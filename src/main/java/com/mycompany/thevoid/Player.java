@@ -35,7 +35,7 @@ public class Player extends Character{
     
     public void chooseTrait(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("Choose an upgrade");
+        GameLogic.printHeader("Choose an upgrade", true);
         System.out.println("(1) " + atkUpgrades[numAtkUpgrades]);
         System.out.println("(2) " + defUpgrades[numDefUpgrades]);
        int input = GameLogic.readInt("-> ", 2);

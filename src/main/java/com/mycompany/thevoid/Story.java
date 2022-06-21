@@ -12,77 +12,77 @@ public class Story {
     
     public static void printIntro(Player player){
         GameLogic.clearConsole();
-        GameLogic.printHeader("STORY");
+        GameLogic.printHeader("STORY",true);
         System.out.println("\n\n\n\n" + player.name);
         GameLogic.anythingToContinue();
     }
     
     public static void firstActIntro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT I");
+        GameLogic.printHeader("ACT I", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
     
     public static void firstActOutro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT I");
+        GameLogic.printHeader("ACT I", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
     
     public static void secondActIntro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT II");
+        GameLogic.printHeader("ACT II", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
     
     public static void secondActOutro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT II");
+        GameLogic.printHeader("ACT II", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
     
     public static void thirdActIntro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT III");
+        GameLogic.printHeader("ACT III", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
     
     public static void thirdActOutro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT III");
+        GameLogic.printHeader("ACT III", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
     
     public static void fourthActIntro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT IV");
+        GameLogic.printHeader("ACT IV", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
     
     public static void fourthActOutro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT IV");
+        GameLogic.printHeader("ACT IV", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
     
     public static void fifthActIntro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT V");
+        GameLogic.printHeader("ACT V", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
     
     public static void fifthActOutro(){
         GameLogic.clearConsole();
-        GameLogic.printHeader("ACT V");
+        GameLogic.printHeader("ACT V", true);
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
