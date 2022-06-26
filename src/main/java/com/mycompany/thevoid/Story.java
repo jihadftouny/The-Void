@@ -86,4 +86,11 @@ public class Story {
         System.out.println("\n\n\n\n");
         GameLogic.anythingToContinue();
     }
+    
+    public static void printEnd(Player player){
+        GameLogic.clearConsole();
+        GameLogic.printHeader("END.", true);
+        System.out.println("\n\n\n\n" + player.name);
+        GameLogic.anythingToContinue();
+    }
 }

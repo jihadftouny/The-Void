@@ -10,13 +10,17 @@ package com.mycompany.thevoid;
  */
 public class Player extends Character{
 
+    //additional variables
+    int gold, restsLeft, pots;
+    
+    
+    //upgrades variables
     public int numAtkUpgrades, numDefUpgrades;
-    
-    
     
     public String[] atkUpgrades = {"Strength","Power","Might","Warlike"};
     public String[] defUpgrades = {"Heavy Bones","Stoneskin","Scale Armor","Holy Armor"};
         
+    //constructor
     public Player(String name) { 
         //calling constructor of superclass
         super(name, 100, 0);
@@ -25,6 +29,10 @@ public class Player extends Character{
        this.numAtkUpgrades = 0;
        this.numDefUpgrades = 0;
        
+       //set additional stats
+       this.gold = 5;
+       this.restsLeft = 1;
+       this.pots = 5;
        //let player choose trait when creating character
        chooseTrait();
         
