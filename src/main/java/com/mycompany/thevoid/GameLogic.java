@@ -5,7 +5,7 @@
 package com.mycompany.thevoid;
 
 import java.util.Scanner;
-import javax.script.ScriptEngine;
+//import javax.script.ScriptEngine;
 
 /**
  *
@@ -95,6 +95,12 @@ public class GameLogic {
             enemies[2] = "Evil Jooj";
             enemies[3] = "Evil Jooj";
             enemies[4] = "Evil Jooj";
+            //assign new values to encounters
+            encounters[0] = "Battle";
+            encounters[1] = "Battle";
+            encounters[2] = "Battle";
+            encounters[3] = "Rest";
+            encounters[4] = "Rest";
         } else if (player.xp >= 90 && act == 3) {
             act = 4;
             place = 3;
@@ -106,6 +112,12 @@ public class GameLogic {
             enemies[2] = "Evil Jooj";
             enemies[3] = "Evil Jooj";
             enemies[4] = "Evil Jooj";
+            //assign new values to encounters
+            encounters[0] = "Battle";
+            encounters[1] = "Battle";
+            encounters[2] = "Battle";
+            encounters[3] = "Rest";
+            encounters[4] = "Rest";
         } else if (player.xp >= 240 && act == 4) {
             act = 5;
             place = 4;
@@ -264,7 +276,7 @@ public class GameLogic {
                         }
 
                         player.gold += goldEarned;
-                        System.out.println("You earned " + goldEarned + "!");
+                        System.out.println("You earned " + goldEarned + " gold!");
 
                         anythingToContinue();
                         return;
@@ -354,9 +366,10 @@ public class GameLogic {
     public static void takeRest() {
         clearConsole();
         if (player.restsLeft >= 1) {
-            printHeader("do you want to take a rest? (" + player.restsLeft + " rest(s) left).", true);
+            printHeader("Do you want to take a rest? (" + player.restsLeft + " rest(s) left).", true);
             System.out.println("(1) Yes\n(2) No, not now");
             int input = readInt("->", 2);
+            clearConsole();
             if (input == 1) {
                 //player takes rest
 
