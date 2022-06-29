@@ -14,8 +14,10 @@ public class Enemy extends Character {
     int playerXp;
 
     public Enemy(String name, int playerXp) {
-        super(name, (int) (Math.random() * playerXp + playerXp / 3 + 5), (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
+        super(name, (int) (Math.random() * playerXp + playerXp / 3 + 30), (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
         this.playerXp = playerXp;
+        Stats[0] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
+        Stats[1] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
     }
 
     @Override
