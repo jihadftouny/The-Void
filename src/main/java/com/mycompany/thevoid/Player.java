@@ -29,6 +29,8 @@ public class Player extends Character{
        this.numAtkUpgrades = 0;
        this.numDefUpgrades = 0;
        
+       //player stats
+       
        //set additional stats
        this.gold = 5;
        this.restsLeft = 1;
@@ -52,10 +54,12 @@ public class Player extends Character{
             GameLogic.clearConsole();
             System.out.println("You chose " + atkUpgrades[numAtkUpgrades] + ".");
             numAtkUpgrades++;
+            Stats[0] += 5;
         }else{
             GameLogic.clearConsole();
             System.out.println("You chose " + defUpgrades[numDefUpgrades] + ".");
             numDefUpgrades++;
+            Stats[1] += 5;
         }
         GameLogic.anythingToContinue();
     }
@@ -63,7 +67,7 @@ public class Player extends Character{
     
     @Override
     public int attack() {
-        return (int) (Math.random()*(xp/4 + numDefUpgrades*3 +3) + xp/10 + numDefUpgrades*2 + numAtkUpgrades +1);
+        return (int) (Math.random()*(xp/4 + numAtkUpgrades*3 +3) + xp/10 + numAtkUpgrades*2 + numDefUpgrades +1);
     }
 
     @Override
