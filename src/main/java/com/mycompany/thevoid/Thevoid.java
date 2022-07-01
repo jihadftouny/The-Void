@@ -13,15 +13,10 @@ public class Thevoid {
 
     public static void main(String[] args) {
         
-        Dices dices;
-        dices = new Dices(2, 6);
-        Dices.rollDice();
         
-        dices = new Dices(3,100);
-        Dices.rollDice();
         
 //        Calculators.dmgCalculator();
-//        GameLogic.startGame();
+        GameLogic.startGame();
 //        GameLogic.printHeader("Jorginho Matagal ta na area");
 //        System.out.println("Texto texto texto");
 //        GameLogic.printDivider(10);

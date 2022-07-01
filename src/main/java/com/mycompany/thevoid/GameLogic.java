@@ -4,6 +4,7 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.Random;
 import java.util.Scanner;
 //import javax.script.ScriptEngine;
 
@@ -17,6 +18,10 @@ public class GameLogic {
     static Scanner scanner = new Scanner(System.in);
     static Player player;
     public static boolean isRunning;
+
+    //dices
+    public static Dice lvlUpDice = new Dice(2, 6);
+    static Dice ultraDice = new Dice(3, 100);
 
     //random encounter variables
     public static String[] encounters = {"Battle", "Battle", "Battle", "Rest", "Rest"}; //this will be used as an rng factor, rest will show parts of the lore while giving xp
@@ -57,6 +62,7 @@ public class GameLogic {
 
         //create new player obejct
         player = new Player(name);
+
         Story.printIntro(player);
 
         isRunning = true;
@@ -172,16 +178,17 @@ public class GameLogic {
         printDivider(20);
         System.out.println("Potions: " + player.pots);
         printDivider(20);
+        System.out.println("ATK: " + player.Stats[0]);
+        System.out.println("DEF: " + player.Stats[1]);
 
         //print chosen traits
         if (player.numAtkUpgrades > 0) {
-            System.out.println("\nOffensive trait: " + player.atkUpgrades[player.numAtkUpgrades - 1]);
-            printDivider(20);
+            System.out.println("Offensive trait: " + player.atkUpgrades[player.numAtkUpgrades - 1]);
         }
         if (player.numDefUpgrades > 0) {
-            System.out.println("\nDefensive trait: " + player.defUpgrades[player.numDefUpgrades - 1]);
-            printDivider(20);
+            System.out.println("Defensive trait: " + player.defUpgrades[player.numDefUpgrades - 1]);
         }
+        printDivider(20);
         anythingToContinue();
     }
 
@@ -222,6 +229,7 @@ public class GameLogic {
             clearConsole();
             printHeader(player.name + "\nHP: " + player.hp + "/" + player.maxHp + "\n", true);
             printHeader(enemy.name + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
+            printHeader("ATK: " + enemy.Stats[0] +  " DEF: " + enemy.Stats[1], false);
             System.out.println("Choose an action: ");
             printDivider(20);
             System.out.println("(1) Fight\n(2) Use Potion\n(3) Run Away");
@@ -272,7 +280,6 @@ public class GameLogic {
                         if (addRest) {
                             player.restsLeft++;
                             System.out.println("You earned the chance to have an additional rest!");
-                            anythingToContinue();
                         }
 
                         player.gold += goldEarned;
@@ -387,8 +394,11 @@ public class GameLogic {
 
                 }
             }
+        }else{
+            System.out.println("You voyage through the jooj without rest.");
         }
         anythingToContinue();
+        
     }
 
     //final battle
@@ -448,4 +458,20 @@ public class GameLogic {
         scanner.next();
     }
 
+    //tests
+//    public static int rollDice(Dice dice) {
+//        Random rand = new Random();
+//        int totalRoll = 0;
+//
+//        for (int i = 0; i < dice.quantity; i++) {
+//
+//            int currentRoll = 1 + rand.nextInt(dice.sides);
+//
+//            totalRoll += currentRoll;
+//            System.out.println("current roll " + currentRoll);
+//        }
+//        System.out.println("total roll " + totalRoll);
+//        return totalRoll;
+//
+//    }
 }

@@ -13,7 +13,7 @@ public abstract class Character {
     //variables
     String name;
     int hp, maxHp, xp;
-    int[] Stats; //every stat level up on the player (every upgrade) is a 3d6
+    int[] Stats; //every stat level up on the player (every upgrade) is a 3d4
 
     public Character(String name, int maxHp, int xp) {
         this.Stats = new int[]{10,10};//Atk,Def

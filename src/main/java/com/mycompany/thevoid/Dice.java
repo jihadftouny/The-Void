@@ -15,13 +15,14 @@ import jdk.nashorn.internal.codegen.CompilerConstants;
  * the game is going to run on a dice system (for its battle), so there will be
  * different amounts of dice, of various sizes. for example, 2d6, 3d8, 1d20, etc
  *
+ * MAYBE Object concept is not necessary
  */
-public class Dices {
+public class Dice {
 
-    public static int quantity, sides; //sides can be 2,4,6,8,10,12,20
-    public static int totalRoll, currentRoll;
+    public int quantity, sides; //sides can be 2,4,6,8,10,12,20
+//    public int totalRoll, currentRoll;
 
-    public Dices(int quantity, int sides) {
+    public Dice(int quantity, int sides) {
         this.quantity = quantity;
         this.sides = sides;
     }
@@ -29,11 +30,14 @@ public class Dices {
     
     
 
-    public static int rollDice() {
+    public static int rollDice(Dice dice) {
         Random rand = new Random();
-        for (int i = 0; i < quantity; i++) {
+        int totalRoll = 0;
+        
+        for (int i = 0; i < dice.quantity; i++) {
 
-            currentRoll = 1 + rand.nextInt(sides);
+            int currentRoll = 1 + rand.nextInt(dice.sides);
+            
             totalRoll += currentRoll;
             System.out.println("current roll " + currentRoll);
         }
@@ -42,19 +46,4 @@ public class Dices {
 
     }
 
-//    public int getQuantity() {
-//        return quantity;
-//    }
-//
-//    public void setQuantity(int quantity) {
-//        this.quantity = quantity;
-//    }
-//
-//    public int getSides() {
-//        return sides;
-//    }
-//
-//    public void setSides(int sides) {
-//        this.sides = sides;
-//    }
 }
