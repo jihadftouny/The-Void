@@ -12,6 +12,17 @@ public class Calculators {
 
     public static void jooj() {
 
+        int i = 0;
+        int avg = 0;
+        while (i < 100) {
+            int playerXp = 5;
+            int xp = (int) (Math.random() * (playerXp / 4 + 2) + 1);
+            int stat = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
+            System.out.println("stat: " + stat);
+            i++;
+            avg += stat;
+        }
+        System.out.println("avg" + (avg/i));
     }
 
     public static void dmgCalculator() {
