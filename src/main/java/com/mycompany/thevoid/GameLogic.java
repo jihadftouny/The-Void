@@ -4,6 +4,7 @@
  */
 package com.mycompany.thevoid;
 
+import com.mycompany.thevoid.Lores.*;
 import java.util.Random;
 import java.util.Scanner;
 //import javax.script.ScriptEngine;
@@ -13,7 +14,7 @@ import java.util.Scanner;
  * @author jihad
  */
 public class GameLogic {
-
+    
     //variables
     static Scanner scanner = new Scanner(System.in);
     static Player player;
@@ -33,8 +34,12 @@ public class GameLogic {
 
 // ------- Main Game Methods ---------------------------------------------------   
     public static void startGame() {
+        
+
         boolean nameSet = false;
         String name;
+        
+        
 
         //print title screen
         clearConsole();
@@ -62,7 +67,7 @@ public class GameLogic {
 
         //create new player obejct
         player = new Player(name);
-
+        
         Story.printIntro(player);
 
         isRunning = true;
