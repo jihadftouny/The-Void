@@ -17,7 +17,7 @@ public class GameLogic {
     
     //variables
     static Scanner scanner = new Scanner(System.in);
-    static Player player;
+    public static Player player;
     public static boolean isRunning;
 
     //dices
