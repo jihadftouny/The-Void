@@ -5,6 +5,9 @@
 
 package com.mycompany.thevoid;
 
+import java.util.Arrays;
+import java.util.Random;
+
 /**
  *
  * @author jihad
@@ -13,7 +16,10 @@ public class Thevoid {
 
     public static void main(String[] args) {
         
+
         
+        
+
         
 //        Calculators.dmgCalculator();
         GameLogic.startGame();

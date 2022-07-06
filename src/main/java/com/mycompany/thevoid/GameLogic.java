@@ -4,6 +4,7 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.Arrays;
 import java.util.Random;
 import java.util.Scanner;
 //import javax.script.ScriptEngine;
@@ -43,8 +44,14 @@ public class GameLogic {
         System.out.println("THE VOID\nA Text Rpg by Jihanger\nv0.0.1");
         printDivider(40);
         printDivider(40);
+        String[] jooj = Lore.loreGen(1);
+       
+        System.out.println("test: " + Arrays.toString(jooj));
         anythingToContinue();
+        
 
+        
+        
         //getting player name
         do {
             clearConsole();
