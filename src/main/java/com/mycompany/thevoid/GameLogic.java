@@ -20,9 +20,11 @@ public class GameLogic {
     static Player player;
     public static boolean isRunning;
 
+    public static Lore loreTest = new Lore(1);
+    
     //dices
-    public static Dice lvlUpDice = new Dice(2, 6);
-    static Dice ultraDice = new Dice(3, 100);
+//    public static Dice lvlUpDice = new Dice(2, 6);
+//    static Dice ultraDice = new Dice(3, 100);
 
     //random encounter variables
     public static String[] encounters = {"Battle", "Battle", "Battle", "Rest", "Rest"}; //this will be used as an rng factor, rest will show parts of the lore while giving xp
@@ -44,9 +46,10 @@ public class GameLogic {
         System.out.println("THE VOID\nA Text Rpg by Jihanger\nv0.0.1");
         printDivider(40);
         printDivider(40);
-        String[] jooj = Lore.loreGen(1);
-       
-        System.out.println("test: " + Arrays.toString(jooj));
+        
+
+        System.out.println("test: " + loreTest.loreText);
+        
         anythingToContinue();
         
 
