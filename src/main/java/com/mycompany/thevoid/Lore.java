@@ -12,6 +12,11 @@ import java.util.Random;
  */
 public class Lore {
 
+    // MAYBE TODOS
+    // -add an outro to the intro after the player takes a rest
+    
+    
+    
     static int chapter;
     static String loreText, loreTitle, result;
     public static String[] loreArray = new String[2];

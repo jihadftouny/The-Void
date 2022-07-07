@@ -386,7 +386,7 @@ public class GameLogic {
         System.out.println(loreRest.loreText);
         printDivider(20);
         if (player.restsLeft >= 1) {
-            printHeader("Do you want to take a rest? (" + player.restsLeft + " rest(s) left).", true);
+            printHeader("Do you want to take a rest? (" + player.restsLeft + " rest(s) left).", false);
             System.out.println("(1) Yes\n(2) No, not now");
             int input = readInt("->", 2);
             clearConsole();
