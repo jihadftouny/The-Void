@@ -4,8 +4,6 @@
  */
 package com.mycompany.thevoid;
 
-import java.util.Arrays;
-import java.util.Random;
 import java.util.Scanner;
 //import javax.script.ScriptEngine;
 
@@ -20,6 +18,8 @@ public class GameLogic {
     static Player player;
     public static boolean isRunning;
 
+    public static Dice lvlUpDice = new Dice(2, 4);
+    
     public static Lore loreTest = new Lore(1);
     
     //dices
@@ -47,8 +47,7 @@ public class GameLogic {
         printDivider(40);
         printDivider(40);
         
-
-        System.out.println("test: " + loreTest.loreText);
+        
         
         anythingToContinue();
         
@@ -382,6 +381,10 @@ public class GameLogic {
 
     public static void takeRest() {
         clearConsole();
+        Lore loreRest = new Lore(act);
+        printHeader(loreRest.loreTitle, true);
+        System.out.println(loreRest.loreText);
+        printDivider(20);
         if (player.restsLeft >= 1) {
             printHeader("Do you want to take a rest? (" + player.restsLeft + " rest(s) left).", true);
             System.out.println("(1) Yes\n(2) No, not now");
@@ -468,20 +471,5 @@ public class GameLogic {
         scanner.next();
     }
 
-    //tests
-//    public static int rollDice(Dice dice) {
-//        Random rand = new Random();
-//        int totalRoll = 0;
-//
-//        for (int i = 0; i < dice.quantity; i++) {
-//
-//            int currentRoll = 1 + rand.nextInt(dice.sides);
-//
-//            totalRoll += currentRoll;
-//            System.out.println("current roll " + currentRoll);
-//        }
-//        System.out.println("total roll " + totalRoll);
-//        return totalRoll;
-//
-//    }
+
 }

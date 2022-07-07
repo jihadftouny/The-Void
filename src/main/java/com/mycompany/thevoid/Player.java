@@ -26,7 +26,7 @@ public class Player extends Character {
     //constructor
     public Player(String name) {
         //calling constructor of superclass
-        super(name, 100, 100);
+        super(name, 100, 0); //name maxhp xp
 
         //setting #upgrades to 0
         this.numAtkUpgrades = 0;
@@ -36,7 +36,7 @@ public class Player extends Character {
         //set additional stats
         this.gold = 5;
         this.restsLeft = 1;
-        this.pots = 5;
+        this.pots = 2;
         //let player choose trait when creating character
         chooseTrait();
 
