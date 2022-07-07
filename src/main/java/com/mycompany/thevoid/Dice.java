@@ -39,9 +39,9 @@ public class Dice {
             int currentRoll = 1 + rand.nextInt(dice.sides);
             
             totalRoll += currentRoll;
-            System.out.println("current roll " + currentRoll);
+            System.out.println("current roll " + currentRoll); //test
         }
-        System.out.println("total roll " + totalRoll);
+        System.out.println("total roll " + totalRoll); //test
         return totalRoll;
 
     }

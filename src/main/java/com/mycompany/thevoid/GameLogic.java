@@ -4,8 +4,6 @@
  */
 package com.mycompany.thevoid;
 
-import com.mycompany.thevoid.Lores.*;
-import java.util.Random;
 import java.util.Scanner;
 //import javax.script.ScriptEngine;
 
@@ -14,15 +12,19 @@ import java.util.Scanner;
  * @author jihad
  */
 public class GameLogic {
-    
+
     //variables
     static Scanner scanner = new Scanner(System.in);
-    public static Player player;
+    static Player player;
     public static boolean isRunning;
 
+    public static Dice lvlUpDice = new Dice(2, 4);
+    
+    public static Lore loreTest = new Lore(1);
+    
     //dices
-    public static Dice lvlUpDice = new Dice(2, 6);
-    static Dice ultraDice = new Dice(3, 100);
+//    public static Dice lvlUpDice = new Dice(2, 6);
+//    static Dice ultraDice = new Dice(3, 100);
 
     //random encounter variables
     public static String[] encounters = {"Battle", "Battle", "Battle", "Rest", "Rest"}; //this will be used as an rng factor, rest will show parts of the lore while giving xp
@@ -34,12 +36,8 @@ public class GameLogic {
 
 // ------- Main Game Methods ---------------------------------------------------   
     public static void startGame() {
-        
-
         boolean nameSet = false;
         String name;
-        
-        
 
         //print title screen
         clearConsole();
@@ -48,8 +46,14 @@ public class GameLogic {
         System.out.println("THE VOID\nA Text Rpg by Jihanger\nv0.0.1");
         printDivider(40);
         printDivider(40);
+        
+        
+        
         anythingToContinue();
+        
 
+        
+        
         //getting player name
         do {
             clearConsole();
@@ -67,7 +71,7 @@ public class GameLogic {
 
         //create new player obejct
         player = new Player(name);
-        
+
         Story.printIntro(player);
 
         isRunning = true;
@@ -377,8 +381,12 @@ public class GameLogic {
 
     public static void takeRest() {
         clearConsole();
+        Lore loreRest = new Lore(act);
+        printHeader(loreRest.loreTitle, true);
+        System.out.println(loreRest.loreText);
+        printDivider(20);
         if (player.restsLeft >= 1) {
-            printHeader("Do you want to take a rest? (" + player.restsLeft + " rest(s) left).", true);
+            printHeader("Do you want to take a rest? (" + player.restsLeft + " rest(s) left).", false);
             System.out.println("(1) Yes\n(2) No, not now");
             int input = readInt("->", 2);
             clearConsole();
@@ -463,20 +471,5 @@ public class GameLogic {
         scanner.next();
     }
 
-    //tests
-//    public static int rollDice(Dice dice) {
-//        Random rand = new Random();
-//        int totalRoll = 0;
-//
-//        for (int i = 0; i < dice.quantity; i++) {
-//
-//            int currentRoll = 1 + rand.nextInt(dice.sides);
-//
-//            totalRoll += currentRoll;
-//            System.out.println("current roll " + currentRoll);
-//        }
-//        System.out.println("total roll " + totalRoll);
-//        return totalRoll;
-//
-//    }
+
 }

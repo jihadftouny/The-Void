@@ -8,7 +8,7 @@ package com.mycompany.thevoid;
  *
  * @author jihad
  */
-public class Calculators {
+public class Calculator {
 
     public static void jooj() {
 

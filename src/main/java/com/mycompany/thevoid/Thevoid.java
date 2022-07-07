@@ -1,11 +1,12 @@
-package com.mycompany.thevoid;
-
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Project/Maven2/JavaApp/src/main/java/${packagePath}/${mainClassName}.java to edit this template
  */
-import com.mycompany.thevoid.Lores.*;
 
+package com.mycompany.thevoid;
+
+import java.util.Arrays;
+import java.util.Random;
 
 /**
  *
@@ -15,9 +16,12 @@ public class Thevoid {
 
     public static void main(String[] args) {
         
+
         
-//
-//        Calculators.jooj();
+        
+
+        
+//        Calculators.dmgCalculator();
         GameLogic.startGame();
 //        GameLogic.printHeader("Jorginho Matagal ta na area");
 //        System.out.println("Texto texto texto");
