@@ -45,7 +45,7 @@ public class Player extends Character {
     // player specific methods
     public void chooseTrait() {
         GameLogic.clearConsole();
-        int roll = Dice.rollDice(GameLogic.lvlUpDice);
+        int roll = Dice.rollDice(Dice.lvlUpDice);
         GameLogic.printHeader("Choose an upgrade", true);
         System.out.println("(1) " + atkUpgrades[numAtkUpgrades]);
         System.out.println("(2) " + defUpgrades[numDefUpgrades]);

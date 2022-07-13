@@ -18,9 +18,9 @@ public class GameLogic {
     static Player player;
     public static boolean isRunning;
 
-    public static Dice lvlUpDice = new Dice(2, 4);
+//    public static Dice lvlUpDice = new Dice(2, 4);
     
-    public static Lore loreTest = new Lore(1);
+    
     
     //dices
 //    public static Dice lvlUpDice = new Dice(2, 6);
@@ -161,7 +161,8 @@ public class GameLogic {
 
     public static void continueJourney() {
         checkAct();
-        //check if game isnt in last act
+
+//        check if game isnt in last act
         if (act != 5) {
             randomEncounter();
         }

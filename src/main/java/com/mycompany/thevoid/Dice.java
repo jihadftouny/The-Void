@@ -21,7 +21,15 @@ public class Dice {
 
     public int quantity, sides; //sides can be 2,4,6,8,10,12,20
 //    public int totalRoll, currentRoll;
-
+    
+    // DICES
+    public static Dice lvlUpDice = new Dice(2, 4);
+    public static Dice lvlUpDice = new Dice(2, 4);
+    public static Dice lvlUpDice = new Dice(2, 4);
+    public static Dice lvlUpDice = new Dice(2, 4);
+    public static Dice lvlUpDice = new Dice(2, 4);
+    
+    
     public Dice(int quantity, int sides) {
         this.quantity = quantity;
         this.sides = sides;
