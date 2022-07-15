@@ -13,7 +13,7 @@ import java.util.Random;
 public class Player extends Character {
 
     Random rand = new Random();
-    
+
     //additional variables
     int gold, restsLeft, pots;
 
@@ -26,7 +26,7 @@ public class Player extends Character {
     //constructor
     public Player(String name) {
         //calling constructor of superclass
-        super(name, 100, 0); //name maxhp xp
+        super(name, 10, 0); //name maxhp xp
 
         //setting #upgrades to 0
         this.numAtkUpgrades = 0;
@@ -38,14 +38,33 @@ public class Player extends Character {
         this.restsLeft = 1;
         this.pots = 2;
         //let player choose trait when creating character
-        chooseTrait();
+        chooseStartStats();
+//        chooseTrait();
 
+    }
+
+    public void chooseStartStats() {
+        //were to roll a d6 4 times, pick 3 highest, and add them to an array. then from this array, player can arrange it as he wishes, player can also re-roll
+        //pseudo code
+        //for loop 6 iterations{
+        //rolldice 4d6, add 3 highest to array as next index
+        //display all indexes in the GameLogic.readInt()
+        int[] StartRolls = new int[]{0,0,0,0,0,0};
+
+        for (int i = 0; i < 6; i++) {
+            int roll = Dice.rollDice(Dice.startStatsDice);
+            roll -= Dice.startStatsDice.smallestRoll;
+            StartRolls[i] = roll;
+            System.out.println(StartRolls[i]); //debug
+        }
+        GameLogic.printHeader("YOUR ROLLS", true);
+        System.out.println(StartRolls[0] + " - " + StartRolls[1] + " - " + StartRolls[2] + " - " + StartRolls[3] + " - " + StartRolls[4] + " - " + StartRolls[5]);
     }
 
     // player specific methods
     public void chooseTrait() {
         GameLogic.clearConsole();
-        int roll = Dice.rollDice(Dice.lvlUpDice);
+        int roll = Dice.rollDice(Dice.d10);
         GameLogic.printHeader("Choose an upgrade", true);
         System.out.println("(1) " + atkUpgrades[numAtkUpgrades]);
         System.out.println("(2) " + defUpgrades[numDefUpgrades]);
@@ -68,7 +87,7 @@ public class Player extends Character {
 
     @Override
     public int attack() {
-        
+
         return rand.nextInt(Stats[0]);
 //        return (int) (Math.random()*(xp/4 + numAtkUpgrades*3 +3) + xp/10 + numAtkUpgrades*2 + numDefUpgrades +1);
     }
