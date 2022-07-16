@@ -5,6 +5,8 @@
 package com.mycompany.thevoid;
 
 import java.util.Random;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -38,27 +40,48 @@ public class Player extends Character {
         this.restsLeft = 1;
         this.pots = 2;
         //let player choose trait when creating character
-        chooseStartStats();
+        rollStartStats();
 //        chooseTrait();
 
     }
 
-    public void chooseStartStats() {
+    public void rollStartStats() {
         //were to roll a d6 4 times, pick 3 highest, and add them to an array. then from this array, player can arrange it as he wishes, player can also re-roll
         //pseudo code
         //for loop 6 iterations{
         //rolldice 4d6, add 3 highest to array as next index
         //display all indexes in the GameLogic.readInt()
-        int[] StartRolls = new int[]{0,0,0,0,0,0};
+//STR,DEX,CON,INT,WIS,CHA,
+        boolean startStatsSet = false;
+        do {
+            for (int i = 0; i < 6; i++) {
+                int roll = Dice.rollDice(Dice.startStatsDice);
+                roll -= Dice.startStatsDice.smallestRoll;
+                Stats[i] = roll;
+                System.out.println(Stats[i]); //debug
+            }
+            
+            GameLogic.printHeader("YOUR ROLLS", true);
+            System.out.println("STR: " + Stats[0] + "\nDEX: " + Stats[1] + "\nCON: " + Stats[2] + "\nINT: " + Stats[3] + "\nWIS: " + Stats[4] + "\nCHA: " + Stats[5]); //debug
+            System.out.println("Do you want to have these attributes?\n(1) Yes, looking good!\n(2) No, re-roll them!");
+            int input = GameLogic.readInt("-> ", 2);
+            
+            if(input == 1 ){
+                startStatsSet = true;
+            }else{
+                System.out.println("Re-rolling stats. . .");
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(Player.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+            
+        } while (!startStatsSet);
 
-        for (int i = 0; i < 6; i++) {
-            int roll = Dice.rollDice(Dice.startStatsDice);
-            roll -= Dice.startStatsDice.smallestRoll;
-            StartRolls[i] = roll;
-            System.out.println(StartRolls[i]); //debug
-        }
-        GameLogic.printHeader("YOUR ROLLS", true);
-        System.out.println(StartRolls[0] + " - " + StartRolls[1] + " - " + StartRolls[2] + " - " + StartRolls[3] + " - " + StartRolls[4] + " - " + StartRolls[5]);
+        
+        GameLogic.anythingToContinue();
+
     }
 
     // player specific methods

@@ -74,6 +74,8 @@ public class GameLogic {
 
         Story.printIntro(player);
 
+        System.out.println(player.Stats[0] + " " +  player.Stats[1] + " " + player.Stats[2] + " " + player.Stats[3] + " " + player.Stats[4] + " " + player.Stats[5]);
+        anythingToContinue(); //debug
         isRunning = true;
         //start main game loop
         gameLoop();
