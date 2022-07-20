@@ -18,6 +18,7 @@ public class GameLogic {
     static Player player;
     public static boolean isRunning;
 
+    
 //    public static Dice lvlUpDice = new Dice(2, 4);
     
     
@@ -190,8 +191,8 @@ public class GameLogic {
         printDivider(20);
         System.out.println("Potions: " + player.pots);
         printDivider(20);
-        System.out.println("ATK: " + player.Stats[0]);
-        System.out.println("DEF: " + player.Stats[1]);
+        System.out.println("STR: " + player.Stats[0] + "\nDEX: " + player.Stats[1] + "\nCON: " + player.Stats[2] + "\nINT: " + player.Stats[3] + "\nWIS: " + player.Stats[4] + "\nCHA: " + player.Stats[5]);
+         
 
         //print chosen traits
         if (player.numAtkUpgrades > 0) {
