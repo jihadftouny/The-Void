@@ -18,6 +18,7 @@ public class Player extends Character {
 
     //additional variables
     int gold, restsLeft, pots;
+    
 
     //upgrades variables
     public int numAtkUpgrades, numDefUpgrades;
@@ -107,6 +108,14 @@ public class Player extends Character {
         System.out.println("roll: " + roll + "\n ATK: " + Stats[0] + " DEF: " + Stats[1]);
         GameLogic.anythingToContinue();
     }
+    
+    
+    public void chooseClass() {
+        GameLogic.clearConsole();
+        
+        
+    
+    }
 
     @Override
     public int attack() {
@@ -121,4 +130,6 @@ public class Player extends Character {
 //        return (int) (Math.random() * (xp / 4 + numDefUpgrades * 3 + 3) + xp / 10 + numDefUpgrades * 2 + numAtkUpgrades + 1);
     }
 
+    
+    
 }
