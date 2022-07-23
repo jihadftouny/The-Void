@@ -15,6 +15,8 @@ import java.util.Map;
  */
 public class Item {
         
+    //MAKE THIS AN ABSTRACT CLASS 
+    
     String itemName;
     int itemId; //id of the item
     int itemType; //0 armor, 1 weapon, 2 trinket, 3 usable (includes instant damage items for example)
@@ -24,7 +26,7 @@ public class Item {
     int itemCost; //cost of item will be slightly variable internally, but character Charisma will ialso influence on price
     
     //armors (type = 0) id range = 100-200
-    Item shirt = new Item("Shirt", 100, 0, , itemACM, itemAtkRoll, itemProperty, itemCost)
+    Item shirt = new Item("Shirt", 100, 0, 10 , 0, Dice.d2, "none", 5);
     
 
     public Item(String itemName, int itemId, int itemType, int itemAC, int itemACM, Dice itemAtkRoll, String itemProperty, int itemCost) {
