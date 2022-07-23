@@ -18,7 +18,11 @@ public class Player extends Character {
 
     //additional variables
     int gold, restsLeft, pots;
-    
+
+    public static String classPlayer;
+
+    Dice hitDiePlayer;
+    int proficiency;
 
     //upgrades variables
     public int numAtkUpgrades, numDefUpgrades;
@@ -41,12 +45,18 @@ public class Player extends Character {
         this.restsLeft = 1;
         this.pots = 2;
         //let player choose trait when creating character
-        rollStartStats();
-//        chooseTrait();
 
+        this.proficiency = 2; //applied to: atk rolls(proficient weapons, and spells you cast)
+        chooseClass();
+        rollStartStats();
+        setMods();
+
+        System.out.println(classPlayer);
+
+//        chooseTrait();
     }
 
-    public void rollStartStats() {
+    public static void rollStartStats() {
         //were to roll a d6 4 times, pick 3 highest, and add them to an array. then from this array, player can arrange it as he wishes, player can also re-roll
         //pseudo code
         //for loop 6 iterations{
@@ -61,15 +71,15 @@ public class Player extends Character {
                 Stats[i] = roll;
                 System.out.println(Stats[i]); //debug
             }
-            
+
             GameLogic.printHeader("YOUR ROLLS", true);
-            System.out.println("STR: " + Stats[0] + "\nDEX: " + Stats[1] + "\nCON: " + Stats[2] + "\nINT: " + Stats[3] + "\nWIS: " + Stats[4] + "\nCHA: " + Stats[5]); //debug
+            System.out.println("STR: " + Stats[0] + "\nDEX: " + Stats[1] + "\nCON: " + Stats[2] + "\nINT: " + Stats[3] + "\nWIS: " + Stats[4] + "\nCHA: " + Stats[5]);
             System.out.println("Do you want to have these attributes?\n(1) Yes, looking good!\n(2) No, re-roll them!");
             int input = GameLogic.readInt("-> ", 2);
-            
-            if(input == 1 ){
+
+            if (input == 1) {
                 startStatsSet = true;
-            }else{
+            } else {
                 System.out.println("Re-rolling stats. . .");
                 try {
                     Thread.sleep(1000);
@@ -77,15 +87,16 @@ public class Player extends Character {
                     Logger.getLogger(Player.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
-            
+
         } while (!startStatsSet);
 
-        
+        //might not need this
         GameLogic.anythingToContinue();
 
     }
 
     // player specific methods
+    // THIS CLASS WILL BE RENAMED TO chooseStats
     public void chooseTrait() {
         GameLogic.clearConsole();
         int roll = Dice.rollDice(Dice.d10);
@@ -108,15 +119,42 @@ public class Player extends Character {
         System.out.println("roll: " + roll + "\n ATK: " + Stats[0] + " DEF: " + Stats[1]);
         GameLogic.anythingToContinue();
     }
-    
-    
+
+    // UNDER DEVELOPMENT
     public void chooseClass() {
         GameLogic.clearConsole();
-        
-        
-    
+        boolean classSet = false;
+
+        do {
+            GameLogic.printHeader("CHOOSE YOUR CLASS", true); //SOLO -> WARRIOR   ---- TECHIES -> WIZARD(kind of)
+            System.out.println("(1) Solo\n(2) Techie");
+            int input = GameLogic.readInt("-> ", 2);
+
+            if (input == 1) {
+                classPlayer = "Solo";
+                hitDiePlayer = Dice.d10;
+            } else if (input == 2) {
+                classPlayer = "Techie";
+                hitDiePlayer = Dice.d6; //wizard
+            }
+            
+            GameLogic.clearConsole();
+            
+            System.out.println("Are you sure you want to be a " + classPlayer + "?");
+            System.out.println("(1) Yeah!\n(2) Go back, go back!");
+            input = GameLogic.readInt("-> ", 2);
+            
+            if (input == 1) {
+                classSet = true;
+            } else if (input == 2) {
+
+            }
+            
+        }while(!classSet);
+  
     }
 
+    //ATTACK AND DEFEND NEED REWORK
     @Override
     public int attack() {
 
@@ -130,6 +168,4 @@ public class Player extends Character {
 //        return (int) (Math.random() * (xp / 4 + numDefUpgrades * 3 + 3) + xp / 10 + numDefUpgrades * 2 + numAtkUpgrades + 1);
     }
 
-    
-    
 }
