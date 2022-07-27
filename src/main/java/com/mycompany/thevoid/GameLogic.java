@@ -62,6 +62,11 @@ public class GameLogic {
 
         //create new player obejct
         player = new Player(name);
+        
+        //this sets player iniitial stats after his creation maxhp based on his hitdie and con mod, also setting his hp with maxhp
+        player.maxHp = player.hitDiePlayer.sides + player.StatsMods[2];
+        player.hp = player.maxHp;
+        player.ArmorClass = 10 + player.StatsMods[2];
 
         Story.printIntro(player);
 
@@ -77,7 +82,7 @@ public class GameLogic {
             act = 2;
             place = 1;
             Story.firstActOutro();
-            player.chooseTrait();
+            player.levelUp();
             Story.secondActIntro();
             //assign new values to enemies
             enemies[0] = "Evil Jooj";
@@ -96,7 +101,7 @@ public class GameLogic {
             act = 3;
             place = 2;
             Story.secondActOutro();
-            player.chooseTrait();
+            player.levelUp();
             Story.thirdActIntro();
             enemies[0] = "Evil Jooj";
             enemies[1] = "Evil Jooj";
@@ -113,7 +118,7 @@ public class GameLogic {
             act = 4;
             place = 3;
             Story.thirdActOutro();
-            player.chooseTrait();
+            player.levelUp();
             Story.fourthActIntro();
             enemies[0] = "Evil Jooj";
             enemies[1] = "Evil Jooj";
@@ -130,7 +135,7 @@ public class GameLogic {
             act = 5;
             place = 4;
             Story.fourthActOutro();
-            player.chooseTrait();
+            player.levelUp();
             Story.fifthActIntro();
             //call final battle
             finalBattle();
@@ -389,7 +394,7 @@ public class GameLogic {
                 //player takes rest
 
                 if (player.hp < player.maxHp) {
-                    int hpRestored = (int) Math.random() * (player.xp / 4 + 1) + 10;
+                    int hpRestored = (int) (Math.random() * (player.xp / 4 + 1) + 10);
                     player.hp += hpRestored;
                     if (player.hp > player.maxHp) {
                         player.hp = player.maxHp;

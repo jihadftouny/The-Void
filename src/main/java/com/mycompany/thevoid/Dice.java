@@ -5,7 +5,6 @@
 package com.mycompany.thevoid;
 
 import java.util.Random;
-import jdk.nashorn.internal.codegen.CompilerConstants;
 
 /**
  *
@@ -30,9 +29,9 @@ public class Dice {
     // DIE SETS
         //SINGLE DIE
     public static Dice d2 = new Dice(1, 2);
-    public static Dice d4 = new Dice(1, 4);
     public static Dice d6 = new Dice(1, 6);
     public static Dice d8 = new Dice(1, 8);
+    public static Dice d4 = new Dice(1, 4);
     public static Dice d10 = new Dice(1, 10);
     public static Dice d12 = new Dice(1, 12);
     public static Dice d20 = new Dice(1, 20);
@@ -79,7 +78,6 @@ public class Dice {
         }
         System.out.println("total roll " + totalRoll); //test
         return totalRoll;
-
     }
 
 }
