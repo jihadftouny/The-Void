@@ -39,7 +39,7 @@ public class GameLogic {
         clearConsole();
         printDivider(40);
         printDivider(40);
-        System.out.println("THE VOID\nA Text Rpg by Jihanger\nv0.0.1");
+        System.out.println("THE VOID\nA Text Rpg by Jihanger\nvAlpha");
         printDivider(40);
         printDivider(40);
 
