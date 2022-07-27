@@ -88,35 +88,26 @@ public abstract class Character {
             switch (GameLogic.act) {
                 case 2: //chapter/lvl 2
                     roll = Dice.rollDice(Player.hitDiePlayer) + StatsMods[2];
-                    if (roll < 1) {
-                        roll = 1;
-                    }
                     Player.hitDiePlayer.quantity = 2;
                     break;
                 case 3: //chapter/lvl 3
                     roll = Dice.rollDice(Player.hitDiePlayer) + StatsMods[2];
-                    if (roll < 1) {
-                        roll = 1;
-                    }
                     Player.hitDiePlayer.quantity = 3;
                     break;
                 case 4: //chapter/lvl 4
                     roll = Dice.rollDice(Player.hitDiePlayer) + StatsMods[2];
-                    if (roll < 1) {
-                        roll = 1;
-                    }
                     Player.hitDiePlayer.quantity = 4;
                     break;
                 default: //chapter/lvl 5
                     roll = Dice.rollDice(Player.hitDiePlayer) + StatsMods[2];
-                    if (roll < 1) {
-                        roll = 1;
-                    }
                     Player.hitDiePlayer.quantity = 5;
                     break;
             }
 
+            if (roll < 1)
+                roll = 1;
             
+
             maxHp += roll;
             System.out.println("extra hp roll: " + roll);
 
