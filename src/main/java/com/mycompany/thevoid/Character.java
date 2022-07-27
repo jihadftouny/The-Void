@@ -17,11 +17,11 @@ public abstract class Character {
     //variables
     String name;
     int hp, maxHp, xp;
-    public static int[] Stats; //every level up player has x points to spend on his attributes
+    public int[] Stats; //every level up player has x points to spend on his attributes
     int ArmorClass;
 
     //modifiers
-    public static int[] StatsMods; // strM, dexM, conM, intM, wisM, chaM;
+    public int[] StatsMods; // strM, dexM, conM, intM, wisM, chaM;
 
     String[] EquipmentOn;
 
@@ -42,9 +42,11 @@ public abstract class Character {
     public abstract int defend();
 
     //the below function will set all the stat modifiers everytime a character is created or level ups.
-    public static void setMods() {
+    public void setMods() {
+        int currentConMod = StatsMods[2];
+
         for (int i = 0; i < 6; i++) {
-            if (Stats[i] == 30){
+            if (Stats[i] == 30) {
                 StatsMods[i] = 10;
             } else if (Stats[i] >= 28) {
                 StatsMods[i] = 9;
@@ -78,5 +80,52 @@ public abstract class Character {
                 StatsMods[i] = -5;
             }
         }
+
+        int newConMod = StatsMods[2];
+        int roll;
+
+        if (Player.isLevelUp) {
+            switch (GameLogic.act) {
+                case 2: //chapter/lvl 2
+                    roll = Dice.rollDice(Player.hitDiePlayer) + StatsMods[2];
+                    if (roll < 1) {
+                        roll = 1;
+                    }
+                    Player.hitDiePlayer.quantity = 2;
+                    break;
+                case 3: //chapter/lvl 3
+                    roll = Dice.rollDice(Player.hitDiePlayer) + StatsMods[2];
+                    if (roll < 1) {
+                        roll = 1;
+                    }
+                    Player.hitDiePlayer.quantity = 3;
+                    break;
+                case 4: //chapter/lvl 4
+                    roll = Dice.rollDice(Player.hitDiePlayer) + StatsMods[2];
+                    if (roll < 1) {
+                        roll = 1;
+                    }
+                    Player.hitDiePlayer.quantity = 4;
+                    break;
+                default: //chapter/lvl 5
+                    roll = Dice.rollDice(Player.hitDiePlayer) + StatsMods[2];
+                    if (roll < 1) {
+                        roll = 1;
+                    }
+                    Player.hitDiePlayer.quantity = 5;
+                    break;
+            }
+
+            
+            maxHp += roll;
+            System.out.println("extra hp roll: " + roll);
+
+            if (currentConMod != newConMod) {
+                System.out.println("new CON mod !");
+                maxHp += GameLogic.act - 1;
+            }
+
+        }
     }
+
 }
