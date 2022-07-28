@@ -13,12 +13,13 @@ import java.util.Random;
 public class Lore {
 
     // MAYBE TODOS
+    // MIGHT NOT need the loreArray[]
     // -add an outro to the intro after the player takes a rest
     
     
     
-    static int chapter;
-    static String loreText, loreTitle, result;
+    int chapter;
+    String loreText, loreTitle, result;
     public static String[] loreArray = new String[2];
     public static Random rand = new Random();
 
@@ -26,13 +27,11 @@ public class Lore {
 // chapters (number of lores available in each chapter
         int c1 = 3, c2 = 3, c3 = 3, c4 = 3;
 
-
         switch (chapter) {
             case 1: {
                 int numberLores = c1; // if c1 is 3, numberLores is 2, so the lorePicker will generate 0 or 1 or 2 (total of three possible outcomes (c1))
                 int lorePicker = rand.nextInt(numberLores);//will pick numberLores + 1 (if numberLores = 2, generates = 0,1,2 => so 3 available/possible lores)
                 if (lorePicker == 0) {
-
                     loreTitle = "This is a Title 1 0";
                     loreText = "1 0 This is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore";
                     loreArray[0] = loreTitle;

@@ -17,7 +17,7 @@ public class Enemy extends Character {
     int playerXp;
 
     public Enemy(String name, int playerXp) {
-        super(name, (int) (Math.random() * playerXp + playerXp / 3 + 30), (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
+        super(name, 1, (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
         this.playerXp = playerXp;
         Stats[0] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         Stats[1] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
@@ -25,13 +25,13 @@ public class Enemy extends Character {
 
     @Override
     public int attack() {
-        return rand.nextInt(Stats[0]);
+        return 0;
 //        return (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
     }
 
     @Override
     public int defend() {
-        return rand.nextInt(Stats[1]);
+        return 0;
 //        return (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
     }
 

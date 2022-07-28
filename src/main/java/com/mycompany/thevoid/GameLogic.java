@@ -18,14 +18,10 @@ public class GameLogic {
     static Player player;
     public static boolean isRunning;
 
-    public static Dice lvlUpDice = new Dice(2, 4);
-    
-    public static Lore loreTest = new Lore(1);
-    
+//    public static Dice lvlUpDice = new Dice(2, 4);
     //dices
 //    public static Dice lvlUpDice = new Dice(2, 6);
 //    static Dice ultraDice = new Dice(3, 100);
-
     //random encounter variables
     public static String[] encounters = {"Battle", "Battle", "Battle", "Rest", "Rest"}; //this will be used as an rng factor, rest will show parts of the lore while giving xp
     public static String[] enemies = {"Ogre", "Orc", "Goblin", "Kobolt", "Rat"};
@@ -43,17 +39,12 @@ public class GameLogic {
         clearConsole();
         printDivider(40);
         printDivider(40);
-        System.out.println("THE VOID\nA Text Rpg by Jihanger\nv0.0.1");
+        System.out.println("THE VOID\nA Text Rpg by Jihanger\nvAlpha");
         printDivider(40);
         printDivider(40);
-        
-        
-        
-        anythingToContinue();
-        
 
-        
-        
+        anythingToContinue();
+
         //getting player name
         do {
             clearConsole();
@@ -71,9 +62,16 @@ public class GameLogic {
 
         //create new player obejct
         player = new Player(name);
+        
+        //this sets player iniitial stats after his creation maxhp based on his hitdie and con mod, also setting his hp with maxhp
+        player.maxHp = player.hitDiePlayer.sides + player.StatsMods[2];
+        player.hp = player.maxHp;
+        player.ArmorClass = 10 + player.StatsMods[2];
 
         Story.printIntro(player);
 
+        System.out.println(player.Stats[0] + " " + player.Stats[1] + " " + player.Stats[2] + " " + player.Stats[3] + " " + player.Stats[4] + " " + player.Stats[5]);
+        anythingToContinue(); //debug
         isRunning = true;
         //start main game loop
         gameLoop();
@@ -84,7 +82,7 @@ public class GameLogic {
             act = 2;
             place = 1;
             Story.firstActOutro();
-            player.chooseTrait();
+            player.levelUp();
             Story.secondActIntro();
             //assign new values to enemies
             enemies[0] = "Evil Jooj";
@@ -103,7 +101,7 @@ public class GameLogic {
             act = 3;
             place = 2;
             Story.secondActOutro();
-            player.chooseTrait();
+            player.levelUp();
             Story.thirdActIntro();
             enemies[0] = "Evil Jooj";
             enemies[1] = "Evil Jooj";
@@ -120,7 +118,7 @@ public class GameLogic {
             act = 4;
             place = 3;
             Story.thirdActOutro();
-            player.chooseTrait();
+            player.levelUp();
             Story.fourthActIntro();
             enemies[0] = "Evil Jooj";
             enemies[1] = "Evil Jooj";
@@ -137,7 +135,7 @@ public class GameLogic {
             act = 5;
             place = 4;
             Story.fourthActOutro();
-            player.chooseTrait();
+            player.levelUp();
             Story.fifthActIntro();
             //call final battle
             finalBattle();
@@ -161,7 +159,8 @@ public class GameLogic {
 
     public static void continueJourney() {
         checkAct();
-        //check if game isnt in last act
+
+//        check if game isnt in last act
         if (act != 5) {
             randomEncounter();
         }
@@ -183,14 +182,15 @@ public class GameLogic {
         //player xp and gold
         System.out.println(player.name + ":\tHP: " + player.hp + "/" + player.maxHp);
         printDivider(20);
-        System.out.println("XP: " + player.xp + "\tGold: " + player.gold);
+        System.out.println(player.classPlayer + "\nXP: " + player.xp + "\tGold: " + player.gold);
         printDivider(20);
         System.out.println("Potions: " + player.pots);
         printDivider(20);
-        System.out.println("ATK: " + player.Stats[0]);
-        System.out.println("DEF: " + player.Stats[1]);
+        System.out.println("STR: " + player.Stats[0] + " (" + player.StatsMods[0] + ")" + "\tDEX: " + player.Stats[1] + " (" + player.StatsMods[1] + ")"
+                + "\nCON: " + player.Stats[2] + " (" + player.StatsMods[2] + ")" + "\tINT: " + player.Stats[3] + " (" + player.StatsMods[3] + ")"
+                + "\nWIS: " + player.Stats[4] + " (" + player.StatsMods[4] + ")" + "\tCHA: " + player.Stats[5] + " (" + player.StatsMods[5] + ")");
 
-        //print chosen traits
+        //print chosen traits (DEPRECATED)
         if (player.numAtkUpgrades > 0) {
             System.out.println("Offensive trait: " + player.atkUpgrades[player.numAtkUpgrades - 1]);
         }
@@ -238,7 +238,7 @@ public class GameLogic {
             clearConsole();
             printHeader(player.name + "\nHP: " + player.hp + "/" + player.maxHp + "\n", true);
             printHeader(enemy.name + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
-            printHeader("ATK: " + enemy.Stats[0] +  " DEF: " + enemy.Stats[1], false);
+            printHeader("ATK: " + enemy.Stats[0] + " DEF: " + enemy.Stats[1], false);
             System.out.println("Choose an action: ");
             printDivider(20);
             System.out.println("(1) Fight\n(2) Use Potion\n(3) Run Away");
@@ -394,7 +394,7 @@ public class GameLogic {
                 //player takes rest
 
                 if (player.hp < player.maxHp) {
-                    int hpRestored = (int) Math.random() * (player.xp / 4 + 1) + 10;
+                    int hpRestored = (int) (Math.random() * (player.xp / 4 + 1) + 10);
                     player.hp += hpRestored;
                     if (player.hp > player.maxHp) {
                         player.hp = player.maxHp;
@@ -407,11 +407,11 @@ public class GameLogic {
 
                 }
             }
-        }else{
+        } else {
             System.out.println("You voyage through the jooj without rest.");
         }
         anythingToContinue();
-        
+
     }
 
     //final battle
@@ -470,6 +470,5 @@ public class GameLogic {
         System.out.println("Type something to continue...");
         scanner.next();
     }
-
 
 }
