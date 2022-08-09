@@ -1,6 +1,6 @@
 # The Void
- This is an experiment using purely Java. It is an interactive fiction (or text-RPG), where the player will descent through floors of a cyberpunk-fantasy themed city.
- :
+ This is an experiment using purely Java. It is an interactive fiction (or text-RPG), where the player will descent through floors of a cyberpunk-fantasy themed city
+ 
  ## Features
  - Equipment with rarity system, which include Armors, Weapons, Trinkets and Usables
  - Random encounters:
