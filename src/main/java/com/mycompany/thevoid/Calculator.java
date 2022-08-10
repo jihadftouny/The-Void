@@ -9,6 +9,18 @@ package com.mycompany.thevoid;
  * @author jihad
  */
 public class Calculator {
+    
+    public static void jooj2(){
+        int act = 3;
+        int wR = 10; //10 5 2
+       
+        
+        for (int i = 0; i < 100; i++) {
+            int price = (int) (Math.random() * ((10* act + act * 5) - (act * 5) + 1) + (act * 5));
+            int jooj = (int) (Math.random() * 15) + 10;
+            System.out.println(price);     
+        }
+    }
 
     public static void jooj() {
 
