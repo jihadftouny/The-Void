@@ -17,11 +17,7 @@ public class Thevoid {
     public static void main(String[] args) {
         
 
-        
-        
-
-        
-//        Calculators.dmgCalculator();
+//        Calculator.jooj2();
         GameLogic.startGame();
 //        GameLogic.printHeader("Jorginho Matagal ta na area");
 //        System.out.println("Texto texto texto");
