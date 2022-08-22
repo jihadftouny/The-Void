@@ -17,8 +17,8 @@ public class Thevoid {
     public static void main(String[] args) {
         
 
-//        Calculator.jooj2();
-        GameLogic.startGame();
+        Calculator.calcsCR();
+//        GameLogic.startGame();
 //        GameLogic.printHeader("Jorginho Matagal ta na area");
 //        System.out.println("Texto texto texto");
 //        GameLogic.printDivider(10);
