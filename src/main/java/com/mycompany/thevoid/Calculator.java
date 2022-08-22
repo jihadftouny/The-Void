@@ -9,16 +9,62 @@ package com.mycompany.thevoid;
  * @author jihad
  */
 public class Calculator {
-    
-    public static void jooj2(){
+
+    public static void calcsCR() {
+
+        double a;
+        double b;
+        int playerLevel;
+        playerLevel = (int) (Math.random() * (20 - 17)) + 17;
+
+        double CRmax, CRmin, CRboss;
+
+        //min
+        a = 0.087970550572;
+        b = 1.4100213799828;
+        CRmin = a * Math.pow(playerLevel, b);
+
+        //max
+        a = 0.2320721484759;
+        b = 1.319592522878;
+        CRmax = a * Math.pow(playerLevel, b);
+
+        //boss
+        a = 0.4294334810279;
+        b = 1.165240310288;
+        CRboss = a * Math.pow(playerLevel, b);
+
+        for (int i = 1; i <= 20; i++) {
+            //min
+            a = 0.087970550572;
+            b = 1.4100213799828;
+            CRmin = a * Math.pow(i, b);
+
+            //max
+            a = 0.2320721484759;
+            b = 1.319592522878;
+            CRmax = a * Math.pow(i, b);
+
+            //boss
+            a = 0.4294334810279;
+            b = 1.165240310288;
+            CRboss = a * Math.pow(i, b);
+
+            System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " at level " + i);
+        }
+
+//        System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " " + playerLevel);
+
+    }
+
+    public static void jooj2() {
         int act = 3;
         int wR = 10; //10 5 2
-       
-        
+
         for (int i = 0; i < 100; i++) {
-            int price = (int) (Math.random() * ((10* act + act * 5) - (act * 5) + 1) + (act * 5));
+            int price = (int) (Math.random() * ((10 * act + act * 5) - (act * 5) + 1) + (act * 5));
             int jooj = (int) (Math.random() * 15) + 10;
-            System.out.println(price);     
+            System.out.println(price);
         }
     }
 
@@ -34,7 +80,7 @@ public class Calculator {
             i++;
             avg += stat;
         }
-        System.out.println("avg" + (avg/i));
+        System.out.println("avg" + (avg / i));
     }
 
     public static void dmgCalculator() {
