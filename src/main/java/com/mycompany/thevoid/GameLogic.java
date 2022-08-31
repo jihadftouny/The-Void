@@ -25,7 +25,7 @@ public class GameLogic {
 //    static Dice ultraDice = new Dice(3, 100);
     //random encounter variables
     public static String[] encounters = {"Battle", "Battle", "Battle", "Rest", "Rest"}; //this will be used as an rng factor, rest will show parts of the lore while giving xp
-    public static String[] enemies = {"Ogre", "Orc", "Goblin", "Kobolt", "Rat"};
+    public static String[] enemies = {"Beast", "Beast", "Beast", "Beast", "Beast"};
 
     //story variables
     public static int place = 0, act = 1;
@@ -244,7 +244,7 @@ public class GameLogic {
         while (true) {
             clearConsole();
             printHeader(player.name + "\nHP: " + player.hp + "/" + player.maxHp + "\n", true);
-            printHeader(enemy.name + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
+            printHeader(enemy.fullName + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
             printHeader("ATK: " + enemy.Stats[0] + " DEF: " + enemy.Stats[1], false);
             System.out.println("Choose an action: ");
             printDivider(20);
