@@ -4,7 +4,11 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
+import jdk.nashorn.internal.objects.NativeArray;
 
 /**
  *
@@ -15,13 +19,22 @@ public class Enemy extends Character {
     Random rand = new Random();
     //variable that stores the player current xp
     int playerXp;
+    String fullName = "";
 
     public Enemy(String name, int playerXp) {
         super(name, 1, (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
         this.playerXp = playerXp; //this here sets the variable playerXp with the variable that was given in the parameter declaration (which was set on object creation)
+        EnemyName enemyName = new EnemyName(name);
+        
+        fullName = enemyName.fullName;
+        
+
         Stats[0] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         Stats[1] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
     }
+
+    
+
 
     public void setStatsEnemy() {
 
@@ -40,9 +53,10 @@ public class Enemy extends Character {
             playerLevel = (int) (Math.random() * (5 - 1)) + 1;      // 5-1
         }
 
+        //CR = challenge rating
         double CRmax, CRmin, CRboss;
 
-        //The following will set max and minimum Challenge Ratings based on playerLevel
+        //The following will set max and minimum (also boss) Challenge Ratings based on playerLevel
         //min
         a = 0.087970550572;
         b = 1.4100213799828;
