@@ -89,17 +89,17 @@ public class GameLogic {
             player.levelUp();
             Story.secondActIntro();
             //assign new values to enemies
-            enemies[0] = "Evil Jooj";
-            enemies[1] = "Evil Jooj";
-            enemies[2] = "Evil Jooj";
-            enemies[3] = "Evil Jooj";
-            enemies[4] = "Evil Jooj";
-            //assign new values to encounters
-            encounters[0] = "Battle";
-            encounters[1] = "Battle";
-            encounters[2] = "Battle";
-            encounters[3] = "Rest";
-            encounters[4] = "Rest";
+//            enemies[0] = "Evil Jooj";
+//            enemies[1] = "Evil Jooj";
+//            enemies[2] = "Evil Jooj";
+//            enemies[3] = "Evil Jooj";
+//            enemies[4] = "Evil Jooj";
+//            //assign new values to encounters
+//            encounters[0] = "Battle";
+//            encounters[1] = "Battle";
+//            encounters[2] = "Battle";
+//            encounters[3] = "Rest";
+//            encounters[4] = "Rest";
 
         } else if (player.xp >= 30 && act == 2) {
             act = 3;
@@ -107,34 +107,34 @@ public class GameLogic {
             Story.secondActOutro();
             player.levelUp();
             Story.thirdActIntro();
-            enemies[0] = "Evil Jooj";
-            enemies[1] = "Evil Jooj";
-            enemies[2] = "Evil Jooj";
-            enemies[3] = "Evil Jooj";
-            enemies[4] = "Evil Jooj";
-            //assign new values to encounters
-            encounters[0] = "Battle";
-            encounters[1] = "Battle";
-            encounters[2] = "Battle";
-            encounters[3] = "Rest";
-            encounters[4] = "Rest";
+//            enemies[0] = "Evil Jooj";
+//            enemies[1] = "Evil Jooj";
+//            enemies[2] = "Evil Jooj";
+//            enemies[3] = "Evil Jooj";
+//            enemies[4] = "Evil Jooj";
+//            //assign new values to encounters
+//            encounters[0] = "Battle";
+//            encounters[1] = "Battle";
+//            encounters[2] = "Battle";
+//            encounters[3] = "Rest";
+//            encounters[4] = "Rest";
         } else if (player.xp >= 90 && act == 3) {
             act = 4;
             place = 3;
             Story.thirdActOutro();
             player.levelUp();
             Story.fourthActIntro();
-            enemies[0] = "Evil Jooj";
-            enemies[1] = "Evil Jooj";
-            enemies[2] = "Evil Jooj";
-            enemies[3] = "Evil Jooj";
-            enemies[4] = "Evil Jooj";
-            //assign new values to encounters
-            encounters[0] = "Battle";
-            encounters[1] = "Battle";
-            encounters[2] = "Battle";
-            encounters[3] = "Rest";
-            encounters[4] = "Rest";
+//            enemies[0] = "Evil Jooj";
+//            enemies[1] = "Evil Jooj";
+//            enemies[2] = "Evil Jooj";
+//            enemies[3] = "Evil Jooj";
+//            enemies[4] = "Evil Jooj";
+//            //assign new values to encounters
+//            encounters[0] = "Battle";
+//            encounters[1] = "Battle";
+//            encounters[2] = "Battle";
+//            encounters[3] = "Rest";
+//            encounters[4] = "Rest";
         } else if (player.xp >= 240 && act == 4) {
             act = 5;
             place = 4;
@@ -163,10 +163,12 @@ public class GameLogic {
     }
 
     public static void continueJourney() {
+        int currentAct = act; 
         checkAct();
+        
 
 //        check if game isnt in last act
-        if (act != 5) {
+        if (act != 5 && currentAct == act) {
             randomEncounter();
         }
     }
