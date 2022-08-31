@@ -4,6 +4,7 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.ArrayList;
 import java.util.Scanner;
 //import javax.script.ScriptEngine;
 
@@ -24,7 +25,7 @@ public class GameLogic {
 //    static Dice ultraDice = new Dice(3, 100);
     //random encounter variables
     public static String[] encounters = {"Battle", "Battle", "Battle", "Rest", "Rest"}; //this will be used as an rng factor, rest will show parts of the lore while giving xp
-    public static String[] enemies = {"Ogre", "Orc", "Goblin", "Kobolt", "Rat"};
+    public static String[] enemies = {"Beast", "Beast", "Beast", "Beast", "Beast"};
 
     //story variables
     public static int place = 0, act = 1;
@@ -62,7 +63,7 @@ public class GameLogic {
 
         //create new player obejct
         player = new Player(name);
-        
+
         //this sets player iniitial stats after his creation maxhp based on his hitdie and con mod, also setting his hp with maxhp
         player.maxHp = player.hitDiePlayer.sides + player.StatsMods[2];
         player.hp = player.maxHp;
@@ -71,6 +72,9 @@ public class GameLogic {
         Story.printIntro(player);
 
         System.out.println(player.Stats[0] + " " + player.Stats[1] + " " + player.Stats[2] + " " + player.Stats[3] + " " + player.Stats[4] + " " + player.Stats[5]);
+
+        //START DEBUG
+        //END DEBUG
         anythingToContinue(); //debug
         isRunning = true;
         //start main game loop
@@ -85,17 +89,17 @@ public class GameLogic {
             player.levelUp();
             Story.secondActIntro();
             //assign new values to enemies
-            enemies[0] = "Evil Jooj";
-            enemies[1] = "Evil Jooj";
-            enemies[2] = "Evil Jooj";
-            enemies[3] = "Evil Jooj";
-            enemies[4] = "Evil Jooj";
-            //assign new values to encounters
-            encounters[0] = "Battle";
-            encounters[1] = "Battle";
-            encounters[2] = "Battle";
-            encounters[3] = "Rest";
-            encounters[4] = "Rest";
+//            enemies[0] = "Evil Jooj";
+//            enemies[1] = "Evil Jooj";
+//            enemies[2] = "Evil Jooj";
+//            enemies[3] = "Evil Jooj";
+//            enemies[4] = "Evil Jooj";
+//            //assign new values to encounters
+//            encounters[0] = "Battle";
+//            encounters[1] = "Battle";
+//            encounters[2] = "Battle";
+//            encounters[3] = "Rest";
+//            encounters[4] = "Rest";
 
         } else if (player.xp >= 30 && act == 2) {
             act = 3;
@@ -103,34 +107,34 @@ public class GameLogic {
             Story.secondActOutro();
             player.levelUp();
             Story.thirdActIntro();
-            enemies[0] = "Evil Jooj";
-            enemies[1] = "Evil Jooj";
-            enemies[2] = "Evil Jooj";
-            enemies[3] = "Evil Jooj";
-            enemies[4] = "Evil Jooj";
-            //assign new values to encounters
-            encounters[0] = "Battle";
-            encounters[1] = "Battle";
-            encounters[2] = "Battle";
-            encounters[3] = "Rest";
-            encounters[4] = "Rest";
+//            enemies[0] = "Evil Jooj";
+//            enemies[1] = "Evil Jooj";
+//            enemies[2] = "Evil Jooj";
+//            enemies[3] = "Evil Jooj";
+//            enemies[4] = "Evil Jooj";
+//            //assign new values to encounters
+//            encounters[0] = "Battle";
+//            encounters[1] = "Battle";
+//            encounters[2] = "Battle";
+//            encounters[3] = "Rest";
+//            encounters[4] = "Rest";
         } else if (player.xp >= 90 && act == 3) {
             act = 4;
             place = 3;
             Story.thirdActOutro();
             player.levelUp();
             Story.fourthActIntro();
-            enemies[0] = "Evil Jooj";
-            enemies[1] = "Evil Jooj";
-            enemies[2] = "Evil Jooj";
-            enemies[3] = "Evil Jooj";
-            enemies[4] = "Evil Jooj";
-            //assign new values to encounters
-            encounters[0] = "Battle";
-            encounters[1] = "Battle";
-            encounters[2] = "Battle";
-            encounters[3] = "Rest";
-            encounters[4] = "Rest";
+//            enemies[0] = "Evil Jooj";
+//            enemies[1] = "Evil Jooj";
+//            enemies[2] = "Evil Jooj";
+//            enemies[3] = "Evil Jooj";
+//            enemies[4] = "Evil Jooj";
+//            //assign new values to encounters
+//            encounters[0] = "Battle";
+//            encounters[1] = "Battle";
+//            encounters[2] = "Battle";
+//            encounters[3] = "Rest";
+//            encounters[4] = "Rest";
         } else if (player.xp >= 240 && act == 4) {
             act = 5;
             place = 4;
@@ -149,6 +153,7 @@ public class GameLogic {
             if (input == 1) {
                 continueJourney();
             } else if (input == 2) {
+                shop();
                 characterInfo();
             } else {
                 playerDied();
@@ -158,10 +163,12 @@ public class GameLogic {
     }
 
     public static void continueJourney() {
+        int currentAct = act; 
         checkAct();
+        
 
 //        check if game isnt in last act
-        if (act != 5) {
+        if (act != 5 && currentAct == act) {
             randomEncounter();
         }
     }
@@ -184,6 +191,8 @@ public class GameLogic {
         printDivider(20);
         System.out.println(player.classPlayer + "\nXP: " + player.xp + "\tGold: " + player.gold);
         printDivider(20);
+        System.out.println("Weapon: " + player.equippedWeapon.itemName);
+        System.out.println("Armor: " + player.equippedArmor.itemName);
         System.out.println("Potions: " + player.pots);
         printDivider(20);
         System.out.println("STR: " + player.Stats[0] + " (" + player.StatsMods[0] + ")" + "\tDEX: " + player.Stats[1] + " (" + player.StatsMods[1] + ")"
@@ -237,7 +246,7 @@ public class GameLogic {
         while (true) {
             clearConsole();
             printHeader(player.name + "\nHP: " + player.hp + "/" + player.maxHp + "\n", true);
-            printHeader(enemy.name + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
+            printHeader(enemy.fullName + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
             printHeader("ATK: " + enemy.Stats[0] + " DEF: " + enemy.Stats[1], false);
             System.out.println("Choose an action: ");
             printDivider(20);
@@ -356,21 +365,100 @@ public class GameLogic {
         isRunning = false;
     }
 
+    public static Item pickItemShop(Item[] itemArray) {
+        
+        ArrayList<Item> tempItemList = new ArrayList<>();
+        int pickIndex;
+
+        
+       
+        for (int i = 0; i < itemArray.length; i++) {
+            // common has weight 5
+            if ("Common".equals(itemArray[i].itemRarity)) {
+                tempItemList.add(itemArray[i]);
+                tempItemList.add(itemArray[i]);
+                tempItemList.add(itemArray[i]);
+                tempItemList.add(itemArray[i]);
+                tempItemList.add(itemArray[i]);
+            } else if ("Rare".equals(itemArray[i].itemRarity)) {
+                tempItemList.add(itemArray[i]);
+                tempItemList.add(itemArray[i]);
+                tempItemList.add(itemArray[i]);
+            } else if ("Legendary".equals(itemArray[i].itemRarity)) {
+                tempItemList.add(itemArray[i]);
+            }
+        }
+        
+        pickIndex = (int)(Math.random() * tempItemList.size());
+
+        return tempItemList.get(pickIndex);
+    }
+
     public static void shop() {
         clearConsole();
-        printHeader("You meet a myserious stranger. He offers you something:", true);
-        int price = (int) (Math.random() * (10 + player.pots * 3) + 10 + player.pots);
-        System.out.println("Magic Potion: " + price + " gold.");
+        printHeader("You meet a mysterious stranger. He offers you something:", true);
+
+        int itemTypeShop = (int) (Math.random() * 2) + 1; //this is going to be used to define what type of item will be picked
+        Item itemGenerated = new Item("null", 0, "null") {
+        };
+        Item itemCurrent = new Item("null", 0, "null") {
+        };
+        // if ARMOR
+        if (itemTypeShop == 1) {
+            switch (act) {
+                case 1:
+                    itemGenerated = pickItemShop(Armor.ArmorsAct1);
+                    break;
+                case 2:
+                    itemGenerated = pickItemShop(Armor.ArmorsAct2);
+                    break;
+                case 3:
+                    itemGenerated = pickItemShop(Armor.ArmorsAct3);
+                    break;
+                default:
+                    itemGenerated = pickItemShop(Armor.ArmorsAct4);
+                    break;
+            }
+            itemCurrent = player.equippedArmor;
+        } else if (itemTypeShop == 2) {
+            switch (act) {
+                case 1:
+                    itemGenerated = pickItemShop(Weapon.WeaponsAct1);
+                    break;
+                case 2:
+                    itemGenerated = pickItemShop(Weapon.WeaponsAct2);
+                    break;
+                case 3:
+                    itemGenerated = pickItemShop(Weapon.WeaponsAct3);
+                    break;
+                default:
+                    itemGenerated = pickItemShop(Weapon.WeaponsAct4);
+                    break;
+            }
+            itemCurrent = player.equippedWeapon;
+        }
+        int price = (int) (Math.random() * ((10* act + act * 5) - (act * 5) + 1) + (act * 5));
+        
+        System.out.println("This '" + itemGenerated.itemName + "' good stuff, mate. Ye can get it for " + price + " units and ye gimme yer '" + itemCurrent.itemName + "'.");
+
+        //there will be no weights on rarity
+        
+        
+        
         printDivider(20);
-        System.out.println("Do you want to buy one?\n(1) Yes\n(2) Maybe next time");
+        System.out.println("Do you want to buy it?\n(1) Yes\n(2) Maybe next time");
         int input = readInt("->", 2);
 
         if (input == 1) {
             clearConsole();
             if (player.gold >= price) {
-                System.out.println("You have bought the potion!\nYou now have a total of " + player.pots + " potions.");
+                System.out.println("You traded your '" + itemCurrent.itemName + "' for the stranger's '" + itemGenerated.itemName + "'.");
                 player.gold -= price;
-                player.pots++;
+                if (itemTypeShop == 1) {
+                    player.equippedArmor = (Armor)itemGenerated;
+                } else if (itemTypeShop == 2){
+                    player.equippedWeapon = (Weapon)itemGenerated;
+                }
                 anythingToContinue();
             } else {
                 System.out.println("You don't have enough gold.");

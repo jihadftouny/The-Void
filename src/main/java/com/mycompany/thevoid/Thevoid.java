@@ -15,14 +15,12 @@ import java.util.Random;
 public class Thevoid {
 
     public static void main(String[] args) {
-        
-
-        
-        
-
-        
-//        Calculators.dmgCalculator();
         GameLogic.startGame();
+
+        
+        
+//        Calculator.setFullName("Beast");
+//        Calculator.calcsCR();
 //        GameLogic.printHeader("Jorginho Matagal ta na area");
 //        System.out.println("Texto texto texto");
 //        GameLogic.printDivider(10);
@@ -31,4 +29,7 @@ public class Thevoid {
 //        System.out.println("Choose:\n(1) Do it\n(2) Don't do it");
 //        GameLogic.readInt("-> ", 2);
     }
+    
+    
+    
 }

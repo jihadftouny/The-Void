@@ -4,11 +4,127 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  *
  * @author jihad
  */
 public class Calculator {
+    
+    
+    
+    public static void setFullName(String name) {
+
+        int randomSelector;
+        int mapKey;
+
+        // String is the name, Integer is the percentage
+        Map<Integer, String> firstName = new HashMap<Integer, String>();
+        Map<Integer, String> middleName = new HashMap<Integer, String>();
+        Map<Integer, String> lastName = new HashMap<Integer, String>();
+
+        //the following if else chain will set the HashMap tables to the creature type acquired from the object creation in GameLogic's Array of enemies
+        if ("Beast".equals(name)) {
+            //STATS mods
+            firstName.put(20, "Feral"); // add dmg
+            firstName.put(40, "Aerobicized"); // add hp
+            firstName.put(60, "Plated"); // add AC
+
+            firstName.put(70, "Bestial"); // add dmg + hp
+            firstName.put(80, "Unbreakable"); // add hp + AC
+            firstName.put(90, "Cunning"); // add AC + dmg
+
+            firstName.put(96, "Giant"); // add dmg + hp + AC
+            firstName.put(99, "Monstrous"); // add dmg + hp + AC A LOT
+            firstName.put(100, "Mutated"); // immunity to some elements, equivalent to UNDEAD
+
+            // // //
+            middleName.put(20, "Cryo"); // Ice
+            middleName.put(40, "Fiery"); // Fire
+            middleName.put(60, "Electrified"); // Electro
+            middleName.put(80, "Venomous"); // Poison
+            middleName.put(100, "Psychogenic"); // Psychic
+
+            //from here on there must be an if else chain for each act's monsters
+            lastName.put(20, "Rat");
+            lastName.put(40, "Dog");
+            lastName.put(60, "Lizard");
+            lastName.put(80, "Spider");
+            lastName.put(100, "Raven");
+        }
+
+        randomSelector = (int) (Math.random() * (101 - 1)) + 1; //1-100
+
+        firstName.forEach((k, v) -> {
+            if (randomSelector <= k)
+            System.out.println(k + ":" + v);
+
+        });
+
+    }
+
+    public static void calcsCR() {
+
+        double a;
+        double b;
+        int playerLevel;
+        playerLevel = (int) (Math.random() * (20 - 17)) + 17;
+
+        double CRmax, CRmin, CRboss;
+
+        //min
+        a = 0.087970550572;
+        b = 1.4100213799828;
+        CRmin = a * Math.pow(playerLevel, b);
+
+        //max
+        a = 0.2320721484759;
+        b = 1.319592522878;
+        CRmax = a * Math.pow(playerLevel, b);
+
+        //boss
+        a = 0.4294334810279;
+        b = 1.165240310288;
+        CRboss = a * Math.pow(playerLevel, b);
+
+        for (int i = 1; i <= 20; i++) {
+            //min
+            a = 0.087970550572;
+            b = 1.4100213799828;
+            CRmin = a * Math.pow(i, b);
+
+            //max
+            a = 0.2320721484759;
+            b = 1.319592522878;
+            CRmax = a * Math.pow(i, b);
+
+            //boss
+            a = 0.4294334810279;
+            b = 1.165240310288;
+            CRboss = a * Math.pow(i, b);
+            int randomSelector = (int) (Math.random() * (101 - 1)) + 1; //10 - 5
+            System.out.println(randomSelector);
+//            System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " at level " + i);
+        }
+        
+        
+
+//        System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " " + playerLevel);
+
+    }
+
+    public static void jooj2() {
+        int act = 3;
+        int wR = 10; //10 5 2
+
+        for (int i = 0; i < 100; i++) {
+            int price = (int) (Math.random() * ((10 * act + act * 5) - (act * 5) + 1) + (act * 5));
+            int jooj = (int) (Math.random() * 15) + 10;
+            System.out.println(price);
+        }
+    }
 
     public static void jooj() {
 
@@ -22,7 +138,7 @@ public class Calculator {
             i++;
             avg += stat;
         }
-        System.out.println("avg" + (avg/i));
+        System.out.println("avg" + (avg / i));
     }
 
     public static void dmgCalculator() {

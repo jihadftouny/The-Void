@@ -13,8 +13,8 @@ package com.mycompany.thevoid;
  */
 public abstract class Item {
         
-    String itemName;
-    int itemCost; //cost of item will be slightly variable internally, but character Charisma will ialso influence on price
+    String itemName, itemRarity;
+    int itemCost, itemRarityWeight; //cost of item will be slightly variable internally, but character Charisma will ialso influence on price
     
     //0 armor, 1 weapon, 2 trinket, 3 usable (includes instant damage items for example)
     
@@ -22,9 +22,12 @@ public abstract class Item {
 // WEAPONS   Dice itemAtkRoll; //this is a dice for the atk roll, used for weapons
 // WEAPONS   String itemProperty; //meelee, ranged, finesse
     
-    public Item(String itemName, int itemCost) {
+    public Item(String itemName, int itemCost, String itemRarity) {
         this.itemName = itemName;
         this.itemCost = itemCost;
+        this.itemRarity = itemRarity;
+        
+        
     }
     
     

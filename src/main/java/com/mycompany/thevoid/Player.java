@@ -15,12 +15,15 @@ import java.util.logging.Logger;
 public class Player extends Character {
 
     Random rand = new Random();
+    public static boolean isLevelUp = false;
 
     //additional variables
     int gold, restsLeft, pots;
 
+    public Armor equippedArmor;
+    public Weapon equippedWeapon;
+
     public String classPlayer;
-    public static boolean isLevelUp = false;
 
     static Dice hitDiePlayer, hitDiePlayerTotal;
     int proficiency;
@@ -34,7 +37,7 @@ public class Player extends Character {
     //constructor
     public Player(String name) {
         //calling constructor of superclass
-        super(name, 0, 150); //name maxhp xp
+        super(name, 0, 0); //name maxhp xp
 
         //setting #upgrades to 0
         this.numAtkUpgrades = 0;
@@ -42,7 +45,7 @@ public class Player extends Character {
 
         //player stats
         //set additional stats
-        this.gold = 5;
+        this.gold = 1500;
         this.restsLeft = 1;
         this.pots = 2;
         //let player choose trait when creating character
@@ -123,36 +126,7 @@ public class Player extends Character {
                         choicePicked[k] += "+";
                         Stats[k]++;
                     }
-
                 }
-                
-
-//                switch (input) {
-//                    case 1:
-//                        choicePicked[0] += "+";
-//                        Stats[0]++;
-//                        break;
-//                    case 2:
-//                        choicePicked[1] += "+";
-//                        Stats[1]++;
-//                        break;
-//                    case 3:
-//                        choicePicked[2] += "+";
-//                        Stats[2]++;
-//                        break;
-//                    case 4:
-//                        choicePicked[3] += "+";
-//                        Stats[3]++;
-//                        break;
-//                    case 5:
-//                        choicePicked[4] += "+";
-//                        Stats[4]++;
-//                        break;
-//                    default:
-//                        choicePicked[5] += "+";
-//                        Stats[5]++;
-//                        break;
-//                }
             }
 
             i++;
@@ -165,11 +139,9 @@ public class Player extends Character {
 
         proficiency++;
 
-        
 //        System.out.println("STR: " + Stats[0] + " (" + StatsMods[0] + ")" + "\tDEX: " + Stats[1] + " (" + StatsMods[1] + ")"
 //                + "\nCON: " + Stats[2] + " (" + StatsMods[2] + ")" + "\tINT: " + Stats[3] + " (" + StatsMods[3] + ")"
 //                + "\nWIS: " + Stats[4] + " (" + StatsMods[4] + ")" + "\tCHA: " + Stats[5] + " (" + StatsMods[5] + ")");
-        
         GameLogic.anythingToContinue();
     }
 
@@ -185,10 +157,14 @@ public class Player extends Character {
 
             if (input == 1) {
                 classPlayer = "Solo";
-                hitDiePlayer = Dice.d10;
+                hitDiePlayer = Dice.d10; //Fighter
+                this.equippedArmor = Armor.testArmor11;
+                this.equippedWeapon = Weapon.testWeapon11;
             } else if (input == 2) {
-                classPlayer = "Techie";
+                classPlayer = "Neuromancer";//some sort of psychic based on wizard class
                 hitDiePlayer = Dice.d6; //wizard
+                this.equippedArmor = Armor.testArmor21;
+                this.equippedWeapon = Weapon.testWeapon21;
             }
 
             GameLogic.clearConsole();
