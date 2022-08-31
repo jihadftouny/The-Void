@@ -4,11 +4,66 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  *
  * @author jihad
  */
 public class Calculator {
+    
+    
+    
+    public static void setFullName(String name) {
+
+        int randomSelector;
+        int mapKey;
+
+        // String is the name, Integer is the percentage
+        Map<Integer, String> firstName = new HashMap<Integer, String>();
+        Map<Integer, String> middleName = new HashMap<Integer, String>();
+        Map<Integer, String> lastName = new HashMap<Integer, String>();
+
+        //the following if else chain will set the HashMap tables to the creature type acquired from the object creation in GameLogic's Array of enemies
+        if ("Beast".equals(name)) {
+            //STATS mods
+            firstName.put(20, "Feral"); // add dmg
+            firstName.put(40, "Aerobicized"); // add hp
+            firstName.put(60, "Plated"); // add AC
+
+            firstName.put(70, "Bestial"); // add dmg + hp
+            firstName.put(80, "Unbreakable"); // add hp + AC
+            firstName.put(90, "Cunning"); // add AC + dmg
+
+            firstName.put(96, "Giant"); // add dmg + hp + AC
+            firstName.put(99, "Monstrous"); // add dmg + hp + AC A LOT
+            firstName.put(100, "Mutated"); // immunity to some elements, equivalent to UNDEAD
+
+            // // //
+            middleName.put(20, "Cryo"); // Ice
+            middleName.put(40, "Fiery"); // Fire
+            middleName.put(60, "Electrified"); // Electro
+            middleName.put(80, "Venomous"); // Poison
+            middleName.put(100, "Psychogenic"); // Psychic
+
+            //from here on there must be an if else chain for each act's monsters
+            lastName.put(20, "Rat");
+            lastName.put(40, "Dog");
+            lastName.put(60, "Lizard");
+            lastName.put(80, "Spider");
+            lastName.put(100, "Raven");
+        }
+
+        randomSelector = (int) (Math.random() * (101 - 1)) + 1; //1-100
+
+        firstName.forEach((k, v) -> {
+            if (randomSelector <= k)
+            System.out.println(k + ":" + v);
+
+        });
+
+    }
 
     public static void calcsCR() {
 
@@ -49,9 +104,12 @@ public class Calculator {
             a = 0.4294334810279;
             b = 1.165240310288;
             CRboss = a * Math.pow(i, b);
-
-            System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " at level " + i);
+            int randomSelector = (int) (Math.random() * (101 - 1)) + 1; //10 - 5
+            System.out.println(randomSelector);
+//            System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " at level " + i);
         }
+        
+        
 
 //        System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " " + playerLevel);
 
