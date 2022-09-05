@@ -19,7 +19,7 @@ public class Enemy extends Character {
     Random rand = new Random();
     //variable that stores the player current xp
     int playerXp;
-    String fullName = "";
+    public static String fullName = "";
 
     public Enemy(String name, int playerXp) {
         super(name, 1, (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
