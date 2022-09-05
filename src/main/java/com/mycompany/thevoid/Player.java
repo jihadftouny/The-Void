@@ -151,12 +151,12 @@ public class Player extends Character {
         boolean classSet = false;
 
         do {
-            GameLogic.printHeader("CHOOSE YOUR CLASS", true); //SOLO -> WARRIOR   ---- TECHIES -> WIZARD(kind of)
-            System.out.println("(1) Solo\n(2) Techie");
+            GameLogic.printHeader("CHOOSE YOUR CLASS", true); //Enforcer -> WARRIOR   ---- Neuromancer -> WIZARD(kind of)
+            System.out.println("(1) Enforcer\n(2) Neuromancer");
             int input = GameLogic.readInt("-> ", 2);
 
             if (input == 1) {
-                classPlayer = "Solo";
+                classPlayer = "Enforcer";
                 hitDiePlayer = Dice.d10; //Fighter
                 this.equippedArmor = Armor.testArmor11;
                 this.equippedWeapon = Weapon.testWeapon11;
