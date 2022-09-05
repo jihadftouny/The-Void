@@ -184,6 +184,7 @@ public class Calculator {
         System.out.println("DmgTook: " + playerDmgTook);
         System.out.println("Turns: " + turns);
         int i = 0;
+        
         while (i < 10) {
             int Status = 10 + (int) (Math.random() * (playerXp / 4) + monsterXp / 4);
             System.out.println(Status);
