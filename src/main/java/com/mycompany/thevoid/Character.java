@@ -16,7 +16,7 @@ public abstract class Character {
     // will have to create setArmor, setWeapon, etc. both for player and enemies, while also randomly picking one from a range to enemies
     //variables
     String name;
-    int hp, maxHp, xp;
+    int hp, maxHp, xp, maxSkillCharges, skillCharges;
     public int[] Stats; //every level up player has x points to spend on his attributes
     int ArmorClass;
 
@@ -34,6 +34,9 @@ public abstract class Character {
         this.maxHp = maxHp;
         this.xp = xp;
         hp = maxHp;
+        
+        this.maxSkillCharges = 5;
+        skillCharges = maxSkillCharges;
     }
 
     //methods every character has
