@@ -194,6 +194,7 @@ public class GameLogic {
         System.out.println("Weapon: " + player.equippedWeapon.itemName);
         System.out.println("Armor: " + player.equippedArmor.itemName);
         System.out.println("Potions: " + player.pots);
+        System.out.println("Skill Charges: " + player.skillCharges + "/" + player.maxSkillCharges);
         printDivider(20);
         System.out.println("STR: " + player.Stats[0] + " (" + player.StatsMods[0] + ")" + "\tDEX: " + player.Stats[1] + " (" + player.StatsMods[1] + ")"
                 + "\nCON: " + player.Stats[2] + " (" + player.StatsMods[2] + ")" + "\tINT: " + player.Stats[3] + " (" + player.StatsMods[3] + ")"
@@ -237,7 +238,8 @@ public class GameLogic {
         anythingToContinue();
 
         //creating new enemy with random name
-        battle(new Enemy(enemies[(int) (Math.random() * enemies.length)], player.xp));
+        Enemy enemy = new Enemy(enemies[(int) (Math.random() * enemies.length)], player.xp);
+        battle(enemy);
     }
 
     //main battle method
@@ -247,7 +249,7 @@ public class GameLogic {
             clearConsole();
             printHeader(player.name + "\nHP: " + player.hp + "/" + player.maxHp + "\n", true);
             printHeader(enemy.fullName + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
-            printHeader("ATK: " + enemy.Stats[0] + " DEF: " + enemy.Stats[1], false);
+            printHeader("ATK: " + enemy.Stats[0] + " DEF: " + enemy.Stats[2], false);
             System.out.println("Choose an action: ");
             printDivider(20);
             System.out.println("(1) Fight\n(2) Use Potion\n(3) Run Away");
@@ -259,6 +261,10 @@ public class GameLogic {
                     //calculate dmg and dmgTook
                     int dmg = player.attack() - enemy.defend();
                     int dmgTook = enemy.attack() - player.defend();
+                    
+                    // test spell
+                    dmgTook = Skill.testFireSkill.damage();
+                    
 
                     //check that dmg isnt negative
                     if (dmgTook < 0) {
@@ -277,6 +283,7 @@ public class GameLogic {
                     clearConsole();
                     printHeader("BATTLE", true);
                     System.out.println("You dealt " + dmg + " damage to " + enemy.name + ".");
+                    System.out.println(Skill.testFireSkill.useText()); //TEST SPELL
                     System.out.println(enemy.name + " dealt " + dmgTook + " damage to you.");
                     anythingToContinue();
 
