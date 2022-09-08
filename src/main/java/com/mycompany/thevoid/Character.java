@@ -22,7 +22,7 @@ public abstract class Character {
     String name;
     int hp, maxHp, xp, skillCharges;
     public int[] Stats; //every level up player has x points to spend on his attributes
-    int ArmorClass;
+    int armorClass;
     int maxSkillCharges;
     ArrayList<Skill> skillPool;
     public static ArrayList<Condition> activeConditions;
@@ -35,7 +35,7 @@ public abstract class Character {
     public Character(String name, int maxHp, int xp) {
         this.Stats = new int[]{10, 10, 10, 10, 10, 10}; //STR,DEX,CON,INT,WIS,CHA, -future update - CON(hp), AGI (chance to dodge), INT (when we add spells) - - also make every upgrade a bigger difference
         this.StatsMods = new int[]{0, 0, 0, 0, 0, 0};
-        this.ArmorClass = 10;
+        this.armorClass = 10;
         this.EquipmentOn = new String[]{"", "", ""};
         this.name = name;
         this.maxHp = maxHp;
@@ -51,6 +51,10 @@ public abstract class Character {
     public abstract int attack();
 
     public abstract int defend();
+    
+    public abstract void setArmorClass();
+    
+    public abstract int atkRoll();
 
     //the below function will set all the stat modifiers everytime a character is created or level ups.
     public void setMods() {

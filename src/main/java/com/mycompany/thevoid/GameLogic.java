@@ -70,7 +70,7 @@ public class GameLogic {
         //this sets player iniitial stats after his creation maxhp based on his hitdie and con mod, also setting his hp with maxhp
         player.maxHp = player.hitDiePlayer.sides + player.StatsMods[2];
         player.hp = player.maxHp;
-        player.ArmorClass = 10 + player.StatsMods[2];
+        player.armorClass = 10 + player.StatsMods[2];
 
         Story.printIntro(player);
 

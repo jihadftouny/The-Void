@@ -63,8 +63,7 @@ public class Enemy extends Character {
         if (pickedSkill.condition2 != null) {
             pickedSkill.addConditionTarget(pickedSkill.condition2);
         }
-        
-        
+
         pickedSkillString = pickedSkill.useText();
 
         return damage;
@@ -127,6 +126,36 @@ public class Enemy extends Character {
     public int defend() {
         return 0;
 //        return (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
+    }
+
+    @Override
+    public void setArmorClass() {
+        armorClass = 10;
+    }
+
+    @Override
+    public int atkRoll() {
+        int diceRoll = Dice.rollDice(Dice.d20);
+        int diceRollOg = diceRoll;
+
+        diceRoll += StatsMods[0];
+
+        if (diceRoll <= 0) {
+            diceRoll = 1;
+        }
+
+        if (diceRollOg == 20) {
+            diceRoll = 8000; //8000 will be used as a critical success
+        }
+        if (diceRollOg == 1) {
+            diceRoll = 8001; //8001 will be used as a a critical fail
+        }
+
+        System.out.println("Atk Roll: " + diceRoll);
+        GameLogic.anythingToContinue();
+
+        return diceRoll;
+
     }
 
 }

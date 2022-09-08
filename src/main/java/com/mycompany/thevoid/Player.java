@@ -28,7 +28,7 @@ public class Player extends Character {
 
     static Dice hitDiePlayer, hitDiePlayerTotal;
     int proficiency;
-    
+
     public static ArrayList<Condition> activeConditions;
 
     //upgrades variables
@@ -41,15 +41,13 @@ public class Player extends Character {
     public Player(String name) {
         //calling constructor of superclass
         super(name, 0, 0); //name maxhp xp
-        
 
         //setting #upgrades to 0
         this.numAtkUpgrades = 0;
         this.numDefUpgrades = 0;
 
         activeConditions = new ArrayList<Condition>();
-        
-        
+
         //player stats
         //set additional stats
         this.gold = 1500;
@@ -167,17 +165,17 @@ public class Player extends Character {
                 hitDiePlayer = Dice.d20; //Fighter
                 this.equippedArmor = Armor.testArmor11;
                 this.equippedWeapon = Weapon.testWeapon11;
-                
+
                 skillPool = new ArrayList<Skill>();
-                
+
             } else if (input == 2) {
                 classPlayer = "Neuromancer";//some sort of psychic based on wizard class
                 hitDiePlayer = Dice.d6; //wizard
                 this.equippedArmor = Armor.testArmor21;
                 this.equippedWeapon = Weapon.testWeapon21;
-                
+
                 skillPool = new ArrayList<Skill>();
-                
+
             }
 
             GameLogic.clearConsole();
@@ -196,8 +194,6 @@ public class Player extends Character {
 
     }
 
-    
-
     //ATTACK AND DEFEND NEED REWORK
     @Override
     public int attack() {
@@ -211,6 +207,46 @@ public class Player extends Character {
         return 0;
 //        return rand.nextInt(Stats[1]);
 //        return (int) (Math.random() * (xp / 4 + numDefUpgrades * 3 + 3) + xp / 10 + numDefUpgrades * 2 + numAtkUpgrades + 1);
+    }
+
+    @Override
+    public void setArmorClass() {
+        if (equippedArmor == null) {
+            armorClass = 10 + StatsMods[1];
+        } else {
+            armorClass = equippedArmor.armorAC + equippedArmor.armorACM;
+        }
+    }
+
+    @Override
+    public int atkRoll() {
+        int diceRoll = Dice.rollDice(Dice.d20);
+        int diceRollOg = diceRoll;
+        if ("Meelee".equals(equippedWeapon.weaponProperty)) {
+            diceRoll += StatsMods[0];
+        }
+        if ("Ranged".equals(equippedWeapon.weaponProperty)) {
+            diceRoll += StatsMods[1];
+        }
+        if ("Finesse".equals(equippedWeapon.weaponProperty)) {
+            if (StatsMods[0] > StatsMods[1]) {
+                diceRoll += StatsMods[0];
+            } else {
+                diceRoll += StatsMods[1];
+            }
+        }
+        if (diceRollOg == 20) {
+            diceRoll = 8000; //8000 will be used as a critical roll
+        }
+        if (diceRollOg == 1) {
+            diceRoll = 8001; //8001 will be used as a a critical fail
+        }
+
+        System.out.println("Atk Roll: " + diceRoll);
+        GameLogic.anythingToContinue();
+
+        return diceRoll;
+
     }
 
 }
