@@ -4,6 +4,7 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.ArrayList;
 import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -27,6 +28,8 @@ public class Player extends Character {
 
     static Dice hitDiePlayer, hitDiePlayerTotal;
     int proficiency;
+    
+    public static ArrayList<Condition> activeConditions;
 
     //upgrades variables
     public int numAtkUpgrades, numDefUpgrades;
@@ -38,11 +41,15 @@ public class Player extends Character {
     public Player(String name) {
         //calling constructor of superclass
         super(name, 0, 0); //name maxhp xp
+        
 
         //setting #upgrades to 0
         this.numAtkUpgrades = 0;
         this.numDefUpgrades = 0;
 
+        activeConditions = new ArrayList<Condition>();
+        
+        
         //player stats
         //set additional stats
         this.gold = 1500;
@@ -157,14 +164,20 @@ public class Player extends Character {
 
             if (input == 1) {
                 classPlayer = "Enforcer";
-                hitDiePlayer = Dice.d10; //Fighter
+                hitDiePlayer = Dice.d20; //Fighter
                 this.equippedArmor = Armor.testArmor11;
                 this.equippedWeapon = Weapon.testWeapon11;
+                
+                skillPool = new ArrayList<Skill>();
+                
             } else if (input == 2) {
                 classPlayer = "Neuromancer";//some sort of psychic based on wizard class
                 hitDiePlayer = Dice.d6; //wizard
                 this.equippedArmor = Armor.testArmor21;
                 this.equippedWeapon = Weapon.testWeapon21;
+                
+                skillPool = new ArrayList<Skill>();
+                
             }
 
             GameLogic.clearConsole();
@@ -183,21 +196,20 @@ public class Player extends Character {
 
     }
 
-    public void setHitDie() {
-
-    }
+    
 
     //ATTACK AND DEFEND NEED REWORK
     @Override
     public int attack() {
-
-        return rand.nextInt(Stats[0]);
+        return 0;
+//        return rand.nextInt(Stats[0]);
 //        return (int) (Math.random()*(xp/4 + numAtkUpgrades*3 +3) + xp/10 + numAtkUpgrades*2 + numDefUpgrades +1);
     }
 
     @Override
     public int defend() {
-        return rand.nextInt(Stats[1]);
+        return 0;
+//        return rand.nextInt(Stats[1]);
 //        return (int) (Math.random() * (xp / 4 + numDefUpgrades * 3 + 3) + xp / 10 + numDefUpgrades * 2 + numAtkUpgrades + 1);
     }
 

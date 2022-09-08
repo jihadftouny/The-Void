@@ -22,7 +22,7 @@ public class EnemyName {
 
     public String setName() {
         String returnedName = "";
-
+        
         // arrays will store names eg. "Feral Electrified Lizard"
         ArrayList<String> firstName = new ArrayList<String>();
         ArrayList<String> middleName = new ArrayList<String>();

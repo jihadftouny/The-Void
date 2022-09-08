@@ -21,20 +21,54 @@ public class Enemy extends Character {
     int playerXp;
     public static String fullName = "";
 
+    public static String pickedSkillString;
+
+    public static ArrayList<Condition> activeConditions;
+
     public Enemy(String name, int playerXp) {
         super(name, 1, (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
         this.playerXp = playerXp; //this here sets the variable playerXp with the variable that was given in the parameter declaration (which was set on object creation)
         EnemyName enemyName = new EnemyName(name);
-        
+
         fullName = enemyName.fullName;
-        
 
         Stats[0] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         Stats[1] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
+
+        activeConditions = new ArrayList<Condition>();
+
+        skillPool = new ArrayList<Skill>();
+
+        //TEST SKILL ADDS, every enemy will have these skills on them (for now)
+        skillPool.add(SkillEnemy.testBurnSkill);
+//        skillPool.add(SkillEnemy.testFireSkill);
+
+        maxSkillCharges = 2;
+
+        skillCharges = maxSkillCharges;
     }
 
-    
+    public int useSkill(ArrayList<Skill> skillPool) {
 
+        // create random selector and pick  from skillpool array
+        int index = rand.nextInt(skillPool.size());
+
+        Skill pickedSkill = skillPool.get(index);
+
+        int damage = pickedSkill.damage();
+        System.out.println("Damage: " + damage);
+        if (pickedSkill.condition1 != null) {
+            pickedSkill.addConditionTarget(pickedSkill.condition1);
+        }
+        if (pickedSkill.condition2 != null) {
+            pickedSkill.addConditionTarget(pickedSkill.condition2);
+        }
+        
+        
+        pickedSkillString = pickedSkill.useText();
+
+        return damage;
+    }
 
     public void setStatsEnemy() {
 
@@ -78,7 +112,14 @@ public class Enemy extends Character {
 
     @Override
     public int attack() {
-        return 0;
+        int damage = 0;
+        if (skillCharges > 0) {
+            damage = useSkill(skillPool);
+            skillCharges--;
+        } else {
+            damage = 1;
+        }
+        return damage;
 //        return (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
     }
 

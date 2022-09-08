@@ -4,6 +4,8 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.ArrayList;
+
 /**
  *
  * @author jihad
@@ -14,11 +16,16 @@ public abstract class Character {
     //BIG BIG BIG IMPORTANT NOTE:::::::::::::::::::::::::::::::::::
     // might have to create methods like attack() and defend() (overidable) to set player stats everytime an item is equipped
     // will have to create setArmor, setWeapon, etc. both for player and enemies, while also randomly picking one from a range to enemies
+    
+    
     //variables
     String name;
-    int hp, maxHp, xp, maxSkillCharges, skillCharges;
+    int hp, maxHp, xp, skillCharges;
     public int[] Stats; //every level up player has x points to spend on his attributes
     int ArmorClass;
+    int maxSkillCharges;
+    ArrayList<Skill> skillPool;
+    public static ArrayList<Condition> activeConditions;
 
     //modifiers
     public int[] StatsMods; // strM, dexM, conM, intM, wisM, chaM;
@@ -35,8 +42,9 @@ public abstract class Character {
         this.xp = xp;
         hp = maxHp;
         
-        this.maxSkillCharges = 5;
-        skillCharges = maxSkillCharges;
+        
+        
+        
     }
 
     //methods every character has
