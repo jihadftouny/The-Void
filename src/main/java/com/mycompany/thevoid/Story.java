@@ -72,6 +72,7 @@ public class Story {
 
     // Fourth Floor - The Inner World
     // It's a pretty place, with ancient ruins, vast forests, little amount of civilization in the beggining, then you find the "City of Angels". enemies here are somewhat "divine looking", angels, ancient creatures, mythical creatures, etc. (maybe deactivate the Two-name random generator).
+    
     public static void fourthActIntro() {
         GameLogic.clearConsole();
         GameLogic.printHeader("ACT IV", true);

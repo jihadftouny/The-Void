@@ -13,6 +13,7 @@ public abstract class Skill {
     public String name;
     public int damage; //negative for healing? maybe
     public int chargeUses;
+    public static Character target;
     
     Element element;
     Condition condition1, condition2;
@@ -48,30 +49,15 @@ public abstract class Skill {
     
     
     // general methods
-    public void addConditionTarget(){}; //here we should add condition objects and set them to whatever is the target
+    public void addConditionTarget(Condition condition){
     
-    public void addConditionSelf(){};
+    } //here we should add condition objects and set them to whatever is the target
     
-    public void removeConditionTarget(){};
+    public void addConditionSelf(){}
     
-    public void removeConditionSelf(){};
+    public void removeConditionTarget(){}
     
-    
-    
-    
-    // test skills
-    public static Skill testFireSkill = new Skill("Pyro Ball", 1, Element.fire) {
-        @Override
-        public int damage() {
-            damage = 2;
-            return damage;
-        }
-
-        @Override
-        public String useText() {
-            return Enemy.fullName + " used " + name;
-        }
-    };
+    public void removeConditionSelf(){}
     
     
 }

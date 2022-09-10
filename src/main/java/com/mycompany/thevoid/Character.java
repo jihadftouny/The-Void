@@ -4,6 +4,8 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.ArrayList;
+
 /**
  *
  * @author jihad
@@ -14,11 +16,16 @@ public abstract class Character {
     //BIG BIG BIG IMPORTANT NOTE:::::::::::::::::::::::::::::::::::
     // might have to create methods like attack() and defend() (overidable) to set player stats everytime an item is equipped
     // will have to create setArmor, setWeapon, etc. both for player and enemies, while also randomly picking one from a range to enemies
+    
+    
     //variables
     String name;
     int hp, maxHp, xp, maxSkillCharges, skillCharges;
     public int[] Stats; //every level up player has x points to spend on his attributes
-    int ArmorClass;
+    int armorClass;
+    int maxSkillCharges;
+    ArrayList<Skill> skillPool;
+    public static ArrayList<Condition> activeConditions;
 
     //modifiers
     public int[] StatsMods; // strM, dexM, conM, intM, wisM, chaM;
@@ -28,7 +35,7 @@ public abstract class Character {
     public Character(String name, int maxHp, int xp) {
         this.Stats = new int[]{10, 10, 10, 10, 10, 10}; //STR,DEX,CON,INT,WIS,CHA, -future update - CON(hp), AGI (chance to dodge), INT (when we add spells) - - also make every upgrade a bigger difference
         this.StatsMods = new int[]{0, 0, 0, 0, 0, 0};
-        this.ArmorClass = 10;
+        this.armorClass = 10;
         this.EquipmentOn = new String[]{"", "", ""};
         this.name = name;
         this.maxHp = maxHp;
@@ -43,6 +50,10 @@ public abstract class Character {
     public abstract int attack();
 
     public abstract int defend();
+    
+    public abstract void setArmorClass();
+    
+    public abstract int atkRoll();
 
     //the below function will set all the stat modifiers everytime a character is created or level ups.
     public void setMods() {
