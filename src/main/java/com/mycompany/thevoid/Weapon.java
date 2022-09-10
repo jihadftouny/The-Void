@@ -11,7 +11,7 @@ package com.mycompany.thevoid;
 public class Weapon extends Item {
 
     Dice weaponAtkRoll;
-    String weaponProperty; // meelee, ranged, finesse
+    String weaponProperty; // Melee, Ranged, Finesse
 
     // ACT 1
     public static final Weapon testWeapon11 = new Weapon("Jooj Gun 1", 5, "Common", Dice.d4, "Ranged");

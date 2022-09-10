@@ -13,7 +13,7 @@ import java.util.Random;
  */
 public class EnemyName {
 
-    String type, firstName, middleName, lastName, fullName;
+    public String type, firstName, middleName, lastName, fullName;
 
     public EnemyName(String type) {
         this.type = type;
@@ -22,7 +22,7 @@ public class EnemyName {
 
     public String setName() {
         String returnedName = "";
-
+        
         // arrays will store names eg. "Feral Electrified Lizard"
         ArrayList<String> firstName = new ArrayList<String>();
         ArrayList<String> middleName = new ArrayList<String>();
@@ -96,7 +96,6 @@ public class EnemyName {
         return returnedName;
     }
     
-    
     public boolean isName(int chance){
         int randomNumber = (int) (Math.random() * (101 - 1)) + 1;
         
@@ -105,11 +104,14 @@ public class EnemyName {
         else return false;
     }
     
+    
     public String selectName(ArrayList names, ArrayList weight, boolean isLastName){ //firstName firstWeight
 
+        //locally setting the arraylists
         ArrayList<String> namesLocal = names;
         ArrayList<Integer> weightLocal = weight;
         
+        //this list will be filled with n weight amounts of each name in names
         ArrayList<String> fullList = new ArrayList<String>();
         
         Random rand = new Random();

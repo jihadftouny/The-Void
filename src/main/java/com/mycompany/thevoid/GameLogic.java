@@ -17,7 +17,12 @@ public class GameLogic {
     //variables
     static Scanner scanner = new Scanner(System.in);
     static Player player;
+    public static Enemy enemy; 
     public static boolean isRunning;
+    
+    
+    public static String attackRollString, advantageString;
+    
 
 //    public static Dice lvlUpDice = new Dice(2, 4);
     //dices
@@ -67,7 +72,7 @@ public class GameLogic {
         //this sets player iniitial stats after his creation maxhp based on his hitdie and con mod, also setting his hp with maxhp
         player.maxHp = player.hitDiePlayer.sides + player.StatsMods[2];
         player.hp = player.maxHp;
-        player.ArmorClass = 10 + player.StatsMods[2];
+        player.armorClass = 10 + player.StatsMods[2];
 
         Story.printIntro(player);
 
@@ -194,6 +199,7 @@ public class GameLogic {
         System.out.println("Weapon: " + player.equippedWeapon.itemName);
         System.out.println("Armor: " + player.equippedArmor.itemName);
         System.out.println("Potions: " + player.pots);
+        System.out.println("Skill Charges: " + player.skillCharges + "/" + player.maxSkillCharges);
         printDivider(20);
         System.out.println("STR: " + player.Stats[0] + " (" + player.StatsMods[0] + ")" + "\tDEX: " + player.Stats[1] + " (" + player.StatsMods[1] + ")"
                 + "\nCON: " + player.Stats[2] + " (" + player.StatsMods[2] + ")" + "\tINT: " + player.Stats[3] + " (" + player.StatsMods[3] + ")"
@@ -236,8 +242,10 @@ public class GameLogic {
         printHeader("You encountered an enemy. Fight for your life!", true);
         anythingToContinue();
 
+        player.advantageDisadvantage = -1;
         //creating new enemy with random name
-        battle(new Enemy(enemies[(int) (Math.random() * enemies.length)], player.xp));
+        enemy = new Enemy(enemies[(int) (Math.random() * enemies.length)], player.xp);
+        battle(enemy);
     }
 
     //main battle method
@@ -247,7 +255,7 @@ public class GameLogic {
             clearConsole();
             printHeader(player.name + "\nHP: " + player.hp + "/" + player.maxHp + "\n", true);
             printHeader(enemy.fullName + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
-            printHeader("ATK: " + enemy.Stats[0] + " DEF: " + enemy.Stats[1], false);
+            printHeader("ATK: " + enemy.Stats[0] + " DEF: " + enemy.Stats[2], false);
             System.out.println("Choose an action: ");
             printDivider(20);
             System.out.println("(1) Fight\n(2) Use Potion\n(3) Run Away");
@@ -257,12 +265,19 @@ public class GameLogic {
                 case 1:
                     //fight
                     //calculate dmg and dmgTook
-                    int dmg = player.attack() - enemy.defend();
-                    int dmgTook = enemy.attack() - player.defend();
+                    
+                    // HERE WE WILL CHECK FOR CONDITIONS THAT UNABLE ATTACKING 
+                    // THEN SET A BOOLEAN THAT LATER WILL ALLOW DMG TO BE MORE THAN 0
+                    // AND CHANGE DAMAGE MESSAGE ACCORDINGLY
+                    // MAKE AN IF ELSE CHAIN WITH HIGHEST PRIORITY STAT ON TOP (IF STUN ELSE SLEEP ELSE BROKEN BONE, ETC) THIS WAY THE HIGH PRIORITY WILL SHOW
+                    
+                    int dmg = player.attack();
+                    int dmgTook = enemy.attack();
+                    
 
                     //check that dmg isnt negative
                     if (dmgTook < 0) {
-                        dmg -= dmgTook / 2; //add some damage if player defend well
+//                        dmg -= dmgTook / 2; //add some damage if player defend well
                         dmgTook = 0;
                     }
                     if (dmg < 0) {
@@ -276,8 +291,21 @@ public class GameLogic {
                     //print battle info
                     clearConsole();
                     printHeader("BATTLE", true);
-                    System.out.println("You dealt " + dmg + " damage to " + enemy.name + ".");
-                    System.out.println(enemy.name + " dealt " + dmgTook + " damage to you.");
+                    if (advantageString != null){
+                        System.out.println(advantageString);
+                        advantageString = null;
+                    }
+                    if (attackRollString != null){
+                        System.out.println(attackRollString);
+                        attackRollString = null;
+                    }
+                    System.out.println("You dealt " + dmg + " damage to " + enemy.fullName + ".");
+                    if (Enemy.pickedSkillString != null){
+                        System.out.println(enemy.pickedSkillString);
+                        Enemy.pickedSkillString = null;
+                    }
+                    System.out.println(enemy.fullName + " dealt " + dmgTook + " damage to you.");
+                    Condition.tickConditions();
                     anythingToContinue();
 
                     //if player hp is 0 or enemy defeated
@@ -286,7 +314,7 @@ public class GameLogic {
                         return;
                     } else if (enemy.hp <= 0) {
                         //tell player he won
-                        printHeader("You defeated " + enemy.name + "!", true);
+                        printHeader("You defeated " + enemy.fullName + "!", true);
                         //increase player xp
                         player.xp += enemy.xp;
                         System.out.println("You earned " + enemy.xp + " XP!");
@@ -332,7 +360,7 @@ public class GameLogic {
                     if (act != 5) {
                         //chance of 35% escape
                         if (Math.random() * 10 + 1 <= 3.5) {
-                            printHeader("You ran away from " + enemy.name + "...", true);
+                            printHeader("You ran away from " + enemy.fullName + "...", true);
                             anythingToContinue();
                             return;
                         } else {
