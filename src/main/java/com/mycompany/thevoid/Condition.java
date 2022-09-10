@@ -18,7 +18,7 @@ public class Condition {
     // PHYSICAL (CON helps you resists them, STR cause them)
     public static Condition bleed = new Condition("Bleed", 2);
     public static Condition stun = new Condition("Stun", 2);
-    public static Condition fracture = new Condition("Fracture", 100); // Needs rest to go away
+    public static Condition fracture = new Condition("Fracture", 100); // Needs rest to go away, gives disadvantage
     public static Condition regeneration = new Condition("Regeneration", 2);
 
     // BASIC ELEMENTAL (CON resist, INT cause)
