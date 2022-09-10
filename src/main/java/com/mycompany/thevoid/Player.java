@@ -21,12 +21,14 @@ public class Player extends Character {
     //additional variables
     int gold, restsLeft, pots;
 
+    public int advantageDisadvantage; // 1 = adv , -1 = dis , 0 = none
+
     public Armor equippedArmor;
     public Weapon equippedWeapon;
 
     public String classPlayer;
 
-    static Dice hitDiePlayer, hitDiePlayerTotal;
+    public static Dice hitDiePlayer, hitDiePlayerTotal;
     int proficiency;
 
     public static ArrayList<Condition> activeConditions;
@@ -40,13 +42,14 @@ public class Player extends Character {
     //constructor
     public Player(String name) {
         //calling constructor of superclass
-        super(name, 0, 0); //name maxhp xp
+        super(name, 0, 50); //name maxhp xp
 
         //setting #upgrades to 0
         this.numAtkUpgrades = 0;
         this.numDefUpgrades = 0;
 
         activeConditions = new ArrayList<Condition>();
+        advantageDisadvantage = 0;
 
         //player stats
         //set additional stats
@@ -162,17 +165,17 @@ public class Player extends Character {
 
             if (input == 1) {
                 classPlayer = "Enforcer";
-                hitDiePlayer = Dice.d20; //Fighter
+                hitDiePlayer = new Dice(1, 10); //Fighter
                 this.equippedArmor = Armor.testArmor11;
-                this.equippedWeapon = Weapon.testWeapon11;
+                this.equippedWeapon = Weapon.testWeapon21;
 
                 skillPool = new ArrayList<Skill>();
 
             } else if (input == 2) {
                 classPlayer = "Neuromancer";//some sort of psychic based on wizard class
-                hitDiePlayer = Dice.d6; //wizard
+                hitDiePlayer = new Dice(1, 6); //wizard
                 this.equippedArmor = Armor.testArmor21;
-                this.equippedWeapon = Weapon.testWeapon21;
+                this.equippedWeapon = Weapon.testWeapon11;
 
                 skillPool = new ArrayList<Skill>();
 
@@ -197,7 +200,31 @@ public class Player extends Character {
     //ATTACK AND DEFEND NEED REWORK
     @Override
     public int attack() {
-        return 0;
+        int damage = 0;
+
+        Dice dmgDice = equippedWeapon.weaponAtkRoll;
+
+        int atkRoll = atkRoll();
+
+        // damage logic
+        damage += Dice.rollDice(dmgDice);
+
+        if (atkRoll == 0) {
+            GameLogic.attackRollString = "Your attack missed!";
+            damage = 0;
+        }
+
+        if (atkRoll == 8000) {
+            GameLogic.attackRollString = "Critical Hit!";
+            damage += Dice.rollDice(dmgDice);
+        }
+
+        if (atkRoll == 8001) {
+            GameLogic.attackRollString = "Critical Fail!";
+            damage = 0;
+        }
+
+        return damage;
 //        return rand.nextInt(Stats[0]);
 //        return (int) (Math.random()*(xp/4 + numAtkUpgrades*3 +3) + xp/10 + numAtkUpgrades*2 + numDefUpgrades +1);
     }
@@ -220,8 +247,33 @@ public class Player extends Character {
 
     @Override
     public int atkRoll() {
-        int diceRoll = Dice.rollDice(Dice.d20);
+        int diceRoll, diceRollOne, diceRollTwo;
+
+        diceRoll = Dice.rollDice(Dice.d20);
+        
+        // ADVANTAGE AND DISADVANTAGE
+        if (advantageDisadvantage != 0) {
+            diceRollOne = Dice.rollDice(Dice.d20);
+            diceRollTwo = Dice.rollDice(Dice.d20);
+
+            if (advantageDisadvantage == 1) { //advantage
+                GameLogic.advantageString = "You have advantage!";
+                if (diceRollOne >= diceRollTwo) {
+                    diceRoll = diceRollOne;
+                } else {
+                    diceRoll = diceRollTwo;
+                }
+            } else if (advantageDisadvantage == -1) { //disadvantage
+                GameLogic.advantageString = "You have disadvantage!";
+                if (diceRollOne <= diceRollTwo) {
+                    diceRoll = diceRollOne;
+                } else {
+                    diceRoll = diceRollTwo;
+                }
+            }
+        }
         int diceRollOg = diceRoll;
+
         if ("Meelee".equals(equippedWeapon.weaponProperty)) {
             diceRoll += StatsMods[0];
         }
@@ -235,11 +287,22 @@ public class Player extends Character {
                 diceRoll += StatsMods[1];
             }
         }
+
+        System.out.println("Atk Roll: " + diceRoll);
+
         if (diceRollOg == 20) {
             diceRoll = 8000; //8000 will be used as a critical roll
         }
         if (diceRollOg == 1) {
             diceRoll = 8001; //8001 will be used as a a critical fail
+        }
+
+        if (diceRoll < 1) {
+            diceRoll = 1;
+        }
+
+        if (diceRoll < GameLogic.enemy.armorClass) {
+            diceRoll = 0;
         }
 
         System.out.println("Atk Roll: " + diceRoll);

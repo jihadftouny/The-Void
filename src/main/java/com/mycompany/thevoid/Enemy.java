@@ -139,18 +139,22 @@ public class Enemy extends Character {
         int diceRollOg = diceRoll;
 
         diceRoll += StatsMods[0];
+        
+        System.out.println("Atk Roll: " + diceRoll);
 
-        if (diceRoll <= 0) {
+        if (diceRoll < 1) {
             diceRoll = 1;
         }
-
         if (diceRollOg == 20) {
             diceRoll = 8000; //8000 will be used as a critical success
         }
         if (diceRollOg == 1) {
             diceRoll = 8001; //8001 will be used as a a critical fail
         }
-
+        
+        if (diceRoll < GameLogic.player.armorClass) {
+            diceRoll = 0;
+        }
         System.out.println("Atk Roll: " + diceRoll);
         GameLogic.anythingToContinue();
 

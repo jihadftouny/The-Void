@@ -21,6 +21,8 @@ public class GameLogic {
     public static boolean isRunning;
     
     
+    public static String attackRollString, advantageString;
+    
 
 //    public static Dice lvlUpDice = new Dice(2, 4);
     //dices
@@ -240,6 +242,7 @@ public class GameLogic {
         printHeader("You encountered an enemy. Fight for your life!", true);
         anythingToContinue();
 
+        player.advantageDisadvantage = -1;
         //creating new enemy with random name
         enemy = new Enemy(enemies[(int) (Math.random() * enemies.length)], player.xp);
         battle(enemy);
@@ -268,13 +271,13 @@ public class GameLogic {
                     // AND CHANGE DAMAGE MESSAGE ACCORDINGLY
                     // MAKE AN IF ELSE CHAIN WITH HIGHEST PRIORITY STAT ON TOP (IF STUN ELSE SLEEP ELSE BROKEN BONE, ETC) THIS WAY THE HIGH PRIORITY WILL SHOW
                     
-                    int dmg = player.attack() - enemy.defend();
-                    int dmgTook = enemy.attack() - player.defend();
+                    int dmg = player.attack();
+                    int dmgTook = enemy.attack();
                     
 
                     //check that dmg isnt negative
                     if (dmgTook < 0) {
-                        dmg -= dmgTook / 2; //add some damage if player defend well
+//                        dmg -= dmgTook / 2; //add some damage if player defend well
                         dmgTook = 0;
                     }
                     if (dmg < 0) {
@@ -288,6 +291,14 @@ public class GameLogic {
                     //print battle info
                     clearConsole();
                     printHeader("BATTLE", true);
+                    if (advantageString != null){
+                        System.out.println(advantageString);
+                        advantageString = null;
+                    }
+                    if (attackRollString != null){
+                        System.out.println(attackRollString);
+                        attackRollString = null;
+                    }
                     System.out.println("You dealt " + dmg + " damage to " + enemy.fullName + ".");
                     if (Enemy.pickedSkillString != null){
                         System.out.println(enemy.pickedSkillString);
