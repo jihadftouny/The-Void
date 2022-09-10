@@ -15,6 +15,7 @@ import java.util.Random;
 public class Thevoid {
 
     public static void main(String[] args) {
+        
         GameLogic.startGame();
 
         
