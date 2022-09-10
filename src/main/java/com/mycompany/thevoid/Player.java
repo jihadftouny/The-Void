@@ -202,10 +202,12 @@ public class Player extends Character {
     public int attack() {
         int damage = 0;
 
+        
         Dice dmgDice = equippedWeapon.weaponAtkRoll;
 
         int atkRoll = atkRoll();
 
+        System.out.println("DMG");
         // damage logic
         damage += Dice.rollDice(dmgDice);
 
@@ -249,10 +251,12 @@ public class Player extends Character {
     public int atkRoll() {
         int diceRoll, diceRollOne, diceRollTwo;
 
+        System.out.println("diceRoll");
         diceRoll = Dice.rollDice(Dice.d20);
         
         // ADVANTAGE AND DISADVANTAGE
         if (advantageDisadvantage != 0) {
+            System.out.println("diceRollOne and Two");
             diceRollOne = Dice.rollDice(Dice.d20);
             diceRollTwo = Dice.rollDice(Dice.d20);
 

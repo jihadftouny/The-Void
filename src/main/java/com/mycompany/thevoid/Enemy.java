@@ -56,7 +56,7 @@ public class Enemy extends Character {
         Skill pickedSkill = skillPool.get(index);
 
         int damage = pickedSkill.damage();
-        System.out.println("Damage: " + damage);
+        System.out.println("Enemy Damage: " + damage);
         if (pickedSkill.condition1 != null) {
             pickedSkill.addConditionTarget(pickedSkill.condition1);
         }

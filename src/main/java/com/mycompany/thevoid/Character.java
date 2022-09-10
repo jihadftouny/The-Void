@@ -23,7 +23,6 @@ public abstract class Character {
     int hp, maxHp, xp, maxSkillCharges, skillCharges;
     public int[] Stats; //every level up player has x points to spend on his attributes
     int armorClass;
-    int maxSkillCharges;
     ArrayList<Skill> skillPool;
     public static ArrayList<Condition> activeConditions;
 

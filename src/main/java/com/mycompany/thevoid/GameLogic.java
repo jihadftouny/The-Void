@@ -242,7 +242,7 @@ public class GameLogic {
         printHeader("You encountered an enemy. Fight for your life!", true);
         anythingToContinue();
 
-        player.advantageDisadvantage = -1;
+        player.advantageDisadvantage = 1;
         //creating new enemy with random name
         enemy = new Enemy(enemies[(int) (Math.random() * enemies.length)], player.xp);
         battle(enemy);
