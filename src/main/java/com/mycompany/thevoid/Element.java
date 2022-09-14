@@ -22,12 +22,8 @@ public class Element {
     
     public static Element psychic = new Element("Psychic");
     public static Element force = new Element("Force");
-    
 
     public Element(String name) {
         this.name = name;
     }
-
-    
-    
 }

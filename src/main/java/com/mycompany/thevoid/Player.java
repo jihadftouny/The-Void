@@ -10,7 +10,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- *
  * @author jihad
  */
 public class Player extends Character {
@@ -64,7 +63,6 @@ public class Player extends Character {
         setMods();
 
         System.out.println(classPlayer);
-
 //        levelUp();
     }
 
@@ -74,7 +72,7 @@ public class Player extends Character {
         //for loop 6 iterations{
         //rolldice 4d6, add 3 highest to array as next index
         //display all indexes in the GameLogic.readInt()
-//STR,DEX,CON,INT,WIS,CHA,
+        //STR,DEX,CON,INT,WIS,CHA,
 
         boolean startStatsSet = false;
         do {
@@ -100,12 +98,10 @@ public class Player extends Character {
                     Logger.getLogger(Player.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
-
         } while (!startStatsSet);
 
         //might not need this
         GameLogic.anythingToContinue();
-
     }
 
     // player specific methods
@@ -146,7 +142,6 @@ public class Player extends Character {
         isLevelUp = false;
 
         proficiency++;
-
 //        System.out.println("STR: " + Stats[0] + " (" + StatsMods[0] + ")" + "\tDEX: " + Stats[1] + " (" + StatsMods[1] + ")"
 //                + "\nCON: " + Stats[2] + " (" + StatsMods[2] + ")" + "\tINT: " + Stats[3] + " (" + StatsMods[3] + ")"
 //                + "\nWIS: " + Stats[4] + " (" + StatsMods[4] + ")" + "\tCHA: " + Stats[5] + " (" + StatsMods[5] + ")");
@@ -189,12 +184,9 @@ public class Player extends Character {
 
             if (input == 1) {
                 classSet = true;
-            } else if (input == 2) {
-
             }
 
         } while (!classSet);
-
     }
 
     //ATTACK AND DEFEND NEED REWORK
@@ -202,11 +194,9 @@ public class Player extends Character {
     public int attack() {
         int damage = 0;
 
-        
         Dice dmgDice = equippedWeapon.weaponAtkRoll;
 
         int atkRoll = atkRoll();
-
         System.out.println("DMG");
         // damage logic
         damage += Dice.rollDice(dmgDice);
@@ -253,7 +243,7 @@ public class Player extends Character {
 
         System.out.println("diceRoll");
         diceRoll = Dice.rollDice(Dice.d20);
-        
+
         // ADVANTAGE AND DISADVANTAGE
         if (advantageDisadvantage != 0) {
             System.out.println("diceRollOne and Two");
@@ -262,18 +252,10 @@ public class Player extends Character {
 
             if (advantageDisadvantage == 1) { //advantage
                 GameLogic.advantageString = "You have advantage!";
-                if (diceRollOne >= diceRollTwo) {
-                    diceRoll = diceRollOne;
-                } else {
-                    diceRoll = diceRollTwo;
-                }
+                diceRoll = Math.max(diceRollOne, diceRollTwo);
             } else if (advantageDisadvantage == -1) { //disadvantage
                 GameLogic.advantageString = "You have disadvantage!";
-                if (diceRollOne <= diceRollTwo) {
-                    diceRoll = diceRollOne;
-                } else {
-                    diceRoll = diceRollTwo;
-                }
+                diceRoll = Math.min(diceRollOne, diceRollTwo);
             }
         }
         int diceRollOg = diceRoll;
@@ -285,11 +267,7 @@ public class Player extends Character {
             diceRoll += StatsMods[1];
         }
         if ("Finesse".equals(equippedWeapon.weaponProperty)) {
-            if (StatsMods[0] > StatsMods[1]) {
-                diceRoll += StatsMods[0];
-            } else {
-                diceRoll += StatsMods[1];
-            }
+            diceRoll += Math.max(StatsMods[0], StatsMods[1]);
         }
 
         System.out.println("Atk Roll: " + diceRoll);
@@ -298,13 +276,11 @@ public class Player extends Character {
             diceRoll = 8000; //8000 will be used as a critical roll
         }
         if (diceRollOg == 1) {
-            diceRoll = 8001; //8001 will be used as a a critical fail
+            diceRoll = 8001; //8001 will be used as a critical fail
         }
-
         if (diceRoll < 1) {
             diceRoll = 1;
         }
-
         if (diceRoll < GameLogic.enemy.armorClass) {
             diceRoll = 0;
         }
@@ -313,7 +289,5 @@ public class Player extends Character {
         GameLogic.anythingToContinue();
 
         return diceRoll;
-
     }
-
 }

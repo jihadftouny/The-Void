@@ -10,7 +10,8 @@ package com.mycompany.thevoid;
  */
 public class Armor extends Item {
 
-    int armorAC, armorACM, armorStr; //ARMOR CLASS, ARMOR CLASS MOD (DEX), ARMOR STRENGTH REQUIRED
+    //ARMOR CLASS, ARMOR CLASS MOD (DEX), ARMOR STRENGTH REQUIRED
+    int armorAC, armorACM, armorStr;
 
     // ARMOR JAVA OBJECTS
     // ACT 1
@@ -44,5 +45,4 @@ public class Armor extends Item {
         this.armorACM = armorACM;
         this.armorStr = armorStr;
     }
-
 }

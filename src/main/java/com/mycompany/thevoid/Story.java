@@ -5,7 +5,6 @@
 package com.mycompany.thevoid;
 
 /**
- *
  * @author jihad
  */
 public class Story {
@@ -15,11 +14,11 @@ public class Story {
         GameLogic.printHeader("STORY", true);
         System.out.println(
                 "The capital of Absolution, 2100 . . .\n"
-                + "- - -\n"
-                + "You are the last hope of your society. The Kingpins of\n"
-                + "The Undercity finally put their convoluted plan into action,\n"
-                + "and the Arch-Mage of house Grandmore has ordered you\n"
-                + player.name + ", to delve into the Rift and kill the kingpins.\n. . .");
+                        + "- - -\n"
+                        + "You are the last hope of your society. The Kingpins of\n"
+                        + "The Undercity finally put their convoluted plan into action,\n"
+                        + "and the Arch-Mage of house Grandmore has ordered you\n"
+                        + player.name + ", to delve into the Rift and kill the kingpins.\n. . .");
         System.out.println("Return with their brainchips so that Grandmore's Memorians can extract all the available information from them.");
         GameLogic.anythingToContinue();
     }
@@ -72,7 +71,7 @@ public class Story {
 
     // Fourth Floor - The Inner World
     // It's a pretty place, with ancient ruins, vast forests, little amount of civilization in the beggining, then you find the "City of Angels". enemies here are somewhat "divine looking", angels, ancient creatures, mythical creatures, etc. (maybe deactivate the Two-name random generator).
-    
+
     public static void fourthActIntro() {
         GameLogic.clearConsole();
         GameLogic.printHeader("ACT IV", true);
@@ -95,7 +94,7 @@ public class Story {
         GameLogic.anythingToContinue();
     }
 
-    //if you dont kill the boss, you go to this.
+    //if you don't kill the boss, you go to this.
     //here you are thrown into the void, never coming back. infinite loops of battle
     public static void fifthActOutro() {
         GameLogic.clearConsole();
