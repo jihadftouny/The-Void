@@ -22,13 +22,16 @@ public class Enemy extends Character {
     public static String fullName = "";
 
     public static String pickedSkillString;
+    
+    EnemyName enemyName;
 
     public static ArrayList<Condition> activeConditions;
 
-    public Enemy(String name, int playerXp) {
-        super(name, 1, (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
+    public Enemy(String type, int playerXp) {
+        super(type, 1, (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
         this.playerXp = playerXp; //this here sets the variable playerXp with the variable that was given in the parameter declaration (which was set on object creation)
-        EnemyName enemyName = new EnemyName(name);
+        
+        enemyName = new EnemyName(type);
 
         fullName = enemyName.fullName;
 
@@ -69,7 +72,7 @@ public class Enemy extends Character {
         return damage;
     }
 
-    public void setStatsEnemy() {
+    public void setBaseStatsEnemy() {
 
         double a;
         double b;
@@ -77,7 +80,7 @@ public class Enemy extends Character {
 
         //this if else chain will set playerLevel randomyl based on act, utilizing DnD Levels of play
         if (playerLevel == 4) {
-            playerLevel = (int) (Math.random() * (21 - 17)) + 17;   // 20-17 (max-min)
+            playerLevel = (int) (Math.random() * (20 - 17)) + 17;   // 19-17 (max-min) //20 WILL BE FOR BOSS
         } else if (playerLevel == 3) {
             playerLevel = (int) (Math.random() * (17 - 11)) + 11;   // 16-11
         } else if (playerLevel == 2) {
@@ -90,6 +93,7 @@ public class Enemy extends Character {
         double CRmax, CRmin, CRboss;
 
         //The following will set max and minimum (also boss) Challenge Ratings based on playerLevel
+        
         //min
         a = 0.087970550572;
         b = 1.4100213799828;
