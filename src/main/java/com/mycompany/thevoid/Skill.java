@@ -17,10 +17,7 @@ public abstract class Skill {
     
     Element element;
     Condition condition1, condition2;
-    
-    
-    
-    
+
     public Skill(String name, int chargeUses, Element element) {
         this.name = name;
         this.chargeUses = chargeUses;
@@ -46,8 +43,6 @@ public abstract class Skill {
     public abstract int damage();
     public abstract String useText();
     
-    
-    
     // general methods
     public void addConditionTarget(Condition condition){
     
@@ -58,6 +53,4 @@ public abstract class Skill {
     public void removeConditionTarget(){}
     
     public void removeConditionSelf(){}
-    
-    
 }

@@ -12,18 +12,16 @@ import java.util.Map;
  * @author jihad
  */
 public class Calculator {
-    
-    
-    
+
     public static void setFullName(String name) {
 
         int randomSelector;
         int mapKey;
 
         // String is the name, Integer is the percentage
-        Map<Integer, String> firstName = new HashMap<Integer, String>();
-        Map<Integer, String> middleName = new HashMap<Integer, String>();
-        Map<Integer, String> lastName = new HashMap<Integer, String>();
+        Map<Integer, String> firstName = new HashMap<>();
+        Map<Integer, String> middleName = new HashMap<>();
+        Map<Integer, String> lastName = new HashMap<>();
 
         //the following if else chain will set the HashMap tables to the creature type acquired from the object creation in GameLogic's Array of enemies
         if ("Beast".equals(name)) {
@@ -58,20 +56,14 @@ public class Calculator {
         randomSelector = (int) (Math.random() * (101 - 1)) + 1; //1-100
 
         firstName.forEach((k, v) -> {
-            if (randomSelector <= k)
-            System.out.println(k + ":" + v);
-
+            if (randomSelector <= k) System.out.println(k + ":" + v);
         });
-
     }
 
     public static void calcsCR() {
-
         double a;
         double b;
-        int playerLevel;
-        playerLevel = (int) (Math.random() * (20 - 17)) + 17;
-
+        int playerLevel = (int) (Math.random() * (20 - 17)) + 17;
         double CRmax, CRmin, CRboss;
 
         //min
@@ -108,11 +100,7 @@ public class Calculator {
             System.out.println(randomSelector);
 //            System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " at level " + i);
         }
-        
-        
-
 //        System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " " + playerLevel);
-
     }
 
     public static void jooj2() {
@@ -127,7 +115,6 @@ public class Calculator {
     }
 
     public static void jooj() {
-
         int i = 0;
         int avg = 0;
         while (i < 100) {

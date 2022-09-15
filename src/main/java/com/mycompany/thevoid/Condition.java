@@ -15,7 +15,7 @@ public class Condition {
     int maxTurns, tempTurns;
     public static String conditionText;
 
-    // PHYSICAL (CON helps you resists them, STR cause them)
+    // PHYSICAL (CON helps you resist them, STR cause them)
     public static Condition bleed = new Condition("Bleed", 2);
     public static Condition stun = new Condition("Stun", 2);
     public static Condition fracture = new Condition("Fracture", 100); // Needs rest to go away, gives disadvantage
@@ -55,17 +55,14 @@ public class Condition {
     public Condition(String name, int maxTurns) {
         this.name = name;
         this.maxTurns = maxTurns;
-
-        tempTurns = maxTurns;
-
+        this.tempTurns = maxTurns;
     }
 
     public static void tickConditions() {
         int damage;
 
         //CHAIN FOR PLAYER, MUST DO ONE FOR ENEMY
-        if (Player.activeConditions.isEmpty()) {
-        } else {
+        if (!Player.activeConditions.isEmpty()) {
             for (Condition i : Player.activeConditions) {
                 if (i.equals(burn)) {
                     if (i.tempTurns == i.maxTurns) {
@@ -74,8 +71,7 @@ public class Condition {
                     } else if (i.tempTurns > 0) {
                         damage = 3;
                         SkillEnemy.target.hp -= damage;
-
-                        System.out.println("You took " + damage +  " damage from burning.");
+                        System.out.println("You took " + damage + " damage from burning.");
                         i.tempTurns--;
                     } else {
                         System.out.println("You are no longer burning!");
@@ -85,10 +81,7 @@ public class Condition {
                     }
                 }
             }
-
         } //END OF PLAYER CHAIN
-
         //do an if chain (just ifs) for each condition
     }
-
 }

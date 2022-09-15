@@ -6,10 +6,8 @@ package com.mycompany.thevoid;
 
 import java.util.ArrayList;
 import java.util.Scanner;
-//import javax.script.ScriptEngine;
 
 /**
- *
  * @author jihad
  */
 public class GameLogic {
@@ -17,14 +15,12 @@ public class GameLogic {
     //variables
     static Scanner scanner = new Scanner(System.in);
     static Player player;
-    public static Enemy enemy; 
+    public static Enemy enemy;
     public static boolean isRunning;
-    
-    
-    public static String attackRollString, advantageString;
-    
 
-//    public static Dice lvlUpDice = new Dice(2, 4);
+    public static String attackRollString, advantageString;
+
+    //    public static Dice lvlUpDice = new Dice(2, 4);
     //dices
 //    public static Dice lvlUpDice = new Dice(2, 6);
 //    static Dice ultraDice = new Dice(3, 100);
@@ -36,7 +32,7 @@ public class GameLogic {
     public static int place = 0, act = 1;
     public static String[] places = {"First Floor", "Second Floor", "Third Floor", "Fourth Floor", "Fifth Floor"};
 
-// ------- Main Game Methods ---------------------------------------------------   
+    // ------- Main Game Methods ---------------------------------------------------
     public static void startGame() {
         boolean nameSet = false;
         String name;
@@ -168,9 +164,9 @@ public class GameLogic {
     }
 
     public static void continueJourney() {
-        int currentAct = act; 
+        int currentAct = act;
         checkAct();
-        
+
 
 //        check if game isnt in last act
         if (act != 5 && currentAct == act) {
@@ -216,7 +212,7 @@ public class GameLogic {
         anythingToContinue();
     }
 
-// ------- Battle/Rest/Shop methods -----------------------------------------------
+    // ------- Battle/Rest/Shop methods -----------------------------------------------
     public static void randomEncounter() {
         //reandom number for encounters array 
         int encounter = (int) (Math.random() * encounters.length);
@@ -265,15 +261,15 @@ public class GameLogic {
                 case 1:
                     //fight
                     //calculate dmg and dmgTook
-                    
+
                     // HERE WE WILL CHECK FOR CONDITIONS THAT UNABLE ATTACKING 
                     // THEN SET A BOOLEAN THAT LATER WILL ALLOW DMG TO BE MORE THAN 0
                     // AND CHANGE DAMAGE MESSAGE ACCORDINGLY
                     // MAKE AN IF ELSE CHAIN WITH HIGHEST PRIORITY STAT ON TOP (IF STUN ELSE SLEEP ELSE BROKEN BONE, ETC) THIS WAY THE HIGH PRIORITY WILL SHOW
-                    
+
                     int dmg = player.attack();
                     int dmgTook = enemy.attack();
-                    
+
 
                     //check that dmg isnt negative
                     if (dmgTook < 0) {
@@ -291,16 +287,16 @@ public class GameLogic {
                     //print battle info
                     clearConsole();
                     printHeader("BATTLE", true);
-                    if (advantageString != null){
+                    if (advantageString != null) {
                         System.out.println(advantageString);
                         advantageString = null;
                     }
-                    if (attackRollString != null){
+                    if (attackRollString != null) {
                         System.out.println(attackRollString);
                         attackRollString = null;
                     }
                     System.out.println("You dealt " + dmg + " damage to " + enemy.fullName + ".");
-                    if (Enemy.pickedSkillString != null){
+                    if (Enemy.pickedSkillString != null) {
                         System.out.println(enemy.pickedSkillString);
                         Enemy.pickedSkillString = null;
                     }
@@ -394,30 +390,23 @@ public class GameLogic {
     }
 
     public static Item pickItemShop(Item[] itemArray) {
-        
+
         ArrayList<Item> tempItemList = new ArrayList<>();
         int pickIndex;
 
-        
-       
-        for (int i = 0; i < itemArray.length; i++) {
+
+        for (Item item : itemArray) {
             // common has weight 5
-            if ("Common".equals(itemArray[i].itemRarity)) {
-                tempItemList.add(itemArray[i]);
-                tempItemList.add(itemArray[i]);
-                tempItemList.add(itemArray[i]);
-                tempItemList.add(itemArray[i]);
-                tempItemList.add(itemArray[i]);
-            } else if ("Rare".equals(itemArray[i].itemRarity)) {
-                tempItemList.add(itemArray[i]);
-                tempItemList.add(itemArray[i]);
-                tempItemList.add(itemArray[i]);
-            } else if ("Legendary".equals(itemArray[i].itemRarity)) {
-                tempItemList.add(itemArray[i]);
+            if ("Common".equals(item.itemRarity)) {
+                for (int i = 0; i < 5; i++) tempItemList.add(item);
+            } else if ("Rare".equals(item.itemRarity)) {
+                for (int i = 0; i < 3; i++) tempItemList.add(item);
+            } else if ("Legendary".equals(item.itemRarity)) {
+                tempItemList.add(item);
             }
         }
-        
-        pickIndex = (int)(Math.random() * tempItemList.size());
+
+        pickIndex = (int) (Math.random() * tempItemList.size());
 
         return tempItemList.get(pickIndex);
     }
@@ -427,10 +416,8 @@ public class GameLogic {
         printHeader("You meet a mysterious stranger. He offers you something:", true);
 
         int itemTypeShop = (int) (Math.random() * 2) + 1; //this is going to be used to define what type of item will be picked
-        Item itemGenerated = new Item("null", 0, "null") {
-        };
-        Item itemCurrent = new Item("null", 0, "null") {
-        };
+        Item itemGenerated = new Item("null", 0, "null") {};
+        Item itemCurrent = new Item("null", 0, "null") {};
         // if ARMOR
         if (itemTypeShop == 1) {
             switch (act) {
@@ -465,14 +452,12 @@ public class GameLogic {
             }
             itemCurrent = player.equippedWeapon;
         }
-        int price = (int) (Math.random() * ((10* act + act * 5) - (act * 5) + 1) + (act * 5));
-        
+        int price = (int) (Math.random() * ((10 * act + act * 5) - (act * 5) + 1) + (act * 5));
+
         System.out.println("This '" + itemGenerated.itemName + "' good stuff, mate. Ye can get it for " + price + " units and ye gimme yer '" + itemCurrent.itemName + "'.");
 
         //there will be no weights on rarity
-        
-        
-        
+
         printDivider(20);
         System.out.println("Do you want to buy it?\n(1) Yes\n(2) Maybe next time");
         int input = readInt("->", 2);
@@ -483,9 +468,9 @@ public class GameLogic {
                 System.out.println("You traded your '" + itemCurrent.itemName + "' for the stranger's '" + itemGenerated.itemName + "'.");
                 player.gold -= price;
                 if (itemTypeShop == 1) {
-                    player.equippedArmor = (Armor)itemGenerated;
-                } else if (itemTypeShop == 2){
-                    player.equippedWeapon = (Weapon)itemGenerated;
+                    player.equippedArmor = (Armor) itemGenerated;
+                } else if (itemTypeShop == 2) {
+                    player.equippedWeapon = (Weapon) itemGenerated;
                 }
                 anythingToContinue();
             } else {
@@ -586,5 +571,4 @@ public class GameLogic {
         System.out.println("Type something to continue...");
         scanner.next();
     }
-
 }
