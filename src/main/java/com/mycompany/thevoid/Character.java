@@ -12,12 +12,11 @@ import java.util.ArrayList;
  */
 public abstract class Character {
 
-    //BIG
-    //BIG BIG BIG IMPORTANT NOTE:::::::::::::::::::::::::::::::::::
+    // BIG
+    // BIG BIG BIG IMPORTANT NOTE:::::::::::::::::::::::::::::::::::
     // might have to create methods like attack() and defend() (overidable) to set player stats everytime an item is equipped
     // will have to create setArmor, setWeapon, etc. both for player and enemies, while also randomly picking one from a range to enemies
-    
-    
+
     //variables
     String name;
     int hp, maxHp, xp, maxSkillCharges, skillCharges;
@@ -59,39 +58,16 @@ public abstract class Character {
         int currentConMod = StatsMods[2];
 
         for (int i = 0; i < 6; i++) {
-            if (Stats[i] == 30) {
+            if (Stats[i] > 30) {
+                // --- (Rare Exception) ---
+                // If in any Fault or Condition (Stats[i] > 30),
+                // then we will set StatsMods[i] = 10 only;
                 StatsMods[i] = 10;
-            } else if (Stats[i] >= 28) {
-                StatsMods[i] = 9;
-            } else if (Stats[i] >= 26) {
-                StatsMods[i] = 8;
-            } else if (Stats[i] >= 24) {
-                StatsMods[i] = 7;
-            } else if (Stats[i] >= 22) {
-                StatsMods[i] = 6;
-            } else if (Stats[i] >= 20) {
-                StatsMods[i] = 5;
-            } else if (Stats[i] >= 18) {
-                StatsMods[i] = 4;
-            } else if (Stats[i] >= 16) {
-                StatsMods[i] = 3;
-            } else if (Stats[i] >= 14) {
-                StatsMods[i] = 2;
-            } else if (Stats[i] >= 12) {
-                StatsMods[i] = 1;
-            } else if (Stats[i] >= 10) {
-                StatsMods[i] = 0;
-            } else if (Stats[i] >= 8) {
-                StatsMods[i] = -1;
-            } else if (Stats[i] >= 6) {
-                StatsMods[i] = -2;
-            } else if (Stats[i] >= 4) {
-                StatsMods[i] = -3;
-            } else if (Stats[i] >= 2) {
-                StatsMods[i] = -4;
-            } else { // Stats is 1
-                StatsMods[i] = -5;
+                continue;
             }
+            int diff = Math.abs(Stats[i] - 30);
+            int ceil = (int) Math.ceil(diff/2.0);
+            StatsMods[i] = 10 - ceil;
         }
 
         int newConMod = StatsMods[2];
@@ -117,9 +93,7 @@ public abstract class Character {
                     break;
             }
 
-            if (roll < 1)
-                roll = 1;
-            
+            if (roll < 1) roll = 1;
 
             maxHp += roll;
             System.out.println("extra hp roll: " + roll);
@@ -128,8 +102,6 @@ public abstract class Character {
                 System.out.println("new CON mod !");
                 maxHp += GameLogic.act - 1;
             }
-
         }
     }
-
 }

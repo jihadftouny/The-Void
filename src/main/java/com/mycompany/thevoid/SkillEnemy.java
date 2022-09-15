@@ -42,7 +42,6 @@ public class SkillEnemy extends Skill {
     //SKILLS
     // test skills
     public static SkillEnemy testFireSkill = new SkillEnemy("Pyro Ball", 1, false, Element.fire) {
-
         @Override
         public int damage() {
             damage = 2;
@@ -70,13 +69,11 @@ public class SkillEnemy extends Skill {
         @Override
         public void addConditionTarget(Condition condition) {
             if (target instanceof Player) {
-                if (Player.activeConditions.contains(condition)) {
-                } else {
+                if (!Player.activeConditions.contains(condition)) {
                     Player.activeConditions.add(condition);
                 }
             }
         }
-
     };
 
     @Override
@@ -88,5 +85,4 @@ public class SkillEnemy extends Skill {
     public String useText() {
         throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
     }
-
 }

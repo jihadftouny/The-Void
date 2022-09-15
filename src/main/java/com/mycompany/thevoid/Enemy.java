@@ -5,10 +5,7 @@
 package com.mycompany.thevoid;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Random;
-import jdk.nashorn.internal.objects.NativeArray;
 
 /**
  *
@@ -65,12 +62,10 @@ public class Enemy extends Character {
         }
 
         pickedSkillString = pickedSkill.useText();
-
         return damage;
     }
 
     public void setStatsEnemy() {
-
         double a;
         double b;
         int playerLevel = GameLogic.act;
@@ -106,7 +101,6 @@ public class Enemy extends Character {
         CRboss = a * Math.pow(playerLevel, b);
 
         System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss);
-
     }
 
     @Override
@@ -159,7 +153,5 @@ public class Enemy extends Character {
         GameLogic.anythingToContinue();
 
         return diceRoll;
-
     }
-
 }

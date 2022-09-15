@@ -5,21 +5,14 @@
 
 package com.mycompany.thevoid;
 
-import java.util.Arrays;
-import java.util.Random;
-
 /**
- *
  * @author jihad
  */
 public class Thevoid {
 
     public static void main(String[] args) {
-        
-        GameLogic.startGame();
 
-        
-        
+        GameLogic.startGame();
 //        Calculator.setFullName("Beast");
 //        Calculator.calcsCR();
 //        GameLogic.printHeader("Jorginho Matagal ta na area");
@@ -30,7 +23,4 @@ public class Thevoid {
 //        System.out.println("Choose:\n(1) Do it\n(2) Don't do it");
 //        GameLogic.readInt("-> ", 2);
     }
-    
-    
-    
 }

@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Random;
 
 /**
- *
  * @author jihad
  */
 public class EnemyName {
@@ -22,7 +21,7 @@ public class EnemyName {
 
     public String setName() {
         String returnedName = "";
-        
+
         // arrays will store names eg. "Feral Electrified Lizard"
         ArrayList<String> firstName = new ArrayList<String>();
         ArrayList<String> middleName = new ArrayList<String>();
@@ -32,7 +31,6 @@ public class EnemyName {
         ArrayList<Integer> weightFirst = new ArrayList<Integer>();
         ArrayList<Integer> weightMiddle = new ArrayList<Integer>();
         ArrayList<Integer> weightLast = new ArrayList<Integer>();
-
 
         if ("Beast".equals(type)) {
             //STATS mods
@@ -89,65 +87,46 @@ public class EnemyName {
         returnedName += secondString;
         String thirdString = selectName(lastName, weightLast, true);
         returnedName += thirdString;
-        
-        
-        
 
         return returnedName;
     }
-    
-    public boolean isName(int chance){
+
+    public boolean isName(int chance) {
         int randomNumber = (int) (Math.random() * (101 - 1)) + 1;
-        
-        if (randomNumber < chance)
-            return true;
-        else return false;
+        return randomNumber < chance;
     }
-    
-    
-    public String selectName(ArrayList names, ArrayList weight, boolean isLastName){ //firstName firstWeight
+
+    public String selectName(ArrayList<String> names, ArrayList<Integer> weight, boolean isLastName) { //firstName firstWeight
 
         //locally setting the arraylists
-        ArrayList<String> namesLocal = names;
-        ArrayList<Integer> weightLocal = weight;
-        
         //this list will be filled with n weight amounts of each name in names
-        ArrayList<String> fullList = new ArrayList<String>();
-        
+        ArrayList<String> fullList = new ArrayList<>();
         Random rand = new Random();
-        
-        
-        
-        // 
+
         for (int i = 0; i < names.size(); i++) {
-            
-           boolean isName; //will be used as a percentage that must be achieved to generate the name
+            boolean isName; //will be used as a percentage that must be achieved to generate the name
             // this checks each act and sets the chance of first and middle name occuring (one for each act)
             if (GameLogic.act != 0) { //here will be == 1, for example
                 isName = isName(95); //50% chance
                 if (isLastName)
                     isName = true;
-                if (isName){
-                    for (int j = 0; j < weightLocal.get(i); j++){
-                        fullList.add(namesLocal.get(i));      
+                if (isName) {
+                    for (int j = 0; j < weight.get(i); j++) {
+                        fullList.add(names.get(i));
                     }
                 } else return "";
-                        
             }
         }
-        
-        int randomArraySelector = rand.nextInt(fullList.size()); //will genearate a number equal to ArrayList size
-        
-        
+
+        //will generate a number equal to ArrayList size
+        int randomArraySelector = rand.nextInt(fullList.size());
         String returnString;
-        
-        if (isLastName)    
+
+        if (isLastName)
             returnString = fullList.get(randomArraySelector);
-        else 
+        else
             returnString = fullList.get(randomArraySelector) + " ";
-        
-        
+
         return returnString;
     }
-
 }
