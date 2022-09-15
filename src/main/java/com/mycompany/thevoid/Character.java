@@ -58,12 +58,16 @@ public abstract class Character {
         int currentConMod = StatsMods[2];
 
         for (int i = 0; i < 6; i++) {
-            if(Stats[i] > 30) {
+            if (Stats[i] > 30) {
+                // --- (Rare Exception) ---
+                // If in any Fault or Condition (Stats[i] > 30),
+                // then we will set StatsMods[i] = 10 only;
                 StatsMods[i] = 10;
                 continue;
             }
             int diff = Math.abs(Stats[i] - 30);
-            StatsMods[i] = 10 - diff;
+            int ceil = (int) Math.ceil(diff/2.0);
+            StatsMods[i] = 10 - ceil;
         }
 
         int newConMod = StatsMods[2];
