@@ -197,37 +197,49 @@ public class EnemyName {
         return randomNumber < chance;
     }
 
-    public String selectName(ArrayList<String> names, ArrayList<Integer> weight, boolean isLastName) { //firstName firstWeight
+    public String selectName(ArrayList names, ArrayList weight, boolean isLastName){ //firstName firstWeight
 
         //locally setting the arraylists
+        ArrayList<String> namesLocal = names;
+        ArrayList<Integer> weightLocal = weight;
+        
         //this list will be filled with n weight amounts of each name in names
-        ArrayList<String> fullList = new ArrayList<>();
+        ArrayList<String> fullList = new ArrayList<String>();
+        
         Random rand = new Random();
-
+        
+        
+        
+        // 
         for (int i = 0; i < names.size(); i++) {
-            boolean isName; //will be used as a percentage that must be achieved to generate the name
+            
+           boolean isName; //will be used as a percentage that must be achieved to generate the name
             // this checks each act and sets the chance of first and middle name occuring (one for each act)
             if (GameLogic.act != 0) { //here will be == 1, for example
                 isName = isName(95); //50% chance
-                if (isLastName) {
+                if (isLastName)
                     isName = true;
-                if (isName) {
-                    for (int j = 0; j < weight.get(i); j++) {
-                        fullList.add(names.get(i));
+                if (isName){
+                    for (int j = 0; j < weightLocal.get(i); j++){
+                        fullList.add(namesLocal.get(i));      
                     }
                 } else return "";
+                        
             }
         }
-
-        //will generate a number equal to ArrayList size
-        int randomArraySelector = rand.nextInt(fullList.size());
+        
+        int randomArraySelector = rand.nextInt(fullList.size()); //will genearate a number equal to ArrayList size
+        
+        
         String returnString;
-
-        if (isLastName)
+        
+        if (isLastName)    
             returnString = fullList.get(randomArraySelector);
-        else
+        else 
             returnString = fullList.get(randomArraySelector) + " ";
-
+        
+        
         return returnString;
     }
+
 }

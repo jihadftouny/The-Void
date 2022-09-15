@@ -41,7 +41,7 @@ public class Player extends Character {
     //constructor
     public Player(String name) {
         //calling constructor of superclass
-        super(name, 0, 50); //name maxhp xp
+        super(name, 0, 0); //name maxhp xp
 
         //setting #upgrades to 0
         this.numAtkUpgrades = 0;
