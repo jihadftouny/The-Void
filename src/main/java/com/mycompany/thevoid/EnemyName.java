@@ -31,12 +31,13 @@ public class EnemyName {
         ArrayList<Integer> weightFirst = new ArrayList<Integer>();
         ArrayList<Integer> weightMiddle = new ArrayList<Integer>();
         ArrayList<Integer> weightLast = new ArrayList<Integer>();
-        
-        // each name will provide different bonuses and skills + the base stats and skills of the lastName
 
+        // each name will provide different bonuses and skills + the base stats and skills of the lastName
+//<editor-fold defaultstate="collapsed" desc="Chapter 1 - Undercity">
         if (GameLogic.act == 1) { //UNDERCITY
+//<editor-fold defaultstate="collapsed" desc="Beasts">
             if ("Beast".equals(type)) {
-                //STATS mods
+                // FIRST NAME - STATS mods
                 firstName.add("Feral");// add STR DEX
                 weightFirst.add(20);
                 firstName.add("Aerobicized");// add CON
@@ -58,7 +59,7 @@ public class EnemyName {
                 firstName.add("Mutated"); // add STR DEX CON AC A LOT + immunity to some elements, equivalent to UNDEAD
                 weightFirst.add(2);
 
-                // Elementals
+                // MIDDLE NAME - Elementals
                 middleName.add("Cryo"); // Ice
                 weightMiddle.add(20);
                 middleName.add("Fiery"); // Fire
@@ -70,7 +71,7 @@ public class EnemyName {
                 middleName.add("Psychogenic"); // Psychic
                 weightMiddle.add(20);
 
-                //from here on there must be an if else chain for each act's monsters
+                // LAST NAMES (Actual creature's name)
                 lastName.add("Rat");
                 weightLast.add(20);
                 lastName.add("Snake");
@@ -81,10 +82,57 @@ public class EnemyName {
                 weightLast.add(20);
                 lastName.add("Raven");
                 weightLast.add(20);
-            } else if ("Humanoid".equals(type)) {
-                
+
+            } 
+            //</editor-fold>
+            //<editor-fold defaultstate="collapsed" desc="Humanoids">
+            else if ("Humanoid".equals(type)) {
+                //STATS mods
+                //Tier 1
+                firstName.add("Pumped");// add STR DEX
+                weightFirst.add(20);
+                firstName.add("Aerobicized");// add CON
+                weightFirst.add(20);
+                firstName.add("Armored");// add AC
+                weightFirst.add(20);
+
+                // Tier 2
+                firstName.add("Intoxicated"); // add random 2 stats -- maybe this enemy after some rounds becomes abstinent
+                weightFirst.add(10);
+                firstName.add("Abstinent"); // remove random 2 stats
+                weightFirst.add(10);
+
+                firstName.add("Augmented"); // add STR DEX CON (Cyborg-like)
+                weightFirst.add(10);
+
+                // Tier 3 -- will modify the whole design of the humanoid (post-release)
+                firstName.add("Raging"); // add STR DEX CON + AC
+                weightFirst.add(5);
+                firstName.add("Berserk"); // add STR DEX CON AC A LOT
+                weightFirst.add(3);
+                firstName.add("Mutated"); // add STR DEX CON AC A LOT + immunity to some elements, equivalent to UNDEAD
+                weightFirst.add(2);
+
+                // MIDDLE NAMES
+                middleName.add(""); // None, humans won't have elemental names
+                weightMiddle.add(1);
+
+                // LAST NAMES (Actual creature's name)
+                lastName.add("Thug");
+                weightLast.add(20);
+                lastName.add("Psycho");
+                weightLast.add(20);
+                lastName.add("Punk");
+                weightLast.add(20);
+                lastName.add("Stalker"); //STALKER
+                weightLast.add(20);
+                lastName.add("Conjurer");
+                weightLast.add(20);
             }
-        } else if (GameLogic.act == 2) { //UPSIDE DOWN
+        } //</editor-fold>
+        //<editor-fold defaultstate="collapsed" desc="Chapter 2 - Upside Down">
+        else if (GameLogic.act == 2) { //UPSIDE DOWN
+            //<editor-fold defaultstate="collapsed" desc="Beasts">
             if ("Beast".equals(type)) {
                 //STATS mods
 
@@ -117,7 +165,7 @@ public class EnemyName {
                 middleName.add("Psychogenic"); // Psychic
                 weightMiddle.add(20);
 
-                //from here on there must be an if else chain for each act's monsters
+                // LAST NAMES (Actual creature's name)
                 lastName.add("Rat");
                 weightLast.add(20);
                 lastName.add("Snake");
@@ -128,13 +176,55 @@ public class EnemyName {
                 weightLast.add(20);
                 lastName.add("Raven");
                 weightLast.add(20);
+
+            } else if ("Humanoid".equals(type)) {
+                //STATS mods
+                //Tier 1
+                firstName.add("Mirrored");// Same Stats as player, also hp and AC
+                weightFirst.add(30);
+                firstName.add("Warped");// Same Stats as player, but randomized, same hp and AC
+                weightFirst.add(30);
+
+                // Tier 2
+                firstName.add("Raving");// Extra STR and DEX
+                weightFirst.add(15);
+                firstName.add("Ruined");// Less all stats
+                weightFirst.add(15);
+
+                // Tier 3
+                firstName.add("Frenzied"); // add STR DEX CON + AC
+                weightFirst.add(5);
+                firstName.add("Maddened"); // add STR DEX CON AC A LOT
+                weightFirst.add(3);
+                firstName.add("Demented"); // add STR DEX CON AC A LOT + immunity to some elements
+                weightFirst.add(2);
+
+                // MIDDLE NAMES
+                middleName.add(""); // None, humans won't have elemental names
+                weightMiddle.add(1);
+
+                // LAST NAMES (Actual creature's name)
+                lastName.add("Thug");
+                weightLast.add(20);
+                lastName.add("Psycho");
+                weightLast.add(20);
+                lastName.add("Punk");
+                weightLast.add(20);
+                lastName.add("Stalker"); //STALKER
+                weightLast.add(20);
+                lastName.add("Conjurer");
+                weightLast.add(20);
             }
 
-        } else if (GameLogic.act == 3) { //White City - Here we will have only 'nightmares' https://www.artstation.com/midnight-98
+        } //</editor-fold>
+        //<editor-fold defaultstate="collapsed" desc="Chapter 3 - Ashen Eternal City">
+        else if (GameLogic.act == 3) { //White City - Here we will have only 'nightmares' https://www.artstation.com/midnight-98
             if ("Beast".equals(type)) {
 
             }
-        } else if (GameLogic.act == 4) { //The Inner World
+        } //</editor-fold>
+        //<editor-fold defaultstate="collapsed" desc="Chapter 4 - The Inner World">
+        else if (GameLogic.act == 4) { //The Inner World
             if ("Beast".equals(type)) {
                 //STATS mods
                 firstName.add("Furious");// add STR DEX
@@ -160,9 +250,9 @@ public class EnemyName {
 
                 // Elementals
                 middleName.add(""); // None, these creatures are custom
-                weightMiddle.add(100);
+                weightMiddle.add(1);
 
-                //from here on there must be an if else chain for each act's monsters
+                // LAST NAMES (Actual creature's name)
                 lastName.add("Hippalectryon"); //its like a horse with chicken features, but it flies
                 weightLast.add(20);
                 lastName.add("Hydra"); // lizard
@@ -176,6 +266,7 @@ public class EnemyName {
             }
 
         }
+        //</editor-fold>
 
         // this function will set each names of the monsters in order (if they should (based on chance))
         String firstString = selectName(firstName, weightFirst, false);
