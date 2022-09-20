@@ -12,7 +12,7 @@ import java.util.Random;
  */
 public class EnemyName {
 
-    public String type, firstName, middleName, lastName, fullName;
+    public String type, fullName;
 
     public EnemyName(String type) {
         this.type = type;
@@ -33,9 +33,9 @@ public class EnemyName {
         ArrayList<Integer> weightLast = new ArrayList<Integer>();
 
         // each name will provide different bonuses and skills + the base stats and skills of the lastName
-//<editor-fold defaultstate="collapsed" desc="Chapter 1 - Undercity">
+        //<editor-fold defaultstate="collapsed" desc="Chapter 1 - Undercity">
         if (GameLogic.act == 1) { //UNDERCITY
-//<editor-fold defaultstate="collapsed" desc="Beasts">
+            //<editor-fold defaultstate="collapsed" desc="Beasts">
             if ("Beast".equals(type)) {
                 // FIRST NAME - STATS mods
                 firstName.add("Feral");// add STR DEX
@@ -83,8 +83,7 @@ public class EnemyName {
                 lastName.add("Raven");
                 weightLast.add(20);
 
-            } 
-            //</editor-fold>
+            } //</editor-fold>
             //<editor-fold defaultstate="collapsed" desc="Humanoids">
             else if ("Humanoid".equals(type)) {
                 //STATS mods
@@ -128,7 +127,7 @@ public class EnemyName {
                 weightLast.add(20);
                 lastName.add("Conjurer");
                 weightLast.add(20);
-            }
+            } //</editor-fold>
         } //</editor-fold>
         //<editor-fold defaultstate="collapsed" desc="Chapter 2 - Upside Down">
         else if (GameLogic.act == 2) { //UPSIDE DOWN
@@ -177,7 +176,9 @@ public class EnemyName {
                 lastName.add("Raven");
                 weightLast.add(20);
 
-            } else if ("Humanoid".equals(type)) {
+            } //</editor-fold>
+            //<editor-fold defaultstate="collapsed" desc="Humanoids">
+            else if ("Humanoid".equals(type)) {
                 //STATS mods
                 //Tier 1
                 firstName.add("Mirrored");// Same Stats as player, also hp and AC
@@ -214,17 +215,19 @@ public class EnemyName {
                 weightLast.add(20);
                 lastName.add("Conjurer");
                 weightLast.add(20);
-            }
+            } //</editor-fold>
 
         } //</editor-fold>
         //<editor-fold defaultstate="collapsed" desc="Chapter 3 - Ashen Eternal City">
         else if (GameLogic.act == 3) { //White City - Here we will have only 'nightmares' https://www.artstation.com/midnight-98
-            if ("Beast".equals(type)) {
+            //<editor-fold defaultstate="collapsed" desc="Nightmare">
+            if ("Nightmare".equals(type)) {
 
-            }
+            } //</editor-fold>
         } //</editor-fold>
         //<editor-fold defaultstate="collapsed" desc="Chapter 4 - The Inner World">
         else if (GameLogic.act == 4) { //The Inner World
+            //<editor-fold defaultstate="collapsed" desc="Beasts">
             if ("Beast".equals(type)) {
                 //STATS mods
                 firstName.add("Furious");// add STR DEX
@@ -263,10 +266,9 @@ public class EnemyName {
                 weightLast.add(20);
                 lastName.add("Chimaera"); //Goat+Snake+Lion+Lizard
                 weightLast.add(20);
-            }
+            } //</editor-fold>
 
-        }
-        //</editor-fold>
+        } // </editor-fold>
 
         // this function will set each names of the monsters in order (if they should (based on chance))
         String firstString = selectName(firstName, weightFirst, false);
@@ -284,18 +286,15 @@ public class EnemyName {
         return randomNumber < chance;
     }
 
-    public String selectName(ArrayList names, ArrayList weight, boolean isLastName) { //firstName firstWeight
+    public String selectName(ArrayList<String> names, ArrayList<Integer> weight, boolean isLastName) { //firstName firstWeight
 
-        //locally setting the arraylists
-        ArrayList<String> namesLocal = names;
-        ArrayList<Integer> weightLocal = weight;
 
         //this list will be filled with n weight amounts of each name in names
-        ArrayList<String> fullList = new ArrayList<String>();
+        ArrayList<String> fullList = new ArrayList<>();
 
         Random rand = new Random();
 
-        // 
+        
         for (int i = 0; i < names.size(); i++) {
 
             boolean isName; //will be used as a percentage that must be achieved to generate the name
@@ -306,8 +305,8 @@ public class EnemyName {
                     isName = true;
                 }
                 if (isName) {
-                    for (int j = 0; j < weightLocal.get(i); j++) {
-                        fullList.add(namesLocal.get(i));
+                    for (int j = 0; j < weight.get(i); j++) {
+                        fullList.add(names.get(i));
                     }
                 } else {
                     return "";
@@ -315,8 +314,9 @@ public class EnemyName {
 
             }
         }
-
-        int randomArraySelector = rand.nextInt(fullList.size()); //will genearate a number equal to ArrayList size
+        
+        //will genearate a number equal to ArrayList size
+        int randomArraySelector = rand.nextInt(fullList.size()); 
 
         String returnString;
 
