@@ -31,6 +31,8 @@ public class EnemyName {
         ArrayList<Integer> weightFirst = new ArrayList<Integer>();
         ArrayList<Integer> weightMiddle = new ArrayList<Integer>();
         ArrayList<Integer> weightLast = new ArrayList<Integer>();
+        
+        // each name will provide different bonuses and skills + the base stats and skills of the lastName
 
         if (GameLogic.act == 1) { //UNDERCITY
             if ("Beast".equals(type)) {
@@ -79,6 +81,8 @@ public class EnemyName {
                 weightLast.add(20);
                 lastName.add("Raven");
                 weightLast.add(20);
+            } else if ("Humanoid".equals(type)) {
+                
             }
         } else if (GameLogic.act == 2) { //UPSIDE DOWN
             if ("Beast".equals(type)) {
@@ -133,49 +137,41 @@ public class EnemyName {
         } else if (GameLogic.act == 4) { //The Inner World
             if ("Beast".equals(type)) {
                 //STATS mods
-                firstName.add("Feral");// add STR DEX
+                firstName.add("Furious");// add STR DEX
                 weightFirst.add(20);
-                firstName.add("Aerobicized");// add CON
+                firstName.add("Vigorous");// add CON
                 weightFirst.add(20);
-                firstName.add("Plated");// add AC
+                firstName.add("Gilded");// add AC
                 weightFirst.add(20);
 
                 firstName.add("Bestial"); // add STR DEX CON
                 weightFirst.add(10);
                 firstName.add("Unbreakable"); // add CON + AC
                 weightFirst.add(10);
-                firstName.add("Cunning"); // add AC + STR DEX
+                firstName.add("Fiendish"); // add AC + STR DEX
                 weightFirst.add(10);
 
                 firstName.add("Giant"); // add STR DEX CON + AC
                 weightFirst.add(5);
                 firstName.add("Monstrous"); // add STR DEX CON AC A LOT
                 weightFirst.add(3);
-                firstName.add("Mutated"); // add STR DEX CON AC A LOT + immunity to some elements, equivalent to UNDEAD
+                firstName.add("Gargantuan"); // add STR DEX CON AC A LOT + immunity to some elements, this b* huge, really. huge.
                 weightFirst.add(2);
 
                 // Elementals
-                middleName.add("Cryo"); // Ice
-                weightMiddle.add(20);
-                middleName.add("Fiery"); // Fire
-                weightMiddle.add(20);
-                middleName.add("Electrified"); // Electro
-                weightMiddle.add(20);
-                middleName.add("Venomous"); // Poison
-                weightMiddle.add(20);
-                middleName.add("Psychogenic"); // Psychic
-                weightMiddle.add(20);
+                middleName.add(""); // None, these creatures are custom
+                weightMiddle.add(100);
 
                 //from here on there must be an if else chain for each act's monsters
-                lastName.add("Rat");
+                lastName.add("Hippalectryon"); //its like a horse with chicken features, but it flies
                 weightLast.add(20);
-                lastName.add("Snake");
+                lastName.add("Hydra"); // lizard
                 weightLast.add(20);
-                lastName.add("Lizard");
+                lastName.add("Griffon");  //lion+bird
                 weightLast.add(20);
-                lastName.add("Spider");
+                lastName.add("Camahueto"); // Bull + 1 horn middle of head
                 weightLast.add(20);
-                lastName.add("Raven");
+                lastName.add("Chimaera"); //Goat+Snake+Lion+Lizard
                 weightLast.add(20);
             }
 
@@ -197,48 +193,48 @@ public class EnemyName {
         return randomNumber < chance;
     }
 
-    public String selectName(ArrayList names, ArrayList weight, boolean isLastName){ //firstName firstWeight
+    public String selectName(ArrayList names, ArrayList weight, boolean isLastName) { //firstName firstWeight
 
         //locally setting the arraylists
         ArrayList<String> namesLocal = names;
         ArrayList<Integer> weightLocal = weight;
-        
+
         //this list will be filled with n weight amounts of each name in names
         ArrayList<String> fullList = new ArrayList<String>();
-        
+
         Random rand = new Random();
-        
-        
-        
+
         // 
         for (int i = 0; i < names.size(); i++) {
-            
-           boolean isName; //will be used as a percentage that must be achieved to generate the name
+
+            boolean isName; //will be used as a percentage that must be achieved to generate the name
             // this checks each act and sets the chance of first and middle name occuring (one for each act)
             if (GameLogic.act != 0) { //here will be == 1, for example
                 isName = isName(95); //50% chance
-                if (isLastName)
+                if (isLastName) {
                     isName = true;
-                if (isName){
-                    for (int j = 0; j < weightLocal.get(i); j++){
-                        fullList.add(namesLocal.get(i));      
+                }
+                if (isName) {
+                    for (int j = 0; j < weightLocal.get(i); j++) {
+                        fullList.add(namesLocal.get(i));
                     }
-                } else return "";
-                        
+                } else {
+                    return "";
+                }
+
             }
         }
-        
+
         int randomArraySelector = rand.nextInt(fullList.size()); //will genearate a number equal to ArrayList size
-        
-        
+
         String returnString;
-        
-        if (isLastName)    
+
+        if (isLastName) {
             returnString = fullList.get(randomArraySelector);
-        else 
+        } else {
             returnString = fullList.get(randomArraySelector) + " ";
-        
-        
+        }
+
         return returnString;
     }
 
