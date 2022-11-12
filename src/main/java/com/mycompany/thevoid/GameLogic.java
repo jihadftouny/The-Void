@@ -327,6 +327,7 @@ public class GameLogic {
                         player.gold += goldEarned;
                         System.out.println("You earned " + goldEarned + " gold!");
 
+                        Enemy.enemyDefeatedCount++;
                         anythingToContinue();
                         return;
                     }
