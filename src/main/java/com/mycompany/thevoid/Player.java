@@ -189,7 +189,7 @@ public class Player extends Character {
         } while (!classSet);
     }
 
-    //ATTACK AND DEFEND NEED REWORK
+    
     @Override
     public int attack() {
         int damage = 0;
