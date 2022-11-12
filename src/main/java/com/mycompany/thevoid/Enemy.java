@@ -12,18 +12,21 @@ import java.util.Random;
  * @author jihad
  */
 public class Enemy extends Character {
+    
+    public static int enemyEncounteredCount = 0;
+    public static int enemyDefeatedCount = 0;
 
-    Random rand = new Random();
-    //variable that stores the player current xp
-    int playerXp;
-    public static String fullName = "";
-
-    public static String pickedSkillString;
+    Random rand = new Random(); 
     
     EnemyName enemyName;
+    public static String fullName = "";
+    
+    public static String pickedSkillString;
 
     public static ArrayList<Condition> activeConditions;
 
+    int playerXp;
+    
     public Enemy(String type, int playerXp) {
         super(type, 1, (int) (Math.random() * (playerXp / 4 + 2) + 1)); //name maxhp xp
         this.playerXp = playerXp; //this here sets the variable playerXp with the variable that was given in the parameter declaration (which was set on object creation)
@@ -35,9 +38,9 @@ public class Enemy extends Character {
         Stats[0] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         Stats[1] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
 
-        activeConditions = new ArrayList<Condition>();
+        activeConditions = new ArrayList<>();
 
-        skillPool = new ArrayList<Skill>();
+        skillPool = new ArrayList<>();
 
         //TEST SKILL ADDS, every enemy will have these skills on them (for now)
         skillPool.add(SkillEnemy.testBurnSkill);
@@ -46,6 +49,8 @@ public class Enemy extends Character {
         maxSkillCharges = 2;
 
         skillCharges = maxSkillCharges;
+        
+        ++enemyEncounteredCount;
     }
 
     public int useSkill(ArrayList<Skill> skillPool) {
