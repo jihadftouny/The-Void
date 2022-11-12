@@ -23,7 +23,6 @@ public abstract class Character {
     public int[] Stats; //every level up player has x points to spend on his attributes
     int armorClass;
     ArrayList<Skill> skillPool;
-    public static ArrayList<Condition> activeConditions;
 
     //modifiers
     public int[] StatsMods; // strM, dexM, conM, intM, wisM, chaM;
