@@ -33,7 +33,7 @@ public class EnemyName {
         ArrayList<Integer> weightLast = new ArrayList<Integer>();
 
         // each name will provide different bonuses and skills + the base stats and skills of the lastName
-        if (GameLogic.act == 1) {       //<editor-fold defaultstate="collapsed" desc="Chapter 1 - Undercity DONE">
+        if      (GameLogic.act == 1) {       //<editor-fold defaultstate="collapsed" desc="Chapter 1 - Undercity DONE">
             //<editor-fold defaultstate="collapsed" desc="1 - Beasts">
             if ("Beast".equals(type)) {
                 // FIRST NAME - STATS mods 
@@ -330,13 +330,13 @@ public class EnemyName {
             } //</editor-fold>
 
         } //</editor-fold>
-        else if (GameLogic.act == 3) {  //White City - Here we will have only 'nightmares' https://www.artstation.com/midnight-98 //<editor-fold defaultstate="collapsed" desc="Chapter 3 - Ashen Eternal City">
-            //<editor-fold defaultstate="collapsed" desc="3 - Nightmares">
+        else if (GameLogic.act == 3) {  //White City - Here we will have only 'nightmares' https://www.artstation.com/midnight-98 //<editor-fold defaultstate="collapsed" desc="Chapter 3 - Ashen Eternal City NOT DONE">
+            //<editor-fold defaultstate="collapsed" desc="3 - Nightmares NOT DONE">
             if ("Nightmare".equals(type)) {
 
             } //</editor-fold>
         } //</editor-fold>
-        else if (GameLogic.act == 4) {  //<editor-fold defaultstate="collapsed" desc="Chapter 4 - The Inner World">
+        else if (GameLogic.act == 4) {  //<editor-fold defaultstate="collapsed" desc="Chapter 4 - The Inner World DONE(Ances. need design)">
             //<editor-fold defaultstate="collapsed" desc="4 - Beasts">
             if ("Beast".equals(type)) {
                 //STATS mods
