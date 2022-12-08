@@ -75,6 +75,28 @@ public class SkillEnemy extends Skill {
             }
         }
     };
+    
+    public static SkillEnemy testFreezeSkill = new SkillEnemy("Freeze!", 1, false, Element.ice, Condition.freeze) {
+        @Override
+        public int damage() {
+            damage = 1;
+            return damage;
+        }
+
+        @Override
+        public String useText() {
+            return Enemy.fullName + " used " + name;
+        }
+
+        @Override
+        public void addConditionTarget(Condition condition) {
+            if (target instanceof Player) {
+                if (!Player.activeConditions.contains(condition)) {
+                    Player.activeConditions.add(condition);
+                }
+            }
+        }
+    };
 
     @Override
     public int damage() {

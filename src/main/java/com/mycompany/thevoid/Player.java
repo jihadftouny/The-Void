@@ -20,6 +20,10 @@ public class Player extends Character {
     //additional variables
     int gold, restsLeft, pots;
 
+    //static stats
+    public static int[] staticStatsMods;
+    public static int[] staticStats;
+
     public int advantageDisadvantage; // 1 = adv , -1 = dis , 0 = none
 
     public Armor equippedArmor;
@@ -61,6 +65,9 @@ public class Player extends Character {
         chooseClass();
         rollStartStats();
         setMods();
+
+        staticStats = Stats;
+        staticStatsMods = StatsMods;
 
         System.out.println(classPlayer);
 //        levelUp();
@@ -141,6 +148,9 @@ public class Player extends Character {
         setMods();
         isLevelUp = false;
 
+        staticStatsMods = StatsMods;
+        staticStats = Stats;
+
         proficiency++;
 //        System.out.println("STR: " + Stats[0] + " (" + StatsMods[0] + ")" + "\tDEX: " + Stats[1] + " (" + StatsMods[1] + ")"
 //                + "\nCON: " + Stats[2] + " (" + StatsMods[2] + ")" + "\tINT: " + Stats[3] + " (" + StatsMods[3] + ")"
@@ -187,54 +197,6 @@ public class Player extends Character {
             }
 
         } while (!classSet);
-    }
-
-    
-    @Override
-    public int attack() {
-        int damage = 0;
-
-        Dice dmgDice = equippedWeapon.weaponAtkRoll;
-
-        int atkRoll = atkRoll();
-        System.out.println("DMG");
-        // damage logic
-        damage += Dice.rollDice(dmgDice);
-
-        if (atkRoll == 0) {
-            GameLogic.attackRollString = "Your attack missed!";
-            damage = 0;
-        }
-
-        if (atkRoll == 8000) {
-            GameLogic.attackRollString = "Critical Hit!";
-            damage += Dice.rollDice(dmgDice);
-        }
-
-        if (atkRoll == 8001) {
-            GameLogic.attackRollString = "Critical Fail!";
-            damage = 0;
-        }
-
-        return damage;
-//        return rand.nextInt(Stats[0]);
-//        return (int) (Math.random()*(xp/4 + numAtkUpgrades*3 +3) + xp/10 + numAtkUpgrades*2 + numDefUpgrades +1);
-    }
-
-    @Override
-    public int defend() {
-        return 0;
-//        return rand.nextInt(Stats[1]);
-//        return (int) (Math.random() * (xp / 4 + numDefUpgrades * 3 + 3) + xp / 10 + numDefUpgrades * 2 + numAtkUpgrades + 1);
-    }
-
-    @Override
-    public void setArmorClass() {
-        if (equippedArmor == null) {
-            armorClass = 10 + StatsMods[1];
-        } else {
-            armorClass = equippedArmor.armorAC + equippedArmor.armorACM;
-        }
     }
 
     @Override
@@ -289,5 +251,52 @@ public class Player extends Character {
         GameLogic.anythingToContinue();
 
         return diceRoll;
+    }
+
+    @Override
+    public int attack() {
+        int damage = 0;
+
+        Dice dmgDice = equippedWeapon.weaponAtkRoll;
+
+        int atkRoll = atkRoll();
+        System.out.println("DMG");
+        // damage logic
+        damage += Dice.rollDice(dmgDice);
+
+        if (atkRoll == 0) {
+            GameLogic.attackRollString = "Your attack missed!";
+            damage = 0;
+        }
+
+        if (atkRoll == 8000) {
+            GameLogic.attackRollString = "Critical Hit!";
+            damage += Dice.rollDice(dmgDice);
+        }
+
+        if (atkRoll == 8001) {
+            GameLogic.attackRollString = "Critical Fail!";
+            damage = 0;
+        }
+
+        return damage;
+//        return rand.nextInt(Stats[0]);
+//        return (int) (Math.random()*(xp/4 + numAtkUpgrades*3 +3) + xp/10 + numAtkUpgrades*2 + numDefUpgrades +1);
+    }
+
+    @Override
+    public int defend() {
+        return 0;
+//        return rand.nextInt(Stats[1]);
+//        return (int) (Math.random() * (xp / 4 + numDefUpgrades * 3 + 3) + xp / 10 + numDefUpgrades * 2 + numAtkUpgrades + 1);
+    }
+
+    @Override
+    public void setArmorClass() {
+        if (equippedArmor == null) {
+            armorClass = 10 + StatsMods[1];
+        } else {
+            armorClass = equippedArmor.armorAC + equippedArmor.armorACM;
+        }
     }
 }

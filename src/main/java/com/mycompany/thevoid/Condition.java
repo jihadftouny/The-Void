@@ -12,18 +12,18 @@ package com.mycompany.thevoid;
 public class Condition {
 
     public String name;
-    int maxTurns, tempTurns;
-    public static String conditionText;
+    int maxTurns, tempTurns; //COULD ROLL A DICE INSTEAD OF SETTING FIXED TURNS, ALSO, ADD +1 TO AVOID BEING MIN 2
+    public String conditionText;
 
-    // PHYSICAL (CON helps you resist them, STR cause them)
+    // PHYSICAL (CON helps you resist them once affected needs to wait or external help, STR cause them)
     public static Condition bleed = new Condition("Bleed", 2);
     public static Condition stun = new Condition("Stun", 2);
     public static Condition fracture = new Condition("Fracture", 100); // Needs rest to go away, gives disadvantage
     public static Condition regeneration = new Condition("Regeneration", 2);
 
-    // BASIC ELEMENTAL (CON resist, INT cause)
-    public static Condition burn = new Condition("Burn", 2);
-    public static Condition freeze = new Condition("Freeze", 2);
+    // BASIC ELEMENTAL (CON chance of breaking, INT cause)
+    public static Condition burn = new Condition("Burn", 2); //dmg per turn
+    public static Condition freeze = new Condition("Freeze", 2); //like stun but chance of breaking based on strength
     public static Condition electrify = new Condition("Electrify", 2);
     public static Condition poison = new Condition("Poison", 2);
 
@@ -36,7 +36,7 @@ public class Condition {
     public static Condition push = new Condition("Push", 1); // if pushed hard enough, can stun
     public static Condition aired = new Condition("Aired", 2);
 
-    // STATS AUGMENTATION
+    // STATS AUGMENTATION WILL BE DONE AFTER RELEASE
     public static Condition strong = new Condition("Strong", 2);
     public static Condition quick = new Condition("Quick", 2);
     public static Condition healthy = new Condition("Healthy", 2);
@@ -63,8 +63,13 @@ public class Condition {
 
         //CHAIN FOR PLAYER, MUST DO ONE FOR ENEMY
         if (!Player.activeConditions.isEmpty()) {
+            int savingThrow = 0;
             for (Condition i : Player.activeConditions) {
-                if (i.equals(burn)) {
+                if (i.equals(null)) {//<editor-fold defaultstate="collapsed" desc="condition empty template">
+
+                }
+                //</editor-fold>
+                if (i.equals(burn)) {//<editor-fold defaultstate="collapsed" desc="Burn">
                     if (i.tempTurns == i.maxTurns) {
                         System.out.println("You have been burned!");
                         i.tempTurns--;
@@ -80,6 +85,33 @@ public class Condition {
                         break;
                     }
                 }
+                //</editor-fold>
+                if (i.equals(freeze)) {//<editor-fold defaultstate="collapsed" desc="Freeze">
+                    savingThrow += Dice.rollDice(Dice.d20) + Player.staticStatsMods[0];
+                    if (i.tempTurns == i.maxTurns) {
+                        System.out.println("You have been frozen.");
+                        i.tempTurns--;
+                        GameLogic.isPlayerSkipTurn = true;
+                    } else if (i.tempTurns > 0) {
+                        System.out.println("You are frozen.");
+                        i.tempTurns--;
+                        GameLogic.isPlayerSkipTurn = true;
+
+                        if (savingThrow >=  Enemy.staticStats[3]) {
+                            System.out.println("You brutely break from the ice that covered you!");
+                            i.tempTurns = i.maxTurns;
+                            Player.activeConditions.remove(i);
+                            break;
+                        }
+                        
+                    } else {
+                        System.out.println("The ice arround you melts away...");
+                        i.tempTurns = i.maxTurns;
+                        Player.activeConditions.remove(i);
+                        break;
+                    }
+                }
+                //</editor-fold>
             }
         } //END OF PLAYER CHAIN
         //do an if chain (just ifs) for each condition
