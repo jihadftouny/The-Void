@@ -2,7 +2,7 @@
  This is an experiment using purely Java. It is an interactive fiction (or text-RPG), where the player will descent through floors of a cyberpunk-fantasy themed city
  
  ## Currently working on:
- @Jihanger-997 : Conditions and Elements
+ @jihadftouny : Conditions and Elements
  
  ## Features
  - Equipment with rarity system, which include Armors, Weapons, Trinkets and Usables
