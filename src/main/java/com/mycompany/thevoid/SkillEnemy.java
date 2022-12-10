@@ -12,6 +12,8 @@ import java.lang.annotation.Target;
  */
 public class SkillEnemy extends Skill {
 
+    public boolean isDamageDealt;
+
     public SkillEnemy(String name, int chargeUses, boolean isSelf, Element element) {
         super(name, chargeUses, element);
         if (!isSelf) {
@@ -54,28 +56,6 @@ public class SkillEnemy extends Skill {
         }
     };
 
-    public static SkillEnemy testBurnSkill = new SkillEnemy("Burn Ball", 1, false, Element.fire, Condition.burn) {
-        @Override
-        public int damage() {
-            damage = 2;
-            return damage;
-        }
-
-        @Override
-        public String useText() {
-            return Enemy.fullName + " used " + name;
-        }
-
-        @Override
-        public void addConditionTarget(Condition condition) {
-            if (target instanceof Player) {
-                if (!Player.activeConditions.contains(condition)) {
-                    Player.activeConditions.add(condition);
-                }
-            }
-        }
-    };
-    
     public static SkillEnemy testFreezeSkill = new SkillEnemy("Freeze!", 1, false, Element.ice, Condition.freeze) {
         @Override
         public int damage() {
@@ -97,6 +77,52 @@ public class SkillEnemy extends Skill {
             }
         }
     };
+
+    public static SkillEnemy testBurnSkill = new SkillEnemy("Burn Ball", 1, false, Element.fire, Condition.burn) {
+        @Override
+        public int damage() {
+            damage = 2;
+            return damage;
+        }
+
+        @Override
+        public String useText() {
+            return Enemy.fullName + " used " + name;
+        }
+
+        @Override
+        public void addConditionTarget(Condition condition) {
+            if (target instanceof Player) {
+                if (!Player.activeConditions.contains(condition)) {
+                    Player.activeConditions.add(condition);
+                }
+            }
+        }
+    };
+
+    public static SkillEnemy testElectrifySkill = new SkillEnemy("Electrify Ball", 1, false, Element.electro, Condition.electrify) {
+        @Override
+        public int damage() {
+            damage = 2;
+            return damage;
+        }
+        
+        @Override
+        public String useText() {
+            return Enemy.fullName + " used " + name;
+        }
+
+        @Override
+        public void addConditionTarget(Condition condition) {
+            if (target instanceof Player) {
+                if (!Player.activeConditions.contains(condition)) {
+                    Player.activeConditions.add(condition);
+                }
+            }
+        }
+    };
+    
+    
 
     @Override
     public int damage() {

@@ -24,8 +24,8 @@ public class Condition {
     // BASIC ELEMENTAL (CON chance of breaking, INT cause)
     public static Condition burn = new Condition("Burn", 2); //dmg per turn
     public static Condition freeze = new Condition("Freeze", 2); //like stun but chance of breaking based on strength
-    public static Condition electrify = new Condition("Electrify", 2);
-    public static Condition poison = new Condition("Poison", 2);
+    public static Condition electrify = new Condition("Electrify", 2); // chance of dealing damage + lose turn
+    public static Condition poison = new Condition("Poison", 2); //needs antidote to heal
 
     // PSYCHIC (WIS resist/cause)
     public static Condition sleep = new Condition("Sleep", 2);
@@ -89,11 +89,11 @@ public class Condition {
                 if (i.equals(freeze)) {//<editor-fold defaultstate="collapsed" desc="Freeze">
                     savingThrow += Dice.rollDice(Dice.d20) + Player.staticStatsMods[0];
                     if (i.tempTurns == i.maxTurns) {
-                        System.out.println("You have been frozen.");
+                        System.out.println("You slowly feel yourself unable to move.");
                         i.tempTurns--;
                         GameLogic.isPlayerSkipTurn = true;
                     } else if (i.tempTurns > 0) {
-                        System.out.println("You are frozen.");
+                        System.out.println("You can see what is in front of you, but you are unable to move.");
                         i.tempTurns--;
                         GameLogic.isPlayerSkipTurn = true;
 
@@ -105,7 +105,31 @@ public class Condition {
                         }
                         
                     } else {
-                        System.out.println("The ice arround you melts away...");
+                        System.out.println("The ice arround you quickly melts away...");
+                        i.tempTurns = i.maxTurns;
+                        Player.activeConditions.remove(i);
+                        break;
+                    }
+                }
+                //</editor-fold>
+                if (i.equals(electrify)) {//<editor-fold defaultstate="collapsed" desc="Freeze">
+                    savingThrow += Dice.rollDice(Dice.d20) + Player.staticStatsMods[0];
+                    if (i.tempTurns == i.maxTurns) {
+                        System.out.println("An unnatural surge of electricity runs through your body.");
+                        i.tempTurns--;
+                    } else if (i.tempTurns > 0) {
+                        System.out.println("Unnatural electricity still runs through your body.");
+                        i.tempTurns--;
+                        if (savingThrow <  Enemy.staticStats[3]) {
+                            System.out.println("Tzzz.\nYou lose your turn.");
+                            GameLogic.dmgTookOverride = 2;
+                            GameLogic.isDmgTookOverride = true;
+                            GameLogic.isPlayerSkipTurn = true;
+                            break;
+                        }
+                        
+                    } else {
+                        System.out.println("The electricty flows from your body to the ground and you're ready to go.");
                         i.tempTurns = i.maxTurns;
                         Player.activeConditions.remove(i);
                         break;

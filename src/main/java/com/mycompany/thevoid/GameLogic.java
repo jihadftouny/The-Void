@@ -17,6 +17,12 @@ public class GameLogic {
     static Player player;
     public static Enemy enemy;
     public static boolean isRunning;
+    
+    //variable used for dmgoverride (for now being used for adding to damage)
+    public static int dmgOverride;
+    public static boolean isDmgOverride = false;
+    public static int dmgTookOverride;
+    public static boolean isDmgTookOverride = false;
 
     public static String attackRollString, advantageString;
     public static boolean isPlayerSkipTurn, isEnemySkipTurn;
@@ -282,6 +288,11 @@ public class GameLogic {
                     clearConsole();
                     printHeader("BATTLE", true);
                     //player attack events
+                    //checks if there's extra damage to be dealt
+                    if (isDmgTookOverride){
+                        dmgTook += dmgTookOverride; 
+                    }
+                    //checks if there is a skip of turn, else do damage
                     if (isPlayerSkipTurn) {
                         System.out.println("You were unable to attack");
                         dmg = 0;

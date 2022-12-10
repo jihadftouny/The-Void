@@ -42,7 +42,7 @@ public class Enemy extends Character {
         Stats[0] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         Stats[1] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         Stats[2] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
-        Stats[3] = 20 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
+        Stats[3] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         Stats[4] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         Stats[5] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         
@@ -52,7 +52,7 @@ public class Enemy extends Character {
         skillPool = new ArrayList<>();
 
         //TEST SKILL ADDS, every enemy will have these skills on them (for now)
-        skillPool.add(SkillEnemy.testFreezeSkill);
+        skillPool.add(SkillEnemy.testElectrifySkill);
 //        skillPool.add(SkillEnemy.testFireSkill);
 
         maxSkillCharges = 2;
