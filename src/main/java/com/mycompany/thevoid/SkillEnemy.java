@@ -13,7 +13,9 @@ import java.lang.annotation.Target;
 public class SkillEnemy extends Skill {
 
     public boolean isDamageDealt;
-
+    
+    
+    //constructors
     public SkillEnemy(String name, int chargeUses, boolean isSelf, Element element) {
         super(name, chargeUses, element);
         if (!isSelf) {

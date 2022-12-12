@@ -18,7 +18,8 @@ public class GameLogic {
     public static Enemy enemy;
     public static boolean isRunning;
     
-    //variable used for dmgoverride (for now being used for adding to damage)
+    //variables used for dmgoverride (for now being used for adding extra dmg to damage)
+    //useless for now
     public static int dmgOverride;
     public static boolean isDmgOverride = false;
     public static int dmgTookOverride;

@@ -17,30 +17,29 @@ public class Condition {
 
     // PHYSICAL (CON helps you resist them once affected needs to wait or external help, STR cause them)
     public static Condition bleed = new Condition("Bleed", 2);
-    public static Condition stun = new Condition("Stun", 2);
-    public static Condition fracture = new Condition("Fracture", 100); // Needs rest to go away, gives disadvantage
-    public static Condition regeneration = new Condition("Regeneration", 2);
+    public static Condition stun = new Condition("Stun", 2); //OK
+    public static Condition fracture = new Condition("Fracture", 100); //OK Needs rest to go away, gives disadvantage
+    public static Condition regeneration = new Condition("Regeneration", 2); //OK
 
     // BASIC ELEMENTAL (CON chance of breaking, INT cause)
-    public static Condition burn = new Condition("Burn", 2); //dmg per turn
-    public static Condition freeze = new Condition("Freeze", 2); //like stun but chance of breaking based on strength
-    public static Condition electrify = new Condition("Electrify", 2); // chance of dealing damage + lose turn
+    public static Condition burn = new Condition("Burn", 2); //OK dmg per turn
+    public static Condition freeze = new Condition("Freeze", 2); //OK like stun but chance of breaking based on strength
+    public static Condition electrify = new Condition("Electrify", 2); //OK chance of dealing damage + lose turn
     public static Condition poison = new Condition("Poison", 2); //needs antidote to heal
 
     // PSYCHIC (WIS resist/cause)
     public static Condition sleep = new Condition("Sleep", 2);
-    public static Condition insanity = new Condition("Insanity", 2);
+    public static Condition insanity = new Condition("Insanity", 2); //random things may happen, random attacks, skills
 
     // FORCE (WIS)
-    public static Condition paralysis = new Condition("Paralysis", 2);
     public static Condition push = new Condition("Push", 1); // if pushed hard enough, can stun
-    public static Condition aired = new Condition("Aired", 2);
+    public static Condition aired = new Condition("Aired", 2); // it's a stun with a damage on last turn, +DMG the +WIS
 
     // STATS AUGMENTATION WILL BE DONE AFTER RELEASE
     public static Condition strong = new Condition("Strong", 2);
-    public static Condition quick = new Condition("Quick", 2);
+    public static Condition quick = new Condition("Agile", 2);
     public static Condition healthy = new Condition("Healthy", 2);
-    public static Condition smart = new Condition("Smart", 2);
+    public static Condition smart = new Condition("Brainy", 2);
     public static Condition wise = new Condition("Wise", 2);
     public static Condition charming = new Condition("Charming", 2);
 
@@ -70,14 +69,23 @@ public class Condition {
                 }
                 //</editor-fold>
                 if (i.equals(burn)) {//<editor-fold defaultstate="collapsed" desc="Burn">
+                    savingThrow += Dice.rollDice(Dice.d20) + Player.staticStatsMods[0];
                     if (i.tempTurns == i.maxTurns) {
-                        System.out.println("You have been burned!");
+                        System.out.println("You caught on fire!");
                         i.tempTurns--;
                     } else if (i.tempTurns > 0) {
-                        damage = 3;
-                        SkillEnemy.target.hp -= damage;
+                        damage = 1;
+                        GameLogic.player.hp -= damage;
                         System.out.println("You took " + damage + " damage from burning.");
                         i.tempTurns--;
+
+                        if (savingThrow >= Enemy.staticStats[3]) {
+                            System.out.println("You roll on the floor and manage to put the fire out.");
+                            i.tempTurns = i.maxTurns;
+                            Player.activeConditions.remove(i);
+                            break;
+                        }
+
                     } else {
                         System.out.println("You are no longer burning!");
                         i.tempTurns = i.maxTurns;
@@ -97,13 +105,13 @@ public class Condition {
                         i.tempTurns--;
                         GameLogic.isPlayerSkipTurn = true;
 
-                        if (savingThrow >=  Enemy.staticStats[3]) {
+                        if (savingThrow >= Enemy.staticStats[3]) {
                             System.out.println("You brutely break from the ice that covered you!");
                             i.tempTurns = i.maxTurns;
                             Player.activeConditions.remove(i);
                             break;
                         }
-                        
+
                     } else {
                         System.out.println("The ice arround you quickly melts away...");
                         i.tempTurns = i.maxTurns;
@@ -112,7 +120,7 @@ public class Condition {
                     }
                 }
                 //</editor-fold>
-                if (i.equals(electrify)) {//<editor-fold defaultstate="collapsed" desc="Freeze">
+                if (i.equals(electrify)) {//<editor-fold defaultstate="collapsed" desc="Electrify">
                     savingThrow += Dice.rollDice(Dice.d20) + Player.staticStatsMods[0];
                     if (i.tempTurns == i.maxTurns) {
                         System.out.println("An unnatural surge of electricity runs through your body.");
@@ -120,14 +128,14 @@ public class Condition {
                     } else if (i.tempTurns > 0) {
                         System.out.println("Unnatural electricity still runs through your body.");
                         i.tempTurns--;
-                        if (savingThrow <  Enemy.staticStats[3]) {
-                            System.out.println("Tzzz.\nYou lose your turn.");
-                            GameLogic.dmgTookOverride = 2;
-                            GameLogic.isDmgTookOverride = true;
+                        if (savingThrow < Enemy.staticStats[3]) {
+                            damage = 1;
+                            GameLogic.player.hp -= damage;
+                            System.out.println("Tzzz.\nYou take " + damage + " damage and lose your turn.");
                             GameLogic.isPlayerSkipTurn = true;
                             break;
                         }
-                        
+
                     } else {
                         System.out.println("The electricty flows from your body to the ground and you're ready to go.");
                         i.tempTurns = i.maxTurns;
@@ -136,6 +144,68 @@ public class Condition {
                     }
                 }
                 //</editor-fold>
+
+                // need to add poison here
+                if (i.equals(stun)) {//<editor-fold defaultstate="collapsed" desc="Stun">
+                    savingThrow += Dice.rollDice(Dice.d20) + Player.staticStatsMods[0];
+                    if (i.tempTurns == i.maxTurns) {
+                        System.out.println("K.O.! You are knocked out!");
+                        i.tempTurns--;
+                        GameLogic.isPlayerSkipTurn = true;
+                    } else if (i.tempTurns > 0) {
+                        System.out.println("You are knocked out.");
+                        i.tempTurns--;
+                        GameLogic.isPlayerSkipTurn = true;
+
+                    } else {
+                        System.out.println("You regain consciousness and are ready to fight!");
+                        i.tempTurns = i.maxTurns;
+                        Player.activeConditions.remove(i);
+                        break;
+                    }
+                }
+                //</editor-fold>
+                if (i.equals(regeneration)) {//<editor-fold defaultstate="collapsed" desc="Regeneration">
+                    savingThrow += Dice.rollDice(Dice.d20) + Player.staticStatsMods[0];
+                    if (i.tempTurns == i.maxTurns) {
+                        System.out.println("You feel grace flowing through your system.");
+                        damage = 2;
+                        GameLogic.player.hp += damage;
+                        System.out.println("You heal for " + damage + " health.");
+                        i.tempTurns--;
+                    } else if (i.tempTurns > 0) {
+                        System.out.println("You are healing.");
+                        damage = 1;
+                        GameLogic.player.hp += damage;
+                        System.out.println("You heal for " + damage + " health.");
+                        i.tempTurns--;
+                    } else {
+                        System.out.println("The temporary bliss fades away. Back to rumbling on your own terms!");
+                        i.tempTurns = i.maxTurns;
+                        Player.activeConditions.remove(i);
+                        break;
+                    }
+                }
+                //</editor-fold>
+                if (i.equals(fracture)) {//<editor-fold defaultstate="collapsed" desc="Fracture">
+                    if (i.tempTurns == i.maxTurns) {
+                        System.out.println("You scream as your hear your bone cracking");
+                        i.tempTurns--;
+                        GameLogic.player.advantageDisadvantage = -1;
+                    } else if (i.tempTurns > 0) {
+                        System.out.println("Your bone is broken.");
+                        i.tempTurns--;
+                        GameLogic.player.advantageDisadvantage = -1;
+                    } else {
+                        System.out.println("Your bone was not supposed to heal, but hey, it's a feature!");
+                        i.tempTurns = i.maxTurns;
+                        Player.activeConditions.remove(i);
+                        break;
+                    }
+                }
+                //</editor-fold>
+                
+                
             }
         } //END OF PLAYER CHAIN
         //do an if chain (just ifs) for each condition

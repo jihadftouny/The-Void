@@ -10,6 +10,8 @@ package com.mycompany.thevoid;
  * Some keywords
  * CONTHERE -> you stopped coding here
  * NEEDT -> this part needs testing
+ * 
+ * NOTES -> Remember that you can call static variables by using the class name
  */
 public class Thevoid {
 
