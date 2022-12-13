@@ -124,7 +124,71 @@ public class SkillEnemy extends Skill {
         }
     };
     
+    public static SkillEnemy testInsanitySkill = new SkillEnemy("Insanity Gas", 1, false, Element.psychic, Condition.insanity) {
+        @Override
+        public int damage() {
+            damage = 0;
+            return damage;
+        }
+        
+        @Override
+        public String useText() {
+            return Enemy.fullName + " used " + name;
+        }
+
+        @Override
+        public void addConditionTarget(Condition condition) {
+            if (target instanceof Player) {
+                if (!Player.activeConditions.contains(condition)) {
+                    Player.activeConditions.add(condition);
+                }
+            }
+        }
+    };
     
+    public static SkillEnemy testPushSkill = new SkillEnemy("Push Force", 1, false, Element.force, Condition.push) {
+        @Override
+        public int damage() {
+            damage = 0;
+            return damage;
+        }
+        
+        @Override
+        public String useText() {
+            return Enemy.fullName + " used " + name;
+        }
+
+        @Override
+        public void addConditionTarget(Condition condition) {
+            if (target instanceof Player) {
+                if (!Player.activeConditions.contains(condition)) {
+                    Player.activeConditions.add(condition);
+                }
+            }
+        }
+    };
+    
+    public static SkillEnemy testStunSkill = new SkillEnemy("Stun", 1, false, Element.physical, Condition.stun) {
+        @Override
+        public int damage() {
+            damage = 1;
+            return damage;
+        }
+        
+        @Override
+        public String useText() {
+            return Enemy.fullName + " used " + name;
+        }
+
+        @Override
+        public void addConditionTarget(Condition condition) {
+            if (target instanceof Player) {
+                if (!Player.activeConditions.contains(condition)) {
+                    Player.activeConditions.add(condition);
+                }
+            }
+        }
+    };
 
     @Override
     public int damage() {

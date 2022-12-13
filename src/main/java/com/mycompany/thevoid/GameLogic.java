@@ -17,7 +17,7 @@ public class GameLogic {
     static Player player;
     public static Enemy enemy;
     public static boolean isRunning;
-    
+
     //variables used for dmgoverride (for now being used for adding extra dmg to damage)
     //useless for now
     public static int dmgOverride;
@@ -273,8 +273,27 @@ public class GameLogic {
                     // THEN SET A BOOLEAN THAT LATER WILL ALLOW DMG TO BE MORE THAN 0
                     // AND CHANGE DAMAGE MESSAGE ACCORDINGLY
                     // MAKE AN IF ELSE CHAIN WITH HIGHEST PRIORITY STAT ON TOP (IF STUN ELSE SLEEP ELSE BROKEN BONE, ETC) THIS WAY THE HIGH PRIORITY WILL SHOW
-                    int dmg = player.attack();
+                    //print battle info
+                    clearConsole();
+                    printHeader("BATTLE", true);
+
+                    int dmg = 0;
+
+                    //enemy casted spell check + enemy damage
                     int dmgTook = enemy.attack();
+
+                    if (Enemy.pickedSkillString != null) {
+                        System.out.println(enemy.pickedSkillString);
+                        Enemy.pickedSkillString = null;
+                    }
+
+                    Condition.tickConditions();
+
+                    System.out.println(enemy.fullName + " dealt " + dmgTook + " damage to you.");
+
+                    if (!isPlayerSkipTurn) {
+                        dmg = player.attack();
+                    }
 
                     //check that dmg isnt negative
                     if (dmgTook < 0) {
@@ -284,14 +303,10 @@ public class GameLogic {
                     if (dmg < 0) {
                         dmg = 0;
                     }
-
-                    //print battle info
-                    clearConsole();
-                    printHeader("BATTLE", true);
                     //player attack events
                     //checks if there's extra damage to be dealt
-                    if (isDmgTookOverride){
-                        dmgTook += dmgTookOverride; 
+                    if (isDmgTookOverride) {
+                        dmgTook += dmgTookOverride;
                     }
                     //checks if there is a skip of turn, else do damage
                     if (isPlayerSkipTurn) {
@@ -308,19 +323,11 @@ public class GameLogic {
                         }
                         System.out.println("You dealt " + dmg + " damage to " + enemy.fullName + ".");
                     }
-                    //enemy casted spell check + enemy damage
-                    if (Enemy.pickedSkillString != null) {
-                        System.out.println(enemy.pickedSkillString);
-                        Enemy.pickedSkillString = null;
-                    }
-                    
+
                     //deal damage
                     player.hp -= dmgTook;
                     enemy.hp -= dmg;
-                    
-                    System.out.println(enemy.fullName + " dealt " + dmgTook + " damage to you.");
 
-                    Condition.tickConditions();
                     anythingToContinue();
 
                     //if player hp is 0 or enemy defeated

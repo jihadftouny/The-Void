@@ -52,7 +52,7 @@ public class Enemy extends Character {
         skillPool = new ArrayList<>();
 
         //TEST SKILL ADDS, every enemy will have these skills on them (for now)
-        skillPool.add(SkillEnemy.testElectrifySkill);
+        skillPool.add(SkillEnemy.testStunSkill);
 //        skillPool.add(SkillEnemy.testFireSkill);
 
         maxSkillCharges = 2;
@@ -74,7 +74,6 @@ public class Enemy extends Character {
         Skill pickedSkill = skillPool.get(index);
 
         int damage = pickedSkill.damage();
-        System.out.println("Enemy Damage: " + damage);
         if (pickedSkill.condition1 != null) {
             pickedSkill.addConditionTarget(pickedSkill.condition1);
         }

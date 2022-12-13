@@ -203,12 +203,12 @@ public class Player extends Character {
     public int atkRoll() {
         int diceRoll, diceRollOne, diceRollTwo;
 
-        System.out.println("diceRoll");
+        //System.out.println("diceRoll");
         diceRoll = Dice.rollDice(Dice.d20);
 
         // ADVANTAGE AND DISADVANTAGE
         if (advantageDisadvantage != 0) {
-            System.out.println("diceRollOne and Two");
+            //System.out.println("diceRollOne and Two");
             diceRollOne = Dice.rollDice(Dice.d20);
             diceRollTwo = Dice.rollDice(Dice.d20);
 
@@ -222,6 +222,7 @@ public class Player extends Character {
         }
         int diceRollOg = diceRoll;
 
+        
         if ("Meelee".equals(equippedWeapon.weaponProperty)) {
             diceRoll += StatsMods[0];
         }
@@ -232,7 +233,7 @@ public class Player extends Character {
             diceRoll += Math.max(StatsMods[0], StatsMods[1]);
         }
 
-        System.out.println("Atk Roll: " + diceRoll);
+        //System.out.println("Atk Roll: " + diceRoll);
 
         if (diceRollOg == 20) {
             diceRoll = 8000; //8000 will be used as a critical roll
@@ -247,8 +248,8 @@ public class Player extends Character {
             diceRoll = 0;
         }
 
-        System.out.println("Atk Roll: " + diceRoll);
-        GameLogic.anythingToContinue();
+        //System.out.println("Atk Roll: " + diceRoll);
+        //GameLogic.anythingToContinue();
 
         return diceRoll;
     }
@@ -260,7 +261,6 @@ public class Player extends Character {
         Dice dmgDice = equippedWeapon.weaponAtkRoll;
 
         int atkRoll = atkRoll();
-        System.out.println("DMG");
         // damage logic
         damage += Dice.rollDice(dmgDice);
 
