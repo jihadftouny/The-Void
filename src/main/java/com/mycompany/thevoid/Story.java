@@ -23,7 +23,7 @@ public class Story {
         GameLogic.anythingToContinue();
     }
 
-    // First Floor - "Zaun"
+    // First Floor - "Undercity"
     // This is the place where criminals are sent from Absolution. In the final fight, you kill one of the Kingpins, and someone throws you deeper into the rift. The deeper you go into the rift, the faster time passes above you(?), the more difficult it is to come back up(?)
     public static void firstActIntro() {
         GameLogic.clearConsole();

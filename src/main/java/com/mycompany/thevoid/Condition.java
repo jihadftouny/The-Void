@@ -16,6 +16,7 @@ public class Condition {
     public String name;
     int maxTurns, tempTurns; //COULD ROLL A DICE INSTEAD OF SETTING FIXED TURNS, ALSO, ADD +1 TO AVOID BEING MIN 2
     public String conditionText;
+   
 
     public static String[] insanityStrings = {
         "~Useless. You are useless.~",
@@ -51,7 +52,7 @@ public class Condition {
     public static Condition insanity = new Condition("Insanity", 5); //HALF OK random things may happen, random attacks, skills
 
     // FORCE (WIS)
-    public static Condition push = new Condition("Push", 1); // if pushed hard enough, can stun
+    public static Condition push = new Condition("Push", 1); //OK if pushed hard enough, can stun
     public static Condition aired = new Condition("Aired", 2); //OK it's a "tornado" stun with a damage on last turn "drop", +DMG the +WIS
 
     // STATS AUGMENTATION WILL BE DONE AFTER RELEASE
@@ -80,6 +81,7 @@ public class Condition {
 
     public static void tickConditions() {
         int damage;
+        
 
         //CHAIN FOR PLAYER, MUST DO ONE FOR ENEMY
         // MIGHT NEED ONLY A break; ON THE LAST IF
@@ -289,8 +291,15 @@ public class Condition {
                 //</editor-fold>
 
                 if (i.equals(push)) {//<editor-fold defaultstate="collapsed" desc="Pushed">
-                    if (i.tempTurns <= 0) {
+                    if (i.tempTurns <= 0) { //&& Enemy.pickedSkill == SkillEnemy.testPushSkill
                         GameLogic.isPlayerSkipTurn = false;
+                        i.tempTurns = i.maxTurns;
+                        System.out.println("You manage to resist the second push!");
+                        Player.activeConditions.remove(i);
+                        break;
+                    } else if (i.tempTurns <= 0) {
+                        GameLogic.isPlayerSkipTurn = false;
+                        i.tempTurns = i.maxTurns;
                         Player.activeConditions.remove(i);
                         break;
                     }

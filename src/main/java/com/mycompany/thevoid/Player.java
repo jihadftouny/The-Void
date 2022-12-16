@@ -23,6 +23,8 @@ public class Player extends Character {
     //static stats
     public static int[] staticStatsMods;
     public static int[] staticStats;
+    
+    public static int[] Resistances; //physical, cryo, pyro, electro, poison, psychic, force
 
     public int advantageDisadvantage; // 1 = adv , -1 = dis , 0 = none
 
@@ -53,6 +55,8 @@ public class Player extends Character {
 
         activeConditions = new ArrayList<Condition>();
         advantageDisadvantage = 0;
+        
+        this.Resistances = new int[]{0, 0, 0, 0, 0, 0};
 
         //player stats
         //set additional stats
@@ -199,6 +203,11 @@ public class Player extends Character {
         } while (!classSet);
     }
 
+    @Override
+    public void setResistance(int index, int percentage){
+        this.Resistances[index] = percentage;
+    }
+    
     @Override
     public int atkRoll() {
         int diceRoll, diceRollOne, diceRollTwo;

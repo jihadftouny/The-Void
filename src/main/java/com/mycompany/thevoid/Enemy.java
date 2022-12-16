@@ -19,8 +19,13 @@ public class Enemy extends Character {
     
     public static int [] staticStatsMods;
     public static int[] staticStats;
+    
+    public static int[] Resistances; //physical, cryo, pyro, electro, poison, psychic, force
 
     Random rand = new Random();
+    public static Skill pickedSkill;
+    
+    
 
     EnemyName enemyName;
     public static String fullName = "";
@@ -46,13 +51,14 @@ public class Enemy extends Character {
         Stats[4] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         Stats[5] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
         
+        this.Resistances = new int[]{0, 0, 0, 0, 0, 0};
 
         activeConditions = new ArrayList<>();
 
         skillPool = new ArrayList<>();
 
         //TEST SKILL ADDS, every enemy will have these skills on them (for now)
-        skillPool.add(SkillEnemy.testStunSkill);
+        skillPool.add(SkillEnemy.testFireSkill);
 //        skillPool.add(SkillEnemy.testFireSkill);
 
         maxSkillCharges = 2;
@@ -71,7 +77,7 @@ public class Enemy extends Character {
         // create random selector and pick  from skillpool array
         int index = rand.nextInt(skillPool.size());
 
-        Skill pickedSkill = skillPool.get(index);
+        pickedSkill = skillPool.get(index);
 
         int damage = pickedSkill.damage();
         if (pickedSkill.condition1 != null) {
@@ -125,6 +131,11 @@ public class Enemy extends Character {
         
     }
 
+    @Override
+    public void setResistance(int index, int percentage){
+        this.Resistances[index] = percentage;
+    }
+    
     @Override
     public int attack() {
         int damage = 0;
