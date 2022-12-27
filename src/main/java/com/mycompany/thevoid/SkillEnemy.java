@@ -12,6 +12,10 @@ import java.lang.annotation.Target;
  */
 public class SkillEnemy extends Skill {
 
+    public boolean isDamageDealt;
+    
+    
+    //constructors
     public SkillEnemy(String name, int chargeUses, boolean isSelf, Element element) {
         super(name, chargeUses, element);
         if (!isSelf) {
@@ -44,7 +48,8 @@ public class SkillEnemy extends Skill {
     public static SkillEnemy testFireSkill = new SkillEnemy("Pyro Ball", 1, false, Element.fire) {
         @Override
         public int damage() {
-            damage = 2;
+            int baseDamage = 2;
+            damage = baseDamage - ((Player.Resistances[2])/100 * baseDamage);
             return damage;
         }
 
@@ -54,10 +59,10 @@ public class SkillEnemy extends Skill {
         }
     };
 
-    public static SkillEnemy testBurnSkill = new SkillEnemy("Burn Ball", 1, false, Element.fire, Condition.burn) {
+    public static SkillEnemy testFreezeSkill = new SkillEnemy("Freeze!", 1, false, Element.ice, Condition.freeze) {
         @Override
         public int damage() {
-            damage = 2;
+            damage = 1;
             return damage;
         }
 

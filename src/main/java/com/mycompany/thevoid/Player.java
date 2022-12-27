@@ -20,6 +20,12 @@ public class Player extends Character {
     //additional variables
     int gold, restsLeft, pots;
 
+    //static stats
+    public static int[] staticStatsMods;
+    public static int[] staticStats;
+    
+    public static int[] Resistances; //physical, cryo, pyro, electro, poison, psychic, force
+
     public int advantageDisadvantage; // 1 = adv , -1 = dis , 0 = none
 
     public Armor equippedArmor;
@@ -49,6 +55,8 @@ public class Player extends Character {
 
         activeConditions = new ArrayList<Condition>();
         advantageDisadvantage = 0;
+        
+        this.Resistances = new int[]{0, 0, 0, 0, 0, 0};
 
         //player stats
         //set additional stats
@@ -61,6 +69,9 @@ public class Player extends Character {
         chooseClass();
         rollStartStats();
         setMods();
+
+        staticStats = Stats;
+        staticStatsMods = StatsMods;
 
         System.out.println(classPlayer);
 //        levelUp();
@@ -141,6 +152,9 @@ public class Player extends Character {
         setMods();
         isLevelUp = false;
 
+        staticStatsMods = StatsMods;
+        staticStats = Stats;
+
         proficiency++;
 //        System.out.println("STR: " + Stats[0] + " (" + StatsMods[0] + ")" + "\tDEX: " + Stats[1] + " (" + StatsMods[1] + ")"
 //                + "\nCON: " + Stats[2] + " (" + StatsMods[2] + ")" + "\tINT: " + Stats[3] + " (" + StatsMods[3] + ")"
@@ -189,7 +203,66 @@ public class Player extends Character {
         } while (!classSet);
     }
 
+    @Override
+    public void setResistance(int index, int percentage){
+        this.Resistances[index] = percentage;
+    }
     
+    @Override
+    public int atkRoll() {
+        int diceRoll, diceRollOne, diceRollTwo;
+
+        //System.out.println("diceRoll");
+        diceRoll = Dice.rollDice(Dice.d20);
+
+        // ADVANTAGE AND DISADVANTAGE
+        if (advantageDisadvantage != 0) {
+            //System.out.println("diceRollOne and Two");
+            diceRollOne = Dice.rollDice(Dice.d20);
+            diceRollTwo = Dice.rollDice(Dice.d20);
+
+            if (advantageDisadvantage == 1) { //advantage
+                GameLogic.advantageString = "You have advantage!";
+                diceRoll = Math.max(diceRollOne, diceRollTwo);
+            } else if (advantageDisadvantage == -1) { //disadvantage
+                GameLogic.advantageString = "You have disadvantage!";
+                diceRoll = Math.min(diceRollOne, diceRollTwo);
+            }
+        }
+        int diceRollOg = diceRoll;
+
+        
+        if ("Meelee".equals(equippedWeapon.weaponProperty)) {
+            diceRoll += StatsMods[0];
+        }
+        if ("Ranged".equals(equippedWeapon.weaponProperty)) {
+            diceRoll += StatsMods[1];
+        }
+        if ("Finesse".equals(equippedWeapon.weaponProperty)) {
+            diceRoll += Math.max(StatsMods[0], StatsMods[1]);
+        }
+
+        //System.out.println("Atk Roll: " + diceRoll);
+
+        if (diceRollOg == 20) {
+            diceRoll = 8000; //8000 will be used as a critical roll
+        }
+        if (diceRollOg == 1) {
+            diceRoll = 8001; //8001 will be used as a critical fail
+        }
+        if (diceRoll < 1) {
+            diceRoll = 1;
+        }
+        if (diceRoll < GameLogic.enemy.armorClass) {
+            diceRoll = 0;
+        }
+
+        //System.out.println("Atk Roll: " + diceRoll);
+        //GameLogic.anythingToContinue();
+
+        return diceRoll;
+    }
+
     @Override
     public int attack() {
         int damage = 0;
@@ -197,7 +270,6 @@ public class Player extends Character {
         Dice dmgDice = equippedWeapon.weaponAtkRoll;
 
         int atkRoll = atkRoll();
-        System.out.println("DMG");
         // damage logic
         damage += Dice.rollDice(dmgDice);
 
@@ -235,59 +307,5 @@ public class Player extends Character {
         } else {
             armorClass = equippedArmor.armorAC + equippedArmor.armorACM;
         }
-    }
-
-    @Override
-    public int atkRoll() {
-        int diceRoll, diceRollOne, diceRollTwo;
-
-        System.out.println("diceRoll");
-        diceRoll = Dice.rollDice(Dice.d20);
-
-        // ADVANTAGE AND DISADVANTAGE
-        if (advantageDisadvantage != 0) {
-            System.out.println("diceRollOne and Two");
-            diceRollOne = Dice.rollDice(Dice.d20);
-            diceRollTwo = Dice.rollDice(Dice.d20);
-
-            if (advantageDisadvantage == 1) { //advantage
-                GameLogic.advantageString = "You have advantage!";
-                diceRoll = Math.max(diceRollOne, diceRollTwo);
-            } else if (advantageDisadvantage == -1) { //disadvantage
-                GameLogic.advantageString = "You have disadvantage!";
-                diceRoll = Math.min(diceRollOne, diceRollTwo);
-            }
-        }
-        int diceRollOg = diceRoll;
-
-        if ("Meelee".equals(equippedWeapon.weaponProperty)) {
-            diceRoll += StatsMods[0];
-        }
-        if ("Ranged".equals(equippedWeapon.weaponProperty)) {
-            diceRoll += StatsMods[1];
-        }
-        if ("Finesse".equals(equippedWeapon.weaponProperty)) {
-            diceRoll += Math.max(StatsMods[0], StatsMods[1]);
-        }
-
-        System.out.println("Atk Roll: " + diceRoll);
-
-        if (diceRollOg == 20) {
-            diceRoll = 8000; //8000 will be used as a critical roll
-        }
-        if (diceRollOg == 1) {
-            diceRoll = 8001; //8001 will be used as a critical fail
-        }
-        if (diceRoll < 1) {
-            diceRoll = 1;
-        }
-        if (diceRoll < GameLogic.enemy.armorClass) {
-            diceRoll = 0;
-        }
-
-        System.out.println("Atk Roll: " + diceRoll);
-        GameLogic.anythingToContinue();
-
-        return diceRoll;
     }
 }

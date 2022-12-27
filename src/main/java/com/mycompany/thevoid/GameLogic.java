@@ -18,7 +18,15 @@ public class GameLogic {
     public static Enemy enemy;
     public static boolean isRunning;
 
+    //variables used for dmgoverride (for now being used for adding extra dmg to damage)
+    //useless for now
+    public static int dmgOverride;
+    public static boolean isDmgOverride = false;
+    public static int dmgTookOverride;
+    public static boolean isDmgTookOverride = false;
+
     public static String attackRollString, advantageString;
+    public static boolean isPlayerSkipTurn, isEnemySkipTurn;
 
     //    public static Dice lvlUpDice = new Dice(2, 4);
     //dices
@@ -167,7 +175,6 @@ public class GameLogic {
         int currentAct = act;
         checkAct();
 
-
 //        check if game isnt in last act
         if (act != 5 && currentAct == act) {
             randomEncounter();
@@ -266,10 +273,27 @@ public class GameLogic {
                     // THEN SET A BOOLEAN THAT LATER WILL ALLOW DMG TO BE MORE THAN 0
                     // AND CHANGE DAMAGE MESSAGE ACCORDINGLY
                     // MAKE AN IF ELSE CHAIN WITH HIGHEST PRIORITY STAT ON TOP (IF STUN ELSE SLEEP ELSE BROKEN BONE, ETC) THIS WAY THE HIGH PRIORITY WILL SHOW
+                    //print battle info
+                    clearConsole();
+                    printHeader("BATTLE", true);
 
-                    int dmg = player.attack();
+                    int dmg = 0;
+
+                    //enemy casted spell check + enemy damage
                     int dmgTook = enemy.attack();
 
+                    if (Enemy.pickedSkillString != null) {
+                        System.out.println(enemy.pickedSkillString);
+                        Enemy.pickedSkillString = null;
+                    }
+
+                    Condition.tickConditions();
+
+                    System.out.println(enemy.fullName + " dealt " + dmgTook + " damage to you.");
+
+                    if (!isPlayerSkipTurn) {
+                        dmg = player.attack();
+                    }
 
                     //check that dmg isnt negative
                     if (dmgTook < 0) {
@@ -279,29 +303,31 @@ public class GameLogic {
                     if (dmg < 0) {
                         dmg = 0;
                     }
+                    //player attack events
+                    //checks if there's extra damage to be dealt
+                    if (isDmgTookOverride) {
+                        dmgTook += dmgTookOverride;
+                    }
+                    //checks if there is a skip of turn, else do damage
+                    if (isPlayerSkipTurn) {
+                        System.out.println("You were unable to attack");
+                        dmg = 0;
+                    } else {
+                        if (advantageString != null) {
+                            System.out.println(advantageString);
+                            advantageString = null;
+                        }
+                        if (attackRollString != null) {
+                            System.out.println(attackRollString);
+                            attackRollString = null;
+                        }
+                        System.out.println("You dealt " + dmg + " damage to " + enemy.fullName + ".");
+                    }
 
                     //deal damage
                     player.hp -= dmgTook;
                     enemy.hp -= dmg;
 
-                    //print battle info
-                    clearConsole();
-                    printHeader("BATTLE", true);
-                    if (advantageString != null) {
-                        System.out.println(advantageString);
-                        advantageString = null;
-                    }
-                    if (attackRollString != null) {
-                        System.out.println(attackRollString);
-                        attackRollString = null;
-                    }
-                    System.out.println("You dealt " + dmg + " damage to " + enemy.fullName + ".");
-                    if (Enemy.pickedSkillString != null) {
-                        System.out.println(enemy.pickedSkillString);
-                        Enemy.pickedSkillString = null;
-                    }
-                    System.out.println(enemy.fullName + " dealt " + dmgTook + " damage to you.");
-                    Condition.tickConditions();
                     anythingToContinue();
 
                     //if player hp is 0 or enemy defeated
@@ -334,48 +360,75 @@ public class GameLogic {
                     break;
                 case 2:
                     //use potion
-                    if (player.pots > 0 && player.hp < player.maxHp) {
-                        clearConsole();
-                        System.out.println("Do you want to drink a potion? (" + player.pots + " left.)");
-                        System.out.println("(1) Yes\n(2) Maybe later");
-                        input = readInt("->", 2);
-                        if (input == 1) {
-                            clearConsole();
-                            player.pots--;
-                            player.hp = player.maxHp;
-                            System.out.println("You drank the potion and you're back to " + player.maxHp + " HP.");
-                        }
+                    if (isPlayerSkipTurn) {
+                        System.out.println("You were unable to use a potion.");
                     } else {
-                        clearConsole();
-                        System.out.println("You don't have or can't drink a potion.");
-                        anythingToContinue();
+                        if (player.pots > 0 && player.hp < player.maxHp) {
+                            clearConsole();
+                            System.out.println("Do you want to drink a potion? (" + player.pots + " left.)");
+                            System.out.println("(1) Yes\n(2) Maybe later");
+                            input = readInt("->", 2);
+                            if (input == 1) {
+                                clearConsole();
+                                player.pots--;
+                                player.hp = player.maxHp;
+                                System.out.println("You drank the potion and you're back to " + player.maxHp + " HP.");
+                            }
+                        } else {
+                            clearConsole();
+                            System.out.println("You don't have or can't drink a potion.");
+                            anythingToContinue();
+                        }
                     }
                     break;
                 default:
                     //run away
                     clearConsole();
-                    if (act != 5) {
-                        //chance of 35% escape
-                        if (Math.random() * 10 + 1 <= 3.5) {
-                            printHeader("You ran away from " + enemy.fullName + "...", true);
-                            anythingToContinue();
-                            return;
-                        } else {
-                            printHeader("You didn't manage to escape...", true);
-                            //calculate damage
-                            dmgTook = enemy.attack();
-                            player.hp -= dmgTook;
-                            System.out.println("In your hurry you took " + dmgTook + " damage!");
-                            anythingToContinue();
-                            if (player.hp <= 0) {
-                                playerDied();
-                                return;
-                            }
+                    if (isPlayerSkipTurn) { //NEEDT
+                        //intended feature
+                        printHeader("You were unable to escape...", true);
+                        //calculate damage
+                        dmgTook = enemy.attack();
+                        player.hp -= dmgTook;
 
+                        //enemy casted spell check + enemy damage
+                        if (Enemy.pickedSkillString != null) {
+                            System.out.println(enemy.pickedSkillString);
+                            Enemy.pickedSkillString = null;
+                        }
+                        System.out.println(enemy.fullName + " dealt " + dmgTook + " damage to you.");
+
+                        Condition.tickConditions();
+
+                        anythingToContinue();
+                        if (player.hp <= 0) {
+                            playerDied();
+                            return;
                         }
                     } else {
-                        printHeader("YOU CANNOT ESCAPE", true);
-                        anythingToContinue();
+                        if (act != 5) {
+                            //chance of 35% escape
+                            if (Math.random() * 10 + 1 <= 3.5) {
+                                printHeader("You ran away from " + enemy.fullName + "...", true);
+                                anythingToContinue();
+                                return;
+                            } else {
+                                printHeader("You didn't manage to escape...", true);
+                                //calculate damage
+                                dmgTook = enemy.attack();
+                                player.hp -= dmgTook;
+                                System.out.println("In your hurry you took " + dmgTook + " damage!");
+                                anythingToContinue();
+                                if (player.hp <= 0) {
+                                    playerDied();
+                                    return;
+                                }
+
+                            }
+                        } else {
+                            printHeader("YOU CANNOT ESCAPE", true);
+                            anythingToContinue();
+                        }
                     }
             }
         }
@@ -395,13 +448,16 @@ public class GameLogic {
         ArrayList<Item> tempItemList = new ArrayList<>();
         int pickIndex;
 
-
         for (Item item : itemArray) {
             // common has weight 5
             if ("Common".equals(item.itemRarity)) {
-                for (int i = 0; i < 5; i++) tempItemList.add(item);
+                for (int i = 0; i < 5; i++) {
+                    tempItemList.add(item);
+                }
             } else if ("Rare".equals(item.itemRarity)) {
-                for (int i = 0; i < 3; i++) tempItemList.add(item);
+                for (int i = 0; i < 3; i++) {
+                    tempItemList.add(item);
+                }
             } else if ("Legendary".equals(item.itemRarity)) {
                 tempItemList.add(item);
             }
@@ -417,8 +473,10 @@ public class GameLogic {
         printHeader("You meet a mysterious stranger. He offers you something:", true);
 
         int itemTypeShop = (int) (Math.random() * 2) + 1; //this is going to be used to define what type of item will be picked
-        Item itemGenerated = new Item("null", 0, "null") {};
-        Item itemCurrent = new Item("null", 0, "null") {};
+        Item itemGenerated = new Item("null", 0, "null") {
+        };
+        Item itemCurrent = new Item("null", 0, "null") {
+        };
         // if ARMOR
         if (itemTypeShop == 1) {
             switch (act) {
@@ -458,7 +516,6 @@ public class GameLogic {
         System.out.println("This '" + itemGenerated.itemName + "' good stuff, mate. Ye can get it for " + price + " units and ye gimme yer '" + itemCurrent.itemName + "'.");
 
         //there will be no weights on rarity
-
         printDivider(20);
         System.out.println("Do you want to buy it?\n(1) Yes\n(2) Maybe next time");
         int input = readInt("->", 2);

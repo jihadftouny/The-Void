@@ -66,9 +66,9 @@ public class Dice {
             if (currentRoll < smallestRoll)
                 smallestRoll = currentRoll;
             totalRoll += currentRoll;
-            System.out.println("current roll " + currentRoll); //test
+            //System.out.println("current roll " + currentRoll); //test
         }
-        System.out.println("total roll " + totalRoll); //test
+        //System.out.println("total roll " + totalRoll); //test
         return totalRoll;
     }
 }
