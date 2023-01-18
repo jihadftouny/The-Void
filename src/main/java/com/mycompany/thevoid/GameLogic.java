@@ -258,7 +258,7 @@ public class GameLogic {
             clearConsole();
             printHeader(player.name + "\nHP: " + player.hp + "/" + player.maxHp + "\n", true);
             printHeader(enemy.fullName + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
-            printHeader("ATK: " + enemy.Stats[0] + " DEF: " + enemy.Stats[2], false);
+            printHeader("STR: " + enemy.Stats[0] + " DEX: " + enemy.Stats[1] + "STR: " + enemy.Stats[2] + "STR: " + enemy.Stats[3] + "STR: " + enemy.Stats[4] + "STR: " + enemy.Stats[5], false);
             System.out.println("Choose an action: ");
             printDivider(20);
             System.out.println("(1) Fight\n(2) Use Potion\n(3) Run Away");

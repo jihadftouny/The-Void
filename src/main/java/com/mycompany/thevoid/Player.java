@@ -23,8 +23,16 @@ public class Player extends Character {
     //static stats
     public static int[] staticStatsMods;
     public static int[] staticStats;
-    
+
     public static int[] Resistances; //physical, cryo, pyro, electro, poison, psychic, force
+
+    public static int physResistance;
+    public static int cryoResistance;
+    public static int pyroResistance;
+    public static int elecResistance;
+    public static int poisResistance;
+    public static int psycResistance;
+    public static int forcResistance;
 
     public int advantageDisadvantage; // 1 = adv , -1 = dis , 0 = none
 
@@ -55,7 +63,7 @@ public class Player extends Character {
 
         activeConditions = new ArrayList<Condition>();
         advantageDisadvantage = 0;
-        
+
         this.Resistances = new int[]{0, 0, 0, 0, 0, 0};
 
         //player stats
@@ -204,10 +212,17 @@ public class Player extends Character {
     }
 
     @Override
-    public void setResistance(int index, int percentage){
-        this.Resistances[index] = percentage;
+    public void setResistance(int indexElement, int percentage) {
+        this.Resistances[indexElement] = percentage;
+        physResistance = Resistances[0];
+        cryoResistance = Resistances[1];
+        pyroResistance = Resistances[2];
+        elecResistance = Resistances[3];
+        poisResistance = Resistances[4];
+        psycResistance = Resistances[5];
+        forcResistance = Resistances[6];
     }
-    
+
     @Override
     public int atkRoll() {
         int diceRoll, diceRollOne, diceRollTwo;
@@ -231,7 +246,6 @@ public class Player extends Character {
         }
         int diceRollOg = diceRoll;
 
-        
         if ("Meelee".equals(equippedWeapon.weaponProperty)) {
             diceRoll += StatsMods[0];
         }
@@ -243,7 +257,6 @@ public class Player extends Character {
         }
 
         //System.out.println("Atk Roll: " + diceRoll);
-
         if (diceRollOg == 20) {
             diceRoll = 8000; //8000 will be used as a critical roll
         }
@@ -259,7 +272,6 @@ public class Player extends Character {
 
         //System.out.println("Atk Roll: " + diceRoll);
         //GameLogic.anythingToContinue();
-
         return diceRoll;
     }
 

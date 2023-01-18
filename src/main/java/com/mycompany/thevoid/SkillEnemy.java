@@ -49,7 +49,7 @@ public class SkillEnemy extends Skill {
         @Override
         public int damage() {
             int baseDamage = 2;
-            damage = baseDamage - ((Player.Resistances[2])/100 * baseDamage);
+            damage = baseDamage - ((Player.pyroResistance)/100 * baseDamage);
             return damage;
         }
 

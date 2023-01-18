@@ -59,7 +59,7 @@ public class EnemyName {
                 weightFirst.add(2);
 
                 // MIDDLE NAME - Elementals
-                middleName.add("Cryo"); // Ice
+                middleName.add("Icy"); // Ice
                 weightMiddle.add(20);
                 middleName.add("Fiery"); // Fire
                 weightMiddle.add(20);
@@ -72,15 +72,11 @@ public class EnemyName {
 
                 // LAST NAMES (Actual creature's name)
                 lastName.add("Rat");
-                weightLast.add(20);
-                lastName.add("Snake");
-                weightLast.add(20);
-                lastName.add("Lizard");
-                weightLast.add(20);
-                lastName.add("Spider");
-                weightLast.add(20);
+                weightLast.add(34);
+                lastName.add("Mongrel");
+                weightLast.add(33);
                 lastName.add("Raven");
-                weightLast.add(20);
+                weightLast.add(33);
 
             } //</editor-fold>
             
@@ -189,9 +185,9 @@ public class EnemyName {
                 weightFirst.add(10);
 
                 // Tier 3 - killing one of these can add or remove karma a lot
-                firstName.add("Corrupted"); // add STR DEX CON + AC
+                firstName.add("Corrupted"); // add STR DEX CON + AC if killed adds curse to player, can be positive or negative
                 weightFirst.add(5);
-                firstName.add("Blessed"); // add STR DEX CON AC A LOT
+                firstName.add("Blessed"); // add STR DEX CON AC if killed adds curse, if spared different rewards
                 weightFirst.add(5);
 
 
@@ -227,15 +223,15 @@ public class EnemyName {
                 firstName.add("Ruined");// Less all stats
                 weightFirst.add(15);
 
-                firstName.add("Giant"); // add STR DEX CON + AC
+                firstName.add("Frenzied"); // add STR DEX CON + AC
                 weightFirst.add(5);
-                firstName.add("Monstrous"); // add STR DEX CON AC A LOT
+                firstName.add("Maddened"); // add STR DEX CON AC A LOT
                 weightFirst.add(3);
-                firstName.add("Mutated"); // add STR DEX CON AC A LOT + immunity to some elements, equivalent to UNDEAD
+                firstName.add("Faceless"); // add STR DEX CON AC A LOT + immunity to some elements, equivalent to UNDEAD
                 weightFirst.add(2);
 
                 // Elementals
-                middleName.add("Cryo"); // Ice
+                middleName.add("Icy"); // Ice
                 weightMiddle.add(20);
                 middleName.add("Fiery"); // Fire
                 weightMiddle.add(20);
@@ -248,15 +244,11 @@ public class EnemyName {
 
                 // LAST NAMES (Actual creature's name)
                 lastName.add("Rat");
-                weightLast.add(20);
-                lastName.add("Snake");
-                weightLast.add(20);
-                lastName.add("Lizard");
-                weightLast.add(20);
-                lastName.add("Spider");
-                weightLast.add(20);
+                weightLast.add(34);
+                lastName.add("Mongrel");
+                weightLast.add(33);
                 lastName.add("Raven");
-                weightLast.add(20);
+                weightLast.add(33);
 
             } //</editor-fold>
             
@@ -419,7 +411,7 @@ public class EnemyName {
                 weightLast.add(12);
             } //</editor-fold>
             
-            //<editor-fold defaultstate="collapsed" desc="4 - Ancestrals">
+            //<editor-fold defaultstate="collapsed" desc="4 - Ancestrals (Final Boss)">
             else if ("Ancestral".equals(type)) {
                 // ANCESTRALS ARE UNIQUE. ONLY THEIR OWN NAME
                 //STATS mods
@@ -453,6 +445,8 @@ public class EnemyName {
         String thirdString = selectName(lastName, weightLast, true);
         returnedName += thirdString;
 
+        
+        
         return returnedName;
     }
 

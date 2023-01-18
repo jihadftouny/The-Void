@@ -14,18 +14,29 @@ import java.util.Random;
  */
 public class Enemy extends Character {
 
+    Random rand = new Random();
+
+    //CR = challenge rating
+    double CRmax, CRmin, CRboss;
+
+    String type;
+
     public static int enemyEncounteredCount = 0;
     public static int enemyDefeatedCount = 0;
-    
-    public static int [] staticStatsMods;
-    public static int[] staticStats;
-    
-    public static int[] Resistances; //physical, cryo, pyro, electro, poison, psychic, force
 
-    Random rand = new Random();
+    public static int[] staticStatsMods;
+    public static int[] staticStats;
+
+    public static int[] Resistances; //physical, cryo, pyro, electro, poison, psychic, force
+    public static int physResistance;
+    public static int cryoResistance;
+    public static int pyroResistance;
+    public static int elecResistance;
+    public static int poisResistance;
+    public static int psycResistance;
+    public static int forcResistance;
+
     public static Skill pickedSkill;
-    
-    
 
     EnemyName enemyName;
     public static String fullName = "";
@@ -41,16 +52,11 @@ public class Enemy extends Character {
         this.playerXp = playerXp; //this here sets the variable playerXp with the variable that was given in the parameter declaration (which was set on object creation)
 
         enemyName = new EnemyName(type);
-
+        this.type = type;
         fullName = enemyName.fullName;
 
-        Stats[0] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
-        Stats[1] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
-        Stats[2] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
-        Stats[3] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
-        Stats[4] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
-        Stats[5] = 10 + (int) (Math.random() * (playerXp / 4 + 1) + xp / 4 + 3);
-        
+        setStatsEnemy();
+
         this.Resistances = new int[]{0, 0, 0, 0, 0, 0};
 
         activeConditions = new ArrayList<>();
@@ -64,11 +70,14 @@ public class Enemy extends Character {
         maxSkillCharges = 2;
 
         skillCharges = maxSkillCharges;
-        
+
         //temporary for test
         staticStatsMods = StatsMods;
         staticStats = Stats;
-        
+
+        // You can set maxHP and currentHp like this after getting the stats
+        this.maxHp = 10;
+
         ++enemyEncounteredCount;
     }
 
@@ -91,24 +100,22 @@ public class Enemy extends Character {
         return damage;
     }
 
+    //CONTHERE
     public void setStatsEnemy() {
         double a;
         double b;
         int playerLevel = GameLogic.act;
 
-        //this if else chain will set playerLevel randomyl based on act, utilizing DnD Levels of play
+        //this if else chain will set playerLevel randomly based on act, utilizing DnD Levels of play
         if (playerLevel == 4) {
-            playerLevel = (int) (Math.random() * (20 - 17)) + 17;   // 19-17 (max-min) //20 WILL BE FOR BOSS
+            playerLevel = 19;   // 20 WILL BE FOR BOSS
         } else if (playerLevel == 3) {
-            playerLevel = (int) (Math.random() * (17 - 11)) + 11;   // 16-11
+            playerLevel = 18;   // 16-11
         } else if (playerLevel == 2) {
-            playerLevel = (int) (Math.random() * (11 - 5)) + 5;     // 10-5
+            playerLevel = 17;
         } else {
-            playerLevel = (int) (Math.random() * (5 - 1)) + 1;      // 5-1
+            playerLevel = 16;
         }
-
-        //CR = challenge rating
-        double CRmax, CRmin, CRboss;
 
         //The following will set max and minimum (also boss) Challenge Ratings based on playerLevel
         //min
@@ -126,16 +133,67 @@ public class Enemy extends Character {
         b = 1.165240310288;
         CRboss = a * Math.pow(playerLevel, b);
 
-        System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss);
-        
-        
+        double generatedCR;
+        int generatedStat;
+
+        for (int i = 0; i <= 5; i++) {
+            generatedCR = ((Math.random() * (CRmax - CRmin)) + CRmin);
+            generatedStat = (int) ((Math.pow(generatedCR, 1.35)) * 0.9 + 1);
+            this.Stats[i] = generatedStat;
+        }
+
+        int[] tempStats = {Stats[0], Stats[1], Stats[2], Stats[3], Stats[4], Stats[5]};
+
+        if ("Beast".equals(type)) {
+            //more STR, DEX, CON than WIS, INT, CHA
+            for (int i = 0; i < tempStats.length; i++) {
+                finalStats[i] = tempStats[i]; // copy the values from tempStats to finalStats
+                if (tempStats[i] > finalStats[i]) {
+                    finalStats[i] = tempStats[i]; // set the greatest value to the current index
+                }
+            }
+
+        }
+        if ("Humanoid".equals(type)) {
+            //Leave as be
+        }
+        if ("Mech".equals(type)) {
+            //Extreme INT, avg STR DEX CON, low WIS CHA
+        }
+        if ("Magical".equals(type)) {
+            //more INT WIS CHA, low STR DEX CON
+        }
+        if ("Nightmare".equals(type)) {
+            //Specific design for each
+        }
+        if ("Ancestral".equals(type)) {
+            //Specific design for each
+        }
+
     }
 
-    @Override
-    public void setResistance(int index, int percentage){
-        this.Resistances[index] = percentage;
+    public void setSkillsEnemy(String enemyName) {
+
     }
-    
+
+    public void setModsEnemy(String enemyName) {
+
+    }
+    //CONTHERE ENDS
+
+    @Override
+    public void setResistance(int indexElement, int percentage) {
+        this.Resistances[indexElement] = percentage;
+
+        physResistance = Resistances[0];
+        cryoResistance = Resistances[1];
+        pyroResistance = Resistances[2];
+        elecResistance = Resistances[3];
+        poisResistance = Resistances[4];
+        psycResistance = Resistances[5];
+        forcResistance = Resistances[6];
+    }
+
     @Override
     public int attack() {
         int damage = 0;

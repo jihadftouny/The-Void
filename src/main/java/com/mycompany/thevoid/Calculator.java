@@ -56,7 +56,9 @@ public class Calculator {
         randomSelector = (int) (Math.random() * (101 - 1)) + 1; //1-100
 
         firstName.forEach((k, v) -> {
-            if (randomSelector <= k) System.out.println(k + ":" + v);
+            if (randomSelector <= k) {
+                System.out.println(k + ":" + v);
+            }
         });
     }
 
@@ -81,7 +83,7 @@ public class Calculator {
         b = 1.165240310288;
         CRboss = a * Math.pow(playerLevel, b);
 
-        for (int i = 1; i <= 20; i++) {
+        for (int i = 15; i <= 20; i++) {
             //min
             a = 0.087970550572;
             b = 1.4100213799828;
@@ -96,11 +98,19 @@ public class Calculator {
             a = 0.4294334810279;
             b = 1.165240310288;
             CRboss = a * Math.pow(i, b);
-            int randomSelector = (int) (Math.random() * (101 - 1)) + 1; //10 - 5
-            System.out.println(randomSelector);
-//            System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " at level " + i);
+            System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " at level " + i);
+            double generatedCR;
+            int generatedStat;
+
+            //more STR, DEX, CON than WIS, INT, CHA
+            for (int j = 0; j <= 5; j++) {
+                generatedCR = ((Math.random() * (CRmax - CRmin)) + CRmin);
+                generatedStat = (int) ((Math.pow(generatedCR, 1.35)) * 0.9 + 1);
+                System.out.println("Stat: " + generatedStat);
+            }
+            
         }
-//        System.out.println("min max boss\n" + CRmin + " " + CRmax + " " + CRboss + " " + playerLevel);
+
     }
 
     public static void jooj2() {
@@ -171,7 +181,7 @@ public class Calculator {
         System.out.println("DmgTook: " + playerDmgTook);
         System.out.println("Turns: " + turns);
         int i = 0;
-        
+
         while (i < 10) {
             int Status = 10 + (int) (Math.random() * (playerXp / 4) + monsterXp / 4);
             System.out.println(Status);
