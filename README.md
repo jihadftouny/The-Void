@@ -1,9 +1,7 @@
 # The Void
- This is an experiment using purely Java. It is an interactive fiction (or text-RPG), where the player will descent through floors of a cyberpunk-fantasy themed city
- 
- ## Currently working on:
- @jihadftouny : Conditions and Elements
- 
+
+A text-based adventure game inspired by my personal experiences as a survivor of psychosis and by the mechanics of Dungeons and Dragons. The game is written in Java and it's focused on story-telling and interactive features.
+
  ## Features
  - Equipment with rarity system, which include Armors, Weapons, Trinkets and Usables
  - Random encounters:
@@ -15,3 +13,13 @@
  - Four floors, four Acts with a Final boss battle :heavy_check_mark:
  - Customizable UI information -> the player will be able to choose less information being available for them
  - Nature system -> what most people call Karma system, player will have choices throughout the descent which will influence the ending
+
+## Built With
+
+- [Java](https://www.java.com/)
+
+## Authors
+
+- **Jihad Ftouny** - [jihadftouny](https://github.com/jihadftouny)
+ 
+
