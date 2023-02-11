@@ -48,7 +48,7 @@ public class SkillEnemy extends Skill {
     public static SkillEnemy testFireSkill = new SkillEnemy("Pyro Ball", 1, false, Element.fire) {
         @Override
         public int damage() {
-            int baseDamage = 2;
+            int baseDamage = (int)(Math.random()*3 + 2);
             damage = baseDamage - ((Player.pyroResistance)/100 * baseDamage);
             return damage;
         }

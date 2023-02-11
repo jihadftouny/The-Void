@@ -28,10 +28,6 @@ public class GameLogic {
     public static String attackRollString, advantageString;
     public static boolean isPlayerSkipTurn, isEnemySkipTurn;
 
-    //    public static Dice lvlUpDice = new Dice(2, 4);
-    //dices
-//    public static Dice lvlUpDice = new Dice(2, 6);
-//    static Dice ultraDice = new Dice(3, 100);
     //random encounter variables
     public static String[] encounters = {"Battle", "Battle", "Battle", "Rest", "Rest"}; //this will be used as an rng factor, rest will show parts of the lore while giving xp
     public static String[] enemies = {"Beast", "Beast", "Beast", "Beast", "Beast"};
@@ -49,9 +45,10 @@ public class GameLogic {
         clearConsole();
         printDivider(40);
         printDivider(40);
-        System.out.println("THE VOID\nA Text Rpg by Jihanger\nvAlpha");
+        System.out.println("This is not a working copy\nUtopian Orbit presents THE VOID\nA Text Rpg by Jihanger \n(GitHub: jihadftouny)\nvAlpha");
         printDivider(40);
         printDivider(40);
+        System.out.println("\n\n\n\n");
 
         anythingToContinue();
 
@@ -80,11 +77,7 @@ public class GameLogic {
 
         Story.printIntro(player);
 
-        System.out.println(player.Stats[0] + " " + player.Stats[1] + " " + player.Stats[2] + " " + player.Stats[3] + " " + player.Stats[4] + " " + player.Stats[5]);
-
-        //START DEBUG
-        //END DEBUG
-        anythingToContinue(); //debug
+        
         isRunning = true;
         //start main game loop
         gameLoop();
@@ -158,7 +151,7 @@ public class GameLogic {
     public static void gameLoop() {
         while (isRunning) {
             printMenu();
-            int input = readInt("->", 3);
+            int input = readInt("-> ", 3);
             if (input == 1) {
                 continueJourney();
             } else if (input == 2) {
@@ -219,7 +212,7 @@ public class GameLogic {
         anythingToContinue();
     }
 
-    // ------- Battle/Rest/Shop methods -----------------------------------------------
+    // ------- Battle/Rest/Shop methods ----------------
     public static void randomEncounter() {
         //reandom number for encounters array 
         int encounter = (int) (Math.random() * encounters.length);
@@ -256,9 +249,8 @@ public class GameLogic {
         //main abttle loop
         while (true) {
             clearConsole();
-            printHeader(player.name + "\nHP: " + player.hp + "/" + player.maxHp + "\n", true);
-            printHeader(enemy.fullName + "\nHP: " + enemy.hp + "/" + enemy.maxHp, false);
-            printHeader("STR: " + enemy.Stats[0] + " DEX: " + enemy.Stats[1] + "STR: " + enemy.Stats[2] + "STR: " + enemy.Stats[3] + "STR: " + enemy.Stats[4] + "STR: " + enemy.Stats[5], false);
+            printHeader(player.name + "\nHP: " + player.hp + "/" + player.maxHp + "", true);
+            printHeader(enemy.fullName + "\nHP: " + enemy.hp + "/" + enemy.maxHp +"\n\nSTR: " + enemy.Stats[0] + " DEX: " + enemy.Stats[1] + " CON: " + enemy.Stats[2] + "\nINT: " + enemy.Stats[3] + " WIS: " + enemy.Stats[4] + " CHA: " + enemy.Stats[5], false);
             System.out.println("Choose an action: ");
             printDivider(20);
             System.out.println("(1) Fight\n(2) Use Potion\n(3) Run Away");
@@ -367,7 +359,7 @@ public class GameLogic {
                             clearConsole();
                             System.out.println("Do you want to drink a potion? (" + player.pots + " left.)");
                             System.out.println("(1) Yes\n(2) Maybe later");
-                            input = readInt("->", 2);
+                            input = readInt("-> ", 2);
                             if (input == 1) {
                                 clearConsole();
                                 player.pots--;
@@ -391,7 +383,7 @@ public class GameLogic {
                         dmgTook = enemy.attack();
                         player.hp -= dmgTook;
 
-                        //enemy casted spell check + enemy damage
+                        //enemy has cast spell check + enemy damage text
                         if (Enemy.pickedSkillString != null) {
                             System.out.println(enemy.pickedSkillString);
                             Enemy.pickedSkillString = null;
@@ -517,8 +509,8 @@ public class GameLogic {
 
         //there will be no weights on rarity
         printDivider(20);
-        System.out.println("Do you want to buy it?\n(1) Yes\n(2) Maybe next time");
-        int input = readInt("->", 2);
+        System.out.println("Do you want to buy it?\n\n(1) Yes\n(2) Maybe next time");
+        int input = readInt("-> ", 2);
 
         if (input == 1) {
             clearConsole();
@@ -547,7 +539,7 @@ public class GameLogic {
         if (player.restsLeft >= 1) {
             printHeader("Do you want to take a rest? (" + player.restsLeft + " rest(s) left).", false);
             System.out.println("(1) Yes\n(2) No, not now");
-            int input = readInt("->", 2);
+            int input = readInt("-> ", 2);
             clearConsole();
             if (input == 1) {
                 //player takes rest
@@ -558,16 +550,18 @@ public class GameLogic {
                     if (player.hp > player.maxHp) {
                         player.hp = player.maxHp;
                     }
+                    System.out.println(loreRest.loreTookRestText);
                     System.out.println("You took a rest and restored " + hpRestored + " health.");
                     System.out.println("You're now at " + player.hp + "/" + player.maxHp + " health.");
                     player.restsLeft--;
                 } else {//player at max hp
-                    System.out.println("You're at full health. There is no need to rest now!");
+                    System.out.println(loreRest.loreTookRestText);
+                    System.out.println("You're already at full health and continue on your journey.");
 
                 }
             }
         } else {
-            System.out.println("You voyage through the jooj without rest.");
+            System.out.println("You voyage through the Rift without rest.");
         }
         anythingToContinue();
 
@@ -626,7 +620,7 @@ public class GameLogic {
 
     //press anything to continue
     public static void anythingToContinue() {
-        System.out.println("Type something to continue...");
+        System.out.println("\nType anything to continue...");
         scanner.next();
     }
 }

@@ -4,7 +4,10 @@
  */
 package com.mycompany.thevoid;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -12,6 +15,28 @@ import java.util.Map;
  * @author jihad
  */
 public class Calculator {
+
+    public static void sortArray(Integer[] array, String type) {
+        int[] sortedArray = new int[array.length];
+        List<Integer> list;
+        Arrays.sort(array);
+        int maxIndex = array[array.length - 1];
+        System.out.println("max = " + maxIndex);
+        System.out.println(array[0] + "" + array[1] + "" + array[2] + "" + array[3] + "" + array[4]);
+
+        if ("Beast".equals(type)) {
+
+            for (int i = 0; i < array.length; i++) {
+                list = Arrays.asList(array);
+                Collections.shuffle(list);
+                if (i == 0) {
+                    sortedArray[0] = maxIndex;
+                } else if (i == 1) {
+
+                }
+            }
+        }
+    }
 
     public static void setFullName(String name) {
 
@@ -108,7 +133,7 @@ public class Calculator {
                 generatedStat = (int) ((Math.pow(generatedCR, 1.35)) * 0.9 + 1);
                 System.out.println("Stat: " + generatedStat);
             }
-            
+
         }
 
     }

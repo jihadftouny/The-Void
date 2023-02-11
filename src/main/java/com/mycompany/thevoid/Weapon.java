@@ -13,9 +13,9 @@ public class Weapon extends Item {
     String weaponProperty; // Melee, Ranged, Finesse
 
     // ACT 1
-    public static final Weapon testWeapon11 = new Weapon("Jooj Gun 1", 5, "Common", Dice.d4, "Ranged");
-    public static final Weapon testWeapon21 = new Weapon("Jaaj Sword 1", 5, "Rare", Dice.d6, "Melee");
-    public static final Weapon testWeapon31 = new Weapon("Jiij Rapier 1", 5, "Legendary", Dice.d8, "Finesse");
+    public static final Weapon testWeapon11 = new Weapon("Standard Energy Pistol", 5, "Common", Dice.d4, "Ranged");
+    public static final Weapon testWeapon21 = new Weapon("High-Tech Katana", 5, "Rare", Dice.d6, "Melee");
+    public static final Weapon testWeapon31 = new Weapon("Eye of the Nebula", 5, "Legendary", Dice.d8, "Finesse");
 
     // ACT 2
     public static final Weapon testWeapon12 = new Weapon("Jooj Gun 2", 5, "Common", Dice.d4, "Ranged");

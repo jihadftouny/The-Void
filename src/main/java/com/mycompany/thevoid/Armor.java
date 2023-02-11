@@ -15,9 +15,9 @@ public class Armor extends Item {
 
     // ARMOR JAVA OBJECTS
     // ACT 1
-    public static final Armor testArmor11 = new Armor("Jooj Armor 1", 5, "Common", 11, 2, 0);
-    public static final Armor testArmor21 = new Armor("Jaaj Armor 1", 5, "Rare", 12, 2, 14);
-    public static final Armor testArmor31 = new Armor("Jiij Armor 1", 5, "Legendary", 12, 2, 14);
+    public static final Armor testArmor11 = new Armor("Standard Power Armor", 5, "Common", 11, 2, 0);
+    public static final Armor testArmor21 = new Armor("Energy-Absorbing Suit", 5, "Rare", 12, 2, 14);
+    public static final Armor testArmor31 = new Armor("Guardian's Shield", 5, "Legendary", 12, 2, 14);
 
     // ACT 2
     public static final Armor testArmor12 = new Armor("Jooj Armor 2", 5, "Common", 11, 2, 0);

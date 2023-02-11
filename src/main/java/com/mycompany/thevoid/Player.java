@@ -99,18 +99,17 @@ public class Player extends Character {
                 int roll = Dice.rollDice(Dice.startStatsDice);
                 roll -= Dice.startStatsDice.smallestRoll;
                 Stats[i] = roll;
-                System.out.println(Stats[i]); //debug
             }
 
             GameLogic.printHeader("YOUR ROLLS", true);
             System.out.println("STR: " + Stats[0] + "\nDEX: " + Stats[1] + "\nCON: " + Stats[2] + "\nINT: " + Stats[3] + "\nWIS: " + Stats[4] + "\nCHA: " + Stats[5]);
-            System.out.println("Do you want to have these attributes?\n(1) Yes, looking good!\n(2) No, re-roll them!");
+            System.out.println("\nDo you want to have these attributes?\n(1) Yes, looking good!\n(2) No, re-roll them!");
             int input = GameLogic.readInt("-> ", 2);
 
             if (input == 1) {
                 startStatsSet = true;
             } else {
-                System.out.println("Re-rolling stats. . .");
+                System.out.println("\nRe-rolling stats. . .");
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException ex) {

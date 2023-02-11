@@ -12,14 +12,15 @@ public class Story {
     public static void printIntro(Player player) {
         GameLogic.clearConsole();
         GameLogic.printHeader("STORY", true);
-        System.out.println(
-                "The capital of Absolution, 2100 . . .\n"
-                        + "- - -\n"
-                        + "You are the last hope of your society. The Kingpins of\n"
-                        + "The Undercity finally put their convoluted plan into action,\n"
-                        + "and the Arch-Mage of house Grandmore has ordered you\n"
-                        + player.name + ", to delve into the Rift and kill the kingpins.\n. . .");
-        System.out.println("Return with their brainchips so that Grandmore's Memorians can extract all the available information from them.");
+        System.out.println("In the bustling metropolis of Absolution, the year is 2100 and the fate of society rests on your shoulders.\n "
+                + "- - - \n"
+                + "As " + player.name + ", a skilled " + player.classPlayer + " delver, you've been tasked with\n"
+                + "a dangerous mission by the Arch-Mage of House Grandmore: venture into the treacherous\n"
+                + "Undercity and take down the nefarious Kingpins. But this isn't just\n"
+                + "any ordinary battle - the stakes are high as you must retrieve their brainchips\n"
+                + "to unlock the secrets they hold. \n"
+                + ". . .\n"
+                + "Will you be able to rise to the challenge and save society from certain doom?");
         GameLogic.anythingToContinue();
     }
 
@@ -71,7 +72,6 @@ public class Story {
 
     // Fourth Floor - The Inner World
     // It's a pretty place, with ancient ruins, vast forests, little amount of civilization in the beggining, then you find the "City of Angels". enemies here are somewhat "divine looking", angels, ancient creatures, mythical creatures, etc. (maybe deactivate the Two-name random generator).
-
     public static void fourthActIntro() {
         GameLogic.clearConsole();
         GameLogic.printHeader("ACT IV", true);

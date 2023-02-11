@@ -59,24 +59,24 @@ public class EnemyName {
                 weightFirst.add(2);
 
                 // MIDDLE NAME - Elementals
-                middleName.add("Icy"); // Ice
-                weightMiddle.add(20);
+//                middleName.add("Icy"); // Ice
+//                weightMiddle.add(20);
                 middleName.add("Fiery"); // Fire
                 weightMiddle.add(20);
-                middleName.add("Electrified"); // Electro
-                weightMiddle.add(20);
-                middleName.add("Venomous"); // Poison
-                weightMiddle.add(20);
-                middleName.add("Psychogenic"); // Psychic
-                weightMiddle.add(20);
+//                middleName.add("Electrified"); // Electro
+//                weightMiddle.add(20);
+//                middleName.add("Venomous"); // Poison
+//                weightMiddle.add(20);
+//                middleName.add("Psychogenic"); // Psychic
+//                weightMiddle.add(20);
 
                 // LAST NAMES (Actual creature's name)
-                lastName.add("Rat");
-                weightLast.add(34);
+//                lastName.add("Rat");
+//                weightLast.add(34);
                 lastName.add("Mongrel");
                 weightLast.add(33);
-                lastName.add("Raven");
-                weightLast.add(33);
+//                lastName.add("Raven");
+//                weightLast.add(33);
 
             } //</editor-fold>
             

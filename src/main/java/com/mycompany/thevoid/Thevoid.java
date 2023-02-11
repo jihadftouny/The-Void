@@ -18,7 +18,9 @@ public class Thevoid {
 
     public static void main(String[] args) {
 
-        GameLogic.startGame();
+        Integer[] array = {1,5,4,2,3};
+        Calculator.sortArray(array, "Beast");
+//        GameLogic.startGame();
 //        Calculator.setFullName("Beast");
 //        Calculator.calcsCR();
 //        GameLogic.printHeader("Jorginho Matagal ta na area");

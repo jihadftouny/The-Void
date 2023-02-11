@@ -26,6 +26,7 @@ public class Enemy extends Character {
 
     public static int[] staticStatsMods;
     public static int[] staticStats;
+    public int [] finalStats = {0,0,0,0,0,0};
 
     public static int[] Resistances; //physical, cryo, pyro, electro, poison, psychic, force
     public static int physResistance;
@@ -57,14 +58,14 @@ public class Enemy extends Character {
 
         setStatsEnemy();
 
-        this.Resistances = new int[]{0, 0, 0, 0, 0, 0};
+        Enemy.Resistances = new int[]{0, 0, 0, 0, 0, 0};
 
         activeConditions = new ArrayList<>();
 
         skillPool = new ArrayList<>();
 
         //TEST SKILL ADDS, every enemy will have these skills on them (for now)
-        skillPool.add(SkillEnemy.testFireSkill);
+//        skillPool.add(SkillEnemy.testFireSkill);
 //        skillPool.add(SkillEnemy.testFireSkill);
 
         maxSkillCharges = 2;
@@ -76,7 +77,8 @@ public class Enemy extends Character {
         staticStats = Stats;
 
         // You can set maxHP and currentHp like this after getting the stats
-        this.maxHp = 10;
+        this.maxHp = 5;
+        this.hp = maxHp;
 
         ++enemyEncounteredCount;
     }
@@ -148,9 +150,6 @@ public class Enemy extends Character {
             //more STR, DEX, CON than WIS, INT, CHA
             for (int i = 0; i < tempStats.length; i++) {
                 finalStats[i] = tempStats[i]; // copy the values from tempStats to finalStats
-                if (tempStats[i] > finalStats[i]) {
-                    finalStats[i] = tempStats[i]; // set the greatest value to the current index
-                }
             }
 
         }
@@ -158,7 +157,7 @@ public class Enemy extends Character {
             //Leave as be
         }
         if ("Mech".equals(type)) {
-            //Extreme INT, avg STR DEX CON, low WIS CHA
+            //Extreme INT CON, avg STR DEX, low WIS CHA
         }
         if ("Magical".equals(type)) {
             //more INT WIS CHA, low STR DEX CON
@@ -198,7 +197,8 @@ public class Enemy extends Character {
     public int attack() {
         int damage = 0;
         if (skillCharges > 0) {
-            damage = useSkill(skillPool);
+//            damage = useSkill(skillPool);
+            damage = (int) ((Math.random()*4) - 2);
             skillCharges--;
         } else {
             damage = 1;

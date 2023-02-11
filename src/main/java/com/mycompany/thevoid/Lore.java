@@ -15,10 +15,9 @@ public class Lore {
     // MAYBE TODOS
     // MIGHT NOT need the loreArray[]
     // -add an outro to the intro after the player takes a rest
-
     int chapter;
-    String loreText, loreTitle, result;
-    public static String[] loreArray = new String[2];
+    String loreText, loreTitle, loreTookRestText;
+    public static String[] loreArray = new String[3]; //this will store the above Text data
     public static Random rand = new Random();
 
     public Lore(int chapter) {
@@ -29,20 +28,52 @@ public class Lore {
             case 1: {
                 int lorePicker = rand.nextInt(c1);//will pick numberLores + 1 (if numberLores = 2, generates = 0,1,2 => so 3 available/possible lores)
                 if (lorePicker == 0) {
-                    loreTitle = "This is a Title 1 0";
-                    loreText = "1 0 This is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore";
+                    loreTitle = "The Green Air";
+                    loreText = "You delve deeper into the Undercity, the green air becomes more prominent. You can't help\n"
+                            + "but feel a sense of calm and peace amidst the chaos and danger. The smell of pollution is \n"
+                            + "still present, but it's not as overwhelming as it once was. You've heard rumors about a rare\n"
+                            + "type of plant that thrives in this toxic environment, and you can't help but wonder if that's \n"
+                            + "what's responsible for the green air.\n "
+                            + "- - - \n"
+                            + "As you move through the dimly lit streets, you can't help but feel at ease. You're not sure if \n"
+                            + "it's the green air or your training and determination, but you know that you're ready \n"
+                            + "for whatever comes your way.";
+                    loreTookRestText = "You know that the Undercity is a dangerous place, but you're not afraid. You've got \n"
+                            + "your equipment and wits. You're determined to complete your mission and bring an end to the Kingpins.";
+                    
                     loreArray[0] = loreTitle;
                     loreArray[1] = loreText;
+                    loreArray[2] = loreTookRestText;
                 } else if (lorePicker == 1) {
-                    loreTitle = "This is a Title 1 1";
-                    loreText = "1 1 This is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore";
+                    loreTitle = "A Glimpse of Hope";
+                    
+                    loreText = "You come across a river that runs through the Undercity. At first glance, you expect it to be \n"
+                            + "just as polluted and dirty as the rest of the environment, but you're surprised to see that it's not.\n"
+                            + "The water is clear and there's a slight hint of blue in it. Fish can be seen swimming in the water\n"
+                            + "and you can't help but feel a bit of hope in this harsh place.";
+                    
+                    loreTookRestText = "As you move forward, you can't help but feel grateful for this unexpected respite.\n"
+                            + "The river serves as a reminder that even in the darkest of places, there is still beauty \n"
+                            + "and hope to be found.";
+                    
                     loreArray[0] = loreTitle;
                     loreArray[1] = loreText;
-                } else if (lorePicker == 2){
-                    loreTitle = "This is a Title 1 2";
-                    loreText = "1 2 This is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore \nthis is a lore this is a lore this is a lore";
+                    loreArray[2] = loreTookRestText;
+                } else if (lorePicker == 2) {
+                    loreTitle = "A Glimpse of Hope";
+                    
+                    loreText = "You come across a river that runs through the Undercity. At first glance, you expect it to be \n"
+                            + "just as polluted and dirty as the rest of the environment, but you're surprised to see that it's not.\n"
+                            + "The water is clear and there's a slight hint of blue in it. Fish can be seen swimming in the water\n"
+                            + "and you can't help but feel a bit of hope in this harsh place.";
+                    
+                    loreTookRestText = "As you move forward, you can't help but feel grateful for this unexpected respite.\n"
+                            + "The river serves as a reminder that even in the darkest of places, there is still beauty \n"
+                            + "and hope to be found.";
+                    
                     loreArray[0] = loreTitle;
                     loreArray[1] = loreText;
+                    loreArray[2] = loreTookRestText;
                 }
                 break;
             }
@@ -111,7 +142,8 @@ public class Lore {
                 }
                 break;
             }
-            default: break;
+            default:
+                break;
         }
     }
 
