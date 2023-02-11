@@ -10,7 +10,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <exec.mainClass>com.mycompany.thevoid.Thevoid</exec.mainClass>
     </properties>
-    <name>The Void - prealpha version</name>
+    <name>The Void</name>
     <description>By Jihad Ftouny
 github: jihadftouny
 project: The Void - A text RPG experiment
