@@ -19,4 +19,11 @@ Format per entry:
 
 ---
 
-_No pipeline runs yet. The first coding task through `agentic-engineering` appends here._
+## 2026-07-26 — m1-character-core
+- Verdict: PASS (awaiting engineer review/merge)
+- Fix rounds: 0
+- Build-agent deviations: none (pre-recorded in plan: fresh-char AC/maxHp use CON per GameLogic.startGame, not DEX per Player.setArmorClass — matched intentionally)
+- Test failures before fixes: none
+- Plan open-questions: none
+- Notes: pipeline run with general-purpose agents carrying the plan/build/test role files (named subagent types register next session). Tester independently hand-verified the mod formula and flagged an off-by-one in the orchestrator's own prompt example (assertions were correct). 31 tests green.
+- Manual engineer fixes: none yet

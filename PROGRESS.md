@@ -9,7 +9,7 @@ build state._
 | Milestone | Status |
 |---|---|
 | M0 — Scaffold + loop system | ✅ |
-| M1 — Core types + character model | ⬜ |
+| M1 — Core types + character model | 🔄 branch ready for review |
 | M2 — Content data (JSON) | ⬜ |
 | M3 — Player creation | ⬜ |
 | M4 — Enemy generation | ⬜ |
@@ -25,6 +25,14 @@ build state._
 Legend: ⬜ not started · 🔄 in progress · ✅ done
 
 ## Session log
+
+### 2026-07-26 — M1 through the loop (awaiting review)
+- First real pipeline run: `agentic/m1-character-core`. plan → build → test, VERDICT PASS, 0 fix rounds.
+- Ported the character foundation from Java `Character.java` into pure `src/game/character.ts`:
+  serializable `Character` type, `Stat` const (no bare indices), `computeStatMod(s)`
+  (`10 - ceil(|stat-30|/2)`, capped at 10 for stat>30), `deriveArmorClass`, `deriveMaxHp`,
+  `createCharacter`. 23 new tests, all expected values hand-derived. Total suite: 31 green.
+- Awaiting your review + merge (the human gate). Not merged. Once merged, M1 flips to ✅ and M2 begins.
 
 ### 2026-07-26 — Project founded
 - Ported the repo layout onto the spaceship-game-style stack: Vite 6 + Vitest 2 + TypeScript

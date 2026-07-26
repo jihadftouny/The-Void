@@ -23,6 +23,20 @@ How to run the app for a check:
       preset). Expected: the game area stays centered and scales, with black bars rather than
       stretching/distorting the text. Wrong: text squashed, or content cut off.
 
+### M1 — Core types + character model  _(branch `agentic/m1-character-core`, awaiting your merge)_
+No runtime/visual checks — this is pure logic, fully covered by automated tests (the test-agent
+returned no NEEDS-HUMAN items). Your only action here is **code review + merge** (the human gate;
+I never merge):
+- [ ] **Review the diff.** `git -C "worktrees/m1-character-core" diff main...HEAD` — two new files
+      under `src/game` (`character.ts`, `character.test.ts`), ~276 lines. Confirm it reads the way
+      you want the logic core to look (naming, the `Stat` const, the stat-mod formula).
+- [ ] **Merge when happy** (from the repo root):
+      `git merge --no-ff agentic/m1-character-core`
+      then clean up: `git worktree remove "worktrees/m1-character-core"` and
+      `git branch -d agentic/m1-character-core`.
+- [ ] If anything's off, tell me what — I'll route it back through the same build-agent (a fix
+      round) rather than hand-patching.
+
 ---
 
 ## Verified
