@@ -66,14 +66,19 @@ Do these in order (most-likely-to-be-wrong first):
 
 ---
 
-## M9 — Save / load (built, no on-screen check needed)
+## M9 — Save / load, now WIRED into the UI (play checks)
 
-Branch `agentic/save-load`. Fully covered by automated tests (safe save encoding, corrupt-save
-rejection, versioning for future formats, and a browser localStorage adapter). **Note:** the save
-system exists and works, but the UI doesn't call it yet — the title's "Continue" button is a
-disabled placeholder. Wiring save/load into the UI (autosave + a working Continue) is a small
-follow-up once these branches merge; say the word and I'll do it through the loop.
-- [ ] Optional: review `git -C "worktrees/save-load" diff agentic/logic-core...HEAD` (4 new files).
+Branch `agentic/wire-save` (contains M9 + M10 + the wiring). The save engine is fully unit-tested;
+these are the real-browser checks (run `cd worktrees/wire-save && npm run dev`), most-likely-wrong first:
+- [ ] **Continue appears after progress.** Fresh store shows only "New Game"; after creating a
+      character and reaching the hub, reload — the title now shows "Continue" too.
+- [ ] **Continue resumes the same run.** Tap it: same character (name/HP/gold), back at the hub.
+      (The narration log starts empty on resume — that's intended.)
+- [ ] **Restart clears the save.** Reach game-over → tap "Restart" → only "New Game" shows; reload →
+      still no "Continue".
+- [ ] **Mid-battle isn't saved.** Start a fight, reload mid-fight, Continue → you resume at the hub,
+      not inside the half-fight (autosave is between encounters, by design).
+- [ ] **Private/blocked storage** degrades gracefully — no crash, Continue simply never appears.
 
 ---
 
@@ -100,25 +105,28 @@ Each follows the original Java (or cleans up an obvious gap); all are one-line t
 
 ---
 
-## Review & merge (your gate — I never merge)
-Three branches stack in this order (each builds on the previous). Merge from the repo root, in order:
-1. `agentic/logic-core` — the whole engine, milestones M1–M8 (includes the earlier M1 branch, so it
-   supersedes `agentic/m1-character-core`).
-2. `agentic/save-load` — M9 (branches off logic-core; only 4 new files).
-3. `agentic/ui-shell` — M10 (branches off logic-core; only render/scene/entry files).
+## Review & merge (your gate — I never merge without your explicit OK)
+`agentic/wire-save` now contains **everything** — the engine (M1–M8), save/load (M9), the UI shell
+(M10), and the save/load wiring — because it was built on top of both earlier branches. So the whole
+project merges in **two steps** (I verified this is conflict-free end to end):
 
 ```
-git merge --no-ff agentic/logic-core
-git merge --no-ff agentic/save-load
-git merge --no-ff agentic/ui-shell
+git merge --no-ff agentic/logic-core     # the engine
+git merge --no-ff agentic/wire-save      # M9 + M10 + wiring, all together
 ```
-Review any branch with `git -C "worktrees/<name>" diff agentic/logic-core...HEAD` (or `main...HEAD`
-for logic-core). After merging, clean up each worktree + branch:
+(Or just `git merge --no-ff agentic/wire-save` alone — it already includes the engine's history.)
+
+The now-redundant branches `agentic/save-load` and `agentic/ui-shell` are subsumed by `wire-save`;
+after merging you can delete them and the superseded `agentic/m1-character-core`, plus their
+worktrees:
 ```
 git worktree remove worktrees/<name> && git branch -d agentic/<name>
 ```
-(also remove the now-superseded `worktrees/m1-character-core` + `agentic/m1-character-core`.)
-If anything's off, tell me — it goes back through the same build agent as a fix round.
+Review with `git -C "worktrees/wire-save" diff main...HEAD`. If anything's off, tell me — it goes
+back through the same build agent as a fix round.
+
+> **Heads-up:** given the LLM-narrative pivot, you may prefer to merge this to lock in the foundation
+> *before* we re-scope, or hold off. Your call — I won't merge until you explicitly say so.
 
 ---
 
