@@ -46,3 +46,56 @@ export function pick<T>(rng: Rng, items: readonly T[]): T {
   // noUncheckedIndexedAccess: index is always in range given the guard above.
   return item as T;
 }
+
+/**
+ * Java `(int)(Math.random() * n)` — a uniform integer in [0, n-1] for n >= 1.
+ * ALWAYS consumes exactly one rng draw, even when n <= 0 (returns 0 then), so a
+ * caller's rng-call count is stable regardless of the argument. This keeps
+ * enemy/loot generation reproducible when a bound happens to be zero.
+ */
+export function randInt(rng: Rng, n: number): number {
+  const x = rng();
+  return n > 0 ? Math.floor(x * n) : 0;
+}
+
+/**
+ * Roll 4d6 and drop the lowest die, summing the top three (D&D-style stat roll).
+ * Range [3, 18]: all-1s -> 4 - 1 = 3; all-6s -> 24 - 6 = 18. Always an integer.
+ * Consumes exactly four rng draws (one per die).
+ */
+export function roll4d6DropLowest(rng: Rng): number {
+  const dice = [
+    rollDie(rng, 6),
+    rollDie(rng, 6),
+    rollDie(rng, 6),
+    rollDie(rng, 6),
+  ];
+  const total = dice.reduce((sum, d) => sum + d, 0);
+  return total - Math.min(...dice);
+}
+
+/**
+ * Weighted selection: expand each entry by its weight and pick uniformly, done
+ * deterministically via one rng draw. Returns undefined for an empty list.
+ * Otherwise: total = sum of weights; r = 1 + randInt(rng, total); return the
+ * first entry whose running cumulative weight is >= r. Zero-weight entries can
+ * never be selected. Same distribution as Java's expand-by-weight `EnemyName`
+ * selection, correct for tables whose weights do not sum to 100.
+ */
+export function weightedPick<T>(
+  rng: Rng,
+  entries: readonly (readonly [T, number])[],
+): T | undefined {
+  if (entries.length === 0) return undefined;
+  let total = 0;
+  for (const [, weight] of entries) total += weight;
+  const r = 1 + randInt(rng, total);
+  let cumulative = 0;
+  for (const [value, weight] of entries) {
+    cumulative += weight;
+    if (cumulative >= r) return value;
+  }
+  // Unreachable when total > 0 and r <= total; degenerate all-zero-weight list
+  // falls through to the last entry.
+  return entries[entries.length - 1]?.[0];
+}
