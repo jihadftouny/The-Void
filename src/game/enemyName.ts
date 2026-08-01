@@ -3,12 +3,16 @@
 // LOAD-BEARING PRINCIPLES honored here:
 //  - Pure logic / render split: no Kaplay, DOM, or canvas imports.
 //  - Data-driven content: the name tables are plain JSON in ../data/enemyNames.json.
-//  - No RNG here: this module only exposes the raw [word, weight] tables. The
-//    weighted selection (Java `selectName`/`isName`) lands in M4 on top of this.
+//  - Deterministic seeded RNG: the M4 runtime selection below draws only through
+//    the injected `Rng` (via `weightedPick`); no Math.random / Date.now.
 //
-// Ported from the canonical Java `EnemyName.setName` per-Act, per-type tables.
+// Ported from the canonical Java `EnemyName.setName` per-Act, per-type tables and
+// `Calculator.setFullName`. See the plan's recorded deviations: selection is a
+// weighted pick over [1, sum(weights)] (correct for tables that do not sum to
+// 100), and the buggy per-candidate 95% slot-omit is dropped.
 
 import enemyNamesData from '../data/enemyNames.json';
+import { weightedPick, type Rng } from './rng.ts';
 
 /** A weighted name fragment: [word, weight]. */
 export type WeightPair = readonly [string, number];
@@ -45,4 +49,40 @@ export function getEnemyNameTable(
 export function enemyTypesForAct(act: number): string[] {
   const actTable = TABLES[String(act)];
   return actTable ? Object.keys(actTable) : [];
+}
+
+/**
+ * Pick one word from a slot's weighted pairs via `weightedPick`. Returns "" for
+ * an empty slot and draws no rng in that case (so an enemy's rng-call count only
+ * grows for slots that actually have entries). A non-empty slot always yields a
+ * word (which may itself be the empty string "" if the table carries one).
+ */
+export function selectNameFragment(
+  pairs: readonly WeightPair[],
+  rng: Rng,
+): string {
+  if (pairs.length === 0) return '';
+  return weightedPick(rng, pairs) ?? '';
+}
+
+/**
+ * Build a full enemy name for an Act/type: picks first, then middle, then last
+ * fragments (in that fixed order, so the rng draw order is stable), and joins the
+ * non-empty ones with single spaces. If the Act/type has no table, or every slot
+ * resolves empty (e.g. Act-3 Nightmare's all-empty tables), falls back to `type`.
+ */
+export function generateEnemyName(
+  act: number,
+  type: string,
+  rng: Rng,
+): string {
+  const table = getEnemyNameTable(act, type);
+  if (!table) return type;
+  const fragments = [
+    selectNameFragment(table.first, rng),
+    selectNameFragment(table.middle, rng),
+    selectNameFragment(table.last, rng),
+  ].filter((word) => word.length > 0);
+  const fullName = fragments.join(' ');
+  return fullName.length > 0 ? fullName : type;
 }

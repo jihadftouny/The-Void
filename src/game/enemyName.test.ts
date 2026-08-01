@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { getEnemyNameTable, enemyTypesForAct } from './enemyName.ts';
+import {
+  getEnemyNameTable,
+  enemyTypesForAct,
+  selectNameFragment,
+  generateEnemyName,
+} from './enemyName.ts';
+import { mulberry32, type Rng } from './rng.ts';
+
+function scriptedRng(values: readonly number[]): Rng {
+  let i = 0;
+  return () => values[i++] ?? 0;
+}
 
 // All expected values are hand-transcribed from Java `EnemyName.setName`,
 // independently of the reference JSON.
@@ -98,5 +109,76 @@ describe('weight invariant', () => {
     const magical = getEnemyNameTable(1, 'Magical')!;
     const sum = magical.first.reduce((acc, [, w]) => acc + w, 0);
     expect(sum).toBe(90);
+  });
+});
+
+describe('selectNameFragment', () => {
+  it('returns "" for an empty slot and consumes no rng draw', () => {
+    // Two same-seed streams: advancing one via an empty-slot pick must NOT move
+    // it, so its next value equals a fresh stream's first value.
+    const a = mulberry32(4);
+    const b = mulberry32(4);
+    expect(selectNameFragment([], a)).toBe('');
+    expect(a()).toBe(b());
+  });
+
+  it('picks by cumulative threshold from a non-empty slot', () => {
+    // total = 20+20+20 = 60; r = 1 + floor(x*60).
+    const pairs = [['Feral', 20], ['Plated', 20], ['Giant', 20]] as const;
+    // x=0.5 -> floor(30)=30 -> r=31 -> Feral(20)<31, Plated(40)>=31 -> 'Plated'
+    expect(selectNameFragment(pairs, scriptedRng([0.5]))).toBe('Plated');
+  });
+});
+
+describe('generateEnemyName', () => {
+  it('scripted rng yields the exact hand-assembled Act-1 Beast name', () => {
+    // Act-1 Beast slot totals are each 100. r = 1 + floor(x*100).
+    //  first  x=0.5 -> r=51 -> cum 20,40,60 -> 'Plated'   (3rd)
+    //  middle x=0.7 -> r=71 -> cum 20,40,60,80 -> 'Venomous' (4th)
+    //  last   x=0.9 -> r=91 -> cum ...,100 -> 'Raven'      (5th)
+    const name = generateEnemyName(1, 'Beast', scriptedRng([0.5, 0.7, 0.9]));
+    expect(name).toBe('Plated Venomous Raven');
+  });
+
+  it('drops an empty-string middle fragment without a double space', () => {
+    // Act-1 Humanoid: first & last non-empty; middle = [["",1]] -> "".
+    //  first x=0 -> 'Pumped'; middle -> ''; last x=0 -> 'Thug'.
+    const name = generateEnemyName(1, 'Humanoid', scriptedRng([0, 0, 0]));
+    expect(name).toBe('Pumped Thug');
+    expect(name).not.toContain('  ');
+  });
+
+  it('falls back to the type string when the table is missing', () => {
+    expect(generateEnemyName(9, 'Beast', scriptedRng([0]))).toBe('Beast');
+  });
+
+  it('Act-3 Nightmare (all-empty tables) falls back to "Nightmare"', () => {
+    for (let seed = 0; seed < 50; seed++) {
+      expect(generateEnemyName(3, 'Nightmare', mulberry32(seed))).toBe('Nightmare');
+    }
+  });
+
+  it('over many seeds every Act-1 Beast fragment is a valid table word, no double spaces', () => {
+    const table = getEnemyNameTable(1, 'Beast')!;
+    const firstWords = table.first.map(([w]) => w);
+    const middleWords = table.middle.map(([w]) => w);
+    const lastWords = table.last.map(([w]) => w);
+    for (let seed = 0; seed < 200; seed++) {
+      const name = generateEnemyName(1, 'Beast', mulberry32(seed));
+      expect(name).not.toContain('  ');
+      // All three Act-1 Beast slots are non-empty single-token words, so the
+      // full name is exactly three space-separated tokens.
+      const tokens = name.split(' ');
+      expect(tokens).toHaveLength(3);
+      expect(firstWords).toContain(tokens[0]);
+      expect(middleWords).toContain(tokens[1]);
+      expect(lastWords).toContain(tokens[2]);
+    }
+  });
+
+  it('is deterministic under the same seed', () => {
+    expect(generateEnemyName(1, 'Beast', mulberry32(321))).toBe(
+      generateEnemyName(1, 'Beast', mulberry32(321)),
+    );
   });
 });
