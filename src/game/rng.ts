@@ -24,6 +24,29 @@ export function mulberry32(seed: number): Rng {
   };
 }
 
+/**
+ * A serializable RNG seam. `createRng(state)` returns an `rng` running the exact
+ * same mulberry32 step as `mulberry32(state)`, plus `getState()` returning the
+ * current 32-bit accumulator as an unsigned integer. That accumulator IS the
+ * serializable RNG state: `createRng(getState())` continues the identical stream,
+ * so a GameState holding `rngState: number` round-trips through JSON and resumes
+ * byte-identically.
+ *
+ * DEVIATION: the 4-line core is duplicated from `mulberry32` rather than
+ * refactored, to keep `mulberry32` and its existing callers byte-stable.
+ */
+export function createRng(state: number): { rng: Rng; getState: () => number } {
+  let a = state >>> 0;
+  const rng: Rng = function next(): number {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  return { rng, getState: () => a >>> 0 };
+}
+
 /** Roll a single die with `sides` faces, returning an integer in [1, sides]. */
 export function rollDie(rng: Rng, sides: number): number {
   if (sides < 1 || !Number.isInteger(sides)) {

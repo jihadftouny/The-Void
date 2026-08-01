@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   mulberry32,
+  createRng,
   rollDie,
   rollDice,
   pick,
@@ -150,6 +151,55 @@ describe('roll4d6DropLowest', () => {
     roll4d6DropLowest(a);
     for (let i = 0; i < 4; i++) b();
     expect(a()).toBe(b());
+  });
+});
+
+describe('createRng', () => {
+  it('produces a stream identical to mulberry32 for the same seed', () => {
+    // Spec: createRng(n) must run the identical mulberry32 step. Compare 50 draws.
+    const ref = mulberry32(12345);
+    const { rng } = createRng(12345);
+    const refStream = Array.from({ length: 50 }, () => ref());
+    const seamStream = Array.from({ length: 50 }, () => rng());
+    expect(seamStream).toEqual(refStream);
+  });
+
+  it('getState() before any draw returns the seed as an unsigned 32-bit int', () => {
+    // seed 12345 is already non-negative and < 2^32, so state === seed.
+    expect(createRng(12345).getState()).toBe(12345);
+    // A seed with the high bit set round-trips through >>> 0 to its unsigned form.
+    // 0x80000001 = 2147483649.
+    expect(createRng(0x80000001).getState()).toBe(2147483649);
+  });
+
+  it('getState() after K draws reseeds a stream that continues identically', () => {
+    // Draw K from one stream, snapshot state, then a fresh createRng(state) must
+    // reproduce the ORIGINAL stream's next M draws exactly (continuation).
+    const K = 7;
+    const M = 20;
+    const original = mulberry32(2026);
+    const { rng, getState } = createRng(2026);
+    for (let i = 0; i < K; i++) rng(); // advance both notionally
+    for (let i = 0; i < K; i++) original(); // original also advanced K
+    const snapshot = getState();
+    const continued = createRng(snapshot).rng;
+    const fromOriginal = Array.from({ length: M }, () => original());
+    const fromContinued = Array.from({ length: M }, () => continued());
+    expect(fromContinued).toEqual(fromOriginal);
+  });
+
+  it('snapshot is a plain number that survives JSON round-trip', () => {
+    const { rng, getState } = createRng(555);
+    for (let i = 0; i < 13; i++) rng();
+    const s = getState();
+    const revived = JSON.parse(JSON.stringify({ rngState: s })).rngState as number;
+    expect(revived).toBe(s);
+    // Reseeding from the revived state continues identically to the live seam.
+    const a = createRng(s).rng;
+    const b = createRng(revived).rng;
+    expect(Array.from({ length: 10 }, () => b())).toEqual(
+      Array.from({ length: 10 }, () => a()),
+    );
   });
 });
 
