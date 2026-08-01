@@ -19,6 +19,16 @@ Format per entry:
 
 ---
 
+## 2026-08-01 — save-load (M9) + ui-shell (M10), run IN PARALLEL
+- Verdict: both PASS (awaiting review/merge). Two concurrent units, disjoint file territories, both branched off agentic/logic-core.
+- Fix rounds: 0 (each unit passed its first test-agent run).
+- Parallelization: clash-avoidance held — save-load owns src/game/save.ts + src/storage/**; ui-shell owns src/render/** + src/scenes/** + src/main.ts + index.html. No overlap; test-agents confirmed each diff stayed in its lane. node_modules shared via junction; only ui-shell serves (dev server), no port clash.
+- M9 build-agent deviations: version model mirrors GameState.version (no separate envelope); shape validation scoped to named invariants + player envelope (phase-variant payloads trusted). No open questions.
+- M10 build-agent deviations: engine flipped landscape→portrait 540×1080 (mobile-first, principle #5); re-derived layout constants for 1080; added src/scenes/common.ts + a level-up "reset picks" affordance. Open questions (visual direction, resolution, same-stat level-up, clock seed) all resolved by orchestrator to faithful/mobile-first defaults.
+- Test failures before fixes: none.
+- Notable: M10 is the pipeline's visual blind spot — pure helpers (layout/routing/format) unit-tested; all rendering/mobile correctness surfaced as NEEDS-HUMAN (5 items) in HUMAN-CHECKS.md. Save/load intentionally left unwired into the UI (disabled "Continue" seam) — future glue unit.
+- Manual engineer fixes: none yet
+
 ## 2026-08-01 — logic-core (M2–M8, full Java logic port)
 - Verdict: PASS (all 4 stages; awaiting engineer review/merge). Contains M1–M8; supersedes m1-character-core.
 - Fix rounds: 0 across all four stages.

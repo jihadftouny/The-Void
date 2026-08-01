@@ -4,11 +4,10 @@ Your running checklist. Anything the automated pipeline **cannot** decide for it
 things you must see, feel, try, or judge. Tick items as you go; leave a note if something's off and
 I'll route it back through the build → test loop.
 
-How to run the tests (no screen needed):
-`npm install` (first time) → `npm test` — the whole game engine is covered headlessly (237 tests).
+**You can now actually play the game on screen** (see the M10 section below).
 
-How to run the app (title screen only, so far):
-`npm run dev` → open the printed URL. The playable on-screen game arrives with the Kaplay UI (M10).
+Everything currently lives on three review branches stacked on top of each other; run commands from
+the branch's folder until you merge (see "Review & merge" at the bottom).
 
 ---
 
@@ -17,69 +16,109 @@ How to run the app (title screen only, so far):
 This is the most important thing to know, and it is a **design decision for you, not a bug**.
 
 - **What:** A full, honest playthrough cannot currently reach the final act. Automated simulation
-  found **0 wins across 20,000 different runs**; the best run reached 13 of the 240 experience
-  points needed for the finale.
-- **Why:** The original Java game was an unfinished alpha where every enemy had **1 health** (so it
-  was trivially winnable and never balanced). We replaced that placeholder with the game's own
-  *intended* enemy-health formula (found unused elsewhere in the Java) — but that formula gives even
-  the first enemy about **30 health**, while your character starts around **11 health** with small
-  weapons. The two sides were never balanced against each other because the original never had both.
-- **The engine itself is correct** — combat, rewards, and the "you win → ending" path are all proven
-  to work (verified with a controlled fight). It's the *numbers* that need a tuning pass.
-- **Your levers** (any one, or a mix): enemy health formula (`src/game/enemy.ts`), weapon damage
-  dice (`src/data/weapons.json`), player starting health / hit die (`src/game/player.ts`).
-- [ ] **Decide the direction.** Tell me the feel you want (e.g. "Act 1 enemies should take ~3–4
-      hits; a careful player should win a full run maybe 1 in 3 attempts") and I'll run a balance
-      pass through the loop that tunes the numbers **and proves with simulation that the game is
-      winnable** at a sensible difficulty before handing it back.
+  found **0 wins across 20,000 runs**; the best run reached 13 of the 240 experience points needed
+  for the finale.
+- **Why:** The original Java was an unfinished draft where every enemy had **1 health** (trivially
+  winnable, never balanced). We put in the game's own *intended* enemy-health formula, but it gives
+  even the first enemy ~**30 health** while your character starts near **11**. The two sides were
+  never balanced against each other because the original never had both.
+- **The engine is correct** — combat, rewards, and the win→ending path are all proven. Only the
+  *numbers* need a tuning pass.
+- **Your levers:** enemy health (`src/game/enemy.ts`), weapon dice (`src/data/weapons.json`),
+  player starting health / hit die (`src/game/player.ts`).
+- [ ] **Tell me the difficulty feel you want** (e.g. "Act 1 enemies take ~3–4 hits; a careful run
+      wins maybe 1 in 3") and I'll run a balance pass that tunes the numbers **and proves by
+      simulation the game is winnable** before handing it back.
 
 ---
 
-## Pending checks
+## M10 — Play it on screen (visual & mobile checks only you can do)
 
-### The whole engine (branch `agentic/logic-core`) — code review + merge (your gate; I never merge)
-This one branch contains the entire port, milestones **M1 through M8** (it includes the earlier M1
-work, so it supersedes the separate `agentic/m1-character-core` branch).
-- [ ] **Review the code.** `git -C "worktrees/logic-core" diff main...HEAD` — 25 commits, 26 modules
-      under `src/game` + `src/data`, plus tests. Confirm it reads the way you want the game's logic
-      to look.
-- [ ] **Run the tests yourself if you like.** From `worktrees/logic-core`: `npm test` → 237 green.
-- [ ] **Merge when happy** (from the repo root):
-      `git merge --no-ff agentic/logic-core`
-      then clean up **both** now-merged branches and their worktrees:
-      `git worktree remove worktrees/logic-core && git branch -d agentic/logic-core`
-      `git worktree remove worktrees/m1-character-core && git branch -d agentic/m1-character-core`
-- [ ] If anything's off, tell me — it goes back through the same build agent as a fix round, not a
-      hand-patch.
+The Kaplay UI shell is built (branch `agentic/ui-shell`). jsdom has no graphics, so the pipeline
+can't see what renders — these are yours. To run it:
+```
+cd "worktrees/ui-shell"
+npm run dev        # then open the printed http://localhost:5173/
+```
+Do these in order (most-likely-to-be-wrong first):
 
-### Balance & rules calls I made faithfully to the original (confirm or change)
-Each of these follows the original Java (or cleans up an obvious gap). None can be judged without
-you; all are one-line tweaks I can make through the loop.
-- [ ] **Enemy stat bonuses** — the original left enemy attribute bonuses unused (zero); I compute
-      them, which makes enemies a bit stronger. Keep, or revert to the original's zero?
-- [ ] **Flee chance ~25%** — the original's *code* escapes ~25% of the time, though its *comment*
-      says 35%. I used the code (25%). Which did you intend?
-- [ ] **Enemies always hit** — the original never rolled enemy attacks to hit (they always land); I
-      kept that. Add a miss chance later if fights feel too punishing?
-- [ ] **Every enemy is a "Beast"** — the original only ever spawned the "Beast" name-type in all
-      acts (other types were stubbed out). Kept faithful. Want distinct enemy families per act later?
-- [ ] **Shop is reached via the menu's "Character Info"** — faithful to the original's quirk (the
-      stranger appears when you open your character screen). Keep, or make the shop its own choice /
-      random encounter?
-- [ ] **Level-up raises max health but doesn't heal you** — faithful to the original. Keep?
-- [ ] **The final boss gets no automatic advantage** — faithful (only random battles grant it). Keep?
-- [ ] **Dying in the final battle shows the death screen, not the ending** — a clean-up (the original
-      showed the ending even on death). Keep?
-- [ ] **Hidden lore entries** — in Acts 2–4 the third lore snippet was unreachable in the original
-      (an off-by-one). I kept it hidden by default but stored it, so it's a one-line switch to turn
-      all lore back on. Want the hidden entries shown?
+- [ ] **1. Boots without a crash.** Open the URL with the browser console open. Right: the title
+      screen shows **THE VOID**. Wrong: any red console error, or a blank/black canvas with no title.
+- [ ] **2. A full run renders and advances.** New Game → enter a name → pick a class → accept (or
+      reroll) stats → main menu → descend into a battle (confirm **both HP bars** and a **scrolling
+      combat log**) → rest → shop → act intro/outro → level-up (tap **two** stat picks; try the same
+      one twice) → keep going. Then start over and lose a battle to see the game-over screen. Wrong:
+      any blank/incorrect screen, a dead button, a missing HP bar, log won't scroll, or level-up
+      won't take two picks. (Note: you'll lose to the balance issue above — that's expected for now.)
+- [ ] **3. Portrait legibility + letterbox scaling.** In the browser's device toolbar, view a narrow
+      phone (≤360px wide), a large phone, and a resized desktop window; toggle a notched device.
+      Right: text is legible, the canvas is centered with black bars (never stretched/cut), nothing
+      hides under a notch or home bar. Wrong: clipped/tiny text, distortion, content under the notch.
+- [ ] **4. Touch targets + keyboard.** On a touch device/emulator, tap buttons and enter a name.
+      Right: buttons feel finger-sized (≥44px) with a clear pressed state; the mobile keyboard opens
+      for the name and the text box sits over the canvas. Wrong: tiny buttons, no pressed state, no
+      keyboard, or a misplaced text box.
+- [ ] **5. Combat log scrolling.** In a long fight, confirm wheel + drag/touch scroll the log and it
+      auto-scrolls to the newest line.
+- [ ] **Visual direction check:** this shell is a clean **text-forward terminal** look on purpose.
+      If you want it more visual (enemy pictures, a floor map, animated dice), that's a later
+      milestone — tell me and we'll scope it (this is the "interview" topic).
 
-### M0 — App shell (still valid)
-- [ ] **App boots to the title screen.** `npm run dev` → near-black canvas showing **THE VOID**,
-      "A Text RPG by Jihanger", "vAlpha — press anywhere to begin". Wrong: blank page or a console
-      error.
-- [ ] **Letterboxing in portrait.** Resize tall-and-narrow (or a phone preset): the game stays
-      centered and scales with black bars, not stretched. Wrong: squashed text or cut-off content.
+---
+
+## M9 — Save / load (built, no on-screen check needed)
+
+Branch `agentic/save-load`. Fully covered by automated tests (safe save encoding, corrupt-save
+rejection, versioning for future formats, and a browser localStorage adapter). **Note:** the save
+system exists and works, but the UI doesn't call it yet — the title's "Continue" button is a
+disabled placeholder. Wiring save/load into the UI (autosave + a working Continue) is a small
+follow-up once these branches merge; say the word and I'll do it through the loop.
+- [ ] Optional: review `git -C "worktrees/save-load" diff agentic/logic-core...HEAD` (4 new files).
+
+---
+
+## Balance & rules calls I made faithfully to the original (confirm or change)
+Each follows the original Java (or cleans up an obvious gap); all are one-line tweaks via the loop.
+- [ ] **Enemy stat bonuses** — original left them unused (zero); I compute them (enemies a bit
+      stronger). Keep or revert?
+- [ ] **Flee chance ~25%** — the original's *code* is ~25% though its *comment* says 35%. I used the
+      code. Which did you intend?
+- [ ] **Enemies always hit** — faithful (the original never rolled enemy attacks to hit). Add a miss
+      chance later if fights feel punishing?
+- [ ] **Every enemy is a "Beast"** — the only name-type the original ever spawned. Want distinct
+      enemy families per act later?
+- [ ] **Shop reached via the menu's "Character Info"** — faithful quirk. Keep, or make the shop its
+      own choice / random encounter?
+- [ ] **Level-up raises max health but doesn't heal** — faithful. Keep?
+- [ ] **Final boss gets no automatic advantage** — faithful. Keep?
+- [ ] **Dying in the final battle shows the death screen, not the ending** — a clean-up. Keep?
+- [ ] **Hidden lore in Acts 2–4** — an original off-by-one hid the third lore snippet; kept hidden
+      but stored, so it's a one-line switch to show them. Want them shown?
+- [ ] **Placeholder story/lore text** — much of the original's lore/story is stub text
+      ("this is a lore…"). As the author, you'll likely want to write the real text — I can wire in
+      whatever you write.
+
+---
+
+## Review & merge (your gate — I never merge)
+Three branches stack in this order (each builds on the previous). Merge from the repo root, in order:
+1. `agentic/logic-core` — the whole engine, milestones M1–M8 (includes the earlier M1 branch, so it
+   supersedes `agentic/m1-character-core`).
+2. `agentic/save-load` — M9 (branches off logic-core; only 4 new files).
+3. `agentic/ui-shell` — M10 (branches off logic-core; only render/scene/entry files).
+
+```
+git merge --no-ff agentic/logic-core
+git merge --no-ff agentic/save-load
+git merge --no-ff agentic/ui-shell
+```
+Review any branch with `git -C "worktrees/<name>" diff agentic/logic-core...HEAD` (or `main...HEAD`
+for logic-core). After merging, clean up each worktree + branch:
+```
+git worktree remove worktrees/<name> && git branch -d agentic/<name>
+```
+(also remove the now-superseded `worktrees/m1-character-core` + `agentic/m1-character-core`.)
+If anything's off, tell me — it goes back through the same build agent as a fix round.
 
 ---
 

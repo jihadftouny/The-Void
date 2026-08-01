@@ -3,8 +3,8 @@
 _Live tracker. Driven by `docs/ROADMAP.md`. Updated as the final step of any session that changes
 build state._
 
-**Overall: 0/11 core milestones merged — but M1–M8 are BUILT and awaiting your review/merge on one branch.**
-`[==============------]` 8/11 built (0 merged yet)
+**Overall: 0/11 core milestones merged — but M1–M10 are BUILT and awaiting your review/merge (three stacked branches).**
+`[==================--]` 10/11 built (0 merged yet)
 
 | Milestone | Status |
 |---|---|
@@ -17,14 +17,29 @@ build state._
 | M6 — Conditions + skills | 🔄 built (on `agentic/logic-core`) |
 | M7 — Encounters (battle/rest/shop) | 🔄 built (on `agentic/logic-core`) |
 | M8 — Progression + story | 🔄 built (on `agentic/logic-core`) |
-| M9 — Save / load | ⬜ (near-free: state is already JSON-serializable) |
-| M10 — Kaplay UI shell (mobile-first) | ⬜ |
+| M9 — Save / load | 🔄 built (on `agentic/save-load`) |
+| M10 — Kaplay UI shell (mobile-first) | 🔄 built (on `agentic/ui-shell`) — playable on screen |
 | M11 — Mobile polish | ⬜ |
 | M12 — (stretch) Juice + PWA | ⬜ |
 
 Legend: ⬜ not started · 🔄 in progress · ✅ done
 
 ## Session log
+
+### 2026-08-01 — Save/load + Kaplay UI shell, built in parallel (M9 + M10, awaiting review)
+- Ran M9 and M10 as two PARALLEL pipeline units (disjoint file territories), both branched off
+  `agentic/logic-core`, both VERDICT PASS, 0 fix rounds:
+  - M9 (`agentic/save-load`): pure save/load core (safe encode/decode, corrupt-save rejection,
+    version/migration seam) + a Node-safe browser localStorage adapter outside `src/game`. 31 new
+    tests; logic core stays pure.
+  - M10 (`agentic/ui-shell`): mobile-first, responsive Kaplay UI shell (portrait 540×1080,
+    letterboxed, ≥44px touch targets, safe-area insets) that renders the pure `step` controller's
+    events and dispatches input — every phase (title→creation→menu→battle→rest→shop→level-up→
+    ending). Pure layout/routing/format helpers are unit-tested (30 tests); visual/mobile checks
+    are human (see HUMAN-CHECKS.md). **The game is now playable on screen.**
+- Save/load is NOT yet wired into the UI (title "Continue" is a disabled seam) — a small follow-up.
+- Still unwinnable at faithful balance — balance pass pending your direction.
+- Three stacked branches awaiting review/merge in order: logic-core → save-load → ui-shell.
 
 ### 2026-08-01 — Full Java logic port through the loop (M2–M8, awaiting review)
 - Ran the whole game-logic port through the `agentic-engineering` loop in one worktree
