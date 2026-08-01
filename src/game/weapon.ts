@@ -53,3 +53,12 @@ export function getAllWeapons(): readonly Weapon[] {
     ...(WEAPONS['act4'] ?? []),
   ];
 }
+
+/**
+ * Resolve a weapon by its `name` id (linear scan across all Acts), or undefined
+ * if no weapon has that name. Used to resolve a player's `equippedWeaponId`,
+ * since equipment is stored on state as an id, not an embedded object.
+ */
+export function getWeaponByName(name: string): Weapon | undefined {
+  return getAllWeapons().find((w) => w.name === name);
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getWeaponsForAct,
   getAllWeapons,
+  getWeaponByName,
   type Rarity,
   type WeaponProperty,
   type Weapon,
@@ -95,5 +96,25 @@ describe('serializability', () => {
   it('getWeaponsForAct(1) round-trips through JSON unchanged', () => {
     const weapons = getWeaponsForAct(1)!;
     expect(JSON.parse(JSON.stringify(weapons))).toEqual(weapons);
+  });
+});
+
+describe('getWeaponByName', () => {
+  it('resolves the Enforcer starting weapon "Jaaj Sword 1" (Rare Melee)', () => {
+    const w = getWeaponByName('Jaaj Sword 1');
+    expect(w).toBeDefined();
+    expect(w!.rarity).toBe('Rare');
+    expect(w!.property).toBe('Melee');
+  });
+
+  it('resolves the Neuromancer starting weapon "Jooj Gun 1" (Common Ranged)', () => {
+    const w = getWeaponByName('Jooj Gun 1');
+    expect(w).toBeDefined();
+    expect(w!.rarity).toBe('Common');
+    expect(w!.property).toBe('Ranged');
+  });
+
+  it('returns undefined for an unknown name', () => {
+    expect(getWeaponByName('No Such Weapon')).toBeUndefined();
   });
 });

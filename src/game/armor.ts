@@ -46,3 +46,12 @@ export function getAllArmor(): readonly Armor[] {
     ...(ARMOR['act4'] ?? []),
   ];
 }
+
+/**
+ * Resolve an armor by its `name` id (linear scan across all Acts), or undefined
+ * if no armor has that name. Used to resolve a player's `equippedArmorId`,
+ * since equipment is stored on state as an id, not an embedded object.
+ */
+export function getArmorByName(name: string): Armor | undefined {
+  return getAllArmor().find((a) => a.name === name);
+}

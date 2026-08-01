@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getArmorForAct, getAllArmor, type Rarity } from './armor.ts';
+import {
+  getArmorForAct,
+  getAllArmor,
+  getArmorByName,
+  type Rarity,
+} from './armor.ts';
 
 // Expected values are hand-derived from the canonical Java `Armor.java`:
 //  Act N: {"Jooj Armor N",5,Common,11,2,0}, {"Jaaj Armor N",5,Rare,12,2,14},
@@ -60,5 +65,23 @@ describe('serializability', () => {
   it('getArmorForAct(1) round-trips through JSON unchanged', () => {
     const armors = getArmorForAct(1)!;
     expect(JSON.parse(JSON.stringify(armors))).toEqual(armors);
+  });
+});
+
+describe('getArmorByName', () => {
+  it('resolves the Enforcer starting armor "Jooj Armor 1" (Common)', () => {
+    const a = getArmorByName('Jooj Armor 1');
+    expect(a).toBeDefined();
+    expect(a!.rarity).toBe('Common');
+  });
+
+  it('resolves the Neuromancer starting armor "Jaaj Armor 1" (Rare)', () => {
+    const a = getArmorByName('Jaaj Armor 1');
+    expect(a).toBeDefined();
+    expect(a!.rarity).toBe('Rare');
+  });
+
+  it('returns undefined for an unknown name', () => {
+    expect(getArmorByName('No Such Armor')).toBeUndefined();
   });
 });
