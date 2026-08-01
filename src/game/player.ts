@@ -24,6 +24,7 @@ import {
 } from './character.ts';
 import { roll4d6DropLowest, type Rng } from './rng.ts';
 import { ELEMENTS } from './element.ts';
+import { type ActiveCondition } from './condition.ts';
 
 /** The two playable classes (this string is the player's `classId`). */
 export type PlayerClass = 'Enforcer' | 'Neuromancer';
@@ -43,9 +44,9 @@ export interface Player extends Character {
   equippedArmorId: string;
   /** One resistance value per element, length ELEMENTS.length (7). */
   resistances: number[];
-  /** Active status conditions — [] until M6. */
-  activeConditions: unknown[];
-  /** Learned skill ids — [] until M6. */
+  /** Active status conditions (M6). */
+  activeConditions: ActiveCondition[];
+  /** Learned skill ids — the player starts with none (faithful to Java). */
   skillPool: string[];
 }
 
