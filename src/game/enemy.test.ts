@@ -87,10 +87,11 @@ describe('generateEnemy naming and shape', () => {
     expect(enemy.fullName).toBe('Nightmare');
   });
 
-  it('has a 7-slot all-zero resistance array and empty M6 fields', () => {
+  it('has a 7-slot all-zero resistance array, the seeded skill, and no conditions', () => {
     const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 12 }, mulberry32(3));
     expect(enemy.resistances).toEqual([0, 0, 0, 0, 0, 0, 0]);
-    expect(enemy.skillPool).toEqual([]);
+    // Every enemy starts with the test Pyro Ball skill (Java Enemy constructor).
+    expect(enemy.skillPool).toEqual(['pyroBall']);
     expect(enemy.activeConditions).toEqual([]);
     expect(enemy.maxSkillCharges).toBe(2);
     expect(enemy.skillCharges).toBe(2);

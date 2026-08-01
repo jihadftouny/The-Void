@@ -35,6 +35,7 @@ import {
 import { randInt, type Rng } from './rng.ts';
 import { generateEnemyName } from './enemyName.ts';
 import { ELEMENTS } from './element.ts';
+import { type ActiveCondition } from './condition.ts';
 
 /** An enemy — a `Character` plus enemy-only fields — as plain serializable data. */
 export interface Enemy extends Character {
@@ -44,10 +45,10 @@ export interface Enemy extends Character {
   fullName: string;
   /** One resistance value per element, length ELEMENTS.length (7). */
   resistances: number[];
-  /** Learned skill ids — [] until M6. */
+  /** Learned skill ids (M6). Every enemy starts with the test Pyro Ball skill. */
   skillPool: string[];
-  /** Active status conditions — [] until M6. */
-  activeConditions: unknown[];
+  /** Active status conditions (M6). */
+  activeConditions: ActiveCondition[];
 }
 
 const ENEMY_ARMOR_CLASS = 10;
@@ -96,7 +97,8 @@ export function generateEnemy(
     maxSkillCharges: ENEMY_MAX_SKILL_CHARGES,
     hitDie: { quantity: 1, sides: 8 }, // vestigial: enemies never roll a hit die
     resistances: ELEMENTS.map(() => 0),
-    skillPool: [],
+    // Java `Enemy` seeds every enemy with SkillEnemy.testFireSkill so it can act.
+    skillPool: ['pyroBall'],
     activeConditions: [],
   };
 }
