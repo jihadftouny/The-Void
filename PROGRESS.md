@@ -3,6 +3,11 @@
 _Live tracker. Driven by `docs/ROADMAP.md`. Updated as the final step of any session that changes
 build state._
 
+> **⚠️ Direction change (2026-08-01):** The Void is pivoting to an **LLM-driven narrative game**.
+> The M1–M11 roadmap below is the faithful Java port (a solid foundation), but the milestones and
+> possibly the UI will be **re-scoped** around the LLM design. See memory
+> `llm-driven-narrative-vision.md`; an interview + roadmap rewrite is the next session's first task.
+
 **Overall: 0/11 core milestones merged — but M1–M10 are BUILT and awaiting your review/merge (three stacked branches).**
 `[==================--]` 10/11 built (0 merged yet)
 
@@ -17,7 +22,7 @@ build state._
 | M6 — Conditions + skills | 🔄 built (on `agentic/logic-core`) |
 | M7 — Encounters (battle/rest/shop) | 🔄 built (on `agentic/logic-core`) |
 | M8 — Progression + story | 🔄 built (on `agentic/logic-core`) |
-| M9 — Save / load | 🔄 built (on `agentic/save-load`) |
+| M9 — Save / load | 🔄 built + wired into UI (on `agentic/wire-save`) |
 | M10 — Kaplay UI shell (mobile-first) | 🔄 built (on `agentic/ui-shell`) — playable on screen |
 | M11 — Mobile polish | ⬜ |
 | M12 — (stretch) Juice + PWA | ⬜ |
@@ -25,6 +30,15 @@ build state._
 Legend: ⬜ not started · 🔄 in progress · ✅ done
 
 ## Session log
+
+### 2026-08-01 — Save/load wired into the UI (+ LLM pivot noted)
+- Integration unit `agentic/wire-save` (= ui-shell + save-load merged, then wiring): working
+  "Continue" on the title, autosave between encounters + on act transitions, save cleared when a run
+  ends, and a "Restart" on game-over. Injectable storage keeps the save policy headlessly tested.
+  VERDICT PASS, 315 tests. Merge path simplifies to: logic-core → wire-save (wire-save subsumes
+  save-load + ui-shell).
+- **New direction:** user set the vision to an LLM-driven narrative game (stored in memory). Next
+  session: interview + rewrite this roadmap. The port so far is the foundation, not the final shape.
 
 ### 2026-08-01 — Save/load + Kaplay UI shell, built in parallel (M9 + M10, awaiting review)
 - Ran M9 and M10 as two PARALLEL pipeline units (disjoint file territories), both branched off

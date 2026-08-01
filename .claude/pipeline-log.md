@@ -19,6 +19,15 @@ Format per entry:
 
 ---
 
+## 2026-08-01 — wire-save (save/load wired into the UI)
+- Verdict: PASS (awaiting review/merge). Integration unit on `agentic/wire-save` = `agentic/ui-shell` + `agentic/save-load` merged (clean, disjoint) as the base, then the wiring built on top.
+- Fix rounds: 0. 315 tests green.
+- Delivered: pure `src/render/persistence.ts` (autosave/clear/continue-available predicates, headlessly tested); GameDriver gains injectable `SaveStorage` (+ resume/restart/persist); title "Continue" + game-over "Restart" wired; `main.ts` injects the real localStorage adapter. Autosave at main-menu + act-intro; save cleared at ending/game-over; mid-battle does NOT persist.
+- Build-agent deviations: none of substance (one self-corrected circular restart-test assertion during authoring). `src/game/**` and `src/storage/**` imported, never modified.
+- NEEDS-HUMAN: real-browser Continue/Restart/localStorage-reload checks (in HUMAN-CHECKS.md).
+- Note: after this, the user set a major new direction — pivot to an LLM-driven narrative game (see memory `llm-driven-narrative-vision.md`); milestones/UI will be re-scoped via an interview next session.
+- Manual engineer fixes: none yet
+
 ## 2026-08-01 — save-load (M9) + ui-shell (M10), run IN PARALLEL
 - Verdict: both PASS (awaiting review/merge). Two concurrent units, disjoint file territories, both branched off agentic/logic-core.
 - Fix rounds: 0 (each unit passed its first test-agent run).
