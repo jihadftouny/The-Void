@@ -106,17 +106,18 @@ Each follows the original Java (or cleans up an obvious gap); all are one-line t
 ---
 
 ## Review & merge (your gate — I never merge without your explicit OK)
-`agentic/wire-save` now contains **everything** — the engine (M1–M8), save/load (M9), the UI shell
+`agentic/wire-save` contains **everything** — the engine (M1–M8), save/load (M9), the UI shell
 (M10), and the save/load wiring — because it was built on top of both earlier branches. So the whole
-project merges in **two steps** (I verified this is conflict-free end to end):
+project merges in **one clean step** (verified conflict-free against `main`):
 
 ```
-git merge --no-ff agentic/logic-core     # the engine
-git merge --no-ff agentic/wire-save      # M9 + M10 + wiring, all together
+git merge --no-ff agentic/wire-save      # engine + M9 + M10 + wiring, all at once
 ```
-(Or just `git merge --no-ff agentic/wire-save` alone — it already includes the engine's history.)
+(Don't merge `agentic/logic-core` separately — `wire-save` already includes its history, and the
+standalone `logic-core` branch has a stale checklist file that would conflict needlessly.)
 
-The now-redundant branches `agentic/save-load` and `agentic/ui-shell` are subsumed by `wire-save`;
+The now-redundant branches `agentic/logic-core`, `agentic/save-load`, `agentic/ui-shell` are all
+subsumed by `wire-save`;
 after merging you can delete them and the superseded `agentic/m1-character-core`, plus their
 worktrees:
 ```
