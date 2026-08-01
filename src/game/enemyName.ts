@@ -20,8 +20,9 @@ export interface EnemyNameTable {
   last: WeightPair[];
 }
 
-// JSON is keyed by act number (as a string) -> type -> table.
-const TABLES = enemyNamesData as Readonly<
+// JSON is keyed by act number (as a string) -> type -> table. The JSON tuples
+// widen to (string|number)[][], so cast through `unknown` to the WeightPair shape.
+const TABLES = enemyNamesData as unknown as Readonly<
   Record<string, Readonly<Record<string, EnemyNameTable>>>
 >;
 

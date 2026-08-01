@@ -11,6 +11,9 @@
 import armorData from '../data/armor.json';
 import type { Rarity } from './weapon.ts';
 
+// Re-export Rarity so armor consumers can import it from a single module.
+export type { Rarity };
+
 /** An armor as plain serializable data (Java `Armor`). */
 export interface Armor {
   name: string;
