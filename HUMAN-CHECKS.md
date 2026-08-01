@@ -25,5 +25,17 @@ How to run the app for a check:
 
 ---
 
+### M4 — Enemy generation
+- [ ] **Confirm/tune enemy HP scaling.** Enemy `maxHp = 30 + floor(playerXp/3) + rand[0, playerXp)`
+      (`src/game/enemy.ts`), replacing the Java vAlpha 1-HP placeholder (`super(type, 1, xp)`). This
+      formula drives whole-game difficulty: at `playerXp = 0` every enemy has exactly 30 HP; at
+      `playerXp = 100` HP ranges 63–162. Play through and judge whether early enemies feel too tanky
+      / late enemies too swingy, and retune the constants if so. Wrong: fights that drag at Act 1, or
+      wildly inconsistent enemy durability at the same player level.
+- [ ] **Confirm enemy stat mods should be computed (not left 0).** We compute enemy `mods` via
+      `computeStatMods` (Java left them 0, giving enemies no stat bonus on attack rolls). This makes
+      enemies hit harder than the Java original. Verify combat (M5) feels fair with computed mods;
+      if enemies feel too accurate/strong, revisit this decision.
+
 ## Verified
 _(move items here once you've confirmed them)_
