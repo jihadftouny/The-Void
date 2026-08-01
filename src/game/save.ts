@@ -14,7 +14,7 @@
 // `decodeSave` VALIDATES and returns `null` on anything corrupt or incompatible —
 // it never throws. The player-facing meaning of a `null` is "start a new game".
 
-import { type GameState, type Phase } from './game.ts';
+import { type GameState } from './game.ts';
 import { type PlayerClass } from './player.ts';
 
 /**

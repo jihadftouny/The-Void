@@ -100,7 +100,7 @@ describe('decodeSave rejection (returns null, never throws)', () => {
   }
 
   it('rejects a missing version field', () => {
-    const s = createGame(SEED) as Record<string, unknown>;
+    const s = createGame(SEED) as unknown as Record<string, unknown>;
     delete s.version;
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
@@ -128,13 +128,13 @@ describe('decodeSave rejection (returns null, never throws)', () => {
 
   it('rejects a non-finite rngState', () => {
     // JSON has no Infinity/NaN, so simulate the parsed shape via a string body.
-    const s = createGame(SEED) as Record<string, unknown>;
+    const s = createGame(SEED) as unknown as Record<string, unknown>;
     const body = JSON.stringify(s).replace('"rngState":12345', '"rngState":null');
     expect(decodeSave(body)).toBeNull();
   });
 
   it('rejects a missing act field', () => {
-    const s = createGame(SEED) as Record<string, unknown>;
+    const s = createGame(SEED) as unknown as Record<string, unknown>;
     delete s.act;
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
