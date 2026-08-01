@@ -1,0 +1,33 @@
+{
+  "intro": {
+    "header": "STORY",
+    "lines": [
+      "The capital of Absolution, 2100 . . .",
+      "- - -",
+      "You are the last hope of your society. The Kingpins of",
+      "The Undercity finally put their convoluted plan into action,",
+      "and the Arch-Mage of house Grandmore has ordered you",
+      "{playerName}, to delve into the Rift and kill the kingpins.",
+      ". . .",
+      "Return with their brainchips so that Grandmore's Memorians can extract all the available information from them."
+    ]
+  },
+  "actIntros": {
+    "1": { "header": "ACT I", "body": "" },
+    "2": { "header": "ACT II", "body": "" },
+    "3": { "header": "ACT III", "body": "" },
+    "4": { "header": "ACT IV", "body": "" },
+    "5": { "header": "ACT V", "body": "" }
+  },
+  "actOutros": {
+    "1": { "header": "ACT I", "body": "" },
+    "2": { "header": "ACT II", "body": "" },
+    "3": { "header": "ACT III", "body": "" },
+    "4": { "header": "ACT IV", "body": "" },
+    "5": { "header": "ACT V", "body": "" }
+  },
+  "ending": {
+    "header": "END.",
+    "body": "{playerName}"
+  }
+}
