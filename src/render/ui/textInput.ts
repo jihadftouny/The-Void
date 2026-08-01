@@ -30,11 +30,18 @@ function toWindowPx(rect: Rect): { left: number; top: number; width: number; hei
   };
 }
 
+export interface TextInputHandle {
+  /** Commit the current value (fires `onSubmit` once) and remove the field. */
+  submit(): void;
+  /** Remove the field without firing `onSubmit` (idempotent). */
+  cleanup(): void;
+}
+
 /**
- * Show the overlay input. Returns a cleanup function that removes it (idempotent).
- * `onSubmit` fires exactly once, then the field is removed.
+ * Show the overlay input. Returns a handle to submit or remove it. `onSubmit` fires
+ * exactly once (via Enter, blur, or `handle.submit()`), then the field is removed.
  */
-export function showTextInput(opts: TextInputOpts): () => void {
+export function showTextInput(opts: TextInputOpts): TextInputHandle {
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'void-input';
@@ -74,5 +81,5 @@ export function showTextInput(opts: TextInputOpts): () => void {
   // Focus on the next frame so the browser reliably opens the keyboard.
   requestAnimationFrame(() => input.focus());
 
-  return cleanup;
+  return { submit, cleanup };
 }
