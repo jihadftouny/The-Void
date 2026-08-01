@@ -1,5 +1,6 @@
-// Game-over scene (terminal): shows the final standing and the log tail. Restart is a
-// disabled seam — a later milestone can wire it to a fresh createGame / load flow.
+// Game-over scene (terminal): shows the final standing and the log tail. Restart begins
+// a fresh run at the title screen (the save was already cleared when game-over was
+// reached, so the fresh title correctly offers no Continue).
 
 import type { Engine } from '../render/engine.ts';
 import type { GameDriver } from '../render/driver.ts';
@@ -24,10 +25,8 @@ export function registerGameOverScene(k: Engine, driver: GameDriver): void {
       ]);
     }
 
-    // SEAM (M9/later): a "Restart" here can re-seed createGame or load a save; not
-    // wired in this milestone.
     const buttonsTop = bottomButtons(k, content, [
-      { label: 'Restart', onClick: () => {}, disabled: true },
+      { label: 'Restart', onClick: () => driver.restart() },
     ]);
 
     const logTop = below + TEXT.body + SPACING.md;

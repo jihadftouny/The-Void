@@ -1,6 +1,6 @@
 // Title scene — the first thing a player sees. "New Game" starts a fresh run through
-// the pure controller; "Continue" is present but disabled, marking the seam where the
-// M9 save/load unit will resume a persisted run.
+// the pure controller; "Continue" is shown ONLY when a valid save exists and resumes
+// that persisted run.
 
 import type { Engine } from '../render/engine.ts';
 import type { GameDriver } from '../render/driver.ts';
@@ -34,11 +34,15 @@ export function registerTitleScene(k: Engine, driver: GameDriver): void {
       k.color(dim[0], dim[1], dim[2]),
     ]);
 
-    bottomButtons(k, content, [
+    // Continue appears only when a valid save exists — an absent/invalid save shows
+    // just New Game (no dead, disabled button).
+    const canContinue = driver.savedGameAvailable();
+    const buttons = [
       { label: 'New Game', onClick: () => driver.dispatch({ kind: 'continue' }) },
-      // SEAM: M9 load() — "Continue" will resume a saved run via driver.load(state).
-      // Disabled until the save/load unit lands; do NOT wire it here.
-      { label: 'Continue', onClick: () => {}, disabled: true },
-    ]);
+    ];
+    if (canContinue) {
+      buttons.push({ label: 'Continue', onClick: () => driver.resume() });
+    }
+    bottomButtons(k, content, buttons);
   });
 }
