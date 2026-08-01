@@ -83,19 +83,24 @@ describe('buildShopOffer', () => {
 
   it('rarity picks are weighted ~5:3:1 and every rarity is reachable', () => {
     const N = 9000;
-    const counts: Record<string, number> = { Common: 0, Rare: 0, Legendary: 0 };
+    let common = 0;
+    let rare = 0;
+    let legendary = 0;
     for (let seed = 0; seed < N; seed++) {
       const r = rarityOf(buildShopOffer(1, mulberry32(seed)));
-      if (r) counts[r] = (counts[r] ?? 0) + 1;
+      if (r === 'Common') common++;
+      else if (r === 'Rare') rare++;
+      else if (r === 'Legendary') legendary++;
     }
-    const total = counts.Common + counts.Rare + counts.Legendary;
-    // Weights 5:3:1 over sum 9 -> 0.556 / 0.333 / 0.111. Tolerance +/- 0.04.
-    expect(counts.Common / total).toBeGreaterThan(0.51);
-    expect(counts.Common / total).toBeLessThan(0.60);
-    expect(counts.Rare / total).toBeGreaterThan(0.29);
-    expect(counts.Rare / total).toBeLessThan(0.38);
-    expect(counts.Legendary / total).toBeGreaterThan(0.07);
-    expect(counts.Legendary / total).toBeLessThan(0.15);
+    const total = common + rare + legendary;
+    expect(total).toBe(N); // every offer resolved to a known rarity
+    // Weights 5:3:1 over sum 9 -> 0.556 / 0.333 / 0.111. Tolerance +/- ~0.04.
+    expect(common / total).toBeGreaterThan(0.51);
+    expect(common / total).toBeLessThan(0.6);
+    expect(rare / total).toBeGreaterThan(0.29);
+    expect(rare / total).toBeLessThan(0.38);
+    expect(legendary / total).toBeGreaterThan(0.07);
+    expect(legendary / total).toBeLessThan(0.15);
   });
 });
 
