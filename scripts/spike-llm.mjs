@@ -139,7 +139,9 @@ async function runOne(lib, modelKey, mode) {
     modelPath,
     gpuLayers: mode === 'cpu' ? 0 : undefined, // undefined => offload as many as fit
   });
-  const context = await model.createContext({ contextSize: 4096 });
+  // sequences: 2 — one slot for the narration session, one for the JSON session.
+  // (A single-sequence context throws "No sequences left" on the 2nd getSequence.)
+  const context = await model.createContext({ contextSize: 4096, sequences: 2 });
   const loadMs = performance.now() - tLoad0;
 
   const freeAfter = os.freemem();
@@ -181,9 +183,9 @@ async function runOne(lib, modelKey, mode) {
       systemPrompt: sysPrompt,
     });
     const raw = await jsonSession.prompt(
-      'Narrate the player finding a locked door, then give exactly 3 choices ' +
-        '(each with a short id and a player-facing label).',
-      { grammar, maxTokens: 300 },
+      'Narrate the player finding a locked door in TWO sentences, then give ' +
+        'exactly 3 choices (each with a short id and a player-facing label).',
+      { grammar, maxTokens: 600 }, // headroom so JSON never truncates mid-string
     );
     const parsed = grammar.parse(raw);
     jsonOk =
