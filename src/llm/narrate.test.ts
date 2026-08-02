@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildNarrationPrompt, describeEvent } from './narrate.ts';
+import {
+  buildNarrationPrompt,
+  describeEvent,
+  createStoryMemory,
+  rememberBeat,
+} from './narrate.ts';
 import type { GameState } from '../game/game.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 
@@ -34,5 +39,34 @@ describe('buildNarrationPrompt', () => {
     expect(p!.user).toContain('First Floor');
     expect(p!.user.toLowerCase()).toContain('second-person');
     expect(p!.system).toContain('Void');
+  });
+  it('prefixes the recent story-so-far when memory is supplied', () => {
+    let m = createStoryMemory();
+    m = rememberBeat(m, ['A Feral Rat emerges to bar your way.']);
+    const p = buildNarrationPrompt(
+      [{ kind: 'attack', subject: 'player', outcome: 'hit', damage: 3 }],
+      baseState,
+      m,
+    );
+    expect(p!.user).toContain('story so far');
+    expect(p!.user).toContain('Feral Rat');
+  });
+});
+
+describe('story memory', () => {
+  it('appends beats and caps at the most recent five', () => {
+    let m = createStoryMemory();
+    for (let i = 1; i <= 7; i++) m = rememberBeat(m, [`beat ${i}`]);
+    expect(m.beats).toHaveLength(5);
+    expect(m.beats[0]).toBe('beat 3');
+    expect(m.beats[4]).toBe('beat 7');
+  });
+  it('ignores empty beats and never mutates the input', () => {
+    const m0 = createStoryMemory();
+    const m1 = rememberBeat(m0, []);
+    expect(m1).toBe(m0);
+    const m2 = rememberBeat(m0, ['x']);
+    expect(m0.beats).toHaveLength(0); // original untouched
+    expect(m2.beats).toEqual(['x']);
   });
 });

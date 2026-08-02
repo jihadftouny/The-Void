@@ -8,7 +8,7 @@ import type { GameState, GameInput, Awaiting } from '../game/game.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { StatKey } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
-import { buildNarrationPrompt } from '../llm/narrate.ts';
+import { buildNarrationPrompt, createStoryMemory, rememberBeat, eventsToFacts } from '../llm/narrate.ts';
 
 interface GenStats { text: string; tokens: number; tokensPerSecond: number; ttftMs: number }
 interface VoidApi {
@@ -29,6 +29,7 @@ const choicesEl = $('choices');
 const sheetEl = $('sheet');
 
 let state: GameState = createGame(Date.now() >>> 0);
+let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
 
 window.void.onStatus((s) => {
   if (s.phase === 'ready') { statusEl.textContent = `the Void is listening — ${s.gpu ? `GPU (${String(s.gpu)})` : 'CPU'}`; }
@@ -56,7 +57,7 @@ function renderSheet(): void {
 }
 
 async function narrate(events: readonly GameEvent[]): Promise<void> {
-  const prompt = buildNarrationPrompt(events, state);
+  const prompt = buildNarrationPrompt(events, state, memory);
   if (!prompt) return;
   const block = document.createElement('p');
   block.className = 'beat';
@@ -89,11 +90,13 @@ async function dispatch(input: GameInput): Promise<void> {
   state = r.state;
   renderSheet();
   await narrate(r.events);
+  memory = rememberBeat(memory, eventsToFacts(r.events)); // remember AFTER narrating
   renderChoices(r.awaiting);
 }
 
 function start(): void {
   state = createGame(Date.now() >>> 0);
+  memory = createStoryMemory();
   narrationEl.innerHTML = '';
   renderSheet();
   renderChoices('title');

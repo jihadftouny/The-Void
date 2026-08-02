@@ -92,21 +92,55 @@ export function describeEvent(e: GameEvent): string {
   }
 }
 
+/** The narratable factual clauses for a set of events (drops empty ones). */
+export function eventsToFacts(events: readonly GameEvent[]): string[] {
+  return events.map(describeEvent).filter((s) => s.length > 0);
+}
+
+// ---- Short-term story memory -----------------------------------------------
+// A compact, serializable running record of recent beats — the AI's "story so
+// far". We keep FACT lines (cheap, deterministic, engine-derived), not past
+// prose, and cap the count so a small local model always gets a lean prompt.
+// Plain data → it can be dropped straight into the save file later (long-term).
+export interface StoryMemory {
+  beats: string[];
+}
+const MAX_REMEMBERED_BEATS = 5;
+
+export function createStoryMemory(): StoryMemory {
+  return { beats: [] };
+}
+
+/** Return a new memory with this beat's facts appended (capped, immutable). */
+export function rememberBeat(memory: StoryMemory, facts: readonly string[]): StoryMemory {
+  if (facts.length === 0) return memory;
+  const beats = [...memory.beats, facts.join(' ')].slice(-MAX_REMEMBERED_BEATS);
+  return { beats };
+}
+
 /**
- * Build the narration prompt for the events that just occurred.
+ * Build the narration prompt for the events that just occurred, optionally
+ * prefixed with the recent story-so-far from `memory` (for continuity).
  * Returns null when nothing narratable happened (pure input phases like name
  * entry) — the UI then simply shows its choices with no new prose.
  */
 export function buildNarrationPrompt(
   events: readonly GameEvent[],
   state: GameState,
+  memory?: StoryMemory,
 ): { system: string; user: string } | null {
-  const facts = events.map(describeEvent).filter((s) => s.length > 0);
+  const facts = eventsToFacts(events);
   if (facts.length === 0) return null;
   const floor = FLOORS[state.place] ?? 'the Void';
+  const soFar =
+    memory && memory.beats.length > 0
+      ? `The story so far (oldest first):\n- ${memory.beats.join('\n- ')}\n\n`
+      : '';
   const user =
+    soFar +
     `Act ${state.act}, ${floor}. What just happened:\n- ` +
     facts.join('\n- ') +
-    `\n\nNarrate this moment in 2-4 vivid second-person sentences.`;
+    `\n\nNarrate this new moment in 2-4 vivid second-person sentences. ` +
+    `Stay consistent with the story so far; do not repeat earlier narration.`;
   return { system: VOID_PERSONA, user };
 }
