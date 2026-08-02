@@ -1,0 +1,22 @@
+{
+  "act1": [
+    { "name": "Jooj Armor 1", "cost": 5, "rarity": "Common", "baseArmor": 11, "dexCap": 2, "strReq": 0 },
+    { "name": "Jaaj Armor 1", "cost": 5, "rarity": "Rare", "baseArmor": 12, "dexCap": 2, "strReq": 14 },
+    { "name": "Jiij Armor 1", "cost": 5, "rarity": "Legendary", "baseArmor": 12, "dexCap": 2, "strReq": 14 }
+  ],
+  "act2": [
+    { "name": "Jooj Armor 2", "cost": 5, "rarity": "Common", "baseArmor": 11, "dexCap": 2, "strReq": 0 },
+    { "name": "Jaaj Armor 2", "cost": 5, "rarity": "Rare", "baseArmor": 12, "dexCap": 2, "strReq": 14 },
+    { "name": "Jiij Armor 2", "cost": 5, "rarity": "Legendary", "baseArmor": 12, "dexCap": 2, "strReq": 14 }
+  ],
+  "act3": [
+    { "name": "Jooj Armor 3", "cost": 5, "rarity": "Common", "baseArmor": 11, "dexCap": 2, "strReq": 0 },
+    { "name": "Jaaj Armor 3", "cost": 5, "rarity": "Rare", "baseArmor": 12, "dexCap": 2, "strReq": 14 },
+    { "name": "Jiij Armor 3", "cost": 5, "rarity": "Legendary", "baseArmor": 12, "dexCap": 2, "strReq": 14 }
+  ],
+  "act4": [
+    { "name": "Jooj Armor 4", "cost": 5, "rarity": "Common", "baseArmor": 11, "dexCap": 2, "strReq": 0 },
+    { "name": "Jaaj Armor 4", "cost": 5, "rarity": "Rare", "baseArmor": 12, "dexCap": 2, "strReq": 14 },
+    { "name": "Jiij Armor 4", "cost": 5, "rarity": "Legendary", "baseArmor": 12, "dexCap": 2, "strReq": 14 }
+  ]
+}

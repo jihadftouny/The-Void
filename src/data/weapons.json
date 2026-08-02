@@ -1,0 +1,22 @@
+{
+  "act1": [
+    { "name": "Jooj Gun 1", "cost": 5, "rarity": "Common", "damage": { "quantity": 1, "sides": 4 }, "property": "Ranged" },
+    { "name": "Jaaj Sword 1", "cost": 5, "rarity": "Rare", "damage": { "quantity": 1, "sides": 6 }, "property": "Melee" },
+    { "name": "Jiij Rapier 1", "cost": 5, "rarity": "Legendary", "damage": { "quantity": 1, "sides": 8 }, "property": "Finesse" }
+  ],
+  "act2": [
+    { "name": "Jooj Gun 2", "cost": 5, "rarity": "Common", "damage": { "quantity": 1, "sides": 4 }, "property": "Ranged" },
+    { "name": "Jaaj Sword 2", "cost": 5, "rarity": "Rare", "damage": { "quantity": 1, "sides": 6 }, "property": "Melee" },
+    { "name": "Jiij Rapier 2", "cost": 5, "rarity": "Legendary", "damage": { "quantity": 1, "sides": 8 }, "property": "Finesse" }
+  ],
+  "act3": [
+    { "name": "Jooj Gun 3", "cost": 5, "rarity": "Common", "damage": { "quantity": 1, "sides": 4 }, "property": "Ranged" },
+    { "name": "Jaaj Sword 3", "cost": 5, "rarity": "Rare", "damage": { "quantity": 1, "sides": 6 }, "property": "Melee" },
+    { "name": "Jiij Rapier 3", "cost": 5, "rarity": "Legendary", "damage": { "quantity": 1, "sides": 8 }, "property": "Finesse" }
+  ],
+  "act4": [
+    { "name": "Jooj Gun 4", "cost": 5, "rarity": "Common", "damage": { "quantity": 1, "sides": 4 }, "property": "Ranged" },
+    { "name": "Jaaj Sword 4", "cost": 5, "rarity": "Rare", "damage": { "quantity": 1, "sides": 6 }, "property": "Melee" },
+    { "name": "Jiij Rapier 4", "cost": 5, "rarity": "Legendary", "damage": { "quantity": 1, "sides": 8 }, "property": "Finesse" }
+  ]
+}
