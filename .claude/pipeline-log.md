@@ -19,6 +19,19 @@ Format per entry:
 
 ---
 
+## 2026-08-02 — ui-combat-fixes (back on the loop: plan→build→test)
+- First unit fully through the loop since the correction. Branch `agentic/ui-combat-fixes` off
+  `spike/n1-local-llm`. VERDICT PASS, 0 fix rounds, 336 tests.
+- Four play-test bugs, all in the render/Electron layer (engine untouched):
+  (1) "No sequences left" crash — `electron/llm.mjs` never disposed the context sequence; now
+  disposes session + sequence in `finally`. (2) HP frozen in combat — live player is in
+  `phase.battle.player`; added pure `displayPlayer(state)` (unit-tested) and renderSheet uses it.
+  (3) narration now shows only the current beat (no growing history). (4) `busy` re-entry guard +
+  "the Void speaks…" indicator locks input during generation.
+- Territory verified clean (only `src/desktop/**` + `electron/llm.mjs`). Runtime behaviors
+  (no crash, HP ticks, single-moment, input-lock) are NEEDS-HUMAN (real model + DOM).
+- Manual engineer fixes: none yet
+
 ## 2026-08-02 — Retroactive verification of the LLM slice (DOCTRINE CORRECTION)
 - Lapse: the post-pivot LLM work (N1 desktop shell, playable narrator slice, story+run memory, log
   system) was hand-built on `spike/n1-local-llm` OUTSIDE plan→build→test. Only M0–M10 (the port) and
