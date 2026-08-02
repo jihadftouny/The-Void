@@ -10,6 +10,7 @@ import type { StatKey } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun } from './persist.ts';
+import { displayPlayer } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 
@@ -69,7 +70,9 @@ window.void.onStatus((s) => {
 });
 
 function renderSheet(): void {
-  const p = state.player;
+  // The live battle combatant during a battle (HP ticks down each round), else
+  // the snapshot — the top-level state.player is stale mid-battle. See view-model.
+  const p = displayPlayer(state);
   if (!p) {
     sheetEl.innerHTML = '';
     return;
