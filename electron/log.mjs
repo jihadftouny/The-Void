@@ -27,7 +27,8 @@ function ensureStream() {
 export function fileLog(entry) {
   const s = ensureStream();
   if (!s) return;
-  const time = typeof entry?.time === 'number' ? entry.time : Date.now();
+  // Guard against a non-finite time (e.g. NaN) — toISOString() would throw.
+  const time = Number.isFinite(entry?.time) ? entry.time : Date.now();
   const t = new Date(time).toISOString();
   const level = String(entry?.level ?? 'info').toUpperCase();
   let line = `${t} ${level} [${entry?.category ?? '?'}] ${entry?.message ?? ''}`;
