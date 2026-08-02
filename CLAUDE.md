@@ -1,13 +1,15 @@
 # The Void
 
-A text-based / dice RPG about a descent through five floors of the Void — inspired by lived experience of psychosis and by Dungeons & Dragons mechanics. Turn-based combat on a seeded
-dice system, procedurally-named enemies, status conditions, skills, a shop and rest encounters,
-XP-driven progression across five Acts, and a final boss.
+An **LLM-driven narrative RPG** about a descent through five floors of the Void — inspired by lived experience of psychosis and by Dungeons & Dragons mechanics. A **local language
+model** (3–4B, bundled — no cloud, no keys, no per-turn cost) narrates the descent and adapts to
+the player's choices; the deterministic engine owns every rule and number (dice combat, status
+conditions, skills, shop/rest, XP across five Acts, a final boss). Shipped as a **packaged desktop
+game** (itch.io). Full locked design: `docs/ROADMAP.md` (v2).
 
-**This is a from-scratch port** of the original Java implementation (`.legacy/The-Void/`) onto a
-modern TypeScript stack, rendered with **Kaplay** (a lightweight 2D game library) and built with
-**Vite** + **Vitest**. Earlier ports (`.legacy/The-Void-Py`, `.legacy/The-Void-Web`) are kept for
-reference only — the Java version is the canonical source of game design.
+The engine is a from-scratch port of the original Java implementation (`.legacy/The-Void/`) on
+TypeScript + **Vite** + **Vitest**, with **Kaplay** as the visual-atmosphere layer. Earlier ports
+(`.legacy/The-Void-Py`, `.legacy/The-Void-Web`) are reference only — the Java version is canonical
+for the base mechanics.
 
 ## Guiding principle — always think long-term
 
@@ -32,22 +34,29 @@ core (breaks reproducibility), and class instances/functions in saved state (bre
    naming, prices) flows through the seeded RNG in `src/game/rng.ts`. Never call `Math.random()` or
    `Date.now()` inside `src/game` — a run must be reproducible from its seed, and tests must assert
    exact outcomes.
-3. **Data-driven content.** Weapons, armor, items, elements, enemy name tables, lore, and story text
-   live in JSON/data modules, not hard-coded in logic. Adding content never means editing combat code.
+3. **Data-driven content.** Weapons, armor, items, elements, enemy name tables, lore, story text,
+   zone prompt files, and enemy cards live in JSON/data modules, not hard-coded in logic. Adding
+   content never means editing combat code.
 4. **Serializable plain-data state.** Game state is plain data that round-trips through JSON, so
    saves work and state is inspectable. No class instances, functions, or canvas objects in state.
-5. **Mobile-first.** The game targets phones first. Design every scene for portrait, variable
-   resolutions, and touch: Kaplay runs letterboxed at a fixed virtual resolution that scales to the
-   device; interactive targets are ≥44px; respect safe-area insets. Test layouts at narrow widths
-   before wide ones. This is a hard requirement, not a later polish pass.
+5. **Engine-authoritative LLM.** The local model narrates and adjudicates *within* the rules — it
+   selects which engine mechanics fire, but never invents numbers or mutates state directly; all
+   outcomes flow through the engine. Every LLM output that feeds the game (choices, tool
+   invocations) is grammar/JSON-constrained. The LLM layer (`src/llm`) is pure and headlessly
+   testable against a fake model; the real model sits behind the runtime interface only.
+6. **Desktop-first, responsive.** (Amended 2026-08-02 from mobile-first: local LLMs are weakest on
+   phones.) Target desktop; keep layouts responsive so a mobile path (smaller model or engine-only
+   mode) can come later. Narrative text renders as DOM; Kaplay is the atmosphere/effects layer.
 
 ## Stack & targets
 
-- Node.js 18+, TypeScript 5 (strict), Vite 6, Vitest 2, Kaplay (2D renderer).
+- Node.js 18+, TypeScript 5 (strict), Vite 6, Vitest 2, Kaplay (atmosphere layer), DOM for
+  narrative text. Desktop packaging: **Electron + node-llama-cpp** (GGUF 3–4B model,
+  grammar-constrained output; Tauri is the fallback — N1 validates).
 - `npm run dev` — dev server. `npm run build` — typecheck (`tsc --noEmit`, which really checks `src`)
-  + Vite build. `npm test` — Vitest (logic core, headless Node). `npm run typecheck`.
-- Mobile-first: every scene must account for portrait orientation, variable resolution, touch input,
-  and safe-area insets. The logic core must run and be tested headlessly in Node.
+  + Vite build. `npm test` — Vitest (logic + llm cores, headless Node). `npm run typecheck`.
+- Min spec: typical laptop, no GPU. The logic and LLM cores must run and be tested headlessly in
+  Node (fake model — never real inference in tests).
 
 ## Progress tracking
 
