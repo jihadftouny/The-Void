@@ -14,9 +14,9 @@ final step of any session that changes build state._
 | Milestone (v2) | Status |
 |---|---|
 | N0 — Doctrine + v2 scaffolding | 🔄 (roadmap + doctrine written; held-branch decision pending) |
-| N1 — Desktop shell + local-model spike | 🔄 spike GREEN + Electron shell built + headless smoke PASS (4B in Electron @ 90 tok/s Vulkan); awaiting your visual `npm run desktop` — branch `spike/n1-local-llm` |
-| N2 — LLM runtime layer (pure core) | ⬜ |
-| N3 — Narrator loop v1 (Floor 1 playable) | ⬜ |
+| N1 — Desktop shell + local-model spike | ✅ shell built, smoke PASS (4B @ 90 tok/s Vulkan) — awaiting your visual `npm run desktop` |
+| N2 — LLM runtime layer (pure core) | 🔄 `src/llm/narrate.ts` (pure prompt builder, tested); grammar-constrained + token budgets still to add |
+| N3 — Narrator loop v1 (Floor 1 playable) | 🔄 FULL-GAME slice built: engine drives all phases, LLM narrates each beat, DOM UI (`src/desktop/game.ts`) — a full run is playable, not just Floor 1 |
 | N4 — Engine-as-toolbox | ⬜ |
 | N5 — Zone system (+ co-written content) | ⬜ |
 | N6 — Enemy cards + boss agents | ⬜ |
@@ -33,6 +33,19 @@ save/load carries over; UI shell partially reused. Merge decision deliberately *
 Legend: ⬜ not started · 🔄 in progress · ✅ done
 
 ## Session log
+
+### 2026-08-02 — Playable LLM game slice (N1 shell + N2 narration + N3 loop)
+- Merged the engine (`agentic/wire-save`) into `spike/n1-local-llm` (build step, not the gated
+  merge-to-main), giving the branch: engine + save/load + Kaplay UI + the N1 Electron shell.
+- Wired the real game: pure `src/llm/narrate.ts` (engine events+state → narration prompt, tested) +
+  DOM renderer `src/desktop/game.ts` that drives the engine `step` loop, streams the 4B narrator per
+  beat over the N1 IPC, and shows engine-authoritative choices for every phase (title→creation→
+  battle→rest→shop→level-up→ending→game-over) with a live character/enemy sheet. Falls back to plain
+  facts if the model errs (engine stays authoritative).
+- Removed the N1 proof shell; `desktop.html` now loads the game. typecheck clean, 319 tests, build OK.
+- **A full run is now playable end-to-end in the desktop app**, LLM-narrated. Remaining is
+  fine-tuning (grammar-constrained choices, zone prompts, enemy cards, balance, packaging).
+- Next: your visual `npm run desktop` play-test.
 
 ### 2026-08-02 — N1 local-LLM spike: GREEN
 - Built `scripts/spike-llm.mjs` (node-llama-cpp) on branch `spike/n1-local-llm`; ran on the dev
