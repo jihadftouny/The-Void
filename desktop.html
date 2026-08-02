@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+    <title>The Void — desktop shell</title>
+    <link rel="stylesheet" href="/src/desktop/shell.css" />
+  </head>
+  <body>
+    <main id="shell">
+      <header>
+        <h1>THE VOID</h1>
+        <p id="status" class="status">starting…</p>
+      </header>
+      <section id="output" class="output" aria-live="polite"></section>
+      <footer>
+        <input id="prompt" type="text" autocomplete="off"
+          value="I step off the elevator onto the First Floor. What do I see?" />
+        <button id="go" disabled>Descend</button>
+        <span id="stats" class="stats"></span>
+      </footer>
+    </main>
+    <script type="module" src="/src/desktop/shell.ts"></script>
+  </body>
+</html>

@@ -3,9 +3,17 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   base: './',
+  server: { port: 5173, strictPort: true },
   build: {
     target: 'es2022',
     sourcemap: true,
+    rollupOptions: {
+      // Multi-page: the Kaplay game (index.html) + the N1 desktop shell (desktop.html).
+      input: {
+        main: 'index.html',
+        desktop: 'desktop.html',
+      },
+    },
   },
   test: {
     globals: true,

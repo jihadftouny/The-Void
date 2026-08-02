@@ -14,7 +14,7 @@ final step of any session that changes build state._
 | Milestone (v2) | Status |
 |---|---|
 | N0 — Doctrine + v2 scaffolding | 🔄 (roadmap + doctrine written; held-branch decision pending) |
-| N1 — Desktop shell + local-model spike | 🔄 spike DONE (GREEN); Electron shell (N1b) pending go-ahead — branch `spike/n1-local-llm` |
+| N1 — Desktop shell + local-model spike | 🔄 spike GREEN + Electron shell BUILT (4B-only); awaiting your launch verify — branch `spike/n1-local-llm` |
 | N2 — LLM runtime layer (pure core) | ⬜ |
 | N3 — Narrator loop v1 (Floor 1 playable) | ⬜ |
 | N4 — Engine-as-toolbox | ⬜ |
