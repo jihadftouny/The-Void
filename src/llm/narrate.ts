@@ -103,26 +103,60 @@ export function eventsToFacts(events: readonly GameEvent[]): string[] {
 // prose, and cap the count so a small local model always gets a lean prompt.
 // Plain data → it can be dropped straight into the save file later (long-term).
 export interface StoryMemory {
+  /** Recent narratable fact-lines — short-term continuity (capped). */
   beats: string[];
+  /** Salient run facts a later boss can reference (accumulate over the whole run). */
+  enemiesDefeated: number;
+  timesFled: number;
+  /** Milestone lines (act intros, boss sightings), capped. */
+  notable: string[];
 }
 const MAX_REMEMBERED_BEATS = 5;
+const MAX_NOTABLE = 8;
 
 export function createStoryMemory(): StoryMemory {
-  return { beats: [] };
+  return { beats: [], enemiesDefeated: 0, timesFled: 0, notable: [] };
 }
 
-/** Return a new memory with this beat's facts appended (capped, immutable). */
-export function rememberBeat(memory: StoryMemory, facts: readonly string[]): StoryMemory {
-  if (facts.length === 0) return memory;
-  const beats = [...memory.beats, facts.join(' ')].slice(-MAX_REMEMBERED_BEATS);
-  return { beats };
+/**
+ * Fold a turn's events into memory: append the recent beat + accumulate the
+ * run-long salient facts. Pure and immutable; returns the same object unchanged
+ * for an empty event list (so callers can compare by reference).
+ */
+export function rememberBeat(memory: StoryMemory, events: readonly GameEvent[]): StoryMemory {
+  if (events.length === 0) return memory;
+  const facts = eventsToFacts(events);
+  let { enemiesDefeated, timesFled } = memory;
+  let notable = memory.notable;
+  for (const e of events) {
+    if (e.kind === 'victory') enemiesDefeated += 1;
+    else if (e.kind === 'fled') timesFled += 1;
+    else if (e.kind === 'final-battle-begins')
+      notable = [...notable, `You faced ${e.enemyName}.`].slice(-MAX_NOTABLE);
+    else if (e.kind === 'act-intro') notable = [...notable, e.header].slice(-MAX_NOTABLE);
+  }
+  const beats =
+    facts.length > 0
+      ? [...memory.beats, facts.join(' ')].slice(-MAX_REMEMBERED_BEATS)
+      : memory.beats;
+  return { beats, enemiesDefeated, timesFled, notable };
+}
+
+/** A one-line summary of the whole descent so far (continuity / boss references). */
+export function runSummary(memory: StoryMemory): string {
+  const parts: string[] = [];
+  if (memory.enemiesDefeated > 0)
+    parts.push(`felled ${memory.enemiesDefeated} foe${memory.enemiesDefeated === 1 ? '' : 's'}`);
+  if (memory.timesFled > 0)
+    parts.push(`fled ${memory.timesFled} time${memory.timesFled === 1 ? '' : 's'}`);
+  return parts.length ? `Across this descent you have ${parts.join(' and ')}.` : '';
 }
 
 /**
  * Build the narration prompt for the events that just occurred, optionally
- * prefixed with the recent story-so-far from `memory` (for continuity).
- * Returns null when nothing narratable happened (pure input phases like name
- * entry) — the UI then simply shows its choices with no new prose.
+ * prefixed with continuity from `memory` (a one-line run summary + recent
+ * moments). Returns null when nothing narratable happened (pure input phases
+ * like name entry) — the UI then simply shows its choices with no new prose.
  */
 export function buildNarrationPrompt(
   events: readonly GameEvent[],
@@ -132,15 +166,19 @@ export function buildNarrationPrompt(
   const facts = eventsToFacts(events);
   if (facts.length === 0) return null;
   const floor = FLOORS[state.place] ?? 'the Void';
-  const soFar =
-    memory && memory.beats.length > 0
-      ? `The story so far (oldest first):\n- ${memory.beats.join('\n- ')}\n\n`
-      : '';
+  let context = '';
+  if (memory) {
+    const run = runSummary(memory);
+    if (run) context += run + '\n';
+    if (memory.beats.length > 0)
+      context += `Recent moments (oldest first):\n- ${memory.beats.join('\n- ')}\n`;
+    if (context) context += '\n';
+  }
   const user =
-    soFar +
+    context +
     `Act ${state.act}, ${floor}. What just happened:\n- ` +
     facts.join('\n- ') +
     `\n\nNarrate this new moment in 2-4 vivid second-person sentences. ` +
-    `Stay consistent with the story so far; do not repeat earlier narration.`;
+    `Stay consistent with what came before; do not repeat earlier narration.`;
   return { system: VOID_PERSONA, user };
 }

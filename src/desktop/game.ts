@@ -3,12 +3,13 @@
 // Reuses everything: the pure engine (`step`) drives all rules, state, and the
 // legal choices; the local model narrates each beat (via the N1 IPC bridge).
 // This is the DOM game UI; the Kaplay layer (index.html) is a separate artifact.
-import { createGame, step } from '../game/game.ts';
+import { createGame, step, awaitingFor } from '../game/game.ts';
 import type { GameState, GameInput, Awaiting } from '../game/game.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { StatKey } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
-import { buildNarrationPrompt, createStoryMemory, rememberBeat, eventsToFacts } from '../llm/narrate.ts';
+import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
+import { loadRun, saveRun, clearRun } from './persist.ts';
 
 interface GenStats { text: string; tokens: number; tokensPerSecond: number; ttftMs: number }
 interface VoidApi {
@@ -90,11 +91,14 @@ async function dispatch(input: GameInput): Promise<void> {
   state = r.state;
   renderSheet();
   await narrate(r.events);
-  memory = rememberBeat(memory, eventsToFacts(r.events)); // remember AFTER narrating
+  memory = rememberBeat(memory, r.events); // remember AFTER narrating
   renderChoices(r.awaiting);
+  if (r.awaiting === 'game-over') clearRun();
+  else saveRun(state, memory); // autosave the full run (engine state + memory)
 }
 
 function start(): void {
+  clearRun();
   state = createGame(Date.now() >>> 0);
   memory = createStoryMemory();
   narrationEl.innerHTML = '';
@@ -184,4 +188,24 @@ function renderChoices(awaiting: Awaiting): void {
   }
 }
 
-start();
+function renderResume(): void {
+  titleEl.style.display = 'block';
+  narrationEl.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = 'beat';
+  p.textContent = 'A descent lies unfinished. Return to it, or begin anew.';
+  narrationEl.appendChild(p);
+  choicesEl.innerHTML = '';
+  button('Continue your descent', () => renderChoices(awaitingFor(state.phase)));
+  button('Begin a new descent', () => start());
+}
+
+const saved = loadRun();
+if (saved) {
+  state = saved.state;
+  memory = saved.memory;
+  renderSheet();
+  renderResume();
+} else {
+  start();
+}

@@ -4,6 +4,7 @@ import {
   describeEvent,
   createStoryMemory,
   rememberBeat,
+  runSummary,
 } from './narrate.ts';
 import type { GameState } from '../game/game.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
@@ -40,33 +41,42 @@ describe('buildNarrationPrompt', () => {
     expect(p!.user.toLowerCase()).toContain('second-person');
     expect(p!.system).toContain('Void');
   });
-  it('prefixes the recent story-so-far when memory is supplied', () => {
+  it('prefixes recent moments and a run summary when memory is supplied', () => {
     let m = createStoryMemory();
-    m = rememberBeat(m, ['A Feral Rat emerges to bar your way.']);
+    m = rememberBeat(m, [{ kind: 'encounter-start', enemyName: 'Feral Rat' }]);
+    m = rememberBeat(m, [{ kind: 'victory', xpGained: 5, goldGained: 2, extraRest: false }]);
     const p = buildNarrationPrompt(
       [{ kind: 'attack', subject: 'player', outcome: 'hit', damage: 3 }],
       baseState,
       m,
     );
-    expect(p!.user).toContain('story so far');
+    expect(p!.user).toContain('Recent moments');
     expect(p!.user).toContain('Feral Rat');
+    expect(p!.user).toContain('felled 1 foe');
   });
 });
 
 describe('story memory', () => {
-  it('appends beats and caps at the most recent five', () => {
+  it('appends recent beats and caps at five', () => {
     let m = createStoryMemory();
-    for (let i = 1; i <= 7; i++) m = rememberBeat(m, [`beat ${i}`]);
+    for (let i = 1; i <= 7; i++)
+      m = rememberBeat(m, [{ kind: 'encounter-start', enemyName: `Rat${i}` }]);
     expect(m.beats).toHaveLength(5);
-    expect(m.beats[0]).toBe('beat 3');
-    expect(m.beats[4]).toBe('beat 7');
+    expect(m.beats[0]).toContain('Rat3');
+    expect(m.beats[4]).toContain('Rat7');
   });
-  it('ignores empty beats and never mutates the input', () => {
+  it('accumulates run facts across beats', () => {
+    let m = createStoryMemory();
+    m = rememberBeat(m, [{ kind: 'victory', xpGained: 5, goldGained: 2, extraRest: false }]);
+    m = rememberBeat(m, [{ kind: 'victory', xpGained: 3, goldGained: 1, extraRest: false }]);
+    m = rememberBeat(m, [{ kind: 'fled' }]);
+    expect(m.enemiesDefeated).toBe(2);
+    expect(m.timesFled).toBe(1);
+    expect(runSummary(m)).toContain('felled 2 foes');
+    expect(runSummary(m)).toContain('fled 1 time');
+  });
+  it('returns the same memory object for an empty event list', () => {
     const m0 = createStoryMemory();
-    const m1 = rememberBeat(m0, []);
-    expect(m1).toBe(m0);
-    const m2 = rememberBeat(m0, ['x']);
-    expect(m0.beats).toHaveLength(0); // original untouched
-    expect(m2.beats).toEqual(['x']);
+    expect(rememberBeat(m0, [])).toBe(m0);
   });
 });
