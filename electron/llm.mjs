@@ -34,28 +34,36 @@ export async function createNarrator({ onStatus } = {}) {
   return {
     gpu: llama.gpu,
     async generate({ prompt, system, maxTokens = 400, onToken } = {}) {
+      // Capture the sequence so we can reclaim it: the context has a finite pool
+      // of sequences, and disposing only the session (as before) leaked one per
+      // call — after the pool drained, node-llama-cpp threw "No sequences left".
+      const sequence = context.getSequence();
       const session = new LlamaChatSession({
-        contextSequence: context.getSequence(),
+        contextSequence: sequence,
         systemPrompt: system ?? DEFAULT_SYSTEM,
       });
-      let firstMs = null;
-      const t0 = performance.now();
-      const text = await session.prompt(prompt, {
-        maxTokens,
-        onTextChunk(chunk) {
-          if (firstMs === null) firstMs = performance.now() - t0;
-          onToken?.(chunk);
-        },
-      });
-      const total = performance.now() - t0;
-      const tokens = model.tokenize(text).length;
-      session.dispose();
-      return {
-        text,
-        tokens,
-        ttftMs: firstMs ?? 0,
-        tokensPerSecond: (tokens / Math.max(1, total - (firstMs ?? 0))) * 1000,
-      };
+      try {
+        let firstMs = null;
+        const t0 = performance.now();
+        const text = await session.prompt(prompt, {
+          maxTokens,
+          onTextChunk(chunk) {
+            if (firstMs === null) firstMs = performance.now() - t0;
+            onToken?.(chunk);
+          },
+        });
+        const total = performance.now() - t0;
+        const tokens = model.tokenize(text).length;
+        return {
+          text,
+          tokens,
+          ttftMs: firstMs ?? 0,
+          tokensPerSecond: (tokens / Math.max(1, total - (firstMs ?? 0))) * 1000,
+        };
+      } finally {
+        session.dispose();
+        sequence.dispose();
+      }
     },
   };
 }
