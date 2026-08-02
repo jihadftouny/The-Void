@@ -14,7 +14,7 @@ final step of any session that changes build state._
 | Milestone (v2) | Status |
 |---|---|
 | N0 — Doctrine + v2 scaffolding | 🔄 (roadmap + doctrine written; held-branch decision pending) |
-| N1 — Desktop shell + local-model spike | ⬜ |
+| N1 — Desktop shell + local-model spike | 🔄 spike DONE (GREEN); Electron shell (N1b) pending go-ahead — branch `spike/n1-local-llm` |
 | N2 — LLM runtime layer (pure core) | ⬜ |
 | N3 — Narrator loop v1 (Floor 1 playable) | ⬜ |
 | N4 — Engine-as-toolbox | ⬜ |
@@ -33,6 +33,17 @@ save/load carries over; UI shell partially reused. Merge decision deliberately *
 Legend: ⬜ not started · 🔄 in progress · ✅ done
 
 ## Session log
+
+### 2026-08-02 — N1 local-LLM spike: GREEN
+- Built `scripts/spike-llm.mjs` (node-llama-cpp) on branch `spike/n1-local-llm`; ran on the dev
+  laptop (RTX 5060). Downloaded Qwen3-4B-Instruct-2507 + Qwen3-1.7B (Q4_K_M GGUF).
+- Verdict: **local-LLM design is viable.** Streaming works; grammar-constrained JSON
+  (narration + choices) works; prose is good and on-theme. Numbers + recommendation in
+  `docs/N1-SPIKE.md`. Qwen3 = Apache-2.0 (clean to bundle).
+- Recommend: ship both models, auto-select by hardware — 4B default/quality, 1.7B no-GPU floor.
+- Deviation (recorded in pipeline-log): the spike ran OUTSIDE the plan→build→test pipeline
+  (exploratory + native deps + 3.6GB models + human-hardware measurement the test-agent can't do).
+- Next: N1b (Electron desktop shell) — awaiting the user's go-ahead + model-tiering decision.
 
 ### 2026-08-02 — The design interview + v2 re-scope (N0)
 - Ran the full scoping interview (on Fable, per the user's request). Locked: hybrid input; LLM

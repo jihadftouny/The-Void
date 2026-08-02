@@ -19,6 +19,17 @@ Format per entry:
 
 ---
 
+## 2026-08-02 — N1 local-LLM spike (EXPLORATORY — ran outside the pipeline)
+- Not a plan→build→test run. Deliberate deviation: this was a hardware-measurement spike (native
+  node-llama-cpp, 3.6GB model downloads, real inference on the dev laptop) — the test-agent can't
+  verify inference headlessly, and the worktree/node_modules-junction model doesn't fit native deps
+  + multi-GB model files. Done directly on branch `spike/n1-local-llm`; verdict is GREEN.
+- Orchestrator fixed two harness bugs mid-spike (context needed 2 sequences; JSON test token cap too
+  low → truncation). Grammar-constrained JSON proven working; only failure mode is length truncation.
+- Signal for pipeline-retro: when a milestone is a hardware/inference spike, prefer a documented
+  exploratory branch over forcing the worktree pipeline. Full results: `docs/N1-SPIKE.md`.
+- Manual engineer fixes: none yet
+
 ## 2026-08-01 — wire-save (save/load wired into the UI)
 - Verdict: PASS (awaiting review/merge). Integration unit on `agentic/wire-save` = `agentic/ui-shell` + `agentic/save-load` merged (clean, disjoint) as the base, then the wiring built on top.
 - Fix rounds: 0. 315 tests green.
