@@ -10,11 +10,14 @@ import type { StatKey } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun } from './persist.ts';
+import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
+import { createDebugOverlay } from './debug-overlay.ts';
 
 interface GenStats { text: string; tokens: number; tokensPerSecond: number; ttftMs: number }
 interface VoidApi {
   onStatus(cb: (s: { phase: string; gpu?: unknown; message?: string }) => void): () => void;
   generate(o: { prompt: string; system?: string; onToken?: (c: string) => void }): Promise<GenStats>;
+  log?(entry: unknown): void;
 }
 declare global { interface Window { void: VoidApi } }
 
@@ -29,19 +32,48 @@ const narrationEl = $('narration');
 const choicesEl = $('choices');
 const sheetEl = $('sheet');
 
+// ---- Logging: console + in-memory ring (for the debug overlay) + forward to
+// the Electron main process (which writes the log file). Overlay: ` or F2.
+const ring = createRingBuffer(1000);
+log.addSink(consoleSink);
+log.addSink(ring.sink);
+log.addSink((e) => {
+  try {
+    window.void.log?.(e);
+  } catch {
+    /* main not ready */
+  }
+});
+createDebugOverlay(ring.get);
+log.info('game', 'renderer booted');
+window.addEventListener('error', (ev) =>
+  log.error('error', 'window error', { message: ev.message, source: ev.filename, line: ev.lineno }),
+);
+window.addEventListener('unhandledrejection', (ev) =>
+  log.error('error', 'unhandled rejection', { reason: String(ev.reason) }),
+);
+
 let state: GameState = createGame(Date.now() >>> 0);
 let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
 
 window.void.onStatus((s) => {
-  if (s.phase === 'ready') { statusEl.textContent = `the Void is listening — ${s.gpu ? `GPU (${String(s.gpu)})` : 'CPU'}`; }
-  else if (s.phase === 'loading') statusEl.textContent = 'the Void stirs (loading model)…';
+  log.info('llm', `model ${s.phase}`, s);
+  if (s.phase === 'ready') {
+    statusEl.textContent = `the Void is listening — ${s.gpu ? `GPU (${String(s.gpu)})` : 'CPU'}`;
+  } else if (s.phase === 'loading') statusEl.textContent = 'the Void stirs (loading model)…';
   else if (s.phase === 'resolving') statusEl.textContent = 'locating the model…';
-  else if (s.phase === 'error') { statusEl.textContent = `error: ${s.message ?? 'unknown'}`; statusEl.classList.add('error'); }
+  else if (s.phase === 'error') {
+    statusEl.textContent = `error: ${s.message ?? 'unknown'}`;
+    statusEl.classList.add('error');
+  }
 });
 
 function renderSheet(): void {
   const p = state.player;
-  if (!p) { sheetEl.innerHTML = ''; return; }
+  if (!p) {
+    sheetEl.innerHTML = '';
+    return;
+  }
   const lines = [
     `<b>${p.name}</b>`,
     `${p.classId}`,
@@ -60,19 +92,31 @@ function renderSheet(): void {
 async function narrate(events: readonly GameEvent[]): Promise<void> {
   const prompt = buildNarrationPrompt(events, state, memory);
   if (!prompt) return;
+  log.debug('llm', 'narrate:request', { promptChars: prompt.user.length });
   const block = document.createElement('p');
   block.className = 'beat';
   narrationEl.appendChild(block);
   narrationEl.scrollTop = narrationEl.scrollHeight;
   try {
-    await window.void.generate({
+    const stats = await window.void.generate({
       prompt: prompt.user,
       system: prompt.system,
-      onToken: (c) => { block.textContent += c; narrationEl.scrollTop = narrationEl.scrollHeight; },
+      onToken: (c) => {
+        block.textContent += c;
+        narrationEl.scrollTop = narrationEl.scrollHeight;
+      },
+    });
+    log.debug('llm', 'narrate:done', {
+      tokens: stats.tokens,
+      tokPerSec: Math.round(stats.tokensPerSecond),
+      ttftMs: Math.round(stats.ttftMs),
     });
   } catch (err) {
     // Resilience: if the model fails, fall back to the plain facts so the game
     // remains fully playable (engine is authoritative regardless).
+    log.error('llm', 'narrate:failed', {
+      message: err instanceof Error ? err.message : String(err),
+    });
     block.textContent = prompt.user.split('\n\n')[0] ?? '(the Void is silent)';
     block.classList.add('fallback');
   }
@@ -87,18 +131,32 @@ function button(label: string, onClick: () => void): void {
 
 async function dispatch(input: GameInput): Promise<void> {
   choicesEl.innerHTML = '';
+  log.debug('ui', 'choice', input);
   const r = step(state, input);
   state = r.state;
+  log.debug('engine', `step -> ${r.awaiting}`, {
+    input,
+    awaiting: r.awaiting,
+    events: r.events.map((e) => e.kind),
+    hp: state.player ? `${state.player.hp}/${state.player.maxHp}` : null,
+    act: state.act,
+  });
   renderSheet();
   await narrate(r.events);
   memory = rememberBeat(memory, r.events); // remember AFTER narrating
   renderChoices(r.awaiting);
-  if (r.awaiting === 'game-over') clearRun();
-  else saveRun(state, memory); // autosave the full run (engine state + memory)
+  if (r.awaiting === 'game-over') {
+    clearRun();
+    log.info('save', 'run cleared (game over)');
+  } else {
+    saveRun(state, memory);
+    log.debug('save', 'run autosaved');
+  }
 }
 
 function start(): void {
   clearRun();
+  log.info('game', 'new run started');
   state = createGame(Date.now() >>> 0);
   memory = createStoryMemory();
   narrationEl.innerHTML = '';
@@ -118,8 +176,13 @@ function renderChoices(awaiting: Awaiting): void {
       const input = document.createElement('input');
       input.placeholder = 'your name';
       input.maxLength = 20;
-      const submit = () => { const name = input.value.trim() || 'Nameless'; void dispatch({ kind: 'name', name }); };
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      const submit = () => {
+        const name = input.value.trim() || 'Nameless';
+        void dispatch({ kind: 'name', name });
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submit();
+      });
       choicesEl.appendChild(input);
       button('Enter the Void', submit);
       input.focus();
@@ -202,6 +265,7 @@ function renderResume(): void {
 
 const saved = loadRun();
 if (saved) {
+  log.info('save', 'resumable run found', { act: saved.state.act, phase: saved.state.phase.kind });
   state = saved.state;
   memory = saved.memory;
   renderSheet();

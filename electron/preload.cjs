@@ -23,4 +23,12 @@ contextBridge.exposeInMainWorld('void', {
       .invoke('llm:generate', { requestId, prompt, system })
       .finally(() => ipcRenderer.removeListener('llm:token', listener));
   },
+  // Forward a renderer log entry to the main process (written to the log file).
+  log(entry) {
+    try {
+      ipcRenderer.send('log:entry', entry);
+    } catch {
+      /* ignore */
+    }
+  },
 });

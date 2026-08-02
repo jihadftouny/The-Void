@@ -3,6 +3,7 @@ dist/
 .agentic/
 worktrees/
 models/
+logs/
 scripts/*.log
 
 # Legacy Java/Python/Pixi ports: kept on disk for reference, not tracked by this
