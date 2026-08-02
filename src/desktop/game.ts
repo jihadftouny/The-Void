@@ -93,8 +93,11 @@ function renderSheet(): void {
 }
 
 async function narrate(events: readonly GameEvent[]): Promise<void> {
+  // Show ONLY the current moment: replace the narration area each turn rather
+  // than accumulating a growing scroll of past beats (bug 2).
+  narrationEl.innerHTML = '';
   const prompt = buildNarrationPrompt(events, state, memory);
-  if (!prompt) return;
+  if (!prompt) return; // pure-input phase: nothing narratable — leave the area blank.
   log.debug('llm', 'narrate:request', { promptChars: prompt.user.length });
   const block = document.createElement('p');
   block.className = 'beat';
@@ -132,28 +135,50 @@ function button(label: string, onClick: () => void): void {
   choicesEl.appendChild(b);
 }
 
-async function dispatch(input: GameInput): Promise<void> {
+// Show a transient indicator while the narrator generates, in place of the
+// (already-cleared) choice buttons. renderChoices() clears this when done.
+function showThinking(): void {
   choicesEl.innerHTML = '';
-  log.debug('ui', 'choice', input);
-  const r = step(state, input);
-  state = r.state;
-  log.debug('engine', `step -> ${r.awaiting}`, {
-    input,
-    awaiting: r.awaiting,
-    events: r.events.map((e) => e.kind),
-    hp: state.player ? `${state.player.hp}/${state.player.maxHp}` : null,
-    act: state.act,
-  });
-  renderSheet();
-  await narrate(r.events);
-  memory = rememberBeat(memory, r.events); // remember AFTER narrating
-  renderChoices(r.awaiting);
-  if (r.awaiting === 'game-over') {
-    clearRun();
-    log.info('save', 'run cleared (game over)');
-  } else {
-    saveRun(state, memory);
-    log.debug('save', 'run autosaved');
+  const div = document.createElement('div');
+  div.className = 'thinking';
+  div.textContent = 'the Void speaks…';
+  choicesEl.appendChild(div);
+}
+
+// Re-entry guard: a step + narration is in flight. Buttons use { once: true } and
+// choices are cleared on entry, but fast clicks, the name-field Enter key, and the
+// level-up multi-pick can still fire mid-generation — this is the real lock (bug 4).
+let busy = false;
+
+async function dispatch(input: GameInput): Promise<void> {
+  if (busy) return;
+  busy = true;
+  try {
+    choicesEl.innerHTML = '';
+    log.debug('ui', 'choice', input);
+    const r = step(state, input);
+    state = r.state;
+    log.debug('engine', `step -> ${r.awaiting}`, {
+      input,
+      awaiting: r.awaiting,
+      events: r.events.map((e) => e.kind),
+      hp: state.player ? `${state.player.hp}/${state.player.maxHp}` : null,
+      act: state.act,
+    });
+    renderSheet();
+    showThinking();
+    await narrate(r.events);
+    memory = rememberBeat(memory, r.events); // remember AFTER narrating
+    renderChoices(r.awaiting);
+    if (r.awaiting === 'game-over') {
+      clearRun();
+      log.info('save', 'run cleared (game over)');
+    } else {
+      saveRun(state, memory);
+      log.debug('save', 'run autosaved');
+    }
+  } finally {
+    busy = false;
   }
 }
 

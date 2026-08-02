@@ -56,3 +56,4 @@ body { font-family: ui-monospace, "Cascadia Code", "Consolas", monospace; font-s
   min-width: 220px;
 }
 .choices .stats-line { width: 100%; color: var(--dim); font-size: 13px; }
+.choices .thinking { color: var(--dim); font-style: italic; }
