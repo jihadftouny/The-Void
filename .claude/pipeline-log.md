@@ -19,6 +19,22 @@ Format per entry:
 
 ---
 
+## 2026-08-04 — gpu-fix (corrected device-agnostic GPU selection)
+- Loop unit stacked on model-cache. VERDICT PASS, 0 fix rounds, 378 tests (electron/gpu.test.mjs = 31, confirmed collected). Territory clean (`electron/**` only).
+- Fixes the three real-hardware root causes gpu-select missed (diagnosed on the RTX 5060 laptop): (1) both Vulkan
+  devices report `unifiedSize=0` so the old unified-gate never fired — replaced with a NAME-keyword + memory-vs-systemRAM
+  scorer (`pickBestDeviceIndex`, pure, +3 discrete/-2 integrated name hints, +2 when total < 0.85×systemRam, qualify ≥1);
+  (2) node-llama-cpp inits the Vulkan backend ONCE per process, so a same-process re-probe can't re-select — selection now
+  runs in a short-lived CHILD (`electron/gpu-probe.mjs` via `process.execPath` + `ELECTRON_RUN_AS_NODE=1`, per-device isolated
+  with `GGML_VK_VISIBLE_DEVICES`), the parent picks and sets the env var BEFORE its first `getLlama`; (3) graceful fallback —
+  probe fail/timeout/<2 devices ⇒ don't pin, auto-pick, never throw into boot.
+- Decision + orchestration both behind an injected `runProbe`/`spawnFn` seam ⇒ fully headless; no test does real GPU
+  enumeration or inference. test-agent independently re-derived the scoring on the real case (Intel iGPU 25.3e9 @ ram 25e9
+  vs NVIDIA 8.3e9 ⇒ index 1) and mutation-confirmed the qualifier gate.
+- NEEDS-HUMAN (real hardware): confirm 5060 is pinned on the dev laptop; packaged-asar child spawn has no 2nd window;
+  single-GPU/CPU-only/non-Vulkan machines still boot via auto-pick. In HUMAN-CHECKS.md.
+- Manual engineer fixes: none yet
+
 ## 2026-08-02 — model-cache (shared, download-once model location)
 - Loop unit stacked on gpu-select. VERDICT PASS, 0 fix rounds, 360 tests. Territory clean (`electron/**`).
 - Fix: model resolves to a fixed per-user dir (`VOID_MODELS_DIR` override, else `app.getPath('userData')/models`)

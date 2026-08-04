@@ -20,7 +20,7 @@ $env:VOID_MODELS_DIR = "<repo>\models"
 npm run desktop
 ```
 
-`<tip>` = the newest built worktree (currently `model-cache`; `gpu-fix` once it's built). After you
+`<tip>` = the newest built worktree (currently `gpu-fix`). After you
 **merge to root** (see the bottom), just run `npm run desktop` from the root — no env var needed.
 
 ---
@@ -68,15 +68,21 @@ Run it (see "How to run" above), then do these in order — most-likely-to-be-wr
 
 ---
 
-## GPU — should use your discrete RTX 5060  *(fix in progress on `agentic/gpu-fix`)*
+## GPU — should use your discrete RTX 5060  *(corrected selector built on `agentic/gpu-fix`)*
 
-The game auto-detects and prefers a discrete GPU when one exists (no vendor/model hardcoded).
-- [ ] Let the model load, then open `logs\void.log` and find the `gpu:selected` line, and check the
-      in-app status line. Both should name your **discrete NVIDIA RTX 5060** (~8 GB) — NOT the Intel
-      integrated GPU, and not CPU.
-- [ ] **Known-open:** on your machine it currently still picks the Intel iGPU. The corrected
-      device-agnostic selection is being built on `agentic/gpu-fix` (child-process probing + pinning
-      the discrete device before the model starts). Once it lands, re-check this item.
+The game now probes each GPU in a short-lived child process (so it can actually read per-device
+memory), scores them by name + memory-vs-system-RAM, and pins the discrete one **before** the model
+starts (no vendor/model hardcoded). This replaces the earlier `gpu-select` heuristic that kept
+landing on the Intel iGPU. Verified by 378 headless tests; the real-hardware confirmation is yours:
+- [ ] **On your 5060 laptop:** run `npm run desktop`, let the model load, then open `logs\void.log`.
+      The selection line should read `gpu:selected index=1 name=NVIDIA …` (NOT `gpu:auto`, NOT the
+      Intel iGPU), and the in-app status line should name the NVIDIA RTX 5060. In Task Manager →
+      Performance, the **NVIDIA** GPU's dedicated memory should climb during generation (not the
+      Intel one), and speed should feel like the GPU tier (~90 tok/s), not CPU/iGPU.
+- [ ] **No second window flashes** during boot (the probe runs as plain Node, not a 2nd Electron
+      window). If a window flashes or the log says `gpu:auto reason=error … app.asar`, tell me.
+- [ ] **Other machines still boot:** on a single-GPU / CPU-only / non-Vulkan box it should log
+      `gpu:auto` and generate normally — never crash on selection.
 
 ---
 
@@ -121,13 +127,13 @@ Each follows the original Java (or cleans up an obvious gap); all are one-line t
 
 The work stacks, each branch built on the one before, all through plan → build → test:
 
-`spike/n1-local-llm` → `ui-combat-fixes` → `gpu-select` → `model-cache` → `gpu-fix` *(pending)*
+`spike/n1-local-llm` → `ui-combat-fixes` → `gpu-select` → `model-cache` → `gpu-fix` *(verified tip)*
 
 The **tip contains everything below it**, so **one merge brings it all**. From the main checkout
 (currently on `spike/n1-local-llm`), merge the newest verified tip:
 
 ```powershell
-git merge --no-ff agentic/model-cache      # or agentic/gpu-fix, once it's verified
+git merge --no-ff agentic/gpu-fix          # engine + all five units, at once
 npm run desktop                            # first root run migrates your model copy, no re-download
 ```
 Then delete the merged worktrees + branches:
