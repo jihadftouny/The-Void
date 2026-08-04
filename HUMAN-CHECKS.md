@@ -142,3 +142,13 @@ The game auto-detects and prefers a discrete GPU when one exists (no vendor/mode
       `the Void is listening — GPU (<discrete device name>)`.
 - [ ] Narration should feel faster than before (5060 vs the integrated GPU). If it still picks the
       integrated device, tell me — the per-device probe order may need tuning for your Vulkan setup.
+
+### Model download location — download once, shared (branch `agentic/model-cache`)
+The model now lives in one per-user folder (`%APPDATA%\the-void\models` by default; override with the
+`VOID_MODELS_DIR` env var), so it downloads once and every run / worktree / the shipped app reuses it.
+- [ ] After merging to root, run `npm run desktop` from the **root** the first time — the log should show a
+      `model migrated` line MOVING your existing root `models\*.gguf` into the per-user folder (instant, same
+      drive), with **no 2.5 GB re-download**.
+- [ ] Run again from anywhere — no download, fast start; the log `models dir` points at the per-user folder and
+      no new `models\` folder is created in the current directory.
+- [ ] (optional) Set `VOID_MODELS_DIR` to a folder of your choice and confirm the log `models dir` uses it.

@@ -19,6 +19,17 @@ Format per entry:
 
 ---
 
+## 2026-08-02 — model-cache (shared, download-once model location)
+- Loop unit stacked on gpu-select. VERDICT PASS, 0 fix rounds, 360 tests. Territory clean (`electron/**`).
+- Fix: model resolves to a fixed per-user dir (`VOID_MODELS_DIR` override, else `app.getPath('userData')/models`)
+  instead of the CWD-relative `./models` — so it downloads once and every worktree/launch (and the shipped
+  app) reuses it. Best-effort migration moves a legacy `./models/*.gguf` into the canonical dir (try/catch,
+  never crashes). Pure `resolveModelDir` + `filesToMigrate` unit-tested.
+- The test-agent was told up front that HUMAN-CHECKS is orchestrator-maintained (the gpu-select retro
+  lesson applied preemptively) → clean PASS, no false FAIL. Confirms the retro fix is the right one.
+- Real download/reuse/migration is NEEDS-HUMAN (in HUMAN-CHECKS.md).
+- Manual engineer fixes: none yet
+
 ## 2026-08-02 — gpu-select (device-agnostic GPU selection)
 - Loop unit stacked on `agentic/ui-combat-fixes`. CODE verified PASS by the test-agent: 349 tests
   (incl. the new `electron/gpu.test.mjs`, confirmed collected), typecheck/build clean, territory +
