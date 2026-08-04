@@ -3,7 +3,9 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import fs from 'node:fs';
 import { createNarrator } from './llm.mjs';
+import { resolveModelDir, filesToMigrate } from './model-path.mjs';
 import { fileLog, LOG_FILE } from './log.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -28,8 +30,40 @@ process.on('unhandledRejection', (reason) =>
   mlog('error', 'electron', 'unhandledRejection', { reason: String(reason) }),
 );
 
+// Resolve (and prepare) the single per-user models directory. Must run after
+// `app` is ready so `app.getPath('userData')` is valid. Best-effort migration
+// of any legacy CWD-relative `./models/*.gguf` into the canonical dir keeps
+// existing dev machines (and old worktrees) from re-downloading — a same-drive
+// rename is instant and preserves the basename so `resolveModelFile` finds it.
+// The whole migration is wrapped so a failure NEVER crashes startup: on any
+// error we log and fall through to a normal download into the canonical dir.
+function resolveModelsDir() {
+  const modelsDir = resolveModelDir({ env: process.env, userDataDir: app.getPath('userData') });
+  fs.mkdirSync(modelsDir, { recursive: true });
+
+  try {
+    const legacyDir = path.join(process.cwd(), 'models');
+    if (legacyDir !== modelsDir && fs.existsSync(legacyDir)) {
+      const legacyList = fs.readdirSync(legacyDir);
+      const canonicalList = fs.existsSync(modelsDir) ? fs.readdirSync(modelsDir) : [];
+      for (const f of filesToMigrate(legacyList, canonicalList)) {
+        fs.renameSync(path.join(legacyDir, f), path.join(modelsDir, f));
+        mlog('info', 'llm', 'model migrated', { file: f, from: legacyDir, to: modelsDir });
+      }
+    }
+  } catch (err) {
+    mlog('warn', 'llm', 'model migration skipped', { message: String(err?.message ?? err) });
+  }
+
+  mlog('info', 'llm', 'models dir', { modelsDir });
+  return modelsDir;
+}
+
 async function ensureNarrator(onStatus) {
-  if (!narrator) narrator = await createNarrator({ onStatus });
+  if (!narrator) {
+    const modelsDir = resolveModelsDir();
+    narrator = await createNarrator({ onStatus, modelsDir });
+  }
   return narrator;
 }
 
