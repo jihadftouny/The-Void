@@ -133,3 +133,12 @@ back through the same build agent as a fix round.
 
 ## Verified
 _(move items here once you've confirmed them)_
+
+### GPU selection — device-agnostic (branch `agentic/gpu-select`)
+The game auto-detects and prefers a discrete GPU when one exists (no vendor/model hardcoded).
+- [ ] Run `npm run desktop:smoke` (or `npm run desktop`), let the model load, then open `logs\void.log`.
+- [ ] Find the `gpu:selected` line. It should name your **discrete NVIDIA RTX 5060** (`unified:false`,
+      ~8 GB VRAM) — NOT the Intel integrated GPU and NOT CPU. The in-app status line should read
+      `the Void is listening — GPU (<discrete device name>)`.
+- [ ] Narration should feel faster than before (5060 vs the integrated GPU). If it still picks the
+      integrated device, tell me — the per-device probe order may need tuning for your Vulkan setup.

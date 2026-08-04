@@ -19,6 +19,23 @@ Format per entry:
 
 ---
 
+## 2026-08-02 — gpu-select (device-agnostic GPU selection)
+- Loop unit stacked on `agentic/ui-combat-fixes`. CODE verified PASS by the test-agent: 349 tests
+  (incl. the new `electron/gpu.test.mjs`, confirmed collected), typecheck/build clean, territory +
+  purity clean, and the pure device-pick + orchestrator branches (CPU short-circuit, dedicated-kept,
+  single-device-not-probed, hybrid-probes-and-disposes-losers, error-always-returns-a-working-llama,
+  env pinned-on-win) all verified with a fake `getLlama`. No code defect; 0 fix rounds on code.
+- test-agent VERDICT was FAIL for ONE reason: the plan listed "write the NEEDS-HUMAN item to
+  HUMAN-CHECKS.md" as a build-agent acceptance criterion, but the orchestrator instructs build-agents
+  NOT to touch HUMAN-CHECKS (project convention — it is maintained on the main line to avoid worktree
+  merge conflicts). The build-agent correctly surfaced the item in its return; the checker, grading
+  against the plan, flagged the missing file edit. Reconciled orchestrator-side (item added to
+  HUMAN-CHECKS.md here). No re-run needed — the code checks all passed.
+- pipeline-retro signal (recurs-worthy): the plan-agent should NOT put "edit HUMAN-CHECKS.md" as a
+  build/test acceptance criterion — it's orchestrator-maintained. Route: DOCTRINE (project-specific).
+- Real hybrid-GPU pick (discrete NVIDIA vs integrated) is NEEDS-HUMAN — in HUMAN-CHECKS.md.
+- Manual engineer fixes: none yet
+
 ## 2026-08-02 — ui-combat-fixes (back on the loop: plan→build→test)
 - First unit fully through the loop since the correction. Branch `agentic/ui-combat-fixes` off
   `spike/n1-local-llm`. VERDICT PASS, 0 fix rounds, 336 tests.
