@@ -7,7 +7,10 @@
 // file stays deliberately thin.
 import { getLlama, resolveModelFile, LlamaChatSession } from 'node-llama-cpp';
 import { performance } from 'node:perf_hooks';
-import { selectBestLlama } from './gpu.mjs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { selectGpuDevice, makeSpawnProbe } from './gpu.mjs';
 
 // 4B only (the N1 decision). Q4_K_M GGUF, Apache-2.0, ~2.5GB.
 const MODEL_URI =
@@ -29,31 +32,47 @@ export async function createNarrator({ onStatus, modelsDir } = {}) {
   onStatus?.({ phase: 'resolving', modelsDir });
   const modelPath = await resolveModelFile(MODEL_URI, modelsDir);
 
-  onStatus?.({ phase: 'loading', modelPath });
-  // Device-agnostic pick: prefer a dedicated GPU over the integrated one on
-  // hybrid laptops (auto-detect otherwise favors the iGPU's large shared pool).
-  const sel = await selectBestLlama({
-    getLlama,
+  // Device-agnostic pick: prefer the discrete GPU over the integrated one on hybrid
+  // laptops. Selection runs in short-lived child probes and sets
+  // GGML_VK_VISIBLE_DEVICES in this process's env BEFORE the first getLlama() below,
+  // because node-llama-cpp binds the Vulkan backend once per process. Any failure
+  // returns "auto-pick" (env untouched) and never crashes boot.
+  const probeScript = path.join(path.dirname(fileURLToPath(import.meta.url)), 'gpu-probe.mjs');
+  const sel = await selectGpuDevice({
+    runProbe: makeSpawnProbe({
+      execPath: process.execPath,
+      probeScript,
+      baseEnv: process.env,
+      timeoutMs: 30000,
+    }),
+    env: process.env,
+    systemRam: os.totalmem(),
     log: (e) => onStatus?.({ phase: 'gpu-probe', ...e }),
   });
-  const llama = sel.llama;
+
+  onStatus?.({ phase: 'loading', modelPath });
+  // env already isolates the pinned device (if any); auto otherwise.
+  const llama = await getLlama(sel.gpu ? { gpu: sel.gpu } : {});
+  const vram = await llama.getVramState().catch(() => null);
+  const unified = vram ? vram.unifiedSize > 0 : false;
+
   const model = await llama.loadModel({ modelPath });
   const context = await model.createContext({ contextSize: 4096 });
   onStatus?.({
     phase: 'ready',
     gpu: llama.gpu,
-    device: sel.deviceName,
-    unified: sel.unified,
-    vram: sel.vram,
-    deviceIndex: sel.deviceIndex,
+    device: sel.name,
+    unified,
+    vram,
+    deviceIndex: sel.index,
   });
 
   return {
     gpu: llama.gpu,
-    device: sel.deviceName,
-    unified: sel.unified,
-    vram: sel.vram,
-    deviceIndex: sel.deviceIndex,
+    device: sel.name,
+    unified,
+    vram,
+    deviceIndex: sel.index,
     async generate({ prompt, system, maxTokens = 400, onToken } = {}) {
       // Capture the sequence so we can reclaim it: the context has a finite pool
       // of sequences, and disposing only the session (as before) leaked one per

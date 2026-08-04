@@ -1,126 +1,269 @@
-// Device-agnostic GPU selection for the local model.
+// Device-agnostic GPU selection for the local model — prefer the discrete GPU.
 //
-// node-llama-cpp's `getLlama({gpu:'auto'})` favors the device reporting the most
-// memory. On a hybrid laptop (integrated + discrete GPU) the integrated GPU wins
-// because it reports a large *shared/unified* system-memory pool, even though the
-// discrete card is far faster. This module adds a vendor-agnostic selection step:
-// probe each visible device and prefer one with *dedicated* (non-unified) memory.
+// On a hybrid laptop (integrated + discrete GPU, Vulkan backend) node-llama-cpp's
+// auto-pick favors the device reporting the most memory. The integrated GPU wins
+// because it reports a large *shared* system-memory pool (≈ system RAM), even
+// though the discrete card is far faster. Worse, both Vulkan devices report
+// `unifiedSize = 0`, so the old "unified ⇒ integrated" gate is dead.
 //
-// No hardcoded vendor / model / device index. Graceful fallback on every hardware
-// shape (single-GPU, Apple unified, integrated-only, CPU-only). The pure decision
-// (`pickDedicatedDeviceIndex`) and the injectable orchestrator (`selectBestLlama`)
-// are both testable headlessly with a fake `getLlama` — no native inference.
+// This module fixes that with two reliable discrete signals — the device NAME and
+// a per-device total memory pool that is meaningfully SMALLER than system RAM (a
+// discrete card has its own VRAM; an iGPU reports ≈ system RAM). Because
+// node-llama-cpp initializes the Vulkan backend ONCE per process, the only way to
+// (a) read a per-device total and (b) actually re-pin the active device is to set
+// `GGML_VK_VISIBLE_DEVICES=<i>` BEFORE the process's first `getLlama()`. So probing
+// happens in short-lived CHILD processes; the parent parses their JSON, picks with
+// the pure scorer, and sets the env var in its own `process.env` before the main
+// process's first `getLlama()`.
+//
+// The pure decision (`scoreDevice` / `pickBestDeviceIndex`) and the orchestrator
+// (`selectGpuDevice`, which takes an injected `runProbe`) are testable headlessly
+// with fabricated probe data — no real spawn, no real GPU, no real inference.
+
+/** Env var node-llama-cpp / ggml honors to restrict the visible Vulkan device. */
+export const ENV_KEY = 'GGML_VK_VISIBLE_DEVICES';
+
+// Vendor keyword hints (data-driven, non-exhaustive). Case-insensitive substring
+// match on the device name. Extend coverage by editing these arrays, not the scorer.
+export const DISCRETE_NAME_HINTS = [
+  'nvidia',
+  'geforce',
+  'rtx',
+  'quadro',
+  'tesla',
+  'radeon rx',
+  'radeon pro',
+  'arc',
+  'instinct',
+];
+export const INTEGRATED_NAME_HINTS = [
+  'intel',
+  'uhd',
+  'iris',
+  'vega',
+  'integrated',
+  'graphics',
+  'apple',
+  'llvmpipe',
+  'microsoft basic',
+];
+
+// A device whose memory pool is meaningfully smaller than system RAM has its own
+// VRAM (discrete); an iGPU reports ≈ system RAM (ratio ≥ ~1).
+const RAM_RATIO = 0.85;
+// A device qualifies as a discrete pick iff its score is at least this. Chosen so a
+// false memory boost on an integrated device (-2 + 2 = 0) never qualifies, while an
+// unknown-vendor discrete card qualifies on memory alone (0 + 2 = +2).
+const DISCRETE_THRESHOLD = 1;
 
 /**
- * Pure decision: given per-device probes `[{index, unified}]`, return the FIRST
- * probe whose memory is dedicated (`unified === false`), else `null`.
- * "Dedicated" (a real discrete GPU with its own VRAM) is what we want to run on.
- * No I/O, no env, no llama — this is the mandated pure, unit-tested unit.
- * @param {{index:number, unified:boolean}[]} probes
- * @returns {number|null} the winning probe's `index` field, or `null`.
+ * Pure score: higher = more likely a discrete GPU worth pinning. No I/O, env, spawn
+ * or llama. Signals combine additively (see plan's pure-function contract):
+ *  - +3 if the name contains ANY discrete hint
+ *  - -2 if the name contains ANY integrated hint (both may fire, e.g. "Intel Arc")
+ *  - +2 if `0 < total < RAM_RATIO * systemRam` (its own VRAM, not shared RAM)
+ * Non-finite / ≤0 memory inputs contribute 0.
+ * @param {{index:number, name:string, total:number}} probe
+ * @param {number} systemRam
+ * @returns {number}
  */
-export function pickDedicatedDeviceIndex(probes) {
+export function scoreDevice(probe, systemRam) {
+  const name = String(probe?.name ?? '').toLowerCase();
+  let score = 0;
+
+  if (DISCRETE_NAME_HINTS.some((h) => name.includes(h))) score += 3;
+  if (INTEGRATED_NAME_HINTS.some((h) => name.includes(h))) score -= 2;
+
+  const total = Number(probe?.total);
+  const ram = Number(systemRam);
+  if (Number.isFinite(total) && total > 0 && Number.isFinite(ram) && ram > 0) {
+    if (total < RAM_RATIO * ram) score += 2;
+  }
+
+  return score;
+}
+
+/**
+ * Pure decision: pick the discrete device index to pin, or `null` to auto-pick.
+ *  - `probes` not an array, or fewer than 2 devices → `null` (never pin a
+ *    single-device / CPU machine).
+ *  - A device qualifies iff `scoreDevice >= DISCRETE_THRESHOLD`. No qualifier → `null`.
+ *  - Else return the `probe.index` FIELD (not array position) of the highest scorer;
+ *    ties broken by lowest `index` (deterministic).
+ * @param {{index:number, name:string, total:number}[]} probes
+ * @param {number} systemRam
+ * @returns {number|null}
+ */
+export function pickBestDeviceIndex(probes, systemRam) {
+  if (!Array.isArray(probes) || probes.length < 2) return null;
+
+  let best = null; // { index, score }
   for (const p of probes) {
-    if (p.unified === false) return p.index;
+    const score = scoreDevice(p, systemRam);
+    if (score < DISCRETE_THRESHOLD) continue;
+    if (
+      best === null ||
+      score > best.score ||
+      (score === best.score && p.index < best.index)
+    ) {
+      best = { index: p.index, score };
+    }
+  }
+
+  return best === null ? null : best.index;
+}
+
+/**
+ * Orchestrate device selection with an injected `runProbe` so every branch is
+ * unit-testable headlessly. Sets `env[ENV_KEY]` before the main process's first
+ * `getLlama()` when a discrete device is picked; otherwise leaves the env var unset
+ * (auto-pick). Never throws into boot — every failure path returns "auto-pick" and
+ * logs a reason.
+ *
+ * `runProbe(vkIndex)`:
+ *  - `runProbe(undefined)` enumerates ALL device names in one un-isolated child →
+ *    `{ names: string[], vram? }` (or `null`/throw on failure).
+ *  - `runProbe(i)` runs isolated (`GGML_VK_VISIBLE_DEVICES=i`) → `{ names:[name],
+ *    vram:{total,...} }` for that single device (or `null` on failure).
+ *
+ * @param {{ runProbe: (i?:number)=>Promise<any>, env?: Record<string,string|undefined>,
+ *   systemRam?: number, log?: Function }} opts
+ * @returns {Promise<{ gpu:('vulkan'|null), index:(number|null), name:(string|null) }>}
+ */
+export async function selectGpuDevice({ runProbe, env = process.env, systemRam, log } = {}) {
+  try {
+    const enumResult = await runProbe(undefined);
+    const names = enumResult?.names ?? [];
+
+    // Single-device / CPU-only machine: nothing to choose between; let auto-pick.
+    if (names.length < 2) {
+      log?.({ event: 'gpu:auto', reason: 'single-device', count: names.length });
+      return { gpu: null, index: null, name: names[0] ?? null };
+    }
+
+    // Probe each visible device in its own isolated child for a per-device total.
+    const devices = [];
+    for (let i = 0; i < names.length; i++) {
+      const r = await runProbe(i);
+      devices.push({
+        index: i,
+        name: r?.names?.[0] ?? names[i] ?? null,
+        total: r?.vram?.total ?? 0,
+      });
+    }
+
+    const idx = pickBestDeviceIndex(devices, systemRam);
+
+    if (idx == null) {
+      log?.({ event: 'gpu:auto', reason: 'no-discrete', devices });
+      return { gpu: null, index: null, name: null };
+    }
+
+    const winner = devices.find((d) => d.index === idx);
+    env[ENV_KEY] = String(idx);
+    log?.({ event: 'gpu:selected', index: idx, name: winner?.name ?? null, total: winner?.total ?? 0 });
+    return { gpu: 'vulkan', index: idx, name: winner?.name ?? null };
+  } catch (err) {
+    // Any failure: do NOT pin; let node-llama-cpp auto-pick, and never crash boot.
+    log?.({ event: 'gpu:auto', reason: 'error', message: String(err?.message ?? err) });
+    return { gpu: null, index: null, name: null };
+  }
+}
+
+/**
+ * Extract the first balanced `{…}` JSON span from a string that may carry leading
+ * or trailing noise (native backends sometimes print to stdout). Returns the parsed
+ * object, or `null` if nothing parses.
+ * @param {string} text
+ * @returns {any|null}
+ */
+function parseFirstJsonObject(text) {
+  const s = String(text ?? '');
+  const start = s.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(s.slice(start, i + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
   }
   return null;
 }
 
-/** Dispose a llama instance without ever throwing (best-effort cleanup). */
-async function safeDispose(llama) {
-  try {
-    await llama?.dispose?.();
-  } catch {
-    /* disposal must never crash selection */
-  }
-}
-
-const ENV_KEY = 'GGML_VK_VISIBLE_DEVICES';
-
 /**
- * Choose the best backend/device and return a loaded `llama` plus metadata.
+ * Build the real `runProbe(vkIndex)` that spawns the short-lived child probe.
+ * The child is `execPath` (the Electron binary) run as plain Node via
+ * `ELECTRON_RUN_AS_NODE=1`, so no second window opens in a packaged build. When
+ * `vkIndex` is defined, `GGML_VK_VISIBLE_DEVICES` isolates that device; otherwise
+ * the var is removed so the child enumerates all devices.
  *
- * Algorithm (see plan): get an auto llama; if it's CPU, done. If its VRAM is
- * already dedicated (`unifiedSize === 0`, e.g. CUDA / desktop dGPU) keep it. If
- * there's only one device (Apple unified / integrated-only) keep it. Otherwise
- * probe each Vulkan device via `GGML_VK_VISIBLE_DEVICES` and prefer a dedicated
- * one; on a winning discrete probe leave the env var pinned to it for the process
- * lifetime (the loaded backend is bound to that device); otherwise unset it and
- * fall back to the auto llama. Every probe path is wrapped so we ALWAYS return a
- * working llama and never crash; discarded llama instances are disposed.
+ * Resolves (never rejects) to the parsed probe JSON, or `null` on non-zero exit,
+ * spawn error, or timeout — so `selectGpuDevice`'s failure paths are exercised,
+ * not thrown.
  *
- * `getLlama` and `env` are injected so this is testable headlessly with a fake.
- * `log?.(entry)` records probe/selection results (optional; defaults to no-op).
- *
- * @param {{ getLlama: Function, env?: Record<string,string|undefined>, log?: Function }} opts
- * @returns {Promise<{ llama:any, backend:(string|boolean), unified:boolean,
- *   deviceIndex:(number|null), deviceName:(string|null), vram:(object|null) }>}
+ * @param {{ execPath:string, probeScript:string, baseEnv?:Record<string,string|undefined>,
+ *   timeoutMs?:number, spawnFn?:Function }} opts
+ * @returns {(vkIndex?:number)=>Promise<any|null>}
  */
-export async function selectBestLlama({ getLlama, env = process.env, log } = {}) {
-  const llama0 = await getLlama({ gpu: 'auto' });
+export function makeSpawnProbe({ execPath, probeScript, baseEnv = process.env, timeoutMs = 30000, spawnFn } = {}) {
+  return async function runProbe(vkIndex) {
+    const { spawn } = spawnFn ? { spawn: spawnFn } : await import('node:child_process');
 
-  // CPU: no GPU backend at all — nothing to probe.
-  if (llama0.gpu === false) {
-    log?.({ event: 'cpu', backend: false });
-    return { llama: llama0, backend: false, unified: false, deviceIndex: null, deviceName: null, vram: null };
-  }
+    return await new Promise((resolve) => {
+      const env = { ...baseEnv, ELECTRON_RUN_AS_NODE: '1' };
+      if (vkIndex === undefined || vkIndex === null) delete env[ENV_KEY];
+      else env[ENV_KEY] = String(vkIndex);
 
-  const probes = [];
-  try {
-    const vram0 = await llama0.getVramState();
+      let child;
+      try {
+        child = spawn(execPath, [probeScript], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+      } catch {
+        resolve(null);
+        return;
+      }
 
-    // Already on a dedicated device (CUDA / desktop dGPU): the auto-pick is right.
-    if (vram0.unifiedSize === 0) {
-      const deviceName = (await llama0.getGpuDeviceNames())[0] ?? null;
-      log?.({ event: 'auto-dedicated', backend: llama0.gpu, deviceName, vram: vram0 });
-      return { llama: llama0, backend: llama0.gpu, unified: false, deviceIndex: null, deviceName, vram: vram0 };
-    }
+      let out = '';
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          child.kill();
+        } catch {
+          /* best-effort */
+        }
+        resolve(value);
+      };
 
-    // Only one device (Apple unified memory / integrated-only): nothing better.
-    const names = await llama0.getGpuDeviceNames();
-    if (names.length <= 1) {
-      const deviceName = names[0] ?? null;
-      log?.({ event: 'single-unified', backend: llama0.gpu, deviceName, vram: vram0 });
-      return { llama: llama0, backend: llama0.gpu, unified: true, deviceIndex: null, deviceName, vram: vram0 };
-    }
+      const timer = setTimeout(() => finish(null), timeoutMs);
 
-    // Hybrid: probe every visible device, isolating each via the env var.
-    for (let i = 0; i < names.length; i++) {
-      env[ENV_KEY] = String(i);
-      const li = await getLlama({ gpu: 'vulkan' });
-      const vram = await li.getVramState();
-      const name = (await li.getGpuDeviceNames())[0] ?? null;
-      const probe = { index: i, unified: vram.unifiedSize > 0, llama: li, vram, name };
-      probes.push(probe);
-      log?.({ event: 'probe', index: i, unified: probe.unified, deviceName: name, vram });
-    }
-
-    const pick = pickDedicatedDeviceIndex(probes.map((p) => ({ index: p.index, unified: p.unified })));
-
-    if (pick !== null) {
-      const winner = probes.find((p) => p.index === pick);
-      // Keep the winner; dispose every other probe AND the discarded auto llama.
-      for (const p of probes) if (p !== winner) await safeDispose(p.llama);
-      await safeDispose(llama0);
-      // Leave the env var pinned to the winner for the process lifetime — the
-      // loaded Vulkan backend is bound to that device.
-      env[ENV_KEY] = String(pick);
-      log?.({ event: 'selected', backend: winner.llama.gpu, deviceName: winner.name, deviceIndex: pick, vram: winner.vram });
-      return { llama: winner.llama, backend: winner.llama.gpu, unified: false, deviceIndex: pick, deviceName: winner.name, vram: winner.vram };
-    }
-
-    // No dedicated device found: fall back to the auto llama, unset the env var.
-    for (const p of probes) await safeDispose(p.llama);
-    delete env[ENV_KEY];
-    const deviceName = names[0] ?? null;
-    log?.({ event: 'fallback-none-dedicated', backend: llama0.gpu, deviceName, vram: vram0 });
-    return { llama: llama0, backend: llama0.gpu, unified: true, deviceIndex: null, deviceName, vram: vram0 };
-  } catch (err) {
-    // Anything went wrong while probing: clean up, unset env, return the auto
-    // llama so the game still runs.
-    for (const p of probes) await safeDispose(p.llama);
-    delete env[ENV_KEY];
-    log?.({ event: 'error', message: String(err?.message ?? err) });
-    return { llama: llama0, backend: llama0.gpu, unified: true, deviceIndex: null, deviceName: null, vram: null };
-  }
+      child.stdout?.on('data', (d) => {
+        out += String(d);
+      });
+      child.on('error', () => finish(null));
+      child.on('close', (code) => {
+        if (code === 0) finish(parseFirstJsonObject(out));
+        else finish(null);
+      });
+    });
+  };
 }
