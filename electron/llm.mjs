@@ -21,10 +21,13 @@ const DEFAULT_SYSTEM =
 /**
  * Load the model once and return a narrator with a streaming `generate`.
  * `onStatus({phase, ...})` reports progress: resolving → loading → ready | error.
+ * `modelsDir` is the canonical per-user models directory (computed by main and
+ * injected here so this layer stays free of any electron/app import); it is
+ * passed to `resolveModelFile` as the download/lookup target.
  */
-export async function createNarrator({ onStatus } = {}) {
-  onStatus?.({ phase: 'resolving' });
-  const modelPath = await resolveModelFile(MODEL_URI, 'models');
+export async function createNarrator({ onStatus, modelsDir } = {}) {
+  onStatus?.({ phase: 'resolving', modelsDir });
+  const modelPath = await resolveModelFile(MODEL_URI, modelsDir);
 
   onStatus?.({ phase: 'loading', modelPath });
   // Device-agnostic pick: prefer a dedicated GPU over the integrated one on
