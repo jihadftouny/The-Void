@@ -16,7 +16,7 @@ import { createDebugOverlay } from './debug-overlay.ts';
 
 interface GenStats { text: string; tokens: number; tokensPerSecond: number; ttftMs: number }
 interface VoidApi {
-  onStatus(cb: (s: { phase: string; gpu?: unknown; message?: string }) => void): () => void;
+  onStatus(cb: (s: { phase: string; gpu?: unknown; device?: string | null; message?: string }) => void): () => void;
   generate(o: { prompt: string; system?: string; onToken?: (c: string) => void }): Promise<GenStats>;
   log?(entry: unknown): void;
 }
@@ -60,7 +60,7 @@ let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
 window.void.onStatus((s) => {
   log.info('llm', `model ${s.phase}`, s);
   if (s.phase === 'ready') {
-    statusEl.textContent = `the Void is listening — ${s.gpu ? `GPU (${String(s.gpu)})` : 'CPU'}`;
+    statusEl.textContent = `the Void is listening — ${s.gpu ? `GPU (${s.device ? String(s.device) : String(s.gpu)})` : 'CPU'}`;
   } else if (s.phase === 'loading') statusEl.textContent = 'the Void stirs (loading model)…';
   else if (s.phase === 'resolving') statusEl.textContent = 'locating the model…';
   else if (s.phase === 'error') {

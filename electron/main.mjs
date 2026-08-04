@@ -53,7 +53,23 @@ async function createWindow() {
     send('llm:status', s);
     mlog('info', 'llm', `status:${s.phase}`, s);
   }).then(
-    (n) => send('llm:status', { phase: 'ready', gpu: n.gpu }),
+    (n) => {
+      send('llm:status', {
+        phase: 'ready',
+        gpu: n.gpu,
+        device: n.device,
+        unified: n.unified,
+        vram: n.vram,
+        deviceIndex: n.deviceIndex,
+      });
+      // Record the final device choice so any machine's selection is in the log.
+      mlog('info', 'llm', 'gpu:selected', {
+        backend: n.gpu,
+        device: n.device,
+        unified: n.unified,
+        vram: n.vram,
+      });
+    },
     (err) => send('llm:status', { phase: 'error', message: String(err?.message ?? err) }),
   );
 }
