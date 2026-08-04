@@ -20,7 +20,7 @@ export default defineConfig({
     // Logic core is framework-agnostic and must be testable headlessly (node).
     // Renderer (Kaplay/canvas) code is never unit-tested here — only pure logic is.
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'electron/**/*.test.mjs'],
     // Worktrees live inside the repo (agentic pipeline); never let Vitest walk them.
     exclude: ['worktrees/**', 'node_modules/**', 'dist/**', '.legacy/**'],
   },
