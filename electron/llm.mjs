@@ -7,6 +7,7 @@
 // file stays deliberately thin.
 import { getLlama, resolveModelFile, LlamaChatSession } from 'node-llama-cpp';
 import { performance } from 'node:perf_hooks';
+import { selectBestLlama } from './gpu.mjs';
 
 // 4B only (the N1 decision). Q4_K_M GGUF, Apache-2.0, ~2.5GB.
 const MODEL_URI =
@@ -26,13 +27,30 @@ export async function createNarrator({ onStatus } = {}) {
   const modelPath = await resolveModelFile(MODEL_URI, 'models');
 
   onStatus?.({ phase: 'loading', modelPath });
-  const llama = await getLlama(); // auto-detects GPU (CUDA/Vulkan/Metal), else CPU
+  // Device-agnostic pick: prefer a dedicated GPU over the integrated one on
+  // hybrid laptops (auto-detect otherwise favors the iGPU's large shared pool).
+  const sel = await selectBestLlama({
+    getLlama,
+    log: (e) => onStatus?.({ phase: 'gpu-probe', ...e }),
+  });
+  const llama = sel.llama;
   const model = await llama.loadModel({ modelPath });
   const context = await model.createContext({ contextSize: 4096 });
-  onStatus?.({ phase: 'ready', gpu: llama.gpu });
+  onStatus?.({
+    phase: 'ready',
+    gpu: llama.gpu,
+    device: sel.deviceName,
+    unified: sel.unified,
+    vram: sel.vram,
+    deviceIndex: sel.deviceIndex,
+  });
 
   return {
     gpu: llama.gpu,
+    device: sel.deviceName,
+    unified: sel.unified,
+    vram: sel.vram,
+    deviceIndex: sel.deviceIndex,
     async generate({ prompt, system, maxTokens = 400, onToken } = {}) {
       // Capture the sequence so we can reclaim it: the context has a finite pool
       // of sequences, and disposing only the session (as before) leaked one per
