@@ -24,8 +24,11 @@
 //    handlers consume no rng draw (no player-visible difference). Only burn/freeze/
 //    electrify — where the save IS consulted — roll a d20. Java also *accumulates* the
 //    save across the loop (a bug); we roll a fresh save per condition.
-//  - `poison` and the augment/deprivation set are DEFINED but INERT (no tick handler),
-//    exactly as in Java (the "need to add poison here" gap).
+//  - M2: `poison` and the twelve augment/deprivation conditions are now ACTIVE. Poison
+//    is a curable DoT (modelled on bleed, no saving throw); each augment/deprivation is
+//    a pure per-turn countdown whose gameplay teeth are the ± stat cascade read via the
+//    accessors in `statEffects.ts` (NOT a per-tick hp/skip effect here). The Java "need
+//    to add poison here" gap and the inert-carry-over fallthrough are both closed.
 
 import type { Character } from './character.ts';
 import { rollDie, pick, type Rng } from './rng.ts';
@@ -61,10 +64,21 @@ export type ConditionType =
   | 'fool'
   | 'repulsive';
 
-/** Static per-condition data (max duration + display name), ported from Java. */
+/**
+ * How repeated application of a condition combines:
+ *  - 'dot'     — damage-over-time (poison, bleed, burn): a second application STACKS
+ *    in intensity (each tick deals `intensity`) and refreshes the duration.
+ *  - 'refresh' — everything else (control, augment/deprivation, …): a second
+ *    application only REFRESHES the duration; there is never a second copy nor a
+ *    doubled effect.
+ */
+export type StackingCategory = 'dot' | 'refresh';
+
+/** Static per-condition data (max duration + display name + stacking rule). */
 export interface ConditionData {
   maxTurns: number;
   displayName: string;
+  stacking: StackingCategory;
 }
 
 /**
@@ -72,30 +86,30 @@ export interface ConditionData {
  * Most conditions last 2; fracture 100 (needs a rest), insanity 5, push 1.
  */
 export const CONDITION_DATA: Record<ConditionType, ConditionData> = {
-  bleed: { maxTurns: 2, displayName: 'Bleed' },
-  stun: { maxTurns: 2, displayName: 'Stun' },
-  fracture: { maxTurns: 100, displayName: 'Fracture' },
-  regeneration: { maxTurns: 2, displayName: 'Regeneration' },
-  burn: { maxTurns: 2, displayName: 'Burn' },
-  freeze: { maxTurns: 2, displayName: 'Freeze' },
-  electrify: { maxTurns: 2, displayName: 'Electrify' },
-  poison: { maxTurns: 2, displayName: 'Poison' },
-  sleep: { maxTurns: 2, displayName: 'Sleep' },
-  insanity: { maxTurns: 5, displayName: 'Insanity' },
-  push: { maxTurns: 1, displayName: 'Push' },
-  aired: { maxTurns: 2, displayName: 'Aired' },
-  strong: { maxTurns: 2, displayName: 'Strong' },
-  quick: { maxTurns: 2, displayName: 'Agile' },
-  healthy: { maxTurns: 2, displayName: 'Healthy' },
-  smart: { maxTurns: 2, displayName: 'Brainy' },
-  wise: { maxTurns: 2, displayName: 'Wise' },
-  charming: { maxTurns: 2, displayName: 'Charming' },
-  weak: { maxTurns: 2, displayName: 'Weak' },
-  slow: { maxTurns: 2, displayName: 'Slow' },
-  sick: { maxTurns: 2, displayName: 'Sick' },
-  dumb: { maxTurns: 2, displayName: 'Dumb' },
-  fool: { maxTurns: 2, displayName: 'Fool' },
-  repulsive: { maxTurns: 2, displayName: 'Repulsive' },
+  bleed: { maxTurns: 2, displayName: 'Bleed', stacking: 'dot' },
+  stun: { maxTurns: 2, displayName: 'Stun', stacking: 'refresh' },
+  fracture: { maxTurns: 100, displayName: 'Fracture', stacking: 'refresh' },
+  regeneration: { maxTurns: 2, displayName: 'Regeneration', stacking: 'refresh' },
+  burn: { maxTurns: 2, displayName: 'Burn', stacking: 'dot' },
+  freeze: { maxTurns: 2, displayName: 'Freeze', stacking: 'refresh' },
+  electrify: { maxTurns: 2, displayName: 'Electrify', stacking: 'refresh' },
+  poison: { maxTurns: 2, displayName: 'Poison', stacking: 'dot' },
+  sleep: { maxTurns: 2, displayName: 'Sleep', stacking: 'refresh' },
+  insanity: { maxTurns: 5, displayName: 'Insanity', stacking: 'refresh' },
+  push: { maxTurns: 1, displayName: 'Push', stacking: 'refresh' },
+  aired: { maxTurns: 2, displayName: 'Aired', stacking: 'refresh' },
+  strong: { maxTurns: 2, displayName: 'Strong', stacking: 'refresh' },
+  quick: { maxTurns: 2, displayName: 'Agile', stacking: 'refresh' },
+  healthy: { maxTurns: 2, displayName: 'Healthy', stacking: 'refresh' },
+  smart: { maxTurns: 2, displayName: 'Brainy', stacking: 'refresh' },
+  wise: { maxTurns: 2, displayName: 'Wise', stacking: 'refresh' },
+  charming: { maxTurns: 2, displayName: 'Charming', stacking: 'refresh' },
+  weak: { maxTurns: 2, displayName: 'Weak', stacking: 'refresh' },
+  slow: { maxTurns: 2, displayName: 'Slow', stacking: 'refresh' },
+  sick: { maxTurns: 2, displayName: 'Sick', stacking: 'refresh' },
+  dumb: { maxTurns: 2, displayName: 'Dumb', stacking: 'refresh' },
+  fool: { maxTurns: 2, displayName: 'Fool', stacking: 'refresh' },
+  repulsive: { maxTurns: 2, displayName: 'Repulsive', stacking: 'refresh' },
 };
 
 /**
@@ -107,6 +121,13 @@ export interface ActiveCondition {
   type: ConditionType;
   remainingTurns: number;
   maxTurns: number;
+  /**
+   * DoT stack depth (poison/bleed/burn). OPTIONAL and additive: absent ⇒ treated as
+   * intensity 1, so a legacy `ActiveCondition` saved before M2 (three fields, no
+   * `intensity`) ticks/stacks exactly as intensity 1 — no save-version bump needed.
+   * It only materializes when a DoT is applied a second time (see `applyCondition`).
+   */
+  intensity?: number;
 }
 
 /** Control conditions — those that make a character skip its turn. */
@@ -154,6 +175,43 @@ export function addCondition(list: ActiveCondition[], type: ConditionType): bool
   return true;
 }
 
+/** The outcome of `applyCondition` — mirrors the three "mix per condition" cases. */
+export type ApplyResult = 'added' | 'stacked' | 'refreshed';
+
+/**
+ * Apply a condition with the "mix per condition" stacking rule (game-design §5). Pure
+ * on its inputs except it MUTATES `list` in place (like `addCondition`) and returns
+ * which case fired so callers decide whether to emit a `condition-applied` event:
+ *  - absent            ⇒ push a fresh instance ⇒ 'added'.
+ *  - present + 'dot'    ⇒ intensity = (existing ?? 1) + 1, duration refreshed ⇒ 'stacked'.
+ *  - present + 'refresh'⇒ duration refreshed only (no intensity, no copy) ⇒ 'refreshed'.
+ */
+export function applyCondition(list: ActiveCondition[], type: ConditionType): ApplyResult {
+  const existing = list.find((c) => c.type === type);
+  if (!existing) {
+    list.push(makeCondition(type));
+    return 'added';
+  }
+  if (CONDITION_DATA[type].stacking === 'dot') {
+    existing.intensity = (existing.intensity ?? 1) + 1;
+    existing.remainingTurns = existing.maxTurns;
+    return 'stacked';
+  }
+  existing.remainingTurns = existing.maxTurns;
+  return 'refreshed';
+}
+
+/**
+ * Return a NEW condition list with every instance of `type` removed — the pure CURE
+ * hook (an antidote item that fires it lands in M6). Does not mutate the input.
+ */
+export function cureCondition(
+  list: readonly ActiveCondition[],
+  type: ConditionType,
+): ActiveCondition[] {
+  return list.filter((c) => c.type !== type);
+}
+
 /** True if the character has any turn-preventing (control) condition active. */
 export function hasControlCondition(character: { activeConditions: ActiveCondition[] }): boolean {
   return character.activeConditions.some((c) => CONTROL_CONDITIONS.has(c.type));
@@ -161,8 +219,9 @@ export function hasControlCondition(character: { activeConditions: ActiveConditi
 
 /**
  * Canonical tick order (ported from Java's if-chain sequence, made deterministic):
- * burn, freeze, electrify, bleed, stun, fracture, regeneration, sleep, insanity,
- * push, aired. Conditions not listed here (poison + augment/deprivation) are inert.
+ * the eleven original entries first, then poison (a DoT), then the twelve
+ * augment/deprivation countdowns. Every ConditionType now appears here, so nothing is
+ * carried untouched — the M2 activation. Order is load-bearing for reproducibility.
  */
 const CHAIN_ORDER: readonly ConditionType[] = [
   'burn',
@@ -176,6 +235,19 @@ const CHAIN_ORDER: readonly ConditionType[] = [
   'insanity',
   'push',
   'aired',
+  'poison',
+  'strong',
+  'quick',
+  'healthy',
+  'smart',
+  'wise',
+  'charming',
+  'weak',
+  'slow',
+  'sick',
+  'dumb',
+  'fool',
+  'repulsive',
 ];
 
 /** The outcome of ticking one character's conditions for a turn. */
@@ -233,8 +305,9 @@ export function tickConditions(
           cond.remainingTurns--;
           survivors.push(cond);
         } else if (isActive) {
-          hpDelta -= 1;
-          events.push({ kind: 'condition-damage', subject, conditionType: type, amount: 1 });
+          const amount = cond.intensity ?? 1;
+          hpDelta -= amount;
+          events.push({ kind: 'condition-damage', subject, conditionType: type, amount });
           cond.remainingTurns--;
           const save = rollDie(rng, 20) + target.mods.STR;
           if (save >= oppInt) {
@@ -295,8 +368,9 @@ export function tickConditions(
           cond.remainingTurns--;
           survivors.push(cond);
         } else if (isActive) {
-          hpDelta -= 1;
-          events.push({ kind: 'condition-damage', subject, conditionType: type, amount: 1 });
+          const amount = cond.intensity ?? 1;
+          hpDelta -= amount;
+          events.push({ kind: 'condition-damage', subject, conditionType: type, amount });
           cond.remainingTurns--;
           survivors.push(cond);
         } else {
@@ -419,15 +493,58 @@ export function tickConditions(
         }
         break;
       }
+      case 'poison': {
+        // Poison — a curable DoT modelled on bleed (no saving throw). Effect ticks deal
+        // its `intensity` (default 1). [HOOK: game-design §5 notes poison should partly
+        // ignore mitigation; no mitigation system exists yet, so it is a plain DoT now.]
+        if (isOnset) {
+          events.push({ kind: 'condition-onset', subject, conditionType: type, text: 'Venom courses through you.' });
+          cond.remainingTurns--;
+          survivors.push(cond);
+        } else if (isActive) {
+          const amount = cond.intensity ?? 1;
+          hpDelta -= amount;
+          events.push({ kind: 'condition-damage', subject, conditionType: type, amount });
+          cond.remainingTurns--;
+          survivors.push(cond);
+        } else {
+          events.push({ kind: 'condition-expired', subject, conditionType: type });
+        }
+        break;
+      }
+      case 'strong':
+      case 'quick':
+      case 'healthy':
+      case 'smart':
+      case 'wise':
+      case 'charming':
+      case 'weak':
+      case 'slow':
+      case 'sick':
+      case 'dumb':
+      case 'fool':
+      case 'repulsive': {
+        // Augment / deprivation — a pure per-turn COUNTDOWN. Their gameplay teeth are
+        // the ± stat cascade read via `statEffects.ts` accessors during combat (to-hit,
+        // damage, AC, max-HP, skill power); they inflict no per-turn hp/skip here. The
+        // deferred twists (Quick/Slow initiative reorder, Lucid/Clouded illusion-sight,
+        // Emboldened/Cowed deal-quality) are commented no-op hooks in statEffects.ts.
+        if (isOnset) {
+          events.push({ kind: 'condition-onset', subject, conditionType: type });
+          cond.remainingTurns--;
+          survivors.push(cond);
+        } else if (isActive) {
+          cond.remainingTurns--;
+          survivors.push(cond);
+        } else {
+          events.push({ kind: 'condition-expired', subject, conditionType: type });
+        }
+        break;
+      }
       /* c8 ignore next 2 */
       default:
         break;
     }
-  }
-
-  // Inert conditions (poison + augment/deprivation) are carried over untouched.
-  for (const cond of active) {
-    if (!CHAIN_ORDER.includes(cond.type)) survivors.push(cond);
   }
 
   return { conditions: survivors, hpDelta, skipTurn, advDisOverride, events };
