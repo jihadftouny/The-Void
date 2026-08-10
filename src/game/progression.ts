@@ -17,7 +17,7 @@ import {
   computeStatMods,
   type StatKey,
 } from './character.ts';
-import { rollDice, type Rng } from './rng.ts';
+import { rollDice, rollDie, type Rng } from './rng.ts';
 import { type Player } from './player.ts';
 
 /**
@@ -53,6 +53,59 @@ export function shouldAdvance(act: number, xp: number): boolean {
   if (act >= 5) return false;
   const threshold = ACT_XP_THRESHOLDS[act + 1];
   return threshold !== undefined && xp >= threshold;
+}
+
+// ------- M9 frequent XP leveling (decoupled from act-entry) -------------------
+//
+// The XP curve below is a deliberate M15 PLACEHOLDER. It is single-sourced here so
+// swapping the formula touches only this module + its test. Leveling is independent of
+// `ACT_XP_THRESHOLDS` / `shouldAdvance` (which still gate the 5-floor / final-boss flow).
+
+/**
+ * Cumulative XP required to REACH `level` — `level * (level - 1)` (M15 placeholder).
+ * Level 1 needs 0. Chosen so early levels arrive fast and pacing slows: cumulative
+ * thresholds are L2=2, L3=6, L4=12, L5=20, L6=30, L10=90, L16=240 — several level-ups
+ * per floor early on.
+ */
+export function cumulativeXpForLevel(level: number): number {
+  return level * (level - 1);
+}
+
+/**
+ * The highest level `L >= 1` whose cumulative XP requirement is `<= xp` — PURE. Derived
+ * directly from `cumulativeXpForLevel`. Examples (hand-derived from `L*(L-1)`): 0→1, 2→2,
+ * 6→3, 12→4, 20→5, 30→6, 90→10, 240→16.
+ */
+export function levelForXp(xp: number): number {
+  let level = 1;
+  while (cumulativeXpForLevel(level + 1) <= xp) level++;
+  return level;
+}
+
+/**
+ * True iff the player has banked enough XP to be at least one level below where their XP
+ * would place them — i.e. a level-up is owed. Compares against the NEXT level's threshold
+ * so queued multi-level catch-ups drain one at a time (`level` increments per drained
+ * level-up until this returns false).
+ */
+export function hasPendingLevelUp(player: Player): boolean {
+  return player.xp >= cumulativeXpForLevel(player.level + 1);
+}
+
+/**
+ * Apply ONE level-up's automatic max-HP growth — PURE. Rolls a single hit die and adds the
+ * CON modifier: `hpRoll = max(rollDie(hitDie.sides) + mods.CON, 1)` (floored at 1). Returns
+ * the player with `level` incremented and `maxHp` raised by `hpRoll`; `hp` is UNCHANGED (no
+ * heal — restored via rest/potion). The hit die stays `{quantity:1, sides}` (no per-act
+ * quantity bump), proficiency is NOT auto-grown, and stats grow ONLY via the draft. All
+ * balance is an M15 placeholder. Threads the injected `Rng` (one draw); no Math.random.
+ */
+export function applyLevelUpHp(player: Player, rng: Rng): { player: Player; hpRoll: number } {
+  const hpRoll = Math.max(rollDie(rng, player.hitDie.sides) + player.mods.CON, 1);
+  return {
+    player: { ...player, level: player.level + 1, maxHp: player.maxHp + hpRoll },
+    hpRoll,
+  };
 }
 
 /**

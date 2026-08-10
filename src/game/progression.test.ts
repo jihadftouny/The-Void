@@ -5,6 +5,10 @@ import {
   FINAL_BOSS_XP,
   shouldAdvance,
   levelUpPlayer,
+  cumulativeXpForLevel,
+  levelForXp,
+  hasPendingLevelUp,
+  applyLevelUpHp,
 } from './progression.ts';
 import { createPlayer } from './player.ts';
 import { type Stats } from './character.ts';
@@ -60,6 +64,83 @@ describe('shouldAdvance', () => {
     // "may I take one step from here"; the caller advances a single act per check.
     expect(shouldAdvance(1, 1000)).toBe(true);
     expect(shouldAdvance(2, 1000)).toBe(true);
+  });
+});
+
+// ------- M9 XP curve (all values hand-derived from cumulativeXpForLevel(L) = L*(L-1)) ----
+
+describe('cumulativeXpForLevel', () => {
+  it('is L*(L-1): 1->0, 2->2, 3->6, 4->12, 5->20, 6->30, 10->90, 16->240', () => {
+    const table: ReadonlyArray<[number, number]> = [
+      [1, 0], [2, 2], [3, 6], [4, 12], [5, 20], [6, 30], [10, 90], [16, 240],
+    ];
+    for (const [L, xp] of table) expect(cumulativeXpForLevel(L)).toBe(xp);
+  });
+});
+
+describe('levelForXp', () => {
+  // Highest L>=1 with cumulativeXpForLevel(L) <= xp. Each expectation hand-derived from
+  // the thresholds {L2:2, L3:6, L4:12, L5:20, L6:30, L10:90, L16:240}. (The plan's example
+  // table listed 1->2 and 5->3, which are inconsistent with L*(L-1) under the highest-L
+  // rule and with the design note "xp 10 -> level 3"; corrected here to the formula.)
+  it('maps xp to the highest afforded level', () => {
+    const table: ReadonlyArray<[number, number]> = [
+      [0, 1], [1, 1], [2, 2], [5, 2], [6, 3], [10, 3], [11, 3], [12, 4], [20, 5], [30, 6],
+      [90, 10], [240, 16],
+    ];
+    for (const [xp, L] of table) expect(levelForXp(xp)).toBe(L);
+  });
+
+  it('is consistent with cumulativeXpForLevel at every boundary', () => {
+    for (let L = 1; L <= 20; L++) {
+      const need = cumulativeXpForLevel(L);
+      expect(levelForXp(need)).toBe(L);       // exactly enough -> that level
+      if (L > 1) expect(levelForXp(need - 1)).toBe(L - 1); // one short -> previous level
+    }
+  });
+});
+
+describe('hasPendingLevelUp', () => {
+  it('is true exactly when xp >= the NEXT level threshold', () => {
+    // Level 1 player: next threshold cumulative(2) = 2.
+    const p1 = { ...createPlayer({ name: 'A', classId: 'Enforcer', stats: stats() }), xp: 1, level: 1 };
+    expect(hasPendingLevelUp(p1)).toBe(false); // 1 < 2
+    expect(hasPendingLevelUp({ ...p1, xp: 2 })).toBe(true); // 2 >= 2
+    // Level 2 player: next threshold cumulative(3) = 6.
+    const p2 = { ...p1, level: 2, xp: 5 };
+    expect(hasPendingLevelUp(p2)).toBe(false); // 5 < 6
+    expect(hasPendingLevelUp({ ...p2, xp: 6 })).toBe(true); // 6 >= 6
+  });
+});
+
+describe('applyLevelUpHp', () => {
+  it('Enforcer d10, CON +1, die face 6 -> +7 maxHp; level+1; hp unchanged', () => {
+    // Enforcer hitDie 1d10; stats() gives CON 13 -> mod +1. maxHp = 10 + 1 = 11.
+    const player = createPlayer({ name: 'A', classId: 'Enforcer', stats: stats() });
+    expect(player.maxHp).toBe(11);
+    // rng 0.55 -> face 1 + floor(0.55*10) = 6. hpRoll = 6 + 1 = 7. maxHp 11 -> 18.
+    const out = applyLevelUpHp(player, scriptedRng([0.55]));
+    expect(out.hpRoll).toBe(7);
+    expect(out.player.maxHp).toBe(18);
+    expect(out.player.level).toBe(2);
+    expect(out.player.hp).toBe(11); // NOT healed
+    // Proficiency and hit-die quantity are NOT auto-grown (M9).
+    expect(out.player.proficiency).toBe(2);
+    expect(out.player.hitDie).toEqual({ quantity: 1, sides: 10 });
+    // Purity: input untouched.
+    expect(player.maxHp).toBe(11);
+    expect(player.level).toBe(1);
+  });
+
+  it('floors the roll at 1 when die face + CON mod is non-positive', () => {
+    // CON 3 -> mod -4. Enforcer maxHp = 10 + (-4) = 6. rng 0 -> face 1. roll = 1 + (-4) = -3
+    // -> floored to 1. maxHp 6 -> 7.
+    const player = createPlayer({ name: 'C', classId: 'Enforcer', stats: stats({ CON: 3 }) });
+    expect(player.maxHp).toBe(6);
+    const out = applyLevelUpHp(player, scriptedRng([0]));
+    expect(out.hpRoll).toBe(1);
+    expect(out.player.maxHp).toBe(7);
+    expect(out.player.level).toBe(2);
   });
 });
 
