@@ -35,7 +35,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
 
 function menuState(player: Player, rngState: number, act = 1): GameState {
   return {
-    version: 5,
+    version: 6,
     rngState,
     player,
     act,
@@ -55,7 +55,7 @@ describe('createGame', () => {
     expect(s.act).toBe(1);
     expect(s.place).toBe(0);
     expect(s.rngState).toBe(777);
-    expect(s.version).toBe(5);
+    expect(s.version).toBe(6);
     expect(awaitingFor(s.phase)).toBe('title');
   });
 
@@ -129,7 +129,7 @@ describe('character creation transitions', () => {
     // armored AC is what the HUD sees.
     const stats: Stats = { STR: 12, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 };
     const state: GameState = {
-      version: 5,
+      version: 6,
       rngState: 7,
       player: null,
       act: 1,
@@ -439,7 +439,7 @@ describe('entering Act 5', () => {
   it('act-intro{5} continue builds the final boss battle', () => {
     const player = makePlayer();
     const state: GameState = {
-      version: 5,
+      version: 6,
       rngState: 314,
       player,
       act: 5,
@@ -469,7 +469,7 @@ describe('win / ending path', () => {
   it('victory in the final battle emits the ending with the name, then goes terminal', () => {
     const player = makePlayer({ name: 'Zara' });
     const state: GameState = {
-      version: 5,
+      version: 6,
       rngState: 1,
       player,
       act: 5,
@@ -507,7 +507,7 @@ describe('win / ending path', () => {
     const battle: BattleState = { player, enemy: boss, act: 5, canFlee: false };
     let r: StepResult = {
       state: {
-        version: 5,
+        version: 6,
         rngState: 7,
         player,
         act: 5,
@@ -569,7 +569,7 @@ describe('JSON round-trip determinism', () => {
 function startedBattleState(player: Player, enemy: BattleState['enemy'], rngState: number): GameState {
   const battle: BattleState = { player, enemy, act: 1, canFlee: true };
   return {
-    version: 5,
+    version: 6,
     rngState,
     player,
     act: 1,

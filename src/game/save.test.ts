@@ -28,6 +28,8 @@ import { createPlayer } from './player.ts';
 import { createInventory } from './inventory.ts';
 import { grantMomentum } from './classKit.ts';
 import { generateEnemy } from './enemy.ts';
+import { getFamily } from './enemyFamily.ts';
+import { applyAffix, AFFIXES } from './enemyAffix.ts';
 import { tickConditions, type ActiveCondition } from './condition.ts';
 import { type ItemInstance } from './item.ts';
 import { type GameEvent } from './gameEvent.ts';
@@ -61,8 +63,8 @@ function runInputs(
 
 describe('SAVE_VERSION', () => {
   it('mirrors the current GameState.version', () => {
-    // Derived from game.ts: createGame stamps version 5 (M7 bumped 4 -> 5, gold retired).
-    expect(SAVE_VERSION).toBe(5);
+    // Derived from game.ts: createGame stamps version 6 (M8 bumped 5 -> 6, enemy roster).
+    expect(SAVE_VERSION).toBe(6);
     expect(createGame(SEED).version).toBe(SAVE_VERSION);
   });
 });
@@ -104,7 +106,7 @@ describe('migration v2 -> v3 (legacy equipped ids -> paperdoll slots)', () => {
     expect(mp.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect('equippedWeaponId' in mp).toBe(false);
     expect('equippedArmorId' in mp).toBe(false);
-    expect(migrated!.version).toBe(5);
+    expect(migrated!.version).toBe(6);
     // Modern midRunState seeds the SAME starting gear into slots, so the migrated v2 save
     // deep-equals the modern v3 state.
     expect(migrated).toEqual(modern);
@@ -140,7 +142,7 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
-    expect(migrated!.version).toBe(5);
+    expect(migrated!.version).toBe(6);
     expect(migrated!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
     expect(migrated!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
@@ -158,12 +160,12 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
     expect(migrated!.player).toBeNull();
-    expect(migrated!.version).toBe(5);
+    expect(migrated!.version).toBe(6);
     expect(migrated).toEqual(modern);
   });
 
-  it('rejects a future version 6 save without throwing', () => {
-    const s = { ...createGame(SEED), version: 6 };
+  it('rejects a future version 7 save without throwing', () => {
+    const s = { ...createGame(SEED), version: 7 };
     expect(() => decodeSave(JSON.stringify(s))).not.toThrow();
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
@@ -496,7 +498,7 @@ describe('M6 v3 -> v4 migration + effect-bearing item round-trip', () => {
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(5);
+    expect(migrated!.version).toBe(6);
     expect(migrated).toEqual(modern);
   });
 
@@ -548,7 +550,7 @@ describe('M7 v4 -> v5 migration (gold retired)', () => {
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(5);
+    expect(migrated!.version).toBe(6);
     expect('gold' in migrated!.player!).toBe(false);
     expect(migrated).toEqual(modern);
   });
@@ -559,17 +561,61 @@ describe('M7 v4 -> v5 migration (gold retired)', () => {
     old.version = 4;
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(5);
+    expect(migrated!.version).toBe(6);
     expect(migrated!.player).toBeNull();
     expect(migrated).toEqual(modern);
   });
 
   it('a fresh v5 state round-trips deep-equal', () => {
     const m = midRunState(SEED);
-    expect(m.version).toBe(5);
+    expect(m.version).toBe(6);
     expect('gold' in m.player!).toBe(false);
     const decoded = decodeSave(encodeSave(m));
     expect(decoded).toEqual(m);
+  });
+});
+
+describe('M8 v5 -> v6 migration + family/affix enemy round-trip', () => {
+  it('a v5 save (M8 roster fields absent) migrates to v6 and equals the modern state', () => {
+    // Build a modern v6 save, then stamp it back to v5 to simulate a pre-M8 save. The M8
+    // Enemy fields are additive/optional, so upgrade5to6 only bumps the version stamp and
+    // the migrated result deep-equals the modern v6 state.
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    old.version = 5;
+    expect(old.version).toBe(5); // sanity: really v5-shaped
+
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.version).toBe(6);
+    expect(migrated).toEqual(modern);
+  });
+
+  it('a mid-battle state carrying a family + affix enemy round-trips deep-equal', () => {
+    const base = midRunState(SEED);
+    // A ⚖ family enemy made elite (Ancient) — carries familyId, karmaWeighted, affixId.
+    const family = getFamily('grief')!;
+    const affix = AFFIXES.find((a) => a.id === 'ancient')!;
+    const enemy = applyAffix(
+      generateEnemy({ act: 3, family, playerXp: 20 }, mulberry32(SEED)),
+      affix,
+    );
+    const battle = createBattle(base.player!, enemy, 3);
+    const state: GameState = {
+      ...base,
+      phase: { kind: 'battle', battle, started: true, final: false },
+    };
+
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+    // The new enemy fields survive explicitly.
+    const rp = restored as GameState;
+    if (rp.phase.kind === 'battle') {
+      expect(rp.phase.battle.enemy.familyId).toBe('grief');
+      expect(rp.phase.battle.enemy.karmaWeighted).toBe(true);
+      expect(rp.phase.battle.enemy.affixId).toBe('ancient');
+    }
   });
 });
 

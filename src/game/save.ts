@@ -26,7 +26,7 @@ import { type PlayerClass } from './player.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 /** The valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -106,11 +106,12 @@ export function decodeSave(json: string): GameState | null {
  * `decodeSave`: each `case` upgrades one step and bumps `current`.
  *
  * Today the reachable source versions are `1` (upgraded via `upgrade1to2` -> `upgrade2to3`
- * -> `upgrade3to4` -> `upgrade4to5`), `2`, `3`, `4`, and anything `< 1` (nothing to upgrade
- * -> `null`, unsupported). The ladder composes: a v1 save gains an empty inventory at 1->2,
- * then its legacy equipped ids populate the paperdoll slots at 2->3, then the M6 additive
- * fields need no change at 3->4 (only a version stamp), then the M7 gold field is DROPPED
- * from the player at 4->5. Returns the upgraded plain value (still unvalidated — `decodeSave`
+ * -> `upgrade3to4` -> `upgrade4to5` -> `upgrade5to6`), `2`, `3`, `4`, `5`, and anything `< 1`
+ * (nothing to upgrade -> `null`, unsupported). The ladder composes: a v1 save gains an empty
+ * inventory at 1->2, then its legacy equipped ids populate the paperdoll slots at 2->3, then
+ * the M6 additive fields need no change at 3->4 (only a version stamp), then the M7 gold field
+ * is DROPPED from the player at 4->5, then the M8 roster fields are additive/optional at 5->6
+ * (only a version stamp). Returns the upgraded plain value (still unvalidated — `decodeSave`
  * validates the result), or `null` if the source version cannot be migrated.
  */
 function migrate(raw: unknown, fromVersion: number): unknown | null {
@@ -133,6 +134,10 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
       case 4:
         value = upgrade4to5(value);
         current = 5;
+        break;
+      case 5:
+        value = upgrade5to6(value);
+        current = 6;
         break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
@@ -245,6 +250,23 @@ function upgrade4to5(raw: unknown): unknown {
     next.player = player;
   }
   next.version = 5;
+  return next;
+}
+
+/**
+ * Migrate a v5 save (M7 sacrifice economy) to the v6 shape (M8 enemy roster). Every M8
+ * addition — the `Enemy.familyId` / `karmaWeighted` / `affixId?` fields — lives only inside
+ * a mid-battle `phase.battle.enemy`, is additive/optional, and is not deep-validated by the
+ * save guard, so a structurally valid v5 save is already a structurally valid v6 save (a
+ * v5 mid-battle enemy simply reads `karmaWeighted` as falsy = non-weighted, which every
+ * pre-M8 enemy was). This step therefore only stamps `version = 6`; a non-object input is
+ * returned with just the stamp so the caller's validation still runs. (An explicit ladder
+ * rung so a future v7 slots in cleanly, matching the upgrade3to4 precedent.)
+ */
+function upgrade5to6(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  next.version = 6;
   return next;
 }
 
