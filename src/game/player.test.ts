@@ -78,7 +78,8 @@ describe('createPlayer — Enforcer', () => {
     expect(player.skillCharges).toBe(5);
     expect(player.maxSkillCharges).toBe(5);
     expect(player.activeConditions).toEqual([]);
-    expect(player.skillPool).toEqual([]);
+    // M2 generic starter pool (class-agnostic; M3 swaps in per-class kits).
+    expect(player.skillPool).toEqual(['strike', 'ember', 'venom', 'frost', 'enfeeble']);
   });
 
   it('has a 7-slot all-zero resistance array', () => {

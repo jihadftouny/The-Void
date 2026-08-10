@@ -25,6 +25,7 @@ import {
 import { roll4d6DropLowest, type Rng } from './rng.ts';
 import { ELEMENTS } from './element.ts';
 import { type ActiveCondition } from './condition.ts';
+import { type SkillId } from './skill.ts';
 import { createInventory, type Inventory } from './inventory.ts';
 
 /** The two playable classes (this string is the player's `classId`). */
@@ -52,7 +53,7 @@ export interface Player extends Character {
   resistances: number[];
   /** Active status conditions (M6). */
   activeConditions: ActiveCondition[];
-  /** Learned skill ids — the player starts with none (faithful to Java). */
+  /** Learned skill ids — a new player starts with the M2 generic starter pool. */
   skillPool: string[];
 }
 
@@ -79,6 +80,14 @@ const STARTING_RESTS = 1;
 const STARTING_POTS = 2;
 const PROFICIENCY = 2;
 const MAX_SKILL_CHARGES = 5;
+
+/**
+ * The generic M2 starter skill pool every new player begins with — enough to exercise
+ * casting across elements/conditions. Class-agnostic for now; M3 replaces these with
+ * per-class signature kits. (Old saves keep whatever skillPool they stored; no starter
+ * injection on load — an old save simply has the skills it had.)
+ */
+const STARTER_SKILLS: readonly SkillId[] = ['strike', 'ember', 'venom', 'frost', 'enfeeble'];
 
 /**
  * Roll a fresh stat set: `roll4d6DropLowest` once per stat, in canonical
@@ -125,6 +134,6 @@ export function createPlayer(args: {
     inventory: createInventory(),
     resistances: ELEMENTS.map(() => 0),
     activeConditions: [],
-    skillPool: [],
+    skillPool: [...STARTER_SKILLS],
   };
 }
