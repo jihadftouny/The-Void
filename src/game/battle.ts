@@ -31,6 +31,7 @@ import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
 import { weaponForSlot, UNARMED } from './equipment.ts';
 import { computeEquipModifiers } from './equipEffects.ts';
 import { fireTrigger, reviveActionFor } from './relicEffects.ts';
+import { applyConsumable, type ConsumableSource } from './consumable.ts';
 
 /** The full, serializable state of a battle in progress. */
 export interface BattleState {
@@ -59,7 +60,12 @@ export interface BattleState {
  * existing `'fight'|'potion'|'run'` caller valid; adding a union member breaks no
  * exhaustive switch.
  */
-export type BattleAction = 'fight' | 'potion' | 'run' | { kind: 'cast'; skillId: SkillId };
+export type BattleAction =
+  | 'fight'
+  | 'potion'
+  | 'run'
+  | { kind: 'cast'; skillId: SkillId }
+  | { kind: 'useConsumable'; source: ConsumableSource };
 
 /** The state of the battle after a round resolves. */
 export type RoundStatus = 'ongoing' | 'player-won' | 'player-died' | 'fled';
@@ -109,8 +115,8 @@ export function rollFlee(rng: Rng): boolean {
  */
 export function resolveRound(state: BattleState, action: BattleAction, rng: Rng): RoundResult {
   if (typeof action === 'object') {
-    // The only object action is a cast.
-    return resolveCast(state, action.skillId, rng);
+    if (action.kind === 'cast') return resolveCast(state, action.skillId, rng);
+    return resolveUseConsumable(state, action.source, rng);
   }
   switch (action) {
     case 'fight':
@@ -441,6 +447,39 @@ function resolvePotion(state: BattleState): RoundResult {
     };
   }
   return { state, events: [{ kind: 'potion-unavailable' }], status: 'ongoing' };
+}
+
+/**
+ * Use a backpack consumable as the player's action — PURE. Delegates the RNG-free effect
+ * application to `consumable.applyConsumable`, then resolves the round: an unavailable item is
+ * a no-op (state unchanged, `consumable-unavailable`); a `flee` consumable ends the round as
+ * `fled`; a throwable that drops the enemy to 0 is a victory (rewards rolled via
+ * `killAndVictory`); a self-lethal outcome (none ship today) is a defeat; otherwise `ongoing`.
+ * NO enemy counter-attack — using an item costs the turn exactly like the potion action.
+ */
+function resolveUseConsumable(
+  state: BattleState,
+  source: ConsumableSource,
+  rng: Rng,
+): RoundResult {
+  const res = applyConsumable(state.player, state.enemy, source);
+  if (!res.consumed) {
+    return { state, events: res.events, status: 'ongoing' };
+  }
+  const player = res.player;
+  const enemy = res.enemy;
+  const events = res.events;
+  if (res.fled) {
+    return { state: { ...state, player, enemy }, events, status: 'fled' };
+  }
+  if (player.hp <= 0) {
+    events.push({ kind: 'defeat' });
+    return { state: { ...state, player, enemy }, events, status: 'player-died' };
+  }
+  if (enemy.hp <= 0) {
+    return killAndVictory(state, player, enemy, events, rng);
+  }
+  return { state: { ...state, player, enemy }, events, status: 'ongoing' };
 }
 
 function resolveRun(state: BattleState, rng: Rng): RoundResult {
