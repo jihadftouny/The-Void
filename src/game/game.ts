@@ -41,6 +41,7 @@ import {
   shouldAdvance,
 } from './progression.ts';
 import { getActIntro, getActOutro, getEnding, getIntro } from './story.ts';
+import { playerArmorClass } from './defense.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- State ---------------------------------------------------------------
@@ -233,11 +234,13 @@ export function step(state: GameState, input: GameInput): StepResult {
       const intro = getIntro();
       const events: GameEvent[] = [
         {
+          // M4: report the player's REAL armored AC (from gear/dexCap/strReq/shield) so
+          // the HUD shows that defense matters, not the stored unarmored 10 + CONmod base.
           kind: 'player-created',
           name: player.name,
           classId: player.classId,
           maxHp: player.maxHp,
-          armorClass: player.armorClass,
+          armorClass: playerArmorClass(player),
         },
         {
           kind: 'intro',

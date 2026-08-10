@@ -411,6 +411,32 @@ describe('M3 classes + resources: save validation & round-trip', () => {
   });
 });
 
+describe('M4 shield: save validation & round-trip', () => {
+  it('a player carrying equippedShieldId round-trips byte-equal', () => {
+    const base = midRunState(SEED);
+    const player = { ...base.player!, equippedShieldId: 'Buckler' };
+    const state: GameState = { ...base, player };
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+    expect(restored!.player!.equippedShieldId).toBe('Buckler');
+  });
+
+  it('a pre-M4 v2 save with NO equippedShieldId field decodes (additive-optional, no version bump)', () => {
+    // A modern save with no shield already omits the optional field; confirm it decodes and
+    // reads as "no shield". This is the pre-M4 shape (equippedShieldId absent).
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    const oldPlayer = old.player as Record<string, unknown>;
+    expect('equippedShieldId' in oldPlayer).toBe(false); // sanity: source really lacks it
+    old.version = SAVE_VERSION;
+
+    const decoded = decodeSave(JSON.stringify(old));
+    expect(decoded).not.toBeNull();
+    expect(decoded!.player!.equippedShieldId).toBeUndefined();
+  });
+});
+
 describe('anchor 2: RNG accumulator identity', () => {
   it('restored rngState is the identical number and the resumed stream matches', () => {
     const m = midRunState(SEED);

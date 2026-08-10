@@ -16,6 +16,7 @@ import { FINAL_BOSS_NAME, FINAL_BOSS_XP } from './progression.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
 import { createKarma } from './karma.ts';
+import { makeCondition } from './condition.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- Fixtures ------------------------------------------------------------
@@ -117,6 +118,31 @@ describe('character creation transitions', () => {
       const joined = intro.lines.join('\n');
       expect(joined).not.toContain('{playerName}');
       expect(joined).toContain('Zara');
+    }
+  });
+
+  it('player-created reports the REAL armored AC, not the stored unarmored base', () => {
+    // Enforcer starts in Jooj Armor 1 (baseArmor 11, dexCap 2, strReq 0). With CON 12/+1
+    // and DEX 12/+1 the real AC is 11 + 1 + min(1,2) = 13, whereas the stored (unarmored)
+    // armorClass is 10 + CONmod = 11. The event must carry 13 (hand-derived), proving M4's
+    // armored AC is what the HUD sees.
+    const stats: Stats = { STR: 12, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 };
+    const state: GameState = {
+      version: 2,
+      rngState: 7,
+      player: null,
+      act: 1,
+      place: 0,
+      karma: createKarma(),
+      phase: { kind: 'stats-roll', name: 'Zara', classId: 'Enforcer', stats },
+    };
+    const r = step(state, { kind: 'stats-decision', accept: true });
+    const created = r.events.find((e) => e.kind === 'player-created');
+    expect(created).toBeDefined();
+    if (created && created.kind === 'player-created') {
+      expect(created.armorClass).toBe(13);
+      // The stored (unarmored) armorClass is only 11 — confirm the event improved on it.
+      expect(r.state.player?.armorClass).toBe(11);
     }
   });
 
@@ -536,9 +562,11 @@ function startedBattleState(player: Player, enemy: BattleState['enemy'], rngStat
 describe('cast battle-action flows through step', () => {
   it('casting Ember deals skill damage, spends a charge, and applies burn to the enemy', () => {
     // Player granted Ember (M3 default pools are per-class kits; Ember is generic), 5
-    // charges, INT 13 (mod 1, no augment -> +0 skill power). Enemy has no charges -> a
-    // plain 1-damage hit, no draw. ember Pyro base 2 vs 0 resist -> 2. player 20-1=19 ;
-    // enemy 30-2=28 ; charge 5->4.
+    // charges, INT 13 (mod 1, no augment -> +0 skill power). To keep the cast assertions
+    // seed-independent now that the enemy rolls to hit (M4), the enemy carries a fresh
+    // FREEZE (control): its condition tick sets the skip flag (0 draws, no save on onset),
+    // so it never attacks — the whole step draws nothing and the player takes 0. ember
+    // Pyro base 2 vs 0 resist -> 2. player 20-0=20 ; enemy 30-2=28 ; charge 5->4.
     const player = makePlayer({ hp: 20, maxHp: 20, skillCharges: 5, skillPool: ['ember'] });
     const enemy = {
       ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(5)),
@@ -546,6 +574,7 @@ describe('cast battle-action flows through step', () => {
       resistances: [0, 0, 0, 0, 0, 0, 0],
       skillPool: [] as string[],
       skillCharges: 0,
+      activeConditions: [makeCondition('freeze')],
     };
     const state = startedBattleState(player, enemy, 123);
     const r = step(state, { kind: 'battle-action', action: { kind: 'cast', skillId: 'ember' } });
@@ -553,7 +582,7 @@ describe('cast battle-action flows through step', () => {
     expect(r.state.phase.kind).toBe('battle');
     if (r.state.phase.kind === 'battle') {
       const b = r.state.phase.battle;
-      expect(b.player.hp).toBe(19);
+      expect(b.player.hp).toBe(20); // enemy frozen -> skipped -> took 0
       expect(b.enemy.hp).toBe(28);
       expect(b.player.skillCharges).toBe(4);
       expect(b.enemy.activeConditions.some((c) => c.type === 'burn')).toBe(true);
