@@ -11,11 +11,11 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 1/18 merged · M1–M5 built+verified (pending your batch merge)** `[######--------------]`
+**v3 overall: 1/18 merged · M1–M6 built+verified (pending your batch merge)** `[#######-------------]`
 Autonomous run (2026-08-10): building the mechanical milestones through the loop, **stacked & unmerged**
 per your merge gate — you review/merge the chain. Chain: `main` → M1 `state-foundations` → M2
-`skills-conditions` → M3 `class-kits` → M4 `combat-defense` → M5 `equip-engine`. Each PASSED
-plan→build→test (typecheck + full tests + build + adversarial verify). 561 tests at M5.
+`skills-conditions` → M3 `class-kits` → M4 `combat-defense` → M5 `equip-engine` → M6 `items-content`.
+Each PASSED plan→build→test (typecheck + full tests + build + adversarial verify). 625 tests at M6.
 
 | Milestone (v3) | Status |
 |---|---|
@@ -25,6 +25,7 @@ plan→build→test (typecheck + full tests + build + adversarial verify). 561 t
 | M3 — Classes & signature kits | ✅ built+verified — `agentic/class-kits` (494 tests), pending merge |
 | M4 — Combat overhaul: defense matters (enemies roll to-hit) | ✅ built+verified — `agentic/combat-defense` (526 tests), pending merge |
 | M5 — Inventory & equipment (Tibia-style) ★ | 🔶 ENGINE built+verified — `agentic/equip-engine` (561 tests); **Tibia visual UI deferred to a collab pass w/ you** |
+| M6 — Items content: relics, uniques, consumables | ✅ built+verified — `agentic/items-content` (625 tests); 15 relics + 4 uniques + 19 consumables + effect/trigger system + rarity gen; flavor co-write & in-UI display pending |
 | M6 — Items content: relics, uniques, consumables | ⬜ |
 | M7 — Loot sourcing & thematic economy | ⬜ |
 | M8 — Enemies: families, affixes, karma-weighting | ⬜ |

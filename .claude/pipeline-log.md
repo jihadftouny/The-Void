@@ -19,6 +19,26 @@ Format per entry:
 
 ---
 
+## 2026-08-10 — items-content (M6: relics, uniques, consumables + effect system) [stacked on M5, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: data files in `src/data/` not `src/game/data/` (repo convention; plan path was
+  wrong); SAVE_VERSION 3→4 rippled to version-LITERAL test assertions (game/view-model/narrate/save tests)
+  — intended bump, no behavioral change; `format.ts` exhaustive switch got 7 new event log lines; Void
+  Pact `cannotHeal` gated only at inventory-aware heal sites (potion/consumable/relic) NOT regen-tick or
+  classKit lifesteal (condition/classKit can't see inventory) — flagged, judged acceptable content-milestone
+  limitation; provisional relic mappings shipped where final mechanic needs unbuilt systems.
+- Test failures before fixes: none (PASS first pass). 561 → 625 tests (+64).
+- Plan open-questions: 4, all orchestrator-resolved (ONE unit w/ per-stage commits; consumable = no extra
+  enemy turn; relics in ring/amulet 2-max; ship provisional mappings). Per-stage-commit instruction added
+  after M5's session-limit interruption — this build completed clean, 5 stage commits.
+- Notable: off-equivalence anchor held (trigger seam inert when no effect declared); triggered effects
+  RNG-free, only rarity-gen uses rng.ts (seeded). Relics karma-neutral. Test-agent caught plan prose
+  overclaiming Void Pact "blocks regeneration" — fix in M6-content co-write. 3 bite-checks.
+- NEEDS-HUMAN banked: in-UI item/relic/consumable display (render follow-up); Void Pact heal-scope design
+  call; item balance/feel (M15); consumable-turn-cost pacing (M15).
+- Manual engineer fixes: none yet
+
 ## 2026-08-10 — equip-engine (M5: equipment engine, Tibia UI deferred) [stacked on M4, unmerged]
 - Verdict: PASS (engine) — test-agent returned FAIL but ONLY for a doc deliverable the orchestrator owns
   (see reconciliation); all code checks passed. Orchestrator reconciled → treated as PASS.

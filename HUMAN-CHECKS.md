@@ -25,7 +25,7 @@ After you **merge to root** (see the bottom), just run `npm run desktop` from th
 
 ---
 
-## 🧱 Autonomous mechanical-milestone run (M1–M5 built+verified, pending your merge)
+## 🧱 Autonomous mechanical-milestone run (M1–M6 built+verified, pending your merge)
 
 I built these through the loop while you were hands-off, **stacked and unmerged** (your merge gate).
 All are headless-verified (typecheck + full tests + build + adversarial checks); the items below are
@@ -59,6 +59,20 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
         when you want to design the UI together.
   - [ ] **Equip/inventory UX feel** — checkable once that UI exists (equip/unequip/swap, the shop's
         "your current gear" display).
+- **M6 (items content — relics, uniques, consumables)** — 15 relics, 4 named uniques, 19 consumables, a
+  triggered-effect system (6 combat trigger points), and a seeded rarity generator. All engine + tested;
+  no in-UI display yet:
+  - [ ] **In-UI item/relic/consumable display** — names, effects, and a *use-consumable* control are NOT
+        surfaced in the UI yet (render follow-up, pairs with the Tibia UI pass). Confirm it's genuinely
+        absent (logic exists & tested), not half-wired.
+  - [ ] **Void Pact heal-scope (design call)** — the "cannot heal" relic currently blocks potion/consumable/
+        relic heals but NOT the regeneration condition or class lifesteal (those systems can't see your
+        inventory). Decide if you want it to be a *total* heal-lock (then it's a small follow-up).
+  - [ ] **Item balance & feel** and **should using a consumable give the enemy a free turn?** — both **M15**
+        tuning calls; every item magnitude is a placeholder.
+  - _Provisional relic mappings_ (Ash Censer, Reliquary, Ashen Crown, Hollow Regalia, Empty Vessel…) are
+        real & tested but mapped to the closest current mechanic; final semantics land in the M6 content
+        co-write / M10 floor hooks.
 
 _Note: the "unwinnable balance" item below predates this run; the dedicated balance pass is **M15**,
 where I'll sim-verify winnability against your difficulty-feel input._
