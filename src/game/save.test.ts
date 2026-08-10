@@ -22,7 +22,10 @@ import {
   type GameInput,
   type StepResult,
 } from './game.ts';
-import { createRng } from './rng.ts';
+import { createRng, mulberry32 } from './rng.ts';
+import { createBattle } from './battle.ts';
+import { generateEnemy } from './enemy.ts';
+import { tickConditions, type ActiveCondition } from './condition.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 const SEED = 12345;
@@ -285,6 +288,63 @@ describe('anchor 1: deterministic resume of the event stream', () => {
 
     expect(resumed.events).toEqual(reference.events);
     expect(resumed.state).toEqual(reference.state);
+  });
+});
+
+describe('M2 conditions: mid-battle save round-trip (intensity + augment + enemy condition)', () => {
+  // Build a started, non-final battle whose player carries a stacked poison (intensity 2)
+  // and an augment (strong), and whose enemy carries a burn. The optional `intensity`
+  // field is additive plain data, so no save-version bump is needed.
+  function midBattleState(playerConds: ActiveCondition[], enemyConds: ActiveCondition[]): GameState {
+    const base = midRunState(SEED);
+    const player = { ...base.player!, hp: 20, maxHp: 20, activeConditions: playerConds };
+    const enemy = {
+      ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(SEED)),
+      activeConditions: enemyConds,
+    };
+    const battle = createBattle(player, enemy, 1);
+    return { ...base, player, phase: { kind: 'battle', battle, started: true, final: false } };
+  }
+
+  it('a stacked poison (intensity 2) + augment + enemy condition survive deep-equal', () => {
+    const state = midBattleState(
+      [
+        { type: 'poison', remainingTurns: 2, maxTurns: 2, intensity: 2 },
+        { type: 'strong', remainingTurns: 2, maxTurns: 2 },
+      ],
+      [{ type: 'burn', remainingTurns: 1, maxTurns: 2 }],
+    );
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+
+    // Intensity is explicitly preserved through the JSON trip.
+    const rp = restored as GameState;
+    if (rp.phase.kind === 'battle') {
+      const poison = rp.phase.battle.player.activeConditions.find((c) => c.type === 'poison');
+      expect(poison?.intensity).toBe(2);
+    }
+  });
+
+  it('a LEGACY condition (no intensity) round-trips without a version bump and ticks as 1', () => {
+    // A pre-M2 poison at its effect phase: three fields, no `intensity`.
+    const state = midBattleState([{ type: 'poison', remainingTurns: 1, maxTurns: 2 }], []);
+    expect(state.version).toBe(SAVE_VERSION); // no bump (SAVE_VERSION stays 2)
+
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).toEqual(state);
+
+    const rp = restored as GameState;
+    if (rp.phase.kind === 'battle') {
+      const cond = rp.phase.battle.player.activeConditions[0]!;
+      expect('intensity' in cond).toBe(false); // stays legacy-shaped
+      // The decoded legacy poison ticks as intensity 1 (-1 hp), proving backward compat.
+      const noDraw = () => {
+        throw new Error('poison must consume no rng draw');
+      };
+      const tick = tickConditions(rp.phase.battle.player, rp.phase.battle.enemy, noDraw);
+      expect(tick.hpDelta).toBe(-1);
+    }
   });
 });
 

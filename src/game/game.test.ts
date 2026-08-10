@@ -517,6 +517,74 @@ describe('JSON round-trip determinism', () => {
   });
 });
 
+// ------- Cast battle-action through `step` ------------------------------------
+
+/** Build a started, non-final battle phase for a player vs a made enemy. */
+function startedBattleState(player: Player, enemy: BattleState['enemy'], rngState: number): GameState {
+  const battle: BattleState = { player, enemy, act: 1, canFlee: true };
+  return {
+    version: 2,
+    rngState,
+    player,
+    act: 1,
+    place: 0,
+    karma: createKarma(),
+    phase: { kind: 'battle', battle, started: true, final: false },
+  };
+}
+
+describe('cast battle-action flows through step', () => {
+  it('casting Ember deals skill damage, spends a charge, and applies burn to the enemy', () => {
+    // Player starts with the generic pool (Ember included), 5 charges, INT 13 (mod 1, no
+    // augment -> +0 skill power). Enemy has no charges -> a plain 1-damage hit, no draw.
+    // ember Pyro base 2 vs 0 resist -> 2. player 20-1=19 ; enemy 30-2=28 ; charge 5->4.
+    const player = makePlayer({ hp: 20, maxHp: 20, skillCharges: 5 });
+    const enemy = {
+      ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(5)),
+      hp: 30,
+      resistances: [0, 0, 0, 0, 0, 0, 0],
+      skillPool: [] as string[],
+      skillCharges: 0,
+    };
+    const state = startedBattleState(player, enemy, 123);
+    const r = step(state, { kind: 'battle-action', action: { kind: 'cast', skillId: 'ember' } });
+
+    expect(r.state.phase.kind).toBe('battle');
+    if (r.state.phase.kind === 'battle') {
+      const b = r.state.phase.battle;
+      expect(b.player.hp).toBe(19);
+      expect(b.enemy.hp).toBe(28);
+      expect(b.player.skillCharges).toBe(4);
+      expect(b.enemy.activeConditions.some((c) => c.type === 'burn')).toBe(true);
+    }
+    expect(r.events).toContainEqual({ kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember' });
+    expect(r.events).toContainEqual({ kind: 'condition-applied', subject: 'enemy', conditionType: 'burn' });
+  });
+
+  it('a cast sequence is deterministic: revived-state step === live step (byte-identical)', () => {
+    // Enemy has a Pyro Ball charge, so its skill-pick draw advances the rng — proving the
+    // rngState round-trips through JSON and the cast round is reproducible.
+    const player = makePlayer({ hp: 40, maxHp: 40, skillCharges: 5 });
+    const enemy = {
+      ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(9)),
+      hp: 30,
+      resistances: [0, 0, 0, 0, 0, 0, 0],
+      skillPool: ['pyroBall'],
+      skillCharges: 2,
+    };
+    const state = startedBattleState(player, enemy, 55);
+    const revived: GameState = JSON.parse(JSON.stringify(state));
+    expect(revived).toEqual(state);
+
+    const castInput: GameInput = { kind: 'battle-action', action: { kind: 'cast', skillId: 'ember' } };
+    const a = step(state, castInput);
+    const b = step(revived, castInput);
+    expect(b.state).toEqual(a.state);
+    expect(b.events).toEqual(a.events);
+    expect(a.state.rngState).not.toBe(state.rngState); // the enemy pick advanced the rng
+  });
+});
+
 // ------- Full scripted playthrough -------------------------------------------
 
 // A deterministic policy: aggressive fighting, CON-stacking, always rest, no shop.
