@@ -13,6 +13,7 @@
 
 import enemyNamesData from '../data/enemyNames.json';
 import { weightedPick, type Rng } from './rng.ts';
+import { type EnemyFamily } from './enemyFamily.ts';
 
 /** A weighted name fragment: [word, weight]. */
 export type WeightPair = readonly [string, number];
@@ -26,9 +27,17 @@ export interface EnemyNameTable {
 
 // JSON is keyed by act number (as a string) -> type -> table. The JSON tuples
 // widen to (string|number)[][], so cast through `unknown` to the WeightPair shape.
+// (The additive top-level "byFamily" key is read via FAMILY_TABLES below; numeric-act
+// lookups never reach it, so `getEnemyNameTable`/`enemyTypesForAct` are unchanged.)
 const TABLES = enemyNamesData as unknown as Readonly<
   Record<string, Readonly<Record<string, EnemyNameTable>>>
 >;
+
+// The M8 per-family name tables (top-level "byFamily"), keyed by family id. Optional —
+// only families whose broad-tag act table is empty (F3 Nightmare) or missing (act 5,
+// act-4 Magical) need a bespoke table; the rest reuse their tag table via the fallback.
+const FAMILY_TABLES: Readonly<Record<string, EnemyNameTable>> =
+  (enemyNamesData as unknown as { byFamily?: Record<string, EnemyNameTable> }).byFamily ?? {};
 
 /**
  * The name table for a given Act (1..4) and enemy type, or undefined if the
@@ -85,4 +94,26 @@ export function generateEnemyName(
   ].filter((word) => word.length > 0);
   const fullName = fragments.join(' ');
   return fullName.length > 0 ? fullName : type;
+}
+
+/**
+ * Build a full name for an ENEMY FAMILY (M8) — PURE, same draw discipline as
+ * `generateEnemyName`. Name resolution, in order:
+ *   1. a bespoke `byFamily[family.id]` table (e.g. the seven Sins, the F3 Feelings);
+ *   2. else the family's broad-tag table for this act, `getEnemyNameTable(act, family.tag)`
+ *      (so a tag-fit family like a Beast-tagged stray reuses the act's Beast table);
+ *   3. else the family's own `name` as a fallback.
+ * Draw order is first, then middle, then last (empty slots draw nothing), so a family
+ * enemy's name-draw count is stable and reproducible from the seed.
+ */
+export function generateFamilyName(family: EnemyFamily, act: number, rng: Rng): string {
+  const table = FAMILY_TABLES[family.id] ?? getEnemyNameTable(act, family.tag);
+  if (!table) return family.name;
+  const fragments = [
+    selectNameFragment(table.first, rng),
+    selectNameFragment(table.middle, rng),
+    selectNameFragment(table.last, rng),
+  ].filter((word) => word.length > 0);
+  const fullName = fragments.join(' ');
+  return fullName.length > 0 ? fullName : family.name;
 }

@@ -4,7 +4,9 @@ import {
   enemyTypesForAct,
   selectNameFragment,
   generateEnemyName,
+  generateFamilyName,
 } from './enemyName.ts';
+import { getFamily, type EnemyFamily } from './enemyFamily.ts';
 import { mulberry32, type Rng } from './rng.ts';
 
 function scriptedRng(values: readonly number[]): Rng {
@@ -179,6 +181,59 @@ describe('generateEnemyName', () => {
   it('is deterministic under the same seed', () => {
     expect(generateEnemyName(1, 'Beast', mulberry32(321))).toBe(
       generateEnemyName(1, 'Beast', mulberry32(321)),
+    );
+  });
+});
+
+describe('generateFamilyName', () => {
+  // The seven authored sin names are the INDEPENDENT oracle (from the plan / GAME-DESIGN §7).
+  const SINS = ['Pride', 'Envy', 'Wrath', 'Sloth', 'Greed', 'Gluttony', 'Lust'];
+
+  it('sevenSins always yields one authored sin, and all 7 are reachable over a seed sweep', () => {
+    const family = getFamily('sevenSins')!;
+    const seen = new Set<string>();
+    for (let seed = 0; seed < 300; seed++) {
+      const name = generateFamilyName(family, 3, mulberry32(seed));
+      expect(SINS).toContain(name); // never a name outside the set
+      seen.add(name);
+    }
+    expect(seen).toEqual(new Set(SINS)); // every one of the 7 was drawn
+  });
+
+  it('a tag-reuse family (mutantStrays) reuses the act-1 Beast table for a 3-token name', () => {
+    // mutantStrays has no bespoke byFamily entry, so it falls back to the Beast tag table
+    // (all three slots non-empty) -> a three-token Beast-style name.
+    const family = getFamily('mutantStrays')!;
+    const table = getEnemyNameTable(1, 'Beast')!;
+    const firstWords = table.first.map(([w]) => w);
+    const middleWords = table.middle.map(([w]) => w);
+    const lastWords = table.last.map(([w]) => w);
+    for (let seed = 0; seed < 100; seed++) {
+      const name = generateFamilyName(family, 1, mulberry32(seed));
+      const tokens = name.split(' ');
+      expect(tokens).toHaveLength(3);
+      expect(firstWords).toContain(tokens[0]);
+      expect(middleWords).toContain(tokens[1]);
+      expect(lastWords).toContain(tokens[2]);
+    }
+  });
+
+  it('falls back to the family name when neither a bespoke nor a tag table exists', () => {
+    const orphan: EnemyFamily = {
+      id: 'orphan',
+      name: 'Nameless Thing',
+      tag: 'NoSuchTag',
+      floor: 1,
+      karmaWeighted: false,
+      theme: { behaviorNote: '' },
+    };
+    expect(generateFamilyName(orphan, 1, mulberry32(7))).toBe('Nameless Thing');
+  });
+
+  it('is deterministic under the same seed', () => {
+    const family = getFamily('demons')!;
+    expect(generateFamilyName(family, 5, mulberry32(99))).toBe(
+      generateFamilyName(family, 5, mulberry32(99)),
     );
   });
 });
