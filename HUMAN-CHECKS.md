@@ -25,7 +25,7 @@ After you **merge to root** (see the bottom), just run `npm run desktop` from th
 
 ---
 
-## 🧱 Autonomous mechanical-milestone run (M1–M6 built+verified, pending your merge)
+## 🧱 Autonomous mechanical-milestone run (M1–M7 built+verified, pending your merge)
 
 I built these through the loop while you were hands-off, **stacked and unmerged** (your merge gate).
 All are headless-verified (typecheck + full tests + build + adversarial checks); the items below are
@@ -73,6 +73,16 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
   - _Provisional relic mappings_ (Ash Censer, Reliquary, Ashen Crown, Hollow Regalia, Empty Vessel…) are
         real & tested but mapped to the closest current mechanic; final semantics land in the M6 content
         co-write / M10 floor hooks.
+- **M7 (pure sacrifice economy — GOLD REMOVED)** — there is no currency anymore. Victory gives XP + a
+  loot drop; floors have chests; the shop is replaced by a **sacrifice-deal altar** ("seek a deal") that
+  trades power for a piece of yourself (HP / max-HP / a stat / a charge / a relic / a desecration):
+  - [ ] **The sacrifice-deal altar & loot/chest reveals render** — pick "seek a deal" from the menu and
+        confirm the cost/reward text + Take/Refuse buttons appear and work; confirm loot drops and chests
+        show what you got. Ships as plain text + buttons only — visual framing is a render follow-up.
+  - [ ] **Economy balance & feel (M15)** — is the ~50/50 found-loot vs sacrifice-deal split right? Are the
+        deal costs (esp. HP/max-HP) fair? Every number is a placeholder; gold removal shifts pacing.
+  - _Note: desecration/greed deals now genuinely move your hidden karma — the first real karma **input**.
+        Karma **effects** (how it bends the world/ending) come in M10/M14._
 
 _Note: the "unwinnable balance" item below predates this run; the dedicated balance pass is **M15**,
 where I'll sim-verify winnability against your difficulty-feel input._

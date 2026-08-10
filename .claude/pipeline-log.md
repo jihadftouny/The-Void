@@ -19,6 +19,25 @@ Format per entry:
 
 ---
 
+## 2026-08-10 — sacrifice-economy (M7: pure sacrifice economy, gold removed) [stacked on M6, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: loot draw-order omits a separate trinket stat-pick draw (dropped ring/amulet
+  stat defaults to STR) — matches the plan's own 5-draw anchor, documented. `buildChestLoot` act-agnostic
+  (per-act chest tables = M8/M10 data). `shop.ts` kept as gold-free throwaway scaffolding stages 1-3 then
+  deleted stage 4 (gold removal makes gold-shop uncompilable). Driver test seed re-pinned 1→2 (6-slot
+  encounter table shifted seed 1's first encounter; seed 2 restores the intended battle-with-round).
+- Test failures before fixes: none (PASS first pass). 625 → 649 tests (+24).
+- Plan open-questions: 4, all orchestrator-resolved (ONE unit; character-info→seek-deal rename; keep
+  extraRest; stat deals mods-only per existing level-up policy). Gold removal rippled into render/llm
+  (format/routing/scenes/desktop/narrate) — mechanical gold-strip + shop→deal rename only.
+- Notable: FIRST real karma INPUT wiring — desecrate/greed sacrifice-deals call the real recordKarma
+  (reverence −2 / greed −1); non-karma deals leave karma unchanged; offer selection only READS karma.
+  Karma EFFECTS still deferred. Save v4→v5 deep-equal migration (gold stripped). Loot seeded via M6
+  rarityGen. Test-agent hand-derived loot/deal/karma + migration deep-equal + 3 bite-checks.
+- NEEDS-HUMAN banked: economy balance/feel (~50/50 split, M15); in-UI deal-altar/loot/chest presentation.
+- Manual engineer fixes: none yet
+
 ## 2026-08-10 — items-content (M6: relics, uniques, consumables + effect system) [stacked on M5, unmerged]
 - Verdict: PASS
 - Fix rounds: 0
