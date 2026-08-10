@@ -33,9 +33,10 @@ import {
   type Stats,
 } from './character.ts';
 import { randInt, type Rng } from './rng.ts';
-import { generateEnemyName } from './enemyName.ts';
-import { ELEMENTS } from './element.ts';
+import { generateEnemyName, generateFamilyName } from './enemyName.ts';
+import { getElement, ELEMENTS } from './element.ts';
 import { type ActiveCondition } from './condition.ts';
+import { type EnemyFamily } from './enemyFamily.ts';
 
 /** An enemy — a `Character` plus enemy-only fields — as plain serializable data. */
 export interface Enemy extends Character {
@@ -49,44 +50,78 @@ export interface Enemy extends Character {
   skillPool: string[];
   /** Active status conditions (M6). */
   activeConditions: ActiveCondition[];
+  /**
+   * M8: the family this enemy belongs to. For a family-generated enemy this is the
+   * family id; for the legacy/boss path (no family) it is the `type`, matching pre-M8.
+   */
+  familyId: string;
+  /** M8: true when killing/sparing this enemy moves the karma vector (⚖ families only). */
+  karmaWeighted: boolean;
+  /** M8: the applied elite affix id, or absent when the enemy carries no affix. */
+  affixId?: string;
 }
 
 const ENEMY_ARMOR_CLASS = 10;
 const ENEMY_MAX_SKILL_CHARGES = 2;
 
 /**
- * Generate a deterministic enemy for an Act/type scaled by the player's xp. The
- * rng draw order is fixed (xp, then six stats in STAT_KEYS order, then maxHp,
- * then the name) so a given seed always reproduces the same enemy.
+ * Generate a deterministic enemy scaled by the player's xp. The rng draw order is
+ * fixed (xp, then six stats in STAT_KEYS order, then maxHp, then the name) so a given
+ * seed always reproduces the same enemy — identical whether or not a `family` is given.
+ *
+ * With `family` (M8): `familyId`/`karmaWeighted`/`skillPool`/resistances/name/stat-bias
+ * come from the family's data theme. Without `family` (legacy + final-boss path): the
+ * enemy is byte-compatible with pre-M8 — `familyId = type`, `karmaWeighted = false`, a
+ * flat all-zero resistance array, the seeded Pyro Ball skill, and the tag-table name. The
+ * family stat-bias and resistances are M15 BALANCE placeholders sourced from the loader.
  */
 export function generateEnemy(
-  args: { act: number; type: string; playerXp: number },
+  args: { act: number; type?: string; family?: EnemyFamily; playerXp: number },
   rng: Rng,
 ): Enemy {
-  const { act, type, playerXp } = args;
+  const { act, family, playerXp } = args;
+  // The base `type`/name: a family enemy is named for its family; the legacy path keeps
+  // the caller-supplied type. `type` and `family` are mutually-exclusive inputs.
+  const type = family ? family.id : (args.type ?? 'Beast');
+  const statBias = family?.theme.statBias;
 
   // 1. Enemy xp: 1 + randInt in [0, floor(playerXp/4) + 1].
   const xp = 1 + randInt(rng, Math.floor(playerXp / 4) + 2);
 
-  // 2. Six stats, in canonical order: 13 + floor(xp/4) + randInt(rng, floor(playerXp/4)+1).
+  // 2. Six stats, in canonical order: 13 + floor(xp/4) + randInt(rng, floor(playerXp/4)+1),
+  //    plus the family's flat per-stat bias (0 for the legacy path — one draw per stat
+  //    either way, so the draw order/count is identical).
   const statFloor = 13 + Math.floor(xp / 4);
   const statSpread = Math.floor(playerXp / 4) + 1;
   const stats = {} as Stats;
   for (const key of STAT_KEYS) {
-    stats[key] = statFloor + randInt(rng, statSpread);
+    stats[key] = statFloor + randInt(rng, statSpread) + (statBias?.[key] ?? 0);
   }
 
   // 3. Max HP (intended dmgCalculator formula), hp = maxHp.
   const maxHp = 30 + Math.floor(playerXp / 3) + randInt(rng, playerXp);
   const hp = maxHp;
 
-  // 4. Procedural name (draws first/middle/last through the same rng).
-  const fullName = generateEnemyName(act, type, rng);
+  // 4. Procedural name (draws first/middle/last through the same rng). The family path
+  //    resolves through the family-aware table chain; the legacy path is unchanged.
+  const fullName = family
+    ? generateFamilyName(family, act, rng)
+    : generateEnemyName(act, type, rng);
+
+  // Resistances: the legacy path is a flat 7-slot all-zero array; a family with a resist
+  // theme seeds exactly one slot (by element index) — no rng draw either way.
+  const resistances = ELEMENTS.map(() => 0);
+  if (family?.theme.resistElement && family.theme.resistAmount) {
+    const idx = getElement(family.theme.resistElement);
+    if (idx !== undefined) resistances[idx] = family.theme.resistAmount;
+  }
 
   return {
     name: type,
     type,
     fullName,
+    familyId: family ? family.id : type,
+    karmaWeighted: family ? family.karmaWeighted : false,
     stats,
     mods: computeStatMods(stats),
     hp,
@@ -96,9 +131,10 @@ export function generateEnemy(
     skillCharges: ENEMY_MAX_SKILL_CHARGES,
     maxSkillCharges: ENEMY_MAX_SKILL_CHARGES,
     hitDie: { quantity: 1, sides: 8 }, // vestigial: enemies never roll a hit die
-    resistances: ELEMENTS.map(() => 0),
-    // Java `Enemy` seeds every enemy with SkillEnemy.testFireSkill so it can act.
-    skillPool: ['pyroBall'],
+    resistances,
+    // Java `Enemy` seeds every enemy with SkillEnemy.testFireSkill so it can act; a family
+    // may override via `theme.skill` (only 'pyroBall' exists today).
+    skillPool: [family?.theme.skill ?? 'pyroBall'],
     activeConditions: [],
   };
 }

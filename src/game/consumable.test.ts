@@ -34,6 +34,7 @@ function makeEnemy(over: Partial<Enemy> = {}): Enemy {
     name: 'Beast', type: 'Beast', fullName: 'Beast', stats, mods: computeStatMods(stats),
     hp: 30, maxHp: 30, xp: 1, armorClass: 10, skillCharges: 0, maxSkillCharges: 2,
     hitDie: { quantity: 1, sides: 8 }, resistances: [0, 0, 0, 0, 0, 0, 0], skillPool: [], activeConditions: [],
+    familyId: 'Beast', karmaWeighted: false,
     ...over,
   };
 }

@@ -45,6 +45,8 @@ function makeEnemy(overrides: Partial<Enemy> = {}): Enemy {
     resistances: [0, 0, 0, 0, 0, 0, 0],
     skillPool: ['pyroBall'],
     activeConditions: [],
+    familyId: 'Beast',
+    karmaWeighted: false,
     ...overrides,
   };
 }

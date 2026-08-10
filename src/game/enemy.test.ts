@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { generateEnemy } from './enemy.ts';
 import { STAT_KEYS } from './character.ts';
+import { getFamily } from './enemyFamily.ts';
+import { getElement } from './element.ts';
 import { mulberry32 } from './rng.ts';
 
 // All expected values are hand-derived from the literal Java formulas (see enemy.ts):
@@ -102,5 +104,55 @@ describe('generateEnemy serializability', () => {
   it('round-trips through JSON unchanged', () => {
     const enemy = generateEnemy({ act: 4, type: 'Humanoid', playerXp: 77 }, mulberry32(88));
     expect(JSON.parse(JSON.stringify(enemy))).toEqual(enemy);
+  });
+});
+
+describe('generateEnemy legacy path carries the additive M8 fields', () => {
+  it('familyId mirrors the type and karmaWeighted is false with no affix', () => {
+    const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(5));
+    expect(enemy.familyId).toBe('Beast');
+    expect(enemy.karmaWeighted).toBe(false);
+    expect(enemy.affixId).toBeUndefined();
+  });
+});
+
+describe('generateEnemy family path', () => {
+  it('folds the family stat-bias, tags familyId/karmaWeighted, and seeds the resist slot', () => {
+    // mutantStrays: tag Beast, NOT ⚖, statBias {DEX:+1}, resist Poison 2. At playerXp=0
+    // every base stat pins to 13 (statSpread 1 -> randInt=0), so DEX = 13 + 1 = 14 and the
+    // other five stay 13. Poison is element index 4 -> resistances[4] = 2.
+    const family = getFamily('mutantStrays')!;
+    const enemy = generateEnemy({ act: 1, family, playerXp: 0 }, mulberry32(11));
+    expect(enemy.familyId).toBe('mutantStrays');
+    expect(enemy.karmaWeighted).toBe(false);
+    expect(enemy.stats.DEX).toBe(14);
+    for (const key of STAT_KEYS) {
+      if (key !== 'DEX') expect(enemy.stats[key]).toBe(13);
+    }
+    const poison = getElement('Poison')!;
+    expect(enemy.resistances[poison]).toBe(2);
+    // Only that one slot is non-zero.
+    expect(enemy.resistances.reduce((a, b) => a + b, 0)).toBe(2);
+    expect(enemy.skillPool).toEqual(['pyroBall']);
+  });
+
+  it('a ⚖ family sets karmaWeighted true and biases its themed stat', () => {
+    // gangers: ⚖, statBias {STR:+1}. At playerXp=0 -> STR = 14, karmaWeighted true.
+    const family = getFamily('gangers')!;
+    const enemy = generateEnemy({ act: 1, family, playerXp: 0 }, mulberry32(3));
+    expect(enemy.familyId).toBe('gangers');
+    expect(enemy.karmaWeighted).toBe(true);
+    expect(enemy.stats.STR).toBe(14);
+    expect(enemy.fullName.length).toBeGreaterThan(0);
+  });
+
+  it('is deterministic and JSON-serializable', () => {
+    const family = getFamily('demons')!;
+    const a = generateEnemy({ act: 5, family, playerXp: 40 }, mulberry32(2024));
+    const b = generateEnemy({ act: 5, family, playerXp: 40 }, mulberry32(2024));
+    expect(a).toEqual(b);
+    expect(JSON.parse(JSON.stringify(a))).toEqual(a);
+    // demons resist Pyro (index 2) by 2.
+    expect(a.resistances[getElement('Pyro')!]).toBe(2);
   });
 });

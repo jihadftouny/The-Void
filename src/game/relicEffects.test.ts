@@ -62,6 +62,8 @@ function makeEnemy(over: Partial<Enemy> = {}): Enemy {
     resistances: [0, 0, 0, 0, 0, 0, 0],
     skillPool: [],
     activeConditions: [],
+    familyId: 'Beast',
+    karmaWeighted: false,
     ...over,
   };
 }
