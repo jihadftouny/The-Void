@@ -243,10 +243,17 @@ describe('resolvePlayerAttack — off-equivalence (no augment / non-augment cond
   });
 });
 
-describe('resolveEnemyAttack — faithful, always hits', () => {
-  it('with charges + skill: deals the skill damage (Pyro Ball = 2) and spends one charge', () => {
+describe('resolveEnemyAttack — enemy rolls to hit (M4)', () => {
+  // Enemy STR 13 -> effectiveMods(enemy).STR = floor((13-10)/2) = +1 to hit. The default
+  // player AC used below is 13 (a starting Enforcer in Jooj Armor 1, CON 12/+1 DEX 12/+1:
+  // 11 + 1 + min(1,2) = 13). So the enemy HITS at natural >= 12 (12+1 = 13 >= 13) and
+  // MISSES at natural <= 11 (11+1 = 12 < 13). Every natural is fixed by a scripted face;
+  // face(f,20) yields exactly natural f, so total = f + 1 is hand-computed, never measured.
+  const AC = 13;
+
+  it('hit: natural 12 -> 13 >= AC 13, casts Pyro Ball (skill-pick draw) for 2, spends a charge', () => {
     const e = enemy({ skillCharges: 2 });
-    const r = resolveEnemyAttack(e, skillTarget(), scriptedRng([0.5]));
+    const r = resolveEnemyAttack(e, skillTarget(), AC, 0, scriptedRng([face(12, 20), 0.5]));
     expect(r.damage).toBe(2);
     expect(r.enemy.skillCharges).toBe(1);
     expect(r.events).toEqual([
@@ -255,17 +262,87 @@ describe('resolveEnemyAttack — faithful, always hits', () => {
     ]);
   });
 
-  it('with 0 charges: deals exactly 1 and draws nothing', () => {
-    const r = resolveEnemyAttack(enemy({ skillCharges: 0 }), skillTarget(), scriptedRng([]));
+  it('miss: natural 11 -> 12 < AC 13, deals 0, spends NO charge, draws NO skill-pick', () => {
+    const e = enemy({ skillCharges: 2 });
+    // Only ONE draw is scripted: if a skill-pick were drawn on a miss, scriptedRng throws.
+    const r = resolveEnemyAttack(e, skillTarget(), AC, 0, scriptedRng([face(11, 20)]));
+    expect(r.damage).toBe(0);
+    expect(r.enemy.skillCharges).toBe(2); // unchanged
+    expect(r.target.activeConditions).toEqual([]); // no condition applied
+    expect(r.events).toEqual([{ kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0 }]);
+  });
+
+  it('crit: natural 20 ignores AC and DOUBLES the dealt Pyro Ball damage (2 -> 4)', () => {
+    const e = enemy({ skillCharges: 2 });
+    const r = resolveEnemyAttack(e, skillTarget(), AC, 0, scriptedRng([face(20, 20), 0.5]));
+    expect(r.damage).toBe(4); // 2 * 2
+    expect(r.enemy.skillCharges).toBe(1);
+    expect(r.events).toEqual([
+      { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
+      { kind: 'attack', subject: 'enemy', outcome: 'crit', damage: 4 },
+    ]);
+  });
+
+  it('fumble: natural 1 -> deals 0, no charge, no skill-pick draw', () => {
+    const e = enemy({ skillCharges: 2 });
+    const r = resolveEnemyAttack(e, skillTarget(), AC, 0, scriptedRng([face(1, 20)]));
+    expect(r.damage).toBe(0);
+    expect(r.enemy.skillCharges).toBe(2);
+    expect(r.events).toEqual([{ kind: 'attack', subject: 'enemy', outcome: 'fumble', damage: 0 }]);
+  });
+
+  it('with 0 charges on a hit: deals the plain 1 (natural 15 -> 16 >= AC 13)', () => {
+    const r = resolveEnemyAttack(enemy({ skillCharges: 0 }), skillTarget(), AC, 0, scriptedRng([face(15, 20)]));
     expect(r.damage).toBe(1);
-    expect(r.enemy.skillCharges).toBe(0);
     expect(r.events).toEqual([{ kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 1 }]);
   });
 
-  it('a Freeze! enemy applies freeze to the returned target', () => {
-    const e = enemy({ skillPool: ['freeze'], skillCharges: 1 });
-    const r = resolveEnemyAttack(e, skillTarget(), scriptedRng([0.5]));
-    expect(r.damage).toBe(1);
-    expect(r.target.activeConditions).toEqual([makeCondition('freeze')]);
+  it('with 0 charges on a crit: doubles the plain 1 to 2', () => {
+    const r = resolveEnemyAttack(enemy({ skillCharges: 0 }), skillTarget(), AC, 0, scriptedRng([face(20, 20)]));
+    expect(r.damage).toBe(2); // 1 * 2
+    expect(r.events).toEqual([{ kind: 'attack', subject: 'enemy', outcome: 'crit', damage: 2 }]);
+  });
+
+  it('Scavver dodge: enemyAdvDis -1 rolls {12, 5}, uses the lower 5 -> 6 < AC 13 -> miss + disadvantage event', () => {
+    const e = enemy({ skillCharges: 2 });
+    // disadvantage draws two d20s (12, 5) and takes the min 5; 5 + 1 = 6 < 13 -> miss.
+    // A non-Scavver (advDis 0) taking the 12 would total 13 -> hit; the dodge converts it.
+    const r = resolveEnemyAttack(e, skillTarget(), AC, -1, scriptedRng([face(12, 20), face(5, 20)]));
+    expect(r.damage).toBe(0);
+    expect(r.enemy.skillCharges).toBe(2); // no charge on a miss
+    expect(r.events).toEqual([
+      { kind: 'disadvantage', subject: 'enemy' },
+      { kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0 },
+    ]);
+  });
+
+  it('the SAME {12,5} at advDis 0 (non-Scavver) would take 12 -> 13 >= AC 13 -> hit (proves the dodge mattered)', () => {
+    const e = enemy({ skillCharges: 2 });
+    const r = resolveEnemyAttack(e, skillTarget(), AC, 0, scriptedRng([face(12, 20), 0.5]));
+    expect(r.damage).toBe(2); // hit, Pyro Ball
+    expect(r.events[0]).toEqual({ kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' });
+  });
+
+  it('a Freeze! enemy applies freeze on a HIT but not on a MISS', () => {
+    const onHit = resolveEnemyAttack(
+      enemy({ skillPool: ['freeze'], skillCharges: 1 }),
+      skillTarget(),
+      AC,
+      0,
+      scriptedRng([face(15, 20), 0.5]),
+    );
+    expect(onHit.damage).toBe(1);
+    expect(onHit.target.activeConditions).toEqual([makeCondition('freeze')]);
+
+    const onMiss = resolveEnemyAttack(
+      enemy({ skillPool: ['freeze'], skillCharges: 1 }),
+      skillTarget(),
+      AC,
+      0,
+      scriptedRng([face(11, 20)]),
+    );
+    expect(onMiss.damage).toBe(0);
+    expect(onMiss.target.activeConditions).toEqual([]); // no freeze on a miss
+    expect(onMiss.enemy.skillCharges).toBe(1); // charge unspent
   });
 });
