@@ -59,17 +59,20 @@ describe('rollFlee — literal Java threshold rng()*10+1 <= 3.5', () => {
 });
 
 describe('resolveRound Fight — exact HP deltas + exact event list', () => {
-  // Draw order [skillPick, playerD20, playerDamage]:
-  //  1) enemy skill pick randInt(_,1)=0 -> Pyro Ball, res 0 -> damage 2, charge 2->1.
-  //  2) no conditions -> tick draws nothing.
-  //  3) player d20 face 15 + STR mod 4 = 19 >= enemy AC 10 -> hit.
-  //  4) player damage 1d6 face 4 -> 4.
+  // Player AC = 13 (Enforcer, Jooj Armor 1 baseArmor 11, CON 12/+1, DEX 12/+1:
+  // 11 + 1 + min(1,2)). Enemy STR 13 -> +1 to hit. Draw order [enemyToHit, skillPick,
+  // playerD20, playerDamage]:
+  //  1) no conditions -> enemy tick draws nothing.
+  //  2) enemy to-hit d20 face 15 + 1 = 16 >= AC 13 -> hit; skill-pick randInt(_,1)=0 ->
+  //     Pyro Ball, res 0 -> damage 2, charge 2->1.
+  //  3) player tick draws nothing.
+  //  4) player d20 face 15 + STR mod 4 = 19 >= enemy AC 10 -> hit; damage 1d6 face 4 -> 4.
   //  Results: player.hp 20-2=18 ; enemy.hp 30-4=26 ; ongoing.
   it('produces the hand-derived HP and event stream and leaves the input unmutated', () => {
     const state = createBattle(makePlayer(), makeEnemy({ hp: 30 }), 1);
     const snapshot = JSON.parse(JSON.stringify(state));
 
-    const r = resolveRound(state, 'fight', scriptedRng([0.5, face(15, 20), face(4, 6)]));
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)]));
 
     expect(r.status).toBe('ongoing');
     expect(r.state.player.hp).toBe(18);
@@ -93,7 +96,7 @@ describe('resolveRound Fight — victory rewards', () => {
   //  gold: randInt(_, 3) with 0.7 -> floor(2.1) = 2.
   it('grants xp = enemy.xp, gold, and an extra rest, and emits a victory event', () => {
     const state = createBattle(makePlayer(), makeEnemy({ hp: 4, xp: 3 }), 1);
-    const r = resolveRound(state, 'fight', scriptedRng([0.5, face(15, 20), face(4, 6), 0.1, 0.7]));
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6), 0.1, 0.7]));
 
     expect(r.status).toBe('player-won');
     expect(r.state.enemy.hp).toBe(0);
@@ -107,7 +110,7 @@ describe('resolveRound Fight — victory rewards', () => {
 describe('resolveRound Fight — defeat', () => {
   it('player at 1 HP taking 2 enemy damage dies with a defeat event', () => {
     const state = createBattle(makePlayer({ hp: 1 }), makeEnemy({ hp: 30 }), 1);
-    const r = resolveRound(state, 'fight', scriptedRng([0.5, face(15, 20), face(4, 6)]));
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)]));
     expect(r.status).toBe('player-died');
     expect(r.state.player.hp).toBe(0);
     expect(r.events.at(-1)).toEqual({ kind: 'defeat' });
@@ -115,10 +118,11 @@ describe('resolveRound Fight — defeat', () => {
 });
 
 describe('resolveRound Fight — turn-skip condition blocks the player', () => {
-  // Player is stunned. Enemy still hits for 2; the player deals 0 (no d20/damage draw).
+  // Player is stunned. Enemy still rolls to hit (face 15 -> 16 >= AC 13 -> hit) for 2; the
+  // player deals 0 (no d20/damage draw). Draws [enemyToHit, skillPick].
   it('a stunned player deals 0 and emits player-unable-to-act', () => {
     const state = createBattle(makePlayer({ activeConditions: [makeCondition('stun')] }), makeEnemy({ hp: 30 }), 1);
-    const r = resolveRound(state, 'fight', scriptedRng([0.5]));
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5]));
 
     expect(r.state.enemy.hp).toBe(30); // enemy took 0 from the player
     expect(r.state.player.hp).toBe(18); // 20 - 2 enemy damage
@@ -170,8 +174,10 @@ describe('resolveRound Run', () => {
   });
 
   it('fails above the threshold: enemy counter-attacks for 2, status ongoing', () => {
+    // Flee 0.9 fails -> enemy counter rolls to hit (face 15 -> 16 >= AC 13 -> hit) then
+    // skill-pick 0.5 -> Pyro Ball 2. Draws [flee, enemyToHit, skillPick].
     const state = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1);
-    const r = resolveRound(state, 'run', scriptedRng([0.9, 0.5]));
+    const r = resolveRound(state, 'run', scriptedRng([0.9, face(15, 20), 0.5]));
     expect(r.status).toBe('ongoing');
     expect(r.state.player.hp).toBe(18); // 20 - 2
     expect(r.events).toContainEqual({ kind: 'escape-failed', damage: 2 });
@@ -189,16 +195,17 @@ describe('resolveRound Run', () => {
 
 describe('resolveRound Cast — damage, charge spend, condition applied', () => {
   // Player casts Ember (Pyro base 2, cost 1, applies burn) at a 0-resist enemy.
-  // Draw order: enemy tick (conditionless -> 0 draws) -> enemy skill-pick 0.5 ->
-  // Pyro Ball dmg 2, charge 2->1 -> player tick (0) -> cast (NO draw). Player has no
-  // INT augment so skill damage = base 2. Results: player 20-2=18, enemy 30-2=28.
+  // Draw order: enemy tick (conditionless -> 0 draws) -> enemy to-hit face 15 (16 >= AC 13
+  // -> hit) -> skill-pick 0.5 -> Pyro Ball dmg 2, charge 2->1 -> player tick (0) -> cast
+  // (NO draw). Player has no INT augment so skill damage = base 2. Results: player 20-2=18,
+  // enemy 30-2=28.
   it('deals the skill damage, spends one charge, and applies burn to the enemy', () => {
     const state = createBattle(
       makePlayer({ skillPool: ['ember'], skillCharges: 5 }),
       makeEnemy({ hp: 30 }),
       1,
     );
-    const r = resolveRound(state, { kind: 'cast', skillId: 'ember' }, scriptedRng([0.5]));
+    const r = resolveRound(state, { kind: 'cast', skillId: 'ember' }, scriptedRng([face(15, 20), 0.5]));
 
     expect(r.status).toBe('ongoing');
     expect(r.state.player.hp).toBe(18);
@@ -240,7 +247,7 @@ describe('resolveRound Cast — guards (no charge, no hp change, no rng draw)', 
       makeEnemy({ hp: 30 }),
       1,
     );
-    const r = resolveRound(state, { kind: 'cast', skillId: 'ember' }, scriptedRng([0.5]));
+    const r = resolveRound(state, { kind: 'cast', skillId: 'ember' }, scriptedRng([face(15, 20), 0.5]));
     expect(r.state.player.skillCharges).toBe(5); // unchanged
     expect(r.state.enemy.hp).toBe(30); // no cast damage
     expect(r.state.player.hp).toBe(18); // 20 - 2 enemy Pyro Ball
@@ -310,16 +317,15 @@ describe('resolveRound Potion — effectiveMaxHp cap (Frail)', () => {
   });
 });
 
-describe('resolveRound Fight — off-equivalence lockstep (no conditions either side)', () => {
-  // A conditionless round must be byte-identical to pre-M2: the enemy-condition tick
-  // added in M2 draws NOTHING when the enemy is conditionless, so the draw order is
-  // unchanged. Independent hand-derivation (enemy hp 10):
-  //   enemy tick: 0 draws. enemy skill-pick 0.5 -> Pyro Ball dmg 2, charge 2->1.
-  //   player tick: 0 draws. player d20 face 12 + STR mod 4 = 16 >= AC 10 -> hit.
-  //   player dmg 1d6 face 5 -> 5. player 20-2=18, enemy 10-5=5, ongoing.
-  it('produces exactly the pre-M2 state + event list and consumes exactly 3 draws', () => {
+describe('resolveRound Fight — conditionless round, exact draw order (M4)', () => {
+  // A conditionless round draws exactly four (M4 adds the enemy to-hit d20 ahead of the
+  // skill-pick). Independent hand-derivation (enemy hp 10, player AC 13, enemy +1 to hit):
+  //   enemy tick: 0 draws. enemy to-hit face 15 + 1 = 16 >= AC 13 -> hit; skill-pick 0.5 ->
+  //   Pyro Ball dmg 2, charge 2->1. player tick: 0 draws. player d20 face 12 + STR mod 4 =
+  //   16 >= enemy AC 10 -> hit; dmg 1d6 face 5 -> 5. player 20-2=18, enemy 10-5=5, ongoing.
+  it('produces the hand-derived state + event list and consumes exactly 4 draws', () => {
     const state = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 10 }), 1);
-    const r = resolveRound(state, 'fight', scriptedRng([0.5, face(12, 20), face(5, 6)]));
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(12, 20), face(5, 6)]));
     expect(r.status).toBe('ongoing');
     expect(r.state.player.hp).toBe(18);
     expect(r.state.enemy.hp).toBe(5);
@@ -332,6 +338,27 @@ describe('resolveRound Fight — off-equivalence lockstep (no conditions either 
   });
 });
 
+describe('resolveRound Fight — enemy misses (M4 defense matters)', () => {
+  // The enemy rolls a LOW natural: face 5 + 1 = 6 < AC 13 -> MISS. It deals 0, draws no
+  // skill-pick, and applies no condition; the player still fights. Draws [enemyToHit,
+  // playerD20, playerDamage] (only three — a skill-pick on a miss would exhaust the rng).
+  //   player d20 face 15 + STR 4 = 19 >= enemy AC 10 -> hit; dmg 1d6 face 4 -> 4.
+  //   player 20-0=20, enemy 30-4=26, ongoing.
+  it('a whiffed enemy attack deals 0 and emits attack/miss with no enemy-skill-used', () => {
+    const state = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1);
+    const r = resolveRound(state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
+    expect(r.status).toBe('ongoing');
+    expect(r.state.player.hp).toBe(20); // took 0
+    expect(r.state.enemy.hp).toBe(26); // 30 - 4
+    expect(r.state.enemy.skillCharges).toBe(2); // no charge spent on a miss
+    expect(r.events).toEqual([
+      { kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0 },
+      { kind: 'attack', subject: 'player', outcome: 'hit', damage: 4 },
+    ]);
+    expect(r.events.some((e) => e.kind === 'enemy-skill-used')).toBe(false);
+  });
+});
+
 describe('resolveRound — M3 class twists in a full round', () => {
   // Momentum-on-damage hooks: an Enforcer who BOTH deals and takes damage in a round gains
   // +1 (dealt) +1 (taken) = 2 momentum. Draw order [skillPick, playerD20, playerDamage]:
@@ -339,7 +366,7 @@ describe('resolveRound — M3 class twists in a full round', () => {
   //  (enemy takes 4 -> +1). Start momentum 0 -> end 2.
   it('an Enforcer gains +2 momentum in a round where it hits and is hit', () => {
     const state = createBattle(makePlayer({ hp: 20, momentum: 0 }), makeEnemy({ hp: 30 }), 1);
-    const r = resolveRound(state, 'fight', scriptedRng([0.5, face(15, 20), face(4, 6)]));
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)]));
     expect(r.state.player.hp).toBe(18); // 20 - 2
     expect(r.state.enemy.hp).toBe(26); // 30 - 4
     expect(r.state.player.momentum).toBe(2);
@@ -355,7 +382,7 @@ describe('resolveRound — M3 class twists in a full round', () => {
       makeEnemy({ hp: 30 }),
       1,
     );
-    const r = resolveRound(state, { kind: 'cast', skillId: 'heavyStrike' }, scriptedRng([0.5]));
+    const r = resolveRound(state, { kind: 'cast', skillId: 'heavyStrike' }, scriptedRng([face(15, 20), 0.5]));
     expect(r.state.enemy.hp).toBe(23); // 30 - 7
     expect(r.state.player.hp).toBe(18); // 20 - 2
     expect(r.state.player.skillCharges).toBe(3);
@@ -384,32 +411,33 @@ describe('resolveRound — M3 class twists in a full round', () => {
   });
 
   // HP-as-fuel + lifesteal through the round. A Hollow (no momentum hook) casts Siphon while
-  // the enemy (0 charges) deals a plain 1. Draws: none. Siphon deals 3 and lifesteals
-  // floor(3 x 0.5) = 1: caster 10 -> 11 (cast) -> 10 (after taking the enemy's 1). enemy 30 -> 27.
+  // the enemy (0 charges) rolls to hit and lands the plain 1 (face 15 -> 16 >= AC 13 -> hit;
+  // one to-hit draw even with 0 charges). Siphon deals 3 and lifesteals floor(3 x 0.5) = 1:
+  // caster 10 -> 11 (cast) -> 10 (after taking the enemy's 1). enemy 30 -> 27.
   it('a Hollow lifesteals on cast, netted against the enemy hit', () => {
     const state = createBattle(
       makePlayer({ hp: 10, maxHp: 30, classId: 'Hollow', skillPool: ['siphon'], skillCharges: 5 }),
       makeEnemy({ hp: 30, skillCharges: 0 }),
       1,
     );
-    const r = resolveRound(state, { kind: 'cast', skillId: 'siphon' }, scriptedRng([]));
+    const r = resolveRound(state, { kind: 'cast', skillId: 'siphon' }, scriptedRng([face(15, 20)]));
     expect(r.state.enemy.hp).toBe(27); // 30 - 3
     expect(r.state.player.hp).toBe(10); // 10 + 1 lifesteal - 1 enemy hit
     expect(r.events).toContainEqual({ kind: 'lifesteal', amount: 1 });
   });
 
   // Off-equivalence of the CAST PATH: casting a twist-free generic skill (strike) produces
-  // the pre-M3 event shape and consumes exactly the enemy skill-pick draw (one) — the twist
-  // layer adds NO draw. Independent derivation: enemy pyroBall dmg 2, strike Physical base 2
-  // applies bleed; player 20-2=18, enemy 30-2=28, charge 5->4.
-  it('casting a twist-free skill draws only the enemy skill-pick and keeps the pre-M3 events', () => {
+  // the pre-M3 event shape and the cast layer adds NO draw. Independent derivation: enemy
+  // to-hit face 15 (16 >= AC 13 -> hit) then skill-pick 0.5 -> pyroBall dmg 2; strike
+  // Physical base 2 applies bleed; player 20-2=18, enemy 30-2=28, charge 5->4.
+  it('casting a twist-free skill draws only the enemy to-hit + skill-pick and keeps the pre-M3 events', () => {
     const state = createBattle(
       makePlayer({ hp: 20, skillPool: ['strike'], skillCharges: 5 }),
       makeEnemy({ hp: 30 }),
       1,
     );
-    // scriptedRng with a SINGLE value: if the cast path drew more, it would throw.
-    const r = resolveRound(state, { kind: 'cast', skillId: 'strike' }, scriptedRng([0.5]));
+    // Exactly the enemy to-hit + skill-pick draws: if the cast path drew more, it would throw.
+    const r = resolveRound(state, { kind: 'cast', skillId: 'strike' }, scriptedRng([face(15, 20), 0.5]));
     expect(r.state.player.hp).toBe(18);
     expect(r.state.enemy.hp).toBe(28);
     expect(r.state.player.skillCharges).toBe(4);
@@ -425,7 +453,14 @@ describe('resolveRound — M3 class twists in a full round', () => {
 describe('BattleState JSON round-trip', () => {
   it('state survives JSON.parse(JSON.stringify(x)) unchanged after a round', () => {
     const state = createBattle(makePlayer(), makeEnemy({ hp: 30 }), 1);
-    const r = resolveRound(state, 'fight', scriptedRng([0.5, face(15, 20), face(4, 6)]));
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)]));
     expect(JSON.parse(JSON.stringify(r.state))).toEqual(r.state);
+  });
+
+  it('a Player carrying the optional equippedShieldId round-trips through JSON', () => {
+    const state = createBattle(makePlayer({ equippedShieldId: 'Buckler' }), makeEnemy({ hp: 30 }), 1);
+    const revived = JSON.parse(JSON.stringify(state));
+    expect(revived).toEqual(state);
+    expect(revived.player.equippedShieldId).toBe('Buckler');
   });
 });

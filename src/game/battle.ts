@@ -27,6 +27,7 @@ import { resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
 import { SKILLS, type SkillDef, type SkillId } from './skill.ts';
 import { castSkill, grantMomentum, usesMomentum } from './classKit.ts';
 import { effectiveMaxHp } from './statEffects.ts';
+import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
 
 /** The full, serializable state of a battle in progress. */
 export interface BattleState {
@@ -74,10 +75,10 @@ export function rollFlee(rng: Rng): boolean {
  * the ordered events, and a terminal status. The input `state` is never mutated.
  *
  * Round draw order (documented for the exact-list test) for Fight/Cast, via the shared
- * `resolvePlayerTurn`: enemy-condition-tick draws (NONE when the enemy is conditionless,
- * so a conditionless round is byte-identical to pre-M2) -> enemy skill-pick draw ->
- * player-condition-tick draws -> player d20 + damage draws (Fight) or no draw (Cast) ->
- * on victory: extra-rest draw then gold draw.
+ * `resolvePlayerTurn`: enemy-condition-tick draws (NONE when the enemy is conditionless)
+ * -> enemy to-hit d20 (1 draw, or 2 at adv/dis; M4) -> enemy skill-pick draw (ONLY on a
+ * hit/crit with charges) -> player-condition-tick draws -> player d20 + damage draws
+ * (Fight) or no draw (Cast) -> on victory: extra-rest draw then gold draw.
  */
 export function resolveRound(state: BattleState, action: BattleAction, rng: Rng): RoundResult {
   if (typeof action === 'object') {
@@ -106,7 +107,8 @@ type PlayerTurnAction = { kind: 'fight' } | { kind: 'cast'; skill: SkillDef };
  *     delta; if the enemy dies to its own DoT before acting, it is still a victory.
  *     Zero rng draws when the enemy is conditionless, so a conditionless round's draws
  *     are exactly the pre-M2 order.
- *  2. Enemy attacks unless a control condition (freeze/etc.) skipped it.
+ *  2. Enemy attacks unless a control condition (freeze/etc.) skipped it. It rolls a to-hit
+ *     d20 (M4) vs the player's AC — on a miss it deals 0 and draws no skill-pick.
  *  3. Tick the PLAYER's conditions.
  *  4. Player acts unless skipped: Fight rolls d20 + damage; Cast spends a charge and
  *     applies the skill's condition to the enemy (no rng draw). A control-skipped player
@@ -132,10 +134,16 @@ function resolvePlayerTurn(
     return applyVictory(state, player, { ...enemy, hp: 0 }, events, rng);
   }
 
-  // 2. Enemy attacks unless skipped.
+  // 2. Enemy attacks unless skipped. M4: it now rolls to hit vs the player's real AC
+  //    (from armor/shield/augments) at the adv/dis the player's class imposes (a Scavver
+  //    forces disadvantage). Both are computed from the CURRENT player (before its own
+  //    condition tick in step 3). On a miss enemyDamage stays 0, so the momentum hook
+  //    below sees no taken damage.
   let enemyDamage = 0;
   if (!skipEnemyAttack) {
-    const ea = resolveEnemyAttack(enemy, player, rng);
+    const defenderAc = playerArmorClass(player);
+    const enemyAdvDis = enemyAdvDisVs(player);
+    const ea = resolveEnemyAttack(enemy, player, defenderAc, enemyAdvDis, rng);
     enemy = ea.enemy;
     player = ea.target;
     enemyDamage = ea.damage;
@@ -282,7 +290,9 @@ function resolveRun(state: BattleState, rng: Rng): RoundResult {
 
 /** Shared "your escape failed, take a counter-attack" path (also the controlled case). */
 function enemyCounterAttack(state: BattleState, rng: Rng): RoundResult {
-  const ea = resolveEnemyAttack(state.enemy, state.player, rng);
+  const defenderAc = playerArmorClass(state.player);
+  const enemyAdvDis = enemyAdvDisVs(state.player);
+  const ea = resolveEnemyAttack(state.enemy, state.player, defenderAc, enemyAdvDis, rng);
   const enemy: Enemy = ea.enemy;
   const player: Player = { ...ea.target, hp: Math.max(ea.target.hp - ea.damage, 0) };
   const events: CombatEvent[] = [...ea.events, { kind: 'escape-failed', damage: ea.damage }];
