@@ -17,11 +17,23 @@
 
 import type { Character } from './character.ts';
 import { getElement } from './element.ts';
-import { addCondition, type ActiveCondition, type ConditionType } from './condition.ts';
+import { applyCondition, type ActiveCondition, type ConditionType } from './condition.ts';
+import { statModDelta } from './statEffects.ts';
 import { subjectOf, type CombatEvent } from './combatEvent.ts';
 
-/** Every skill id (ported from `SkillEnemy.java`'s test skills). */
-export type SkillId = 'pyroBall' | 'freeze';
+/**
+ * Every skill id. `pyroBall`/`freeze` are the ported enemy test skills; the five
+ * `strike`/`ember`/`venom`/`frost`/`enfeeble` are the M2 generic STARTER pool the
+ * player begins with (M3 replaces these with per-class signature kits).
+ */
+export type SkillId =
+  | 'pyroBall'
+  | 'freeze'
+  | 'strike'
+  | 'ember'
+  | 'venom'
+  | 'frost'
+  | 'enfeeble';
 
 /** A skill definition as plain, data-driven content. */
 export interface SkillDef {
@@ -45,6 +57,12 @@ export interface SkillDef {
 export const SKILLS: Record<SkillId, SkillDef> = {
   pyroBall: { id: 'pyroBall', name: 'Pyro Ball', element: 'Pyro', chargeCost: 1, baseDamage: 2, conditions: [] },
   freeze: { id: 'freeze', name: 'Freeze!', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['freeze'] },
+  // ---- M2 generic starter pool (class-agnostic; each enemy-targeted, one condition). ----
+  strike: { id: 'strike', name: 'Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
+  ember: { id: 'ember', name: 'Ember', element: 'Pyro', chargeCost: 1, baseDamage: 2, conditions: ['burn'] },
+  venom: { id: 'venom', name: 'Venom', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison'] },
+  frost: { id: 'frost', name: 'Frost', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['freeze'] },
+  enfeeble: { id: 'enfeeble', name: 'Enfeeble', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
 };
 
 /**
@@ -73,16 +91,19 @@ export interface UseSkillResult<C extends Character, T extends Character> {
 
 /**
  * Cast a skill from `caster` at `target` — PURE. Spends exactly one caster charge,
- * computes the resistance-adjusted damage (NOT applied to hp — the round applies hp),
- * and appends the skill's condition(s) to a COPY of the target's activeConditions
- * (deduped by type). Emits `enemy-skill-used` and one `condition-applied` per newly
- * added condition. Reusable by the enemy turn and (later) a player cast-skill action.
+ * computes the resistance-adjusted damage PLUS the caster's INT-mod delta (Sharp/Dull
+ * skill power — 0 when the caster carries no INT augment, so the enemy path is
+ * unchanged), and applies the skill's condition(s) to a COPY of the target's
+ * activeConditions via the mix-per-condition rule. Damage is NOT applied to hp — the
+ * round applies hp. Emits `enemy-skill-used` and one `condition-applied` per condition
+ * that was newly added OR stacked (never on a bare duration refresh — preserves the
+ * freeze-dedup "no event" behaviour). Reusable by the enemy turn and the player cast.
  */
 export function useSkill<
-  C extends Character,
+  C extends Character & { activeConditions: ActiveCondition[] },
   T extends Character & { activeConditions: ActiveCondition[]; resistances: number[] },
 >(caster: C, target: T, skill: SkillDef): UseSkillResult<C, T> {
-  const damage = computeSkillDamage(skill, target);
+  const damage = Math.max(computeSkillDamage(skill, target) + statModDelta(caster, 'INT'), 0);
   const newCaster: C = { ...caster, skillCharges: caster.skillCharges - skill.chargeCost };
 
   const conditions = target.activeConditions.map((c) => ({ ...c }));
@@ -91,7 +112,8 @@ export function useSkill<
     { kind: 'enemy-skill-used', skillId: skill.id, name: skill.name },
   ];
   for (const type of skill.conditions) {
-    if (addCondition(conditions, type)) {
+    const result = applyCondition(conditions, type);
+    if (result === 'added' || result === 'stacked') {
       events.push({ kind: 'condition-applied', subject: targetSubject, conditionType: type });
     }
   }

@@ -7,7 +7,9 @@ import { makeCondition, type ActiveCondition } from './condition.ts';
 //   damage = base - floor(res/100) * base
 // with Pyro at element index 2 and Cryo at index 1 (elements.json order).
 
-function caster(overrides: Partial<Character> = {}): Character {
+function caster(
+  overrides: Partial<Character & { activeConditions: ActiveCondition[] }> = {},
+): Character & { activeConditions: ActiveCondition[] } {
   return {
     name: 'Enemy',
     stats: { STR: 13, DEX: 13, CON: 13, INT: 13, WIS: 13, CHA: 13 },
@@ -19,6 +21,7 @@ function caster(overrides: Partial<Character> = {}): Character {
     skillCharges: 2,
     maxSkillCharges: 2,
     hitDie: { quantity: 1, sides: 8 },
+    activeConditions: [],
     ...overrides,
   };
 }
@@ -87,6 +90,50 @@ describe('useSkill — Pyro Ball applies no condition', () => {
     expect(r.damage).toBe(2);
     expect(r.target.activeConditions).toEqual([]);
     expect(r.events).toEqual([{ kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' }]);
+  });
+});
+
+describe('useSkill — INT cascade skill power (Sharp/Dull)', () => {
+  // base INT 14 -> mod 2. smart (+2 INT -> 16 -> mod 3) = +1 delta; dumb (-2 -> 12 ->
+  // mod 1) = -1 delta. Ember base 2 at 0 resistance: Sharp -> 2+1 = 3, Dull -> 2-1 = 1,
+  // no augment -> 2. Hand-derived from floor((stat-10)/2).
+  const int14 = { STR: 13, DEX: 13, CON: 13, INT: 14, WIS: 13, CHA: 13 };
+  it('Sharp (+1 INT mod) adds 1 to skill damage', () => {
+    const c = caster({ stats: int14, activeConditions: [makeCondition('smart')] });
+    expect(useSkill(c, target(), SKILLS.ember).damage).toBe(3);
+  });
+  it('Dull (-1 INT mod) subtracts 1 from skill damage', () => {
+    const c = caster({ stats: int14, activeConditions: [makeCondition('dumb')] });
+    expect(useSkill(c, target(), SKILLS.ember).damage).toBe(1);
+  });
+  it('no INT augment leaves the base damage unchanged (enemy path)', () => {
+    const c = caster({ stats: int14 });
+    expect(useSkill(c, target(), SKILLS.ember).damage).toBe(2);
+  });
+});
+
+describe('useSkill — starter pool casts (damage + condition)', () => {
+  it('strike deals base 2 (Physical) and applies bleed', () => {
+    const r = useSkill(caster(), target(), SKILLS.strike);
+    expect(r.damage).toBe(2);
+    expect(r.target.activeConditions).toEqual([makeCondition('bleed')]);
+    expect(r.events).toContainEqual({ kind: 'condition-applied', subject: 'player', conditionType: 'bleed' });
+  });
+  it('venom deals base 1 (Poison) and applies poison; a second cast stacks intensity 2', () => {
+    const once = useSkill(caster(), target(), SKILLS.venom);
+    expect(once.damage).toBe(1);
+    expect(once.target.activeConditions).toEqual([makeCondition('poison')]);
+    // Second cast onto the already-poisoned target -> stacked (intensity 2), event still fires.
+    const twice = useSkill(caster(), once.target, SKILLS.venom);
+    expect(twice.target.activeConditions).toEqual([
+      { type: 'poison', remainingTurns: 2, maxTurns: 2, intensity: 2 },
+    ]);
+    expect(twice.events).toContainEqual({ kind: 'condition-applied', subject: 'player', conditionType: 'poison' });
+  });
+  it('enfeeble applies the deprivation weak to the enemy target', () => {
+    const r = useSkill(caster(), target(), SKILLS.enfeeble);
+    expect(r.damage).toBe(1);
+    expect(r.target.activeConditions).toEqual([makeCondition('weak')]);
   });
 });
 
