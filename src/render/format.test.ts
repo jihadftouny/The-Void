@@ -16,7 +16,7 @@ describe('hpText', () => {
 
 describe('formatEvent — anchored player-facing strings', () => {
   it('victory carries the XP number (M7: no gold)', () => {
-    const s = formatEvent({ kind: 'victory', xpGained: 12, extraRest: false });
+    const s = formatEvent({ kind: 'victory', xpGained: 12, extraRest: false, loot: [] });
     expect(s).toContain('12');
     expect(s.toLowerCase()).not.toContain('gold');
   });
@@ -82,7 +82,7 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'fled' },
     { kind: 'escape-failed', damage: 4 },
     { kind: 'escape-impossible' },
-    { kind: 'victory', xpGained: 5, extraRest: true },
+    { kind: 'victory', xpGained: 5, extraRest: true, loot: [] },
     { kind: 'defeat' },
     // narrative
     { kind: 'title' },

@@ -5,7 +5,7 @@
 //    deltas to the clones, and returns a NEW BattleState plus an ordered event list
 //    and a terminal status. The input state is never mutated; nothing is printed.
 //  - Deterministic seeded RNG: every draw (enemy skill pick, condition saves, player
-//    d20 + damage, flee roll, victory extra-rest) threads the injected `Rng` in a
+//    d20 + damage, flee roll, victory extra-rest + loot) threads the injected `Rng` in a
 //    documented order, so a round is exactly reproducible and testable.
 //  - Serializable plain-data state: BattleState is flat plain data (player, enemy,
 //    act, canFlee) that round-trips through JSON.
@@ -28,7 +28,8 @@ import { SKILLS, type SkillDef, type SkillId } from './skill.ts';
 import { castSkill, grantMomentum, usesMomentum } from './classKit.ts';
 import { effectiveMaxHp } from './statEffects.ts';
 import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
-import { weaponForSlot, UNARMED } from './equipment.ts';
+import { weaponForSlot, UNARMED, pickUp } from './equipment.ts';
+import { rollLootDrop, summarizeLoot } from './loot.ts';
 import { computeEquipModifiers } from './equipEffects.ts';
 import { fireTrigger, reviveActionFor } from './relicEffects.ts';
 import { applyConsumable, type ConsumableSource } from './consumable.ts';
@@ -111,7 +112,7 @@ export function rollFlee(rng: Rng): boolean {
  * `resolvePlayerTurn`: enemy-condition-tick draws (NONE when the enemy is conditionless)
  * -> enemy to-hit d20 (1 draw, or 2 at adv/dis; M4) -> enemy skill-pick draw (ONLY on a
  * hit/crit with charges) -> player-condition-tick draws -> player d20 + damage draws
- * (Fight) or no draw (Cast) -> on victory: extra-rest draw.
+ * (Fight) or no draw (Cast) -> on victory: extra-rest draw then loot roll.
  */
 export function resolveRound(state: BattleState, action: BattleAction, rng: Rng): RoundResult {
   if (typeof action === 'object') {
@@ -365,7 +366,7 @@ function withFlags(
 /**
  * Fire the `onKill` triggers (Devourer's Maw's permanent stat steal, etc.) on the player who
  * just felled the enemy, then hand off to `applyVictory` — PURE. RNG-free trigger step, so
- * the victory draw order (extra-rest) is unchanged. Off-equivalent for a normal
+ * the victory draw order (extra-rest then loot) is unchanged. Off-equivalent for a normal
  * run (no onKill trigger fires, so the player is unchanged before rewards).
  */
 function killAndVictory(
@@ -400,11 +401,13 @@ function resolveCast(state: BattleState, skillId: SkillId, rng: Rng): RoundResul
 }
 
 /**
- * The shared victory block — PURE. Grants xp = enemy.xp and rolls the extra-rest chance
- * (`rng()*100+1 <= 25`), then emits the `victory` event. Extracted so an enemy killed by
- * its own DoT tick (before it acts) awards exactly the same rewards as a kill by the
- * player's action. (M7 gold removal: the old gold draw is gone; the loot roll lands in
- * Stage 2 immediately AFTER the extra-rest draw.)
+ * The shared victory block — PURE. Grants xp = enemy.xp, rolls the extra-rest chance
+ * (`rng()*100+1 <= 25`) THEN a found-loot drop (`rollLootDrop(state.act, rng)`) IN THAT ORDER,
+ * and emits the `victory` event. Extracted so an enemy killed by its own DoT tick (before it
+ * acts) awards exactly the same rewards as a kill by the player's action. M7: the old gold
+ * draw is replaced by the loot roll — a non-null drop is picked up into the backpack and
+ * summarized on `victory.loot`; a failed drop gate leaves the backpack untouched and
+ * `victory.loot` empty (the loot roll still consumes its single gate draw).
  */
 function applyVictory(
   state: BattleState,
@@ -415,12 +418,16 @@ function applyVictory(
 ): RoundResult {
   const xpGained = enemy.xp;
   const extraRest = rng() * 100 + 1 <= 25;
+  const drop = rollLootDrop(state.act, rng);
+  const inventory = drop ? pickUp(player.inventory, drop) : player.inventory;
+  const loot = drop ? [summarizeLoot(drop)] : [];
   const newPlayer: Player = {
     ...player,
     xp: player.xp + xpGained,
     restsLeft: player.restsLeft + (extraRest ? 1 : 0),
+    inventory,
   };
-  events.push({ kind: 'victory', xpGained, extraRest });
+  events.push({ kind: 'victory', xpGained, extraRest, loot });
   return { state: { ...state, player: newPlayer, enemy }, events, status: 'player-won' };
 }
 

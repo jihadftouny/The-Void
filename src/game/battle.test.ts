@@ -91,17 +91,19 @@ describe('resolveRound Fight — exact HP deltas + exact event list', () => {
 });
 
 describe('resolveRound Fight — victory rewards', () => {
-  // enemy.xp 3, hp 4. Player deals 4 -> enemy 0 -> victory. Reward draw (M7: gold removed):
+  // enemy.xp 3, hp 4. Player deals 4 -> enemy 0 -> victory. Reward draws (M7: gold -> loot):
   //  extraRest: rng()*100+1 <= 25 -> 0.1 -> 11 <= 25 -> true.
-  it('grants xp = enemy.xp and an extra rest, and emits a victory event', () => {
+  //  loot gate: rng() < act-1 dropChance(0.5) -> 0.99 >= 0.5 -> no drop (one draw), loot [].
+  it('grants xp = enemy.xp and an extra rest, and emits a victory event (no drop)', () => {
     const state = createBattle(makePlayer(), makeEnemy({ hp: 4, xp: 3 }), 1);
-    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6), 0.1]));
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6), 0.1, 0.99]));
 
     expect(r.status).toBe('player-won');
     expect(r.state.enemy.hp).toBe(0);
     expect(r.state.player.xp).toBe(3); // 0 + enemy.xp
     expect(r.state.player.restsLeft).toBe(2); // 1 + extra rest
-    expect(r.events.at(-1)).toEqual({ kind: 'victory', xpGained: 3, extraRest: true });
+    expect(r.state.player.inventory.backpack).toEqual([]); // failed drop gate adds nothing
+    expect(r.events.at(-1)).toEqual({ kind: 'victory', xpGained: 3, extraRest: true, loot: [] });
   });
 });
 
@@ -259,14 +261,15 @@ describe('resolveRound — enemy-side condition ticking', () => {
   // Player-inflicted DoT on the enemy now ticks. Enemy carries poison at its effect
   // phase (remaining 1) with hp 1 and xp 3: the enemy dies to its OWN poison tick before
   // acting -> still player-won. Poison rolls no save, so the tick draws nothing; then the
-  // victory block draws extra-rest (0.1 -> 11 <= 25 true). M7: no gold draw.
+  // victory block draws extra-rest (0.1 -> 11 <= 25 true) then the loot gate (0.99 >= 0.5 ->
+  // no drop). M7: gold draw replaced by the loot roll.
   it('an enemy killed by its own DoT tick (before acting) yields player-won + rewards', () => {
     const state = createBattle(
       makePlayer({ hp: 20 }),
       makeEnemy({ hp: 1, xp: 3, activeConditions: [{ type: 'poison', remainingTurns: 1, maxTurns: 2 }] }),
       1,
     );
-    const r = resolveRound(state, 'fight', scriptedRng([0.1]));
+    const r = resolveRound(state, 'fight', scriptedRng([0.1, 0.99]));
 
     expect(r.status).toBe('player-won');
     expect(r.state.enemy.hp).toBe(0);
@@ -275,7 +278,7 @@ describe('resolveRound — enemy-side condition ticking', () => {
     expect(r.state.player.restsLeft).toBe(2); // 1 + extra rest
     expect(r.events).toEqual([
       { kind: 'condition-damage', subject: 'enemy', conditionType: 'poison', amount: 1 },
-      { kind: 'victory', xpGained: 3, extraRest: true },
+      { kind: 'victory', xpGained: 3, extraRest: true, loot: [] },
     ]);
   });
 

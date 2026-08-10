@@ -103,10 +103,12 @@ export function formatEvent(e: GameEvent): string {
       return `Your escape fails — you take ${e.damage} damage.`;
     case 'escape-impossible':
       return `There is no escape from this one.`;
-    case 'victory':
-      return e.extraRest
-        ? `Victory! +${e.xpGained} XP, and you find a place to rest.`
-        : `Victory! +${e.xpGained} XP.`;
+    case 'victory': {
+      const rest = e.extraRest ? ', and you find a place to rest' : '';
+      const loot =
+        e.loot.length > 0 ? ` You scavenge ${e.loot.map((l) => l.name).join(', ')}.` : '';
+      return `Victory! +${e.xpGained} XP${rest}.${loot}`;
+    }
     case 'defeat':
       return `You have fallen.`;
     // --- M6 items-content events ---

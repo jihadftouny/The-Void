@@ -16,6 +16,7 @@ import type { ConditionType } from './condition.ts';
 import type { SkillId } from './skill.ts';
 import type { StatKey } from './character.ts';
 import type { TriggerType, EffectActionKind } from './item.ts';
+import type { Rarity } from './weapon.ts';
 
 /** Who an event is about. */
 export type CombatSubject = 'player' | 'enemy';
@@ -80,6 +81,8 @@ export type CombatEvent =
       kind: 'victory';
       xpGained: number;
       extraRest: boolean;
+      /** Found loot this kill dropped into the backpack (M7). Empty when the drop gate failed. */
+      loot: readonly { defId: string; name: string; rarity: Rarity }[];
       text?: string;
     }
   | { kind: 'defeat'; text?: string }
