@@ -535,10 +535,11 @@ function startedBattleState(player: Player, enemy: BattleState['enemy'], rngStat
 
 describe('cast battle-action flows through step', () => {
   it('casting Ember deals skill damage, spends a charge, and applies burn to the enemy', () => {
-    // Player starts with the generic pool (Ember included), 5 charges, INT 13 (mod 1, no
-    // augment -> +0 skill power). Enemy has no charges -> a plain 1-damage hit, no draw.
-    // ember Pyro base 2 vs 0 resist -> 2. player 20-1=19 ; enemy 30-2=28 ; charge 5->4.
-    const player = makePlayer({ hp: 20, maxHp: 20, skillCharges: 5 });
+    // Player granted Ember (M3 default pools are per-class kits; Ember is generic), 5
+    // charges, INT 13 (mod 1, no augment -> +0 skill power). Enemy has no charges -> a
+    // plain 1-damage hit, no draw. ember Pyro base 2 vs 0 resist -> 2. player 20-1=19 ;
+    // enemy 30-2=28 ; charge 5->4.
+    const player = makePlayer({ hp: 20, maxHp: 20, skillCharges: 5, skillPool: ['ember'] });
     const enemy = {
       ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(5)),
       hp: 30,
@@ -564,7 +565,7 @@ describe('cast battle-action flows through step', () => {
   it('a cast sequence is deterministic: revived-state step === live step (byte-identical)', () => {
     // Enemy has a Pyro Ball charge, so its skill-pick draw advances the rng — proving the
     // rngState round-trips through JSON and the cast round is reproducible.
-    const player = makePlayer({ hp: 40, maxHp: 40, skillCharges: 5 });
+    const player = makePlayer({ hp: 40, maxHp: 40, skillCharges: 5, skillPool: ['ember'] });
     const enemy = {
       ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(9)),
       hp: 30,

@@ -332,6 +332,96 @@ describe('resolveRound Fight — off-equivalence lockstep (no conditions either 
   });
 });
 
+describe('resolveRound — M3 class twists in a full round', () => {
+  // Momentum-on-damage hooks: an Enforcer who BOTH deals and takes damage in a round gains
+  // +1 (dealt) +1 (taken) = 2 momentum. Draw order [skillPick, playerD20, playerDamage]:
+  //  enemy pyroBall dmg 2 (player takes 2 -> +1) ; player d20 15+STR4=19 hit, 1d6(4) dealt
+  //  (enemy takes 4 -> +1). Start momentum 0 -> end 2.
+  it('an Enforcer gains +2 momentum in a round where it hits and is hit', () => {
+    const state = createBattle(makePlayer({ hp: 20, momentum: 0 }), makeEnemy({ hp: 30 }), 1);
+    const r = resolveRound(state, 'fight', scriptedRng([0.5, face(15, 20), face(4, 6)]));
+    expect(r.state.player.hp).toBe(18); // 20 - 2
+    expect(r.state.enemy.hp).toBe(26); // 30 - 4
+    expect(r.state.player.momentum).toBe(2);
+  });
+
+  // Casting Heavy Strike (spendMomentum, momentumDamagePer 1) at momentum 4: base 3 + 4 = 7
+  // enemy damage, momentum spent to 0 by the cast, then the on-damage hooks re-add +1 (dealt
+  // 7) +1 (took 2 from pyroBall) = 2. charge 5 -> 3 (cost 2). Applies fracture. Draw order:
+  // enemy tick 0 -> skillPick 0.5 -> player tick 0 -> cast (no draw).
+  it('Enforcer Heavy Strike spends momentum for burst, then the hooks re-bank +2', () => {
+    const state = createBattle(
+      makePlayer({ hp: 20, momentum: 4, skillCharges: 5, skillPool: ['heavyStrike'] }),
+      makeEnemy({ hp: 30 }),
+      1,
+    );
+    const r = resolveRound(state, { kind: 'cast', skillId: 'heavyStrike' }, scriptedRng([0.5]));
+    expect(r.state.enemy.hp).toBe(23); // 30 - 7
+    expect(r.state.player.hp).toBe(18); // 20 - 2
+    expect(r.state.player.skillCharges).toBe(3);
+    expect(r.state.player.momentum).toBe(2); // spent to 0 by cast, +1 dealt +1 taken
+    expect(r.state.enemy.activeConditions.some((c) => c.type === 'fracture')).toBe(true);
+    expect(r.events).toContainEqual({ kind: 'resource-changed', subject: 'player', resource: 'momentum', value: 0 });
+  });
+
+  // Detonate through the round. A Neuromancer (no momentum hook) casts Synapse at an enemy
+  // carrying insanity + sleep (both control -> the enemy is skipped, and both fresh -> onset,
+  // NO save draw). Enemy has 0 charges. Draws: enemy tick 0 -> enemy skipped (no skillPick) ->
+  // player tick 0 -> cast 0 = zero draws total. Synapse base 1 + 2x2 detonate = 5; the two
+  // mental conditions are consumed.
+  it('a Neuromancer detonates the enemy mental conditions for bonus damage', () => {
+    const state = createBattle(
+      makePlayer({ hp: 20, maxHp: 20, classId: 'Neuromancer', skillPool: ['synapse'], skillCharges: 5 }),
+      makeEnemy({ hp: 30, skillCharges: 0, activeConditions: [makeCondition('insanity'), makeCondition('sleep')] }),
+      1,
+    );
+    const r = resolveRound(state, { kind: 'cast', skillId: 'synapse' }, scriptedRng([]));
+    expect(r.state.enemy.hp).toBe(25); // 30 - 5
+    expect(r.state.player.hp).toBe(20); // enemy skipped (controlled)
+    expect(r.state.player.skillCharges).toBe(3); // synapse costs 2
+    expect(r.state.enemy.activeConditions.some((c) => c.type === 'insanity' || c.type === 'sleep')).toBe(false);
+    expect(r.events).toContainEqual({ kind: 'detonate', consumed: 2, bonusDamage: 4 });
+  });
+
+  // HP-as-fuel + lifesteal through the round. A Hollow (no momentum hook) casts Siphon while
+  // the enemy (0 charges) deals a plain 1. Draws: none. Siphon deals 3 and lifesteals
+  // floor(3 x 0.5) = 1: caster 10 -> 11 (cast) -> 10 (after taking the enemy's 1). enemy 30 -> 27.
+  it('a Hollow lifesteals on cast, netted against the enemy hit', () => {
+    const state = createBattle(
+      makePlayer({ hp: 10, maxHp: 30, classId: 'Hollow', skillPool: ['siphon'], skillCharges: 5 }),
+      makeEnemy({ hp: 30, skillCharges: 0 }),
+      1,
+    );
+    const r = resolveRound(state, { kind: 'cast', skillId: 'siphon' }, scriptedRng([]));
+    expect(r.state.enemy.hp).toBe(27); // 30 - 3
+    expect(r.state.player.hp).toBe(10); // 10 + 1 lifesteal - 1 enemy hit
+    expect(r.events).toContainEqual({ kind: 'lifesteal', amount: 1 });
+  });
+
+  // Off-equivalence of the CAST PATH: casting a twist-free generic skill (strike) produces
+  // the pre-M3 event shape and consumes exactly the enemy skill-pick draw (one) — the twist
+  // layer adds NO draw. Independent derivation: enemy pyroBall dmg 2, strike Physical base 2
+  // applies bleed; player 20-2=18, enemy 30-2=28, charge 5->4.
+  it('casting a twist-free skill draws only the enemy skill-pick and keeps the pre-M3 events', () => {
+    const state = createBattle(
+      makePlayer({ hp: 20, skillPool: ['strike'], skillCharges: 5 }),
+      makeEnemy({ hp: 30 }),
+      1,
+    );
+    // scriptedRng with a SINGLE value: if the cast path drew more, it would throw.
+    const r = resolveRound(state, { kind: 'cast', skillId: 'strike' }, scriptedRng([0.5]));
+    expect(r.state.player.hp).toBe(18);
+    expect(r.state.enemy.hp).toBe(28);
+    expect(r.state.player.skillCharges).toBe(4);
+    expect(r.events).toEqual([
+      { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
+      { kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2 },
+      { kind: 'skill-cast', subject: 'player', skillId: 'strike', name: 'Strike' },
+      { kind: 'condition-applied', subject: 'enemy', conditionType: 'bleed' },
+    ]);
+  });
+});
+
 describe('BattleState JSON round-trip', () => {
   it('state survives JSON.parse(JSON.stringify(x)) unchanged after a round', () => {
     const state = createBattle(makePlayer(), makeEnemy({ hp: 30 }), 1);

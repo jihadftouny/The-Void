@@ -80,6 +80,17 @@ export function formatEvent(e: GameEvent): string {
       return `${e.conditionType} takes hold of ${sideName(e.subject).toLowerCase()}.`;
     case 'condition-expired':
       return `${e.conditionType} fades from ${sideName(e.subject).toLowerCase()}.`;
+    // --- M3 class-twist events ---
+    case 'resource-changed':
+      return `Your ${e.resource} is now ${e.value}.`;
+    case 'self-sacrifice':
+      return e.ofMaxHp
+        ? `You sacrifice ${e.amount} of your max HP to the Void.`
+        : `You spend ${e.amount} HP as fuel.`;
+    case 'lifesteal':
+      return `You drain ${e.amount} HP.`;
+    case 'detonate':
+      return `You detonate ${e.consumed} affliction(s) for ${e.bonusDamage} damage.`;
     case 'potion-drunk':
       return `You drink a potion — restored to ${e.healedTo} HP.`;
     case 'potion-unavailable':

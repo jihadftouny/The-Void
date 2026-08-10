@@ -24,7 +24,8 @@ import { randInt, type Rng } from './rng.ts';
 import { type CombatEvent } from './combatEvent.ts';
 import { hasControlCondition, tickConditions, type ConditionType } from './condition.ts';
 import { resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
-import { SKILLS, useSkill, type SkillDef, type SkillId } from './skill.ts';
+import { SKILLS, type SkillDef, type SkillId } from './skill.ts';
+import { castSkill, grantMomentum, usesMomentum } from './classKit.ts';
 import { effectiveMaxHp } from './statEffects.ts';
 
 /** The full, serializable state of a battle in progress. */
@@ -158,21 +159,41 @@ function resolvePlayerTurn(
     playerDamage = pa.damage;
     events.push(...pa.events);
   } else {
-    // Cast: spend one charge, apply the skill's condition to the enemy, deal the skill's
-    // (INT-scaled, resistance-adjusted) damage. No rng draw.
-    const used = useSkill(player, enemy, action.skill);
-    player = used.caster;
-    enemy = used.target;
-    playerDamage = used.damage;
+    // Cast: spend one charge and resolve the skill through `castSkill` — the base
+    // useSkill damage/condition PLUS the class signature twist, all deterministic (NO rng
+    // draw, so the documented draw order is unchanged). Forward the twist events; the base
+    // `enemy-skill-used` event is dropped in favor of the player-facing `skill-cast`.
+    const cast = castSkill(player, enemy, action.skill);
+    player = cast.caster;
+    enemy = cast.target;
+    playerDamage = cast.damage;
     events.push({ kind: 'skill-cast', subject: 'player', skillId: action.skill.id, name: action.skill.name });
-    for (const e of used.events) {
-      if (e.kind === 'condition-applied') events.push(e);
+    for (const e of cast.events) {
+      if (
+        e.kind === 'condition-applied' ||
+        e.kind === 'resource-changed' ||
+        e.kind === 'self-sacrifice' ||
+        e.kind === 'lifesteal' ||
+        e.kind === 'detonate'
+      ) {
+        events.push(e);
+      }
     }
   }
 
   // 5. Apply the exchanged damage (clamp hp at 0).
   player = { ...player, hp: Math.max(player.hp - enemyDamage, 0) };
   enemy = { ...enemy, hp: Math.max(enemy.hp - playerDamage, 0) };
+
+  // Momentum-on-damage hooks (Enforcer only): dealing damage grants +1 and taking enemy
+  // damage grants +1, capped. SILENT (no event) and pure arithmetic (no rng draw), so a
+  // conditionless round stays byte-identical for non-momentum classes and adds no draw.
+  if (usesMomentum(player)) {
+    let gain = 0;
+    if (playerDamage > 0) gain += 1;
+    if (enemyDamage > 0) gain += 1;
+    if (gain > 0) player = grantMomentum(player, gain);
+  }
 
   // 6. Resolve the outcome (player death checked first, faithful to pre-M2).
   if (player.hp <= 0) {
