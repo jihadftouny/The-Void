@@ -19,6 +19,24 @@ Format per entry:
 
 ---
 
+## 2026-08-10 — combat-defense (M4: enemies roll to-hit, armor/shield/dodge) [stacked on M3, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: (1) added 2 test-only cases to `save.test.ts` (not in declared MODIFY list) —
+  plan required a shield save round-trip; `save.ts` source untouched (optional key tolerated, no version
+  bump). (2) commit order steps 2/3 swapped (enemyAdvDisVs depends on scavverEvasionTwist). (3) secondary
+  AC-display kept minimal (game.ts + 1 game.test assertion); render/format tests untouched.
+- Test failures before fixes: none (PASS first pass). 494 → 526 tests (+32).
+- Plan open-questions: 1, orchestrator-resolved: AC replace-model `baseArmor + CONmod + min(DEXmod,
+  dexCap)` (armor.json's 11/12 already embed the base 10; my brief's "10 + baseArmor" wording would have
+  double-counted → plan-agent caught it). Good independent-truth catch by the plan-agent.
+- Notable: enemy to-hit CHANGES outcomes (enemies now miss) — all affected tests re-derived via
+  scriptedRng, hand-computed vs player AC. Player attack path byte-unchanged. Enemies-missing is partial
+  relief for the "unwinnable" issue (full balance still M15). Scavver dodge = enemy disadvantage.
+  initiativeOrderTwist still deferred no-op. Test-agent hand-derived AC + to-hit + 3 bite-checks.
+- NEEDS-HUMAN banked: combat feel with enemies missing / defense mattering.
+- Manual engineer fixes: none yet
+
 ## 2026-08-10 — class-kits (M3: five classes + signature kits) [stacked on M2, unmerged]
 - Verdict: PASS
 - Fix rounds: 0
