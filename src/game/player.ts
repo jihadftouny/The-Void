@@ -19,17 +19,16 @@ import {
   createCharacter,
   STAT_KEYS,
   type Character,
-  type HitDie,
   type Stats,
 } from './character.ts';
 import { roll4d6DropLowest, type Rng } from './rng.ts';
 import { ELEMENTS } from './element.ts';
 import { type ActiveCondition } from './condition.ts';
-import { type SkillId } from './skill.ts';
+import { CLASSES, type PlayerClass } from './classKit.ts';
 import { createInventory, type Inventory } from './inventory.ts';
 
-/** The two playable classes (this string is the player's `classId`). */
-export type PlayerClass = 'Enforcer' | 'Neuromancer';
+/** The five playable classes (defined with the class roster in `classKit.ts`). */
+export type { PlayerClass } from './classKit.ts';
 
 /**
  * A player — a `Character` plus player-only fields — as plain serializable data.
@@ -53,26 +52,20 @@ export interface Player extends Character {
   resistances: number[];
   /** Active status conditions (M6). */
   activeConditions: ActiveCondition[];
-  /** Learned skill ids — a new player starts with the M2 generic starter pool. */
+  /** Learned skill ids — a new player starts with its class's signature kit (M3). */
   skillPool: string[];
+  /**
+   * Enforcer momentum resource (M3). OPTIONAL and additive: absent ⇒ read as 0, so a
+   * pre-M3 v2 save without this field loads unchanged. Built by dealing/taking damage in
+   * a round (battle hooks), spent by `spendMomentum` skills. Harmless 0 for other classes.
+   */
+  momentum?: number;
+  /**
+   * Hollow corruption resource (M3). OPTIONAL and additive (same save story as momentum).
+   * Raised by `maxHpCost` sacrifices; read by `corruptionScale` skills. Harmless for others.
+   */
+  corruption?: number;
 }
-
-/** Per-class rules: hit die + starting gear (as M2 weapon/armor `name` ids). */
-const CLASS_PROFILES: Record<
-  PlayerClass,
-  { hitDie: HitDie; weaponId: string; armorId: string }
-> = {
-  Enforcer: {
-    hitDie: { quantity: 1, sides: 10 },
-    weaponId: 'Jaaj Sword 1', // Act-1 Rare Melee
-    armorId: 'Jooj Armor 1', // Act-1 Common
-  },
-  Neuromancer: {
-    hitDie: { quantity: 1, sides: 6 },
-    weaponId: 'Jooj Gun 1', // Act-1 Common Ranged
-    armorId: 'Jaaj Armor 1', // Act-1 Rare
-  },
-};
 
 /** Fixed game-start scalars (Java `GameLogic.startGame` / `Player` init). */
 const STARTING_GOLD = 1500;
@@ -80,14 +73,6 @@ const STARTING_RESTS = 1;
 const STARTING_POTS = 2;
 const PROFICIENCY = 2;
 const MAX_SKILL_CHARGES = 5;
-
-/**
- * The generic M2 starter skill pool every new player begins with — enough to exercise
- * casting across elements/conditions. Class-agnostic for now; M3 replaces these with
- * per-class signature kits. (Old saves keep whatever skillPool they stored; no starter
- * injection on load — an old save simply has the skills it had.)
- */
-const STARTER_SKILLS: readonly SkillId[] = ['strike', 'ember', 'venom', 'frost', 'enfeeble'];
 
 /**
  * Roll a fresh stat set: `roll4d6DropLowest` once per stat, in canonical
@@ -104,20 +89,23 @@ export function rollStartStats(rng: Rng): Stats {
 
 /**
  * Assemble a fresh `Player` from a name, class, and a rolled stat set. Pure: it
- * rolls nothing. Looks up the class profile, derives the Character base (mods,
- * maxHp = hitDie.sides + CONmod, hp = maxHp, armorClass = 10 + CONmod, charges),
- * then adds the player fields and equips the class starting gear by id.
+ * rolls nothing. Looks up the `CLASSES` definition, derives the Character base (mods,
+ * maxHp = hitDie.sides + CONmod, hp = maxHp, armorClass = 10 + CONmod, charges), then
+ * adds the player fields, equips the class starting gear by id, and grants the class's
+ * signature kit as the `skillPool`. Resources start at 0. NOTE (orchestrator resolution):
+ * stats are rolled UNIFORMLY (4d6-drop-lowest) elsewhere; `CLASSES[].primaryStats` is
+ * flavor only, so `createPlayer` applies no class stat-weighting.
  */
 export function createPlayer(args: {
   name: string;
   classId: PlayerClass;
   stats: Stats;
 }): Player {
-  const profile = CLASS_PROFILES[args.classId];
+  const def = CLASSES[args.classId];
   const base = createCharacter({
     name: args.name,
     stats: args.stats,
-    hitDie: profile.hitDie,
+    hitDie: def.hitDie,
     maxSkillCharges: MAX_SKILL_CHARGES,
     xp: 0,
   });
@@ -129,11 +117,13 @@ export function createPlayer(args: {
     pots: STARTING_POTS,
     proficiency: PROFICIENCY,
     advantageDisadvantage: 0,
-    equippedWeaponId: profile.weaponId,
-    equippedArmorId: profile.armorId,
+    equippedWeaponId: def.weaponId,
+    equippedArmorId: def.armorId,
     inventory: createInventory(),
     resistances: ELEMENTS.map(() => 0),
     activeConditions: [],
-    skillPool: [...STARTER_SKILLS],
+    skillPool: [...def.kit],
+    momentum: 0,
+    corruption: 0,
   };
 }

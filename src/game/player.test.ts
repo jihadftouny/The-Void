@@ -78,8 +78,11 @@ describe('createPlayer — Enforcer', () => {
     expect(player.skillCharges).toBe(5);
     expect(player.maxSkillCharges).toBe(5);
     expect(player.activeConditions).toEqual([]);
-    // M2 generic starter pool (class-agnostic; M3 swaps in per-class kits).
-    expect(player.skillPool).toEqual(['strike', 'ember', 'venom', 'frost', 'enfeeble']);
+    // M3 per-class signature kit (Enforcer's four skills), not the old generic pool.
+    expect(player.skillPool).toEqual(['heavyStrike', 'brace', 'intimidate', 'execute']);
+    // Resources start at 0 (Enforcer banks momentum; corruption harmless-0).
+    expect(player.momentum).toBe(0);
+    expect(player.corruption).toBe(0);
   });
 
   it('has a 7-slot all-zero resistance array', () => {
@@ -131,9 +134,52 @@ describe('createPlayer — Neuromancer', () => {
   });
 });
 
+// M3 — all five classes selectable & created. Every expected value is hand-derived from
+// the class spec in classKit.ts + the fresh-character formulas (CON 14 -> CONmod 2 ->
+// maxHp = hitDie.sides + 2, AC 12). Hit dice: Enforcer d10, Neuromancer d6, Scavver d8,
+// Penitent d8 (M15 placeholder), Hollow d8 (M15 placeholder). Kits and provisional gear
+// are read from the plan's per-class table, NOT from code output.
+describe('createPlayer — all five classes (creation table)', () => {
+  const con14 = statsWithCon(14); // CONmod 2 for every row
+  const table: Array<{
+    classId: 'Enforcer' | 'Neuromancer' | 'Scavver' | 'Penitent' | 'Hollow';
+    sides: number;
+    maxHp: number;
+    weaponId: string;
+    armorId: string;
+    kit: string[];
+  }> = [
+    { classId: 'Enforcer', sides: 10, maxHp: 12, weaponId: 'Jaaj Sword 1', armorId: 'Jooj Armor 1', kit: ['heavyStrike', 'brace', 'intimidate', 'execute'] },
+    { classId: 'Neuromancer', sides: 6, maxHp: 8, weaponId: 'Jooj Gun 1', armorId: 'Jaaj Armor 1', kit: ['mindSpike', 'unravel', 'lull', 'synapse'] },
+    { classId: 'Scavver', sides: 8, maxHp: 10, weaponId: 'Jiij Rapier 1', armorId: 'Jooj Armor 1', kit: ['backstab', 'venomCoat', 'slip', 'scavenge'] },
+    { classId: 'Penitent', sides: 8, maxHp: 10, weaponId: 'Jaaj Sword 1', armorId: 'Jaaj Armor 1', kit: ['smite', 'mend', 'consecrate', 'martyr'] },
+    { classId: 'Hollow', sides: 8, maxHp: 10, weaponId: 'Jooj Gun 1', armorId: 'Jooj Armor 1', kit: ['siphon', 'corrupt', 'sacrifice', 'unmake'] },
+  ];
+
+  for (const row of table) {
+    it(`${row.classId}: hitDie d${row.sides}, maxHp/hp ${row.maxHp}, AC 12, kit skillPool, gear resolves, resources 0`, () => {
+      const player = createPlayer({ name: 'Nyx', classId: row.classId, stats: con14 });
+      expect(player.hitDie).toEqual({ quantity: 1, sides: row.sides });
+      expect(player.maxHp).toBe(row.maxHp);
+      expect(player.hp).toBe(row.maxHp);
+      expect(player.armorClass).toBe(12);
+      // skillPool is exactly this class's four-skill kit (deep-equal, order-sensitive).
+      expect(player.skillPool).toEqual(row.kit);
+      // Provisional starting gear resolves in the M2 tables.
+      expect(player.equippedWeaponId).toBe(row.weaponId);
+      expect(player.equippedArmorId).toBe(row.armorId);
+      expect(getWeaponByName(row.weaponId)).toBeDefined();
+      expect(getArmorByName(row.armorId)).toBeDefined();
+      // Resource state present and zeroed.
+      expect(player.momentum).toBe(0);
+      expect(player.corruption).toBe(0);
+    });
+  }
+});
+
 describe('serializability', () => {
-  it('a created player of either class round-trips through JSON unchanged', () => {
-    for (const classId of ['Enforcer', 'Neuromancer'] as const) {
+  it('a created player of every class round-trips through JSON unchanged', () => {
+    for (const classId of ['Enforcer', 'Neuromancer', 'Scavver', 'Penitent', 'Hollow'] as const) {
       const player = createPlayer({
         name: 'Nyx',
         classId,
