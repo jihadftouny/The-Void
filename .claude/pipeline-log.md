@@ -19,6 +19,32 @@ Format per entry:
 
 ---
 
+## 2026-08-10 — equip-engine (M5: equipment engine, Tibia UI deferred) [stacked on M4, unmerged]
+- Verdict: PASS (engine) — test-agent returned FAIL but ONLY for a doc deliverable the orchestrator owns
+  (see reconciliation); all code checks passed. Orchestrator reconciled → treated as PASS.
+- Fix rounds: 0 (the FAIL needed no code change).
+- Build interruption: the FIRST build attempt was killed mid-build by a session/usage limit (nothing
+  committed, 2 partial untracked files). Restarted fresh (cleared partials); the restart instruction
+  added "commit each step as you go" so a future interruption can't lose committed progress. Clean run.
+- Build-agent deviations: steps 3–6 committed as ONE group (dropping Player.equipped*Id breaks all call
+  sites → only green once combat/defense/battle/shop/save are all rewired; splitting would commit
+  failing states). `shieldAcBonus` signature now takes Inventory. Shop preserves displaced gear to
+  backpack (plan-intended).
+- Test failures before fixes: none real. 526 → 561 tests (+35).
+- Plan open-questions: 3, all orchestrator-resolved (gear-resolver BRIDGE not full unification — defer
+  to M6/M7; unbounded no-weight backpack; two-handed deferred). Plan gave recommendations, not bare asks.
+- **DOCTRINE SIGNAL (recurring — 2nd time, also gpu-select):** the plan listed "append to
+  HUMAN-CHECKS.md" as a BUILD-AGENT acceptance criterion, and the test-agent FAILED the unit when the
+  build-agent didn't do it — but the ORCHESTRATOR maintains HUMAN-CHECKS (I told the build-agent not to
+  touch it). Fix for pipeline-retro: plans must NOT put HUMAN-CHECKS edits as build/test acceptance
+  criteria; that file is orchestrator-owned. The engine was sound; the FAIL was purely this mismatch.
+- Notable: paperdoll now authoritative (legacy equipped*Id removed); save v2→v3 migrates ids→slots;
+  effect pipeline built INERT, ready for M6 to add effect content without touching wiring. Byte-identical
+  anchor held (fresh Enforcer AC 13, damage unchanged). Bespoke Tibia UI deliberately DEFERRED to an
+  author art-direction pass.
+- NEEDS-HUMAN banked: Tibia visual paperdoll UI (deferred collaboration); equip/inventory UX feel.
+- Manual engineer fixes: none yet
+
 ## 2026-08-10 — combat-defense (M4: enemies roll to-hit, armor/shield/dodge) [stacked on M3, unmerged]
 - Verdict: PASS
 - Fix rounds: 0

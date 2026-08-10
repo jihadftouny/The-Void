@@ -25,7 +25,7 @@ After you **merge to root** (see the bottom), just run `npm run desktop` from th
 
 ---
 
-## 🧱 Autonomous mechanical-milestone run (M1–M3 built+verified, pending your merge)
+## 🧱 Autonomous mechanical-milestone run (M1–M5 built+verified, pending your merge)
 
 I built these through the loop while you were hands-off, **stacked and unmerged** (your merge gate).
 All are headless-verified (typecheck + full tests + build + adversarial checks); the items below are
@@ -45,6 +45,20 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
         exposure) — the engine emits the events; their on-screen rendering is play-test-only.
   - [ ] **Class balance & feel** — is any class unplayably weak or trivially dominant? (All magnitudes
         and the provisional Penitent/Hollow d8 hit dice are **M15 balance placeholders** — tuning input.)
+- **M4 (combat overhaul — defense matters)** — enemies now roll to-hit vs your Armor Class (they can
+  miss), armor value/dex-cap/str-requirement + shields + Scavver dodge all change how hard you are to hit:
+  - [ ] **Combat feel** — does it read tough-but-fair? Enemies missing sometimes, heavier armor/shield/
+        meeting str-req/playing Scavver each *visibly* making you harder to hit. Wrong = trivially easy,
+        or defense choices produce no felt difference. (All constants are **M15 placeholders**.)
+- **M5 (equipment engine — Tibia UI DEFERRED)** — the inventory paperdoll is now the authoritative
+  equipment system (equip/unequip/swap across 9 slots + backpack; combat & AC read from the slots; save
+  migrated v2→v3). **The bespoke Tibia-style visual UI was deliberately NOT built** — it needs your
+  art-direction and can't be verified headlessly:
+  - [ ] **The Tibia visual paperdoll UI is a dedicated collaboration pass with you** (drag-drop slots,
+        backpack container, item tooltips/comparison). The engine underneath is done & tested — tell me
+        when you want to design the UI together.
+  - [ ] **Equip/inventory UX feel** — checkable once that UI exists (equip/unequip/swap, the shop's
+        "your current gear" display).
 
 _Note: the "unwinnable balance" item below predates this run; the dedicated balance pass is **M15**,
 where I'll sim-verify winnability against your difficulty-feel input._
