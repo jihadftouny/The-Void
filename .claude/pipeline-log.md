@@ -19,6 +19,28 @@ Format per entry:
 
 ---
 
+## 2026-08-10 — state-foundations (M1: foundational state models)
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: (1) 5 commits not 4 — save version-bump + migration split into its own 5th
+  commit (couldn't fold into the already-committed earlier steps); benign. (2) Touched 2 consumer test
+  fixtures outside declared territory (`src/desktop/view-model.test.ts`, `src/llm/narrate.test.ts`) —
+  required because `karma` was made a REQUIRED `GameState` field (correct for the shape/migration
+  contract), which broke those fixtures' `GameState` literals; mechanical add-a-field only, no
+  production code outside `src/game/**`+`src/data/**`.
+- Test failures before fixes: none (PASS first pass). 378 → 411 tests (+33: karma 16, item 7,
+  inventory 4, save 30-suite incl. migration).
+- Plan open-questions: none.
+- Notable: independent-truth on the stat-formula swap. Orchestrator caught arithmetic disagreement in
+  the PLAN's illustrative old-formula numbers (divergence point / extreme-stat example) and directed
+  build+test to re-derive every assertion from the actual formulas rather than trust the plan. Outcome:
+  new `floor((stat-10)/2)` agrees with the old formula across the entire base-play range (3–18), so NO
+  normal-range assertion moved — only `character.test.ts` s=40 (+15) changed. Test-agent ran 4 mutation
+  (bite) checks, all failed-as-expected. Lesson for plan-agent: when a plan asserts specific arithmetic
+  as its correctness anchor, compute it independently — an illustrative-but-wrong anchor number nearly
+  propagated.
+- Manual engineer fixes: none yet
+
 ## 2026-08-04 — gpu-fix (corrected device-agnostic GPU selection)
 - Loop unit stacked on model-cache. VERDICT PASS, 0 fix rounds, 378 tests (electron/gpu.test.mjs = 31, confirmed collected). Territory clean (`electron/**` only).
 - Fixes the three real-hardware root causes gpu-select missed (diagnosed on the RTX 5060 laptop): (1) both Vulkan
