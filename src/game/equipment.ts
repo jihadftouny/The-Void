@@ -28,7 +28,7 @@
 //   WORK: M6/M7 full unification.
 
 import {
-  getItemById,
+  getCatalogItemById,
   EQUIP_SLOTS,
   type EquipSlot,
   type ItemEffect,
@@ -72,7 +72,7 @@ export const UNARMED: Weapon = {
  * weapon/armor/shield tables. Legacy defs are synthesized with `effects: []`.
  */
 export function resolveGearDef(defId: string): GearDef | undefined {
-  const unified = getItemById(defId);
+  const unified = getCatalogItemById(defId);
   if (unified) {
     return {
       defId: unified.id,
@@ -95,6 +95,26 @@ export function resolveGearDef(defId: string): GearDef | undefined {
     return { defId, kind: 'armor', slot: 'offHand', rarity: shield.rarity, effects: [] };
   }
   return undefined;
+}
+
+/**
+ * Resolve the mechanical def for a concrete `ItemInstance` — PURE. A rarity-generated
+ * instance carries its full description in `rolled`, so it becomes a `GearDef` directly
+ * (its effects contribute to the equip pipeline exactly like a catalog item's). A plain
+ * instance falls back to `resolveGearDef(defId)`. This is the single seam the effect
+ * pipeline reads so rolled loot and catalog gear are treated uniformly.
+ */
+export function resolveInstanceDef(instance: ItemInstance): GearDef | undefined {
+  if (instance.rolled) {
+    return {
+      defId: instance.defId,
+      kind: instance.rolled.kind,
+      slot: instance.rolled.slot,
+      rarity: instance.rolled.rarity,
+      effects: instance.rolled.effects,
+    };
+  }
+  return resolveGearDef(instance.defId);
 }
 
 /** The equip slot a defId belongs in, or `null` for a usable / unknown def. */

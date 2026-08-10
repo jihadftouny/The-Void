@@ -26,7 +26,7 @@ import { type PlayerClass } from './player.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /** The 15 valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -104,10 +104,11 @@ export function decodeSave(json: string): GameState | null {
  * Structured as a version ladder so future format bumps slot in without touching
  * `decodeSave`: each `case` upgrades one step and bumps `current`.
  *
- * Today the reachable source versions are `1` (upgraded via `upgrade1to2` then
- * `upgrade2to3`), `2` (upgraded via `upgrade2to3`), and anything `< 1` (nothing to upgrade
- * -> `null`, unsupported). The ladder composes: a v1 save gains an empty inventory at 1->2,
- * then its legacy equipped ids populate the paperdoll slots at 2->3. Returns the upgraded
+ * Today the reachable source versions are `1` (upgraded via `upgrade1to2` -> `upgrade2to3`
+ * -> `upgrade3to4`), `2` (from `upgrade2to3`), `3` (from `upgrade3to4`), and anything `< 1`
+ * (nothing to upgrade -> `null`, unsupported). The ladder composes: a v1 save gains an empty
+ * inventory at 1->2, then its legacy equipped ids populate the paperdoll slots at 2->3, then
+ * the M6 additive fields need no change at 3->4 (only a version stamp). Returns the upgraded
  * plain value (still unvalidated — `decodeSave` validates the result), or `null` if the
  * source version cannot be migrated.
  */
@@ -123,6 +124,10 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
       case 2:
         value = upgrade2to3(value);
         current = 3;
+        break;
+      case 3:
+        value = upgrade3to4(value);
+        current = 4;
         break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
@@ -199,6 +204,21 @@ function upgrade2to3(raw: unknown): unknown {
     next.player = player;
   }
   next.version = 3;
+  return next;
+}
+
+/**
+ * Migrate a v3 save (M5 paperdoll) to the v4 shape (M6 items content). Every M6 addition
+ * — `ItemInstance.rolled`, the extended `ItemEffect` union, `Player.shield`, the new
+ * relic/unique/consumable catalogs — is OPTIONAL and additive, so a structurally valid v3
+ * save is already a structurally valid v4 save. This step therefore only stamps
+ * `version = 4`; a non-object input is returned with just the stamp so the caller's
+ * validation still runs. (Kept as an explicit ladder rung so a future v5 slots in cleanly.)
+ */
+function upgrade3to4(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  next.version = 4;
   return next;
 }
 

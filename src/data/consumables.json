@@ -1,0 +1,204 @@
+[
+  {
+    "id": "void-draught",
+    "name": "Void Draught",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "healSelf", "params": { "pctMaxHp": 100 } }]
+  },
+  {
+    "id": "regen-salve",
+    "name": "Regen Salve",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "applyConditionSelf", "params": {}, "condition": "regeneration" }]
+  },
+  {
+    "id": "suture-kit",
+    "name": "Suture Kit",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [
+      { "kind": "cure", "params": {}, "condition": "bleed" },
+      { "kind": "healSelf", "params": { "amount": 4 } }
+    ]
+  },
+  {
+    "id": "antidote",
+    "name": "Antidote",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "cure", "params": {}, "condition": "poison" }]
+  },
+  {
+    "id": "clarity-tonic",
+    "name": "Clarity Draught",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [
+      { "kind": "cure", "params": {}, "condition": "insanity" },
+      { "kind": "applyConditionSelf", "params": {}, "condition": "wise" }
+    ]
+  },
+  {
+    "id": "cleansing-ash",
+    "name": "Cleansing Ash",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [
+      { "kind": "cure", "params": {}, "condition": "weak" },
+      { "kind": "cure", "params": {}, "condition": "slow" },
+      { "kind": "cure", "params": {}, "condition": "sick" },
+      { "kind": "cure", "params": {}, "condition": "dumb" },
+      { "kind": "cure", "params": {}, "condition": "fool" },
+      { "kind": "cure", "params": {}, "condition": "repulsive" }
+    ]
+  },
+  {
+    "id": "warding-charm",
+    "name": "Warding Charm",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "cure", "params": {}, "condition": "fracture" }]
+  },
+  {
+    "id": "stimpack",
+    "name": "Stimpack",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [
+      { "kind": "applyConditionSelf", "params": {}, "condition": "strong" },
+      { "kind": "applyConditionSelf", "params": {}, "condition": "quick" }
+    ]
+  },
+  {
+    "id": "ironhide-tonic",
+    "name": "Ironhide Tonic",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "applyConditionSelf", "params": {}, "condition": "healthy" }]
+  },
+  {
+    "id": "focus-serum",
+    "name": "Focus Serum",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [
+      { "kind": "applyConditionSelf", "params": {}, "condition": "smart" },
+      { "kind": "restoreCharge", "params": { "amount": 2 } }
+    ]
+  },
+  {
+    "id": "firebomb",
+    "name": "Firebomb",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [
+      { "kind": "dealDamage", "params": { "amount": 6 }, "element": 2 },
+      { "kind": "applyConditionEnemy", "params": {}, "condition": "burn" }
+    ]
+  },
+  {
+    "id": "cryo-grenade",
+    "name": "Cryo Grenade",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [
+      { "kind": "dealDamage", "params": { "amount": 4 }, "element": 1 },
+      { "kind": "applyConditionEnemy", "params": {}, "condition": "freeze" }
+    ]
+  },
+  {
+    "id": "shock-charge",
+    "name": "Shock Charge",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [
+      { "kind": "dealDamage", "params": { "amount": 4 }, "element": 3 },
+      { "kind": "applyConditionEnemy", "params": {}, "condition": "stun" }
+    ]
+  },
+  {
+    "id": "vial-of-rot",
+    "name": "Vial of Rot",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [
+      { "kind": "applyConditionEnemy", "params": {}, "condition": "poison" },
+      { "kind": "applyConditionEnemy", "params": {}, "condition": "bleed" }
+    ]
+  },
+  {
+    "id": "smoke-vial",
+    "name": "Smoke Vial",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "flee", "params": {} }]
+  },
+  {
+    "id": "lodestone",
+    "name": "Lodestone",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "reroll", "params": {} }]
+  },
+  {
+    "id": "ash-mask",
+    "name": "Ash-Mask",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "reroll", "params": {} }]
+  },
+  {
+    "id": "static-flare",
+    "name": "Static Flare",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "reroll", "params": {} }]
+  },
+  {
+    "id": "echo-bell",
+    "name": "Echo Bell",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [],
+    "use": [{ "kind": "reroll", "params": {} }]
+  }
+]

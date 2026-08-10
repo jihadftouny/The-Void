@@ -29,6 +29,7 @@ import { createInventory } from './inventory.ts';
 import { grantMomentum } from './classKit.ts';
 import { generateEnemy } from './enemy.ts';
 import { tickConditions, type ActiveCondition } from './condition.ts';
+import { type ItemInstance } from './item.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 const SEED = 12345;
@@ -60,8 +61,8 @@ function runInputs(
 
 describe('SAVE_VERSION', () => {
   it('mirrors the current GameState.version', () => {
-    // Derived from game.ts: createGame stamps version 3 (M5 bumped 2 -> 3 for the paperdoll).
-    expect(SAVE_VERSION).toBe(3);
+    // Derived from game.ts: createGame stamps version 4 (M6 bumped 3 -> 4 for items content).
+    expect(SAVE_VERSION).toBe(4);
     expect(createGame(SEED).version).toBe(SAVE_VERSION);
   });
 });
@@ -103,7 +104,7 @@ describe('migration v2 -> v3 (legacy equipped ids -> paperdoll slots)', () => {
     expect(mp.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect('equippedWeaponId' in mp).toBe(false);
     expect('equippedArmorId' in mp).toBe(false);
-    expect(migrated!.version).toBe(3);
+    expect(migrated!.version).toBe(4);
     // Modern midRunState seeds the SAME starting gear into slots, so the migrated v2 save
     // deep-equals the modern v3 state.
     expect(migrated).toEqual(modern);
@@ -139,7 +140,7 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
-    expect(migrated!.version).toBe(3);
+    expect(migrated!.version).toBe(4);
     expect(migrated!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
     expect(migrated!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
@@ -157,12 +158,12 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
     expect(migrated!.player).toBeNull();
-    expect(migrated!.version).toBe(3);
+    expect(migrated!.version).toBe(4);
     expect(migrated).toEqual(modern);
   });
 
-  it('rejects a future version 4 save without throwing', () => {
-    const s = { ...createGame(SEED), version: 4 };
+  it('rejects a future version 5 save without throwing', () => {
+    const s = { ...createGame(SEED), version: 5 };
     expect(() => decodeSave(JSON.stringify(s))).not.toThrow();
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
@@ -480,6 +481,56 @@ describe('M5 paperdoll: equipped gear save validation & round-trip', () => {
     // Enforcer starting gear seeded at creation (player.ts) survives the trip.
     expect(restored!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
     expect(restored!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
+  });
+});
+
+describe('M6 v3 -> v4 migration + effect-bearing item round-trip', () => {
+  it('a v3 save (all M6 fields absent) migrates to v4 and equals the modern state', () => {
+    // Build a modern v4 save, then stamp it back to v3 to simulate a pre-M6 save. Because
+    // every M6 addition is optional/additive, upgrade3to4 only bumps the version stamp, so
+    // the migrated result must deep-equal the modern v4 state.
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    old.version = 3;
+    expect(old.version).toBe(3); // sanity: really v3-shaped
+
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.version).toBe(4);
+    expect(migrated).toEqual(modern);
+  });
+
+  it('a fresh v4 state with an equipped relic + a rolled backpack item round-trips deep-equal', () => {
+    const base = midRunState(SEED);
+    const inv = base.player!.inventory;
+    const rolled: ItemInstance = {
+      defId: 'gen:blade-1',
+      rolled: {
+        name: 'Forged Rapier',
+        rarity: 'Legendary',
+        slot: 'mainHand',
+        kind: 'weapon',
+        effects: [{ type: 'bonusDamage', params: { amount: 6 } }],
+      },
+    };
+    const player = {
+      ...base.player!,
+      inventory: {
+        ...inv,
+        // A relic (triggered effect) equipped in the ring slot, plus a rarity-rolled weapon
+        // sitting in the backpack — both effect-bearing, both must survive the JSON trip.
+        slots: { ...inv.slots, ring: { defId: 'mirror-shard' } },
+        backpack: [rolled],
+      },
+    };
+    const state: GameState = { ...base, player };
+
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+    // The rolled overlay and the equipped relic id survive explicitly.
+    expect(restored!.player!.inventory.backpack[0]!.rolled!.name).toBe('Forged Rapier');
+    expect(restored!.player!.inventory.slots.ring).toEqual({ defId: 'mirror-shard' });
   });
 });
 
