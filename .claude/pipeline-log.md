@@ -19,6 +19,22 @@ Format per entry:
 
 ---
 
+## 2026-08-10 — skills-conditions (M2: player skills + 24-condition layer) [stacked on M1, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: (1) touched `src/render/format.ts` + `format.test.ts` (outside src/game) —
+  the `formatEvent` switch is an exhaustive by-design build-guard; new CombatEvent kinds (`skill-cast`,
+  `cast-unavailable`) broke tsc unless handled. Minimal additive fix; flagged for clash-tracking.
+  (2) Added `Math.max(...,0)` damage clamps so a debuff can't heal the target (safety; off-equivalent).
+- Test failures before fixes: none (PASS first pass). 411 → 456 tests (+45).
+- Plan open-questions: none.
+- Notable: same byte-identical anchor as M1 — stat-cascade accessors return base when no augment
+  active, so no pre-existing combat assertion moved. Deferred twists (Quick/Slow initiative→M4,
+  Emboldened/Cowed deals→M7, Lucid/Clouded illusions→M10) built as inert commented no-op hooks. No
+  save-version bump (`intensity` additive-optional). Test-agent ran 3 bite-checks, all failed-as-expected.
+- NEEDS-HUMAN banked: in-UI Cast button/skill-picker (render follow-up); combat-feel play-test.
+- Manual engineer fixes: none yet
+
 ## 2026-08-10 — state-foundations (M1: foundational state models)
 - Verdict: PASS
 - Fix rounds: 0
