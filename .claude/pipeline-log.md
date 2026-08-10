@@ -19,6 +19,23 @@ Format per entry:
 
 ---
 
+## 2026-08-10 — class-kits (M3: five classes + signature kits) [stacked on M2, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: (1) `src/render/format.ts` exhaustive `formatEvent` switch needed 4 new twist
+  event cases (same by-design build-guard as M2). (2) two `game.test.ts` cast tests now grant
+  `skillPool:['ember']` explicitly — default pools became per-class kits (Enforcer's kit has no Ember);
+  test-data update, not a behavior change.
+- Test failures before fixes: none (PASS first pass). 456 → 494 tests (+38).
+- Plan open-questions: 2, both orchestrator-resolved from GAME-DESIGN §4 (no user needed): uniform
+  4d6 stat roll (primaryStats = flavor, not class-assigned); provisional Penitent d8 / Hollow d8 (M15).
+- Notable: byte-identical anchor again — `castSkill` wraps `useSkill` and returns its exact result for
+  twist-free skills (proven by scriptedRng single-value test: no extra rng draw). 5 twists (Momentum/
+  Detonate/Exposure/Martyr/Corruption) all pure arithmetic, no rng. Scavver dodge = inert M4 seam. No
+  save-version bump (resources additive-optional). Test-agent hand-derived all 5 twists + 3 bite-checks.
+- NEEDS-HUMAN banked: class balance/feel (M15); in-UI class-select for 5 + twist visualization.
+- Manual engineer fixes: none yet
+
 ## 2026-08-10 — skills-conditions (M2: player skills + 24-condition layer) [stacked on M1, unmerged]
 - Verdict: PASS
 - Fix rounds: 0

@@ -20,8 +20,34 @@ $env:VOID_MODELS_DIR = "<repo>\models"
 npm run desktop
 ```
 
-`<tip>` = the newest built worktree (currently `gpu-fix`). After you
-**merge to root** (see the bottom), just run `npm run desktop` from the root — no env var needed.
+`<tip>` = the newest built worktree (currently **`class-kits`** = M3, the tip of the M1→M2→M3 chain).
+After you **merge to root** (see the bottom), just run `npm run desktop` from the root — no env var needed.
+
+---
+
+## 🧱 Autonomous mechanical-milestone run (M1–M3 built+verified, pending your merge)
+
+I built these through the loop while you were hands-off, **stacked and unmerged** (your merge gate).
+All are headless-verified (typecheck + full tests + build + adversarial checks); the items below are
+the **play-feel / UI things only you can judge**, once the chain is merged and running.
+
+- **M1 (state foundations)** — no play-check; pure serializable state (karma vector, item/inventory
+  schema, standard D&D stat formula, save migration). Verified headlessly (411 tests).
+- **M2 (skills + 24 conditions)** — the engine can now `cast` and all 24 status effects work, but:
+  - [ ] **In-UI Cast button + skill picker** is NOT wired yet (engine-only this milestone) — a render
+        follow-up. Confirm you're OK that casting isn't yet clickable in the desktop UI.
+  - [ ] **Combat feel with casting** — once wired: are starting charges too scarce? Is enemy-side
+        damage-over-time (poison/bleed/burn) satisfying? Is casting worth a turn vs. a plain attack?
+- **M3 (5 classes + signature kits)** — Enforcer, Neuromancer, Scavver, Penitent, Hollow, each with a
+  4-skill kit and one twist (Momentum / Detonate / Exposure / Martyr / Corruption):
+  - [ ] **Class-select shows all five** and each creates a character that reaches the main menu.
+  - [ ] **Twist feedback is legible** in battle (momentum building, corruption/lifesteal, detonate,
+        exposure) — the engine emits the events; their on-screen rendering is play-test-only.
+  - [ ] **Class balance & feel** — is any class unplayably weak or trivially dominant? (All magnitudes
+        and the provisional Penitent/Hollow d8 hit dice are **M15 balance placeholders** — tuning input.)
+
+_Note: the "unwinnable balance" item below predates this run; the dedicated balance pass is **M15**,
+where I'll sim-verify winnability against your difficulty-feel input._
 
 ---
 

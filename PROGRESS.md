@@ -11,15 +11,18 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 1/18 milestones done** `[#-------------------]` — M0 ✅; **M1 next** (foundational state
-models, through the loop). Pre-M0 base (engine + save/load + desktop LLM slice) built & verified.
+**v3 overall: 1/18 merged · M1–M3 built+verified (pending your batch merge)** `[####----------------]`
+Autonomous run (2026-08-10): building the mechanical milestones through the loop, **stacked & unmerged**
+per your merge gate — you review/merge the chain. Chain: `main` → M1 `state-foundations` → M2
+`skills-conditions` → M3 `class-kits`. Each PASSED plan→build→test (typecheck + full tests + build +
+adversarial verify). 494 tests at M3.
 
 | Milestone (v3) | Status |
 |---|---|
-| M0 — Consolidate base & reconcile to mechanics-first | ✅ merged to `main` (378 tests, typecheck + build clean); branches consolidated |
-| M1 — Foundational state models (karma + item schema + inventory) | ⬜ |
-| M2 — Player skills + full 24-condition system | ⬜ |
-| M3 — Classes & signature kits | ⬜ |
+| M0 — Consolidate base & reconcile to mechanics-first | ✅ merged to `main` (378 tests) |
+| M1 — Foundational state models (karma + item schema + inventory) | ✅ built+verified — branch `agentic/state-foundations` (411 tests), pending merge |
+| M2 — Player skills + full 24-condition system | ✅ built+verified — `agentic/skills-conditions` (456 tests), pending merge |
+| M3 — Classes & signature kits | ✅ built+verified — `agentic/class-kits` (494 tests), pending merge |
 | M4 — Combat overhaul: defense matters (enemies roll to-hit) | ⬜ |
 | M5 — Inventory & equipment (Tibia-style) ★ | ⬜ |
 | M6 — Items content: relics, uniques, consumables | ⬜ |
