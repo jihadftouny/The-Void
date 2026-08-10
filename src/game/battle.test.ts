@@ -91,19 +91,17 @@ describe('resolveRound Fight — exact HP deltas + exact event list', () => {
 });
 
 describe('resolveRound Fight — victory rewards', () => {
-  // enemy.xp 3, hp 4. Player deals 4 -> enemy 0 -> victory. Reward draws:
+  // enemy.xp 3, hp 4. Player deals 4 -> enemy 0 -> victory. Reward draw (M7: gold removed):
   //  extraRest: rng()*100+1 <= 25 -> 0.1 -> 11 <= 25 -> true.
-  //  gold: randInt(_, 3) with 0.7 -> floor(2.1) = 2.
-  it('grants xp = enemy.xp, gold, and an extra rest, and emits a victory event', () => {
+  it('grants xp = enemy.xp and an extra rest, and emits a victory event', () => {
     const state = createBattle(makePlayer(), makeEnemy({ hp: 4, xp: 3 }), 1);
-    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6), 0.1, 0.7]));
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6), 0.1]));
 
     expect(r.status).toBe('player-won');
     expect(r.state.enemy.hp).toBe(0);
     expect(r.state.player.xp).toBe(3); // 0 + enemy.xp
-    expect(r.state.player.gold).toBe(1502); // 1500 + 2
     expect(r.state.player.restsLeft).toBe(2); // 1 + extra rest
-    expect(r.events.at(-1)).toEqual({ kind: 'victory', xpGained: 3, goldGained: 2, extraRest: true });
+    expect(r.events.at(-1)).toEqual({ kind: 'victory', xpGained: 3, extraRest: true });
   });
 });
 
@@ -261,24 +259,23 @@ describe('resolveRound — enemy-side condition ticking', () => {
   // Player-inflicted DoT on the enemy now ticks. Enemy carries poison at its effect
   // phase (remaining 1) with hp 1 and xp 3: the enemy dies to its OWN poison tick before
   // acting -> still player-won. Poison rolls no save, so the tick draws nothing; then the
-  // victory block draws extra-rest (0.1 -> 11 <= 25 true) and gold (randInt(_,3) 0.7 -> 2).
+  // victory block draws extra-rest (0.1 -> 11 <= 25 true). M7: no gold draw.
   it('an enemy killed by its own DoT tick (before acting) yields player-won + rewards', () => {
     const state = createBattle(
       makePlayer({ hp: 20 }),
       makeEnemy({ hp: 1, xp: 3, activeConditions: [{ type: 'poison', remainingTurns: 1, maxTurns: 2 }] }),
       1,
     );
-    const r = resolveRound(state, 'fight', scriptedRng([0.1, 0.7]));
+    const r = resolveRound(state, 'fight', scriptedRng([0.1]));
 
     expect(r.status).toBe('player-won');
     expect(r.state.enemy.hp).toBe(0);
     expect(r.state.player.hp).toBe(20); // enemy never got to attack
     expect(r.state.player.xp).toBe(3); // 0 + enemy.xp
-    expect(r.state.player.gold).toBe(1502); // 1500 + 2
     expect(r.state.player.restsLeft).toBe(2); // 1 + extra rest
     expect(r.events).toEqual([
       { kind: 'condition-damage', subject: 'enemy', conditionType: 'poison', amount: 1 },
-      { kind: 'victory', xpGained: 3, goldGained: 2, extraRest: true },
+      { kind: 'victory', xpGained: 3, extraRest: true },
     ]);
   });
 

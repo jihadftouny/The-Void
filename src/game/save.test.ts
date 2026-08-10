@@ -61,8 +61,8 @@ function runInputs(
 
 describe('SAVE_VERSION', () => {
   it('mirrors the current GameState.version', () => {
-    // Derived from game.ts: createGame stamps version 4 (M6 bumped 3 -> 4 for items content).
-    expect(SAVE_VERSION).toBe(4);
+    // Derived from game.ts: createGame stamps version 5 (M7 bumped 4 -> 5, gold retired).
+    expect(SAVE_VERSION).toBe(5);
     expect(createGame(SEED).version).toBe(SAVE_VERSION);
   });
 });
@@ -104,7 +104,7 @@ describe('migration v2 -> v3 (legacy equipped ids -> paperdoll slots)', () => {
     expect(mp.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect('equippedWeaponId' in mp).toBe(false);
     expect('equippedArmorId' in mp).toBe(false);
-    expect(migrated!.version).toBe(4);
+    expect(migrated!.version).toBe(5);
     // Modern midRunState seeds the SAME starting gear into slots, so the migrated v2 save
     // deep-equals the modern v3 state.
     expect(migrated).toEqual(modern);
@@ -140,7 +140,7 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
-    expect(migrated!.version).toBe(4);
+    expect(migrated!.version).toBe(5);
     expect(migrated!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
     expect(migrated!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
@@ -158,12 +158,12 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
     expect(migrated!.player).toBeNull();
-    expect(migrated!.version).toBe(4);
+    expect(migrated!.version).toBe(5);
     expect(migrated).toEqual(modern);
   });
 
-  it('rejects a future version 5 save without throwing', () => {
-    const s = { ...createGame(SEED), version: 5 };
+  it('rejects a future version 6 save without throwing', () => {
+    const s = { ...createGame(SEED), version: 6 };
     expect(() => decodeSave(JSON.stringify(s))).not.toThrow();
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
@@ -496,7 +496,7 @@ describe('M6 v3 -> v4 migration + effect-bearing item round-trip', () => {
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(4);
+    expect(migrated!.version).toBe(5);
     expect(migrated).toEqual(modern);
   });
 
@@ -531,6 +531,45 @@ describe('M6 v3 -> v4 migration + effect-bearing item round-trip', () => {
     // The rolled overlay and the equipped relic id survive explicitly.
     expect(restored!.player!.inventory.backpack[0]!.rolled!.name).toBe('Forged Rapier');
     expect(restored!.player!.inventory.slots.ring).toEqual({ defId: 'mirror-shard' });
+  });
+});
+
+describe('M7 v4 -> v5 migration (gold retired)', () => {
+  it('a v4 save with player.gold decodes to a v5 state with no gold field', () => {
+    // Build a modern v5 save (no gold), then re-add a legacy `gold` and stamp version 4 to
+    // simulate a genuine pre-M7 save. upgrade4to5 must DELETE gold and bump to 5; because the
+    // modern state carries no gold, the migrated result deep-equals it.
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    (old.player as Record<string, unknown>).gold = 1500;
+    old.version = 4;
+    // Sanity: really v4-shaped with a gold balance.
+    expect((old.player as Record<string, unknown>).gold).toBe(1500);
+
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.version).toBe(5);
+    expect('gold' in migrated!.player!).toBe(false);
+    expect(migrated).toEqual(modern);
+  });
+
+  it('a v4 title save with a null player migrates (nothing to strip)', () => {
+    const modern = createGame(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    old.version = 4;
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.version).toBe(5);
+    expect(migrated!.player).toBeNull();
+    expect(migrated).toEqual(modern);
+  });
+
+  it('a fresh v5 state round-trips deep-equal', () => {
+    const m = midRunState(SEED);
+    expect(m.version).toBe(5);
+    expect('gold' in m.player!).toBe(false);
+    const decoded = decodeSave(encodeSave(m));
+    expect(decoded).toEqual(m);
   });
 });
 

@@ -69,7 +69,7 @@ describe('createPlayer — Enforcer', () => {
   });
 
   it('has the fixed game-start scalar defaults', () => {
-    expect(player.gold).toBe(1500);
+    expect('gold' in player).toBe(false); // M7: gold retired
     expect(player.restsLeft).toBe(1);
     expect(player.pots).toBe(2);
     expect(player.proficiency).toBe(2);

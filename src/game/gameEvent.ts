@@ -44,7 +44,7 @@ export type NarrativeEvent =
       currentName: string;
       text?: string;
     }
-  | { kind: 'shop-purchased'; itemId: string; price: number; gold: number; text?: string }
+  | { kind: 'shop-purchased'; itemId: string; price: number; text?: string }
   | { kind: 'shop-insufficient'; text?: string }
   | { kind: 'shop-declined'; text?: string }
   | { kind: 'character-info'; text?: string }

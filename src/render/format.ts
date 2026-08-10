@@ -105,8 +105,8 @@ export function formatEvent(e: GameEvent): string {
       return `There is no escape from this one.`;
     case 'victory':
       return e.extraRest
-        ? `Victory! +${e.xpGained} XP, +${e.goldGained} gold, and you find a place to rest.`
-        : `Victory! +${e.xpGained} XP, +${e.goldGained} gold.`;
+        ? `Victory! +${e.xpGained} XP, and you find a place to rest.`
+        : `Victory! +${e.xpGained} XP.`;
     case 'defeat':
       return `You have fallen.`;
     // --- M6 items-content events ---
@@ -147,9 +147,9 @@ export function formatEvent(e: GameEvent): string {
     case 'no-rests':
       return `You have no rest remaining.`;
     case 'shop-offer':
-      return `The stranger offers ${e.itemName} (${e.itemKind}) for ${e.price} gold.`;
+      return `The stranger offers ${e.itemName} (${e.itemKind}).`;
     case 'shop-purchased':
-      return `You buy ${e.itemId} for ${e.price} gold — ${e.gold} gold left.`;
+      return `You take ${e.itemId}.`;
     case 'shop-insufficient':
       return `You cannot afford that.`;
     case 'shop-declined':

@@ -42,7 +42,6 @@ export type { PlayerClass } from './classKit.ts';
  */
 export interface Player extends Character {
   classId: PlayerClass;
-  gold: number;
   restsLeft: number;
   pots: number;
   proficiency: number;
@@ -75,7 +74,6 @@ export interface Player extends Character {
 }
 
 /** Fixed game-start scalars (Java `GameLogic.startGame` / `Player` init). */
-const STARTING_GOLD = 1500;
 const STARTING_RESTS = 1;
 const STARTING_POTS = 2;
 const PROFICIENCY = 2;
@@ -119,7 +117,6 @@ export function createPlayer(args: {
   return {
     ...base,
     classId: args.classId,
-    gold: STARTING_GOLD,
     restsLeft: STARTING_RESTS,
     pots: STARTING_POTS,
     proficiency: PROFICIENCY,

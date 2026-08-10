@@ -79,7 +79,6 @@ export type CombatEvent =
   | {
       kind: 'victory';
       xpGained: number;
-      goldGained: number;
       extraRest: boolean;
       text?: string;
     }

@@ -22,7 +22,7 @@ export function registerMainMenuScene(k: Engine, driver: GameDriver): void {
 
     if (player) {
       const stat = COLORS.dim;
-      const line = `HP ${hpText(player.hp, player.maxHp)}   Gold ${player.gold}   XP ${player.xp}   Rests ${player.restsLeft}   Potions ${player.pots}`;
+      const line = `HP ${hpText(player.hp, player.maxHp)}   XP ${player.xp}   Rests ${player.restsLeft}   Potions ${player.pots}`;
       k.add([
         k.text(line, { size: TEXT.small, font: FONT, width: content.w, align: 'left' }),
         k.pos(content.x, below),

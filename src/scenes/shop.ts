@@ -1,5 +1,6 @@
-// Shop scene: the mysterious stranger's offer (item, kind, price) against the
-// player's current gear and gold. Buy / Decline -> dispatch {kind:'shop-decision'}.
+// Shop scene: the mysterious stranger's offer (item, kind) against the player's current
+// gear. Take / Decline -> dispatch {kind:'shop-decision'}. INTERIM (gold removed in M7);
+// Stage 4 replaces this scene with the sacrifice-deal scene.
 
 import type { Engine } from '../render/engine.ts';
 import type { GameDriver } from '../render/driver.ts';
@@ -24,8 +25,6 @@ export function registerShopScene(k: Engine, driver: GameDriver): void {
         ? '—'
         : equippedDefId(player.inventory, offer.itemKind === 'armor' ? 'armor' : 'mainHand') ??
           '—';
-    const gold = player?.gold ?? 0;
-    const canAfford = gold >= offer.price;
 
     const region = { x: content.x, y: below + SPACING.sm, w: content.w, h: content.h };
     bodyText(
@@ -34,19 +33,13 @@ export function registerShopScene(k: Engine, driver: GameDriver): void {
       [
         `Offer: ${offer.itemName}`,
         `Kind: ${offer.itemKind}`,
-        `Price: ${offer.price} gold`,
         `Your ${offer.itemKind}: ${currentId}`,
-        `Your gold: ${gold}${canAfford ? '' : '  (not enough)'}`,
       ].join('\n'),
-      canAfford ? COLORS.text : COLORS.dim,
+      COLORS.text,
     );
 
     bottomButtons(k, content, [
-      {
-        label: 'Buy',
-        onClick: () => driver.dispatch({ kind: 'shop-decision', accept: true }),
-        disabled: !canAfford,
-      },
+      { label: 'Take', onClick: () => driver.dispatch({ kind: 'shop-decision', accept: true }) },
       { label: 'Decline', onClick: () => driver.dispatch({ kind: 'shop-decision', accept: false }) },
     ]);
   });

@@ -27,7 +27,7 @@ describe('CombatEvent JSON round-trip', () => {
     { kind: 'fled' },
     { kind: 'escape-failed', damage: 2 },
     { kind: 'escape-impossible' },
-    { kind: 'victory', xpGained: 3, goldGained: 1, extraRest: true },
+    { kind: 'victory', xpGained: 3, extraRest: true },
     { kind: 'defeat' },
   ];
 

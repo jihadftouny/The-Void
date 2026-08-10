@@ -68,7 +68,7 @@ export type Phase =
 
 /** The full, serializable game state. */
 export interface GameState {
-  version: 4;
+  version: 5;
   /** mulberry32 accumulator — the serializable RNG state; JSON round-trips it. */
   rngState: number;
   player: Player | null;
@@ -121,7 +121,7 @@ export interface StepResult {
 /** Build a fresh game at the title screen, seeded by `seed`. */
 export function createGame(seed: number): GameState {
   return {
-    version: 4,
+    version: 5,
     rngState: seed >>> 0,
     player: null,
     act: 1,
@@ -482,17 +482,12 @@ function resolveShopDecision(
     events.push({ kind: 'shop-declined' });
   } else {
     const result = applyShopPurchase(player, offer);
-    if (result.outcome === 'bought') {
-      nextPlayer = result.player;
-      events.push({
-        kind: 'shop-purchased',
-        itemId: offer.itemId,
-        price: offer.price,
-        gold: result.player.gold,
-      });
-    } else {
-      events.push({ kind: 'shop-insufficient' });
-    }
+    nextPlayer = result.player;
+    events.push({
+      kind: 'shop-purchased',
+      itemId: offer.itemId,
+      price: offer.price,
+    });
   }
   // Java bundles character-info after the shop.
   events.push({ kind: 'character-info' });

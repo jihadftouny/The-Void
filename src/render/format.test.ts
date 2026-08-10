@@ -15,10 +15,10 @@ describe('hpText', () => {
 });
 
 describe('formatEvent — anchored player-facing strings', () => {
-  it('victory carries the XP and gold numbers', () => {
-    const s = formatEvent({ kind: 'victory', xpGained: 12, goldGained: 7, extraRest: false });
+  it('victory carries the XP number (M7: no gold)', () => {
+    const s = formatEvent({ kind: 'victory', xpGained: 12, extraRest: false });
     expect(s).toContain('12');
-    expect(s).toContain('7');
+    expect(s.toLowerCase()).not.toContain('gold');
   });
 
   it('an enemy miss names the enemy side and says "miss"', () => {
@@ -82,7 +82,7 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'fled' },
     { kind: 'escape-failed', damage: 4 },
     { kind: 'escape-impossible' },
-    { kind: 'victory', xpGained: 5, goldGained: 3, extraRest: true },
+    { kind: 'victory', xpGained: 5, extraRest: true },
     { kind: 'defeat' },
     // narrative
     { kind: 'title' },
@@ -104,7 +104,7 @@ describe('formatEvent — totality over every event kind', () => {
       currentId: 'C',
       currentName: 'C',
     },
-    { kind: 'shop-purchased', itemId: 'W', price: 10, gold: 5 },
+    { kind: 'shop-purchased', itemId: 'W', price: 10 },
     { kind: 'shop-insufficient' },
     { kind: 'shop-declined' },
     { kind: 'character-info' },

@@ -25,7 +25,7 @@ describe('persist (desktop save/load)', () => {
   it('round-trips a run (engine state + memory)', () => {
     const state = createGame(12345);
     let memory = createStoryMemory();
-    memory = rememberBeat(memory, [{ kind: 'victory', xpGained: 5, goldGained: 2, extraRest: false }]);
+    memory = rememberBeat(memory, [{ kind: 'victory', xpGained: 5, extraRest: false }]);
     saveRun(state, memory);
     const loaded = loadRun();
     expect(loaded).not.toBeNull();

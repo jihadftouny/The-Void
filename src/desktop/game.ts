@@ -81,7 +81,7 @@ function renderSheet(): void {
     `<b>${p.name}</b>`,
     `${p.classId}`,
     `HP ${p.hp}/${p.maxHp}`,
-    `XP ${p.xp} · Gold ${p.gold}`,
+    `XP ${p.xp}`,
     `Act ${state.act}`,
     `Pots ${p.pots} · Rests ${p.restsLeft}`,
   ];

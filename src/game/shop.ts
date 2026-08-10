@@ -35,8 +35,13 @@ export interface ShopOffer {
   price: number;
 }
 
-/** The result of trying to buy an offer. */
-export type ShopOutcome = 'bought' | 'insufficient';
+/**
+ * The result of trying to take an offer. M7 (gold removal): with gold gone the trade
+ * always succeeds — the stranger hands the item over. This whole module is INTERIM
+ * scaffolding kept only so Stages 1-3 stay green; Stage 4 deletes it and replaces the
+ * shop with the sacrifice-deal encounter (`deal.ts`).
+ */
+export type ShopOutcome = 'bought';
 
 /**
  * The price of a shop offer in the given Act — PURE, one draw. Java:
@@ -79,23 +84,18 @@ export function buildShopOffer(act: number, rng: Rng): ShopOffer {
 }
 
 /**
- * Apply a purchase — PURE. If the player has enough gold, equip the bought item into its
- * paperdoll slot (`armor -> armor`, `weapon -> mainHand`) and subtract exactly the price
- * (`outcome: 'bought'`); otherwise the player is returned unchanged (`outcome:
- * 'insufficient'`). M5: the item is picked up then equipped via the equipment bridge, so any
- * item it DISPLACES from the slot moves to the backpack instead of being discarded. Gold
- * logic is unchanged (gold removal is M7). A decline is handled by the caller.
+ * Apply a purchase — PURE. M7 (gold removal): the trade always succeeds. Equip the offered
+ * item into its paperdoll slot (`armor -> armor`, `weapon -> mainHand`); the item it
+ * DISPLACES from the slot moves to the backpack (via the equipment bridge) instead of being
+ * discarded. `outcome` is always `'bought'`. A decline is handled by the caller. Interim
+ * scaffolding — Stage 4 replaces the shop with the sacrifice-deal encounter.
  */
 export function applyShopPurchase(
   player: Player,
   offer: ShopOffer,
 ): { player: Player; outcome: ShopOutcome } {
-  if (player.gold < offer.price) {
-    return { player, outcome: 'insufficient' };
-  }
-  const gold = player.gold - offer.price;
   const slot: EquipSlot = offer.itemKind === 'armor' ? 'armor' : 'mainHand';
   const withItem = pickUp(player.inventory, { defId: offer.itemId });
   const { inventory } = equip(withItem, withItem.backpack.length - 1, slot);
-  return { player: { ...player, gold, inventory }, outcome: 'bought' };
+  return { player: { ...player, inventory }, outcome: 'bought' };
 }

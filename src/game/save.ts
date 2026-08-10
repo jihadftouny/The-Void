@@ -26,7 +26,7 @@ import { type PlayerClass } from './player.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /** The 15 valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -105,12 +105,12 @@ export function decodeSave(json: string): GameState | null {
  * `decodeSave`: each `case` upgrades one step and bumps `current`.
  *
  * Today the reachable source versions are `1` (upgraded via `upgrade1to2` -> `upgrade2to3`
- * -> `upgrade3to4`), `2` (from `upgrade2to3`), `3` (from `upgrade3to4`), and anything `< 1`
- * (nothing to upgrade -> `null`, unsupported). The ladder composes: a v1 save gains an empty
- * inventory at 1->2, then its legacy equipped ids populate the paperdoll slots at 2->3, then
- * the M6 additive fields need no change at 3->4 (only a version stamp). Returns the upgraded
- * plain value (still unvalidated — `decodeSave` validates the result), or `null` if the
- * source version cannot be migrated.
+ * -> `upgrade3to4` -> `upgrade4to5`), `2`, `3`, `4`, and anything `< 1` (nothing to upgrade
+ * -> `null`, unsupported). The ladder composes: a v1 save gains an empty inventory at 1->2,
+ * then its legacy equipped ids populate the paperdoll slots at 2->3, then the M6 additive
+ * fields need no change at 3->4 (only a version stamp), then the M7 gold field is DROPPED
+ * from the player at 4->5. Returns the upgraded plain value (still unvalidated — `decodeSave`
+ * validates the result), or `null` if the source version cannot be migrated.
  */
 function migrate(raw: unknown, fromVersion: number): unknown | null {
   let current = fromVersion;
@@ -128,6 +128,10 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
       case 3:
         value = upgrade3to4(value);
         current = 4;
+        break;
+      case 4:
+        value = upgrade4to5(value);
+        current = 5;
         break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
@@ -222,6 +226,27 @@ function upgrade3to4(raw: unknown): unknown {
   return next;
 }
 
+/**
+ * Migrate a v4 save (M6 items content) to the v5 shape (M7 pure sacrifice economy). Gold is
+ * retired: DELETE `player.gold` so an old save's balance simply vanishes. Everything else is
+ * unchanged — the new loot/deal/chest state is additive and only appears in fresh v5 runs, so
+ * a structurally valid v4 save minus its gold field is a structurally valid v5 save. Pure: it
+ * shallow-clones the parsed plain object (and its player) and stamps `version = 5`; a
+ * non-object input (or absent/null player) is returned with just the stamp so the caller's
+ * validation still runs.
+ */
+function upgrade4to5(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (isPlainObject(next.player)) {
+    const player = { ...(next.player as Record<string, unknown>) };
+    delete player.gold;
+    next.player = player;
+  }
+  next.version = 5;
+  return next;
+}
+
 // ------- Shape guard ---------------------------------------------------------
 
 /** True for a non-null, non-array object. */
@@ -289,7 +314,6 @@ function isValidPlayer(v: unknown): boolean {
   if (!isFiniteNumber(v.maxHp)) return false;
   if (!isFiniteNumber(v.xp)) return false;
   if (!isFiniteNumber(v.armorClass)) return false;
-  if (!isFiniteNumber(v.gold)) return false;
   if (!isFiniteNumber(v.proficiency)) return false;
 
   // Nested plain-object fields.

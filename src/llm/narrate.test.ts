@@ -11,7 +11,7 @@ import type { GameEvent } from '../game/gameEvent.ts';
 import { createKarma } from '../game/karma.ts';
 
 const baseState: GameState = {
-  version: 4,
+  version: 5,
   rngState: 1,
   player: null,
   act: 1,
@@ -46,7 +46,7 @@ describe('buildNarrationPrompt', () => {
   it('prefixes recent moments and a run summary when memory is supplied', () => {
     let m = createStoryMemory();
     m = rememberBeat(m, [{ kind: 'encounter-start', enemyName: 'Feral Rat' }]);
-    m = rememberBeat(m, [{ kind: 'victory', xpGained: 5, goldGained: 2, extraRest: false }]);
+    m = rememberBeat(m, [{ kind: 'victory', xpGained: 5, extraRest: false }]);
     const p = buildNarrationPrompt(
       [{ kind: 'attack', subject: 'player', outcome: 'hit', damage: 3 }],
       baseState,
@@ -69,8 +69,8 @@ describe('story memory', () => {
   });
   it('accumulates run facts across beats', () => {
     let m = createStoryMemory();
-    m = rememberBeat(m, [{ kind: 'victory', xpGained: 5, goldGained: 2, extraRest: false }]);
-    m = rememberBeat(m, [{ kind: 'victory', xpGained: 3, goldGained: 1, extraRest: false }]);
+    m = rememberBeat(m, [{ kind: 'victory', xpGained: 5, extraRest: false }]);
+    m = rememberBeat(m, [{ kind: 'victory', xpGained: 3, extraRest: false }]);
     m = rememberBeat(m, [{ kind: 'fled' }]);
     expect(m.enemiesDefeated).toBe(2);
     expect(m.timesFled).toBe(1);

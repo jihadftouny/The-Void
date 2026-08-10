@@ -35,7 +35,7 @@ describe('displayPlayer (desktop view-model)', () => {
     // that differs from the undamaged snapshot's hp.
     const damaged = { ...battle, player: { ...battle.player, hp: 3 } };
     const state: GameState = {
-      version: 4,
+      version: 5,
       rngState: 0,
       player: snapshot,
       act: 1,
@@ -52,7 +52,7 @@ describe('displayPlayer (desktop view-model)', () => {
 
   it('returns the snapshot object outside battle', () => {
     const state: GameState = {
-      version: 4,
+      version: 5,
       rngState: 0,
       player: snapshot,
       act: 1,
