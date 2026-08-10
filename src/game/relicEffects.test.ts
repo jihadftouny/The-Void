@@ -142,7 +142,8 @@ describe('trigger: onCast — Doubling Glass adds flat damage on a cast', () => 
 
 describe('trigger: onKill — Devourer\'s Maw steals STR permanently (anchor)', () => {
   it('STR 14 -> 15 on the first kill, -> 16 (mod +3) on the second', () => {
-    // Kill an enemy at 1 hp with a Jaaj Sword hit (1d6 -> 4). Victory draws: extra-rest, gold.
+    // Kill an enemy at 1 hp with a Jaaj Sword hit (1d6 -> 4). Victory draws: extra-rest (0.99 ->
+    // none) then the loot gate (0.5 >= act-1 dropChance 0.5 -> no drop). M7: gold -> loot roll.
     const seq = () => seqRng([d20(1), d20(10), d6(4), 0.99, 0.5]);
     const battle1 = createBattle(makePlayer({ amulet: { defId: 'devourers-maw' } }), makeEnemy({ hp: 1 }), 1);
     const r1 = resolveRound(battle1, 'fight', seq());

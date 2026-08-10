@@ -16,6 +16,12 @@
 // WHERE loot lands is the caller's job (battle.ts victory drops into the backpack; game.ts
 // chest phase does the same). Every magnitude/chance here is an M15 balance placeholder.
 //
+// BALANCE (provisional, M15 — NEEDS-HUMAN): the intent is a rough ~50/50 split between FOUND
+// loot (victory drops at dropChance 0.5 + the 1/6 chest encounter) and SACRIFICE deals (the
+// player-initiated `seek-deal` altar). Act-1 dropChance is pinned at 0.5 and rarity/legendary
+// weight rises by Act. These numbers are not play-tested; removing gold + adding found loot
+// shifts progression pacing (recorded, not tuned here).
+//
 // DOCUMENTED DRAW ORDER (load-bearing for the determinism tests):
 //   rollLootDrop:  (1) drop gate  = rng() < dropChance   [fail -> null, one draw]
 //                  (2) rarity      = weightedPick(rarityWeights)

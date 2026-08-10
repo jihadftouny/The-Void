@@ -102,7 +102,8 @@ describe('throwables category', () => {
   });
 
   it('a throwable that kills the enemy resolves to victory (rewards rolled)', () => {
-    // Enemy at 1 hp; Firebomb (6) kills. killAndVictory draws extra-rest then gold (2 draws).
+    // Enemy at 1 hp; Firebomb (6) kills. killAndVictory draws extra-rest (0.99 -> none) then the
+    // loot gate (0.5 >= act-1 dropChance 0.5 -> no drop). M7: gold draw replaced by loot roll.
     const r = use0(makePlayer({}, [{ defId: 'firebomb' }]), makeEnemy({ hp: 1, xp: 1 }), [0.99, 0.5]);
     expect(r.status).toBe('player-won');
   });
