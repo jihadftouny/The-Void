@@ -46,8 +46,14 @@ const PHASE_KINDS: readonly string[] = [
   'game-over',
 ];
 
-/** The two valid player classes (mirrors `PlayerClass` in player.ts). */
-const PLAYER_CLASSES: readonly PlayerClass[] = ['Enforcer', 'Neuromancer'];
+/** The five valid player classes (mirrors `PlayerClass`, defined in classKit.ts). */
+const PLAYER_CLASSES: readonly PlayerClass[] = [
+  'Enforcer',
+  'Neuromancer',
+  'Scavver',
+  'Penitent',
+  'Hollow',
+];
 
 // ------- Encode / decode -----------------------------------------------------
 

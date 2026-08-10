@@ -24,6 +24,8 @@ import {
 } from './game.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { createBattle } from './battle.ts';
+import { createPlayer } from './player.ts';
+import { grantMomentum } from './classKit.ts';
 import { generateEnemy } from './enemy.ts';
 import { tickConditions, type ActiveCondition } from './condition.ts';
 import { type GameEvent } from './gameEvent.ts';
@@ -345,6 +347,67 @@ describe('M2 conditions: mid-battle save round-trip (intensity + augment + enemy
       const tick = tickConditions(rp.phase.battle.player, rp.phase.battle.enemy, noDraw);
       expect(tick.hpDelta).toBe(-1);
     }
+  });
+});
+
+describe('M3 classes + resources: save validation & round-trip', () => {
+  const ALL_CLASSES = ['Enforcer', 'Neuromancer', 'Scavver', 'Penitent', 'Hollow'] as const;
+
+  it('all five classIds pass validation and round-trip', () => {
+    for (const classId of ALL_CLASSES) {
+      const base = midRunState(SEED);
+      const player = createPlayer({ name: 'Ari', classId, stats: base.player!.stats });
+      const state: GameState = { ...base, player };
+      const decoded = decodeSave(encodeSave(state));
+      expect(decoded).not.toBeNull();
+      expect(decoded!.player!.classId).toBe(classId);
+      // A full deep round-trip (kit skillPool + resources included).
+      expect(decoded).toEqual(state);
+    }
+  });
+
+  it('a resource-bearing player (momentum/corruption > 0) + an exposed enemy round-trip byte-equal', () => {
+    const base = midRunState(SEED);
+    const player = { ...base.player!, momentum: 3, corruption: 2, hp: 20, maxHp: 20 };
+    const enemy = {
+      ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(SEED)),
+      activeConditions: [{ type: 'exposed', remainingTurns: 2, maxTurns: 2, intensity: 3 } as ActiveCondition],
+    };
+    const battle = createBattle(player, enemy, 1);
+    const state: GameState = { ...base, player, phase: { kind: 'battle', battle, started: true, final: false } };
+
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+    // The live resources and the exposed intensity survive explicitly.
+    const rp = restored as GameState;
+    if (rp.phase.kind === 'battle') {
+      expect(rp.phase.battle.player.momentum).toBe(3);
+      expect(rp.phase.battle.player.corruption).toBe(2);
+      const mark = rp.phase.battle.enemy.activeConditions.find((c) => c.type === 'exposed');
+      expect(mark?.intensity).toBe(3);
+    }
+  });
+
+  it('a pre-M3 v2 save with NO momentum/corruption fields decodes, and the resource reads as 0', () => {
+    // Build a modern mid-run save, then STRIP the M3 resource fields to simulate a pre-M3
+    // v2 player (additive-optional -> no version bump needed).
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    const oldPlayer = old.player as Record<string, unknown>;
+    delete oldPlayer.momentum;
+    delete oldPlayer.corruption;
+    old.version = SAVE_VERSION; // still v2 — the strip does not change the shape version
+    // Sanity: the source really is missing the fields (else the test is vacuous).
+    expect('momentum' in oldPlayer).toBe(false);
+    expect('corruption' in oldPlayer).toBe(false);
+
+    const decoded = decodeSave(JSON.stringify(old));
+    expect(decoded).not.toBeNull();
+    const p = decoded!.player!;
+    expect(p.momentum).toBeUndefined();
+    // The engine reads the absent field as 0: granting +1 yields exactly 1.
+    expect(grantMomentum(p, 1).momentum).toBe(1);
   });
 });
 
