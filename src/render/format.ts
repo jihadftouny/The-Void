@@ -158,6 +158,12 @@ export function formatEvent(e: GameEvent): string {
       return `You wave the stranger away.`;
     case 'character-info':
       return `— Your standing —`;
+    case 'chest-found':
+      return `You uncover a cache in the dark.`;
+    case 'chest-loot':
+      return e.loot.length > 0
+        ? `Inside: ${e.loot.map((l) => l.name).join(', ')}.`
+        : `The cache is empty.`;
     case 'act-outro':
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'level-up':

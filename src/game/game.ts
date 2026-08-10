@@ -29,11 +29,13 @@ import { createBattle } from './battle.ts';
 import { generateEnemy } from './enemy.ts';
 import {
   buildRandomBattle,
+  buildChestLoot,
   computeRestHeal,
   selectEncounter,
   selectLore,
 } from './encounter.ts';
 import { buildShopOffer, applyShopPurchase, type ShopOffer } from './shop.ts';
+import { summarizeLoot } from './loot.ts';
 import {
   FINAL_BOSS_NAME,
   FINAL_BOSS_XP,
@@ -42,8 +44,8 @@ import {
 } from './progression.ts';
 import { getActIntro, getActOutro, getEnding, getIntro } from './story.ts';
 import { playerArmorClass } from './defense.ts';
-import { equippedDefId } from './equipment.ts';
-import { type EquipSlot } from './item.ts';
+import { equippedDefId, pickUp } from './equipment.ts';
+import { type EquipSlot, type ItemInstance } from './item.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- State ---------------------------------------------------------------
@@ -59,6 +61,7 @@ export type Phase =
   | { kind: 'battle-victory'; final: boolean }
   | { kind: 'rest'; restOffered: boolean }
   | { kind: 'shop'; offer: ShopOffer }
+  | { kind: 'chest'; loot: ItemInstance[] }
   | { kind: 'act-outro'; newAct: number }
   | { kind: 'level-up'; newAct: number }
   | { kind: 'level-up-result'; newAct: number }
@@ -152,6 +155,8 @@ export function awaitingFor(phase: Phase): Awaiting {
       return phase.restOffered ? 'rest-decision' : 'continue';
     case 'shop':
       return 'shop-decision';
+    case 'chest':
+      return 'continue';
     case 'act-outro':
       return 'continue';
     case 'level-up':
@@ -308,6 +313,12 @@ export function step(state: GameState, input: GameInput): StepResult {
       return resolveShopDecision(state, phase.offer, input.accept, finish);
     }
 
+    case 'chest': {
+      if (input.kind !== 'continue') return noop;
+      // The loot was already picked up when the chest was found; continue to the hub.
+      return finish({ kind: 'main-menu' }, []);
+    }
+
     case 'act-outro': {
       if (input.kind !== 'continue') return noop;
       const concluded = phase.newAct - 1;
@@ -391,6 +402,22 @@ function continueJourney(
     return finish({ kind: 'battle', battle, started: false, final: false }, [
       { kind: 'encounter-start', enemyName: battle.enemy.fullName },
     ]);
+  }
+  if (encounter === 'chest') {
+    // A chest/cache: roll its guaranteed loot, pick every item up into the backpack, then
+    // show the reveal. `continue` from the chest phase returns to the hub.
+    const loot = buildChestLoot(rng);
+    let inventory = player.inventory;
+    for (const item of loot) inventory = pickUp(inventory, item);
+    const nextPlayer: Player = { ...player, inventory };
+    return finish(
+      { kind: 'chest', loot },
+      [
+        { kind: 'chest-found' },
+        { kind: 'chest-loot', loot: loot.map(summarizeLoot) },
+      ],
+      { player: nextPlayer },
+    );
   }
   // Rest: show lore, then offer a rest if any remain.
   const lore = selectLore(state.act, rng);

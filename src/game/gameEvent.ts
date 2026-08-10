@@ -14,6 +14,7 @@
 import type { CombatEvent } from './combatEvent.ts';
 import type { Stats, StatKey } from './character.ts';
 import type { PlayerClass } from './player.ts';
+import type { Rarity } from './weapon.ts';
 
 /** The narrative (non-combat) half of the game event stream. */
 export type NarrativeEvent =
@@ -48,6 +49,13 @@ export type NarrativeEvent =
   | { kind: 'shop-insufficient'; text?: string }
   | { kind: 'shop-declined'; text?: string }
   | { kind: 'character-info'; text?: string }
+  // ---- M7 chest/cache encounter ----
+  | { kind: 'chest-found'; text?: string }
+  | {
+      kind: 'chest-loot';
+      loot: readonly { defId: string; name: string; rarity: Rarity }[];
+      text?: string;
+    }
   | { kind: 'act-outro'; act: number; header: string; body: string; text?: string }
   | {
       kind: 'level-up';

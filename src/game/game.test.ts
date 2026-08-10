@@ -342,6 +342,38 @@ describe('shop (menu option: character-info) — M7: gold removed, trade always 
   });
 });
 
+// ------- Chest encounter -----------------------------------------------------
+
+describe('chest encounter', () => {
+  // Seed 4: the first step draw is 0.9236 -> randInt(_,6)=5 -> the chest slot of
+  // [B,B,B,R,R,C]. xp 0 so no act gate fires first. The chest loot lands in the backpack.
+  it('main-menu continue can open a chest, depositing rolled loot into the backpack', () => {
+    const player = makePlayer({ xp: 0 });
+    const before = player.inventory.backpack.length;
+    const r = step(menuState(player, 4), { kind: 'menu', choice: 'continue' });
+    expect(r.state.phase.kind).toBe('chest');
+    expect(r.awaiting).toBe('continue');
+    expect(r.events.some((e) => e.kind === 'chest-found')).toBe(true);
+    const lootEvent = r.events.find((e) => e.kind === 'chest-loot');
+    expect(lootEvent).toBeDefined();
+    // chestItemCount is 1, so exactly one item is revealed and picked up.
+    if (lootEvent && lootEvent.kind === 'chest-loot') expect(lootEvent.loot).toHaveLength(1);
+    expect(r.state.player?.inventory.backpack.length).toBe(before + 1);
+  });
+
+  it('continuing from the chest phase returns to the main menu (loot already taken)', () => {
+    const player = makePlayer();
+    const state: GameState = {
+      ...menuState(player, 1),
+      phase: { kind: 'chest', loot: [{ defId: 'gen:Common:ring' }] },
+    };
+    const r = step(state, { kind: 'continue' });
+    expect(r.state.phase.kind).toBe('main-menu');
+    // The chest phase does not re-pick-up; the player is unchanged on continue.
+    expect(r.state.player?.inventory.backpack).toEqual(player.inventory.backpack);
+  });
+});
+
 // ------- Act progression at a gate -------------------------------------------
 
 describe('act progression at a gate', () => {

@@ -108,6 +108,8 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'shop-insufficient' },
     { kind: 'shop-declined' },
     { kind: 'character-info' },
+    { kind: 'chest-found' },
+    { kind: 'chest-loot', loot: [{ defId: 'gen:Common:ring', name: 'Common ring', rarity: 'Common' }] },
     { kind: 'act-outro', act: 1, header: 'H', body: 'B' },
     {
       kind: 'level-up',
@@ -124,7 +126,7 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'game-over', xp: 42 },
   ];
 
-  // Every kind, listed by hand (21 combat + 21 narrative = 42).
+  // Every kind, listed by hand (21 combat + 23 narrative = 44).
   const ALL_KINDS: GameEventKind[] = [
     'enemy-skill-used',
     'skill-cast',
@@ -162,6 +164,8 @@ describe('formatEvent — totality over every event kind', () => {
     'shop-insufficient',
     'shop-declined',
     'character-info',
+    'chest-found',
+    'chest-loot',
     'act-outro',
     'level-up',
     'act-intro',
@@ -173,7 +177,7 @@ describe('formatEvent — totality over every event kind', () => {
   it('has one sample for every kind (no kind missed)', () => {
     const sampled = new Set(samples.map((s) => s.kind));
     expect(sampled).toEqual(new Set(ALL_KINDS));
-    expect(ALL_KINDS).toHaveLength(42);
+    expect(ALL_KINDS).toHaveLength(44);
   });
 
   it('yields a non-empty string for every kind', () => {

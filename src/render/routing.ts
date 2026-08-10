@@ -48,8 +48,8 @@ export const SCENE_IDS: ReadonlySet<SceneId> = new Set<SceneId>([
 
 /**
  * Map a phase kind to the scene that renders it. Total over the `Phase` union
- * (exhaustive switch, no `default`). The four narrative "continue" phases share the
- * generic `narrative` scene; the rest each have their own screen.
+ * (exhaustive switch, no `default`). The narrative "continue" phases (including the
+ * chest reveal) share the generic `narrative` scene; the rest each have their own screen.
  */
 export function sceneFor(kind: Phase['kind']): SceneId {
   switch (kind) {
@@ -71,6 +71,9 @@ export function sceneFor(kind: Phase['kind']): SceneId {
       return 'rest';
     case 'shop':
       return 'shop';
+    case 'chest':
+      // The chest reveal is a continue-phase; the generic narrative scene shows its events.
+      return 'narrative';
     case 'act-outro':
       return 'narrative';
     case 'level-up':

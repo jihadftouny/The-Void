@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   selectEncounter,
   buildRandomBattle,
+  buildChestLoot,
   selectLore,
   computeRestHeal,
 } from './encounter.ts';
@@ -19,24 +20,43 @@ function stats(): Stats {
 }
 
 describe('selectEncounter', () => {
-  it('splits the 5-slot [B,B,B,R,R] table at draw 0.6', () => {
-    // randInt(rng,5) = floor(x*5): indices 0..2 -> battle, 3..4 -> rest.
-    expect(selectEncounter(scriptedRng([0.0]))).toBe('battle'); // idx 0
-    expect(selectEncounter(scriptedRng([0.19]))).toBe('battle'); // floor(0.95)=0
-    expect(selectEncounter(scriptedRng([0.59]))).toBe('battle'); // floor(2.95)=2
-    expect(selectEncounter(scriptedRng([0.6]))).toBe('rest'); // floor(3.0)=3
-    expect(selectEncounter(scriptedRng([0.99]))).toBe('rest'); // floor(4.95)=4
+  it('splits the 6-slot [B,B,B,R,R,C] table by draw band', () => {
+    // randInt(rng,6) = floor(x*6): idx 0..2 -> battle ([0,0.5)), 3..4 -> rest ([0.5,0.8333)),
+    // 5 -> chest ([0.8333,1)).
+    expect(selectEncounter(scriptedRng([0.0]))).toBe('battle'); // floor(0.0)=0
+    expect(selectEncounter(scriptedRng([0.49]))).toBe('battle'); // floor(2.94)=2
+    expect(selectEncounter(scriptedRng([0.5]))).toBe('rest'); // floor(3.0)=3
+    expect(selectEncounter(scriptedRng([0.83]))).toBe('rest'); // floor(4.98)=4
+    expect(selectEncounter(scriptedRng([0.84]))).toBe('chest'); // floor(5.04)=5
+    expect(selectEncounter(scriptedRng([0.99]))).toBe('chest'); // floor(5.94)=5
   });
 
-  it('is weighted battle:rest = 3:2 over many seeds (within tolerance)', () => {
-    const N = 5000;
+  it('is weighted battle:rest:chest = 3:2:1 over many seeds (within tolerance)', () => {
+    const N = 6000;
     let battles = 0;
+    let chests = 0;
     for (let seed = 0; seed < N; seed++) {
-      if (selectEncounter(mulberry32(seed)) === 'battle') battles++;
+      const e = selectEncounter(mulberry32(seed));
+      if (e === 'battle') battles++;
+      else if (e === 'chest') chests++;
     }
-    // Expected 3/5 = 0.6. Allow +/- 0.03 for sampling noise.
-    expect(battles / N).toBeGreaterThan(0.57);
-    expect(battles / N).toBeLessThan(0.63);
+    // Expected battle 3/6 = 0.5, chest 1/6 ~ 0.1667. Allow +/- 0.03 for sampling noise.
+    expect(battles / N).toBeGreaterThan(0.47);
+    expect(battles / N).toBeLessThan(0.53);
+    expect(chests / N).toBeGreaterThan(0.14);
+    expect(chests / N).toBeLessThan(0.19);
+  });
+});
+
+describe('buildChestLoot', () => {
+  it('yields the guaranteed chest items and is deterministic for a fixed seed', () => {
+    // chestItemCount is 1 (dropTables.json), so a chest always yields exactly one item;
+    // determinism is proved by two independent rolls from the same seed matching.
+    const a = buildChestLoot(mulberry32(31));
+    const b = buildChestLoot(mulberry32(31));
+    expect(a).toHaveLength(1);
+    expect(a).toEqual(b);
+    expect(a[0]!.rolled).toBeDefined();
   });
 });
 

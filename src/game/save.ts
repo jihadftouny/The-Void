@@ -28,7 +28,7 @@ import { type PlayerClass } from './player.ts';
  */
 export const SAVE_VERSION = 5;
 
-/** The 15 valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
+/** The valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
   'title',
   'name-entry',
@@ -39,6 +39,7 @@ const PHASE_KINDS: readonly string[] = [
   'battle-victory',
   'rest',
   'shop',
+  'chest',
   'act-outro',
   'level-up',
   'level-up-result',

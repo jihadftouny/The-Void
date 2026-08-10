@@ -75,6 +75,12 @@ export function describeEvent(e: GameEvent): string {
       return `You turn the stranger away.`;
     case 'shop-insufficient':
       return `You lack what the stranger demands.`;
+    case 'chest-found':
+      return `You find a cache half-buried in the dark.`;
+    case 'chest-loot':
+      return e.loot.length > 0
+        ? `You pry it open and take ${e.loot.map((l) => l.name).join(', ')}.`
+        : `You pry it open, but it is hollow.`;
     case 'level-up':
       return `Something in you hardens; you are stronger than before.`;
     case 'act-outro':
