@@ -14,7 +14,7 @@
 //
 // Ported from `GameLogic` (startGame -> checkAct -> gameLoop -> encounters -> battle
 // -> progression -> finalBattle -> ending). Confirmed faithful/cleaned choices:
-//  - Menu option 2 bundles shop THEN character-info (the only path to the shop).
+//  - Menu option 2 (`seek-deal`) opens the sacrifice-deal encounter (replaces the gold shop).
 //  - Level-up raises maxHp but does not heal; the final boss gets no auto-advantage.
 //  - The ending shows only on a win; death goes to game-over.
 //  - Name/class confirm loops and per-round continue gates are dropped (events carry
@@ -34,7 +34,14 @@ import {
   selectEncounter,
   selectLore,
 } from './encounter.ts';
-import { buildShopOffer, applyShopPurchase, type ShopOffer } from './shop.ts';
+import {
+  buildDeal,
+  applyDeal,
+  canAfford,
+  describeCost,
+  describeReward,
+  type SacrificeDeal,
+} from './deal.ts';
 import { summarizeLoot } from './loot.ts';
 import {
   FINAL_BOSS_NAME,
@@ -44,8 +51,8 @@ import {
 } from './progression.ts';
 import { getActIntro, getActOutro, getEnding, getIntro } from './story.ts';
 import { playerArmorClass } from './defense.ts';
-import { equippedDefId, pickUp } from './equipment.ts';
-import { type EquipSlot, type ItemInstance } from './item.ts';
+import { pickUp } from './equipment.ts';
+import { type ItemInstance } from './item.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- State ---------------------------------------------------------------
@@ -60,7 +67,7 @@ export type Phase =
   | { kind: 'battle'; battle: BattleState; started: boolean; final: boolean }
   | { kind: 'battle-victory'; final: boolean }
   | { kind: 'rest'; restOffered: boolean }
-  | { kind: 'shop'; offer: ShopOffer }
+  | { kind: 'deal'; deal: SacrificeDeal }
   | { kind: 'chest'; loot: ItemInstance[] }
   | { kind: 'act-outro'; newAct: number }
   | { kind: 'level-up'; newAct: number }
@@ -98,7 +105,7 @@ export type Awaiting =
   | 'continue'
   | 'battle-action'
   | 'level-up-picks'
-  | 'shop-decision'
+  | 'deal-decision'
   | 'rest-decision'
   | 'game-over';
 
@@ -108,10 +115,10 @@ export type GameInput =
   | { kind: 'name'; name: string }
   | { kind: 'class'; classId: PlayerClass }
   | { kind: 'stats-decision'; accept: boolean }
-  | { kind: 'menu'; choice: 'continue' | 'character-info' | 'quit' }
+  | { kind: 'menu'; choice: 'continue' | 'seek-deal' | 'quit' }
   | { kind: 'battle-action'; action: BattleAction }
   | { kind: 'level-up-picks'; picks: [StatKey, StatKey] }
-  | { kind: 'shop-decision'; accept: boolean }
+  | { kind: 'deal-decision'; accept: boolean }
   | { kind: 'rest-decision'; accept: boolean };
 
 /** What `step` returns: the next state, the ordered events, and the next Awaiting. */
@@ -153,8 +160,8 @@ export function awaitingFor(phase: Phase): Awaiting {
       return 'continue';
     case 'rest':
       return phase.restOffered ? 'rest-decision' : 'continue';
-    case 'shop':
-      return 'shop-decision';
+    case 'deal':
+      return 'deal-decision';
     case 'chest':
       return 'continue';
     case 'act-outro':
@@ -196,7 +203,7 @@ export function step(state: GameState, input: GameInput): StepResult {
   const finish = (
     phase: Phase,
     events: GameEvent[],
-    patch: Partial<Pick<GameState, 'player' | 'act' | 'place'>> = {},
+    patch: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma'>> = {},
   ): StepResult => {
     const next: GameState = {
       ...state,
@@ -264,8 +271,8 @@ export function step(state: GameState, input: GameInput): StepResult {
       if (input.choice === 'quit') {
         return finish({ kind: 'game-over' }, [{ kind: 'game-over', xp: player.xp }]);
       }
-      if (input.choice === 'character-info') {
-        return openShop(state, player, rng, finish);
+      if (input.choice === 'seek-deal') {
+        return openDeal(state, rng, finish);
       }
       // 'continue' — Java continueJourney: checkAct first, else an encounter.
       return continueJourney(state, player, rng, finish);
@@ -308,9 +315,9 @@ export function step(state: GameState, input: GameInput): StepResult {
       return resolveRestDecision(state, input.accept, rng, finish);
     }
 
-    case 'shop': {
-      if (input.kind !== 'shop-decision') return noop;
-      return resolveShopDecision(state, phase.offer, input.accept, finish);
+    case 'deal': {
+      if (input.kind !== 'deal-decision') return noop;
+      return resolveDealDecision(state, phase.deal, input.accept, finish);
     }
 
     case 'chest': {
@@ -374,7 +381,7 @@ export function step(state: GameState, input: GameInput): StepResult {
 type Finish = (
   phase: Phase,
   events: GameEvent[],
-  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place'>>,
+  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma'>>,
 ) => StepResult;
 
 function requirePlayer(state: GameState): Player {
@@ -432,21 +439,20 @@ function continueJourney(
   return finish({ kind: 'rest', restOffered: false }, events);
 }
 
-/** Java option 2: the mysterious stranger's shop offer. */
-function openShop(state: GameState, player: Player, rng: Rng, finish: Finish): StepResult {
-  const offer = buildShopOffer(state.act, rng);
-  const slot: EquipSlot = offer.itemKind === 'armor' ? 'armor' : 'mainHand';
-  // M5: the currently-equipped item comes from the paperdoll slot (empty -> '—').
-  const currentId = equippedDefId(player.inventory, slot) ?? '—';
-  return finish({ kind: 'shop', offer }, [
+/**
+ * The sacrifice-deal encounter (menu option 2, `seek-deal`) — an altar/stranger offers a
+ * reward for a cost paid from the player. `buildDeal` reads the karma vector (for the pool)
+ * and rolls any reward item, so the offer is fully determined here; the take/leave decision
+ * is resolved by `resolveDealDecision`.
+ */
+function openDeal(state: GameState, rng: Rng, finish: Finish): StepResult {
+  const deal = buildDeal(state.karma, state.act, rng);
+  return finish({ kind: 'deal', deal }, [
     {
-      kind: 'shop-offer',
-      itemKind: offer.itemKind,
-      itemId: offer.itemId,
-      itemName: offer.itemName,
-      price: offer.price,
-      currentId,
-      currentName: currentId,
+      kind: 'deal-offer',
+      pool: deal.pool,
+      cost: describeCost(deal.cost),
+      reward: describeReward(deal.reward),
     },
   ]);
 }
@@ -496,29 +502,34 @@ function resolveRestDecision(
   });
 }
 
-function resolveShopDecision(
+/**
+ * Resolve the player's take/leave on a sacrifice deal — returns to the hub either way. On
+ * decline, nothing changes (`deal-declined`). On accept, `applyDeal` pays the cost and grants
+ * the reward: an affordable deal patches BOTH player and karma (`deal-taken`); an unaffordable
+ * one (e.g. an HP cost >= current HP, or a relic cost with no relic) changes nothing
+ * (`deal-unaffordable`). A karma-shifting cost flows through the real `recordKarma`.
+ */
+function resolveDealDecision(
   state: GameState,
-  offer: ShopOffer,
+  deal: SacrificeDeal,
   accept: boolean,
   finish: Finish,
 ): StepResult {
   const player = requirePlayer(state);
-  const events: GameEvent[] = [];
-  let nextPlayer = player;
   if (!accept) {
-    events.push({ kind: 'shop-declined' });
-  } else {
-    const result = applyShopPurchase(player, offer);
-    nextPlayer = result.player;
-    events.push({
-      kind: 'shop-purchased',
-      itemId: offer.itemId,
-      price: offer.price,
-    });
+    return finish({ kind: 'main-menu' }, [{ kind: 'deal-declined' }]);
   }
-  // Java bundles character-info after the shop.
-  events.push({ kind: 'character-info' });
-  return finish({ kind: 'main-menu' }, events, { player: nextPlayer });
+  if (!canAfford(player, deal.cost)) {
+    return finish({ kind: 'main-menu' }, [
+      { kind: 'deal-unaffordable', cost: describeCost(deal.cost) },
+    ]);
+  }
+  const result = applyDeal(player, state.karma, deal);
+  return finish(
+    { kind: 'main-menu' },
+    [{ kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
+    { player: result.player, karma: result.karma },
+  );
 }
 
 function resolveLevelUp(

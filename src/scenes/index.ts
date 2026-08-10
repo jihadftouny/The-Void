@@ -11,7 +11,7 @@ import { registerStatsScene } from './stats.ts';
 import { registerMainMenuScene } from './mainMenu.ts';
 import { registerBattleScene } from './battle.ts';
 import { registerRestScene } from './rest.ts';
-import { registerShopScene } from './shop.ts';
+import { registerDealScene } from './deal.ts';
 import { registerLevelUpScene } from './levelUp.ts';
 import { registerNarrativeScene } from './narrative.ts';
 import { registerEndingScene } from './ending.ts';
@@ -26,7 +26,7 @@ export function registerAllScenes(k: Engine, driver: GameDriver): void {
   registerMainMenuScene(k, driver);
   registerBattleScene(k, driver);
   registerRestScene(k, driver);
-  registerShopScene(k, driver);
+  registerDealScene(k, driver);
   registerLevelUpScene(k, driver);
   registerNarrativeScene(k, driver);
   registerEndingScene(k, driver);

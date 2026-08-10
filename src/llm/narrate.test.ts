@@ -26,7 +26,7 @@ describe('describeEvent', () => {
     expect(describeEvent(e)).toContain('devastating');
   });
   it('returns empty string for events that need no narration', () => {
-    expect(describeEvent({ kind: 'character-info' } as GameEvent)).toBe('');
+    expect(describeEvent({ kind: 'cast-unavailable' } as GameEvent)).toBe('');
   });
 });
 

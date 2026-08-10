@@ -15,6 +15,7 @@ import type { CombatEvent } from './combatEvent.ts';
 import type { Stats, StatKey } from './character.ts';
 import type { PlayerClass } from './player.ts';
 import type { Rarity } from './weapon.ts';
+import type { Pool } from './deal.ts';
 
 /** The narrative (non-combat) half of the game event stream. */
 export type NarrativeEvent =
@@ -35,20 +36,11 @@ export type NarrativeEvent =
   | { kind: 'rest-full'; text?: string }
   | { kind: 'rest-declined'; text?: string }
   | { kind: 'no-rests'; text?: string }
-  | {
-      kind: 'shop-offer';
-      itemKind: 'armor' | 'weapon';
-      itemId: string;
-      itemName: string;
-      price: number;
-      currentId: string;
-      currentName: string;
-      text?: string;
-    }
-  | { kind: 'shop-purchased'; itemId: string; price: number; text?: string }
-  | { kind: 'shop-insufficient'; text?: string }
-  | { kind: 'shop-declined'; text?: string }
-  | { kind: 'character-info'; text?: string }
+  // ---- M7 sacrifice-deal encounter (replaces the gold shop) ----
+  | { kind: 'deal-offer'; pool: Pool; cost: string; reward: string; text?: string }
+  | { kind: 'deal-taken'; cost: string; reward: string; text?: string }
+  | { kind: 'deal-unaffordable'; cost: string; text?: string }
+  | { kind: 'deal-declined'; text?: string }
   // ---- M7 chest/cache encounter ----
   | { kind: 'chest-found'; text?: string }
   | {

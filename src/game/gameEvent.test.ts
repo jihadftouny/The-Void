@@ -35,7 +35,7 @@ describe('GameEvent union', () => {
   });
 
   it('GameEventKind covers a representative narrative kind', () => {
-    const k: GameEventKind = 'shop-offer';
-    expect(k).toBe('shop-offer');
+    const k: GameEventKind = 'deal-offer';
+    expect(k).toBe('deal-offer');
   });
 });

@@ -148,16 +148,14 @@ export function formatEvent(e: GameEvent): string {
       return `You press on without resting.`;
     case 'no-rests':
       return `You have no rest remaining.`;
-    case 'shop-offer':
-      return `The stranger offers ${e.itemName} (${e.itemKind}).`;
-    case 'shop-purchased':
-      return `You take ${e.itemId}.`;
-    case 'shop-insufficient':
-      return `You cannot afford that.`;
-    case 'shop-declined':
-      return `You wave the stranger away.`;
-    case 'character-info':
-      return `— Your standing —`;
+    case 'deal-offer':
+      return `The altar offers ${e.reward} — the price is ${e.cost}.`;
+    case 'deal-taken':
+      return `You pay ${e.cost} and take ${e.reward}.`;
+    case 'deal-unaffordable':
+      return `You cannot pay ${e.cost}.`;
+    case 'deal-declined':
+      return `You turn from the altar.`;
     case 'chest-found':
       return `You uncover a cache in the dark.`;
     case 'chest-loot':

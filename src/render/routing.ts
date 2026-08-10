@@ -20,7 +20,7 @@ export type SceneId =
   | 'main-menu'
   | 'battle'
   | 'rest'
-  | 'shop'
+  | 'deal'
   | 'level-up'
   | 'narrative'
   | 'ending'
@@ -39,7 +39,7 @@ export const SCENE_IDS: ReadonlySet<SceneId> = new Set<SceneId>([
   'main-menu',
   'battle',
   'rest',
-  'shop',
+  'deal',
   'level-up',
   'narrative',
   'ending',
@@ -69,8 +69,8 @@ export function sceneFor(kind: Phase['kind']): SceneId {
       return 'narrative';
     case 'rest':
       return 'rest';
-    case 'shop':
-      return 'shop';
+    case 'deal':
+      return 'deal';
     case 'chest':
       // The chest reveal is a continue-phase; the generic narrative scene shows its events.
       return 'narrative';

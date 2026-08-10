@@ -238,7 +238,7 @@ function renderChoices(awaiting: Awaiting): void {
     }
     case 'main-menu':
       button('Continue the descent', () => void dispatch({ kind: 'menu', choice: 'continue' }));
-      button('The stranger / your self', () => void dispatch({ kind: 'menu', choice: 'character-info' }));
+      button('Seek a bargain', () => void dispatch({ kind: 'menu', choice: 'seek-deal' }));
       button('Abandon the descent', () => void dispatch({ kind: 'menu', choice: 'quit' }));
       break;
     case 'battle-action':
@@ -269,9 +269,9 @@ function renderChoices(awaiting: Awaiting): void {
       }
       break;
     }
-    case 'shop-decision':
-      button('Make the trade', () => void dispatch({ kind: 'shop-decision', accept: true }));
-      button('Refuse', () => void dispatch({ kind: 'shop-decision', accept: false }));
+    case 'deal-decision':
+      button('Pay the price', () => void dispatch({ kind: 'deal-decision', accept: true }));
+      button('Refuse', () => void dispatch({ kind: 'deal-decision', accept: false }));
       break;
     case 'rest-decision':
       button('Rest here', () => void dispatch({ kind: 'rest-decision', accept: true }));

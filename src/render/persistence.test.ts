@@ -27,7 +27,7 @@ const ALL_PHASES: Phase[] = [
   { kind: 'battle', battle: {} as never, started: false, final: false },
   { kind: 'battle-victory', final: false },
   { kind: 'rest', restOffered: true },
-  { kind: 'shop', offer: {} as never },
+  { kind: 'deal', deal: {} as never },
   { kind: 'chest', loot: [] },
   { kind: 'act-outro', newAct: 2 },
   { kind: 'level-up', newAct: 2 },

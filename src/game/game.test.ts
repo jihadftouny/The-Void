@@ -11,7 +11,7 @@ import { createPlayer, type Player } from './player.ts';
 import { generateEnemy } from './enemy.ts';
 import { type BattleState } from './battle.ts';
 import { selectEncounter } from './encounter.ts';
-import { buildShopOffer } from './shop.ts';
+import { buildDeal, selectPool } from './deal.ts';
 import { FINAL_BOSS_NAME, FINAL_BOSS_XP } from './progression.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
@@ -302,43 +302,45 @@ describe('rest resolution', () => {
   });
 });
 
-// ------- Shop ----------------------------------------------------------------
+// ------- Sacrifice-deal encounter (menu option: seek-deal) -------------------
 
-describe('shop (menu option: character-info) — M7: gold removed, trade always succeeds', () => {
-  it('offers exactly buildShopOffer(act,rng), then takes and bundles character-info', () => {
+describe('sacrifice deal (menu option: seek-deal)', () => {
+  it('opens a deal phase matching buildDeal(karma,act,rng) with the karma-read pool', () => {
     const player = makePlayer();
     const rngState = 12321;
-    // Independently derive the offer the reducer will build (same rng seam).
-    const expectedOffer = buildShopOffer(1, createRng(rngState).rng);
-    const r = step(menuState(player, rngState), { kind: 'menu', choice: 'character-info' });
-    expect(r.state.phase.kind).toBe('shop');
-    expect(r.awaiting).toBe('shop-decision');
-    const offerEvent = r.events.find((e) => e.kind === 'shop-offer');
-    expect(offerEvent).toBeDefined();
-    if (offerEvent && offerEvent.kind === 'shop-offer') {
-      expect(offerEvent.itemId).toBe(expectedOffer.itemId);
-      expect(offerEvent.itemKind).toBe(expectedOffer.itemKind);
+    // Independently derive the deal the reducer will build (same rng seam + neutral karma).
+    const expected = buildDeal(createKarma(), 1, createRng(rngState).rng);
+    const r = step(menuState(player, rngState), { kind: 'menu', choice: 'seek-deal' });
+    expect(r.state.phase.kind).toBe('deal');
+    expect(r.awaiting).toBe('deal-decision');
+    if (r.state.phase.kind === 'deal') {
+      expect(r.state.phase.deal).toEqual(expected);
+      expect(r.state.phase.deal.pool).toBe(selectPool(createKarma())); // neutral -> 'standard'
     }
-
-    const r2 = step(r.state, { kind: 'shop-decision', accept: true });
-    expect(r2.state.phase.kind).toBe('main-menu');
-    expect(r2.events.some((e) => e.kind === 'shop-purchased')).toBe(true);
-    expect(r2.events.some((e) => e.kind === 'character-info')).toBe(true);
-    // No gold field; the matching paperdoll slot is equipped to the offer id.
-    expect('gold' in (r2.state.player ?? {})).toBe(false);
-    const boughtSlot = expectedOffer.itemKind === 'weapon' ? 'mainHand' : 'armor';
-    expect(r2.state.player?.inventory.slots[boughtSlot]).toEqual({ defId: expectedOffer.itemId });
+    const offer = r.events.find((e) => e.kind === 'deal-offer');
+    expect(offer).toBeDefined();
+    if (offer && offer.kind === 'deal-offer') expect(offer.pool).toBe(expected.pool);
   });
 
-  it('declining leaves gear unchanged but still shows character-info', () => {
+  it('taking the deal returns to the hub and patches player + karma', () => {
     const player = makePlayer();
     const rngState = 12321;
-    const r = step(menuState(player, rngState), { kind: 'menu', choice: 'character-info' });
-    const r2 = step(r.state, { kind: 'shop-decision', accept: false });
-    expect(r2.events.some((e) => e.kind === 'shop-declined')).toBe(true);
-    expect(r2.events.some((e) => e.kind === 'character-info')).toBe(true);
-    expect(r2.state.player?.inventory.slots.mainHand).toEqual(player.inventory.slots.mainHand);
-    expect(r2.state.player?.inventory.slots.armor).toEqual(player.inventory.slots.armor);
+    const r = step(menuState(player, rngState), { kind: 'menu', choice: 'seek-deal' });
+    const r2 = step(r.state, { kind: 'deal-decision', accept: true });
+    expect(r2.state.phase.kind).toBe('main-menu');
+    expect(r2.events.some((e) => e.kind === 'deal-taken')).toBe(true);
+    expect('gold' in (r2.state.player ?? {})).toBe(false);
+  });
+
+  it('declining leaves player and karma unchanged and returns to the hub', () => {
+    const player = makePlayer();
+    const state = menuState(player, 12321);
+    const r = step(state, { kind: 'menu', choice: 'seek-deal' });
+    const r2 = step(r.state, { kind: 'deal-decision', accept: false });
+    expect(r2.events.some((e) => e.kind === 'deal-declined')).toBe(true);
+    expect(r2.state.phase.kind).toBe('main-menu');
+    expect(r2.state.player).toEqual(player);
+    expect(r2.state.karma).toEqual(state.karma);
   });
 });
 
@@ -662,8 +664,8 @@ function decide(res: StepResult): GameInput {
     }
     case 'level-up-picks':
       return { kind: 'level-up-picks', picks: ['CON', 'CON'] };
-    case 'shop-decision':
-      return { kind: 'shop-decision', accept: false };
+    case 'deal-decision':
+      return { kind: 'deal-decision', accept: false };
     case 'rest-decision':
       return { kind: 'rest-decision', accept: true };
     case 'game-over':

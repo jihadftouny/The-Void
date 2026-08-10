@@ -95,19 +95,10 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'rest-full' },
     { kind: 'rest-declined' },
     { kind: 'no-rests' },
-    {
-      kind: 'shop-offer',
-      itemKind: 'weapon',
-      itemId: 'W',
-      itemName: 'W',
-      price: 10,
-      currentId: 'C',
-      currentName: 'C',
-    },
-    { kind: 'shop-purchased', itemId: 'W', price: 10 },
-    { kind: 'shop-insufficient' },
-    { kind: 'shop-declined' },
-    { kind: 'character-info' },
+    { kind: 'deal-offer', pool: 'standard', cost: '8 HP', reward: '12 HP restored' },
+    { kind: 'deal-taken', cost: '8 HP', reward: '12 HP restored' },
+    { kind: 'deal-unaffordable', cost: 'a relic' },
+    { kind: 'deal-declined' },
     { kind: 'chest-found' },
     { kind: 'chest-loot', loot: [{ defId: 'gen:Common:ring', name: 'Common ring', rarity: 'Common' }] },
     { kind: 'act-outro', act: 1, header: 'H', body: 'B' },
@@ -126,7 +117,7 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'game-over', xp: 42 },
   ];
 
-  // Every kind, listed by hand (21 combat + 23 narrative = 44).
+  // Every kind, listed by hand (21 combat + 22 narrative = 43).
   const ALL_KINDS: GameEventKind[] = [
     'enemy-skill-used',
     'skill-cast',
@@ -159,11 +150,10 @@ describe('formatEvent — totality over every event kind', () => {
     'rest-full',
     'rest-declined',
     'no-rests',
-    'shop-offer',
-    'shop-purchased',
-    'shop-insufficient',
-    'shop-declined',
-    'character-info',
+    'deal-offer',
+    'deal-taken',
+    'deal-unaffordable',
+    'deal-declined',
     'chest-found',
     'chest-loot',
     'act-outro',
@@ -177,7 +167,7 @@ describe('formatEvent — totality over every event kind', () => {
   it('has one sample for every kind (no kind missed)', () => {
     const sampled = new Set(samples.map((s) => s.kind));
     expect(sampled).toEqual(new Set(ALL_KINDS));
-    expect(ALL_KINDS).toHaveLength(44);
+    expect(ALL_KINDS).toHaveLength(43);
   });
 
   it('yields a non-empty string for every kind', () => {
