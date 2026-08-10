@@ -19,6 +19,25 @@ Format per entry:
 
 ---
 
+## 2026-08-10 — enemy-roster (M8: 24 families, affixes, spare + karma-weighting) [stacked on M7, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: game.ts karma wiring landed in step-6 commit not step-7 (adding 'spared' to
+  RoundStatus forces the exhaustive switch to handle it same-commit; step 7 = pure save bump).
+  `resolveBattleRound` gained a leading `state` param to read the karma vector (matches resolveDealDecision).
+- Test failures before fixes: none (PASS first pass). 649 → 691 tests (+42).
+- Plan open-questions: 3, all orchestrator-resolved (bump v5→v6 no-op rung; uniform mercy↔cruelty now +
+  per-family onSpare/onKill DATA SEAM for M10 differentiation; ELITE_CHANCE 0.15 M15 placeholder).
+- Notable: 24 families (6 originals absorbed as tags), exactly 9 ⚖; Seven Sins = 1 family of 7 named
+  elites. Second karma INPUT surface (spare=mercy / ⚖ kill=cruelty; non-⚖ kill neutral). Off-equivalence
+  held — legacy/boss generateEnemy path byte-compatible (familyId=type, karmaWeighted=false). Complex
+  family behaviors (illusions, kit-copy, resource-sap) captured as behaviorNote for M10. Per-family
+  onSpare/onKill seam lets M10 set Judged→reverence, Sins→heavier cruelty by editing DATA not logic.
+  Test-agent hand-derived family pick + affix delta + spare/kill karma + 3 bite-checks.
+- NEEDS-HUMAN banked: enemy variety/balance/feel (M15); provisional family behaviors (M10); in-UI spare
+  button + enemy/family/affix display; family name-table flavor (editorial pass).
+- Manual engineer fixes: none yet
+
 ## 2026-08-10 — sacrifice-economy (M7: pure sacrifice economy, gold removed) [stacked on M6, unmerged]
 - Verdict: PASS
 - Fix rounds: 0

@@ -25,7 +25,7 @@ After you **merge to root** (see the bottom), just run `npm run desktop` from th
 
 ---
 
-## 🧱 Autonomous mechanical-milestone run (M1–M7 built+verified, pending your merge)
+## 🧱 Autonomous mechanical-milestone run (M1–M8 built+verified, pending your merge)
 
 I built these through the loop while you were hands-off, **stacked and unmerged** (your merge gate).
 All are headless-verified (typecheck + full tests + build + adversarial checks); the items below are
@@ -83,6 +83,16 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
         deal costs (esp. HP/max-HP) fair? Every number is a placeholder; gold removal shifts pacing.
   - _Note: desecration/greed deals now genuinely move your hidden karma — the first real karma **input**.
         Karma **effects** (how it bends the world/ending) come in M10/M14._
+- **M8 (bestiary — 24 families, affixes, the spare action)** — fights now draw varied enemies per floor
+  (Gangers/Drones → Reflections → Feelings & Sins → Angels → Void-horrors), with occasional elite affixes
+  (Ravenous/Ancient/Warped/Blessed/Cursed), and you can now **spare** karma-weighted foes:
+  - [ ] **In-UI spare button + enemy/family/affix display** — the engine offers "spare" vs karma-weighted
+        enemies and names affixed elites, but the button + visual display aren't wired (render follow-up).
+  - [ ] **Enemy variety & balance (M15)** — is the elite rate (15%) right? Do families feel distinct? All
+        stats/affix magnitudes/karma weights are placeholders.
+  - _Deferred to M10 floor hooks: the signature family behaviors (Reflections' illusions, Mirror-Selves
+        copying your kit, Grief sapping resources, etc.) — shipped as flat themes for now. Family name
+        flavor also wants your editorial pass._
 
 _Note: the "unwinnable balance" item below predates this run; the dedicated balance pass is **M15**,
 where I'll sim-verify winnability against your difficulty-feel input._

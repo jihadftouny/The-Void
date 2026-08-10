@@ -11,12 +11,12 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 1/18 merged · M1–M7 built+verified (pending your batch merge)** `[########------------]`
+**v3 overall: 1/18 merged · M1–M8 built+verified (pending your batch merge)** `[#########-----------]`
 Autonomous run (2026-08-10): building the mechanical milestones through the loop, **stacked & unmerged**
 per your merge gate — you review/merge the chain. Chain: `main` → M1 `state-foundations` → M2
 `skills-conditions` → M3 `class-kits` → M4 `combat-defense` → M5 `equip-engine` → M6 `items-content`
-→ M7 `sacrifice-economy`. Each PASSED plan→build→test (typecheck + full tests + build + adversarial
-verify). 649 tests at M7.
+→ M7 `sacrifice-economy` → M8 `enemy-roster`. Each PASSED plan→build→test (typecheck + full tests +
+build + adversarial verify). 691 tests at M8.
 
 | Milestone (v3) | Status |
 |---|---|
@@ -28,6 +28,7 @@ verify). 649 tests at M7.
 | M5 — Inventory & equipment (Tibia-style) ★ | 🔶 ENGINE built+verified — `agentic/equip-engine` (561 tests); **Tibia visual UI deferred to a collab pass w/ you** |
 | M6 — Items content: relics, uniques, consumables | ✅ built+verified — `agentic/items-content` (625 tests); 15 relics + 4 uniques + 19 consumables + effect/trigger system + rarity gen; flavor co-write & in-UI display pending |
 | M7 — Loot sourcing & thematic economy | ✅ built+verified — `agentic/sacrifice-economy` (649 tests); **gold removed**, pure sacrifice-deals + loot drops + chests; karma-shift deals feed the pillar; balance/in-UI pending |
+| M8 — Enemies: families, affixes, karma-weighting | ✅ built+verified — `agentic/enemy-roster` (691 tests); 24 families + 5 affixes + spare action (9 ⚖ families feed karma); complex behaviors/flavor → M10, in-UI pending |
 | M6 — Items content: relics, uniques, consumables | ⬜ |
 | M7 — Loot sourcing & thematic economy | ⬜ |
 | M8 — Enemies: families, affixes, karma-weighting | ⬜ |
