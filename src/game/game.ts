@@ -82,7 +82,7 @@ export type Phase =
 
 /** The full, serializable game state. */
 export interface GameState {
-  version: 6;
+  version: 7;
   /** mulberry32 accumulator — the serializable RNG state; JSON round-trips it. */
   rngState: number;
   player: Player | null;
@@ -135,7 +135,7 @@ export interface StepResult {
 /** Build a fresh game at the title screen, seeded by `seed`. */
 export function createGame(seed: number): GameState {
   return {
-    version: 6,
+    version: 7,
     rngState: seed >>> 0,
     player: null,
     act: 1,

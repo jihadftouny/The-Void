@@ -23,6 +23,7 @@ import {
   type StepResult,
 } from './game.ts';
 import { createRng, mulberry32 } from './rng.ts';
+import { levelForXp } from './progression.ts';
 import { createBattle } from './battle.ts';
 import { createPlayer } from './player.ts';
 import { createInventory } from './inventory.ts';
@@ -63,8 +64,8 @@ function runInputs(
 
 describe('SAVE_VERSION', () => {
   it('mirrors the current GameState.version', () => {
-    // Derived from game.ts: createGame stamps version 6 (M8 bumped 5 -> 6, enemy roster).
-    expect(SAVE_VERSION).toBe(6);
+    // Derived from game.ts: createGame stamps version 7 (M9 bumped 6 -> 7, level-up draft).
+    expect(SAVE_VERSION).toBe(7);
     expect(createGame(SEED).version).toBe(SAVE_VERSION);
   });
 });
@@ -106,7 +107,7 @@ describe('migration v2 -> v3 (legacy equipped ids -> paperdoll slots)', () => {
     expect(mp.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect('equippedWeaponId' in mp).toBe(false);
     expect('equippedArmorId' in mp).toBe(false);
-    expect(migrated!.version).toBe(6);
+    expect(migrated!.version).toBe(7);
     // Modern midRunState seeds the SAME starting gear into slots, so the migrated v2 save
     // deep-equals the modern v3 state.
     expect(migrated).toEqual(modern);
@@ -142,7 +143,7 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
-    expect(migrated!.version).toBe(6);
+    expect(migrated!.version).toBe(7);
     expect(migrated!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
     expect(migrated!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
@@ -160,12 +161,12 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
     expect(migrated!.player).toBeNull();
-    expect(migrated!.version).toBe(6);
+    expect(migrated!.version).toBe(7);
     expect(migrated).toEqual(modern);
   });
 
-  it('rejects a future version 7 save without throwing', () => {
-    const s = { ...createGame(SEED), version: 7 };
+  it('rejects a future version 8 save without throwing', () => {
+    const s = { ...createGame(SEED), version: 8 };
     expect(() => decodeSave(JSON.stringify(s))).not.toThrow();
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
@@ -498,7 +499,7 @@ describe('M6 v3 -> v4 migration + effect-bearing item round-trip', () => {
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(6);
+    expect(migrated!.version).toBe(7);
     expect(migrated).toEqual(modern);
   });
 
@@ -550,7 +551,7 @@ describe('M7 v4 -> v5 migration (gold retired)', () => {
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(6);
+    expect(migrated!.version).toBe(7);
     expect('gold' in migrated!.player!).toBe(false);
     expect(migrated).toEqual(modern);
   });
@@ -561,14 +562,14 @@ describe('M7 v4 -> v5 migration (gold retired)', () => {
     old.version = 4;
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(6);
+    expect(migrated!.version).toBe(7);
     expect(migrated!.player).toBeNull();
     expect(migrated).toEqual(modern);
   });
 
   it('a fresh v5 state round-trips deep-equal', () => {
     const m = midRunState(SEED);
-    expect(m.version).toBe(6);
+    expect(m.version).toBe(7);
     expect('gold' in m.player!).toBe(false);
     const decoded = decodeSave(encodeSave(m));
     expect(decoded).toEqual(m);
@@ -587,7 +588,7 @@ describe('M8 v5 -> v6 migration + family/affix enemy round-trip', () => {
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(6);
+    expect(migrated!.version).toBe(7);
     expect(migrated).toEqual(modern);
   });
 
@@ -633,5 +634,106 @@ describe('anchor 2: RNG accumulator identity', () => {
     const originalDraw = createRng(m.rngState).rng();
     const resumedDraw = createRng(restored.rngState).rng();
     expect(resumedDraw).toBe(originalDraw);
+  });
+});
+
+// ------- M9 v6 -> v7 migration + mid-draft round-trip -------------------------
+
+describe('M9 v6 -> v7 migration (level / perks / skillUpgrades injected)', () => {
+  it('a GENUINE v6 save (missing the M9 fields) gains level=levelForXp(xp), perks [], skillUpgrades {}', () => {
+    // Build a modern v7 save, then STRIP the M9 player fields and stamp version 6 to simulate
+    // a genuine pre-M9 save (xp 0 at the hub -> levelForXp(0) = 1, which matches the modern
+    // fresh player, so the migrated result deep-equals the modern state).
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    const oldPlayer = old.player as Record<string, unknown>;
+    delete oldPlayer.level;
+    delete oldPlayer.perks;
+    delete oldPlayer.skillUpgrades;
+    old.version = 6;
+    // Sanity: the source really is missing the fields (else the test is vacuous).
+    expect('level' in oldPlayer).toBe(false);
+    expect('perks' in oldPlayer).toBe(false);
+
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.version).toBe(7);
+    const p = migrated!.player!;
+    expect(p.level).toBe(levelForXp(p.xp)); // xp 0 -> level 1
+    expect(p.perks).toEqual([]);
+    expect(p.skillUpgrades).toEqual({});
+    expect(migrated).toEqual(modern);
+  });
+
+  it('a mid-run v6 player with xp already banked migrates to the correct level (no catch-up cascade)', () => {
+    // xp 6 -> levelForXp(6) = 3 (cumulative thresholds L2:2, L3:6, L4:12). Hand-derived.
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    const oldPlayer = old.player as Record<string, unknown>;
+    delete oldPlayer.level;
+    delete oldPlayer.perks;
+    delete oldPlayer.skillUpgrades;
+    oldPlayer.xp = 6;
+    old.version = 6;
+
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.player!.level).toBe(3);
+  });
+
+  it('a v6 save parked in an in-flight OLD level-up phase is reset to main-menu', () => {
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    // Simulate a pre-M9 save mid-transition in the removed stat-pick level-up phase.
+    old.phase = { kind: 'level-up', newAct: 2 };
+    old.version = 6;
+
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.phase.kind).toBe('main-menu'); // reset to a safe hub state
+  });
+
+  it('an unrelated valid v6 run (at the hub) still loads and plays', () => {
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    old.version = 6;
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.phase.kind).toBe('main-menu');
+    // It still steps (continue from the hub is a valid move).
+    const stepped = step(migrated as GameState, { kind: 'menu', choice: 'continue' });
+    expect(stepped.state).not.toBe(migrated);
+  });
+});
+
+describe('M9 mid-pending-draft save round-trip', () => {
+  /** Drive to a real level-up-draft state: a battle victory whose xp owes a level. */
+  function pendingDraftState(): GameState {
+    const base = midRunState(SEED);
+    const player = { ...base.player!, xp: 2, level: 1 }; // xp 2 = cumulative(2) -> one owed
+    const start: GameState = { ...base, player, phase: { kind: 'battle-victory', final: false } };
+    const r = step(start, { kind: 'continue' });
+    return r.state;
+  }
+
+  it('a level-up-draft state (offers populated, level/maxHp advanced) round-trips deep-equal', () => {
+    const state = pendingDraftState();
+    // Sanity: genuinely mid-draft with populated offers and an already-advanced level.
+    expect(state.phase.kind).toBe('level-up-draft');
+    if (state.phase.kind === 'level-up-draft') expect(state.phase.offers).toHaveLength(3);
+    expect(state.player!.level).toBe(2);
+
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+  });
+
+  it('stepping draft-pick after reload matches a no-reload run (identical offer applied)', () => {
+    const state = pendingDraftState();
+    const reference = step(state, { kind: 'draft-pick', index: 1 });
+    const restored = decodeSave(encodeSave(state)) as GameState;
+    const resumed = step(restored, { kind: 'draft-pick', index: 1 });
+    expect(resumed.events).toEqual(reference.events);
+    expect(resumed.state).toEqual(reference.state);
   });
 });

@@ -19,6 +19,7 @@ import { createKarma } from './karma.ts';
 import { createInventory } from './inventory.ts';
 import { EQUIP_SLOTS } from './item.ts';
 import { type PlayerClass } from './player.ts';
+import { levelForXp } from './progression.ts';
 
 /**
  * The current save-format version. Single source of version truth: it mirrors the
@@ -26,7 +27,7 @@ import { type PlayerClass } from './player.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 /** The valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -41,7 +42,7 @@ const PHASE_KINDS: readonly string[] = [
   'deal',
   'chest',
   'act-outro',
-  'level-up',
+  'level-up-draft',
   'level-up-result',
   'act-intro',
   'ending',
@@ -138,6 +139,10 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
       case 5:
         value = upgrade5to6(value);
         current = 6;
+        break;
+      case 6:
+        value = upgrade6to7(value);
+        current = 7;
         break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
@@ -267,6 +272,39 @@ function upgrade5to6(raw: unknown): unknown {
   if (!isPlainObject(raw)) return raw;
   const next: Record<string, unknown> = { ...raw };
   next.version = 6;
+  return next;
+}
+
+/**
+ * Migrate a v6 save (pre-M9) to the v7 shape (M9 frequent level-up draft). Injects the three
+ * additive Player fields: `level = levelForXp(player.xp)` (so a migrated run is already at the
+ * correct level — no giant catch-up cascade), `perks: []`, and `skillUpgrades: {}`. Because
+ * the M9 phase machine removed the old stat-pick `level-up` phase and re-routed act flow, a
+ * v6 save PARKED in an in-flight transition phase (`level-up`, `level-up-result`, or
+ * `act-outro`) can no longer be reconstructed; when a player exists it is DEFENSIVELY reset to
+ * `main-menu` (the run keeps its XP and re-triggers drafts on the next victory). Pure:
+ * shallow-clones the parsed plain object; stamps `version = 7`.
+ */
+function upgrade6to7(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (isPlainObject(next.player)) {
+    const player = { ...(next.player as Record<string, unknown>) };
+    if (!('level' in player) || player.level === undefined) {
+      player.level = levelForXp(typeof player.xp === 'number' ? player.xp : 0);
+    }
+    if (!('perks' in player) || player.perks === undefined) player.perks = [];
+    if (!('skillUpgrades' in player) || player.skillUpgrades === undefined) player.skillUpgrades = {};
+    next.player = player;
+    // Reset an in-flight old level-up / act transition phase to a safe hub state.
+    if (isPlainObject(next.phase)) {
+      const kind = (next.phase as { kind?: unknown }).kind;
+      if (kind === 'level-up' || kind === 'level-up-result' || kind === 'act-outro') {
+        next.phase = { kind: 'main-menu' };
+      }
+    }
+  }
+  next.version = 7;
   return next;
 }
 
