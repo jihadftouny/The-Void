@@ -7,6 +7,7 @@ import { buildRandomBattle } from '../game/encounter.ts';
 import { createRng } from '../game/rng.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { Stats } from '../game/character.ts';
+import { createKarma } from '../game/karma.ts';
 
 // A whole, undamaged Enforcer with fixed stats. Every stat is 10 → each modifier
 // floor((10-10)/2) = 0, so for the Enforcer's d10 hit die maxHp = 10 + 0 = 10 and
@@ -39,6 +40,7 @@ describe('displayPlayer (desktop view-model)', () => {
       player: snapshot,
       act: 1,
       place: 0,
+      karma: createKarma(),
       phase: { kind: 'battle', battle: damaged, started: true, final: false },
     };
     const shown = displayPlayer(state);
@@ -55,6 +57,7 @@ describe('displayPlayer (desktop view-model)', () => {
       player: snapshot,
       act: 1,
       place: 0,
+      karma: createKarma(),
       phase: { kind: 'main-menu' },
     };
     expect(displayPlayer(state)).toBe(state.player);

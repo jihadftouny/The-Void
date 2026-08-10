@@ -15,6 +15,7 @@ import { buildShopOffer } from './shop.ts';
 import { FINAL_BOSS_NAME, FINAL_BOSS_XP } from './progression.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
+import { createKarma } from './karma.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- Fixtures ------------------------------------------------------------
@@ -37,6 +38,7 @@ function menuState(player: Player, rngState: number, act = 1): GameState {
     player,
     act,
     place: act - 1,
+    karma: createKarma(),
     phase: { kind: 'main-menu' },
   };
 }
@@ -53,6 +55,27 @@ describe('createGame', () => {
     expect(s.rngState).toBe(777);
     expect(s.version).toBe(1);
     expect(awaitingFor(s.phase)).toBe('title');
+  });
+
+  it('seeds a neutral four-axis karma vector (all axes 0)', () => {
+    // Independently: createKarma() is the all-zero vector; createGame seeds it.
+    expect(createGame(777).karma).toEqual({
+      mercyCruelty: 0,
+      restraintGreed: 0,
+      reverenceDesecration: 0,
+      clarityDelusion: 0,
+    });
+  });
+});
+
+describe('karma persistence across steps', () => {
+  it('carries karma unchanged through a transition that records none', () => {
+    // No M1 engine event records a karma action, so karma is invariant across step.
+    const s = createGame(42);
+    const r = step(s, { kind: 'continue' }); // title -> name-entry
+    expect(r.state.phase.kind).toBe('name-entry');
+    expect(r.state.karma).toEqual(createKarma());
+    expect(r.state.karma).toEqual(s.karma);
   });
 });
 
@@ -375,6 +398,7 @@ describe('entering Act 5', () => {
       player,
       act: 5,
       place: 4,
+      karma: createKarma(),
       phase: { kind: 'act-intro', newAct: 5 },
     };
     const r = step(state, { kind: 'continue' });
@@ -404,6 +428,7 @@ describe('win / ending path', () => {
       player,
       act: 5,
       place: 4,
+      karma: createKarma(),
       phase: { kind: 'battle-victory', final: true },
     };
     const r = step(state, { kind: 'continue' });
@@ -441,6 +466,7 @@ describe('win / ending path', () => {
         player,
         act: 5,
         place: 4,
+        karma: createKarma(),
         phase: { kind: 'battle', battle, started: true, final: true },
       },
       events: [],

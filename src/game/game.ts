@@ -22,6 +22,7 @@
 
 import { createRng, type Rng } from './rng.ts';
 import { type StatKey, type Stats } from './character.ts';
+import { createKarma, type KarmaState } from './karma.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
 import { resolveRound, type BattleState, type BattleAction } from './battle.ts';
 import { createBattle } from './battle.ts';
@@ -72,6 +73,12 @@ export interface GameState {
   act: number;
   /** Current floor index, 0..4 (place = act - 1). */
   place: number;
+  /**
+   * Four-axis Karma / Nature vector for this run. Recorded only in M1 (see
+   * `karma.ts`); no engine outcome depends on it yet. Spread through every `step`
+   * transition, so it persists unchanged until a later milestone writes to it.
+   */
+  karma: KarmaState;
   phase: Phase;
 }
 
@@ -116,6 +123,7 @@ export function createGame(seed: number): GameState {
     player: null,
     act: 1,
     place: 0,
+    karma: createKarma(),
     phase: { kind: 'title' },
   };
 }

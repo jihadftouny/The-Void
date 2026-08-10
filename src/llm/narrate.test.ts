@@ -8,6 +8,7 @@ import {
 } from './narrate.ts';
 import type { GameState } from '../game/game.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
+import { createKarma } from '../game/karma.ts';
 
 const baseState: GameState = {
   version: 1,
@@ -15,6 +16,7 @@ const baseState: GameState = {
   player: null,
   act: 1,
   place: 0,
+  karma: createKarma(),
   phase: { kind: 'title' },
 };
 
