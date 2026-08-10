@@ -17,7 +17,7 @@ function scriptedRng(values: readonly number[]): Rng {
   return () => values[i++] ?? 0;
 }
 
-// A stat set with every score = 13 (mod = 10 - ceil((30-13)/2) = 10 - 9 = 1).
+// A stat set with every score = 13 (mod = floor((13-10)/2) = 1).
 function stats(overrides: Partial<Stats> = {}): Stats {
   return { STR: 13, DEX: 13, CON: 13, INT: 13, WIS: 13, CHA: 13, ...overrides };
 }
@@ -77,7 +77,7 @@ describe('levelUpPlayer', () => {
     expect(out.stats.STR).toBe(14);
     expect(out.stats.DEX).toBe(14);
     expect(out.stats.CON).toBe(13);
-    expect(out.mods.STR).toBe(2); // 10 - ceil((30-14)/2) = 10 - 8 = 2
+    expect(out.mods.STR).toBe(2); // floor((14-10)/2) = 2
     expect(out.mods.DEX).toBe(2);
     expect(out.mods.CON).toBe(1); // unchanged
     expect(out.maxHp).toBe(18);
@@ -90,7 +90,7 @@ describe('levelUpPlayer', () => {
   });
 
   it('CON-changed: adds the extra (newAct - 1) HP bonus', () => {
-    // picks [CON, CON] -> CON 13 -> 15 -> mod 10 - ceil((30-15)/2) = 10 - 8 = 2.
+    // picks [CON, CON] -> CON 13 -> 15 -> mod floor((15-10)/2) = 2.
     // face 6 (0.55), roll = 6 + newConMod(2) = 8, maxHp = 11 + 8 + (newAct-1=1) = 20.
     const player = createPlayer({ name: 'B', classId: 'Enforcer', stats: stats() });
     const out = levelUpPlayer(player, ['CON', 'CON'], 2, scriptedRng([0.55]));
@@ -102,7 +102,7 @@ describe('levelUpPlayer', () => {
   });
 
   it('floors the HP roll at 1 when dieFace + CON mod is non-positive', () => {
-    // CON 3 -> mod 10 - ceil((30-3)/2) = 10 - 14 = -4. Enforcer maxHp = 10 + (-4) = 6.
+    // CON 3 -> mod floor((3-10)/2) = -4. Enforcer maxHp = 10 + (-4) = 6.
     // picks [STR, DEX] leave CON unchanged. die face = 1 (rng 0). roll = 1 + (-4) = -3
     // -> floored to 1. maxHp = 6 + 1 = 7, no CON bonus.
     const player = createPlayer({

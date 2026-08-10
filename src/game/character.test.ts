@@ -12,26 +12,26 @@ import {
 
 // Every expected value below is derived BY HAND from the canonical formulas, never
 // measured from the implementation:
-//   mod    = (stat > 30) ? 10 : 10 - ceil(|stat - 30| / 2)
+//   mod    = floor((stat - 10) / 2)   (standard D&D, uncapped)
 //   maxHp  = hitDie.sides + conMod
 //   AC     = 10 + conMod
 
 describe('computeStatMod', () => {
-  // [stat, expected mod] — worked in the plan's stat-modifier table.
+  // [stat, expected mod] — floor((stat - 10) / 2), worked by hand.
   const cases: ReadonlyArray<readonly [number, number]> = [
-    [1, -5], //  10 - ceil(29/2) = 10 - 15
-    [5, -3], //  10 - ceil(25/2) = 10 - 13
-    [8, -1], //  10 - ceil(22/2) = 10 - 11
-    [10, 0], //  10 - ceil(20/2) = 10 - 10
-    [12, 1], //  10 - ceil(18/2) = 10 - 9
-    [15, 2], //  10 - ceil(15/2) = 10 - 8
-    [20, 5], //  10 - ceil(10/2) = 10 - 5
-    [25, 7], //  10 - ceil(5/2)  = 10 - 3
-    [28, 9], //  10 - ceil(2/2)  = 10 - 1
-    [29, 9], //  10 - ceil(1/2)  = 10 - 1
-    [30, 10], // 10 - ceil(0/2)  = 10 - 0  (boundary)
-    [31, 10], // stat > 30 special case
-    [40, 10], // stat > 30 special case
+    [1, -5], //  floor(-9/2)  = floor(-4.5) = -5
+    [5, -3], //  floor(-5/2)  = floor(-2.5) = -3
+    [8, -1], //  floor(-2/2)  = -1
+    [10, 0], //  floor(0/2)   = 0
+    [12, 1], //  floor(2/2)   = 1
+    [15, 2], //  floor(5/2)   = floor(2.5) = 2
+    [20, 5], //  floor(10/2)  = 5
+    [25, 7], //  floor(15/2)  = floor(7.5) = 7
+    [28, 9], //  floor(18/2)  = 9
+    [29, 9], //  floor(19/2)  = floor(9.5) = 9
+    [30, 10], // floor(20/2)  = 10
+    [31, 10], // floor(21/2)  = floor(10.5) = 10 (agrees with old clamp)
+    [40, 15], // floor(30/2)  = 15 (old clamped to 10; new keeps climbing)
   ];
 
   for (const [stat, mod] of cases) {

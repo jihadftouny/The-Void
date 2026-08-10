@@ -28,8 +28,8 @@ const SWORD = getWeaponByName('Jaaj Sword 1')!; // Melee 1d6
 const GUN = getWeaponByName('Jooj Gun 1')!; // Ranged 1d4
 const RAPIER = getWeaponByName('Jiij Rapier 1')!; // Finesse 1d8
 
-// Player with STR mod 4, DEX mod 1 (derived by hand: STR 18 -> 10-ceil(12/2)=4;
-// DEX 12 -> 10-ceil(18/2)=1). Melee uses STR(4), Ranged uses DEX(1), Finesse max(4,1)=4.
+// Player with STR mod 4, DEX mod 1 (derived by hand: STR 18 -> floor((18-10)/2)=4;
+// DEX 12 -> floor((12-10)/2)=1). Melee uses STR(4), Ranged uses DEX(1), Finesse max(4,1)=4.
 function player(overrides: Partial<Attacker> = {}): Attacker {
   return {
     name: 'Hero',

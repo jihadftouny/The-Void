@@ -7,7 +7,7 @@ import { mulberry32 } from './rng.ts';
 //   xp     = 1 + randInt(rng, floor(playerXp/4) + 2)
 //   stat   = 13 + floor(xp/4) + randInt(rng, floor(playerXp/4) + 1)
 //   maxHp  = 30 + floor(playerXp/3) + randInt(rng, playerXp) ; hp = maxHp
-//   mod(s) = (s>30) ? 10 : 10 - ceil(|s-30|/2)  => mod(13) = 10 - ceil(17/2) = 1
+//   mod(s) = floor((s - 10) / 2)  => mod(13) = floor(3/2) = 1
 //   armorClass = 10 (fixed)
 // randInt(rng, n) is in [0, n-1] for n>=1, and is exactly 0 for n<=0.
 

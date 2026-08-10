@@ -5,10 +5,10 @@ import { mulberry32 } from './rng.ts';
 import { getWeaponByName } from './weapon.ts';
 import { getArmorByName } from './armor.ts';
 
-// All expected values are hand-derived from the Java class spec / formulas:
-//   computeStatMod(s) = (s>30) ? 10 : 10 - ceil(|s-30|/2)
-//     mod(14) = 10 - ceil(16/2) = 10 - 8 = 2
-//     mod(30) = 10 - ceil(0/2)  = 10 - 0 = 10
+// All expected values are hand-derived from the class spec / formulas:
+//   computeStatMod(s) = floor((s - 10) / 2)   (standard D&D, uncapped)
+//     mod(14) = floor(4/2)  = 2
+//     mod(30) = floor(20/2) = 10
 //   maxHp = hitDie.sides + CONmod ; hp = maxHp ; armorClass = 10 + CONmod
 //   Enforcer hitDie = 1d10, Neuromancer hitDie = 1d6
 // Starting scalars (Java Player / GameLogic.startGame): gold 1500, restsLeft 1,

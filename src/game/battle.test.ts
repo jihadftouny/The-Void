@@ -16,7 +16,7 @@ function scriptedRng(values: number[]): Rng {
 }
 const face = (f: number, sides: number): number => (f - 0.5) / sides;
 
-// Enforcer with STR 18 -> STR mod 4 (10 - ceil(|18-30|/2) = 4), equipped Jaaj Sword 1
+// Enforcer with STR 18 -> STR mod 4 (floor((18-10)/2) = 4), equipped Jaaj Sword 1
 // (Melee, 1d6). hp/maxHp forced to 20 for clean arithmetic; gold 1500, rests 1, pots 2.
 function makePlayer(overrides: Partial<Player> = {}): Player {
   const base = createPlayer({
