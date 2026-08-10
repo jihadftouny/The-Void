@@ -77,6 +77,9 @@ export type CombatEvent =
   | { kind: 'fled'; text?: string }
   | { kind: 'escape-failed'; damage: number; text?: string }
   | { kind: 'escape-impossible'; text?: string }
+  // ---- M8 spare / release (karma-weighted enemies only) ----
+  | { kind: 'spared'; enemyName: string; text?: string }
+  | { kind: 'spare-unavailable'; text?: string }
   | {
       kind: 'victory';
       xpGained: number;

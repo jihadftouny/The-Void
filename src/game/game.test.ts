@@ -9,6 +9,7 @@ import {
 } from './game.ts';
 import { createPlayer, type Player } from './player.ts';
 import { generateEnemy } from './enemy.ts';
+import { getFamily } from './enemyFamily.ts';
 import { type BattleState } from './battle.ts';
 import { selectEncounter } from './encounter.ts';
 import { buildDeal, selectPool } from './deal.ts';
@@ -631,6 +632,93 @@ describe('cast battle-action flows through step', () => {
     expect(b.state).toEqual(a.state);
     expect(b.events).toEqual(a.events);
     expect(a.state.rngState).not.toBe(state.rngState); // the enemy pick advanced the rng
+  });
+});
+
+// ------- M8 spare / kill karma (INPUT only) ----------------------------------
+
+describe('spare / moral-kill karma through step', () => {
+  const NEUTRAL = createKarma();
+
+  /** A ⚖ enemy (gangers family) with the given hp overrides. */
+  function weightedEnemy(overrides: Partial<BattleState['enemy']> = {}): BattleState['enemy'] {
+    return {
+      ...generateEnemy({ act: 1, family: getFamily('gangers')!, playerXp: 0 }, mulberry32(1)),
+      ...overrides,
+    };
+  }
+
+  /** A non-⚖ enemy (securityDrones family). */
+  function plainEnemy(overrides: Partial<BattleState['enemy']> = {}): BattleState['enemy'] {
+    return {
+      ...generateEnemy({ act: 1, family: getFamily('securityDrones')!, playerXp: 0 }, mulberry32(1)),
+      ...overrides,
+    };
+  }
+
+  it('sparing a ⚖ enemy returns to the hub, grants nothing, and records +1 mercy', () => {
+    const player = makePlayer({ xp: 3 });
+    const enemy = weightedEnemy({ hp: 30 });
+    const state = startedBattleState(player, enemy, 42);
+    const r = step(state, { kind: 'battle-action', action: 'spare' });
+
+    expect(r.state.phase.kind).toBe('main-menu');
+    // Hand-derived from KARMA_DELTAS.spareWeighted = { mercyCruelty: 1 }.
+    expect(r.state.karma).toEqual({
+      mercyCruelty: 1,
+      restraintGreed: 0,
+      reverenceDesecration: 0,
+      clarityDelusion: 0,
+    });
+    // No victory: no XP, no loot event, the enemy was not defeated.
+    expect(r.state.player?.xp).toBe(3);
+    expect(r.events.some((e) => e.kind === 'victory')).toBe(false);
+    expect(r.events).toContainEqual({ kind: 'spared', enemyName: enemy.fullName });
+  });
+
+  it('killing a ⚖ enemy records −1 mercy (cruelty), other axes unchanged', () => {
+    const player = makePlayer({ hp: 9999, maxHp: 9999, advantageDisadvantage: 1 });
+    const enemy = weightedEnemy({ hp: 1, maxHp: 1, armorClass: 1, skillPool: [], skillCharges: 0 });
+    let state = startedBattleState(player, enemy, 7);
+    // Fight until the battle resolves (a miss just loops; the enemy has 1 hp).
+    let r = step(state, { kind: 'battle-action', action: 'fight' });
+    let guard = 0;
+    while (r.awaiting === 'battle-action' && guard < 50) {
+      r = step(r.state, { kind: 'battle-action', action: 'fight' });
+      guard++;
+    }
+    expect(r.state.phase.kind).toBe('battle-victory');
+    expect(r.state.karma).toEqual({
+      mercyCruelty: -1,
+      restraintGreed: 0,
+      reverenceDesecration: 0,
+      clarityDelusion: 0,
+    });
+  });
+
+  it('killing a non-⚖ enemy leaves all four karma axes neutral', () => {
+    const player = makePlayer({ hp: 9999, maxHp: 9999, advantageDisadvantage: 1 });
+    const enemy = plainEnemy({ hp: 1, maxHp: 1, armorClass: 1, skillPool: [], skillCharges: 0 });
+    let r = step(startedBattleState(player, enemy, 7), { kind: 'battle-action', action: 'fight' });
+    let guard = 0;
+    while (r.awaiting === 'battle-action' && guard < 50) {
+      r = step(r.state, { kind: 'battle-action', action: 'fight' });
+      guard++;
+    }
+    expect(r.state.phase.kind).toBe('battle-victory');
+    expect(r.state.karma).toEqual(NEUTRAL);
+  });
+
+  it('sparing a non-⚖ enemy is a no-op: battle continues, no karma, no rng consumed', () => {
+    const player = makePlayer();
+    const enemy = plainEnemy({ hp: 30 });
+    const state = startedBattleState(player, enemy, 555);
+    const r = step(state, { kind: 'battle-action', action: 'spare' });
+    expect(r.state.phase.kind).toBe('battle'); // still fighting
+    expect(r.state.karma).toEqual(NEUTRAL);
+    expect(r.events).toContainEqual({ kind: 'spare-unavailable' });
+    // Zero rng draws: the accumulator is unchanged.
+    expect(r.state.rngState).toBe(state.rngState);
   });
 });
 

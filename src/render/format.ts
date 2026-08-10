@@ -103,6 +103,10 @@ export function formatEvent(e: GameEvent): string {
       return `Your escape fails — you take ${e.damage} damage.`;
     case 'escape-impossible':
       return `There is no escape from this one.`;
+    case 'spared':
+      return `You stay your hand. ${e.enemyName} is spared.`;
+    case 'spare-unavailable':
+      return `This one cannot be spared.`;
     case 'victory': {
       const rest = e.extraRest ? ', and you find a place to rest' : '';
       const loot =

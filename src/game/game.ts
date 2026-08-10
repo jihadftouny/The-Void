@@ -22,7 +22,8 @@
 
 import { createRng, type Rng } from './rng.ts';
 import { type StatKey, type Stats } from './character.ts';
-import { createKarma, type KarmaState } from './karma.ts';
+import { createKarma, recordKarma, type KarmaState } from './karma.ts';
+import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
 import { resolveRound, openBattle, type BattleState, type BattleAction } from './battle.ts';
 import { createBattle } from './battle.ts';
@@ -287,7 +288,7 @@ export function step(state: GameState, input: GameInput): StepResult {
         return finish({ ...phase, battle: opened.battle, started: true }, opened.events);
       }
       if (input.kind !== 'battle-action') return noop;
-      return resolveBattleRound(phase, input.action, rng, finish);
+      return resolveBattleRound(state, phase, input.action, rng, finish);
     }
 
     case 'battle-victory': {
@@ -458,6 +459,7 @@ function openDeal(state: GameState, rng: Rng, finish: Finish): StepResult {
 }
 
 function resolveBattleRound(
+  state: GameState,
   phase: Extract<Phase, { kind: 'battle' }>,
   action: BattleAction,
   rng: Rng,
@@ -465,15 +467,31 @@ function resolveBattleRound(
 ): StepResult {
   const round = resolveRound(phase.battle, action, rng);
   const events: GameEvent[] = [...round.events];
+  const enemy = round.state.enemy;
   switch (round.status) {
     case 'ongoing':
       return finish({ ...phase, battle: round.state }, events);
     case 'fled':
       return finish({ kind: 'main-menu' }, events, { player: round.state.player });
-    case 'player-won':
+    case 'spared':
+      // Mercy: end the encounter with no rewards. Record the spare on the karma vector
+      // (INPUT only — no world/tone effect yet). The action is data-sourced from the
+      // family (the M10 seam), defaulting to the uniform mercy action.
+      return finish({ kind: 'main-menu' }, events, {
+        player: round.state.player,
+        karma: recordKarma(state.karma, getFamily(enemy.familyId)?.onSpare ?? 'spareWeighted'),
+      });
+    case 'player-won': {
+      // A moral (⚖) kill records cruelty; a plain enemy (and the final boss) records
+      // nothing. Karma is an INPUT only in M8 (effects deferred to M10/M14).
+      const karma = enemy.karmaWeighted
+        ? recordKarma(state.karma, getFamily(enemy.familyId)?.onKill ?? 'killWeighted')
+        : state.karma;
       return finish({ kind: 'battle-victory', final: phase.final }, events, {
         player: round.state.player,
+        karma,
       });
+    }
     case 'player-died':
       events.push({ kind: 'game-over', xp: round.state.player.xp });
       return finish({ kind: 'game-over' }, events, { player: round.state.player });

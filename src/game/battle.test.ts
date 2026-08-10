@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createBattle, resolveRound, rollFlee } from './battle.ts';
+import { createBattle, resolveRound, rollFlee, spareAvailable } from './battle.ts';
 import { createPlayer, type Player } from './player.ts';
 import { type Enemy } from './enemy.ts';
 import { makeCondition } from './condition.ts';
@@ -50,6 +50,38 @@ function makeEnemy(overrides: Partial<Enemy> = {}): Enemy {
     ...overrides,
   };
 }
+
+describe('spare / release (M8)', () => {
+  const noDrawRng = () => {
+    throw new Error('spare must consume no rng draw');
+  };
+
+  it('sparing a ⚖ enemy ends the encounter as spared, enemy untouched, zero draws', () => {
+    const enemy = makeEnemy({ hp: 30, karmaWeighted: true, fullName: 'Wailing Grief' });
+    const state = createBattle(makePlayer(), enemy, 1);
+    const r = resolveRound(state, 'spare', noDrawRng);
+    expect(r.status).toBe('spared');
+    expect(r.events).toEqual([{ kind: 'spared', enemyName: 'Wailing Grief' }]);
+    // The enemy is NOT killed: hp unchanged, still alive.
+    expect(r.state.enemy.hp).toBe(30);
+  });
+
+  it('sparing a non-⚖ enemy is an unavailable no-op: ongoing, zero draws', () => {
+    const enemy = makeEnemy({ hp: 30, karmaWeighted: false });
+    const state = createBattle(makePlayer(), enemy, 1);
+    const r = resolveRound(state, 'spare', noDrawRng);
+    expect(r.status).toBe('ongoing');
+    expect(r.events).toEqual([{ kind: 'spare-unavailable' }]);
+    expect(r.state).toBe(state); // no-op returns the input state
+  });
+
+  it('spareAvailable gates on ⚖ and a living enemy', () => {
+    expect(spareAvailable(createBattle(makePlayer(), makeEnemy({ karmaWeighted: true, hp: 5 }), 1))).toBe(true);
+    expect(spareAvailable(createBattle(makePlayer(), makeEnemy({ karmaWeighted: false, hp: 5 }), 1))).toBe(false);
+    // A ⚖ enemy at 0 hp is dead, not spareable.
+    expect(spareAvailable(createBattle(makePlayer(), makeEnemy({ karmaWeighted: true, hp: 0 }), 1))).toBe(false);
+  });
+});
 
 describe('rollFlee — literal Java threshold rng()*10+1 <= 3.5', () => {
   it('escapes below the boundary and fails above it (independent of the constant)', () => {

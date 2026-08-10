@@ -65,11 +65,12 @@ export type BattleAction =
   | 'fight'
   | 'potion'
   | 'run'
+  | 'spare'
   | { kind: 'cast'; skillId: SkillId }
   | { kind: 'useConsumable'; source: ConsumableSource };
 
 /** The state of the battle after a round resolves. */
-export type RoundStatus = 'ongoing' | 'player-won' | 'player-died' | 'fled';
+export type RoundStatus = 'ongoing' | 'player-won' | 'player-died' | 'fled' | 'spared';
 
 /** What `resolveRound` returns: the next state, the events, and a terminal status. */
 export interface RoundResult {
@@ -126,10 +127,39 @@ export function resolveRound(state: BattleState, action: BattleAction, rng: Rng)
       return resolvePotion(state);
     case 'run':
       return resolveRun(state, rng);
+    case 'spare':
+      return resolveSpare(state);
     /* istanbul ignore next */
     default:
       return { state, events: [], status: 'ongoing' };
   }
+}
+
+/**
+ * Whether the player may spare/release the current enemy — PURE, RNG-free. Only a
+ * living karma-weighted (⚖) enemy can be spared. The render layer calls this to gate
+ * the Spare button; `resolveSpare` re-checks so a spurious 'spare' action is a safe no-op.
+ */
+export function spareAvailable(battle: BattleState): boolean {
+  return battle.enemy.karmaWeighted && battle.enemy.hp > 0;
+}
+
+/**
+ * Resolve a spare/release — PURE, ZERO rng draws, no counter-attack. Against a non-⚖
+ * enemy the action is unavailable: a no-op that leaves the battle ongoing (mirrors an
+ * unavailable potion), so no karma can be recorded off a non-⚖ enemy. Against a ⚖ enemy
+ * it ends the encounter as `spared` (mercy) — the enemy is NOT killed (hp unchanged, no
+ * XP/loot); the karma write happens one level up in game.ts, which owns the karma vector.
+ */
+function resolveSpare(state: BattleState): RoundResult {
+  if (!state.enemy.karmaWeighted) {
+    return { state, events: [{ kind: 'spare-unavailable' }], status: 'ongoing' };
+  }
+  return {
+    state,
+    events: [{ kind: 'spared', enemyName: state.enemy.fullName }],
+    status: 'spared',
+  };
 }
 
 /** What the player does on their step of a symmetric round: attack, or cast a skill. */
