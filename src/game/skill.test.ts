@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { SKILLS, computeSkillDamage, useSkill } from './skill.ts';
+import {
+  SKILLS,
+  computeSkillDamage,
+  useSkill,
+  resolveSkill,
+  applySkillUpgrade,
+  type SkillUpgrade,
+} from './skill.ts';
 import { type Character } from './character.ts';
 import { makeCondition, type ActiveCondition } from './condition.ts';
 
@@ -171,6 +178,62 @@ describe('M3 kit skill data (rows are content, not logic)', () => {
     expect(SKILLS.strike.spendMomentum).toBeUndefined();
     expect(SKILLS.strike.detonate).toBeUndefined();
     expect(SKILLS.strike.hpCost).toBeUndefined();
+  });
+});
+
+// ------- M9 skill upgrades (resolveSkill / applySkillUpgrade) -----------------
+// Expected values hand-derived from the heavyStrike row (baseDamage 3, chargeCost 2,
+// conditions ['fracture']) and the SkillUpgrade merge rules.
+
+describe('resolveSkill — merges an owned upgrade, else returns the base def', () => {
+  it('no upgrade returns the EXACT base def (referential + deep equal, off-equivalence)', () => {
+    const resolved = resolveSkill({ skillUpgrades: {} }, 'heavyStrike');
+    expect(resolved).toBe(SKILLS.heavyStrike); // same reference
+    expect(resolved).toEqual(SKILLS.heavyStrike);
+    // A player with no skillUpgrades field at all also gets the base.
+    expect(resolveSkill({}, 'heavyStrike')).toBe(SKILLS.heavyStrike);
+  });
+
+  it('damageBonus +2 raises baseDamage 3 -> 5 (cost/conditions unchanged)', () => {
+    const resolved = resolveSkill(
+      { skillUpgrades: { heavyStrike: { damageBonus: 2 } } },
+      'heavyStrike',
+    );
+    expect(resolved.baseDamage).toBe(5);
+    expect(resolved.chargeCost).toBe(2);
+    expect(resolved.conditions).toEqual(['fracture']);
+    // Purity: the base table is untouched.
+    expect(SKILLS.heavyStrike.baseDamage).toBe(3);
+  });
+
+  it('chargeDelta -1 lowers chargeCost 2 -> 1, and clamps at 0', () => {
+    expect(resolveSkill({ skillUpgrades: { heavyStrike: { chargeDelta: -1 } } }, 'heavyStrike').chargeCost).toBe(1);
+    // -3 would give -1 -> clamped to 0.
+    expect(resolveSkill({ skillUpgrades: { heavyStrike: { chargeDelta: -3 } } }, 'heavyStrike').chargeCost).toBe(0);
+  });
+
+  it('addConditions are unioned onto the inflicted conditions', () => {
+    const resolved = resolveSkill(
+      { skillUpgrades: { heavyStrike: { addConditions: ['burn'] } } },
+      'heavyStrike',
+    );
+    expect(resolved.conditions).toEqual(['fracture', 'burn']);
+  });
+});
+
+describe('applySkillUpgrade — accumulates onto any existing entry', () => {
+  it('first upgrade folds onto an empty record', () => {
+    const out = applySkillUpgrade({}, 'heavyStrike', { damageBonus: 2 });
+    expect(out.heavyStrike).toEqual({ damageBonus: 2, chargeDelta: 0, addConditions: [] });
+  });
+
+  it('a second damage upgrade stacks to +4 (numeric fields add)', () => {
+    let up: Record<string, SkillUpgrade> = applySkillUpgrade({}, 'heavyStrike', { damageBonus: 2 });
+    up = applySkillUpgrade(up, 'heavyStrike', { damageBonus: 2 });
+    expect(up.heavyStrike?.damageBonus).toBe(4);
+    // Two +2 upgrades on heavyStrike (base 3) resolve to baseDamage 7.
+    expect(resolveSkill({ skillUpgrades: up }, 'heavyStrike').baseDamage).toBe(7);
+    // Purity: the intermediate record is not mutated (still +2).
   });
 });
 

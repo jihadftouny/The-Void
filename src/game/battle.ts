@@ -24,8 +24,9 @@ import { type Rng } from './rng.ts';
 import { type CombatEvent } from './combatEvent.ts';
 import { hasControlCondition, tickConditions, type ConditionType } from './condition.ts';
 import { resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
-import { SKILLS, type SkillDef, type SkillId } from './skill.ts';
+import { resolveSkill, type SkillDef, type SkillId } from './skill.ts';
 import { castSkill, grantMomentum, usesMomentum } from './classKit.ts';
+import { perkModifiers } from './perks.ts';
 import { effectiveMaxHp } from './statEffects.ts';
 import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
 import { weaponForSlot, UNARMED, pickUp } from './equipment.ts';
@@ -257,7 +258,10 @@ function resolvePlayerTurn(
     // Both are off-equivalent for legacy gear (real weapon, 0 bonus), so the draw order and
     // damage are unchanged for a normal run.
     const weapon = weaponForSlot(player.inventory) ?? UNARMED;
-    const pa = resolvePlayerAttack(player, enemy, weapon, mods.flatDamage, rng);
+    // M9: fold the player's wired damage perks (sharpEdge) into the SAME flat-damage seam as
+    // the equip bonus. Off-equivalent (0) for a player with no such perk.
+    const flatDamage = mods.flatDamage + perkModifiers(player.perks).flatDamage;
+    const pa = resolvePlayerAttack(player, enemy, weapon, flatDamage, rng);
     playerDamage = pa.damage;
     didHit = pa.outcome === 'hit' || pa.outcome === 'crit';
     didCrit = pa.outcome === 'crit';
@@ -419,7 +423,10 @@ function killAndVictory(
  */
 function resolveCast(state: BattleState, skillId: SkillId, rng: Rng): RoundResult {
   const player = state.player;
-  const skill = SKILLS[skillId];
+  // M9: resolve the player's OWN skill def (base merged with any owned upgrade). No upgrade
+  // ⇒ the base SKILLS def is returned unchanged (off-equivalence); the enemy path still reads
+  // SKILLS directly (upgrades are player-only).
+  const skill = resolveSkill(player, skillId);
   // Overclock Chip / Hollow Heart cut the effective charge cost (never below 0). 0 for a
   // normal run, so availability is unchanged (off-equivalence).
   const discount = computeEquipModifiers(player.inventory).chargeDiscount;

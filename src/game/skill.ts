@@ -192,6 +192,50 @@ export function computeSkillDamage(
   return Math.max(damage, 0);
 }
 
+/**
+ * Merge a player's accumulated `SkillUpgrade` for `skillId` into the base skill def — PURE.
+ * With NO upgrade the BASE def is returned unchanged (referential-equal ⇒ off-equivalence:
+ * an un-upgraded player casts byte-identically). With an upgrade: `baseDamage + damageBonus`,
+ * `chargeCost` shifted by `chargeDelta` and clamped at 0, and `addConditions` unioned onto
+ * the inflicted conditions. Player-only — the enemy cast path keeps reading `SKILLS` directly.
+ */
+export function resolveSkill(
+  player: { skillUpgrades?: Record<string, SkillUpgrade> },
+  skillId: SkillId,
+): SkillDef {
+  const base = SKILLS[skillId];
+  const up = player.skillUpgrades?.[skillId];
+  if (!base || !up) return base;
+  return {
+    ...base,
+    baseDamage: base.baseDamage + (up.damageBonus ?? 0),
+    chargeCost: Math.max(0, base.chargeCost + (up.chargeDelta ?? 0)),
+    conditions:
+      up.addConditions && up.addConditions.length > 0
+        ? [...base.conditions, ...up.addConditions]
+        : base.conditions,
+  };
+}
+
+/**
+ * Accumulate `upgrade` onto any existing entry for `skillId` — PURE, returns a NEW record.
+ * Numeric fields ADD (so two +2 damage upgrades stack to +4); `addConditions` concatenate.
+ * The absent-field default is 0 / [], so a first upgrade folds cleanly onto no prior entry.
+ */
+export function applySkillUpgrade(
+  upgrades: Record<string, SkillUpgrade>,
+  skillId: SkillId,
+  upgrade: SkillUpgrade,
+): Record<string, SkillUpgrade> {
+  const prior = upgrades[skillId] ?? {};
+  const merged: SkillUpgrade = {
+    damageBonus: (prior.damageBonus ?? 0) + (upgrade.damageBonus ?? 0),
+    chargeDelta: (prior.chargeDelta ?? 0) + (upgrade.chargeDelta ?? 0),
+    addConditions: [...(prior.addConditions ?? []), ...(upgrade.addConditions ?? [])],
+  };
+  return { ...upgrades, [skillId]: merged };
+}
+
 /** The result of casting a skill — new caster/target plus damage and events. */
 export interface UseSkillResult<C extends Character, T extends Character> {
   caster: C;

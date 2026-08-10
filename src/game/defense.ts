@@ -34,6 +34,7 @@ import { armorForSlot, shieldForSlot } from './equipment.ts';
 import { computeEquipModifiers } from './equipEffects.ts';
 import { type Inventory } from './inventory.ts';
 import { scavverEvasionTwist, type PlayerClass } from './classKit.ts';
+import { perkModifiers } from './perks.ts';
 
 /**
  * Flat AC penalty for wearing armor whose `strReq` your (effective) STR does not meet.
@@ -47,7 +48,7 @@ export const STR_REQ_AC_PENALTY = 2;
  * the paperdoll `inventory` (armor from `slots.armor`, shield from `slots.offHand`), the
  * single source of truth — no legacy `equipped*Id` reads remain.
  */
-export type Defender = Conditioned & { inventory: Inventory };
+export type Defender = Conditioned & { inventory: Inventory; perks?: readonly string[] };
 
 /**
  * The flat AC bonus from the player's off-hand shield (`inventory.slots.offHand`): 0 when
@@ -61,8 +62,8 @@ export function shieldAcBonus(inventory: Inventory): number {
 /**
  * The player's Armor Class from its equipped gear — PURE. See the AC MODEL note above.
  *   armored:   baseArmor + CONmod + min(DEXmod, dexCap)  (− STR_REQ_AC_PENALTY if
- *              armor.strReq > 0 and effective STR < strReq)  + shield acBonus + equip flatAc
- *   unarmored: 10 + CONmod                                    + shield acBonus + equip flatAc
+ *              armor.strReq > 0 and effective STR < strReq)  + shield acBonus + equip flatAc + perk flatAc
+ *   unarmored: 10 + CONmod                                    + shield acBonus + equip flatAc + perk flatAc
  * CON/DEX/STR are the EFFECTIVE (augment-cascaded) values. Armor/shield resolve from the
  * paperdoll slots. The equipped-item `flatAc` (equipEffects.ts) is 0 for legacy gear, so a
  * normal run is byte-identical to M4 (off-equivalence).
@@ -83,6 +84,9 @@ export function playerArmorClass(player: Defender): number {
   }
   ac += shieldAcBonus(player.inventory);
   ac += computeEquipModifiers(player.inventory).flatAc;
+  // M9: fold the player's wired AC perks (wardingCharm) into the SAME flatAc seam. Off-
+  // equivalent (0) for a player with no such perk (or no perks field, e.g. an enemy defender).
+  ac += perkModifiers(player.perks ?? []).flatAc;
   return ac;
 }
 
