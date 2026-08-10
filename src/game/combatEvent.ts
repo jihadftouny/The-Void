@@ -27,6 +27,8 @@ export type AttackOutcome = 'hit' | 'crit' | 'miss' | 'fumble';
 /** An ordered, structured record of one thing that happened during combat. */
 export type CombatEvent =
   | { kind: 'enemy-skill-used'; skillId: SkillId; name: string; text?: string }
+  | { kind: 'skill-cast'; subject: 'player'; skillId: SkillId; name: string; text?: string }
+  | { kind: 'cast-unavailable'; text?: string }
   | {
       kind: 'attack';
       subject: CombatSubject;

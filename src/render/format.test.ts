@@ -64,6 +64,8 @@ describe('formatEvent — totality over every event kind', () => {
   const samples: GameEvent[] = [
     // combat
     { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
+    { kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember' },
+    { kind: 'cast-unavailable' },
     { kind: 'attack', subject: 'player', outcome: 'hit', damage: 3 },
     { kind: 'advantage', subject: 'player' },
     { kind: 'disadvantage', subject: 'enemy' },
@@ -122,9 +124,11 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'game-over', xp: 42 },
   ];
 
-  // Every kind, listed by hand (19 combat + 21 narrative = 40).
+  // Every kind, listed by hand (21 combat + 21 narrative = 42).
   const ALL_KINDS: GameEventKind[] = [
     'enemy-skill-used',
+    'skill-cast',
+    'cast-unavailable',
     'attack',
     'advantage',
     'disadvantage',
@@ -169,7 +173,7 @@ describe('formatEvent — totality over every event kind', () => {
   it('has one sample for every kind (no kind missed)', () => {
     const sampled = new Set(samples.map((s) => s.kind));
     expect(sampled).toEqual(new Set(ALL_KINDS));
-    expect(ALL_KINDS).toHaveLength(40);
+    expect(ALL_KINDS).toHaveLength(42);
   });
 
   it('yields a non-empty string for every kind', () => {

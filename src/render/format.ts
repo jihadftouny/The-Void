@@ -43,6 +43,10 @@ export function formatEvent(e: GameEvent): string {
     // --- combat events ---
     case 'enemy-skill-used':
       return `The enemy casts ${e.name}.`;
+    case 'skill-cast':
+      return `You cast ${e.name}.`;
+    case 'cast-unavailable':
+      return `You cannot cast that right now.`;
     case 'attack': {
       const who = sideName(e.subject);
       const verb = e.subject === 'player' ? 'strike' : 'strikes';

@@ -24,6 +24,8 @@ import { randInt, type Rng } from './rng.ts';
 import { type CombatEvent } from './combatEvent.ts';
 import { hasControlCondition, tickConditions, type ConditionType } from './condition.ts';
 import { resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
+import { SKILLS, useSkill, type SkillDef, type SkillId } from './skill.ts';
+import { effectiveMaxHp } from './statEffects.ts';
 
 /** The full, serializable state of a battle in progress. */
 export interface BattleState {
@@ -35,8 +37,13 @@ export interface BattleState {
   canFlee: boolean;
 }
 
-/** The three player battle actions. */
-export type BattleAction = 'fight' | 'potion' | 'run';
+/**
+ * The player's battle actions: the three string actions plus a structured `cast` (spend
+ * a charge to cast a skill from the player's skillPool). The string members keep every
+ * existing `'fight'|'potion'|'run'` caller valid; adding a union member breaks no
+ * exhaustive switch.
+ */
+export type BattleAction = 'fight' | 'potion' | 'run' | { kind: 'cast'; skillId: SkillId };
 
 /** The state of the battle after a round resolves. */
 export type RoundStatus = 'ongoing' | 'player-won' | 'player-died' | 'fled';
@@ -65,14 +72,20 @@ export function rollFlee(rng: Rng): boolean {
  * Resolve one battle round for the chosen action — PURE. Returns a new BattleState,
  * the ordered events, and a terminal status. The input `state` is never mutated.
  *
- * Fight draw order (documented for the exact-list test): enemy skill-pick draw ->
- * condition-tick saving-throw/flavor draws -> player d20 draw(s) -> player damage
- * draw(s) -> on victory: extra-rest draw then gold draw.
+ * Round draw order (documented for the exact-list test) for Fight/Cast, via the shared
+ * `resolvePlayerTurn`: enemy-condition-tick draws (NONE when the enemy is conditionless,
+ * so a conditionless round is byte-identical to pre-M2) -> enemy skill-pick draw ->
+ * player-condition-tick draws -> player d20 + damage draws (Fight) or no draw (Cast) ->
+ * on victory: extra-rest draw then gold draw.
  */
 export function resolveRound(state: BattleState, action: BattleAction, rng: Rng): RoundResult {
+  if (typeof action === 'object') {
+    // The only object action is a cast.
+    return resolveCast(state, action.skillId, rng);
+  }
   switch (action) {
     case 'fight':
-      return resolveFight(state, rng);
+      return resolvePlayerTurn(state, { kind: 'fight' }, rng);
     case 'potion':
       return resolvePotion(state);
     case 'run':
@@ -83,58 +96,134 @@ export function resolveRound(state: BattleState, action: BattleAction, rng: Rng)
   }
 }
 
-function resolveFight(state: BattleState, rng: Rng): RoundResult {
+/** What the player does on their step of a symmetric round: attack, or cast a skill. */
+type PlayerTurnAction = { kind: 'fight' } | { kind: 'cast'; skill: SkillDef };
+
+/**
+ * The shared symmetric round for Fight and Cast — PURE. Draw order (steps 1-6):
+ *  1. Tick ENEMY conditions (player-inflicted DoT/control finally tick). Apply the hp
+ *     delta; if the enemy dies to its own DoT before acting, it is still a victory.
+ *     Zero rng draws when the enemy is conditionless, so a conditionless round's draws
+ *     are exactly the pre-M2 order.
+ *  2. Enemy attacks unless a control condition (freeze/etc.) skipped it.
+ *  3. Tick the PLAYER's conditions.
+ *  4. Player acts unless skipped: Fight rolls d20 + damage; Cast spends a charge and
+ *     applies the skill's condition to the enemy (no rng draw). A control-skipped player
+ *     never reaches the cast branch, so casting under control spends NO charge.
+ *  5. Apply the exchanged damage (clamp hp at 0).
+ *  6. Resolve player-died / player-won / ongoing.
+ */
+function resolvePlayerTurn(
+  state: BattleState,
+  action: PlayerTurnAction,
+  rng: Rng,
+): RoundResult {
   const events: CombatEvent[] = [];
+  let player: Player = state.player;
+  let enemy: Enemy = state.enemy;
 
-  // 1. Enemy attacks (may cast a skill: spends a charge, may apply a condition).
-  const ea = resolveEnemyAttack(state.enemy, state.player, rng);
-  let enemy: Enemy = ea.enemy;
-  let player: Player = ea.target;
-  const enemyDamage = ea.damage;
-  events.push(...ea.events);
-
-  // 2. Tick the player's conditions (damage/heal/skip/fracture), then apply hp delta.
-  const tc = tickConditions(player, enemy, rng);
-  player = { ...player, activeConditions: tc.conditions, hp: player.hp + tc.hpDelta };
-  if (tc.advDisOverride !== 0) {
-    player = { ...player, advantageDisadvantage: tc.advDisOverride };
+  // 1. Tick the enemy's conditions.
+  const etc = tickConditions(enemy, player, rng);
+  enemy = { ...enemy, activeConditions: etc.conditions, hp: enemy.hp + etc.hpDelta };
+  events.push(...etc.events);
+  const skipEnemyAttack = etc.skipTurn;
+  if (enemy.hp <= 0) {
+    return applyVictory(state, player, { ...enemy, hp: 0 }, events, rng);
   }
-  events.push(...tc.events);
 
-  // 3. Player acts unless a condition made it skip.
+  // 2. Enemy attacks unless skipped.
+  let enemyDamage = 0;
+  if (!skipEnemyAttack) {
+    const ea = resolveEnemyAttack(enemy, player, rng);
+    enemy = ea.enemy;
+    player = ea.target;
+    enemyDamage = ea.damage;
+    events.push(...ea.events);
+  }
+
+  // 3. Tick the player's conditions (damage/heal/skip/fracture), then apply hp delta.
+  const ptc = tickConditions(player, enemy, rng);
+  player = { ...player, activeConditions: ptc.conditions, hp: player.hp + ptc.hpDelta };
+  if (ptc.advDisOverride !== 0) {
+    player = { ...player, advantageDisadvantage: ptc.advDisOverride };
+  }
+  events.push(...ptc.events);
+
+  // 4. Player acts unless a condition made it skip.
   let playerDamage = 0;
-  if (tc.skipTurn) {
-    events.push({ kind: 'player-unable-to-act', conditionType: skipCause(tc.events) });
-  } else {
+  if (ptc.skipTurn) {
+    events.push({ kind: 'player-unable-to-act', conditionType: skipCause(ptc.events) });
+  } else if (action.kind === 'fight') {
     const pa = resolvePlayerAttack(player, enemy, rng);
     playerDamage = pa.damage;
     events.push(...pa.events);
+  } else {
+    // Cast: spend one charge, apply the skill's condition to the enemy, deal the skill's
+    // (INT-scaled, resistance-adjusted) damage. No rng draw.
+    const used = useSkill(player, enemy, action.skill);
+    player = used.caster;
+    enemy = used.target;
+    playerDamage = used.damage;
+    events.push({ kind: 'skill-cast', subject: 'player', skillId: action.skill.id, name: action.skill.name });
+    for (const e of used.events) {
+      if (e.kind === 'condition-applied') events.push(e);
+    }
   }
 
-  // 4. Apply the exchanged damage (clamp hp at 0).
+  // 5. Apply the exchanged damage (clamp hp at 0).
   player = { ...player, hp: Math.max(player.hp - enemyDamage, 0) };
   enemy = { ...enemy, hp: Math.max(enemy.hp - playerDamage, 0) };
 
-  // 5. Resolve the outcome.
-  let status: RoundStatus = 'ongoing';
+  // 6. Resolve the outcome (player death checked first, faithful to pre-M2).
   if (player.hp <= 0) {
-    status = 'player-died';
     events.push({ kind: 'defeat' });
-  } else if (enemy.hp <= 0) {
-    status = 'player-won';
-    const xpGained = enemy.xp;
-    const extraRest = rng() * 100 + 1 <= 25;
-    const goldGained = randInt(rng, enemy.xp);
-    player = {
-      ...player,
-      xp: player.xp + xpGained,
-      gold: player.gold + goldGained,
-      restsLeft: player.restsLeft + (extraRest ? 1 : 0),
-    };
-    events.push({ kind: 'victory', xpGained, goldGained, extraRest });
+    return { state: { ...state, player, enemy }, events, status: 'player-died' };
   }
+  if (enemy.hp <= 0) {
+    return applyVictory(state, player, enemy, events, rng);
+  }
+  return { state: { ...state, player, enemy }, events, status: 'ongoing' };
+}
 
-  return { state: { ...state, player, enemy }, events, status };
+/**
+ * The player casts a skill from their pool — pre-guard then the shared round. If the
+ * skill is unknown, not in `player.skillPool`, or the player lacks the charge, this is a
+ * no-op: state unchanged, a single `cast-unavailable` event, `ongoing`, and NO rng draw
+ * (mirrors an unavailable potion). Otherwise it runs `resolvePlayerTurn` as a cast.
+ */
+function resolveCast(state: BattleState, skillId: SkillId, rng: Rng): RoundResult {
+  const player = state.player;
+  const skill = SKILLS[skillId];
+  if (!skill || !player.skillPool.includes(skillId) || player.skillCharges < skill.chargeCost) {
+    return { state, events: [{ kind: 'cast-unavailable' }], status: 'ongoing' };
+  }
+  return resolvePlayerTurn(state, { kind: 'cast', skill }, rng);
+}
+
+/**
+ * The shared victory block — PURE. Grants xp = enemy.xp, rolls the extra-rest chance
+ * (`rng()*100+1 <= 25`) then the gold (`randInt(rng, enemy.xp)`) IN THAT ORDER, and
+ * emits the `victory` event. Extracted so an enemy killed by its own DoT tick (before it
+ * acts) awards exactly the same rewards as a kill by the player's action.
+ */
+function applyVictory(
+  state: BattleState,
+  player: Player,
+  enemy: Enemy,
+  events: CombatEvent[],
+  rng: Rng,
+): RoundResult {
+  const xpGained = enemy.xp;
+  const extraRest = rng() * 100 + 1 <= 25;
+  const goldGained = randInt(rng, enemy.xp);
+  const newPlayer: Player = {
+    ...player,
+    xp: player.xp + xpGained,
+    gold: player.gold + goldGained,
+    restsLeft: player.restsLeft + (extraRest ? 1 : 0),
+  };
+  events.push({ kind: 'victory', xpGained, goldGained, extraRest });
+  return { state: { ...state, player: newPlayer, enemy }, events, status: 'player-won' };
 }
 
 function resolvePotion(state: BattleState): RoundResult {
@@ -142,11 +231,14 @@ function resolvePotion(state: BattleState): RoundResult {
   if (hasControlCondition(player)) {
     return { state, events: [{ kind: 'potion-blocked' }], status: 'ongoing' };
   }
-  if (player.pots > 0 && player.hp < player.maxHp) {
-    const healed: Player = { ...player, hp: player.maxHp, pots: player.pots - 1 };
+  // Heal cap is the EFFECTIVE max HP (Hardy raises it, Frail lowers it). Off-equivalent:
+  // equals the stored maxHp when no CON augment is active.
+  const cap = effectiveMaxHp(player);
+  if (player.pots > 0 && player.hp < cap) {
+    const healed: Player = { ...player, hp: cap, pots: player.pots - 1 };
     return {
       state: { ...state, player: healed },
-      events: [{ kind: 'potion-drunk', healedTo: player.maxHp }],
+      events: [{ kind: 'potion-drunk', healedTo: cap }],
       status: 'ongoing',
     };
   }
