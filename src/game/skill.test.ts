@@ -137,6 +137,43 @@ describe('useSkill — starter pool casts (damage + condition)', () => {
   });
 });
 
+describe('M3 kit skill data (rows are content, not logic)', () => {
+  // Spot-check a few kit rows against the plan's per-class table (element/cost/base/
+  // conditions), hand-transcribed from the design — not read off the impl.
+  it('carries the tabled base fields for representative kit skills', () => {
+    expect(SKILLS.heavyStrike.element).toBe('Physical');
+    expect(SKILLS.heavyStrike.chargeCost).toBe(2);
+    expect(SKILLS.heavyStrike.baseDamage).toBe(3);
+    expect(SKILLS.heavyStrike.conditions).toEqual(['fracture']);
+
+    expect(SKILLS.synapse.element).toBe('Electro');
+    expect(SKILLS.synapse.conditions).toEqual([]);
+
+    expect(SKILLS.corrupt.element).toBe('Poison');
+    expect(SKILLS.corrupt.conditions).toEqual(['poison', 'insanity']);
+
+    expect(SKILLS.smite.element).toBe('Force');
+    expect(SKILLS.smite.baseDamage).toBe(3);
+  });
+
+  it('exposes the optional twist knobs as data on the right skills', () => {
+    expect(SKILLS.heavyStrike.spendMomentum).toBe(true);
+    expect(SKILLS.heavyStrike.momentumDamagePer).toBe(1);
+    expect(SKILLS.synapse.detonate).toEqual({ damagePer: 2, group: 'mental' });
+    expect(SKILLS.venomCoat.exposureScale).toBe(1);
+    expect(SKILLS.backstab.appliesExposure).toBe(1);
+    expect(SKILLS.smite.hpCost).toBe(2);
+    expect(SKILLS.smite.scaleStat).toBe('WIS');
+    expect(SKILLS.sacrifice.maxHpCost).toBe(3);
+    expect(SKILLS.unmake.corruptionScale).toBe(1);
+    expect(SKILLS.siphon.lifestealFraction).toBe(0.5);
+    // A twist-free generic skill has NO twist knobs (so castSkill == useSkill for it).
+    expect(SKILLS.strike.spendMomentum).toBeUndefined();
+    expect(SKILLS.strike.detonate).toBeUndefined();
+    expect(SKILLS.strike.hpCost).toBeUndefined();
+  });
+});
+
 describe('useSkill — purity', () => {
   it('does not mutate the input caster or target', () => {
     const c = caster({ skillCharges: 2 });

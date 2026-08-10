@@ -57,6 +57,17 @@ export type CombatEvent =
   | { kind: 'condition-skip'; subject: CombatSubject; conditionType: ConditionType; text?: string }
   | { kind: 'condition-applied'; subject: CombatSubject; conditionType: ConditionType; text?: string }
   | { kind: 'condition-expired'; subject: CombatSubject; conditionType: ConditionType; text?: string }
+  // ---- M3 class-twist events (additive; only class casts emit them) ----
+  | {
+      kind: 'resource-changed';
+      subject: 'player';
+      resource: 'momentum' | 'corruption';
+      value: number;
+      text?: string;
+    }
+  | { kind: 'self-sacrifice'; amount: number; ofMaxHp: boolean; text?: string }
+  | { kind: 'lifesteal'; amount: number; text?: string }
+  | { kind: 'detonate'; consumed: number; bonusDamage: number; text?: string }
   | { kind: 'potion-drunk'; healedTo: number; text?: string }
   | { kind: 'potion-unavailable'; text?: string }
   | { kind: 'potion-blocked'; text?: string }

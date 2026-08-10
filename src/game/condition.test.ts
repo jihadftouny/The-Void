@@ -172,6 +172,54 @@ describe('tickConditions — Fracture forces disadvantage', () => {
   });
 });
 
+describe('exposed (M3 Scavver mark) — pure countdown, no hp/skip, DoT stacking', () => {
+  // Hand-derived from CONDITION_DATA.exposed (maxTurns 2, stacking 'dot'): onset (turn 1,
+  // no effect), active (turn 2, no effect), expiry (turn 3, removed). It rolls no save, so
+  // an empty scripted RNG proves it consumes zero draws.
+  it('ticks down over 3 turns with no hp delta and no skip, then expires', () => {
+    const opponent = creature();
+    let conditions: ActiveCondition[] = [makeCondition('exposed')];
+    expect(conditions[0]).toEqual({ type: 'exposed', remainingTurns: 2, maxTurns: 2 });
+
+    // Turn 1 — onset, no damage/skip, survives at remaining 1.
+    let r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    expect(r.hpDelta).toBe(0);
+    expect(r.skipTurn).toBe(false);
+    expect(r.events.map((e) => e.kind)).toEqual(['condition-onset']);
+    expect(r.conditions).toEqual([{ type: 'exposed', remainingTurns: 1, maxTurns: 2 }]);
+    conditions = r.conditions;
+
+    // Turn 2 — active, still no effect, survives at remaining 0.
+    r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    expect(r.hpDelta).toBe(0);
+    expect(r.skipTurn).toBe(false);
+    expect(r.events).toEqual([]);
+    expect(r.conditions).toEqual([{ type: 'exposed', remainingTurns: 0, maxTurns: 2 }]);
+    conditions = r.conditions;
+
+    // Turn 3 — expiry, removed.
+    r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    expect(r.events).toEqual([{ kind: 'condition-expired', subject: 'player', conditionType: 'exposed' }]);
+    expect(r.conditions).toEqual([]);
+  });
+
+  it('a second application stacks intensity to 2 and refreshes the duration', () => {
+    const list: ActiveCondition[] = [];
+    expect(applyCondition(list, 'exposed')).toBe('added');
+    expect(list).toEqual([{ type: 'exposed', remainingTurns: 2, maxTurns: 2 }]); // fresh = intensity 1
+
+    // Advance the duration, then re-apply: intensity -> 2 and duration refreshes to max.
+    list[0]!.remainingTurns = 1;
+    expect(applyCondition(list, 'exposed')).toBe('stacked');
+    expect(list).toEqual([{ type: 'exposed', remainingTurns: 2, maxTurns: 2, intensity: 2 }]);
+  });
+
+  it('is not a control condition (never blocks a turn)', () => {
+    expect(CONTROL_CONDITIONS.has('exposed')).toBe(false);
+    expect(hasControlCondition(creature({ activeConditions: [makeCondition('exposed')] }))).toBe(false);
+  });
+});
+
 describe('tickConditions — purity + serializability', () => {
   it('does not mutate the input conditions and returns serializable data', () => {
     const input: ActiveCondition[] = [makeCondition('bleed')];

@@ -49,6 +49,10 @@ export type ConditionType =
   | 'insanity'
   | 'push'
   | 'aired'
+  // M3 — Scavver's mark. A DoT-stacking marker with NO per-turn effect: its intensity
+  // is the payoff read by Scavver's exposure skills. Not a control condition, not an
+  // augment/deprivation, not in the "mental" detonate set.
+  | 'exposed'
   // Stat augmentation (post-release in Java) — defined but inert.
   | 'strong'
   | 'quick'
@@ -98,6 +102,8 @@ export const CONDITION_DATA: Record<ConditionType, ConditionData> = {
   insanity: { maxTurns: 5, displayName: 'Insanity', stacking: 'refresh' },
   push: { maxTurns: 1, displayName: 'Push', stacking: 'refresh' },
   aired: { maxTurns: 2, displayName: 'Aired', stacking: 'refresh' },
+  // 'dot' so repeated Backstabs accumulate intensity (the mark deepens); M15 balance.
+  exposed: { maxTurns: 2, displayName: 'Exposed', stacking: 'dot' },
   strong: { maxTurns: 2, displayName: 'Strong', stacking: 'refresh' },
   quick: { maxTurns: 2, displayName: 'Agile', stacking: 'refresh' },
   healthy: { maxTurns: 2, displayName: 'Healthy', stacking: 'refresh' },
@@ -236,6 +242,7 @@ const CHAIN_ORDER: readonly ConditionType[] = [
   'push',
   'aired',
   'poison',
+  'exposed',
   'strong',
   'quick',
   'healthy',
@@ -505,6 +512,23 @@ export function tickConditions(
           const amount = cond.intensity ?? 1;
           hpDelta -= amount;
           events.push({ kind: 'condition-damage', subject, conditionType: type, amount });
+          cond.remainingTurns--;
+          survivors.push(cond);
+        } else {
+          events.push({ kind: 'condition-expired', subject, conditionType: type });
+        }
+        break;
+      }
+      case 'exposed': {
+        // Scavver's mark — a pure per-turn COUNTDOWN with NO hp/skip effect. Its teeth
+        // are the `intensity` read by Scavver's exposure skills (classKit.castSkill),
+        // not anything that happens on tick. It counts down and expires like a DoT
+        // duration but deals no damage. Stacking accumulates intensity (applyCondition).
+        if (isOnset) {
+          events.push({ kind: 'condition-onset', subject, conditionType: type });
+          cond.remainingTurns--;
+          survivors.push(cond);
+        } else if (isActive) {
           cond.remainingTurns--;
           survivors.push(cond);
         } else {

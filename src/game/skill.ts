@@ -15,16 +15,20 @@
 //    (no random term). The caller (resolveEnemyAttack) owns the skill-pick draw.
 //  - `Skill.target` static global is dropped; the target is an explicit parameter.
 
-import type { Character } from './character.ts';
+import type { Character, StatKey } from './character.ts';
 import { getElement } from './element.ts';
 import { applyCondition, type ActiveCondition, type ConditionType } from './condition.ts';
 import { statModDelta } from './statEffects.ts';
 import { subjectOf, type CombatEvent } from './combatEvent.ts';
 
 /**
- * Every skill id. `pyroBall`/`freeze` are the ported enemy test skills; the five
- * `strike`/`ember`/`venom`/`frost`/`enfeeble` are the M2 generic STARTER pool the
- * player begins with (M3 replaces these with per-class signature kits).
+ * Every skill id.
+ *  - `pyroBall`/`freeze` are the ported enemy test skills.
+ *  - `strike`/`ember`/`venom`/`frost`/`enfeeble` are the M2 generic pool: no longer
+ *    auto-granted to a player, but retained as valid castable defs for the enemy path
+ *    and the off-equivalence test (a twist-free skill through `castSkill`).
+ *  - The twenty class-kit ids (M3) are the five signature kits (four skills each). Their
+ *    optional twist knobs below are interpreted by `castSkill` in `classKit.ts`.
  */
 export type SkillId =
   | 'pyroBall'
@@ -33,9 +37,40 @@ export type SkillId =
   | 'ember'
   | 'venom'
   | 'frost'
-  | 'enfeeble';
+  | 'enfeeble'
+  // Enforcer kit (Momentum)
+  | 'heavyStrike'
+  | 'brace'
+  | 'intimidate'
+  | 'execute'
+  // Neuromancer kit (Detonate)
+  | 'mindSpike'
+  | 'unravel'
+  | 'lull'
+  | 'synapse'
+  // Scavver kit (Exposure)
+  | 'backstab'
+  | 'venomCoat'
+  | 'slip'
+  | 'scavenge'
+  // Penitent kit (Devotion / Martyr — HP-as-fuel)
+  | 'smite'
+  | 'mend'
+  | 'consecrate'
+  | 'martyr'
+  // Hollow kit (Corruption)
+  | 'siphon'
+  | 'corrupt'
+  | 'sacrifice'
+  | 'unmake';
 
-/** A skill definition as plain, data-driven content. */
+/**
+ * A skill definition as plain, data-driven content. The base fields (id..conditions)
+ * drive `useSkill`; the OPTIONAL twist fields below drive `castSkill` (M3). Every twist
+ * field absent ⇒ `castSkill` returns exactly `useSkill`'s result, so the enemy path and
+ * the generic skills stay byte-identical. All twist magnitudes are M15 balance
+ * placeholders (see `classKit.ts`).
+ */
 export interface SkillDef {
   id: SkillId;
   name: string;
@@ -47,6 +82,38 @@ export interface SkillDef {
   baseDamage: number;
   /** Conditions this skill inflicts on its target. */
   conditions: ConditionType[];
+
+  // ---- Optional twist knobs (M3, interpreted by classKit.castSkill) ----
+  /** Penitent: spend this much caster HP on cast (clamped so caster never drops below 1). */
+  hpCost?: number;
+  /** Hollow: sacrifice this much caster maxHp; each point raises `corruption` by 1. */
+  maxHpCost?: number;
+  /** Penitent: heal the caster by this flat amount (clamped to effective max HP). */
+  selfHeal?: number;
+  /** Hollow: heal the caster by floor(damage × fraction) (clamped to effective max HP). */
+  lifestealFraction?: number;
+  /** Enforcer: consume all caster momentum, adding `momentumDamagePer × momentum` damage. */
+  spendMomentum?: boolean;
+  /** Enforcer: damage added per point of consumed momentum (pairs with `spendMomentum`). */
+  momentumDamagePer?: number;
+  /** Enforcer: grant this much momentum on cast (clamped to the cap). */
+  gainMomentum?: number;
+  /** Enforcer: bonus damage when the target is at/below `thresholdPct`% of its max HP. */
+  bonusVsBloodied?: { thresholdPct: number; bonus: number };
+  /** Neuromancer: remove every target condition in `group`, adding `damagePer × count`. */
+  detonate?: { damagePer: number; group: 'mental' };
+  /** Scavver: raise the target's `exposed` intensity by this many stacks on cast. */
+  appliesExposure?: number;
+  /** Scavver: damage added per point of the target's current `exposed` intensity. */
+  exposureScale?: number;
+  /** Hollow: damage added per point of the caster's current `corruption`. */
+  corruptionScale?: number;
+  /** Apply these conditions to the CASTER (self-buffs: brace/consecrate/slip). */
+  selfConditions?: ConditionType[];
+  /** Scavver: restore this many skill charges to the caster (clamped to the max). */
+  restoreCharges?: number;
+  /** Penitent: add the caster's mod for this stat to the skill's damage. */
+  scaleStat?: StatKey;
 }
 
 /**
@@ -63,6 +130,37 @@ export const SKILLS: Record<SkillId, SkillDef> = {
   venom: { id: 'venom', name: 'Venom', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison'] },
   frost: { id: 'frost', name: 'Frost', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['freeze'] },
   enfeeble: { id: 'enfeeble', name: 'Enfeeble', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+
+  // ---- M3 class kits (all magnitudes/costs are M15 balance placeholders). ----
+  // Enforcer (Momentum): spend banked momentum for burst; build it back with brace.
+  heavyStrike: { id: 'heavyStrike', name: 'Heavy Strike', element: 'Physical', chargeCost: 2, baseDamage: 3, conditions: ['fracture'], spendMomentum: true, momentumDamagePer: 1 },
+  brace: { id: 'brace', name: 'Brace', element: 'Force', chargeCost: 1, baseDamage: 0, conditions: [], selfConditions: ['healthy'], gainMomentum: 2 },
+  intimidate: { id: 'intimidate', name: 'Intimidate', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['stun'] },
+  execute: { id: 'execute', name: 'Execute', element: 'Physical', chargeCost: 2, baseDamage: 2, conditions: ['bleed'], bonusVsBloodied: { thresholdPct: 50, bonus: 4 } },
+
+  // Neuromancer (Detonate): stack mental conditions, then blow them up with synapse.
+  mindSpike: { id: 'mindSpike', name: 'Mind Spike', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['insanity'] },
+  unravel: { id: 'unravel', name: 'Unravel', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['fool'] },
+  lull: { id: 'lull', name: 'Lull', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['sleep'] },
+  synapse: { id: 'synapse', name: 'Synapse', element: 'Electro', chargeCost: 2, baseDamage: 1, conditions: [], detonate: { damagePer: 2, group: 'mental' } },
+
+  // Scavver (Exposure): mark a foe Exposed, then punish the mark. (Evasion half → M4.)
+  backstab: { id: 'backstab', name: 'Backstab', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'], appliesExposure: 1 },
+  venomCoat: { id: 'venomCoat', name: 'Venom Coat', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison'], exposureScale: 1 },
+  slip: { id: 'slip', name: 'Slip', element: 'Physical', chargeCost: 1, baseDamage: 0, conditions: [], selfConditions: ['quick'] },
+  scavenge: { id: 'scavenge', name: 'Scavenge', element: 'Physical', chargeCost: 1, baseDamage: 0, conditions: [], restoreCharges: 2 },
+
+  // Penitent (Devotion / Martyr): pay HP for holy burst; mend/consecrate to sustain.
+  smite: { id: 'smite', name: 'Smite', element: 'Force', chargeCost: 1, baseDamage: 3, conditions: [], hpCost: 2, scaleStat: 'WIS' },
+  mend: { id: 'mend', name: 'Mend', element: 'Force', chargeCost: 1, baseDamage: 0, conditions: [], selfHeal: 4 },
+  consecrate: { id: 'consecrate', name: 'Consecrate', element: 'Force', chargeCost: 1, baseDamage: 1, conditions: [], selfConditions: ['regeneration'] },
+  martyr: { id: 'martyr', name: 'Martyr', element: 'Force', chargeCost: 2, baseDamage: 5, conditions: [], hpCost: 5 },
+
+  // Hollow (Corruption): sacrifice max HP into corruption, then scale unmake by it.
+  siphon: { id: 'siphon', name: 'Siphon', element: 'Psychic', chargeCost: 1, baseDamage: 3, conditions: [], lifestealFraction: 0.5 },
+  corrupt: { id: 'corrupt', name: 'Corrupt', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison', 'insanity'] },
+  sacrifice: { id: 'sacrifice', name: 'Sacrifice', element: 'Psychic', chargeCost: 1, baseDamage: 0, conditions: [], maxHpCost: 3 },
+  unmake: { id: 'unmake', name: 'Unmake', element: 'Psychic', chargeCost: 2, baseDamage: 3, conditions: [], corruptionScale: 1, lifestealFraction: 0.5 },
 };
 
 /**
