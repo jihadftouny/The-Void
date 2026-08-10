@@ -21,7 +21,7 @@
 //    the narration; confirmation UX belongs to the render layer).
 
 import { createRng, type Rng } from './rng.ts';
-import { type StatKey, type Stats } from './character.ts';
+import { type Stats } from './character.ts';
 import { createKarma, recordKarma, type KarmaState } from './karma.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
@@ -47,9 +47,11 @@ import { summarizeLoot } from './loot.ts';
 import {
   FINAL_BOSS_NAME,
   FINAL_BOSS_XP,
-  levelUpPlayer,
+  applyLevelUpHp,
+  hasPendingLevelUp,
   shouldAdvance,
 } from './progression.ts';
+import { generateDraft, applyDraftOption, describeDraftOption, type DraftOption } from './draft.ts';
 import { getActIntro, getActOutro, getEnding, getIntro } from './story.ts';
 import { playerArmorClass } from './defense.ts';
 import { pickUp } from './equipment.ts';
@@ -71,8 +73,9 @@ export type Phase =
   | { kind: 'deal'; deal: SacrificeDeal }
   | { kind: 'chest'; loot: ItemInstance[] }
   | { kind: 'act-outro'; newAct: number }
-  | { kind: 'level-up'; newAct: number }
-  | { kind: 'level-up-result'; newAct: number }
+  // M9: a level-up presents a seeded draft of 3; the picked option is applied on draft-pick.
+  | { kind: 'level-up-draft'; offers: DraftOption[] }
+  | { kind: 'level-up-result' }
   | { kind: 'act-intro'; newAct: number }
   | { kind: 'ending' }
   | { kind: 'game-over' };
@@ -105,7 +108,7 @@ export type Awaiting =
   | 'main-menu'
   | 'continue'
   | 'battle-action'
-  | 'level-up-picks'
+  | 'draft-pick'
   | 'deal-decision'
   | 'rest-decision'
   | 'game-over';
@@ -118,7 +121,7 @@ export type GameInput =
   | { kind: 'stats-decision'; accept: boolean }
   | { kind: 'menu'; choice: 'continue' | 'seek-deal' | 'quit' }
   | { kind: 'battle-action'; action: BattleAction }
-  | { kind: 'level-up-picks'; picks: [StatKey, StatKey] }
+  | { kind: 'draft-pick'; index: number }
   | { kind: 'deal-decision'; accept: boolean }
   | { kind: 'rest-decision'; accept: boolean };
 
@@ -167,8 +170,8 @@ export function awaitingFor(phase: Phase): Awaiting {
       return 'continue';
     case 'act-outro':
       return 'continue';
-    case 'level-up':
-      return 'level-up-picks';
+    case 'level-up-draft':
+      return 'draft-pick';
     case 'level-up-result':
       return 'continue';
     case 'act-intro':
@@ -293,8 +296,8 @@ export function step(state: GameState, input: GameInput): StepResult {
 
     case 'battle-victory': {
       if (input.kind !== 'continue') return noop;
+      const player = requirePlayer(state);
       if (phase.final) {
-        const player = requirePlayer(state);
         const ending = getEnding();
         return finish({ kind: 'ending' }, [
           {
@@ -303,6 +306,12 @@ export function step(state: GameState, input: GameInput): StepResult {
             body: substituteName(ending.body, player.name),
           },
         ]);
+      }
+      // M9: battle victory is the sole XP source, so the sole level-up hook. If the new XP
+      // crossed one or more level thresholds, route into the draft (drains one at a time);
+      // otherwise straight back to the hub. Act advancement is checked separately at the menu.
+      if (hasPendingLevelUp(player)) {
+        return enterLevelUp(player, rng, finish);
       }
       return finish({ kind: 'main-menu' }, []);
     }
@@ -328,25 +337,37 @@ export function step(state: GameState, input: GameInput): StepResult {
     }
 
     case 'act-outro': {
-      if (input.kind !== 'continue') return noop;
-      const concluded = phase.newAct - 1;
-      const outro = getActOutro(concluded) ?? { header: '', body: '' };
-      return finish({ kind: 'level-up', newAct: phase.newAct }, [
-        { kind: 'act-outro', act: concluded, header: outro.header, body: outro.body },
-      ]);
-    }
-
-    case 'level-up': {
-      if (input.kind !== 'level-up-picks') return noop;
-      return resolveLevelUp(state, phase.newAct, input.picks, rng, finish);
-    }
-
-    case 'level-up-result': {
+      // M9: act flow is decoupled from level-up. The outro event was already emitted when
+      // this phase was entered (continueJourney); continuing goes straight to the act intro.
       if (input.kind !== 'continue') return noop;
       const intro = getActIntro(phase.newAct) ?? { header: '', body: '' };
       return finish({ kind: 'act-intro', newAct: phase.newAct }, [
         { kind: 'act-intro', act: phase.newAct, header: intro.header, body: intro.body },
       ]);
+    }
+
+    case 'level-up-draft': {
+      if (input.kind !== 'draft-pick') return noop;
+      const index = input.index;
+      if (index < 0 || index >= phase.offers.length) return noop; // out-of-range: no-op
+      const player = requirePlayer(state);
+      const picked = applyDraftOption(player, phase.offers[index]!);
+      return finish(
+        { kind: 'level-up-result' },
+        [{ kind: 'draft-picked', option: picked.describe }],
+        { player: picked.player },
+      );
+    }
+
+    case 'level-up-result': {
+      // Drain the next queued level-up if XP still owes one; else return to the hub. Act
+      // advancement is handled independently at the menu, never through this chain.
+      if (input.kind !== 'continue') return noop;
+      const player = requirePlayer(state);
+      if (hasPendingLevelUp(player)) {
+        return enterLevelUp(player, rng, finish);
+      }
+      return finish({ kind: 'main-menu' }, []);
     }
 
     case 'act-intro': {
@@ -399,10 +420,16 @@ function continueJourney(
 ): StepResult {
   if (shouldAdvance(state.act, player.xp)) {
     const newAct = state.act + 1;
-    return finish({ kind: 'act-outro', newAct }, [], {
-      act: newAct,
-      place: newAct - 1,
-    });
+    // M9: emit the concluded act's outro event on ENTRY to act-outro (the old
+    // act-outro -> level-up -> level-up-result -> act-intro chain is gone; act transitions
+    // never pass through a draft).
+    const concluded = newAct - 1;
+    const outro = getActOutro(concluded) ?? { header: '', body: '' };
+    return finish(
+      { kind: 'act-outro', newAct },
+      [{ kind: 'act-outro', act: concluded, header: outro.header, body: outro.body }],
+      { act: newAct, place: newAct - 1 },
+    );
   }
   const encounter = selectEncounter(rng);
   if (encounter === 'battle') {
@@ -550,29 +577,21 @@ function resolveDealDecision(
   );
 }
 
-function resolveLevelUp(
-  state: GameState,
-  newAct: number,
-  picks: [StatKey, StatKey],
-  rng: Rng,
-  finish: Finish,
-): StepResult {
-  const player = requirePlayer(state);
-  const oldConMod = player.mods.CON;
-  const leveled = levelUpPlayer(player, picks, newAct, rng);
-  const conModChanged = oldConMod !== leveled.mods.CON;
-  // The floored dice+conMod roll = total maxHp delta minus the CON-changed bonus.
-  const delta = leveled.maxHp - player.maxHp;
-  const hpRoll = delta - (conModChanged ? newAct - 1 : 0);
-  return finish({ kind: 'level-up-result', newAct }, [
-    {
-      kind: 'level-up',
-      picks,
-      newStats: leveled.stats,
-      hpRoll,
-      newMaxHp: leveled.maxHp,
-      conModChanged,
-      proficiency: leveled.proficiency,
-    },
-  ], { player: leveled });
+/**
+ * Enter ONE level-up (M9): auto max-HP growth (one hit-die draw) then a seeded draft of 3
+ * (its draws). Sets the `level-up-draft` phase with the offers, patches the leveled player,
+ * and emits the `level-up` + `draft-offer` events. Called from `battle-victory` and, to
+ * drain a queued level, from `level-up-result`.
+ */
+function enterLevelUp(player: Player, rng: Rng, finish: Finish): StepResult {
+  const { player: leveled, hpRoll } = applyLevelUpHp(player, rng);
+  const offers = generateDraft(leveled, rng);
+  return finish(
+    { kind: 'level-up-draft', offers },
+    [
+      { kind: 'level-up', newLevel: leveled.level, hpRoll, newMaxHp: leveled.maxHp },
+      { kind: 'draft-offer', options: offers.map(describeDraftOption) },
+    ],
+    { player: leveled },
+  );
 }

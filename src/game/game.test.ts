@@ -379,57 +379,99 @@ describe('chest encounter', () => {
 
 // ------- Act progression at a gate -------------------------------------------
 
-describe('act progression at a gate', () => {
-  it('continue at xp>=10 runs outro -> level-up -> intro back to the menu (one act only)', () => {
+describe('act progression at a gate (M9: decoupled from level-up)', () => {
+  it('continue at xp>=10 runs outro -> intro back to the menu, with NO draft between', () => {
     const player = makePlayer({ xp: 1000 }); // far past the Act-2 gate (10)
-    const oldMaxHp = player.maxHp; // 11
     let r = step(menuState(player, 55, 1), { kind: 'menu', choice: 'continue' });
 
-    // checkAct advances exactly ONE act, runs no encounter, emits nothing yet.
+    // checkAct advances exactly ONE act and emits the concluded act's outro ON ENTRY.
     expect(r.state.act).toBe(2);
     expect(r.state.place).toBe(1);
     expect(r.state.phase).toEqual({ kind: 'act-outro', newAct: 2 });
-    expect(r.events).toEqual([]);
+    expect(r.events).toContainEqual({ kind: 'act-outro', act: 1, header: 'ACT I', body: '' });
     expect(r.awaiting).toBe('continue');
 
-    // Outro of the concluded act (Act I).
-    r = step(r.state, { kind: 'continue' });
-    expect(r.state.phase.kind).toBe('level-up');
-    expect(r.events).toContainEqual({
-      kind: 'act-outro',
-      act: 1,
-      header: 'ACT I',
-      body: '',
-    });
-    expect(r.awaiting).toBe('level-up-picks');
-
-    // Level-up: pick CON twice -> CON 13->15, mod 1->2 (changed).
-    r = step(r.state, { kind: 'level-up-picks', picks: ['CON', 'CON'] });
-    expect(r.state.phase.kind).toBe('level-up-result');
-    const lvl = r.events.find((e) => e.kind === 'level-up');
-    expect(lvl).toBeDefined();
-    if (lvl && lvl.kind === 'level-up') {
-      expect(lvl.conModChanged).toBe(true);
-      expect(lvl.proficiency).toBe(3);
-      expect(lvl.newStats.CON).toBe(15);
-      expect(lvl.newMaxHp).toBe(r.state.player?.maxHp);
-      // hpRoll is the total maxHp delta minus the CON-changed bonus (newAct-1 = 1).
-      expect(lvl.hpRoll).toBe(lvl.newMaxHp - oldMaxHp - 1);
-    }
-    expect(r.state.player?.hp).toBe(11); // NOT healed
-    expect(r.state.player?.hitDie).toEqual({ quantity: 2, sides: 10 });
-
-    // Act intro then back to the menu (not Act 5).
+    // Continuing goes STRAIGHT to the act intro — no level-up-draft, no stat pick between.
     r = step(r.state, { kind: 'continue' });
     expect(r.state.phase.kind).toBe('act-intro');
-    expect(r.events).toContainEqual({
-      kind: 'act-intro',
-      act: 2,
-      header: 'ACT II',
-      body: '',
-    });
+    expect(r.events).toContainEqual({ kind: 'act-intro', act: 2, header: 'ACT II', body: '' });
+    // Act entry does NOT auto-level: level/maxHp/stats are untouched (leveling rides victory).
+    expect(r.state.player?.level).toBe(1);
+    expect(r.state.player?.maxHp).toBe(player.maxHp);
+    expect(r.state.player?.stats).toEqual(player.stats);
+
+    // Act intro -> back to the menu (not Act 5).
     r = step(r.state, { kind: 'continue' });
     expect(r.state.phase.kind).toBe('main-menu');
+  });
+});
+
+// ------- M9 frequent XP leveling via battle victory -------------------------
+
+describe('frequent level-up draft on battle victory', () => {
+  it('a victory crossing a threshold routes continue -> level-up-draft (not main-menu)', () => {
+    // Player at level 1 with xp 2 = cumulative(2) -> one level owed. Enforcer d10, CON 13
+    // (mod +1). The HP roll is one d10 draw from the seed, derived independently below.
+    const seed = 777;
+    const player = makePlayer({ xp: 2, level: 1, maxHp: 11, hp: 11 });
+    const state: GameState = {
+      ...menuState(player, seed),
+      phase: { kind: 'battle-victory', final: false },
+    };
+    // Independent derivation from rng.ts + applyLevelUpHp: first draw -> d10 face, + CON mod 1.
+    const face = 1 + Math.floor(createRng(seed).rng() * 10);
+    const expectedHpRoll = Math.max(face + 1, 1);
+    const expectedMaxHp = 11 + expectedHpRoll;
+
+    const r = step(state, { kind: 'continue' });
+    expect(r.state.phase.kind).toBe('level-up-draft');
+    expect(r.awaiting).toBe('draft-pick');
+    if (r.state.phase.kind === 'level-up-draft') {
+      expect(r.state.phase.offers).toHaveLength(3);
+    }
+    // level-up event carries the hand-derived level/hpRoll/newMaxHp; hp is NOT healed.
+    expect(r.events).toContainEqual({ kind: 'level-up', newLevel: 2, hpRoll: expectedHpRoll, newMaxHp: expectedMaxHp });
+    expect(r.state.player?.level).toBe(2);
+    expect(r.state.player?.maxHp).toBe(expectedMaxHp);
+    expect(r.state.player?.hp).toBe(11);
+    // A draft-offer event lists exactly 3 option labels.
+    const offer = r.events.find((e) => e.kind === 'draft-offer');
+    expect(offer).toBeDefined();
+    if (offer && offer.kind === 'draft-offer') expect(offer.options).toHaveLength(3);
+
+    // Picking an offer applies it and moves to level-up-result; then continue -> main-menu
+    // (xp 2 < cumulative(3)=6, so no further level is owed).
+    const picked = step(r.state, { kind: 'draft-pick', index: 0 });
+    expect(picked.state.phase.kind).toBe('level-up-result');
+    expect(picked.events.some((e) => e.kind === 'draft-picked')).toBe(true);
+    const done = step(picked.state, { kind: 'continue' });
+    expect(done.state.phase.kind).toBe('main-menu');
+  });
+
+  it('several queued levels drain one-by-one before returning to the menu', () => {
+    // xp 6 = cumulative(3): from level 1 that owes TWO levels (L2 at 2, L3 at 6; L4 needs 12).
+    const player = makePlayer({ xp: 6, level: 1, maxHp: 11, hp: 11 });
+    let r: StepResult = {
+      state: { ...menuState(player, 4242), phase: { kind: 'battle-victory', final: false } },
+      events: [],
+      awaiting: 'continue',
+    };
+    // Drain: continue -> draft, pick, continue -> draft, pick, continue -> main-menu.
+    let drafts = 0;
+    let guard = 0;
+    r = step(r.state, { kind: 'continue' });
+    while (r.state.phase.kind !== 'main-menu' && guard < 20) {
+      if (r.state.phase.kind === 'level-up-draft') {
+        drafts++;
+        r = step(r.state, { kind: 'draft-pick', index: 0 });
+      } else {
+        r = step(r.state, { kind: 'continue' });
+      }
+      guard++;
+    }
+    expect(r.state.phase.kind).toBe('main-menu');
+    expect(drafts).toBe(2); // exactly two level-ups drained
+    expect(r.state.player?.level).toBe(3);
   });
 });
 
@@ -750,8 +792,8 @@ function decide(res: StepResult): GameInput {
       }
       return { kind: 'battle-action', action: 'fight' };
     }
-    case 'level-up-picks':
-      return { kind: 'level-up-picks', picks: ['CON', 'CON'] };
+    case 'draft-pick':
+      return { kind: 'draft-pick', index: 0 }; // autopick the first offer
     case 'deal-decision':
       return { kind: 'deal-decision', accept: false };
     case 'rest-decision':

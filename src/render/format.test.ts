@@ -39,18 +39,16 @@ describe('formatEvent — anchored player-facing strings', () => {
     expect(s).toContain('15/20');
   });
 
-  it('level-up mentions both picked stats', () => {
-    const s = formatEvent({
-      kind: 'level-up',
-      picks: ['STR', 'CON'],
-      newStats: STATS,
-      hpRoll: 4,
-      newMaxHp: 16,
-      conModChanged: false,
-      proficiency: 2,
-    });
-    expect(s).toContain('STR');
-    expect(s).toContain('CON');
+  it('level-up carries the new level and max HP', () => {
+    const s = formatEvent({ kind: 'level-up', newLevel: 3, hpRoll: 4, newMaxHp: 16 });
+    expect(s).toContain('3'); // new level
+    expect(s).toContain('16'); // new max HP
+  });
+
+  it('draft-offer lists the offered option labels', () => {
+    const s = formatEvent({ kind: 'draft-offer', options: ['Learn Intimidate', '+1 STR'] });
+    expect(s).toContain('Learn Intimidate');
+    expect(s).toContain('+1 STR');
   });
 
   it('prefers a logic-populated `text` over the template', () => {
@@ -104,22 +102,16 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'chest-found' },
     { kind: 'chest-loot', loot: [{ defId: 'gen:Common:ring', name: 'Common ring', rarity: 'Common' }] },
     { kind: 'act-outro', act: 1, header: 'H', body: 'B' },
-    {
-      kind: 'level-up',
-      picks: ['STR', 'CON'],
-      newStats: STATS,
-      hpRoll: 4,
-      newMaxHp: 16,
-      conModChanged: false,
-      proficiency: 2,
-    },
+    { kind: 'level-up', newLevel: 2, hpRoll: 4, newMaxHp: 16 },
+    { kind: 'draft-offer', options: ['Learn Intimidate', '+1 STR'] },
+    { kind: 'draft-picked', option: '+1 STR' },
     { kind: 'act-intro', act: 2, header: 'H', body: 'B' },
     { kind: 'final-battle-begins', enemyName: 'Boss' },
     { kind: 'ending', header: 'H', body: 'B' },
     { kind: 'game-over', xp: 42 },
   ];
 
-  // Every kind, listed by hand (23 combat + 22 narrative = 45).
+  // Every kind, listed by hand (23 combat + 24 narrative = 47).
   const ALL_KINDS: GameEventKind[] = [
     'enemy-skill-used',
     'skill-cast',
@@ -162,6 +154,8 @@ describe('formatEvent — totality over every event kind', () => {
     'chest-loot',
     'act-outro',
     'level-up',
+    'draft-offer',
+    'draft-picked',
     'act-intro',
     'final-battle-begins',
     'ending',
@@ -171,7 +165,7 @@ describe('formatEvent — totality over every event kind', () => {
   it('has one sample for every kind (no kind missed)', () => {
     const sampled = new Set(samples.map((s) => s.kind));
     expect(sampled).toEqual(new Set(ALL_KINDS));
-    expect(ALL_KINDS).toHaveLength(45);
+    expect(ALL_KINDS).toHaveLength(47);
   });
 
   it('yields a non-empty string for every kind', () => {

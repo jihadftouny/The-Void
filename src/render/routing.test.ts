@@ -19,7 +19,7 @@ const ALL_PHASE_KINDS: Phase['kind'][] = [
   'deal',
   'chest',
   'act-outro',
-  'level-up',
+  'level-up-draft',
   'level-up-result',
   'act-intro',
   'ending',
@@ -62,7 +62,7 @@ describe('specific routes', () => {
       ['battle', 'battle'],
       ['rest', 'rest'],
       ['deal', 'deal'],
-      ['level-up', 'level-up'],
+      ['level-up-draft', 'level-up'],
       ['ending', 'ending'],
       ['game-over', 'game-over'],
     ];

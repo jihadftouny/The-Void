@@ -76,7 +76,8 @@ export function sceneFor(kind: Phase['kind']): SceneId {
       return 'narrative';
     case 'act-outro':
       return 'narrative';
-    case 'level-up':
+    case 'level-up-draft':
+      // The draft picker reuses the dedicated `level-up` scene id.
       return 'level-up';
     case 'level-up-result':
       return 'narrative';

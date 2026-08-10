@@ -1,23 +1,19 @@
-// Act progression + level-up for The Void — pure, framework-agnostic game logic (M8).
+// Act progression + XP leveling for The Void — pure, framework-agnostic game logic (M8/M9).
 //
 // LOAD-BEARING PRINCIPLES honored here:
 //  - Pure logic / render split: no Kaplay, DOM, or canvas imports; nothing is
-//    printed. `levelUpPlayer` returns a NEW Player and never mutates its input.
+//    printed. `applyLevelUpHp` returns a NEW Player and never mutates its input.
 //  - Deterministic seeded RNG: the only randomness (the level-up HP roll) threads
 //    the injected `Rng`; no Math.random / Date.now.
 //  - Serializable plain-data state: operates on and returns the flat `Player` record.
 //
-// Ported from `GameLogic.checkAct` (the act gates) and the level-up path Java split
-// across `Player.levelUp` + `Character.setMods` (the `isLevelUp` branch). Recorded
-// faithful choices (see plan open questions, all confirmed):
-//  - Level-up raises maxHp but does NOT heal (hp is left unchanged).
-//  - armorClass is NOT recomputed on level-up (Java's setMods never touches it).
+// The act gates are ported from `GameLogic.checkAct`. M9 REPLACED the old act-gated
+// `levelUpPlayer` (Java `Player.levelUp` + `Character.setMods`) with frequent, XP-driven
+// leveling (`levelForXp` / `applyLevelUpHp`) decoupled from act entry; the draft (draft.ts)
+// now owns stat/skill/perk growth. Faithful choice kept: a level-up raises maxHp but does
+// NOT heal (hp unchanged), and armorClass is not recomputed.
 
-import {
-  computeStatMods,
-  type StatKey,
-} from './character.ts';
-import { rollDice, rollDie, type Rng } from './rng.ts';
+import { rollDie, type Rng } from './rng.ts';
 import { type Player } from './player.ts';
 
 /**
@@ -108,47 +104,3 @@ export function applyLevelUpHp(player: Player, rng: Rng): { player: Player; hpRo
   };
 }
 
-/**
- * Apply a level-up as the player enters `newAct` (2..5) — PURE. Steps, ported from
- * Java `Player.levelUp` + `Character.setMods`:
- *  1. Spend two attribute points: `+1` per pick (the same stat twice ⇒ `+2`).
- *  2. Recompute all stat modifiers from the new stats.
- *  3. Roll the act-scaled HP gain: `rollDice(hitDie.quantity, hitDie.sides)` (which
- *     is `newAct-1` dice, since quantity tracks the prior act) plus the NEW CON mod,
- *     floored at 1, added to `maxHp`.
- *  4. If the CON modifier changed, add a further `newAct - 1` to `maxHp`.
- *  5. Bump the hit-die quantity to `min(newAct, 5)` and proficiency by 1.
- * `hp` and `armorClass` are left unchanged (faithful to Java).
- */
-export function levelUpPlayer(
-  player: Player,
-  picks: readonly [StatKey, StatKey],
-  newAct: number,
-  rng: Rng,
-): Player {
-  const newStats = { ...player.stats };
-  for (const pick of picks) {
-    newStats[pick] = newStats[pick] + 1;
-  }
-
-  const oldConMod = player.mods.CON;
-  const newMods = computeStatMods(newStats);
-  const newConMod = newMods.CON;
-
-  let roll = rollDice(rng, player.hitDie.quantity, player.hitDie.sides) + newConMod;
-  if (roll < 1) roll = 1;
-
-  let maxHp = player.maxHp + roll;
-  if (oldConMod !== newConMod) {
-    maxHp += newAct - 1;
-  }
-
-  return {
-    ...player,
-    stats: newStats,
-    mods: newMods,
-    maxHp,
-    proficiency: player.proficiency + 1,
-    hitDie: { quantity: Math.min(newAct, 5), sides: player.hitDie.sides },
-  };
-}

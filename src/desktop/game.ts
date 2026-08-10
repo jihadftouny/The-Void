@@ -6,7 +6,7 @@
 import { createGame, step, awaitingFor } from '../game/game.ts';
 import type { GameState, GameInput, Awaiting } from '../game/game.ts';
 import { STAT_KEYS } from '../game/character.ts';
-import type { StatKey } from '../game/character.ts';
+import { describeDraftOption } from '../game/draft.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun } from './persist.ts';
@@ -249,23 +249,16 @@ function renderChoices(awaiting: Awaiting): void {
     case 'continue':
       button('Continue', () => void dispatch({ kind: 'continue' }));
       break;
-    case 'level-up-picks': {
-      const picks: StatKey[] = [];
+    case 'draft-pick': {
+      // M9: a minimal functional draft picker — one button per offered option (index-dispatch).
       const note = document.createElement('div');
       note.className = 'stats-line';
-      note.textContent = 'Choose two — the descent reshapes you.';
+      note.textContent = 'Choose one — the descent reshapes you.';
       choicesEl.appendChild(note);
-      for (const k of STAT_KEYS) {
-        const b = document.createElement('button');
-        b.textContent = k;
-        b.addEventListener('click', () => {
-          picks.push(k);
-          b.classList.add('picked');
-          if (picks.length === 2) {
-            void dispatch({ kind: 'level-up-picks', picks: [picks[0]!, picks[1]!] });
-          }
+      if (state.phase.kind === 'level-up-draft') {
+        state.phase.offers.forEach((offer, i) => {
+          button(describeDraftOption(offer), () => void dispatch({ kind: 'draft-pick', index: i }));
         });
-        choicesEl.appendChild(b);
       }
       break;
     }

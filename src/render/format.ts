@@ -169,7 +169,11 @@ export function formatEvent(e: GameEvent): string {
     case 'act-outro':
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'level-up':
-      return `Level up! You raise ${e.picks.join(', ')} — HP roll ${e.hpRoll}, max HP now ${e.newMaxHp}.`;
+      return `Level ${e.newLevel}! HP roll ${e.hpRoll}, max HP now ${e.newMaxHp}.`;
+    case 'draft-offer':
+      return `The descent offers a choice: ${e.options.join(' · ')}.`;
+    case 'draft-picked':
+      return `You take: ${e.option}.`;
     case 'act-intro':
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'final-battle-begins':

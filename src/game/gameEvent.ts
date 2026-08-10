@@ -12,7 +12,7 @@
 // optional `text` on the narrative events is a UI convenience only.
 
 import type { CombatEvent } from './combatEvent.ts';
-import type { Stats, StatKey } from './character.ts';
+import type { Stats } from './character.ts';
 import type { PlayerClass } from './player.ts';
 import type { Rarity } from './weapon.ts';
 import type { Pool } from './deal.ts';
@@ -49,16 +49,10 @@ export type NarrativeEvent =
       text?: string;
     }
   | { kind: 'act-outro'; act: number; header: string; body: string; text?: string }
-  | {
-      kind: 'level-up';
-      picks: readonly [StatKey, StatKey];
-      newStats: Stats;
-      hpRoll: number;
-      newMaxHp: number;
-      conModChanged: boolean;
-      proficiency: number;
-      text?: string;
-    }
+  // ---- M9 frequent level-up draft ----
+  | { kind: 'level-up'; newLevel: number; hpRoll: number; newMaxHp: number; text?: string }
+  | { kind: 'draft-offer'; options: readonly string[]; text?: string }
+  | { kind: 'draft-picked'; option: string; text?: string }
   | { kind: 'act-intro'; act: number; header: string; body: string; text?: string }
   | { kind: 'final-battle-begins'; enemyName: string; text?: string }
   | { kind: 'ending'; header: string; body: string; text?: string }

@@ -16,11 +16,13 @@ describe('GameEvent union', () => {
       },
       { kind: 'player-created', name: 'X', classId: 'Enforcer', maxHp: 11, armorClass: 11 },
       { kind: 'encounter-start', enemyName: 'Beast' },
-      { kind: 'level-up', picks: ['STR', 'CON'], newStats: { STR: 14, DEX: 13, CON: 14, INT: 13, WIS: 13, CHA: 13 }, hpRoll: 7, newMaxHp: 18, conModChanged: true, proficiency: 3 },
+      { kind: 'level-up', newLevel: 2, hpRoll: 7, newMaxHp: 18 },
+      { kind: 'draft-offer', options: ['Learn Intimidate', '+1 STR', '+1 damage'] },
+      { kind: 'draft-picked', option: '+1 STR' },
       { kind: 'ending', header: 'END.', body: 'X' },
       { kind: 'game-over', xp: 42 },
     ];
-    expect(events).toHaveLength(8);
+    expect(events).toHaveLength(10);
     expect(events[0]?.kind).toBe('title');
   });
 
