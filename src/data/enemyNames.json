@@ -1,0 +1,230 @@
+{
+  "1": {
+    "Beast": {
+      "first": [
+        ["Feral", 20],
+        ["Aerobicized", 20],
+        ["Plated", 20],
+        ["Bestial", 10],
+        ["Unbreakable", 10],
+        ["Cunning", 10],
+        ["Giant", 5],
+        ["Monstrous", 3],
+        ["Mutated", 2]
+      ],
+      "middle": [
+        ["Cryo", 20],
+        ["Fiery", 20],
+        ["Electrified", 20],
+        ["Venomous", 20],
+        ["Psychogenic", 20]
+      ],
+      "last": [
+        ["Rat", 20],
+        ["Snake", 20],
+        ["Lizard", 20],
+        ["Spider", 20],
+        ["Raven", 20]
+      ]
+    },
+    "Humanoid": {
+      "first": [
+        ["Pumped", 20],
+        ["Aerobicized", 20],
+        ["Armored", 20],
+        ["Intoxicated", 10],
+        ["Abstinent", 10],
+        ["Augmented", 10],
+        ["Raging", 5],
+        ["Berserk", 3],
+        ["Mutated", 2]
+      ],
+      "middle": [
+        ["", 1]
+      ],
+      "last": [
+        ["Thug", 20],
+        ["Psycho", 20],
+        ["Punk", 20],
+        ["Stalker", 20],
+        ["Conjurer", 20]
+      ]
+    },
+    "Mech": {
+      "first": [
+        ["Steamed", 20],
+        ["Reinforced", 20],
+        ["Plated", 20],
+        ["Modified", 10],
+        ["Rusty", 10],
+        ["Hexa", 5],
+        ["Ripper", 3],
+        ["K1-LA", 2]
+      ],
+      "middle": [
+        ["Pyro-Core", 1],
+        ["Cryo-Core", 1],
+        ["Electro-Core", 1]
+      ],
+      "last": [
+        ["Battlebot", 1],
+        ["Auto-Turret", 1],
+        ["Drone", 1]
+      ]
+    },
+    "Magical": {
+      "first": [
+        ["Glowing", 20],
+        ["Chromated", 20],
+        ["Gilded", 20],
+        ["Transmuted", 10],
+        ["Fading", 10],
+        ["Corrupted", 5],
+        ["Blessed", 5]
+      ],
+      "middle": [
+        ["Pyro", 1],
+        ["Cryo", 1],
+        ["Electro", 1]
+      ],
+      "last": [
+        ["Pixie", 1],
+        ["Wisp", 1],
+        ["Gazer", 1]
+      ]
+    }
+  },
+  "2": {
+    "Beast": {
+      "first": [
+        ["Mirrored", 30],
+        ["Warped", 30],
+        ["Two-headed", 15],
+        ["Ruined", 15],
+        ["Giant", 5],
+        ["Monstrous", 3],
+        ["Mutated", 2]
+      ],
+      "middle": [
+        ["Cryo", 20],
+        ["Fiery", 20],
+        ["Electrified", 20],
+        ["Venomous", 20],
+        ["Psychogenic", 20]
+      ],
+      "last": [
+        ["Rat", 20],
+        ["Snake", 20],
+        ["Lizard", 20],
+        ["Spider", 20],
+        ["Raven", 20]
+      ]
+    },
+    "Humanoid": {
+      "first": [
+        ["Mirrored", 30],
+        ["Warped", 30],
+        ["Enraged", 15],
+        ["Ruined", 15],
+        ["Frenzied", 5],
+        ["Maddened", 3],
+        ["Faceless", 2]
+      ],
+      "middle": [
+        ["", 1]
+      ],
+      "last": [
+        ["Thug Aspect", 20],
+        ["Psycho Aspect", 20],
+        ["Punk Aspect", 20],
+        ["Stalker Aspect", 20],
+        ["Conjurer Aspect", 20]
+      ]
+    },
+    "Magical": {
+      "first": [
+        ["Elder", 60],
+        ["Eldritch", 30],
+        ["Deathwhispering", 10]
+      ],
+      "middle": [
+        ["", 1]
+      ],
+      "last": [
+        ["Beholder", 1],
+        ["Djinn", 1],
+        ["Horror", 1]
+      ]
+    }
+  },
+  "3": {
+    "Nightmare": {
+      "first": [],
+      "middle": [],
+      "last": []
+    }
+  },
+  "4": {
+    "Beast": {
+      "first": [
+        ["Furious", 20],
+        ["Vigorous", 20],
+        ["Gilded", 20],
+        ["Bestial", 10],
+        ["Unbreakable", 10],
+        ["Fiendish", 10],
+        ["Giant", 5],
+        ["Monstrous", 3],
+        ["Gargantuan", 2]
+      ],
+      "middle": [
+        ["", 1]
+      ],
+      "last": [
+        ["Hippalectryon", 20],
+        ["Hydra", 20],
+        ["Griffon", 20],
+        ["Camahueto", 20],
+        ["Chimaera", 20]
+      ]
+    },
+    "Humanoid": {
+      "first": [
+        ["Gilded", 50],
+        ["Chromated", 50]
+      ],
+      "middle": [
+        ["Bestial", 26],
+        ["Hallowed", 25],
+        ["Corrupt", 12],
+        ["Celestial", 25],
+        ["Hellish", 12]
+      ],
+      "last": [
+        ["Centaur", 12],
+        ["Ipotane", 12],
+        ["Harpy", 12],
+        ["Naga", 12],
+        ["Satyr", 12],
+        ["Sphinx", 12],
+        ["Minotaur", 12],
+        ["Gorgon", 12]
+      ]
+    },
+    "Ancestral": {
+      "first": [
+        ["", 1]
+      ],
+      "middle": [
+        ["", 1]
+      ],
+      "last": [
+        ["The Knight", 1],
+        ["The Counselor", 1],
+        ["Gaea", 1],
+        ["Sif", 1],
+        ["Death", 1]
+      ]
+    }
+  }
+}

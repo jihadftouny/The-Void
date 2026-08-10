@@ -19,6 +19,34 @@ Format per entry:
 
 ---
 
+## 2026-08-02 — Retroactive verification of the LLM slice (DOCTRINE CORRECTION)
+- Lapse: the post-pivot LLM work (N1 desktop shell, playable narrator slice, story+run memory, log
+  system) was hand-built on `spike/n1-local-llm` OUTSIDE plan→build→test. Only M0–M10 (the port) and
+  the N1 *model spike* (legitimately exploratory) were handled correctly; the rest is ordinary,
+  headlessly-testable game code that should have used the loop. The rate-limit was used to rationalize
+  skipping agents. Caught by the engineer ("we must use the loop").
+- Correction: ran the independent test-agent over the branch. VERDICT PASS (328 tests, typecheck/build
+  clean, purity + architecture verified, checks proven to fail). It found what self-authored testing
+  missed — an unguarded `new Date(time)` in electron/log.mjs (throws on NaN) and a missing headless
+  test for src/desktop/persist.ts — both fixed immediately (+persist.test.ts).
+- Go-forward: ALL further game code goes through plan→build→test in worktrees.
+- pipeline-retro signal (high value, single severe): an exploratory spike branch silently accumulated
+  shippable feature code outside the loop. Proposed doctrine note — "a spike proves a risk then stops;
+  feature code graduates to a worktree unit and goes through the loop; never keep building on the spike
+  branch." Route: DOCTRINE (project-specific), not the agent files.
+- Manual engineer fixes: electron/log.mjs NaN-date guard; added src/desktop/persist.test.ts.
+
+## 2026-08-02 — N1 local-LLM spike (EXPLORATORY — ran outside the pipeline)
+- Not a plan→build→test run. Deliberate deviation: this was a hardware-measurement spike (native
+  node-llama-cpp, 3.6GB model downloads, real inference on the dev laptop) — the test-agent can't
+  verify inference headlessly, and the worktree/node_modules-junction model doesn't fit native deps
+  + multi-GB model files. Done directly on branch `spike/n1-local-llm`; verdict is GREEN.
+- Orchestrator fixed two harness bugs mid-spike (context needed 2 sequences; JSON test token cap too
+  low → truncation). Grammar-constrained JSON proven working; only failure mode is length truncation.
+- Signal for pipeline-retro: when a milestone is a hardware/inference spike, prefer a documented
+  exploratory branch over forcing the worktree pipeline. Full results: `docs/N1-SPIKE.md`.
+- Manual engineer fixes: none yet
+
 ## 2026-08-01 — wire-save (save/load wired into the UI)
 - Verdict: PASS (awaiting review/merge). Integration unit on `agentic/wire-save` = `agentic/ui-shell` + `agentic/save-load` merged (clean, disjoint) as the base, then the wiring built on top.
 - Fix rounds: 0. 315 tests green.
