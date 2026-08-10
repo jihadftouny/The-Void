@@ -12,14 +12,28 @@ import { inventoryWithGear } from './equipment.ts';
 
 const ZERO_STATS = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 };
 
+// The M6 identity bundle: every field is the no-op value. resistDeltas is length-7 (one
+// per element) all-zero; dotTickMult is the multiplicative identity 1; every flag is off.
+// Hand-derived from EquipModifiers in equipEffects.ts — this is what an effect-free
+// inventory must fold to (off-equivalence).
+const ZERO_BUNDLE = {
+  statDeltas: ZERO_STATS,
+  flatAc: 0,
+  flatDamage: 0,
+  resistDeltas: [0, 0, 0, 0, 0, 0, 0],
+  chargeDiscount: 0,
+  chargePerTurn: 0,
+  damageDealtMult: 0,
+  firstHitReduction: false,
+  lowHpDamageBonus: null,
+  dotTickMult: 1,
+  cannotHeal: false,
+  triggered: [],
+};
+
 describe('computeEquipModifiers — off-equivalence (the pipeline is inert for a normal run)', () => {
   it('an empty inventory yields the zero bundle', () => {
-    expect(computeEquipModifiers(createInventory())).toEqual({
-      statDeltas: ZERO_STATS,
-      flatAc: 0,
-      flatDamage: 0,
-      resistDeltas: [],
-    });
+    expect(computeEquipModifiers(createInventory())).toEqual(ZERO_BUNDLE);
   });
 
   it('legacy starting gear (effects []) also yields the zero bundle', () => {
@@ -28,12 +42,7 @@ describe('computeEquipModifiers — off-equivalence (the pipeline is inert for a
       armor: 'Jooj Armor 1',
       offHand: 'Buckler',
     });
-    expect(computeEquipModifiers(inv)).toEqual({
-      statDeltas: ZERO_STATS,
-      flatAc: 0,
-      flatDamage: 0,
-      resistDeltas: [],
-    });
+    expect(computeEquipModifiers(inv)).toEqual(ZERO_BUNDLE);
   });
 });
 
@@ -65,10 +74,10 @@ describe('computeEquipModifiers — items.json effects move the right field', ()
       inventoryWithGear({ mainHand: 'rusted-blade', armor: 'void-plate', ring: 'hollow-ring' }),
     );
     expect(mods).toEqual({
+      ...ZERO_BUNDLE,
       statDeltas: { ...ZERO_STATS, CON: 1 },
       flatAc: 2,
       flatDamage: 1,
-      resistDeltas: [],
     });
   });
 });

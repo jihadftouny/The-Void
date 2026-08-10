@@ -33,9 +33,24 @@ import {
   STAT_KEYS,
 } from './character.ts';
 import type { ActiveCondition, ConditionType } from './condition.ts';
+import { type Inventory } from './inventory.ts';
+import { computeEquipModifiers } from './equipEffects.ts';
 
 /** A character carrying live conditions (Player or Enemy) — what the accessors read. */
 export type Conditioned = Character & { activeConditions: ActiveCondition[] };
+
+/**
+ * The per-stat score delta contributed by a character's EQUIPPED gear (bonusStat effects),
+ * or 0 for a character with no paperdoll (an Enemy). This is the M6 activation of the M5
+ * `statDeltas` seam: a Player's equipped bonusStat gear now cascades through effective
+ * stats/mods exactly like an augment condition. Off-equivalent for effect-free gear
+ * (every delta 0).
+ */
+function equipStatDelta(char: Conditioned, stat: StatKey): number {
+  if (!('inventory' in char)) return 0;
+  return computeEquipModifiers((char as Conditioned & { inventory: Inventory }).inventory)
+    .statDeltas[stat];
+}
 
 /**
  * The twelve augment/deprivation conditions and the ± stat delta each applies. Six
@@ -84,11 +99,12 @@ export function conditionStatDelta(
   return delta;
 }
 
-/** The character's stored stats with active augment/deprivation deltas layered in. */
+/** The character's stored stats with active augment/deprivation AND equipped-gear deltas layered in. */
 export function effectiveStats(char: Conditioned): Stats {
   const out = {} as Stats;
   for (const key of STAT_KEYS) {
-    out[key] = char.stats[key] + conditionStatDelta(char.activeConditions, key);
+    out[key] =
+      char.stats[key] + conditionStatDelta(char.activeConditions, key) + equipStatDelta(char, key);
   }
   return out;
 }
@@ -111,7 +127,7 @@ export function effectiveMods(char: Conditioned): StatMods {
  */
 export function statModDelta(char: Conditioned, stat: StatKey): number {
   const base = char.stats[stat];
-  const delta = conditionStatDelta(char.activeConditions, stat);
+  const delta = conditionStatDelta(char.activeConditions, stat) + equipStatDelta(char, stat);
   return computeStatMod(base + delta) - computeStatMod(base);
 }
 
@@ -141,7 +157,12 @@ export function effectiveResistances(
   char: Conditioned & { resistances: number[] },
 ): number[] {
   const shift = RESIST_PER_WIS_MOD * statModDelta(char, 'WIS');
-  return char.resistances.map((r) => r + shift);
+  const equip =
+    'inventory' in char
+      ? computeEquipModifiers((char as Conditioned & { inventory: Inventory }).inventory)
+          .resistDeltas
+      : null;
+  return char.resistances.map((r, i) => r + shift + (equip ? equip[i] ?? 0 : 0));
 }
 
 // ------- Deferred-twist no-op hooks -------------------------------------------
