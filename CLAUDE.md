@@ -21,6 +21,12 @@ engineer asks "which is better?", answer for the long term by default.
 
 ## Load-bearing principles
 
+> **Refresh cadence — `docs/PRINCIPLES.md`.** That file is the distilled, portable statement of how
+> we work (Part A universal, Part B software-specific). **Re-read it roughly every ~10 requests** —
+> and whenever you start a new task, plan, review, or merge — so the working principles stay live in
+> context and don't drift. It is the "why" behind the concrete rules below; when the two ever seem to
+> conflict, the load-bearing rules here win, and note the deviation (per §A12).
+
 These override any library convention or agent default. Where a convenient pattern conflicts with
 one of these, follow the principle and record the deviation and why. Known traps already avoided:
 game logic reaching into Kaplay/DOM (breaks headless testing), `Math.random`/`Date.now` in the logic

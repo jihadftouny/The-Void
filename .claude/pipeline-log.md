@@ -19,6 +19,63 @@ Format per entry:
 
 ---
 
+## 2026-08-04 — gpu-fix (corrected device-agnostic GPU selection)
+- Loop unit stacked on model-cache. VERDICT PASS, 0 fix rounds, 378 tests (electron/gpu.test.mjs = 31, confirmed collected). Territory clean (`electron/**` only).
+- Fixes the three real-hardware root causes gpu-select missed (diagnosed on the RTX 5060 laptop): (1) both Vulkan
+  devices report `unifiedSize=0` so the old unified-gate never fired — replaced with a NAME-keyword + memory-vs-systemRAM
+  scorer (`pickBestDeviceIndex`, pure, +3 discrete/-2 integrated name hints, +2 when total < 0.85×systemRam, qualify ≥1);
+  (2) node-llama-cpp inits the Vulkan backend ONCE per process, so a same-process re-probe can't re-select — selection now
+  runs in a short-lived CHILD (`electron/gpu-probe.mjs` via `process.execPath` + `ELECTRON_RUN_AS_NODE=1`, per-device isolated
+  with `GGML_VK_VISIBLE_DEVICES`), the parent picks and sets the env var BEFORE its first `getLlama`; (3) graceful fallback —
+  probe fail/timeout/<2 devices ⇒ don't pin, auto-pick, never throw into boot.
+- Decision + orchestration both behind an injected `runProbe`/`spawnFn` seam ⇒ fully headless; no test does real GPU
+  enumeration or inference. test-agent independently re-derived the scoring on the real case (Intel iGPU 25.3e9 @ ram 25e9
+  vs NVIDIA 8.3e9 ⇒ index 1) and mutation-confirmed the qualifier gate.
+- NEEDS-HUMAN (real hardware): confirm 5060 is pinned on the dev laptop; packaged-asar child spawn has no 2nd window;
+  single-GPU/CPU-only/non-Vulkan machines still boot via auto-pick. In HUMAN-CHECKS.md.
+- Manual engineer fixes: none yet
+
+## 2026-08-02 — model-cache (shared, download-once model location)
+- Loop unit stacked on gpu-select. VERDICT PASS, 0 fix rounds, 360 tests. Territory clean (`electron/**`).
+- Fix: model resolves to a fixed per-user dir (`VOID_MODELS_DIR` override, else `app.getPath('userData')/models`)
+  instead of the CWD-relative `./models` — so it downloads once and every worktree/launch (and the shipped
+  app) reuses it. Best-effort migration moves a legacy `./models/*.gguf` into the canonical dir (try/catch,
+  never crashes). Pure `resolveModelDir` + `filesToMigrate` unit-tested.
+- The test-agent was told up front that HUMAN-CHECKS is orchestrator-maintained (the gpu-select retro
+  lesson applied preemptively) → clean PASS, no false FAIL. Confirms the retro fix is the right one.
+- Real download/reuse/migration is NEEDS-HUMAN (in HUMAN-CHECKS.md).
+- Manual engineer fixes: none yet
+
+## 2026-08-02 — gpu-select (device-agnostic GPU selection)
+- Loop unit stacked on `agentic/ui-combat-fixes`. CODE verified PASS by the test-agent: 349 tests
+  (incl. the new `electron/gpu.test.mjs`, confirmed collected), typecheck/build clean, territory +
+  purity clean, and the pure device-pick + orchestrator branches (CPU short-circuit, dedicated-kept,
+  single-device-not-probed, hybrid-probes-and-disposes-losers, error-always-returns-a-working-llama,
+  env pinned-on-win) all verified with a fake `getLlama`. No code defect; 0 fix rounds on code.
+- test-agent VERDICT was FAIL for ONE reason: the plan listed "write the NEEDS-HUMAN item to
+  HUMAN-CHECKS.md" as a build-agent acceptance criterion, but the orchestrator instructs build-agents
+  NOT to touch HUMAN-CHECKS (project convention — it is maintained on the main line to avoid worktree
+  merge conflicts). The build-agent correctly surfaced the item in its return; the checker, grading
+  against the plan, flagged the missing file edit. Reconciled orchestrator-side (item added to
+  HUMAN-CHECKS.md here). No re-run needed — the code checks all passed.
+- pipeline-retro signal (recurs-worthy): the plan-agent should NOT put "edit HUMAN-CHECKS.md" as a
+  build/test acceptance criterion — it's orchestrator-maintained. Route: DOCTRINE (project-specific).
+- Real hybrid-GPU pick (discrete NVIDIA vs integrated) is NEEDS-HUMAN — in HUMAN-CHECKS.md.
+- Manual engineer fixes: none yet
+
+## 2026-08-02 — ui-combat-fixes (back on the loop: plan→build→test)
+- First unit fully through the loop since the correction. Branch `agentic/ui-combat-fixes` off
+  `spike/n1-local-llm`. VERDICT PASS, 0 fix rounds, 336 tests.
+- Four play-test bugs, all in the render/Electron layer (engine untouched):
+  (1) "No sequences left" crash — `electron/llm.mjs` never disposed the context sequence; now
+  disposes session + sequence in `finally`. (2) HP frozen in combat — live player is in
+  `phase.battle.player`; added pure `displayPlayer(state)` (unit-tested) and renderSheet uses it.
+  (3) narration now shows only the current beat (no growing history). (4) `busy` re-entry guard +
+  "the Void speaks…" indicator locks input during generation.
+- Territory verified clean (only `src/desktop/**` + `electron/llm.mjs`). Runtime behaviors
+  (no crash, HP ticks, single-moment, input-lock) are NEEDS-HUMAN (real model + DOM).
+- Manual engineer fixes: none yet
+
 ## 2026-08-02 — Retroactive verification of the LLM slice (DOCTRINE CORRECTION)
 - Lapse: the post-pivot LLM work (N1 desktop shell, playable narrator slice, story+run memory, log
   system) was hand-built on `spike/n1-local-llm` OUTSIDE plan→build→test. Only M0–M10 (the port) and
