@@ -217,8 +217,12 @@ function renderChoices(awaiting: Awaiting): void {
       break;
     }
     case 'choose-class':
+      // All five selectable (M3); unlock gating is M13. Dispatch-only — the engine rules.
       button('Enforcer — flesh and steel', () => void dispatch({ kind: 'class', classId: 'Enforcer' }));
       button('Neuromancer — mind and static', () => void dispatch({ kind: 'class', classId: 'Neuromancer' }));
+      button('Scavver — knives and tempo', () => void dispatch({ kind: 'class', classId: 'Scavver' }));
+      button('Penitent — devotion in blood', () => void dispatch({ kind: 'class', classId: 'Penitent' }));
+      button('Hollow — the Void within', () => void dispatch({ kind: 'class', classId: 'Hollow' }));
       break;
     case 'accept-or-reroll-stats': {
       if (state.phase.kind === 'stats-roll') {
