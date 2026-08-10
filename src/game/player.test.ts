@@ -4,6 +4,7 @@ import { STAT_KEYS, type Stats } from './character.ts';
 import { mulberry32 } from './rng.ts';
 import { getWeaponByName } from './weapon.ts';
 import { getArmorByName } from './armor.ts';
+import { CLASSES } from './classKit.ts';
 
 // All expected values are hand-derived from the class spec / formulas:
 //   computeStatMod(s) = floor((s - 10) / 2)   (standard D&D, uncapped)
@@ -78,8 +79,13 @@ describe('createPlayer — Enforcer', () => {
     expect(player.skillCharges).toBe(5);
     expect(player.maxSkillCharges).toBe(5);
     expect(player.activeConditions).toEqual([]);
-    // M3 per-class signature kit (Enforcer's four skills), not the old generic pool.
-    expect(player.skillPool).toEqual(['heavyStrike', 'brace', 'intimidate', 'execute']);
+    // M9 lean start: only the Enforcer's TWO core skills (heavyStrike, brace), NOT the full
+    // 4-skill kit; the rest (intimidate, execute) is drafted over the run.
+    expect(player.skillPool).toEqual(['heavyStrike', 'brace']);
+    // M9 progression fields at their fresh defaults.
+    expect(player.level).toBe(1);
+    expect(player.perks).toEqual([]);
+    expect(player.skillUpgrades).toEqual({});
     // Resources start at 0 (Enforcer banks momentum; corruption harmless-0).
     expect(player.momentum).toBe(0);
     expect(player.corruption).toBe(0);
@@ -138,11 +144,12 @@ describe('createPlayer — Neuromancer', () => {
   });
 });
 
-// M3 — all five classes selectable & created. Every expected value is hand-derived from
+// M3/M9 — all five classes selectable & created. Every expected value is hand-derived from
 // the class spec in classKit.ts + the fresh-character formulas (CON 14 -> CONmod 2 ->
 // maxHp = hitDie.sides + 2, AC 12). Hit dice: Enforcer d10, Neuromancer d6, Scavver d8,
-// Penitent d8 (M15 placeholder), Hollow d8 (M15 placeholder). Kits and provisional gear
-// are read from the plan's per-class table, NOT from code output.
+// Penitent d8 (M15 placeholder), Hollow d8 (M15 placeholder). M9 lean start: the skillPool
+// is the class's 1–2 `coreSkills`, NOT the full kit. Core pairs and provisional gear are
+// read from the plan's per-class table, NOT from code output.
 describe('createPlayer — all five classes (creation table)', () => {
   const con14 = statsWithCon(14); // CONmod 2 for every row
   const table: Array<{
@@ -151,24 +158,31 @@ describe('createPlayer — all five classes (creation table)', () => {
     maxHp: number;
     weaponId: string;
     armorId: string;
-    kit: string[];
+    core: string[];
   }> = [
-    { classId: 'Enforcer', sides: 10, maxHp: 12, weaponId: 'Jaaj Sword 1', armorId: 'Jooj Armor 1', kit: ['heavyStrike', 'brace', 'intimidate', 'execute'] },
-    { classId: 'Neuromancer', sides: 6, maxHp: 8, weaponId: 'Jooj Gun 1', armorId: 'Jaaj Armor 1', kit: ['mindSpike', 'unravel', 'lull', 'synapse'] },
-    { classId: 'Scavver', sides: 8, maxHp: 10, weaponId: 'Jiij Rapier 1', armorId: 'Jooj Armor 1', kit: ['backstab', 'venomCoat', 'slip', 'scavenge'] },
-    { classId: 'Penitent', sides: 8, maxHp: 10, weaponId: 'Jaaj Sword 1', armorId: 'Jaaj Armor 1', kit: ['smite', 'mend', 'consecrate', 'martyr'] },
-    { classId: 'Hollow', sides: 8, maxHp: 10, weaponId: 'Jooj Gun 1', armorId: 'Jooj Armor 1', kit: ['siphon', 'corrupt', 'sacrifice', 'unmake'] },
+    { classId: 'Enforcer', sides: 10, maxHp: 12, weaponId: 'Jaaj Sword 1', armorId: 'Jooj Armor 1', core: ['heavyStrike', 'brace'] },
+    { classId: 'Neuromancer', sides: 6, maxHp: 8, weaponId: 'Jooj Gun 1', armorId: 'Jaaj Armor 1', core: ['mindSpike', 'synapse'] },
+    { classId: 'Scavver', sides: 8, maxHp: 10, weaponId: 'Jiij Rapier 1', armorId: 'Jooj Armor 1', core: ['backstab', 'venomCoat'] },
+    { classId: 'Penitent', sides: 8, maxHp: 10, weaponId: 'Jaaj Sword 1', armorId: 'Jaaj Armor 1', core: ['smite', 'mend'] },
+    { classId: 'Hollow', sides: 8, maxHp: 10, weaponId: 'Jooj Gun 1', armorId: 'Jooj Armor 1', core: ['siphon', 'sacrifice'] },
   ];
 
   for (const row of table) {
-    it(`${row.classId}: hitDie d${row.sides}, maxHp/hp ${row.maxHp}, AC 12, kit skillPool, gear resolves, resources 0`, () => {
+    it(`${row.classId}: hitDie d${row.sides}, maxHp/hp ${row.maxHp}, AC 12, core skillPool, gear resolves, resources 0`, () => {
       const player = createPlayer({ name: 'Nyx', classId: row.classId, stats: con14 });
       expect(player.hitDie).toEqual({ quantity: 1, sides: row.sides });
       expect(player.maxHp).toBe(row.maxHp);
       expect(player.hp).toBe(row.maxHp);
       expect(player.armorClass).toBe(12);
-      // skillPool is exactly this class's four-skill kit (deep-equal, order-sensitive).
-      expect(player.skillPool).toEqual(row.kit);
+      // M9 lean start: skillPool is exactly this class's core skills (deep-equal, ordered),
+      // length 1–2 — NOT the full 4-skill kit.
+      expect(player.skillPool).toEqual(row.core);
+      expect(player.skillPool.length).toBeGreaterThanOrEqual(1);
+      expect(player.skillPool.length).toBeLessThanOrEqual(2);
+      // M9 progression fields at their fresh defaults.
+      expect(player.level).toBe(1);
+      expect(player.perks).toEqual([]);
+      expect(player.skillUpgrades).toEqual({});
       // Provisional starting gear seeded into the paperdoll, resolving in the M2 tables.
       expect(player.inventory.slots.mainHand).toEqual({ defId: row.weaponId });
       expect(player.inventory.slots.armor).toEqual({ defId: row.armorId });
@@ -179,6 +193,24 @@ describe('createPlayer — all five classes (creation table)', () => {
       expect(player.corruption).toBe(0);
     });
   }
+});
+
+// M9 — every class's coreSkills must be a strict subset of its full kit (the draft source
+// is kit \ coreSkills), and length 1–2. Derived from the classKit.ts contract, not output.
+describe('coreSkills invariants (M9 lean start)', () => {
+  it('every class core is a 1–2 length subset of its kit', () => {
+    for (const [id, def] of Object.entries(CLASSES)) {
+      expect(def.coreSkills.length).toBeGreaterThanOrEqual(1);
+      expect(def.coreSkills.length).toBeLessThanOrEqual(2);
+      for (const s of def.coreSkills) {
+        expect(def.kit).toContain(s);
+      }
+      // Strict subset: at least one kit skill is left to draft.
+      expect(def.coreSkills.length).toBeLessThan(def.kit.length);
+      // Sanity: id key matches def.
+      expect(def.id).toBe(id);
+    }
+  });
 });
 
 describe('serializability', () => {

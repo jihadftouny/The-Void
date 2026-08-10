@@ -25,6 +25,7 @@ import { roll4d6DropLowest, type Rng } from './rng.ts';
 import { ELEMENTS } from './element.ts';
 import { type ActiveCondition } from './condition.ts';
 import { CLASSES, type PlayerClass } from './classKit.ts';
+import { type SkillUpgrade } from './skill.ts';
 import { type Inventory } from './inventory.ts';
 import { inventoryWithGear } from './equipment.ts';
 
@@ -52,8 +53,27 @@ export interface Player extends Character {
   resistances: number[];
   /** Active status conditions (M6). */
   activeConditions: ActiveCondition[];
-  /** Learned skill ids — a new player starts with its class's signature kit (M3). */
+  /**
+   * Learned skill ids. M9 lean start: a new player begins with only its class's 1–2
+   * `coreSkills` (not the full kit); the rest of the kit is drafted at level-up.
+   */
   skillPool: string[];
+  /**
+   * Player level (M9). Starts at 1 and increments once per drained level-up. Plain data;
+   * drives the XP curve (`progression.ts`) and the frequency of level-up drafts.
+   */
+  level: number;
+  /**
+   * Owned universal-perk ids (M9 draft). REPEATABLE — an id may appear more than once and
+   * stacks (e.g. two `sharpEdge` = +2 damage). Wired perks are folded into the combat
+   * modifier seams via `perks.ts` `perkModifiers`. Plain data; empty for a fresh/off run.
+   */
+  perks: string[];
+  /**
+   * Per-skill accumulated upgrades (M9 draft), keyed by skill id. Merged into the cast
+   * skill by `resolveSkill`; absent key ⇒ the base skill (off-equivalence). Plain data.
+   */
+  skillUpgrades: Record<string, SkillUpgrade>;
   /**
    * Enforcer momentum resource (M3). OPTIONAL and additive: absent ⇒ read as 0, so a
    * pre-M3 v2 save without this field loads unchanged. Built by dealing/taking damage in
@@ -97,7 +117,8 @@ export function rollStartStats(rng: Rng): Stats {
  * rolls nothing. Looks up the `CLASSES` definition, derives the Character base (mods,
  * maxHp = hitDie.sides + CONmod, hp = maxHp, armorClass = 10 + CONmod, charges), then
  * adds the player fields, seeds the class starting gear into the paperdoll, and grants the class's
- * signature kit as the `skillPool`. Resources start at 0. NOTE (orchestrator resolution):
+ * `coreSkills` as the `skillPool` (M9 lean start — the rest of the kit is drafted at level-up).
+ * `level` starts at 1; `perks`/`skillUpgrades` start empty. Resources start at 0. NOTE (orchestrator resolution):
  * stats are rolled UNIFORMLY (4d6-drop-lowest) elsewhere; `CLASSES[].primaryStats` is
  * flavor only, so `createPlayer` applies no class stat-weighting.
  */
@@ -127,7 +148,11 @@ export function createPlayer(args: {
     inventory: inventoryWithGear({ mainHand: def.weaponId, armor: def.armorId }),
     resistances: ELEMENTS.map(() => 0),
     activeConditions: [],
-    skillPool: [...def.kit],
+    // M9 lean start: only the class's core skills; the rest of `def.kit` is drafted later.
+    skillPool: [...def.coreSkills],
+    level: 1,
+    perks: [],
+    skillUpgrades: {},
     momentum: 0,
     corruption: 0,
   };

@@ -117,6 +117,19 @@ export interface SkillDef {
 }
 
 /**
+ * A per-skill accumulated upgrade (M9 draft rewards) as plain, serializable data. Every
+ * field is OPTIONAL and additive so a player with no upgrades round-trips unchanged and
+ * `resolveSkill` is off-equivalent. `damageBonus` adds to `baseDamage`; `chargeDelta` shifts
+ * `chargeCost` (clamped at 0); `addConditions` are unioned onto the skill's inflicted
+ * conditions. All magnitudes are M15 balance placeholders.
+ */
+export interface SkillUpgrade {
+  damageBonus?: number;
+  chargeDelta?: number;
+  addConditions?: ConditionType[];
+}
+
+/**
  * The skill table, ported from `SkillEnemy.java`:
  *  - Pyro Ball (Element.fire = Pyro): base 2, no condition.
  *  - Freeze!   (Element.ice  = Cryo): base 1, applies `freeze`.

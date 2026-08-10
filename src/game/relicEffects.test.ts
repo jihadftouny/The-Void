@@ -40,6 +40,10 @@ function makePlayer(slots: Record<string, ItemInstance> = {}, over: Partial<Play
   return {
     ...p,
     inventory: { ...p.inventory, slots: { ...p.inventory.slots, ...slots } },
+    // M9 lean start grants only core skills (heavyStrike, brace); these relic tests cast
+    // intimidate/execute as low-damage probes, so grant the FULL Enforcer kit here (the
+    // relic behavior under test is orthogonal to which skills are owned).
+    skillPool: ['heavyStrike', 'brace', 'intimidate', 'execute'],
     ...over,
   };
 }

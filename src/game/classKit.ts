@@ -49,6 +49,13 @@ export interface ClassDef {
   weaponId: string;
   armorId: string;
   kit: SkillId[];
+  /**
+   * The 1–2 signature "core" skills granted at character creation (M9 lean start). These
+   * express the class twist; the REST of `kit` (kit \ coreSkills) is drafted over the run
+   * via the level-up loop. `coreSkills` must be a subset of `kit`. (Pre-M9 granted the full
+   * `kit` at creation.) The exact core pairs are an M15 balance/design refinement.
+   */
+  coreSkills: SkillId[];
   resource: ClassResource;
   /** Human-readable twist label (UI/flavor). */
   twist: string;
@@ -66,6 +73,7 @@ export const CLASSES: Record<PlayerClass, ClassDef> = {
     weaponId: 'Jaaj Sword 1', // Act-1 Rare Melee
     armorId: 'Jooj Armor 1', // Act-1 Common
     kit: ['heavyStrike', 'brace', 'intimidate', 'execute'],
+    coreSkills: ['heavyStrike', 'brace'], // build + spend momentum
     resource: 'momentum',
     twist: 'Momentum',
   },
@@ -76,6 +84,7 @@ export const CLASSES: Record<PlayerClass, ClassDef> = {
     weaponId: 'Jooj Gun 1', // Act-1 Common Ranged
     armorId: 'Jaaj Armor 1', // Act-1 Rare
     kit: ['mindSpike', 'unravel', 'lull', 'synapse'],
+    coreSkills: ['mindSpike', 'synapse'], // stack + detonate
     resource: 'none',
     twist: 'Detonate',
   },
@@ -86,6 +95,7 @@ export const CLASSES: Record<PlayerClass, ClassDef> = {
     weaponId: 'Jiij Rapier 1', // Act-1 Legendary Finesse (provisional)
     armorId: 'Jooj Armor 1', // Act-1 Common (provisional)
     kit: ['backstab', 'venomCoat', 'slip', 'scavenge'],
+    coreSkills: ['backstab', 'venomCoat'], // mark + exploit exposure
     resource: 'none',
     twist: 'Tempo / Exposure',
   },
@@ -96,6 +106,7 @@ export const CLASSES: Record<PlayerClass, ClassDef> = {
     weaponId: 'Jaaj Sword 1', // provisional
     armorId: 'Jaaj Armor 1', // provisional
     kit: ['smite', 'mend', 'consecrate', 'martyr'],
+    coreSkills: ['smite', 'mend'], // pay-HP burst + sustain
     resource: 'none',
     twist: 'Devotion / Martyr',
   },
@@ -106,6 +117,7 @@ export const CLASSES: Record<PlayerClass, ClassDef> = {
     weaponId: 'Jooj Gun 1', // provisional
     armorId: 'Jooj Armor 1', // provisional
     kit: ['siphon', 'corrupt', 'sacrifice', 'unmake'],
+    coreSkills: ['siphon', 'sacrifice'], // lifesteal + build corruption
     resource: 'corruption',
     twist: 'Corruption',
   },
