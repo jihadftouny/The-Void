@@ -19,6 +19,26 @@ Format per entry:
 
 ---
 
+## 2026-08-11 — levelup-loop (M9: frequent draft-based level-up) [stacked on M8, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: **caught the plan's own levelForXp example table being internally inconsistent**
+  with its formula `L*(L-1)` and re-derived the correct table by hand (good independent-truth catch —
+  plan said 1→2/5→3, correct is 1→1/5→2). `levelUpPlayer` removed in step 5 not 2 (caller must go with it
+  for a green commit); render plumbing folded into step-5 (Phase/event union change breaks typecheck
+  repo-wide); relicEffects test helper grants full kit (lean start dropped the probe skills it used);
+  Defender type gained optional perks field (off-equivalent when absent).
+- Test failures before fixes: none (PASS first pass). 691 → 726 tests (+35).
+- Plan open-questions: 6, all orchestrator-resolved (2 core skills/class; XP curve L*(L-1); drop
+  auto-proficiency; WIRED perks only — defer crit/evasion/lifesteal; no heal on level; migrated level =
+  levelForXp(xp)).
+- Notable: replaces 4-total act-gated stat-picks with frequent XP-driven leveling + draft-1-of-3 (new
+  skill / upgrade / perk / stat), all seeded via rng.ts. Lean start (2 core skills, draft the rest).
+  Auto max-HP (no heal). Mid-pending-draft save v6→v7 round-trips & restores same offers. Off-equivalence
+  held (perks/upgrades inert when unowned). Test-agent hand-derived the full levelForXp table + 3 bite-checks.
+- NEEDS-HUMAN banked: draft-picker rendering/polish; level-up feel/snowball pacing; curve/perk balance (M15).
+- Manual engineer fixes: none yet
+
 ## 2026-08-10 — enemy-roster (M8: 24 families, affixes, spare + karma-weighting) [stacked on M7, unmerged]
 - Verdict: PASS
 - Fix rounds: 0

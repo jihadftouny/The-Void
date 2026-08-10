@@ -25,7 +25,7 @@ After you **merge to root** (see the bottom), just run `npm run desktop` from th
 
 ---
 
-## 🧱 Autonomous mechanical-milestone run (M1–M8 built+verified, pending your merge)
+## 🧱 Autonomous mechanical-milestone run (M1–M9 built+verified, pending your merge)
 
 I built these through the loop while you were hands-off, **stacked and unmerged** (your merge gate).
 All are headless-verified (typecheck + full tests + build + adversarial checks); the items below are
@@ -93,6 +93,13 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
   - _Deferred to M10 floor hooks: the signature family behaviors (Reflections' illusions, Mirror-Selves
         copying your kit, Grief sapping resources, etc.) — shipped as flat themes for now. Family name
         flavor also wants your editorial pass._
+- **M9 (frequent level-up loop)** — you now level up several times per floor; each level auto-grows max-HP
+  and offers a **draft of 3** (new skill / skill upgrade / perk / stat point). You start lean (2 core
+  skills) and build your kit over the run:
+  - [ ] **Level-up draft picker** — win a fight that crosses a level threshold; confirm 3 readable option
+        buttons appear and picking one advances. (Functional but minimal — visual polish is a follow-up.)
+  - [ ] **Snowball feel & pacing (M15)** — do level-ups fire at a satisfying rate (several/floor) and feel
+        like compounding growth? XP curve, HP-per-level, perk/upgrade magnitudes are all placeholders.
 
 _Note: the "unwinnable balance" item below predates this run; the dedicated balance pass is **M15**,
 where I'll sim-verify winnability against your difficulty-feel input._
