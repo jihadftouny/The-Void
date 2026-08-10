@@ -44,6 +44,14 @@ export interface Player extends Character {
   equippedWeaponId: string;
   equippedArmorId: string;
   /**
+   * Off-hand shield id (M4). OPTIONAL and additive: absent ⇒ no shield (AC bonus 0),
+   * so a pre-M4 save without this field loads unchanged (same save story as
+   * `momentum?`/`corruption?`). Resolved via `getShieldById`; the flat `acBonus`
+   * feeds `playerArmorClass` (defense.ts). Equipping a shield is M5 — `createPlayer`
+   * grants none.
+   */
+  equippedShieldId?: string;
+  /**
    * Tibia-style paperdoll + backpack (M1). Additive: it sits alongside the legacy
    * equipped*Id ids, which remain the live combat path until M5 migrates onto this.
    */
