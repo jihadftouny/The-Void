@@ -42,13 +42,13 @@ describe('createPlayer — Enforcer', () => {
     stats: statsWithCon(14),
   });
 
-  it('equips the Rare Melee weapon "Jaaj Sword 1" and Common armor "Jooj Armor 1"', () => {
-    expect(player.equippedWeaponId).toBe('Jaaj Sword 1');
-    expect(player.equippedArmorId).toBe('Jooj Armor 1');
-    const weapon = getWeaponByName(player.equippedWeaponId)!;
+  it('seeds the Rare Melee weapon "Jaaj Sword 1" (mainHand) and Common armor "Jooj Armor 1" (armor slot)', () => {
+    expect(player.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
+    expect(player.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
+    const weapon = getWeaponByName(player.inventory.slots.mainHand!.defId)!;
     expect(weapon.rarity).toBe('Rare');
     expect(weapon.property).toBe('Melee');
-    expect(getArmorByName(player.equippedArmorId)!.rarity).toBe('Common');
+    expect(getArmorByName(player.inventory.slots.armor!.defId)!.rarity).toBe('Common');
   });
 
   it('derives maxHp = 12, hp = 12, armorClass = 12 for CON 14 (1d10, CONmod 2)', () => {
@@ -89,7 +89,7 @@ describe('createPlayer — Enforcer', () => {
     expect(player.resistances).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 
-  it('starts with an empty paperdoll: nine null slots and an empty backpack', () => {
+  it('has a full 9-slot paperdoll: starting gear seeded, the other 7 null, empty backpack', () => {
     // The nine equip slots from item.ts, independently listed.
     const expectedSlots = [
       'helmet',
@@ -103,8 +103,12 @@ describe('createPlayer — Enforcer', () => {
       'ammo',
     ];
     expect(Object.keys(player.inventory.slots).sort()).toEqual([...expectedSlots].sort());
+    // Only the two gear slots are seeded (M5); the other seven stay null.
+    const seeded = new Set(['mainHand', 'armor']);
     for (const slot of expectedSlots) {
-      expect(player.inventory.slots[slot as keyof typeof player.inventory.slots]).toBeNull();
+      const cell = player.inventory.slots[slot as keyof typeof player.inventory.slots];
+      if (seeded.has(slot)) expect(cell).not.toBeNull();
+      else expect(cell).toBeNull();
     }
     expect(player.inventory.backpack).toEqual([]);
   });
@@ -117,13 +121,13 @@ describe('createPlayer — Neuromancer', () => {
     stats: statsWithCon(14),
   });
 
-  it('equips the Common Ranged weapon "Jooj Gun 1" and Rare armor "Jaaj Armor 1"', () => {
-    expect(player.equippedWeaponId).toBe('Jooj Gun 1');
-    expect(player.equippedArmorId).toBe('Jaaj Armor 1');
-    const weapon = getWeaponByName(player.equippedWeaponId)!;
+  it('seeds the Common Ranged weapon "Jooj Gun 1" (mainHand) and Rare armor "Jaaj Armor 1" (armor slot)', () => {
+    expect(player.inventory.slots.mainHand).toEqual({ defId: 'Jooj Gun 1' });
+    expect(player.inventory.slots.armor).toEqual({ defId: 'Jaaj Armor 1' });
+    const weapon = getWeaponByName(player.inventory.slots.mainHand!.defId)!;
     expect(weapon.rarity).toBe('Common');
     expect(weapon.property).toBe('Ranged');
-    expect(getArmorByName(player.equippedArmorId)!.rarity).toBe('Rare');
+    expect(getArmorByName(player.inventory.slots.armor!.defId)!.rarity).toBe('Rare');
   });
 
   it('derives maxHp = 8, armorClass = 12 for CON 14 (1d6, CONmod 2)', () => {
@@ -165,9 +169,9 @@ describe('createPlayer — all five classes (creation table)', () => {
       expect(player.armorClass).toBe(12);
       // skillPool is exactly this class's four-skill kit (deep-equal, order-sensitive).
       expect(player.skillPool).toEqual(row.kit);
-      // Provisional starting gear resolves in the M2 tables.
-      expect(player.equippedWeaponId).toBe(row.weaponId);
-      expect(player.equippedArmorId).toBe(row.armorId);
+      // Provisional starting gear seeded into the paperdoll, resolving in the M2 tables.
+      expect(player.inventory.slots.mainHand).toEqual({ defId: row.weaponId });
+      expect(player.inventory.slots.armor).toEqual({ defId: row.armorId });
       expect(getWeaponByName(row.weaponId)).toBeDefined();
       expect(getArmorByName(row.armorId)).toBeDefined();
       // Resource state present and zeroed.

@@ -30,8 +30,9 @@
 
 import type { Conditioned } from './statEffects.ts';
 import { effectiveMods, effectiveStats } from './statEffects.ts';
-import { getArmorByName } from './armor.ts';
-import { getShieldById } from './shield.ts';
+import { armorForSlot, shieldForSlot } from './equipment.ts';
+import { computeEquipModifiers } from './equipEffects.ts';
+import { type Inventory } from './inventory.ts';
 import { scavverEvasionTwist, type PlayerClass } from './classKit.ts';
 
 /**
@@ -41,36 +42,38 @@ import { scavverEvasionTwist, type PlayerClass } from './classKit.ts';
  */
 export const STR_REQ_AC_PENALTY = 2;
 
-/** The gear + condition fields `playerArmorClass` reads off a Player. */
-export type Defender = Conditioned & {
-  equippedArmorId: string;
-  equippedShieldId?: string;
-};
+/**
+ * The gear + condition fields `playerArmorClass` reads off a Player. M5: gear now comes from
+ * the paperdoll `inventory` (armor from `slots.armor`, shield from `slots.offHand`), the
+ * single source of truth — no legacy `equipped*Id` reads remain.
+ */
+export type Defender = Conditioned & { inventory: Inventory };
 
 /**
- * The flat AC bonus from the player's equipped off-hand shield: 0 when no shield is
- * equipped (`equippedShieldId` absent) or the id is unknown, else the shield's `acBonus`.
+ * The flat AC bonus from the player's off-hand shield (`inventory.slots.offHand`): 0 when
+ * the slot is empty or holds a non-shield id, else the shield's `acBonus`.
  */
-export function shieldAcBonus(player: { equippedShieldId?: string }): number {
-  if (!player.equippedShieldId) return 0;
-  const shield = getShieldById(player.equippedShieldId);
+export function shieldAcBonus(inventory: Inventory): number {
+  const shield = shieldForSlot(inventory);
   return shield ? shield.acBonus : 0;
 }
 
 /**
  * The player's Armor Class from its equipped gear — PURE. See the AC MODEL note above.
  *   armored:   baseArmor + CONmod + min(DEXmod, dexCap)  (− STR_REQ_AC_PENALTY if
- *              armor.strReq > 0 and effective STR < strReq)  + shield acBonus
- *   unarmored: 10 + CONmod                                    + shield acBonus
- * CON/DEX/STR are the EFFECTIVE (augment-cascaded) values.
+ *              armor.strReq > 0 and effective STR < strReq)  + shield acBonus + equip flatAc
+ *   unarmored: 10 + CONmod                                    + shield acBonus + equip flatAc
+ * CON/DEX/STR are the EFFECTIVE (augment-cascaded) values. Armor/shield resolve from the
+ * paperdoll slots. The equipped-item `flatAc` (equipEffects.ts) is 0 for legacy gear, so a
+ * normal run is byte-identical to M4 (off-equivalence).
  */
 export function playerArmorClass(player: Defender): number {
   const em = effectiveMods(player);
-  const armor = getArmorByName(player.equippedArmorId);
+  const armor = armorForSlot(player.inventory);
 
   let ac: number;
   if (!armor) {
-    // Unarmored fallback (unknown / empty armor id): the CON-based base.
+    // Unarmored fallback (empty / non-armor mainHand id): the CON-based base.
     ac = 10 + em.CON;
   } else {
     ac = armor.baseArmor + em.CON + Math.min(em.DEX, armor.dexCap);
@@ -78,7 +81,8 @@ export function playerArmorClass(player: Defender): number {
       ac -= STR_REQ_AC_PENALTY;
     }
   }
-  ac += shieldAcBonus(player);
+  ac += shieldAcBonus(player.inventory);
+  ac += computeEquipModifiers(player.inventory).flatAc;
   return ac;
 }
 

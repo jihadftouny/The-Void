@@ -9,13 +9,30 @@ import {
 } from './defense.ts';
 import { computeStatMods, type Stats } from './character.ts';
 import { makeCondition } from './condition.ts';
+import { createInventory, type Inventory } from './inventory.ts';
+import { inventoryWithGear } from './equipment.ts';
 
-// A Defender fixture. Only `stats`, `activeConditions`, `equippedArmorId`, and
-// `equippedShieldId` drive playerArmorClass (mods are recomputed from effective stats),
-// but every field is set for a coherent, JSON-serializable record. Every AC below is
-// hand-derived from the D&D mod formula floor((stat-10)/2) + armor.json + the AC MODEL
-// (baseArmor REPLACES the base 10), never read off the implementation.
-function defender(stats: Stats, overrides: Partial<Defender> = {}): Defender {
+// A Defender fixture. Gear now lives in the paperdoll `inventory` (armor -> slots.armor,
+// shield -> slots.offHand). Only `stats`, `activeConditions`, and that inventory drive
+// playerArmorClass. Every AC below is hand-derived from the D&D mod formula
+// floor((stat-10)/2) + armor.json + the AC MODEL (baseArmor REPLACES the base 10), never
+// read off the implementation.
+type Gear = { armorId?: string; shieldId?: string };
+
+function invFor(gear: Gear): Inventory {
+  const spec: Record<string, string> = {};
+  // `armorId` defaults to the Common starter; pass '' / a bogus id for the unarmored path.
+  const armorId = gear.armorId ?? 'Jooj Armor 1';
+  if (armorId !== undefined) spec.armor = armorId;
+  if (gear.shieldId !== undefined) spec.offHand = gear.shieldId;
+  return inventoryWithGear(spec);
+}
+
+function defender(
+  stats: Stats,
+  gear: Gear = {},
+  overrides: Partial<Defender> = {},
+): Defender {
   return {
     name: 'Hero',
     stats,
@@ -28,7 +45,7 @@ function defender(stats: Stats, overrides: Partial<Defender> = {}): Defender {
     maxSkillCharges: 5,
     hitDie: { quantity: 1, sides: 10 },
     activeConditions: [],
-    equippedArmorId: 'Jooj Armor 1',
+    inventory: invFor(gear),
     ...overrides,
   };
 }
@@ -90,86 +107,98 @@ describe('playerArmorClass — armored (replace model)', () => {
     // Jaaj Armor 1: baseArmor 12, dexCap 2, strReq 14. STR 10 < 14 -> penalty.
     // 12 + 1 + min(1, 2) - 2 = 12.
     expect(STR_REQ_AC_PENALTY).toBe(2);
-    expect(playerArmorClass(defender(S({ STR: 10 }), { equippedArmorId: 'Jaaj Armor 1' }))).toBe(12);
+    expect(playerArmorClass(defender(S({ STR: 10 }), { armorId: 'Jaaj Armor 1' }))).toBe(12);
   });
 
   it('meeting strReq removes the penalty: STR 14 in Jaaj Armor 1 -> AC 14', () => {
     // 12 + 1 + min(1, 2) = 14, no penalty (14 >= 14).
-    expect(playerArmorClass(defender(S({ STR: 14 }), { equippedArmorId: 'Jaaj Armor 1' }))).toBe(14);
+    expect(playerArmorClass(defender(S({ STR: 14 }), { armorId: 'Jaaj Armor 1' }))).toBe(14);
   });
 });
 
 describe('playerArmorClass — unarmored fallback', () => {
   it('an unknown / empty armor id falls back to 10 + CONmod: CON 12/+1 -> AC 11', () => {
-    expect(playerArmorClass(defender(S(), { equippedArmorId: 'None' }))).toBe(11);
-    expect(playerArmorClass(defender(S(), { equippedArmorId: '' }))).toBe(11);
+    expect(playerArmorClass(defender(S(), { armorId: 'None' }))).toBe(11);
+    expect(playerArmorClass(defender(S(), { armorId: '' }))).toBe(11);
   });
 
   it('unarmored scales with CON: CON 16/+3 -> AC 13', () => {
-    expect(playerArmorClass(defender(S({ CON: 16 }), { equippedArmorId: 'None' }))).toBe(13);
+    expect(playerArmorClass(defender(S({ CON: 16 }), { armorId: 'None' }))).toBe(13);
   });
 });
 
-describe('playerArmorClass — shield bonus', () => {
+describe('playerArmorClass — shield bonus (off-hand slot)', () => {
   it('a Buckler (acBonus 1) raises the default AC from 13 to 14', () => {
-    expect(playerArmorClass(defender(S(), { equippedShieldId: 'Buckler' }))).toBe(14);
+    expect(playerArmorClass(defender(S(), { shieldId: 'Buckler' }))).toBe(14);
   });
 
   it('a Kite Shield (acBonus 2) raises the default AC from 13 to 15', () => {
-    expect(playerArmorClass(defender(S(), { equippedShieldId: 'Kite Shield' }))).toBe(15);
+    expect(playerArmorClass(defender(S(), { shieldId: 'Kite Shield' }))).toBe(15);
   });
 
   it('an unknown shield id adds nothing (AC stays 13)', () => {
-    expect(playerArmorClass(defender(S(), { equippedShieldId: 'Tower Shield' }))).toBe(13);
+    expect(playerArmorClass(defender(S(), { shieldId: 'Tower Shield' }))).toBe(13);
   });
 
   it('shieldAcBonus is 0 with no shield and the exact acBonus with one', () => {
-    expect(shieldAcBonus({})).toBe(0);
-    expect(shieldAcBonus({ equippedShieldId: 'Buckler' })).toBe(1);
-    expect(shieldAcBonus({ equippedShieldId: 'Kite Shield' })).toBe(2);
+    expect(shieldAcBonus(createInventory())).toBe(0);
+    expect(shieldAcBonus(inventoryWithGear({ offHand: 'Buckler' }))).toBe(1);
+    expect(shieldAcBonus(inventoryWithGear({ offHand: 'Kite Shield' }))).toBe(2);
+  });
+});
+
+describe('playerArmorClass — equipped-effect flatAc (M5 pipeline seam)', () => {
+  it('void-plate (bonusArmorClass 2) raises AC by exactly 2 over an empty armor slot', () => {
+    // void-plate lives ONLY in items.json (no armor.json row), so it is NOT a legacy armor:
+    // armorForSlot -> undefined -> unarmored base 10 + CONmod (11), and its effect adds +2.
+    const bare = defender(S(), { armorId: '' }); // unarmored 11
+    const plated = { ...bare, inventory: inventoryWithGear({ armor: 'void-plate' }) };
+    expect(playerArmorClass(bare)).toBe(11);
+    expect(playerArmorClass(plated)).toBe(13); // 11 + flatAc 2
   });
 });
 
 describe('playerArmorClass — augment/deprivation cascade', () => {
   it('Hardy (healthy: CON +2 -> +1 mod) raises the default AC by 1 (13 -> 14)', () => {
     // effective CON 14 -> +2: 11 + 2 + min(1, 2) = 14.
-    const p = defender(S(), { activeConditions: [makeCondition('healthy')] });
+    const p = defender(S(), {}, { activeConditions: [makeCondition('healthy')] });
     expect(playerArmorClass(p)).toBe(14);
   });
 
   it('Frail (sick: CON -2 -> -1 mod) lowers the default AC by 1 (13 -> 12)', () => {
     // effective CON 10 -> +0: 11 + 0 + min(1, 2) = 12.
-    const p = defender(S(), { activeConditions: [makeCondition('sick')] });
+    const p = defender(S(), {}, { activeConditions: [makeCondition('sick')] });
     expect(playerArmorClass(p)).toBe(12);
   });
 
   it('Quick (DEX +2) raises AC through the dexCap term (13 -> 14)', () => {
     // effective DEX 14 -> +2: 11 + 1 + min(2, 2) = 14.
-    const p = defender(S(), { activeConditions: [makeCondition('quick')] });
+    const p = defender(S(), {}, { activeConditions: [makeCondition('quick')] });
     expect(playerArmorClass(p)).toBe(14);
   });
 
   it('Slow (DEX -2) lowers AC through the dexCap term (13 -> 12)', () => {
     // effective DEX 10 -> +0: 11 + 1 + min(0, 2) = 12.
-    const p = defender(S(), { activeConditions: [makeCondition('slow')] });
+    const p = defender(S(), {}, { activeConditions: [makeCondition('slow')] });
     expect(playerArmorClass(p)).toBe(12);
   });
 
   it('the dexCap still bites under Quick: DEX 18/+4 capped at 2, Quick pushes to +5 but AC stays 14', () => {
     // effective DEX 20 -> +5, still min(5, 2) = 2: 11 + 1 + 2 = 14 (same as without Quick).
-    const p = defender(S({ DEX: 18 }), { activeConditions: [makeCondition('quick')] });
+    const p = defender(S({ DEX: 18 }), {}, { activeConditions: [makeCondition('quick')] });
     expect(playerArmorClass(p)).toBe(14);
   });
 
   it('unmet strReq flips to met under Strong: STR 12 in Jaaj Armor 1 gains +2 when Strong', () => {
     // STR 12 < 14 -> penalty: 12 + 1 + 1 - 2 = 12. Strong -> effective STR 14 >= 14 -> no
     // penalty: 12 + 1 + 1 = 14.
-    const weak = defender(S({ STR: 12 }), { equippedArmorId: 'Jaaj Armor 1' });
+    const weak = defender(S({ STR: 12 }), { armorId: 'Jaaj Armor 1' });
     expect(playerArmorClass(weak)).toBe(12);
-    const strong = defender(S({ STR: 12 }), {
-      equippedArmorId: 'Jaaj Armor 1',
-      activeConditions: [makeCondition('strong')],
-    });
+    const strong = defender(
+      S({ STR: 12 }),
+      { armorId: 'Jaaj Armor 1' },
+      { activeConditions: [makeCondition('strong')] },
+    );
     expect(playerArmorClass(strong)).toBe(14);
   });
 });

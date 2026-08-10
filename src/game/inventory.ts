@@ -8,10 +8,10 @@
 //    object of ItemInstance|null) plus a `backpack` array, so it round-trips through
 //    JSON unchanged.
 //
-// SCOPE (M1): this defines the CONTAINER shape and its empty default only. Equip /
-// unequip moves, backpack capacity / weight, and two-handed vs shield rules land in
-// M5. In M1 the Player carries this ALONGSIDE the legacy equippedWeaponId /
-// equippedArmorId (additive) — the legacy ids remain the live combat path.
+// SCOPE: this defines the CONTAINER shape and its empty default only. The equip / unequip
+// moves and mechanical resolver live in equipment.ts (M5); the paperdoll `slots` are now the
+// SINGLE SOURCE OF TRUTH for equipped gear (the legacy `equipped*Id` fields were removed).
+// Backpack capacity / weight and two-handed vs shield rules remain deferred (M6/M7/M15).
 
 import { EQUIP_SLOTS, type EquipSlot, type ItemInstance } from './item.ts';
 

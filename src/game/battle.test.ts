@@ -457,10 +457,18 @@ describe('BattleState JSON round-trip', () => {
     expect(JSON.parse(JSON.stringify(r.state))).toEqual(r.state);
   });
 
-  it('a Player carrying the optional equippedShieldId round-trips through JSON', () => {
-    const state = createBattle(makePlayer({ equippedShieldId: 'Buckler' }), makeEnemy({ hp: 30 }), 1);
+  it('a Player carrying a shield in the off-hand slot round-trips through JSON', () => {
+    const base = makePlayer();
+    const withShield = {
+      ...base,
+      inventory: {
+        ...base.inventory,
+        slots: { ...base.inventory.slots, offHand: { defId: 'Buckler' } },
+      },
+    };
+    const state = createBattle(withShield, makeEnemy({ hp: 30 }), 1);
     const revived = JSON.parse(JSON.stringify(state));
     expect(revived).toEqual(state);
-    expect(revived.player.equippedShieldId).toBe('Buckler');
+    expect(revived.player.inventory.slots.offHand).toEqual({ defId: 'Buckler' });
   });
 });

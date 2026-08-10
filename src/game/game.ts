@@ -42,6 +42,8 @@ import {
 } from './progression.ts';
 import { getActIntro, getActOutro, getEnding, getIntro } from './story.ts';
 import { playerArmorClass } from './defense.ts';
+import { equippedDefId } from './equipment.ts';
+import { type EquipSlot } from './item.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- State ---------------------------------------------------------------
@@ -66,7 +68,7 @@ export type Phase =
 
 /** The full, serializable game state. */
 export interface GameState {
-  version: 2;
+  version: 3;
   /** mulberry32 accumulator — the serializable RNG state; JSON round-trips it. */
   rngState: number;
   player: Player | null;
@@ -119,7 +121,7 @@ export interface StepResult {
 /** Build a fresh game at the title screen, seeded by `seed`. */
 export function createGame(seed: number): GameState {
   return {
-    version: 2,
+    version: 3,
     rngState: seed >>> 0,
     player: null,
     act: 1,
@@ -403,8 +405,9 @@ function continueJourney(
 /** Java option 2: the mysterious stranger's shop offer. */
 function openShop(state: GameState, player: Player, rng: Rng, finish: Finish): StepResult {
   const offer = buildShopOffer(state.act, rng);
-  const currentId =
-    offer.itemKind === 'armor' ? player.equippedArmorId : player.equippedWeaponId;
+  const slot: EquipSlot = offer.itemKind === 'armor' ? 'armor' : 'mainHand';
+  // M5: the currently-equipped item comes from the paperdoll slot (empty -> '—').
+  const currentId = equippedDefId(player.inventory, slot) ?? '—';
   return finish({ kind: 'shop', offer }, [
     {
       kind: 'shop-offer',

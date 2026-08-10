@@ -10,6 +10,7 @@ import {
   type SkillTarget,
 } from './combat.ts';
 import { getWeaponByName } from './weapon.ts';
+import { UNARMED } from './equipment.ts';
 import { makeCondition } from './condition.ts';
 import { effectiveMods } from './statEffects.ts';
 import { type Rng } from './rng.ts';
@@ -43,7 +44,6 @@ function player(overrides: Partial<Attacker> = {}): Attacker {
     skillCharges: 5,
     maxSkillCharges: 5,
     hitDie: { quantity: 1, sides: 10 },
-    equippedWeaponId: 'Jaaj Sword 1',
     advantageDisadvantage: 0,
     activeConditions: [],
     ...overrides,
@@ -137,32 +137,32 @@ describe('resolveAttackOutcome', () => {
 
 describe('resolvePlayerAttack — outcomes and damage', () => {
   it('hit: natural 15 + STR mod 4 = 19 >= AC 10, damage = one d6 (face 4) = 4', () => {
-    const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), scriptedRng([face(15, 20), face(4, 6)]));
+    const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), SWORD, 0, scriptedRng([face(15, 20), face(4, 6)]));
     expect(r.outcome).toBe('hit');
     expect(r.damage).toBe(4);
     expect(r.events).toEqual([{ kind: 'attack', subject: 'player', outcome: 'hit', damage: 4 }]);
   });
 
   it('crit: natural 20, damage = TWO d6 (faces 3,4) = 7', () => {
-    const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), scriptedRng([face(20, 20), face(3, 6), face(4, 6)]));
+    const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), SWORD, 0, scriptedRng([face(20, 20), face(3, 6), face(4, 6)]));
     expect(r.outcome).toBe('crit');
     expect(r.damage).toBe(7);
   });
 
   it('crit ignores AC (nat 20 hits at AC 100)', () => {
-    const r = resolvePlayerAttack(player(), enemy({ armorClass: 100 }), scriptedRng([face(20, 20), face(3, 6), face(4, 6)]));
+    const r = resolvePlayerAttack(player(), enemy({ armorClass: 100 }), SWORD, 0, scriptedRng([face(20, 20), face(3, 6), face(4, 6)]));
     expect(r.outcome).toBe('crit');
     expect(r.damage).toBe(7);
   });
 
   it('fumble: natural 1 -> damage 0 and NO damage draw', () => {
-    const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), scriptedRng([face(1, 20)]));
+    const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), SWORD, 0, scriptedRng([face(1, 20)]));
     expect(r.outcome).toBe('fumble');
     expect(r.damage).toBe(0);
   });
 
   it('miss: total 14 < AC 25 -> damage 0 and NO damage draw', () => {
-    const r = resolvePlayerAttack(player(), enemy({ armorClass: 25 }), scriptedRng([face(10, 20)]));
+    const r = resolvePlayerAttack(player(), enemy({ armorClass: 25 }), SWORD, 0, scriptedRng([face(10, 20)]));
     expect(r.outcome).toBe('miss');
     expect(r.damage).toBe(0);
   });
@@ -171,6 +171,8 @@ describe('resolvePlayerAttack — outcomes and damage', () => {
     const r = resolvePlayerAttack(
       player({ advantageDisadvantage: 1 }),
       enemy({ armorClass: 10 }),
+      SWORD,
+      0,
       scriptedRng([face(7, 20), face(15, 20), face(4, 6)]),
     );
     expect(r.outcome).toBe('hit'); // natural 15 + 4 = 19
@@ -190,7 +192,7 @@ describe('resolvePlayerAttack — Strong/Weak STR cascade (to-hit + melee damage
   it('strong: mod +3 -> nat 10 hits AC 13, damage = 1d6(4) + 1 = 5', () => {
     const p = player({ stats: str14, mods: { STR: 2, DEX: 1, CON: 1, INT: 0, WIS: 0, CHA: 0 }, activeConditions: [makeCondition('strong')] });
     expect(effectiveMods(p).STR).toBe(3);
-    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), scriptedRng([face(10, 20), face(4, 6)]));
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), SWORD, 0, scriptedRng([face(10, 20), face(4, 6)]));
     expect(r.outcome).toBe('hit'); // 10 + 3 = 13 >= 13
     expect(r.damage).toBe(5); // 4 + 1
   });
@@ -198,7 +200,7 @@ describe('resolvePlayerAttack — Strong/Weak STR cascade (to-hit + melee damage
   it('without the augment the SAME nat 10 misses AC 13 (proves +1 to-hit mattered)', () => {
     const p = player({ stats: str14, mods: { STR: 2, DEX: 1, CON: 1, INT: 0, WIS: 0, CHA: 0 } });
     expect(effectiveMods(p).STR).toBe(2);
-    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), scriptedRng([face(10, 20)]));
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), SWORD, 0, scriptedRng([face(10, 20)]));
     expect(r.outcome).toBe('miss'); // 10 + 2 = 12 < 13, no damage draw
     expect(r.damage).toBe(0);
   });
@@ -206,7 +208,7 @@ describe('resolvePlayerAttack — Strong/Weak STR cascade (to-hit + melee damage
   it('weak: mod +1 -> nat 10 hits AC 5, damage = 1d6(4) - 1 = 3', () => {
     const p = player({ stats: str14, mods: { STR: 2, DEX: 1, CON: 1, INT: 0, WIS: 0, CHA: 0 }, activeConditions: [makeCondition('weak')] });
     expect(effectiveMods(p).STR).toBe(1);
-    const r = resolvePlayerAttack(p, enemy({ armorClass: 5 }), scriptedRng([face(10, 20), face(4, 6)]));
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 5 }), SWORD, 0, scriptedRng([face(10, 20), face(4, 6)]));
     expect(r.outcome).toBe('hit'); // 10 + 1 = 11 >= 5
     expect(r.damage).toBe(3); // 4 - 1
   });
@@ -218,16 +220,16 @@ describe('resolvePlayerAttack — Quick DEX cascade (ranged to-hit only, no rang
   const dex14 = { STR: 10, DEX: 14, CON: 12, INT: 10, WIS: 10, CHA: 10 };
 
   it('quick raises ranged to-hit by +1 but leaves 1d4 damage unmodified', () => {
-    const p = player({ stats: dex14, mods: { STR: 0, DEX: 2, CON: 1, INT: 0, WIS: 0, CHA: 0 }, equippedWeaponId: 'Jooj Gun 1', activeConditions: [makeCondition('quick')] });
+    const p = player({ stats: dex14, mods: { STR: 0, DEX: 2, CON: 1, INT: 0, WIS: 0, CHA: 0 }, activeConditions: [makeCondition('quick')] });
     expect(effectiveMods(p).DEX).toBe(3);
-    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), scriptedRng([face(10, 20), face(3, 4)]));
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), GUN, 0, scriptedRng([face(10, 20), face(3, 4)]));
     expect(r.outcome).toBe('hit'); // 10 + 3 = 13 >= 13
     expect(r.damage).toBe(3); // 1d4 face 3, NO STR delta on a ranged weapon
   });
 
   it('without quick the same nat 10 misses AC 13 (10 + 2 = 12 < 13)', () => {
-    const p = player({ stats: dex14, mods: { STR: 0, DEX: 2, CON: 1, INT: 0, WIS: 0, CHA: 0 }, equippedWeaponId: 'Jooj Gun 1' });
-    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), scriptedRng([face(10, 20)]));
+    const p = player({ stats: dex14, mods: { STR: 0, DEX: 2, CON: 1, INT: 0, WIS: 0, CHA: 0 } });
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), GUN, 0, scriptedRng([face(10, 20)]));
     expect(r.outcome).toBe('miss');
   });
 });
@@ -237,9 +239,46 @@ describe('resolvePlayerAttack — off-equivalence (no augment / non-augment cond
     // bleed touches no stat, so mod stays 4 and enemy AC stays 10 -> same as the base
     // "nat 15 + 4 = 19 hit, 1d6(4)=4" anchor above.
     const p = player({ activeConditions: [makeCondition('bleed')] });
-    const r = resolvePlayerAttack(p, enemy({ armorClass: 10 }), scriptedRng([face(15, 20), face(4, 6)]));
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 10 }), SWORD, 0, scriptedRng([face(15, 20), face(4, 6)]));
     expect(r.outcome).toBe('hit');
     expect(r.damage).toBe(4);
+  });
+});
+
+describe('resolvePlayerAttack — M5 injected weapon + equip damage bonus', () => {
+  // UNARMED (1d1 Melee): a 1d1 die always rolls exactly 1 (face(1,1) -> natural 1). Damage
+  // is the die only in this engine (the STR mod feeds TO-HIT, not damage); with no augment
+  // and no equip bonus a hit deals exactly UNARMED.damage = 1. Player STR mod 4 makes the
+  // nat 15 -> 19 hit at AC 10, but adds nothing to damage.
+  it('unarmed: an empty-hand hit deals exactly UNARMED (1d1 = 1)', () => {
+    const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), UNARMED, 0, scriptedRng([face(15, 20), face(1, 1)]));
+    expect(r.outcome).toBe('hit');
+    expect(r.damage).toBe(1);
+  });
+
+  // equipDamageBonus adds to a hit ONCE (like an ability mod). Same SWORD nat-15 hit, die
+  // face 4: bonus 0 -> 4, bonus 3 -> 7 (exactly +3, not +3 per die).
+  it('a flat equip damage bonus adds exactly N to a hit', () => {
+    const noBonus = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), SWORD, 0, scriptedRng([face(15, 20), face(4, 6)]));
+    expect(noBonus.damage).toBe(4);
+    const withBonus = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), SWORD, 3, scriptedRng([face(15, 20), face(4, 6)]));
+    expect(withBonus.damage).toBe(7);
+  });
+
+  // On a crit the bonus is added ONCE (not per die): two d6 (3,4) + bonus 3 = 10, not 13.
+  it('a flat equip damage bonus adds once to a crit (not per die)', () => {
+    const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), SWORD, 3, scriptedRng([face(20, 20), face(3, 6), face(4, 6)]));
+    expect(r.outcome).toBe('crit');
+    expect(r.damage).toBe(10); // 3 + 4 + 3
+  });
+
+  // Weapon swap changes what you hit for: a Legendary 1d8 Finesse rapier can deal 8 damage
+  // (die face 8), a value the 1d6 sword can never produce ([1..6]). Finesse to-hit uses
+  // max(STR 4, DEX 1) = 4, so nat 15 -> 19 hits AC 10.
+  it('a legendary 1d8 rapier can hit for 8 — outside the 1d6 sword range', () => {
+    const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), RAPIER, 0, scriptedRng([face(15, 20), face(8, 8)]));
+    expect(r.outcome).toBe('hit');
+    expect(r.damage).toBe(8);
   });
 });
 

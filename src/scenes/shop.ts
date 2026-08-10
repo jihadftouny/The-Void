@@ -5,6 +5,7 @@ import type { Engine } from '../render/engine.ts';
 import type { GameDriver } from '../render/driver.ts';
 import { frame, bottomButtons, bodyText } from './common.ts';
 import { addHeader, COLORS, SPACING } from '../render/ui/index.ts';
+import { equippedDefId } from '../game/equipment.ts';
 
 export const SHOP_SCENE = 'shop';
 
@@ -21,9 +22,8 @@ export function registerShopScene(k: Engine, driver: GameDriver): void {
     const currentId =
       player === null
         ? '—'
-        : offer.itemKind === 'armor'
-          ? player.equippedArmorId
-          : player.equippedWeaponId;
+        : equippedDefId(player.inventory, offer.itemKind === 'armor' ? 'armor' : 'mainHand') ??
+          '—';
     const gold = player?.gold ?? 0;
     const canAfford = gold >= offer.price;
 

@@ -25,7 +25,7 @@
 //    never matched, so Java melee weapons silently added no modifier — a bug we drop).
 
 import type { Character } from './character.ts';
-import { getWeaponByName, type Weapon } from './weapon.ts';
+import { type Weapon } from './weapon.ts';
 import { rollDice, rollDie, randInt, type Rng } from './rng.ts';
 import { SKILLS, useSkill, type SkillId } from './skill.ts';
 import type { ActiveCondition } from './condition.ts';
@@ -34,9 +34,13 @@ import type { AttackOutcome, CombatEvent } from './combatEvent.ts';
 
 export type { AttackOutcome } from './combatEvent.ts';
 
-/** An attacker that carries an equipped weapon id and an adv/dis flag (the Player). */
+/**
+ * An attacker that carries an adv/dis flag (the Player). M5: the resolved `Weapon` and the
+ * flat equip-damage bonus are now INJECTED by the caller (battle.ts) from the paperdoll —
+ * this interface no longer carries an equipped weapon id, keeping combat.ts free of the
+ * equipment/inventory imports (clean layering, symmetric with the injected defenderAc).
+ */
 export interface Attacker extends Character {
-  equippedWeaponId: string;
   advantageDisadvantage: number;
   /** Active status conditions — read for the augment/deprivation stat cascade (M2). */
   activeConditions: ActiveCondition[];
@@ -124,20 +128,24 @@ export interface PlayerAttackResult {
 
 /**
  * Resolve a player's Fight attack against an enemy — PURE. Rolls the d20 (honoring
- * the player's advantageDisadvantage), computes the outcome from the equipped
- * weapon's modifier vs the enemy AC, then rolls weapon damage: once for a hit, twice
- * for a crit, none for a miss or fumble. Emits an advantage/disadvantage event when
- * applicable and an `attack` event. Applies no hp.
+ * the player's advantageDisadvantage), computes the outcome from the given `weapon`'s
+ * modifier vs the enemy AC, then rolls weapon damage: once for a hit, twice for a crit,
+ * none for a miss or fumble. Emits an advantage/disadvantage event when applicable and an
+ * `attack` event. Applies no hp.
+ *
+ * M5: `weapon` (resolved from the paperdoll `mainHand`, or UNARMED when empty) and
+ * `equipDamageBonus` (the flat `flatDamage` from equipped-item effects) are INJECTED by
+ * battle.ts. `equipDamageBonus` adds to a hit's total ONCE and to a crit's total ONCE (like
+ * an ability mod, NOT per die); it is 0 for legacy gear, so a normal run is off-equivalent.
+ * The rng DRAW ORDER is unchanged (equipDamageBonus is pure arithmetic, no draw).
  */
 export function resolvePlayerAttack(
   player: Attacker,
   enemy: Character & { activeConditions: ActiveCondition[] },
+  weapon: Weapon,
+  equipDamageBonus: number,
   rng: Rng,
 ): PlayerAttackResult {
-  const weapon = getWeaponByName(player.equippedWeaponId);
-  if (!weapon) {
-    throw new Error(`resolvePlayerAttack: unknown weapon id "${player.equippedWeaponId}"`);
-  }
   const advDis = normalizeAdvDis(player.advantageDisadvantage);
   const { natural } = rollD20WithAdvantage(advDis, rng);
   // To-hit uses the EFFECTIVE mods (Strong/Weak on STR, Quick/Slow on DEX cascade in);
@@ -161,12 +169,16 @@ export function resolvePlayerAttack(
 
   let damage = 0;
   if (outcome === 'hit') {
-    damage = rollDice(rng, weapon.damage.quantity, weapon.damage.sides) + meleeDamageDelta;
+    damage =
+      rollDice(rng, weapon.damage.quantity, weapon.damage.sides) +
+      meleeDamageDelta +
+      equipDamageBonus;
   } else if (outcome === 'crit') {
     damage =
       rollDice(rng, weapon.damage.quantity, weapon.damage.sides) +
       rollDice(rng, weapon.damage.quantity, weapon.damage.sides) +
-      meleeDamageDelta;
+      meleeDamageDelta +
+      equipDamageBonus;
   }
   damage = Math.max(damage, 0);
   events.push({ kind: 'attack', subject: 'player', outcome, damage });

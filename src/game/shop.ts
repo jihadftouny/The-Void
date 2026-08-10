@@ -17,6 +17,8 @@ import { getWeaponsForAct } from './weapon.ts';
 import { getArmorForAct } from './armor.ts';
 import type { Rarity } from './weapon.ts';
 import { type Player } from './player.ts';
+import { equip, pickUp } from './equipment.ts';
+import { type EquipSlot } from './item.ts';
 
 /** Shop rarity weights (Java `pickItemShop`): commoner items appear more often. */
 export const RARITY_WEIGHT: Readonly<Record<Rarity, number>> = {
@@ -77,10 +79,12 @@ export function buildShopOffer(act: number, rng: Rng): ShopOffer {
 }
 
 /**
- * Apply a purchase — PURE. If the player has enough gold, swap the matching
- * equipped id and subtract exactly the price (`outcome: 'bought'`); otherwise the
- * player is returned unchanged (`outcome: 'insufficient'`). A decline is handled by
- * the caller (this is never called for a decline).
+ * Apply a purchase — PURE. If the player has enough gold, equip the bought item into its
+ * paperdoll slot (`armor -> armor`, `weapon -> mainHand`) and subtract exactly the price
+ * (`outcome: 'bought'`); otherwise the player is returned unchanged (`outcome:
+ * 'insufficient'`). M5: the item is picked up then equipped via the equipment bridge, so any
+ * item it DISPLACES from the slot moves to the backpack instead of being discarded. Gold
+ * logic is unchanged (gold removal is M7). A decline is handled by the caller.
  */
 export function applyShopPurchase(
   player: Player,
@@ -90,9 +94,8 @@ export function applyShopPurchase(
     return { player, outcome: 'insufficient' };
   }
   const gold = player.gold - offer.price;
-  const equipped =
-    offer.itemKind === 'armor'
-      ? { equippedArmorId: offer.itemId }
-      : { equippedWeaponId: offer.itemId };
-  return { player: { ...player, gold, ...equipped }, outcome: 'bought' };
+  const slot: EquipSlot = offer.itemKind === 'armor' ? 'armor' : 'mainHand';
+  const withItem = pickUp(player.inventory, { defId: offer.itemId });
+  const { inventory } = equip(withItem, withItem.backpack.length - 1, slot);
+  return { player: { ...player, gold, inventory }, outcome: 'bought' };
 }

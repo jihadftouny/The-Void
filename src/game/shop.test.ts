@@ -105,8 +105,8 @@ describe('buildShopOffer', () => {
 });
 
 describe('applyShopPurchase', () => {
-  it('with enough gold swaps the equipped id and deducts exactly the price', () => {
-    const p = player(); // starting gold 1500, Enforcer weapon "Jaaj Sword 1"
+  it('with enough gold equips the item into mainHand, deducts the price, and keeps the old weapon in the backpack', () => {
+    const p = player(); // starting gold 1500, Enforcer weapon "Jaaj Sword 1" in mainHand
     const offer: ShopOffer = {
       itemKind: 'weapon',
       itemId: 'Jooj Gun 1',
@@ -115,15 +115,19 @@ describe('applyShopPurchase', () => {
     };
     const { player: after, outcome } = applyShopPurchase(p, offer);
     expect(outcome).toBe('bought');
-    expect(after.equippedWeaponId).toBe('Jooj Gun 1');
+    expect(after.inventory.slots.mainHand).toEqual({ defId: 'Jooj Gun 1' });
     expect(after.gold).toBe(1500 - 12);
-    expect(after.equippedArmorId).toBe(p.equippedArmorId); // armor untouched
+    // The displaced starting weapon moves to the backpack (no longer discarded).
+    expect(after.inventory.backpack).toEqual([{ defId: 'Jaaj Sword 1' }]);
+    // Armor slot untouched.
+    expect(after.inventory.slots.armor).toEqual(p.inventory.slots.armor);
     // Purity: source unchanged.
-    expect(p.equippedWeaponId).toBe('Jaaj Sword 1');
+    expect(p.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
+    expect(p.inventory.backpack).toEqual([]);
     expect(p.gold).toBe(1500);
   });
 
-  it('swaps armor for an armor offer', () => {
+  it('equips armor into the armor slot for an armor offer', () => {
     const p = player();
     const offer: ShopOffer = {
       itemKind: 'armor',
@@ -133,7 +137,8 @@ describe('applyShopPurchase', () => {
     };
     const { player: after, outcome } = applyShopPurchase(p, offer);
     expect(outcome).toBe('bought');
-    expect(after.equippedArmorId).toBe('Jiij Armor 1');
+    expect(after.inventory.slots.armor).toEqual({ defId: 'Jiij Armor 1' });
+    expect(after.inventory.backpack).toEqual([{ defId: 'Jooj Armor 1' }]); // old armor displaced
     expect(after.gold).toBe(1400);
   });
 
@@ -149,6 +154,6 @@ describe('applyShopPurchase', () => {
     expect(outcome).toBe('insufficient');
     expect(after).toBe(p); // same reference, no change
     expect(after.gold).toBe(5);
-    expect(after.equippedWeaponId).toBe(p.equippedWeaponId);
+    expect(after.inventory.slots.mainHand).toEqual(p.inventory.slots.mainHand);
   });
 });

@@ -17,6 +17,7 @@
 import { type GameState } from './game.ts';
 import { createKarma } from './karma.ts';
 import { createInventory } from './inventory.ts';
+import { EQUIP_SLOTS } from './item.ts';
 import { type PlayerClass } from './player.ts';
 
 /**
@@ -25,7 +26,7 @@ import { type PlayerClass } from './player.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** The 15 valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -103,10 +104,12 @@ export function decodeSave(json: string): GameState | null {
  * Structured as a version ladder so future format bumps slot in without touching
  * `decodeSave`: each `case` upgrades one step and bumps `current`.
  *
- * Today the reachable source versions are `1` (upgraded to 2 by `upgrade1to2`) and
- * anything `< 1` (nothing to upgrade -> `null`, unsupported). Returns the upgraded
- * plain value (still unvalidated — `decodeSave` validates the result), or `null`
- * if the source version cannot be migrated.
+ * Today the reachable source versions are `1` (upgraded via `upgrade1to2` then
+ * `upgrade2to3`), `2` (upgraded via `upgrade2to3`), and anything `< 1` (nothing to upgrade
+ * -> `null`, unsupported). The ladder composes: a v1 save gains an empty inventory at 1->2,
+ * then its legacy equipped ids populate the paperdoll slots at 2->3. Returns the upgraded
+ * plain value (still unvalidated — `decodeSave` validates the result), or `null` if the
+ * source version cannot be migrated.
  */
 function migrate(raw: unknown, fromVersion: number): unknown | null {
   let current = fromVersion;
@@ -116,6 +119,10 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
       case 1:
         value = upgrade1to2(value);
         current = 2;
+        break;
+      case 2:
+        value = upgrade2to3(value);
+        current = 3;
         break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
@@ -144,6 +151,54 @@ function upgrade1to2(raw: unknown): unknown {
     }
   }
   next.version = 2;
+  return next;
+}
+
+/**
+ * Migrate a v2 save (player with legacy `equipped*Id` fields, paperdoll alongside) to the v3
+ * shape (M5: the paperdoll is authoritative). When a player is present: ensure `inventory`
+ * with a 9-slot record exists, MOVE `equippedWeaponId -> slots.mainHand`,
+ * `equippedArmorId -> slots.armor`, and (if present) `equippedShieldId -> slots.offHand` as
+ * `{ defId }` instances, then DELETE the three legacy fields. Pure: shallow-clones the parsed
+ * plain object and rewrites only the player's inventory, then stamps `version = 3`. A
+ * non-object input (or absent/null player) is returned with only the version stamped so the
+ * caller's validation still runs.
+ */
+function upgrade2to3(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (isPlainObject(next.player)) {
+    const player = { ...(next.player as Record<string, unknown>) };
+    // Start from the existing inventory's slots (or a fresh empty 9-slot record).
+    const existingInv = isPlainObject(player.inventory)
+      ? (player.inventory as Record<string, unknown>)
+      : {};
+    const empty = createInventory();
+    const slots: Record<string, unknown> = { ...empty.slots };
+    if (isPlainObject(existingInv.slots)) {
+      for (const slot of EQUIP_SLOTS) {
+        const cell = (existingInv.slots as Record<string, unknown>)[slot];
+        if (cell !== undefined) slots[slot] = cell;
+      }
+    }
+    // Move each legacy id into its slot (only if a non-empty string is present).
+    if (typeof player.equippedWeaponId === 'string' && player.equippedWeaponId !== '') {
+      slots.mainHand = { defId: player.equippedWeaponId };
+    }
+    if (typeof player.equippedArmorId === 'string' && player.equippedArmorId !== '') {
+      slots.armor = { defId: player.equippedArmorId };
+    }
+    if (typeof player.equippedShieldId === 'string' && player.equippedShieldId !== '') {
+      slots.offHand = { defId: player.equippedShieldId };
+    }
+    const backpack = Array.isArray(existingInv.backpack) ? existingInv.backpack : [];
+    delete player.equippedWeaponId;
+    delete player.equippedArmorId;
+    delete player.equippedShieldId;
+    player.inventory = { slots, backpack };
+    next.player = player;
+  }
+  next.version = 3;
   return next;
 }
 
@@ -225,9 +280,8 @@ function isValidPlayer(v: unknown): boolean {
   if (typeof v.classId !== 'string') return false;
   if (!PLAYER_CLASSES.includes(v.classId as PlayerClass)) return false;
 
-  // Equipment id strings.
-  if (typeof v.equippedWeaponId !== 'string') return false;
-  if (typeof v.equippedArmorId !== 'string') return false;
+  // Equipment (M5): no legacy `equipped*Id` — the paperdoll `inventory` (checked below) is
+  // the single source of truth for what is equipped.
 
   // Array fields.
   if (!Array.isArray(v.resistances)) return false;

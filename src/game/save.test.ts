@@ -25,6 +25,7 @@ import {
 import { createRng, mulberry32 } from './rng.ts';
 import { createBattle } from './battle.ts';
 import { createPlayer } from './player.ts';
+import { createInventory } from './inventory.ts';
 import { grantMomentum } from './classKit.ts';
 import { generateEnemy } from './enemy.ts';
 import { tickConditions, type ActiveCondition } from './condition.ts';
@@ -59,8 +60,8 @@ function runInputs(
 
 describe('SAVE_VERSION', () => {
   it('mirrors the current GameState.version', () => {
-    // Derived from game.ts: createGame stamps version 2 (M1 bumped 1 -> 2).
-    expect(SAVE_VERSION).toBe(2);
+    // Derived from game.ts: createGame stamps version 3 (M5 bumped 2 -> 3 for the paperdoll).
+    expect(SAVE_VERSION).toBe(3);
     expect(createGame(SEED).version).toBe(SAVE_VERSION);
   });
 });
@@ -72,34 +73,81 @@ const ZERO_KARMA = {
   clarityDelusion: 0,
 };
 
-describe('migration v1 -> v2', () => {
-  it('injects default karma + empty inventory into an old-shape mid-run save', () => {
-    // The modern (v2) state carries karma (all zero) and a player with an empty
-    // inventory. Build a v1 save by STRIPPING those M1 fields and stamping version 1.
-    const modern = midRunState(SEED);
+describe('migration v2 -> v3 (legacy equipped ids -> paperdoll slots)', () => {
+  // Build a v2-shaped save from the modern (v3) one: reset the paperdoll to empty, re-add the
+  // pre-M5 legacy equipped ids on the player, and stamp version 2 — the exact pre-M5 shape.
+  function v2Save(mutatePlayer: (p: Record<string, unknown>) => void): Record<string, unknown> {
+    const modern = midRunState(SEED); // Enforcer, v3
     const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
-    delete old.karma;
-    delete (old.player as Record<string, unknown>).inventory;
-    old.version = 1;
-    // Sanity: the source really is missing the M1 fields (else the test is vacuous).
-    expect('karma' in old).toBe(false);
-    expect('inventory' in (old.player as Record<string, unknown>)).toBe(false);
+    const player = old.player as Record<string, unknown>;
+    player.inventory = createInventory(); // empty 9-null slots, no backpack items
+    player.equippedWeaponId = 'Jaaj Sword 1';
+    player.equippedArmorId = 'Jooj Armor 1';
+    mutatePlayer(player);
+    old.version = 2;
+    return old;
+  }
+
+  it('moves equippedWeaponId/armorId into slots, strips the legacy fields, and equals the modern state', () => {
+    const modern = midRunState(SEED);
+    const old = v2Save(() => {});
+    // Sanity: the source really is v2-shaped (legacy fields present, slots empty).
+    const srcPlayer = old.player as Record<string, unknown>;
+    expect(srcPlayer.equippedWeaponId).toBe('Jaaj Sword 1');
+    expect((srcPlayer.inventory as { slots: Record<string, unknown> }).slots.mainHand).toBeNull();
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    // The injected defaults, asserted explicitly.
-    expect(migrated!.karma).toEqual(ZERO_KARMA);
-    expect(migrated!.version).toBe(2);
-    expect(migrated!.player!.inventory.backpack).toEqual([]);
-    expect(Object.values(migrated!.player!.inventory.slots).every((s) => s === null)).toBe(
-      true,
-    );
-    expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
-    // And the migrated state deep-equals the modern new-shape state it was built from.
+    const mp = migrated!.player!;
+    expect(mp.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
+    expect(mp.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
+    expect('equippedWeaponId' in mp).toBe(false);
+    expect('equippedArmorId' in mp).toBe(false);
+    expect(migrated!.version).toBe(3);
+    // Modern midRunState seeds the SAME starting gear into slots, so the migrated v2 save
+    // deep-equals the modern v3 state.
     expect(migrated).toEqual(modern);
   });
 
-  it('migrates a v1 title save with a null player (no inventory to inject)', () => {
+  it('migrates equippedShieldId into the offHand slot', () => {
+    const old = v2Save((p) => {
+      p.equippedShieldId = 'Buckler';
+    });
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    const mp = migrated!.player!;
+    expect(mp.inventory.slots.offHand).toEqual({ defId: 'Buckler' });
+    expect('equippedShieldId' in mp).toBe(false);
+  });
+});
+
+describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids -> slots)', () => {
+  it('injects karma + inventory (1->2) then lands the legacy ids in slots (2->3)', () => {
+    // A genuine v1 save: no karma, player with legacy equipped ids and no inventory.
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    delete old.karma;
+    const player = old.player as Record<string, unknown>;
+    delete player.inventory;
+    player.equippedWeaponId = 'Jaaj Sword 1';
+    player.equippedArmorId = 'Jooj Armor 1';
+    old.version = 1;
+    // Sanity: really v1-shaped.
+    expect('karma' in old).toBe(false);
+    expect('inventory' in player).toBe(false);
+
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.karma).toEqual(ZERO_KARMA);
+    expect(migrated!.version).toBe(3);
+    expect(migrated!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
+    expect(migrated!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
+    expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
+    // Deep-equals the modern state, which seeds the same gear into slots.
+    expect(migrated).toEqual(modern);
+  });
+
+  it('migrates a v1 title save with a null player (nothing to inject into slots)', () => {
     const modern = createGame(SEED); // player is null at the title
     const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
     delete old.karma;
@@ -109,12 +157,12 @@ describe('migration v1 -> v2', () => {
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
     expect(migrated!.player).toBeNull();
-    expect(migrated!.version).toBe(2);
+    expect(migrated!.version).toBe(3);
     expect(migrated).toEqual(modern);
   });
 
-  it('rejects a future version 3 save without throwing', () => {
-    const s = { ...createGame(SEED), version: 3 };
+  it('rejects a future version 4 save without throwing', () => {
+    const s = { ...createGame(SEED), version: 4 };
     expect(() => decodeSave(JSON.stringify(s))).not.toThrow();
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
@@ -411,29 +459,27 @@ describe('M3 classes + resources: save validation & round-trip', () => {
   });
 });
 
-describe('M4 shield: save validation & round-trip', () => {
-  it('a player carrying equippedShieldId round-trips byte-equal', () => {
+describe('M5 paperdoll: equipped gear save validation & round-trip', () => {
+  it('a player with a shield in the off-hand slot round-trips byte-equal', () => {
     const base = midRunState(SEED);
-    const player = { ...base.player!, equippedShieldId: 'Buckler' };
+    const inv = base.player!.inventory;
+    const player = {
+      ...base.player!,
+      inventory: { ...inv, slots: { ...inv.slots, offHand: { defId: 'Buckler' } } },
+    };
     const state: GameState = { ...base, player };
     const restored = decodeSave(encodeSave(state));
     expect(restored).not.toBeNull();
     expect(restored).toEqual(state);
-    expect(restored!.player!.equippedShieldId).toBe('Buckler');
+    expect(restored!.player!.inventory.slots.offHand).toEqual({ defId: 'Buckler' });
   });
 
-  it('a pre-M4 v2 save with NO equippedShieldId field decodes (additive-optional, no version bump)', () => {
-    // A modern save with no shield already omits the optional field; confirm it decodes and
-    // reads as "no shield". This is the pre-M4 shape (equippedShieldId absent).
-    const modern = midRunState(SEED);
-    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
-    const oldPlayer = old.player as Record<string, unknown>;
-    expect('equippedShieldId' in oldPlayer).toBe(false); // sanity: source really lacks it
-    old.version = SAVE_VERSION;
-
-    const decoded = decodeSave(JSON.stringify(old));
-    expect(decoded).not.toBeNull();
-    expect(decoded!.player!.equippedShieldId).toBeUndefined();
+  it('the seeded starting gear survives a v3 round-trip in its slots', () => {
+    const restored = decodeSave(encodeSave(midRunState(SEED)));
+    expect(restored).not.toBeNull();
+    // Enforcer starting gear seeded at creation (player.ts) survives the trip.
+    expect(restored!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
+    expect(restored!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
   });
 });
 

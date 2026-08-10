@@ -28,6 +28,8 @@ import { SKILLS, type SkillDef, type SkillId } from './skill.ts';
 import { castSkill, grantMomentum, usesMomentum } from './classKit.ts';
 import { effectiveMaxHp } from './statEffects.ts';
 import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
+import { weaponForSlot, UNARMED } from './equipment.ts';
+import { computeEquipModifiers } from './equipEffects.ts';
 
 /** The full, serializable state of a battle in progress. */
 export interface BattleState {
@@ -163,7 +165,13 @@ function resolvePlayerTurn(
   if (ptc.skipTurn) {
     events.push({ kind: 'player-unable-to-act', conditionType: skipCause(ptc.events) });
   } else if (action.kind === 'fight') {
-    const pa = resolvePlayerAttack(player, enemy, rng);
+    // M5: resolve the weapon from the paperdoll mainHand (empty -> UNARMED so an unarmed
+    // player never throws) and the flat equip-damage bonus, both injected into combat.ts.
+    // Both are off-equivalent for legacy gear (real weapon, 0 bonus), so the draw order and
+    // damage are unchanged for a normal run.
+    const weapon = weaponForSlot(player.inventory) ?? UNARMED;
+    const equipDmg = computeEquipModifiers(player.inventory).flatDamage;
+    const pa = resolvePlayerAttack(player, enemy, weapon, equipDmg, rng);
     playerDamage = pa.damage;
     events.push(...pa.events);
   } else {

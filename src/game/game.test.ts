@@ -34,7 +34,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
 
 function menuState(player: Player, rngState: number, act = 1): GameState {
   return {
-    version: 2,
+    version: 3,
     rngState,
     player,
     act,
@@ -54,7 +54,7 @@ describe('createGame', () => {
     expect(s.act).toBe(1);
     expect(s.place).toBe(0);
     expect(s.rngState).toBe(777);
-    expect(s.version).toBe(2);
+    expect(s.version).toBe(3);
     expect(awaitingFor(s.phase)).toBe('title');
   });
 
@@ -128,7 +128,7 @@ describe('character creation transitions', () => {
     // armored AC is what the HUD sees.
     const stats: Stats = { STR: 12, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 };
     const state: GameState = {
-      version: 2,
+      version: 3,
       rngState: 7,
       player: null,
       act: 1,
@@ -325,13 +325,10 @@ describe('shop (menu option: character-info)', () => {
     expect(r2.state.phase.kind).toBe('main-menu');
     expect(r2.events.some((e) => e.kind === 'shop-purchased')).toBe(true);
     expect(r2.events.some((e) => e.kind === 'character-info')).toBe(true);
-    // Gold reduced by exactly the price; matching slot swapped to the offer id.
+    // Gold reduced by exactly the price; matching paperdoll slot equipped to the offer id.
     expect(r2.state.player?.gold).toBe(1500 - expectedOffer.price);
-    if (expectedOffer.itemKind === 'weapon') {
-      expect(r2.state.player?.equippedWeaponId).toBe(expectedOffer.itemId);
-    } else {
-      expect(r2.state.player?.equippedArmorId).toBe(expectedOffer.itemId);
-    }
+    const boughtSlot = expectedOffer.itemKind === 'weapon' ? 'mainHand' : 'armor';
+    expect(r2.state.player?.inventory.slots[boughtSlot]).toEqual({ defId: expectedOffer.itemId });
   });
 
   it('declining leaves gold and gear unchanged but still shows character-info', () => {
@@ -342,8 +339,8 @@ describe('shop (menu option: character-info)', () => {
     expect(r2.events.some((e) => e.kind === 'shop-declined')).toBe(true);
     expect(r2.events.some((e) => e.kind === 'character-info')).toBe(true);
     expect(r2.state.player?.gold).toBe(1500);
-    expect(r2.state.player?.equippedWeaponId).toBe(player.equippedWeaponId);
-    expect(r2.state.player?.equippedArmorId).toBe(player.equippedArmorId);
+    expect(r2.state.player?.inventory.slots.mainHand).toEqual(player.inventory.slots.mainHand);
+    expect(r2.state.player?.inventory.slots.armor).toEqual(player.inventory.slots.armor);
   });
 
   it('insufficient gold changes nothing', () => {
@@ -353,7 +350,7 @@ describe('shop (menu option: character-info)', () => {
     const r2 = step(r.state, { kind: 'shop-decision', accept: true });
     expect(r2.events.some((e) => e.kind === 'shop-insufficient')).toBe(true);
     expect(r2.state.player?.gold).toBe(0);
-    expect(r2.state.player?.equippedWeaponId).toBe(player.equippedWeaponId);
+    expect(r2.state.player?.inventory.slots.mainHand).toEqual(player.inventory.slots.mainHand);
   });
 });
 
@@ -419,7 +416,7 @@ describe('entering Act 5', () => {
   it('act-intro{5} continue builds the final boss battle', () => {
     const player = makePlayer();
     const state: GameState = {
-      version: 2,
+      version: 3,
       rngState: 314,
       player,
       act: 5,
@@ -449,7 +446,7 @@ describe('win / ending path', () => {
   it('victory in the final battle emits the ending with the name, then goes terminal', () => {
     const player = makePlayer({ name: 'Zara' });
     const state: GameState = {
-      version: 2,
+      version: 3,
       rngState: 1,
       player,
       act: 5,
@@ -487,7 +484,7 @@ describe('win / ending path', () => {
     const battle: BattleState = { player, enemy: boss, act: 5, canFlee: false };
     let r: StepResult = {
       state: {
-        version: 2,
+        version: 3,
         rngState: 7,
         player,
         act: 5,
@@ -549,7 +546,7 @@ describe('JSON round-trip determinism', () => {
 function startedBattleState(player: Player, enemy: BattleState['enemy'], rngState: number): GameState {
   const battle: BattleState = { player, enemy, act: 1, canFlee: true };
   return {
-    version: 2,
+    version: 3,
     rngState,
     player,
     act: 1,

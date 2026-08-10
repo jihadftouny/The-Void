@@ -8,8 +8,8 @@
 //    armor tables; only the two class profiles (hit die + gear ids) and the fixed
 //    game-start scalars — which are *rules*, not content — live here.
 //  - Serializable plain-data state: `Player` is a flat record of primitives and
-//    plain arrays; equipment is stored as id strings (resolve via
-//    getWeaponByName / getArmorByName), so state round-trips through JSON.
+//    plain arrays; equipment lives in the paperdoll `inventory.slots` as `{ defId }`
+//    instances (resolved via the equipment.ts bridge), so state round-trips through JSON.
 //
 // Ported from the canonical Java (`Player.java`, `GameLogic.startGame`). The
 // stat accept/re-roll loop, class-confirm loop, and name-entry prompt are UI
@@ -25,14 +25,20 @@ import { roll4d6DropLowest, type Rng } from './rng.ts';
 import { ELEMENTS } from './element.ts';
 import { type ActiveCondition } from './condition.ts';
 import { CLASSES, type PlayerClass } from './classKit.ts';
-import { createInventory, type Inventory } from './inventory.ts';
+import { type Inventory } from './inventory.ts';
+import { inventoryWithGear } from './equipment.ts';
 
 /** The five playable classes (defined with the class roster in `classKit.ts`). */
 export type { PlayerClass } from './classKit.ts';
 
 /**
  * A player — a `Character` plus player-only fields — as plain serializable data.
- * Equipment is held as id strings into the M2 weapon/armor tables.
+ *
+ * EQUIPMENT (M5): the Tibia-style paperdoll `inventory.slots` is the SINGLE SOURCE OF TRUTH
+ * for what is equipped. The legacy `equipped*Id` fields were removed here; combat resolves
+ * the weapon from `slots.mainHand` (empty ⇒ UNARMED), defense the armor from `slots.armor`
+ * and the shield from `slots.offHand`, all via the `equipment.ts` bridge. Old saves migrate
+ * their legacy ids into `slots` (save.ts `upgrade2to3`).
  */
 export interface Player extends Character {
   classId: PlayerClass;
@@ -41,20 +47,7 @@ export interface Player extends Character {
   pots: number;
   proficiency: number;
   advantageDisadvantage: number;
-  equippedWeaponId: string;
-  equippedArmorId: string;
-  /**
-   * Off-hand shield id (M4). OPTIONAL and additive: absent ⇒ no shield (AC bonus 0),
-   * so a pre-M4 save without this field loads unchanged (same save story as
-   * `momentum?`/`corruption?`). Resolved via `getShieldById`; the flat `acBonus`
-   * feeds `playerArmorClass` (defense.ts). Equipping a shield is M5 — `createPlayer`
-   * grants none.
-   */
-  equippedShieldId?: string;
-  /**
-   * Tibia-style paperdoll + backpack (M1). Additive: it sits alongside the legacy
-   * equipped*Id ids, which remain the live combat path until M5 migrates onto this.
-   */
+  /** Tibia-style paperdoll + backpack — the authoritative equipped-gear store (M5). */
   inventory: Inventory;
   /** One resistance value per element, length ELEMENTS.length (7). */
   resistances: number[];
@@ -99,7 +92,7 @@ export function rollStartStats(rng: Rng): Stats {
  * Assemble a fresh `Player` from a name, class, and a rolled stat set. Pure: it
  * rolls nothing. Looks up the `CLASSES` definition, derives the Character base (mods,
  * maxHp = hitDie.sides + CONmod, hp = maxHp, armorClass = 10 + CONmod, charges), then
- * adds the player fields, equips the class starting gear by id, and grants the class's
+ * adds the player fields, seeds the class starting gear into the paperdoll, and grants the class's
  * signature kit as the `skillPool`. Resources start at 0. NOTE (orchestrator resolution):
  * stats are rolled UNIFORMLY (4d6-drop-lowest) elsewhere; `CLASSES[].primaryStats` is
  * flavor only, so `createPlayer` applies no class stat-weighting.
@@ -125,9 +118,10 @@ export function createPlayer(args: {
     pots: STARTING_POTS,
     proficiency: PROFICIENCY,
     advantageDisadvantage: 0,
-    equippedWeaponId: def.weaponId,
-    equippedArmorId: def.armorId,
-    inventory: createInventory(),
+    // Seed the class starting gear into the paperdoll slots (M5): weapon -> mainHand,
+    // armor -> armor. No starting shield (unchanged). These slots are now the live combat
+    // path, so a fresh character's damage/AC are unchanged from M4 (same starting gear).
+    inventory: inventoryWithGear({ mainHand: def.weaponId, armor: def.armorId }),
     resistances: ELEMENTS.map(() => 0),
     activeConditions: [],
     skillPool: [...def.kit],
