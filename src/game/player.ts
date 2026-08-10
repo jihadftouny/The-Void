@@ -25,6 +25,7 @@ import {
 import { roll4d6DropLowest, type Rng } from './rng.ts';
 import { ELEMENTS } from './element.ts';
 import { type ActiveCondition } from './condition.ts';
+import { createInventory, type Inventory } from './inventory.ts';
 
 /** The two playable classes (this string is the player's `classId`). */
 export type PlayerClass = 'Enforcer' | 'Neuromancer';
@@ -42,6 +43,11 @@ export interface Player extends Character {
   advantageDisadvantage: number;
   equippedWeaponId: string;
   equippedArmorId: string;
+  /**
+   * Tibia-style paperdoll + backpack (M1). Additive: it sits alongside the legacy
+   * equipped*Id ids, which remain the live combat path until M5 migrates onto this.
+   */
+  inventory: Inventory;
   /** One resistance value per element, length ELEMENTS.length (7). */
   resistances: number[];
   /** Active status conditions (M6). */
@@ -116,6 +122,7 @@ export function createPlayer(args: {
     advantageDisadvantage: 0,
     equippedWeaponId: profile.weaponId,
     equippedArmorId: profile.armorId,
+    inventory: createInventory(),
     resistances: ELEMENTS.map(() => 0),
     activeConditions: [],
     skillPool: [],

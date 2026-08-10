@@ -84,6 +84,26 @@ describe('createPlayer — Enforcer', () => {
   it('has a 7-slot all-zero resistance array', () => {
     expect(player.resistances).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
+
+  it('starts with an empty paperdoll: nine null slots and an empty backpack', () => {
+    // The nine equip slots from item.ts, independently listed.
+    const expectedSlots = [
+      'helmet',
+      'amulet',
+      'mainHand',
+      'offHand',
+      'armor',
+      'legs',
+      'boots',
+      'ring',
+      'ammo',
+    ];
+    expect(Object.keys(player.inventory.slots).sort()).toEqual([...expectedSlots].sort());
+    for (const slot of expectedSlots) {
+      expect(player.inventory.slots[slot as keyof typeof player.inventory.slots]).toBeNull();
+    }
+    expect(player.inventory.backpack).toEqual([]);
+  });
 });
 
 describe('createPlayer — Neuromancer', () => {
