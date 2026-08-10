@@ -11,12 +11,12 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 0/18 milestones done** `[--------------------]` — M0 in progress (base built; merge +
-reconcile pending). Pre-M0 base (engine + save/load + desktop LLM slice) is built & verified.
+**v3 overall: 1/18 milestones done** `[#-------------------]` — M0 ✅; **M1 next** (foundational state
+models, through the loop). Pre-M0 base (engine + save/load + desktop LLM slice) built & verified.
 
 | Milestone (v3) | Status |
 |---|---|
-| M0 — Consolidate base & reconcile to mechanics-first | 🔄 docs reconciled (ROADMAP v3 + GAME-DESIGN); branch-stack merge is the user's gate |
+| M0 — Consolidate base & reconcile to mechanics-first | ✅ merged to `main` (378 tests, typecheck + build clean); branches consolidated |
 | M1 — Foundational state models (karma + item schema + inventory) | ⬜ |
 | M2 — Player skills + full 24-condition system | ⬜ |
 | M3 — Classes & signature kits | ⬜ |
@@ -44,6 +44,22 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-08-10 — M0 complete: consolidated to a single `main` trunk ✅
+- Merged the verified stack into **`main`** (user-gated, approved): `agentic/gpu-fix` (all engine +
+  desktop LLM + GPU-fix code, clean ff) then `spike/n1-local-llm` (v3 design docs + doc-history) —
+  both auto-merged, **zero conflicts**.
+- **Post-merge verification on `main`:** `npm run typecheck` clean, **378/378 tests pass**,
+  `npm run build` OK.
+- Cleaned up: removed 8 merged unit worktrees + deleted their branches. **Kept as safety refs:**
+  `spike/n1-local-llm` (fully merged) and `agentic/logic-core` (content is in `main` via wire-save,
+  but its original commits aren't ancestors — not force-deleted during consolidation). One stale
+  `worktrees/gpu-fix` dir is OS-locked (harmless cruft; clears later).
+- Design brainstorm is complete (all systems locked in `docs/GAME-DESIGN.md`); the full design also
+  co-decided the class roster, floors+bosses, karma model, enemies, economy, items, status effects,
+  level-up loop, and meta-progression this session.
+- **Next: M1** — foundational state models (four-axis karma vector, item/inventory schema, standard
+  D&D stat formula) through the agentic loop (plan → build → test in a worktree off `main`).
 
 ### 2026-08-05 — Full scope interview + mechanics-first re-scope (M0 docs)
 - Ran a thorough scope interview. **Recalibrated to mechanics-first** (deep RPG is the heart; LLM
