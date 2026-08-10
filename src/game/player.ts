@@ -66,6 +66,12 @@ export interface Player extends Character {
    * Raised by `maxHpCost` sacrifices; read by `corruptionScale` skills. Harmless for others.
    */
   corruption?: number;
+  /**
+   * Transient combat shield (M6). OPTIONAL and additive: absent ⇒ read as 0. Absorbs enemy
+   * damage before HP (Grace-Forged Aegis grants it at battle start via `gainShield`); it is
+   * plain data so it round-trips through a mid-battle save, and 0/absent for a normal run.
+   */
+  shield?: number;
 }
 
 /** Fixed game-start scalars (Java `GameLogic.startGame` / `Player` init). */

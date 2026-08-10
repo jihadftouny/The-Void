@@ -14,6 +14,8 @@
 
 import type { ConditionType } from './condition.ts';
 import type { SkillId } from './skill.ts';
+import type { StatKey } from './character.ts';
+import type { TriggerType, EffectActionKind } from './item.ts';
 
 /** Who an event is about. */
 export type CombatSubject = 'player' | 'enemy';
@@ -81,7 +83,15 @@ export type CombatEvent =
       extraRest: boolean;
       text?: string;
     }
-  | { kind: 'defeat'; text?: string };
+  | { kind: 'defeat'; text?: string }
+  // ---- M6 items-content events (additive; only relics/consumables emit them) ----
+  | { kind: 'relic-triggered'; trigger: TriggerType; action: EffectActionKind; text?: string }
+  | { kind: 'consumable-used'; itemId: string; text?: string }
+  | { kind: 'consumable-unavailable'; text?: string }
+  | { kind: 'shield-gained'; amount: number; text?: string }
+  | { kind: 'shield-absorbed'; amount: number; text?: string }
+  | { kind: 'revive'; healedTo: number; text?: string }
+  | { kind: 'stat-stolen'; stat: StatKey; amount: number; text?: string };
 
 /** Every event `kind` string (handy for exhaustiveness / test assertions). */
 export type CombatEventKind = CombatEvent['kind'];

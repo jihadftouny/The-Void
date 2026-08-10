@@ -30,6 +30,7 @@ import { effectiveMaxHp } from './statEffects.ts';
 import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
 import { weaponForSlot, UNARMED } from './equipment.ts';
 import { computeEquipModifiers } from './equipEffects.ts';
+import { fireTrigger, reviveActionFor } from './relicEffects.ts';
 
 /** The full, serializable state of a battle in progress. */
 export interface BattleState {
@@ -39,6 +40,17 @@ export interface BattleState {
   act: number;
   /** False in the final act: escape is impossible. */
   canFlee: boolean;
+  /**
+   * M6, OPTIONAL/transient: the first enemy hit each battle has already landed (Scrap
+   * Plating consumed its one free zero-hit). Absent ⇒ not yet consumed. Only a
+   * firstHitReduction relic ever sets it, so it stays absent for a normal run.
+   */
+  firstEnemyHitDone?: boolean;
+  /**
+   * M6, OPTIONAL/transient: the once-per-battle revive (Halo Fragment) has fired. Absent ⇒
+   * still available. Only set when a revive gate triggers, so absent for a normal run.
+   */
+  reviveUsed?: boolean;
 }
 
 /**
@@ -62,6 +74,19 @@ export interface RoundResult {
 /** Build a fresh battle. `canFlee` is false only in the final act (act 5). */
 export function createBattle(player: Player, enemy: Enemy, act: number): BattleState {
   return { player, enemy, act, canFlee: act !== 5 };
+}
+
+/**
+ * Fire the `startOfBattle` triggers on the player's equipped relics — PURE, RNG-FREE.
+ * Returns the (possibly) updated battle plus the emitted events. When nothing is equipped
+ * that fires at battle start the ORIGINAL battle object is returned with an empty event
+ * list (off-equivalence — a normal battle opens byte-identically). Call once, when a battle
+ * becomes active (game.ts flips `started` to true).
+ */
+export function openBattle(battle: BattleState): { battle: BattleState; events: CombatEvent[] } {
+  const fired = fireTrigger('startOfBattle', battle.player, battle.enemy, {});
+  if (fired.events.length === 0) return { battle, events: [] };
+  return { battle: { ...battle, player: fired.player, enemy: fired.enemy }, events: fired.events };
 }
 
 /**
@@ -127,13 +152,22 @@ function resolvePlayerTurn(
   let player: Player = state.player;
   let enemy: Enemy = state.enemy;
 
-  // 1. Tick the enemy's conditions.
+  // M6: read the player's aggregated equip modifiers ONCE. Every field below is
+  // identity-valued (0 / false / mult 1 / null / []) for effect-free gear, so all the M6
+  // branches are no-ops for a normal run (off-equivalence). RNG-FREE — no draw is added.
+  const mods = computeEquipModifiers(player.inventory);
+  let firstHitDone = state.firstEnemyHitDone ?? false;
+  let reviveUsed = state.reviveUsed ?? false;
+
+  // 1. Tick the enemy's conditions. Grave of Embers / Ashen Crown double the enemy's
+  //    negative DoT (dotTickMult) — identity 1 for a normal run.
   const etc = tickConditions(enemy, player, rng);
-  enemy = { ...enemy, activeConditions: etc.conditions, hp: enemy.hp + etc.hpDelta };
+  const enemyTickDelta = etc.hpDelta < 0 ? etc.hpDelta * mods.dotTickMult : etc.hpDelta;
+  enemy = { ...enemy, activeConditions: etc.conditions, hp: enemy.hp + enemyTickDelta };
   events.push(...etc.events);
   const skipEnemyAttack = etc.skipTurn;
   if (enemy.hp <= 0) {
-    return applyVictory(state, player, { ...enemy, hp: 0 }, events, rng);
+    return killAndVictory(state, player, { ...enemy, hp: 0 }, events, rng);
   }
 
   // 2. Enemy attacks unless skipped. M4: it now rolls to hit vs the player's real AC
@@ -150,6 +184,11 @@ function resolvePlayerTurn(
     player = ea.target;
     enemyDamage = ea.damage;
     events.push(...ea.events);
+    // Scrap Plating: the first enemy hit each battle is reduced to 0 (once per battle).
+    if (mods.firstHitReduction && !firstHitDone && enemyDamage > 0) {
+      enemyDamage = 0;
+      firstHitDone = true;
+    }
   }
 
   // 3. Tick the player's conditions (damage/heal/skip/fracture), then apply hp delta.
@@ -160,8 +199,19 @@ function resolvePlayerTurn(
   }
   events.push(...ptc.events);
 
+  // Empty Vessel: restore charge(s) at the player's turn (capped at max). No-op at 0.
+  if (mods.chargePerTurn > 0) {
+    player = {
+      ...player,
+      skillCharges: Math.min(player.skillCharges + mods.chargePerTurn, player.maxSkillCharges),
+    };
+  }
+
   // 4. Player acts unless a condition made it skip.
   let playerDamage = 0;
+  let didHit = false;
+  let didCrit = false;
+  let didCast = false;
   if (ptc.skipTurn) {
     events.push({ kind: 'player-unable-to-act', conditionType: skipCause(ptc.events) });
   } else if (action.kind === 'fight') {
@@ -170,9 +220,10 @@ function resolvePlayerTurn(
     // Both are off-equivalent for legacy gear (real weapon, 0 bonus), so the draw order and
     // damage are unchanged for a normal run.
     const weapon = weaponForSlot(player.inventory) ?? UNARMED;
-    const equipDmg = computeEquipModifiers(player.inventory).flatDamage;
-    const pa = resolvePlayerAttack(player, enemy, weapon, equipDmg, rng);
+    const pa = resolvePlayerAttack(player, enemy, weapon, mods.flatDamage, rng);
     playerDamage = pa.damage;
+    didHit = pa.outcome === 'hit' || pa.outcome === 'crit';
+    didCrit = pa.outcome === 'crit';
     events.push(...pa.events);
   } else {
     // Cast: spend one charge and resolve the skill through `castSkill` — the base
@@ -183,6 +234,16 @@ function resolvePlayerTurn(
     player = cast.caster;
     enemy = cast.target;
     playerDamage = cast.damage;
+    didCast = true;
+    // Overclock Chip / Hollow Heart: refund the charge-cost discount castSkill just spent
+    // (capped so the effective spend never goes below 0, and never above max).
+    if (mods.chargeDiscount > 0) {
+      const refund = Math.min(mods.chargeDiscount, action.skill.chargeCost);
+      player = {
+        ...player,
+        skillCharges: Math.min(player.skillCharges + refund, player.maxSkillCharges),
+      };
+    }
     events.push({ kind: 'skill-cast', subject: 'player', skillId: action.skill.id, name: action.skill.name });
     for (const e of cast.events) {
       if (
@@ -197,7 +258,30 @@ function resolvePlayerTurn(
     }
   }
 
-  // 5. Apply the exchanged damage (clamp hp at 0).
+  // 4b. Player-damage passive modifiers (RNG-free). Adrenal Shunt adds a flat bonus below
+  //     the HP threshold; Void Pact multiplies the total. Both no-op for a normal run.
+  if (playerDamage > 0) {
+    if (
+      mods.lowHpDamageBonus &&
+      player.hp < (mods.lowHpDamageBonus.thresholdPct / 100) * effectiveMaxHp(player)
+    ) {
+      playerDamage += mods.lowHpDamageBonus.amount;
+    }
+    if (mods.damageDealtMult > 0) {
+      playerDamage = Math.floor(playerDamage * (1 + mods.damageDealtMult / 100));
+    }
+  }
+
+  // 5. Apply the exchanged damage. Grace-Forged Aegis shield absorbs enemy damage before HP.
+  let absorbed = 0;
+  let shield = player.shield ?? 0;
+  if (shield > 0 && enemyDamage > 0) {
+    absorbed = Math.min(shield, enemyDamage);
+    shield -= absorbed;
+    enemyDamage -= absorbed;
+    player = { ...player, shield };
+    events.push({ kind: 'shield-absorbed', amount: absorbed });
+  }
   player = { ...player, hp: Math.max(player.hp - enemyDamage, 0) };
   enemy = { ...enemy, hp: Math.max(enemy.hp - playerDamage, 0) };
 
@@ -211,15 +295,83 @@ function resolvePlayerTurn(
     if (gain > 0) player = grantMomentum(player, gain);
   }
 
-  // 6. Resolve the outcome (player death checked first, faithful to pre-M2).
+  // 5b. Fire triggered relic effects (RNG-free). Order: onTakeDamage (enemy struck first,
+  //     in step 2) then the player's action triggers. `damageTaken` is the HP damage after
+  //     shield. Empty for effect-free gear (off-equivalence).
+  if (enemyDamage > 0) {
+    const t = fireTrigger('onTakeDamage', player, enemy, { damageTaken: enemyDamage });
+    player = t.player; enemy = t.enemy; events.push(...t.events);
+  }
+  if (didHit) {
+    const t = fireTrigger('onHit', player, enemy, {});
+    player = t.player; enemy = t.enemy; events.push(...t.events);
+  }
+  if (didCrit) {
+    const t = fireTrigger('onCrit', player, enemy, {});
+    player = t.player; enemy = t.enemy; events.push(...t.events);
+  }
+  if (didCast) {
+    const t = fireTrigger('onCast', player, enemy, {});
+    player = t.player; enemy = t.enemy; events.push(...t.events);
+  }
+
+  // 6. Resolve the outcome (player death checked first, faithful to pre-M2) — with the
+  //    Halo Fragment revive gate intercepting lethal damage once per battle.
   if (player.hp <= 0) {
-    events.push({ kind: 'defeat' });
-    return { state: { ...state, player, enemy }, events, status: 'player-died' };
+    const rev = reviveActionFor(player);
+    if (rev && !reviveUsed) {
+      const healedTo = Math.max(
+        Math.floor((effectiveMaxHp(player) * (rev.params.pctMaxHp ?? 25)) / 100),
+        1,
+      );
+      player = { ...player, hp: healedTo };
+      reviveUsed = true;
+      events.push({ kind: 'revive', healedTo });
+    } else {
+      events.push({ kind: 'defeat' });
+      return { state: withFlags(state, player, enemy, firstHitDone, reviveUsed), events, status: 'player-died' };
+    }
   }
   if (enemy.hp <= 0) {
-    return applyVictory(state, player, enemy, events, rng);
+    return killAndVictory(state, player, enemy, events, rng);
   }
-  return { state: { ...state, player, enemy }, events, status: 'ongoing' };
+  return { state: withFlags(state, player, enemy, firstHitDone, reviveUsed), events, status: 'ongoing' };
+}
+
+/**
+ * Build the next BattleState, threading the two transient M6 flags. They are set only when
+ * TRUE (never written as `false`/`undefined`), so a relic-less round produces a state
+ * byte-identical to the pre-M6 `{ ...state, player, enemy }` (off-equivalence).
+ */
+function withFlags(
+  state: BattleState,
+  player: Player,
+  enemy: Enemy,
+  firstHitDone: boolean,
+  reviveUsed: boolean,
+): BattleState {
+  const next: BattleState = { ...state, player, enemy };
+  if (firstHitDone) next.firstEnemyHitDone = true;
+  if (reviveUsed) next.reviveUsed = true;
+  return next;
+}
+
+/**
+ * Fire the `onKill` triggers (Devourer's Maw's permanent stat steal, etc.) on the player who
+ * just felled the enemy, then hand off to `applyVictory` — PURE. RNG-free trigger step, so
+ * the victory draw order (extra-rest then gold) is unchanged. Off-equivalent for a normal
+ * run (no onKill trigger fires, so the player is unchanged before rewards).
+ */
+function killAndVictory(
+  state: BattleState,
+  player: Player,
+  enemy: Enemy,
+  events: CombatEvent[],
+  rng: Rng,
+): RoundResult {
+  const k = fireTrigger('onKill', player, enemy, {});
+  events.push(...k.events);
+  return applyVictory(state, k.player, k.enemy, events, rng);
 }
 
 /**
@@ -231,7 +383,11 @@ function resolvePlayerTurn(
 function resolveCast(state: BattleState, skillId: SkillId, rng: Rng): RoundResult {
   const player = state.player;
   const skill = SKILLS[skillId];
-  if (!skill || !player.skillPool.includes(skillId) || player.skillCharges < skill.chargeCost) {
+  // Overclock Chip / Hollow Heart cut the effective charge cost (never below 0). 0 for a
+  // normal run, so availability is unchanged (off-equivalence).
+  const discount = computeEquipModifiers(player.inventory).chargeDiscount;
+  const effectiveCost = Math.max((skill?.chargeCost ?? 0) - discount, 0);
+  if (!skill || !player.skillPool.includes(skillId) || player.skillCharges < effectiveCost) {
     return { state, events: [{ kind: 'cast-unavailable' }], status: 'ongoing' };
   }
   return resolvePlayerTurn(state, { kind: 'cast', skill }, rng);
@@ -267,6 +423,11 @@ function resolvePotion(state: BattleState): RoundResult {
   const player = state.player;
   if (hasControlCondition(player)) {
     return { state, events: [{ kind: 'potion-blocked' }], status: 'ongoing' };
+  }
+  // Void Pact's `cannotHeal` blocks the potion heal site. 0/false for a normal run, so the
+  // potion path is byte-identical (off-equivalence).
+  if (computeEquipModifiers(player.inventory).cannotHeal) {
+    return { state, events: [{ kind: 'potion-unavailable' }], status: 'ongoing' };
   }
   // Heal cap is the EFFECTIVE max HP (Hardy raises it, Frail lowers it). Off-equivalent:
   // equals the stored maxHp when no CON augment is active.

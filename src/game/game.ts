@@ -24,7 +24,7 @@ import { createRng, type Rng } from './rng.ts';
 import { type StatKey, type Stats } from './character.ts';
 import { createKarma, type KarmaState } from './karma.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
-import { resolveRound, type BattleState, type BattleAction } from './battle.ts';
+import { resolveRound, openBattle, type BattleState, type BattleAction } from './battle.ts';
 import { createBattle } from './battle.ts';
 import { generateEnemy } from './enemy.ts';
 import {
@@ -269,7 +269,10 @@ export function step(state: GameState, input: GameInput): StepResult {
     case 'battle': {
       if (!phase.started) {
         if (input.kind !== 'continue') return noop;
-        return finish({ ...phase, started: true }, []);
+        // M6: fire startOfBattle relic triggers as the battle becomes active. Off-equivalent
+        // (same battle, no events) for a player with no startOfBattle relics equipped.
+        const opened = openBattle(phase.battle);
+        return finish({ ...phase, battle: opened.battle, started: true }, opened.events);
       }
       if (input.kind !== 'battle-action') return noop;
       return resolveBattleRound(phase, input.action, rng, finish);

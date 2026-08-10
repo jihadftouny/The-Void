@@ -109,6 +109,21 @@ export function formatEvent(e: GameEvent): string {
         : `Victory! +${e.xpGained} XP, +${e.goldGained} gold.`;
     case 'defeat':
       return `You have fallen.`;
+    // --- M6 items-content events ---
+    case 'relic-triggered':
+      return `A relic answers (${e.trigger}).`;
+    case 'consumable-used':
+      return `You use ${e.itemId}.`;
+    case 'consumable-unavailable':
+      return `You have nothing to use.`;
+    case 'shield-gained':
+      return `A shield forms around you (+${e.amount}).`;
+    case 'shield-absorbed':
+      return `Your shield absorbs ${e.amount} damage.`;
+    case 'revive':
+      return `The Void refuses your death — you rise with ${e.healedTo} HP.`;
+    case 'stat-stolen':
+      return `You devour the enemy's essence (+${e.amount} ${e.stat}).`;
 
     // --- narrative events ---
     case 'title':
