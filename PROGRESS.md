@@ -1,38 +1,66 @@
 # The Void — Build Progress
 
-_Live tracker. Driven by `docs/ROADMAP.md` (v2 — the LLM-driven narrative game). Updated as the
-final step of any session that changes build state._
+_Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike). Design record:
+`docs/GAME-DESIGN.md`. Updated as the final step of any session that changes build state._
 
-> **Direction (locked 2026-08-02):** The Void is an **LLM-driven narrative RPG** running a **local
-> 3–4B model**, shipped as a **packaged desktop game** (Electron + node-llama-cpp, itch.io),
-> desktop-first. Hybrid input (LLM-written choices + free text), engine-authoritative rules, master
-> narrator + specialists, per-zone prompt files, enemy cards + boss agents, DOM text UI + Kaplay
-> atmosphere. Full design record in `docs/ROADMAP.md`.
+> **Direction (scope locked 2026-08-05):** The Void is a **mechanics-first roguelike RPG** — a deep
+> D&D-style game with a **local-LLM narrator** over the top (engine owns all rules/numbers). Five-floor
+> psyche-descent, die-and-restart with **unlocks-only** meta-progression, a **hidden multi-axis karma
+> ("Nature")** that bends world + mechanics and resolves into a **blended ending** (floor 4 is the
+> karma reckoning). Full-depth systems: classes + signature skills, 24 conditions, ~24 enemy families +
+> affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
+> Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v2 overall: 0/10 N-milestones done** `[--------------------]`
+**v3 overall: 0/18 milestones done** `[--------------------]` — M0 in progress (base built; merge +
+reconcile pending). Pre-M0 base (engine + save/load + desktop LLM slice) is built & verified.
 
-| Milestone (v2) | Status |
+| Milestone (v3) | Status |
 |---|---|
-| N0 — Doctrine + v2 scaffolding | 🔄 (roadmap + doctrine written; held-branch decision pending) |
-| N1 — Desktop shell + local-model spike | ✅ shell built, smoke PASS (4B @ 90 tok/s Vulkan) — awaiting your visual `npm run desktop` |
-| N2 — LLM runtime layer (pure core) | 🔄 `src/llm/narrate.ts` (pure prompt builder, tested); grammar-constrained + token budgets still to add |
-| N3 — Narrator loop v1 (Floor 1 playable) | 🔄 FULL-GAME slice built: engine drives all phases, LLM narrates each beat, DOM UI (`src/desktop/game.ts`) — a full run is playable, not just Floor 1 |
-| N4 — Engine-as-toolbox | ⬜ |
-| N5 — Zone system (+ co-written content) | ⬜ |
-| N6 — Enemy cards + boss agents | ⬜ |
-| N7 — Narrative UI (DOM + Kaplay atmosphere) | ⬜ |
-| N8 — Save/load v2 | ⬜ |
-| N9 — Balance & playability | ⬜ |
-| N10 — Package & ship (itch) | ⬜ |
+| M0 — Consolidate base & reconcile to mechanics-first | 🔄 docs reconciled (ROADMAP v3 + GAME-DESIGN); branch-stack merge is the user's gate |
+| M1 — Foundational state models (karma + item schema + inventory) | ⬜ |
+| M2 — Player skills + full 24-condition system | ⬜ |
+| M3 — Classes & signature kits | ⬜ |
+| M4 — Combat overhaul: defense matters (enemies roll to-hit) | ⬜ |
+| M5 — Inventory & equipment (Tibia-style) ★ | ⬜ |
+| M6 — Items content: relics, uniques, consumables | ⬜ |
+| M7 — Loot sourcing & thematic economy | ⬜ |
+| M8 — Enemies: families, affixes, karma-weighting | ⬜ |
+| M9 — In-run progression (frequent level-up picks) | ⬜ |
+| M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ |
+| M11 — LLM layer to spec (narrate+choices, floor voices, boss-agent infra) | ⬜ (working narrator slice exists; not yet to spec) |
+| M12 — Bosses: five unique encounters as agents | ⬜ |
+| M13 — Meta-progression: unlocks & mastery feats | ⬜ |
+| M14 — Karma payoff: blended-spectrum endings | ⬜ |
+| M15 — Balance pass (tough but fair), sim-verified | ⬜ |
+| M16 — Polish & game-feel | ⬜ |
+| M17 — Package & ship (itch) | ⬜ |
 
-**v1 foundation (Java port): built, verified, on held branches** — engine M1–M8
-(`agentic/logic-core`), save/load + UI shell + wiring (`agentic/wire-save`, contains everything).
-298–315 tests green across branches; merges cleanly (verified). Disposition: engine = the toolbox;
-save/load carries over; UI shell partially reused. Merge decision deliberately **held** until N1/N2.
+**Pre-M0 base (built, verified, on a stacked review branch awaiting merge):** deterministic engine
+(combat/stats/2 stub classes/act-gated leveling/enemies/11-of-24 conditions/shop/rest/gold/5-act/final
+boss/`step` controller), save/load, Kaplay UI shell, desktop Electron app w/ local LLM narrator
+(full run narrated), device-agnostic GPU selection, shared model-cache. ~378 tests green. The v1 Java
+port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M11–M12.
 
-Legend: ⬜ not started · 🔄 in progress · ✅ done
+Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-08-05 — Full scope interview + mechanics-first re-scope (M0 docs)
+- Ran a thorough scope interview. **Recalibrated to mechanics-first** (deep RPG is the heart; LLM
+  narrates over it) and expanded scope: several distinct classes w/ signature kits, player skills +
+  all 24 conditions, ~24 enemy families + affixes, 5 boss agents, full Tibia-style inventory,
+  build-defining relic trinkets, authored uniques + rarity-scaling, rich consumables, drops+chests+
+  shops loot, thematic economy, unlocks-only meta-progression, hidden multi-axis karma with a
+  blended-spectrum ending, and the locked five-floor spine (Undercity → Entrance to the Void → Ash
+  City → Angelic Underground → True Void). Karma is live from floor 1; **floor 4 is the reckoning**
+  (carried karma × floor-4 choices decides grace vs. cast-down).
+- Wrote **`docs/GAME-DESIGN.md`** (authoritative WHAT, decisions tagged DECIDED/PROPOSAL/OPEN) and
+  rewrote **`docs/ROADMAP.md` → v3** (18-milestone plan mirroring the spaceship game's format).
+  Reconciled this tracker. `CLAUDE.md` top line ("LLM-driven narrative RPG") flagged for a one-line
+  mechanics-first tweak (user's file — not auto-changed).
+- Also this session: fixed the device-agnostic GPU selection (kept the verified `gpu-fix`; removed an
+  accidental duplicate `gpu-discrete`); rebuilt the `gpu-fix` worktree for the user's real-hardware check.
+- Next: brainstorm the [OPEN] items (classes, floors+bosses, karma axes) → then M0 merge (gated) → M1.
 
 ### 2026-08-02 — Playable LLM game slice (N1 shell + N2 narration + N3 loop)
 - Merged the engine (`agentic/wire-save`) into `spike/n1-local-llm` (build step, not the gated
