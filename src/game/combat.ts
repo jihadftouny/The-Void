@@ -26,6 +26,7 @@ import { getWeaponByName, type Weapon } from './weapon.ts';
 import { rollDice, rollDie, randInt, type Rng } from './rng.ts';
 import { SKILLS, useSkill, type SkillId } from './skill.ts';
 import type { ActiveCondition } from './condition.ts';
+import { effectiveMods, effectiveArmorClass, statModDelta } from './statEffects.ts';
 import type { AttackOutcome, CombatEvent } from './combatEvent.ts';
 
 export type { AttackOutcome } from './combatEvent.ts';
@@ -34,6 +35,8 @@ export type { AttackOutcome } from './combatEvent.ts';
 export interface Attacker extends Character {
   equippedWeaponId: string;
   advantageDisadvantage: number;
+  /** Active status conditions — read for the augment/deprivation stat cascade (M2). */
+  activeConditions: ActiveCondition[];
 }
 
 /** An enemy able to cast from a skill pool (the Enemy). */
@@ -125,7 +128,7 @@ export interface PlayerAttackResult {
  */
 export function resolvePlayerAttack(
   player: Attacker,
-  enemy: Character,
+  enemy: Character & { activeConditions: ActiveCondition[] },
   rng: Rng,
 ): PlayerAttackResult {
   const weapon = getWeaponByName(player.equippedWeaponId);
@@ -134,21 +137,35 @@ export function resolvePlayerAttack(
   }
   const advDis = normalizeAdvDis(player.advantageDisadvantage);
   const { natural } = rollD20WithAdvantage(advDis, rng);
-  const total = natural + weaponModifier(player, weapon);
-  const outcome = resolveAttackOutcome(natural, total, enemy.armorClass);
+  // To-hit uses the EFFECTIVE mods (Strong/Weak on STR, Quick/Slow on DEX cascade in);
+  // the defender AC is the enemy's EFFECTIVE AC (Hardy/Frail + Quick/Slow). Both are
+  // off-equivalent: with no augment active they equal the stored mods / stored AC.
+  const em = effectiveMods(player);
+  const total = natural + weaponModifier({ ...player, mods: em }, weapon);
+  const outcome = resolveAttackOutcome(natural, total, effectiveArmorClass(enemy));
 
   const events: CombatEvent[] = [];
   if (advDis === 1) events.push({ kind: 'advantage', subject: 'player' });
   else if (advDis === -1) events.push({ kind: 'disadvantage', subject: 'player' });
 
+  // Strong/Weak add the STR-mod delta to weapon damage — melee only (Melee/Finesse).
+  // Quick does NOT add ranged damage. 0 when no STR augment is active. Added once
+  // (like an ability mod), not per die on a crit.
+  const meleeDamageDelta =
+    weapon.property === 'Melee' || weapon.property === 'Finesse'
+      ? statModDelta(player, 'STR')
+      : 0;
+
   let damage = 0;
   if (outcome === 'hit') {
-    damage = rollDice(rng, weapon.damage.quantity, weapon.damage.sides);
+    damage = rollDice(rng, weapon.damage.quantity, weapon.damage.sides) + meleeDamageDelta;
   } else if (outcome === 'crit') {
     damage =
       rollDice(rng, weapon.damage.quantity, weapon.damage.sides) +
-      rollDice(rng, weapon.damage.quantity, weapon.damage.sides);
+      rollDice(rng, weapon.damage.quantity, weapon.damage.sides) +
+      meleeDamageDelta;
   }
+  damage = Math.max(damage, 0);
   events.push({ kind: 'attack', subject: 'player', outcome, damage });
 
   return { outcome, damage, events };

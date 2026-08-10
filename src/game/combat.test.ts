@@ -11,6 +11,7 @@ import {
 } from './combat.ts';
 import { getWeaponByName } from './weapon.ts';
 import { makeCondition } from './condition.ts';
+import { effectiveMods } from './statEffects.ts';
 import { type Rng } from './rng.ts';
 
 function scriptedRng(values: number[]): Rng {
@@ -44,6 +45,7 @@ function player(overrides: Partial<Attacker> = {}): Attacker {
     hitDie: { quantity: 1, sides: 10 },
     equippedWeaponId: 'Jaaj Sword 1',
     advantageDisadvantage: 0,
+    activeConditions: [],
     ...overrides,
   };
 }
@@ -174,6 +176,70 @@ describe('resolvePlayerAttack — outcomes and damage', () => {
     expect(r.outcome).toBe('hit'); // natural 15 + 4 = 19
     expect(r.damage).toBe(4);
     expect(r.events[0]).toEqual({ kind: 'advantage', subject: 'player' });
+  });
+});
+
+describe('resolvePlayerAttack — Strong/Weak STR cascade (to-hit + melee damage)', () => {
+  // Melee attacker, base STR 14 -> mod +2 (floor((14-10)/2)). Jaaj Sword 1 = Melee 1d6.
+  //   strong: STR 16 -> mod +3 (+1 delta) ; weak: STR 12 -> mod +1 (-1 delta).
+  // Damage delta is added ONCE to the die roll (like an ability mod). Every number is
+  // hand-derived from the D&D formula, and the scripted face makes the natural roll
+  // explicit so total = natural + hand-computed mod, never the function vs itself.
+  const str14 = { STR: 14, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 };
+
+  it('strong: mod +3 -> nat 10 hits AC 13, damage = 1d6(4) + 1 = 5', () => {
+    const p = player({ stats: str14, mods: { STR: 2, DEX: 1, CON: 1, INT: 0, WIS: 0, CHA: 0 }, activeConditions: [makeCondition('strong')] });
+    expect(effectiveMods(p).STR).toBe(3);
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), scriptedRng([face(10, 20), face(4, 6)]));
+    expect(r.outcome).toBe('hit'); // 10 + 3 = 13 >= 13
+    expect(r.damage).toBe(5); // 4 + 1
+  });
+
+  it('without the augment the SAME nat 10 misses AC 13 (proves +1 to-hit mattered)', () => {
+    const p = player({ stats: str14, mods: { STR: 2, DEX: 1, CON: 1, INT: 0, WIS: 0, CHA: 0 } });
+    expect(effectiveMods(p).STR).toBe(2);
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), scriptedRng([face(10, 20)]));
+    expect(r.outcome).toBe('miss'); // 10 + 2 = 12 < 13, no damage draw
+    expect(r.damage).toBe(0);
+  });
+
+  it('weak: mod +1 -> nat 10 hits AC 5, damage = 1d6(4) - 1 = 3', () => {
+    const p = player({ stats: str14, mods: { STR: 2, DEX: 1, CON: 1, INT: 0, WIS: 0, CHA: 0 }, activeConditions: [makeCondition('weak')] });
+    expect(effectiveMods(p).STR).toBe(1);
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 5 }), scriptedRng([face(10, 20), face(4, 6)]));
+    expect(r.outcome).toBe('hit'); // 10 + 1 = 11 >= 5
+    expect(r.damage).toBe(3); // 4 - 1
+  });
+});
+
+describe('resolvePlayerAttack — Quick DEX cascade (ranged to-hit only, no ranged damage)', () => {
+  // Ranged attacker (Jooj Gun 1 = Ranged 1d4), base DEX 14 -> mod +2. quick: DEX 16 ->
+  // mod +3 (+1 delta). Ranged to-hit uses DEX; Quick must NOT add ranged damage.
+  const dex14 = { STR: 10, DEX: 14, CON: 12, INT: 10, WIS: 10, CHA: 10 };
+
+  it('quick raises ranged to-hit by +1 but leaves 1d4 damage unmodified', () => {
+    const p = player({ stats: dex14, mods: { STR: 0, DEX: 2, CON: 1, INT: 0, WIS: 0, CHA: 0 }, equippedWeaponId: 'Jooj Gun 1', activeConditions: [makeCondition('quick')] });
+    expect(effectiveMods(p).DEX).toBe(3);
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), scriptedRng([face(10, 20), face(3, 4)]));
+    expect(r.outcome).toBe('hit'); // 10 + 3 = 13 >= 13
+    expect(r.damage).toBe(3); // 1d4 face 3, NO STR delta on a ranged weapon
+  });
+
+  it('without quick the same nat 10 misses AC 13 (10 + 2 = 12 < 13)', () => {
+    const p = player({ stats: dex14, mods: { STR: 0, DEX: 2, CON: 1, INT: 0, WIS: 0, CHA: 0 }, equippedWeaponId: 'Jooj Gun 1' });
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 13 }), scriptedRng([face(10, 20)]));
+    expect(r.outcome).toBe('miss');
+  });
+});
+
+describe('resolvePlayerAttack — off-equivalence (no augment / non-augment condition)', () => {
+  it('a non-augment condition (bleed) leaves to-hit and damage identical to conditionless', () => {
+    // bleed touches no stat, so mod stays 4 and enemy AC stays 10 -> same as the base
+    // "nat 15 + 4 = 19 hit, 1d6(4)=4" anchor above.
+    const p = player({ activeConditions: [makeCondition('bleed')] });
+    const r = resolvePlayerAttack(p, enemy({ armorClass: 10 }), scriptedRng([face(15, 20), face(4, 6)]));
+    expect(r.outcome).toBe('hit');
+    expect(r.damage).toBe(4);
   });
 });
 
