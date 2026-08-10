@@ -307,18 +307,19 @@ export function castSkill<
   return { caster: newCaster, target: newTarget, damage, events };
 }
 
-// ------- Deferred-twist no-op hook (M4 seam) ---------------------------------
+// ------- Scavver EVASION half (M4) --------------------------------------------
 // Scavver's twist has two halves: EXPOSURE (the crit/DoT-payoff, implemented above via
-// `exposureScale`/`appliesExposure`) and EVASION (dodging enemy attacks). Evasion depends
-// on enemies rolling to hit, which does not exist until M4. This is the single, obvious
-// site M4 fills in — wired now as an explicit NO-OP so the feature is never silently
-// missing. Do NOT build the dodge here.
+// `exposureScale`/`appliesExposure`) and EVASION (dodging enemy attacks). Now that enemies
+// roll to hit (M4), EVASION is real: a Scavver forces the enemy's to-hit d20 to
+// disadvantage (roll twice, take the lower). Slip's `quick` self-buff separately becomes a
+// real evasion bonus via the DEX->AC (dexCap) path in defense.ts — no extra work here.
 
 /**
- * Scavver EVASION half (M4). Should let a Scavver dodge some enemy attacks (and let
- * `slip`'s `quick` become a real evasion bonus). No enemy to-hit system exists yet, so
- * this returns 0 (no dodge) regardless of input.
+ * The advantage/disadvantage the ENEMY suffers when attacking this character: −1
+ * (disadvantage) for a Scavver, 0 for every other class. Deterministic — the two-draw
+ * disadvantage roll itself is owned by `rollD20WithAdvantage` in combat.ts. (M4 emits only
+ * −1|0; the roller still accepts +1 for a future enemy-advantage source.)
  */
-export function scavverEvasionTwist(_character: { classId: PlayerClass }): 0 {
-  return 0; // no-op until M4 wires enemy to-hit
+export function scavverEvasionTwist(character: { classId: PlayerClass }): -1 | 0 {
+  return character.classId === 'Scavver' ? -1 : 0;
 }

@@ -265,7 +265,9 @@ describe('helpers', () => {
     expect(grantMomentum({ momentum: 5 }, 2).momentum).toBe(5);
   });
 
-  it('scavverEvasionTwist is a wired no-op (M4 seam) — always 0', () => {
-    expect(scavverEvasionTwist({ classId: 'Scavver' })).toBe(0);
+  it('scavverEvasionTwist gives a Scavver -1 (enemy attacks at disadvantage), others 0', () => {
+    expect(scavverEvasionTwist({ classId: 'Scavver' })).toBe(-1);
+    expect(scavverEvasionTwist({ classId: 'Enforcer' })).toBe(0);
+    expect(scavverEvasionTwist({ classId: 'Hollow' })).toBe(0);
   });
 });
