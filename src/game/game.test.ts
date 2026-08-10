@@ -33,7 +33,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
 
 function menuState(player: Player, rngState: number, act = 1): GameState {
   return {
-    version: 1,
+    version: 2,
     rngState,
     player,
     act,
@@ -53,7 +53,7 @@ describe('createGame', () => {
     expect(s.act).toBe(1);
     expect(s.place).toBe(0);
     expect(s.rngState).toBe(777);
-    expect(s.version).toBe(1);
+    expect(s.version).toBe(2);
     expect(awaitingFor(s.phase)).toBe('title');
   });
 
@@ -393,7 +393,7 @@ describe('entering Act 5', () => {
   it('act-intro{5} continue builds the final boss battle', () => {
     const player = makePlayer();
     const state: GameState = {
-      version: 1,
+      version: 2,
       rngState: 314,
       player,
       act: 5,
@@ -423,7 +423,7 @@ describe('win / ending path', () => {
   it('victory in the final battle emits the ending with the name, then goes terminal', () => {
     const player = makePlayer({ name: 'Zara' });
     const state: GameState = {
-      version: 1,
+      version: 2,
       rngState: 1,
       player,
       act: 5,
@@ -461,7 +461,7 @@ describe('win / ending path', () => {
     const battle: BattleState = { player, enemy: boss, act: 5, canFlee: false };
     let r: StepResult = {
       state: {
-        version: 1,
+        version: 2,
         rngState: 7,
         player,
         act: 5,

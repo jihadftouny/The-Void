@@ -54,9 +54,64 @@ function runInputs(
 
 describe('SAVE_VERSION', () => {
   it('mirrors the current GameState.version', () => {
-    // Derived from game.ts: createGame stamps version 1.
-    expect(SAVE_VERSION).toBe(1);
+    // Derived from game.ts: createGame stamps version 2 (M1 bumped 1 -> 2).
+    expect(SAVE_VERSION).toBe(2);
     expect(createGame(SEED).version).toBe(SAVE_VERSION);
+  });
+});
+
+const ZERO_KARMA = {
+  mercyCruelty: 0,
+  restraintGreed: 0,
+  reverenceDesecration: 0,
+  clarityDelusion: 0,
+};
+
+describe('migration v1 -> v2', () => {
+  it('injects default karma + empty inventory into an old-shape mid-run save', () => {
+    // The modern (v2) state carries karma (all zero) and a player with an empty
+    // inventory. Build a v1 save by STRIPPING those M1 fields and stamping version 1.
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    delete old.karma;
+    delete (old.player as Record<string, unknown>).inventory;
+    old.version = 1;
+    // Sanity: the source really is missing the M1 fields (else the test is vacuous).
+    expect('karma' in old).toBe(false);
+    expect('inventory' in (old.player as Record<string, unknown>)).toBe(false);
+
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    // The injected defaults, asserted explicitly.
+    expect(migrated!.karma).toEqual(ZERO_KARMA);
+    expect(migrated!.version).toBe(2);
+    expect(migrated!.player!.inventory.backpack).toEqual([]);
+    expect(Object.values(migrated!.player!.inventory.slots).every((s) => s === null)).toBe(
+      true,
+    );
+    expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
+    // And the migrated state deep-equals the modern new-shape state it was built from.
+    expect(migrated).toEqual(modern);
+  });
+
+  it('migrates a v1 title save with a null player (no inventory to inject)', () => {
+    const modern = createGame(SEED); // player is null at the title
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    delete old.karma;
+    old.version = 1;
+
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.karma).toEqual(ZERO_KARMA);
+    expect(migrated!.player).toBeNull();
+    expect(migrated!.version).toBe(2);
+    expect(migrated).toEqual(modern);
+  });
+
+  it('rejects a future version 3 save without throwing', () => {
+    const s = { ...createGame(SEED), version: 3 };
+    expect(() => decodeSave(JSON.stringify(s))).not.toThrow();
+    expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
 });
 

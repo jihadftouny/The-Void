@@ -15,6 +15,8 @@
 // it never throws. The player-facing meaning of a `null` is "start a new game".
 
 import { type GameState } from './game.ts';
+import { createKarma } from './karma.ts';
+import { createInventory } from './inventory.ts';
 import { type PlayerClass } from './player.ts';
 
 /**
@@ -23,7 +25,7 @@ import { type PlayerClass } from './player.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** The 15 valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -93,18 +95,10 @@ export function decodeSave(json: string): GameState | null {
 /**
  * Upgrade seam for old saves. Called only when `fromVersion < SAVE_VERSION`.
  * Structured as a version ladder so future format bumps slot in without touching
- * `decodeSave`: each `case` upgrades one step and bumps `current`, e.g.
+ * `decodeSave`: each `case` upgrades one step and bumps `current`.
  *
- *   while (current < SAVE_VERSION) {
- *     switch (current) {
- *       case 1: value = upgrade1to2(value); current = 2; break;
- *       case 2: value = upgrade2to3(value); current = 3; break;
- *       default: return null; // unknown/unsupported source version
- *     }
- *   }
- *
- * Today SAVE_VERSION is 1, so the only reachable `fromVersion` here is `< 1`, for
- * which there is nothing to upgrade -> `null` (unsupported). Returns the upgraded
+ * Today the reachable source versions are `1` (upgraded to 2 by `upgrade1to2`) and
+ * anything `< 1` (nothing to upgrade -> `null`, unsupported). Returns the upgraded
  * plain value (still unvalidated — `decodeSave` validates the result), or `null`
  * if the source version cannot be migrated.
  */
@@ -113,13 +107,38 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
   let value = raw;
   while (current < SAVE_VERSION) {
     switch (current) {
-      // Future example:
-      // case 1: value = upgrade1to2(value); current = 2; break;
+      case 1:
+        value = upgrade1to2(value);
+        current = 2;
+        break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
     }
   }
   return value;
+}
+
+/**
+ * Migrate a v1 save (no `karma`, player with no `inventory`) to the v2 shape by
+ * INJECTING the defaults M1 added: a neutral karma vector, and — when a player is
+ * present — an empty inventory. Pure: it shallow-clones the parsed plain object and
+ * fills only the absent fields, then stamps `version = 2`. A non-object input is
+ * returned unchanged so the caller's validation rejects it.
+ */
+function upgrade1to2(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (!('karma' in next) || next.karma === undefined) {
+    next.karma = createKarma();
+  }
+  if (isPlainObject(next.player)) {
+    const player = next.player as Record<string, unknown>;
+    if (!('inventory' in player) || player.inventory === undefined) {
+      next.player = { ...player, inventory: createInventory() };
+    }
+  }
+  next.version = 2;
+  return next;
 }
 
 // ------- Shape guard ---------------------------------------------------------
@@ -159,10 +178,24 @@ function isValidGameState(v: unknown): v is GameState {
   if (typeof (v.phase as { kind?: unknown }).kind !== 'string') return false;
   if (!PHASE_KINDS.includes((v.phase as { kind: string }).kind)) return false;
 
+  // Karma vector: a plain object whose four axes are all finite numbers.
+  if (!isValidKarma(v.karma)) return false;
+
   // `player` is null before creation, otherwise a full Player envelope.
   if (v.player !== null && !isValidPlayer(v.player)) return false;
 
   return true;
+}
+
+/** Karma-vector check: a plain object with four finite-number axes. */
+function isValidKarma(v: unknown): boolean {
+  if (!isPlainObject(v)) return false;
+  return (
+    isFiniteNumber(v.mercyCruelty) &&
+    isFiniteNumber(v.restraintGreed) &&
+    isFiniteNumber(v.reverenceDesecration) &&
+    isFiniteNumber(v.clarityDelusion)
+  );
 }
 
 /** Top-level Player field/type check (not recursive into items/conditions). */
@@ -194,6 +227,13 @@ function isValidPlayer(v: unknown): boolean {
   if (!Array.isArray(v.resistances)) return false;
   if (!Array.isArray(v.activeConditions)) return false;
   if (!Array.isArray(v.skillPool)) return false;
+
+  // Inventory: a plain object with a `slots` record and a `backpack` array.
+  // Shallow, matching this module's non-recursive validation depth — the per-slot
+  // and per-instance contents are trusted once the container shape is sound.
+  if (!isPlainObject(v.inventory)) return false;
+  if (!isPlainObject((v.inventory as { slots?: unknown }).slots)) return false;
+  if (!Array.isArray((v.inventory as { backpack?: unknown }).backpack)) return false;
 
   return true;
 }
