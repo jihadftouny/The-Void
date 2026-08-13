@@ -10,7 +10,12 @@ import { describeDraftOption } from '../game/draft.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun } from './persist.ts';
-import { displayPlayer } from './view-model.ts';
+import {
+  displayPlayer,
+  castOptions,
+  consumableOptions,
+  spareOffered,
+} from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 
@@ -135,6 +140,46 @@ function button(label: string, onClick: () => void): void {
   choicesEl.appendChild(b);
 }
 
+// Append one option button to an arbitrary container (used by the inline pickers and the
+// inventory/sheet screens). A disabled option (e.g. an unaffordable skill) is visibly
+// greyed and inert. `once` so a click can't double-fire before the re-render clears it.
+function optionButton(
+  parent: HTMLElement,
+  label: string,
+  onClick: () => void,
+  disabled = false,
+): void {
+  const b = document.createElement('button');
+  b.textContent = label;
+  if (disabled) {
+    b.disabled = true;
+    b.classList.add('disabled');
+  } else {
+    b.addEventListener('click', onClick, { once: true });
+  }
+  parent.appendChild(b);
+}
+
+// An inline expander: a toggle button in #choices that reveals/hides a sub-list of option
+// buttons built by `build`. Keeps the battle Cast / Use-item pickers on the existing
+// containers — no desktop.html change needed.
+function pickerButton(label: string, build: (list: HTMLElement) => void): void {
+  const wrap = document.createElement('div');
+  wrap.className = 'picker';
+  const toggle = document.createElement('button');
+  toggle.textContent = label;
+  const list = document.createElement('div');
+  list.className = 'picker-list';
+  list.style.display = 'none';
+  toggle.addEventListener('click', () => {
+    list.style.display = list.style.display === 'none' ? 'block' : 'none';
+  });
+  wrap.appendChild(toggle);
+  wrap.appendChild(list);
+  build(list);
+  choicesEl.appendChild(wrap);
+}
+
 // Show a transient indicator while the narrator generates, in place of the
 // (already-cleared) choice buttons. renderChoices() clears this when done.
 function showThinking(): void {
@@ -241,11 +286,43 @@ function renderChoices(awaiting: Awaiting): void {
       button('Seek a bargain', () => void dispatch({ kind: 'menu', choice: 'seek-deal' }));
       button('Abandon the descent', () => void dispatch({ kind: 'menu', choice: 'quit' }));
       break;
-    case 'battle-action':
+    case 'battle-action': {
+      const p = displayPlayer(state);
       button('Fight', () => void dispatch({ kind: 'battle-action', action: 'fight' }));
+      // Cast: an inline picker of the player's skills with charge costs; unaffordable
+      // skills render disabled. The engine re-checks the charge on dispatch.
+      const casts = p ? castOptions(p) : [];
+      if (casts.length > 0) {
+        pickerButton('Cast', (list) => {
+          for (const c of casts) {
+            optionButton(
+              list,
+              `${c.name} (${c.chargeCost}⚡)`,
+              () => void dispatch({ kind: 'battle-action', action: { kind: 'cast', skillId: c.skillId } }),
+              !c.affordable,
+            );
+          }
+        });
+      }
+      // Spare: only against a living karma-weighted enemy (the engine's own gate).
+      if (spareOffered(state)) {
+        button('Spare', () => void dispatch({ kind: 'battle-action', action: 'spare' }));
+      }
+      // Use item: an inline picker of usable consumables in the backpack (by index).
+      const items = p ? consumableOptions(p) : [];
+      if (items.length > 0) {
+        pickerButton('Use item', (list) => {
+          for (const it of items) {
+            optionButton(list, `${it.name} (${it.rarity})`, () =>
+              void dispatch({ kind: 'battle-action', action: { kind: 'useConsumable', source: { index: it.index } } }),
+            );
+          }
+        });
+      }
       button('Potion', () => void dispatch({ kind: 'battle-action', action: 'potion' }));
       button('Run', () => void dispatch({ kind: 'battle-action', action: 'run' }));
       break;
+    }
     case 'continue':
       button('Continue', () => void dispatch({ kind: 'continue' }));
       break;
