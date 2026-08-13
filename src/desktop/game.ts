@@ -6,7 +6,6 @@
 import { createGame, step, awaitingFor } from '../game/game.ts';
 import type { GameState, GameInput, Awaiting } from '../game/game.ts';
 import { STAT_KEYS } from '../game/character.ts';
-import { describeDraftOption } from '../game/draft.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun } from './persist.ts';
@@ -18,6 +17,10 @@ import {
   describeInventory,
   equipFromBackpack,
   unequipSlot,
+  characterSheet,
+  dealView,
+  draftCards,
+  chestReveal,
 } from './view-model.ts';
 import type { ItemView } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
@@ -283,6 +286,58 @@ function renderInventoryScreen(): void {
   });
 }
 
+// The hub full character sheet: level, six stats (+mods), HP, AC, skill charges, skills,
+// equipped gear, and the class build-resource. NEVER karma/Nature (the view-model omits it).
+function renderSheetScreen(): void {
+  const p = state.player;
+  if (!p) {
+    screen = 'game';
+    rerender();
+    return;
+  }
+  const sheet = characterSheet(p);
+  const wrap = document.createElement('div');
+  wrap.className = 'vm-screen';
+
+  vmRow(wrap, 'Name', sheet.name);
+  vmRow(wrap, 'Class', `${sheet.classId} · level ${sheet.level}`);
+  vmRow(wrap, 'HP', `${sheet.hp} / ${sheet.maxHp}`);
+  vmRow(wrap, 'Armor class', String(sheet.armorClass));
+  vmRow(wrap, 'XP', String(sheet.xp));
+  vmRow(wrap, 'Charges', `${sheet.skillCharges} / ${sheet.maxSkillCharges}`);
+  if (sheet.resource) {
+    vmRow(wrap, sheet.resource.kind, String(sheet.resource.value));
+  }
+
+  const statHead = document.createElement('h3');
+  statHead.textContent = 'Stats';
+  wrap.appendChild(statHead);
+  for (const s of sheet.stats) {
+    vmRow(wrap, s.key, `${s.score} (${s.mod >= 0 ? '+' : ''}${s.mod})`);
+  }
+
+  const skillHead = document.createElement('h3');
+  skillHead.textContent = 'Skills';
+  wrap.appendChild(skillHead);
+  if (sheet.skills.length === 0) vmRow(wrap, '', '(none)', true);
+  for (const sk of sheet.skills) {
+    vmRow(wrap, sk.name, `${sk.chargeCost}⚡`);
+  }
+
+  const gearHead = document.createElement('h3');
+  gearHead.textContent = 'Equipped';
+  wrap.appendChild(gearHead);
+  for (const g of sheet.equipped) {
+    vmRow(wrap, g.slot, g.name ?? '(empty)', !g.name);
+  }
+
+  choicesEl.appendChild(wrap);
+  button('Back', () => {
+    screen = 'game';
+    rerender();
+  });
+}
+
 // Show a transient indicator while the narrator generates, in place of the
 // (already-cleared) choice buttons. renderChoices() clears this when done.
 function showThinking(): void {
@@ -390,11 +445,19 @@ function renderChoices(awaiting: Awaiting): void {
         renderInventoryScreen();
         break;
       }
+      if (screen === 'sheet') {
+        renderSheetScreen();
+        break;
+      }
       button('Continue the descent', () => void dispatch({ kind: 'menu', choice: 'continue' }));
       button('Seek a bargain', () => void dispatch({ kind: 'menu', choice: 'seek-deal' }));
       button('Abandon the descent', () => void dispatch({ kind: 'menu', choice: 'quit' }));
       button('Inventory', () => {
         screen = 'inventory';
+        rerender();
+      });
+      button('Character sheet', () => {
+        screen = 'sheet';
         rerender();
       });
       break;
@@ -436,25 +499,56 @@ function renderChoices(awaiting: Awaiting): void {
       break;
     }
     case 'continue':
+      // A chest/cache continue: reveal the dropped loot (name + rarity) before Continue.
+      if (state.phase.kind === 'chest') {
+        const loot = chestReveal(state.phase.loot);
+        const head = document.createElement('div');
+        head.className = 'stats-line';
+        head.textContent = loot.length > 0 ? 'You found:' : 'The cache is empty.';
+        choicesEl.appendChild(head);
+        for (const row of loot) {
+          const div = document.createElement('div');
+          div.className = 'loot-row vm-row';
+          div.innerHTML = `<span class="vm-name">${row.name}</span><span class="vm-rarity">${row.rarity}</span>`;
+          choicesEl.appendChild(div);
+        }
+      }
       button('Continue', () => void dispatch({ kind: 'continue' }));
       break;
     case 'draft-pick': {
-      // M9: a minimal functional draft picker — one button per offered option (index-dispatch).
+      // M9: a functional draft picker — one readable card per offered option (index-dispatch).
       const note = document.createElement('div');
       note.className = 'stats-line';
       note.textContent = 'Choose one — the descent reshapes you.';
       choicesEl.appendChild(note);
       if (state.phase.kind === 'level-up-draft') {
-        state.phase.offers.forEach((offer, i) => {
-          button(describeDraftOption(offer), () => void dispatch({ kind: 'draft-pick', index: i }));
-        });
+        for (const card of draftCards(state.phase.offers)) {
+          const b = document.createElement('button');
+          b.className = 'draft-card';
+          b.textContent = card.label;
+          b.addEventListener('click', () => void dispatch({ kind: 'draft-pick', index: card.index }), {
+            once: true,
+          });
+          choicesEl.appendChild(b);
+        }
       }
       break;
     }
-    case 'deal-decision':
+    case 'deal-decision': {
+      // A clear cost -> reward block; NEVER the karma-derived pool (view-model omits it).
+      if (state.phase.kind === 'deal') {
+        const dv = dealView(state.phase.deal);
+        const block = document.createElement('div');
+        block.className = 'deal-block';
+        block.innerHTML =
+          `<div class="deal-cost">Cost: ${dv.cost}</div>` +
+          `<div class="deal-reward">Reward: ${dv.reward}</div>`;
+        choicesEl.appendChild(block);
+      }
       button('Pay the price', () => void dispatch({ kind: 'deal-decision', accept: true }));
       button('Refuse', () => void dispatch({ kind: 'deal-decision', accept: false }));
       break;
+    }
     case 'rest-decision':
       button('Rest here', () => void dispatch({ kind: 'rest-decision', accept: true }));
       button('Press on', () => void dispatch({ kind: 'rest-decision', accept: false }));
