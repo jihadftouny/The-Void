@@ -19,6 +19,29 @@ Format per entry:
 
 ---
 
+## 2026-08-11 — functional-ui (surface M2–M9 engine in the desktop UI) [stacked on M9, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Not a numbered milestone — a cross-cutting UI pass to make the invisible engine hand-testable
+  (engine was built engine-first; author needs to play-test feel). FUNCTIONAL not polished; bespoke
+  Tibia art-direction stays a later author session.
+- Build-agent deviations: none of substance (spare gate uses `state.phase.started`, the real shape, not
+  the plan's prose `state.phase.battle.started`).
+- Test failures before fixes: none (PASS first pass). 726 → 753 tests (+27 pure view-model tests).
+- Plan open-questions: 4, all orchestrator-resolved (equip via pure view-model helper composing
+  equipment.ts — src/game frozen, FOLLOW-UP logged to promote equip/unequip to real `step` inputs later;
+  inventory hub-only; NEVER render karma or the deal `pool`; no desktop.html change).
+- Notable: **hidden-karma pillar enforced by test** — deep-key-scan proves no karma/nature on the
+  character sheet, deal view proves no `pool` leak. Logic/render split kept (all display + action-mapping
+  pure in view-model.ts, tested; game.ts thin DOM shell). Territory src/desktop ONLY. DOM/visual is
+  inherently NEEDS-HUMAN — a concrete 6-point play-test checklist shipped (in HUMAN-CHECKS.md).
+- ARCHITECTURE FOLLOW-UP (logged): equip/unequip mutate GameState via a view-model helper, not `step` —
+  a conscious, documented exception (the equip ops are pure); promote to real engine `step` inputs in a
+  later engine milestone so the reducer stays the single mutation path.
+- NEEDS-HUMAN banked: the full play-test of every surfaced control (Cast/Spare/Use-item, inventory
+  equip/unequip, deal screen no-pool-leak, character sheet no-karma, draft cards, chest reveal).
+- Manual engineer fixes: none yet
+
 ## 2026-08-11 — levelup-loop (M9: frequent draft-based level-up) [stacked on M8, unmerged]
 - Verdict: PASS
 - Fix rounds: 0

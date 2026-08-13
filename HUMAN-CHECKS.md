@@ -15,13 +15,43 @@ All new work lives on stacked review branches (not merged yet — your gate). To
 already have:
 
 ```powershell
-cd "<repo>\worktrees\<tip>"
+cd "<repo>\worktrees\functional-ui"
 $env:VOID_MODELS_DIR = "<repo>\models"
 npm run desktop
 ```
 
-`<tip>` = the newest built worktree (currently **`class-kits`** = M3, the tip of the M1→M2→M3 chain).
-After you **merge to root** (see the bottom), just run `npm run desktop` from the root — no env var needed.
+`<tip>` = **`functional-ui`** — the newest built worktree (M1–M9 engine + the functional UI that finally
+surfaces it all). After you **merge to root** (see the bottom), just run `npm run desktop` from root.
+
+---
+
+## ▶️ HOW TO TEST EVERYTHING (the functional UI is now wired — do these in order)
+
+The deep engine (M2–M9) is now surfaced as working (plain) controls, so you can finally hand-test it.
+Run the build above, start a run **as an Enforcer** (its skills/gear are the reference values), then:
+
+1. **Deal screen — no karma leak (most important).** Hub → "Seek a bargain" until a deal appears. You
+   should see only **Cost: … / Reward: …**. ❌ FAIL if any word like "grace / tempting / standard / pool
+   / karma / nature" is visible — karma is meant to be *invisible*.
+2. **Spare button.** In a battle vs a **karma-weighted** enemy (Gangers on floor 1; Feelings/Sins on
+   floor 3; the Judged; Echoes), a **Spare** button shows while it's alive and vanishes once it's dead.
+   ❌ FAIL if Spare appears on an ordinary enemy or lingers after death.
+3. **Cast picker.** In battle → **Cast** lists your skills with charge costs (`Heavy Strike (2⚡)`,
+   `Brace (1⚡)`). Spend down to 1 charge → Heavy Strike is disabled, Brace still clickable. Casting
+   spends the charge and resolves the round.
+4. **Inventory equip/unequip.** Hub → **Inventory**: paperdoll + backpack. Equip a backpack item →
+   it fills the slot and any displaced item drops to the backpack; Unequip → it returns. Check the
+   Character sheet's **Armor class** updates. ❌ FAIL if an item is lost/duplicated.
+5. **Character sheet — no karma.** Hub → **Character sheet**: level, six stats+mods, HP, Armor class
+   (armored value, e.g. 11 for a fresh Enforcer, not 10), charges, skills, gear, and the class resource
+   (momentum/corruption). ❌ FAIL if any karma/Nature value appears.
+6. **The rest.** Use-item lists only consumables (not gear) and applies the effect; a chest shows
+   dropped items by name+rarity; a level-up shows 3 readable draft cards and picking one applies it;
+   Fight/Potion/Run behave as before.
+
+If any ❌ or a dead button / blank panel: tell me exactly what you saw and I'll route it back through the
+loop as a fix on this branch. **Visual polish (the Tibia-style paperdoll look) is deliberately NOT done
+here** — that's our later art-direction session; this pass is about *functional & testable*.
 
 ---
 

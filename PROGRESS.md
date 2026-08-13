@@ -11,13 +11,15 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 1/18 merged · M1–M9 built+verified (pending your batch merge)** `[##########----------]`
+**v3 overall: 1/18 merged · M1–M9 + functional-UI built+verified (pending your batch merge)** `[##########----------]`
 Autonomous run (2026-08-10→11): built the entire **mechanical core** (M1–M9) through the loop, **stacked
 & unmerged** per your merge gate — you review/merge the chain. Chain: `main` → M1 `state-foundations` →
 M2 `skills-conditions` → M3 `class-kits` → M4 `combat-defense` → M5 `equip-engine` → M6 `items-content`
-→ M7 `sacrifice-economy` → M8 `enemy-roster` → M9 `levelup-loop`. Each PASSED plan→build→test (typecheck
-+ full tests + build + adversarial verify). **726 tests at M9.** M10+ paused — they need your voice
-(floor/boss prose), design (karma effects), difficulty-feel (M15 balance), and play-testing.
+→ M7 `sacrifice-economy` → M8 `enemy-roster` → M9 `levelup-loop` → **`functional-ui`** (surfaces the
+engine so it's hand-testable — tip). Each PASSED plan→build→test (typecheck + full tests + build +
+adversarial verify). **753 tests at the tip.** The game is now **playable/testable** (functional UI;
+bespoke Tibia visual polish deferred). M10+ paused — they need your voice (floor/boss prose), design
+(karma effects), difficulty-feel (M15 balance). **Play-test checklist: `HUMAN-CHECKS.md`.**
 
 | Milestone (v3) | Status |
 |---|---|
