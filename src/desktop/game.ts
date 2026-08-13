@@ -15,7 +15,11 @@ import {
   castOptions,
   consumableOptions,
   spareOffered,
+  describeInventory,
+  equipFromBackpack,
+  unequipSlot,
 } from './view-model.ts';
+import type { ItemView } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 
@@ -180,6 +184,105 @@ function pickerButton(label: string, build: (list: HTMLElement) => void): void {
   choicesEl.appendChild(wrap);
 }
 
+// Render-layer UI mode for the hub screens (NOT game state): the plain game flow, the
+// inventory/equipment screen, or the full character sheet. Only reachable from the hub;
+// reset to 'game' whenever a real engine action is dispatched.
+let screen: 'game' | 'inventory' | 'sheet' = 'game';
+
+// Re-render the current phase's choices + HUD WITHOUT dispatching to the engine — used by
+// the hub screen buttons (Inventory / Character sheet / Back) and the equip/unequip actions.
+function rerender(): void {
+  renderSheet();
+  renderChoices(awaitingFor(state.phase));
+}
+
+// A labelled row (label + value/name), the shared building block for the inventory and
+// character-sheet screens. Returns the row so callers can append action buttons.
+function vmRow(parent: HTMLElement, label: string, value: string, empty = false): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'vm-row';
+  const lab = document.createElement('span');
+  lab.className = 'vm-label';
+  lab.textContent = label;
+  const val = document.createElement('span');
+  val.className = empty ? 'vm-empty' : 'vm-name';
+  val.textContent = value;
+  row.appendChild(lab);
+  row.appendChild(val);
+  parent.appendChild(row);
+  return row;
+}
+
+// One "Name — Rarity" fragment plus an effects line, appended to a row's value cell.
+function itemLabel(item: ItemView): string {
+  return `${item.name} · ${item.rarity}`;
+}
+
+// The hub inventory / equipment screen: paperdoll slots (each equipped item with Unequip)
+// and the backpack (each item with Equip). Equip/unequip go through the PURE view-model
+// action-mapping helpers, then autosave + re-render. Reads state.player (hub-authoritative).
+function renderInventoryScreen(): void {
+  const p = state.player;
+  if (!p) {
+    screen = 'game';
+    rerender();
+    return;
+  }
+  const view = describeInventory(p);
+  const wrap = document.createElement('div');
+  wrap.className = 'vm-screen';
+
+  const gearHead = document.createElement('h3');
+  gearHead.textContent = 'Equipped';
+  wrap.appendChild(gearHead);
+  for (const s of view.slots) {
+    const row = vmRow(wrap, s.slot, s.item ? itemLabel(s.item) : '(empty)', !s.item);
+    if (s.item) {
+      optionButton(row, 'Unequip', () => {
+        const r = unequipSlot(state, s.slot);
+        if (r.ok) {
+          state = r.state;
+          saveRun(state, memory);
+        }
+        rerender();
+      });
+    }
+  }
+
+  const packHead = document.createElement('h3');
+  packHead.textContent = 'Backpack';
+  wrap.appendChild(packHead);
+  if (view.backpack.length === 0) {
+    vmRow(wrap, '', '(empty)', true);
+  }
+  for (const b of view.backpack) {
+    const row = vmRow(wrap, `#${b.index}`, itemLabel(b.item));
+    if (b.item.effects.length > 0) {
+      const fx = document.createElement('span');
+      fx.className = 'vm-effects';
+      fx.textContent = b.item.effects.join('; ');
+      row.appendChild(fx);
+    }
+    // Equip only slottable gear (usables have slot: null — no equip target).
+    if (b.item.slot) {
+      optionButton(row, 'Equip', () => {
+        const r = equipFromBackpack(state, b.index);
+        if (r.ok) {
+          state = r.state;
+          saveRun(state, memory);
+        }
+        rerender();
+      });
+    }
+  }
+
+  choicesEl.appendChild(wrap);
+  button('Back', () => {
+    screen = 'game';
+    rerender();
+  });
+}
+
 // Show a transient indicator while the narrator generates, in place of the
 // (already-cleared) choice buttons. renderChoices() clears this when done.
 function showThinking(): void {
@@ -198,6 +301,7 @@ let busy = false;
 async function dispatch(input: GameInput): Promise<void> {
   if (busy) return;
   busy = true;
+  screen = 'game'; // a real engine transition always returns to the plain game view
   try {
     choicesEl.innerHTML = '';
     log.debug('ui', 'choice', input);
@@ -282,9 +386,17 @@ function renderChoices(awaiting: Awaiting): void {
       break;
     }
     case 'main-menu':
+      if (screen === 'inventory') {
+        renderInventoryScreen();
+        break;
+      }
       button('Continue the descent', () => void dispatch({ kind: 'menu', choice: 'continue' }));
       button('Seek a bargain', () => void dispatch({ kind: 'menu', choice: 'seek-deal' }));
       button('Abandon the descent', () => void dispatch({ kind: 'menu', choice: 'quit' }));
+      button('Inventory', () => {
+        screen = 'inventory';
+        rerender();
+      });
       break;
     case 'battle-action': {
       const p = displayPlayer(state);
