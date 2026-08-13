@@ -155,11 +155,8 @@ The game now probes each GPU in a short-lived child process (so it can actually 
 memory), scores them by name + memory-vs-system-RAM, and pins the discrete one **before** the model
 starts (no vendor/model hardcoded). This replaces the earlier `gpu-select` heuristic that kept
 landing on the Intel iGPU. Verified by 378 headless tests; the real-hardware confirmation is yours:
-- [ ] **On your 5060 laptop:** run `npm run desktop`, let the model load, then open `logs\void.log`.
-      The selection line should read `gpu:selected index=1 name=NVIDIA …` (NOT `gpu:auto`, NOT the
-      Intel iGPU), and the in-app status line should name the NVIDIA RTX 5060. In Task Manager →
-      Performance, the **NVIDIA** GPU's dedicated memory should climb during generation (not the
-      Intel one), and speed should feel like the GPU tier (~90 tok/s), not CPU/iGPU.
+- [x] **On your 5060 laptop:** ✅ **CONFIRMED WORKING (2026-08-11)** — the GPU fix correctly selects the
+      NVIDIA RTX 5060 on real hardware.
 - [ ] **No second window flashes** during boot (the probe runs as plain Node, not a 2nd Electron
       window). If a window flashes or the log says `gpu:auto reason=error … app.asar`, tell me.
 - [ ] **Other machines still boot:** on a single-GPU / CPU-only / non-Vulkan box it should log
