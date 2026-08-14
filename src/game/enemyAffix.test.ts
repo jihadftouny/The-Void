@@ -9,7 +9,7 @@ function scriptedRng(values: readonly number[]): Rng {
   return () => values[i++] ?? 0;
 }
 
-/** A base (un-affixed) enemy pinned to stats 13 / maxHp 14 (playerXp 0, M15-tuned base HP). */
+/** A base (un-affixed) enemy pinned to stats 13 / maxHp 10 (playerXp 0, M15-tuned base HP). */
 function baseEnemy() {
   return generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(5));
 }
@@ -104,7 +104,7 @@ describe('applyAffix — pure, hand-derived stat deltas', () => {
   it('Ancient adds +2 to every stat and +8 maxHp/hp, recomputes mods, prefixes the name', () => {
     const base = baseEnemy();
     // Independent oracle from the authored table: Ancient statMods all +2, maxHpBonus +8.
-    // base stats are all 13 -> 15; mod(15)=floor(5/2)=2. base maxHp/hp 14 (M15) -> 22.
+    // base stats are all 13 -> 15; mod(15)=floor(5/2)=2. base maxHp/hp 10 (M15) -> 18.
     const elite = applyAffix(base, affixById('ancient'));
     for (const key of STAT_KEYS) {
       expect(elite.stats[key]).toBe(base.stats[key] + 2);
@@ -112,7 +112,7 @@ describe('applyAffix — pure, hand-derived stat deltas', () => {
       expect(elite.mods[key]).toBe(2);
     }
     expect(elite.maxHp).toBe(base.maxHp + 8);
-    expect(elite.maxHp).toBe(22);
+    expect(elite.maxHp).toBe(18);
     expect(elite.hp).toBe(base.hp + 8);
     expect(elite.fullName).toBe(`Ancient ${base.fullName}`);
     expect(elite.fullName.startsWith('Ancient ')).toBe(true);

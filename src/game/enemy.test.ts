@@ -8,7 +8,7 @@ import { mulberry32 } from './rng.ts';
 // All expected values are hand-derived from the literal Java formulas (see enemy.ts):
 //   xp     = 1 + randInt(rng, floor(playerXp/4) + 2)
 //   stat   = 13 + floor(xp/4) + randInt(rng, floor(playerXp/4) + 1)
-//   maxHp  = 14 + floor(playerXp/8) + randInt(rng, floor(playerXp/4)) ; hp = maxHp   [M15 tuned]
+//   maxHp  = 10 + floor(playerXp/8) + randInt(rng, floor(playerXp/4)) ; hp = maxHp   [M15 tuned]
 //   mod(s) = floor((s - 10) / 2)  => mod(13) = floor(3/2) = 1
 //   armorClass = 10 (fixed)
 // randInt(rng, n) is in [0, n-1] for n>=1, and is exactly 0 for n<=0.
@@ -16,16 +16,16 @@ import { mulberry32 } from './rng.ts';
 describe('generateEnemy at playerXp = 0 (fully pinned, seed-independent)', () => {
   // floor(0/4)=0 so: xp = 1 + randInt(_,2) in {1,2}; statSpread = 1 so
   // randInt(_,1)=0 => every stat = 13 + floor(xp/4). floor(1/4)=floor(2/4)=0,
-  // so every stat = 13 exactly. maxHp = 14 + floor(0/8)=0 + randInt(_, floor(0/4)=0)=0 => 14.
+  // so every stat = 13 exactly. maxHp = 10 + floor(0/8)=0 + randInt(_, floor(0/4)=0)=0 => 10.
   for (const seed of [0, 1, 2, 7, 42, 1000, 123456]) {
-    it(`seed ${seed}: all stats 13, mods 1, maxHp 14, AC 10, xp in {1,2}`, () => {
+    it(`seed ${seed}: all stats 13, mods 1, maxHp 10, AC 10, xp in {1,2}`, () => {
       const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(seed));
       for (const key of STAT_KEYS) {
         expect(enemy.stats[key]).toBe(13);
         expect(enemy.mods[key]).toBe(1);
       }
-      expect(enemy.maxHp).toBe(14);
-      expect(enemy.hp).toBe(14);
+      expect(enemy.maxHp).toBe(10);
+      expect(enemy.hp).toBe(10);
       expect(enemy.armorClass).toBe(10);
       expect([1, 2]).toContain(enemy.xp);
     });
@@ -57,7 +57,7 @@ describe('generateEnemy stat range at playerXp = 40', () => {
 });
 
 describe('generateEnemy HP scaling with playerXp', () => {
-  it('every maxHp at playerXp=100 (min 26) exceeds every maxHp at playerXp=0 (max 14)', () => {
+  it('every maxHp at playerXp=100 (min 22) exceeds every maxHp at playerXp=0 (max 10)', () => {
     let maxAtZero = -Infinity;
     let minAtHundred = Infinity;
     for (let seed = 0; seed < 300; seed++) {
@@ -69,10 +69,10 @@ describe('generateEnemy HP scaling with playerXp', () => {
       expect(high.hp).toBe(high.maxHp);
       expect(low.hp).toBe(low.maxHp);
     }
-    // Hand-derived floors (M15 tuned formula 14 + floor(xp/8) + randInt(_, floor(xp/4))):
-    //   min at 100 = 14 + floor(100/8)=12 + randInt(_,25)_min=0 = 26; max at 0 = 14 (both terms 0).
-    expect(minAtHundred).toBeGreaterThanOrEqual(26);
-    expect(maxAtZero).toBeLessThanOrEqual(14);
+    // Hand-derived floors (M15 tuned formula 10 + floor(xp/8) + randInt(_, floor(xp/4))):
+    //   min at 100 = 10 + floor(100/8)=12 + randInt(_,25)_min=0 = 22; max at 0 = 10 (both terms 0).
+    expect(minAtHundred).toBeGreaterThanOrEqual(22);
+    expect(maxAtZero).toBeLessThanOrEqual(10);
     expect(minAtHundred).toBeGreaterThan(maxAtZero);
   });
 });

@@ -69,9 +69,14 @@ const ENEMY_MAX_SKILL_CHARGES = 2;
  * levers are one edit each. `maxHp = ENEMY_BASE_HP + floor(playerXp/ENEMY_HP_XP_DIV)
  * + randInt(rng, floor(playerXp/ENEMY_HP_RAND_DIV))`.
  *
- *  - `ENEMY_BASE_HP` 30 → 14 (the Act-1 wall). At Act-1 xp≈0 both scaling terms are 0, so a
- *    fresh enemy is exactly 14 HP; a fresh character (≈4–5 damage/landed hit) needs ~3 landed
- *    hits to drop it — the author's "~3–4 hits" (anchor test). At the original 30 it took ~7.
+ *  - `ENEMY_BASE_HP` 30 → 10 (the Act-1 wall). At Act-1 xp≈0 both scaling terms are 0, so a
+ *    fresh enemy is exactly 10 HP. MEASURED note: melee/finesse weapons add only their die to
+ *    DAMAGE (the STR/DEX mod feeds to-HIT, not damage — see combat.ts), and starting weapons
+ *    span 1d4 (gun) to 1d8 (rapier), so real damage is ≈2.5–4/landed hit, NOT the ~4.5 the plan
+ *    assumed. At 10 HP the melee/finesse classes take ≈3–4 Fight actions to kill (the author's
+ *    "~3–4 hits" anchor); the 1d4-gun classes take ≈4–5 (a documented starting-weapon quirk —
+ *    see balance.test.ts + the return note). The plan's 12–18 search band came from the wrong
+ *    ~4.5/hit estimate; measured against the anchor, ~10 is right. At the original 30 it was ~7+.
  *  - `ENEMY_HP_XP_DIV` 3 → 8 and `ENEMY_HP_RAND_DIV` 1 → 4 (DEVIATION from the plan, which
  *    asked to leave the xp-scaling terms alone). Measured against the sim, the ORIGINAL steep
  *    scaling (floor(xp/3)+randInt(xp), up to ≈+119 HP at xp≈90) made the mid/late descent
@@ -83,7 +88,7 @@ const ENEMY_MAX_SKILL_CHARGES = 2;
  *    reproducibility — is unchanged; only the resulting HP magnitude moves. Recorded per the
  *    "override the plan + record the deviation" rule.
  */
-export const ENEMY_BASE_HP = 14;
+export const ENEMY_BASE_HP = 10;
 export const ENEMY_HP_XP_DIV = 8;
 export const ENEMY_HP_RAND_DIV = 4;
 
