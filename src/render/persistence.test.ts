@@ -33,7 +33,8 @@ const ALL_PHASES: Phase[] = [
   { kind: 'level-up-draft', offers: [] },
   { kind: 'level-up-result' },
   { kind: 'act-intro', newAct: 2 },
-  { kind: 'ending' },
+  { kind: 'verdict', outcome: 'grace' },
+  { kind: 'ending', endingType: 'grace' },
   { kind: 'game-over' },
 ];
 
@@ -42,8 +43,8 @@ const EXPECT_AUTOSAVE = new Set<Phase['kind']>(['main-menu', 'act-intro']);
 const EXPECT_CLEAR = new Set<Phase['kind']>(['ending', 'game-over']);
 
 describe('persistence policy tables', () => {
-  it('enumerates all 16 phase kinds', () => {
-    expect(ALL_PHASES).toHaveLength(16);
+  it('enumerates all 17 phase kinds', () => {
+    expect(ALL_PHASES).toHaveLength(17);
   });
 
   it('autosaves only at main-menu and act-intro', () => {

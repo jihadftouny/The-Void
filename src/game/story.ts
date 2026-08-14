@@ -22,7 +22,10 @@ export interface Story {
   intro: { header: string; lines: readonly string[] };
   actIntros: Record<number, StorySection>;
   actOutros: Record<number, StorySection>;
+  /** The legacy single ending (kept for back-compat; no longer on the live path). */
   ending: StorySection;
+  /** M12: the two verdict-routed endings (placeholder prose; real text is M14). */
+  endings: { grace: StorySection; damnation: StorySection };
 }
 
 const STORY = storyData as Story;
@@ -47,7 +50,17 @@ export function getActOutro(act: number): StorySection | undefined {
   return STORY.actOutros[act];
 }
 
-/** The ending (header + body, with the `{playerName}` token literal). */
+/** The legacy ending (header + body, with the `{playerName}` token literal). */
 export function getEnding(): StorySection {
   return STORY.ending;
+}
+
+/** The GRACE ending (act-4 ascension), with the `{playerName}` token literal. */
+export function getGraceEnding(): StorySection {
+  return STORY.endings.grace;
+}
+
+/** The DAMNATION ending (act-5 Hollow fall), with the `{playerName}` token literal. */
+export function getDamnationEnding(): StorySection {
+  return STORY.endings.damnation;
 }

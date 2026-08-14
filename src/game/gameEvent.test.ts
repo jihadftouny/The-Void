@@ -19,7 +19,7 @@ describe('GameEvent union', () => {
       { kind: 'level-up', newLevel: 2, hpRoll: 7, newMaxHp: 18 },
       { kind: 'draft-offer', options: ['Learn Intimidate', '+1 STR', '+1 damage'] },
       { kind: 'draft-picked', option: '+1 STR' },
-      { kind: 'ending', header: 'END.', body: 'X' },
+      { kind: 'ending', endingType: 'damnation', header: 'END.', body: 'X' },
       { kind: 'game-over', xp: 42 },
     ];
     expect(events).toHaveLength(10);

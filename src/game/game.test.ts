@@ -14,9 +14,11 @@ import { type BattleState } from './battle.ts';
 import { selectEncounter } from './encounter.ts';
 import { buildDeal, selectPool } from './deal.ts';
 import { FINAL_BOSS_NAME, FINAL_BOSS_XP } from './progression.ts';
+import { BOSSES } from './boss.ts';
+import { getGraceEnding, getDamnationEnding } from './story.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
-import { createKarma } from './karma.ts';
+import { createKarma, type KarmaState } from './karma.ts';
 import { makeCondition } from './condition.ts';
 import { type GameEvent } from './gameEvent.ts';
 
@@ -35,7 +37,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
 
 function menuState(player: Player, rngState: number, act = 1): GameState {
   return {
-    version: 7,
+    version: 8,
     rngState,
     player,
     act,
@@ -55,7 +57,7 @@ describe('createGame', () => {
     expect(s.act).toBe(1);
     expect(s.place).toBe(0);
     expect(s.rngState).toBe(777);
-    expect(s.version).toBe(7);
+    expect(s.version).toBe(8);
     expect(awaitingFor(s.phase)).toBe('title');
   });
 
@@ -129,7 +131,7 @@ describe('character creation transitions', () => {
     // armored AC is what the HUD sees.
     const stats: Stats = { STR: 12, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 };
     const state: GameState = {
-      version: 7,
+      version: 8,
       rngState: 7,
       player: null,
       act: 1,
@@ -377,32 +379,51 @@ describe('chest encounter', () => {
   });
 });
 
-// ------- Act progression at a gate -------------------------------------------
+// ------- Act progression at a gate (M12: the boss is the gate) ---------------
 
-describe('act progression at a gate (M9: decoupled from level-up)', () => {
-  it('continue at xp>=10 runs outro -> intro back to the menu, with NO draft between', () => {
+describe('act gate is now the floor BOSS (M12)', () => {
+  it('continue at xp>=10 enters the act-1 Kingpin boss battle, act NOT yet incremented', () => {
     const player = makePlayer({ xp: 1000 }); // far past the Act-2 gate (10)
-    let r = step(menuState(player, 55, 1), { kind: 'menu', choice: 'continue' });
+    const r = step(menuState(player, 55, 1), { kind: 'menu', choice: 'continue' });
 
-    // checkAct advances exactly ONE act and emits the concluded act's outro ON ENTRY.
-    expect(r.state.act).toBe(2);
-    expect(r.state.place).toBe(1);
-    expect(r.state.phase).toEqual({ kind: 'act-outro', newAct: 2 });
-    expect(r.events).toContainEqual({ kind: 'act-outro', act: 1, header: 'ACT I', body: '' });
-    expect(r.awaiting).toBe('continue');
+    // The floor boss ends the floor: a boss battle is entered, and the act stays put until
+    // the boss falls (the increment now rides `resolvePostVictory`, not the XP threshold).
+    expect(r.state.act).toBe(1);
+    expect(r.state.place).toBe(0);
+    expect(r.state.phase.kind).toBe('battle');
+    expect(r.awaiting).toBe('continue'); // battle not yet started
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.final).toBe(false);
+      expect(r.state.phase.started).toBe(false);
+      expect(r.state.phase.battle.boss?.bossId).toBe('kingpin');
+      expect(r.state.phase.battle.boss?.minions).toBe(0);
+      expect(r.state.phase.battle.canFlee).toBe(false); // no fleeing a boss
+      // The boss-encounter event names the boss id + the built enemy's display name.
+      expect(r.events).toContainEqual({
+        kind: 'boss-encounter',
+        bossId: 'kingpin',
+        enemyName: r.state.phase.battle.enemy.fullName,
+      });
+    }
+  });
 
-    // Continuing goes STRAIGHT to the act intro — no level-up-draft, no stat pick between.
-    r = step(r.state, { kind: 'continue' });
-    expect(r.state.phase.kind).toBe('act-intro');
-    expect(r.events).toContainEqual({ kind: 'act-intro', act: 2, header: 'ACT II', body: '' });
-    // Act entry does NOT auto-level: level/maxHp/stats are untouched (leveling rides victory).
-    expect(r.state.player?.level).toBe(1);
-    expect(r.state.player?.maxHp).toBe(player.maxHp);
-    expect(r.state.player?.stats).toEqual(player.stats);
-
-    // Act intro -> back to the menu (not Act 5).
-    r = step(r.state, { kind: 'continue' });
-    expect(r.state.phase.kind).toBe('main-menu');
+  it('the act-2 gate enters the Reflection; the act-3 gate enters the Sin', () => {
+    // Act 2 gate at xp>=30 → Reflection.
+    const p2 = makePlayer({ xp: 1000 });
+    const r2 = step(menuState(p2, 7, 2), { kind: 'menu', choice: 'continue' });
+    expect(r2.state.phase.kind).toBe('battle');
+    if (r2.state.phase.kind === 'battle') {
+      expect(r2.state.phase.battle.boss?.bossId).toBe('reflection');
+      // The Reflection mirrors the player's kit (a copy).
+      expect(r2.state.phase.battle.enemy.skillPool).toEqual(p2.skillPool);
+    }
+    // Act 3 gate at xp>=90 → Sin.
+    const p3 = makePlayer({ xp: 1000 });
+    const r3 = step(menuState(p3, 7, 3), { kind: 'menu', choice: 'continue' });
+    expect(r3.state.phase.kind).toBe('battle');
+    if (r3.state.phase.kind === 'battle') {
+      expect(r3.state.phase.battle.boss?.bossId).toBe('sin');
+    }
   });
 });
 
@@ -475,13 +496,13 @@ describe('frequent level-up draft on battle victory', () => {
   });
 });
 
-// ------- Act 5 triggers the final battle -------------------------------------
+// ------- Act 5 triggers the HOLLOW final battle (M12) -------------------------
 
 describe('entering Act 5', () => {
-  it('act-intro{5} continue builds the final boss battle', () => {
-    const player = makePlayer();
+  it('act-intro{5} continue builds the HOLLOW SELF (replacing Jorginho)', () => {
+    const player = makePlayer({ skillPool: ['heavyStrike', 'brace'] });
     const state: GameState = {
-      version: 7,
+      version: 8,
       rngState: 314,
       player,
       act: 5,
@@ -495,23 +516,27 @@ describe('entering Act 5', () => {
       expect(r.state.phase.final).toBe(true);
       expect(r.state.phase.started).toBe(false);
       expect(r.state.phase.battle.canFlee).toBe(false); // Act 5: no escape
-      expect(r.state.phase.battle.enemy.type).toBe(FINAL_BOSS_NAME);
+      expect(r.state.phase.battle.boss?.bossId).toBe('hollow');
+      // The Hollow's identity is the placeholder Hollow-Self, NOT the retired Jorginho.
+      expect(r.state.phase.battle.enemy.type).toBe(BOSSES.hollow.name);
+      expect(r.state.phase.battle.enemy.type).not.toBe(FINAL_BOSS_NAME);
+      // It mirrors the player's kit (a copy).
+      expect(r.state.phase.battle.enemy.skillPool).toEqual(player.skillPool);
+      expect(r.events).toContainEqual({
+        kind: 'final-battle-begins',
+        enemyName: r.state.phase.battle.enemy.fullName,
+      });
     }
-    // Act 5 has no name table, so the boss's display name is its type.
-    expect(r.events).toContainEqual({
-      kind: 'final-battle-begins',
-      enemyName: FINAL_BOSS_NAME,
-    });
   });
 });
 
 // ------- Ending / win path ---------------------------------------------------
 
 describe('win / ending path', () => {
-  it('victory in the final battle emits the ending with the name, then goes terminal', () => {
+  it('victory in the final (Hollow) battle emits the DAMNATION ending, then goes terminal', () => {
     const player = makePlayer({ name: 'Zara' });
     const state: GameState = {
-      version: 7,
+      version: 8,
       rngState: 1,
       player,
       act: 5,
@@ -520,10 +545,16 @@ describe('win / ending path', () => {
       phase: { kind: 'battle-victory', final: true },
     };
     const r = step(state, { kind: 'continue' });
-    expect(r.state.phase.kind).toBe('ending');
+    expect(r.state.phase).toEqual({ kind: 'ending', endingType: 'damnation' });
     expect(r.awaiting).toBe('continue');
-    // Ending body is Story.ending.body "{playerName}" with the name substituted.
-    expect(r.events).toContainEqual({ kind: 'ending', header: 'END.', body: 'Zara' });
+    // The damnation ending prose (placeholder), name-substituted, hand-derived from story data.
+    const dam = getDamnationEnding();
+    expect(r.events).toContainEqual({
+      kind: 'ending',
+      endingType: 'damnation',
+      header: dam.header,
+      body: dam.body.split('{playerName}').join('Zara'),
+    });
 
     const r2 = step(r.state, { kind: 'continue' });
     expect(r2.state.phase.kind).toBe('game-over');
@@ -549,7 +580,7 @@ describe('win / ending path', () => {
     const battle: BattleState = { player, enemy: boss, act: 5, canFlee: false };
     let r: StepResult = {
       state: {
-        version: 7,
+        version: 8,
         rngState: 7,
         player,
         act: 5,
@@ -576,8 +607,252 @@ describe('win / ending path', () => {
     const ending = all.filter((e) => e.kind === 'ending');
     expect(ending).toHaveLength(1);
     expect(all.some((e) => e.kind === 'victory')).toBe(true);
-    expect(all[all.length - 1]).toEqual({ kind: 'ending', header: 'END.', body: 'Zara' });
+    const dam = getDamnationEnding();
+    expect(all[all.length - 1]).toEqual({
+      kind: 'ending',
+      endingType: 'damnation',
+      header: dam.header,
+      body: dam.body.split('{playerName}').join('Zara'),
+    });
     expect(r.awaiting).toBe('game-over');
+  });
+});
+
+// ------- M12 boss / verdict flow ---------------------------------------------
+
+function karmaOf(partial: Partial<KarmaState>): KarmaState {
+  return { ...createKarma(), ...partial };
+}
+
+/** A started boss battle vs a 1-HP, skill-less enemy the unkillable player one-shots. */
+function bossVictoryState(
+  bossId: 'kingpin' | 'reflection' | 'sin',
+  act: number,
+): GameState {
+  // Player parked at a very high level so the tiny boss xp never owes a level-up (keeps the
+  // post-victory route focused on the act advance).
+  const player = makePlayer({ name: 'Zara', hp: 9999, maxHp: 9999, advantageDisadvantage: 1, level: 100 });
+  const enemy = {
+    ...generateEnemy({ act, type: BOSSES[bossId].name, playerXp: player.xp }, mulberry32(1)),
+    hp: 1,
+    maxHp: 1,
+    armorClass: 1,
+    skillPool: [] as string[],
+    skillCharges: 0,
+    karmaWeighted: false,
+  };
+  const battle: BattleState = {
+    player,
+    enemy,
+    act,
+    canFlee: false,
+    boss: { bossId, round: 0, ...(bossId === 'kingpin' ? { minions: 0 } : {}) },
+  };
+  return {
+    version: 8,
+    rngState: 7,
+    player,
+    act,
+    place: act - 1,
+    karma: createKarma(),
+    phase: { kind: 'battle', battle, started: true, final: false },
+  };
+}
+
+describe('M12 floor-boss victory advances the act', () => {
+  it('a Kingpin win sets pending=advance-act, then continue runs the act-outro/intro chain', () => {
+    const r = step(bossVictoryState('kingpin', 1), { kind: 'battle-action', action: 'fight' });
+    // The boss fell: routed to battle-victory with the advance flag scheduled.
+    expect(r.state.phase.kind).toBe('battle-victory');
+    expect(r.state.pending).toBe('advance-act');
+    expect(r.state.act).toBe(1); // not yet incremented
+
+    // Continue: no level owed (level 100) → resolvePostVictory advances the act.
+    const r2 = step(r.state, { kind: 'continue' });
+    expect(r2.state.phase.kind).toBe('act-outro');
+    expect(r2.state.act).toBe(2);
+    expect(r2.state.place).toBe(1);
+    expect(r2.state.pending).toBeUndefined(); // the flag is consumed
+    expect(r2.events).toContainEqual({ kind: 'act-outro', act: 1, header: 'ACT I', body: '' });
+
+    // Outro → intro → hub.
+    const r3 = step(r2.state, { kind: 'continue' });
+    expect(r3.state.phase.kind).toBe('act-intro');
+    const r4 = step(r3.state, { kind: 'continue' });
+    expect(r4.state.phase.kind).toBe('main-menu');
+    expect(r4.state.pending).toBeUndefined();
+  });
+});
+
+describe('M12 act-4 verdict gate routes the two fates', () => {
+  it('a reverence-led (grace) karma → verdict grace → TERMINAL grace ending at act 4 (act 5 never built)', () => {
+    // computeVerdict({reverence:+2}) = 3×2 = 6 ≥ 1 ⇒ grace (hand-derived).
+    const player = makePlayer({ name: 'Zara', xp: 1000 });
+    const state: GameState = {
+      version: 8,
+      rngState: 5,
+      player,
+      act: 4,
+      place: 3,
+      karma: karmaOf({ reverenceDesecration: 2 }),
+      phase: { kind: 'main-menu' },
+    };
+    const r = step(state, { kind: 'menu', choice: 'continue' });
+    expect(r.state.phase).toEqual({ kind: 'verdict', outcome: 'grace' });
+    const verdictEvent = r.events.find((e) => e.kind === 'verdict');
+    expect(verdictEvent).toBeDefined();
+    // The verdict event leaks NO karma: its ONLY fields are kind + outcome (no axis/number).
+    expect(Object.keys(verdictEvent!).sort()).toEqual(['kind', 'outcome']);
+    if (verdictEvent?.kind === 'verdict') expect(verdictEvent.outcome).toBe('grace');
+
+    // Continue → the grace ending, TERMINAL: act stays 4, act 5 is never constructed.
+    const r2 = step(r.state, { kind: 'continue' });
+    expect(r2.state.phase).toEqual({ kind: 'ending', endingType: 'grace' });
+    expect(r2.state.act).toBe(4);
+    const grace = getGraceEnding();
+    expect(r2.events).toContainEqual({
+      kind: 'ending',
+      endingType: 'grace',
+      header: grace.header,
+      body: grace.body.split('{playerName}').join('Zara'),
+    });
+    const r3 = step(r2.state, { kind: 'continue' });
+    expect(r3.state.phase.kind).toBe('game-over');
+    expect(r3.state.act).toBe(4); // never reached act 5
+  });
+
+  it('a neutral (cast-down) karma → verdict cast-down → advance to act 5 → the Hollow', () => {
+    // computeVerdict(all-zero) = 0 < 1 ⇒ cast-down (hand-derived).
+    const player = makePlayer({ name: 'Zara', xp: 1000 });
+    const state: GameState = {
+      version: 8,
+      rngState: 5,
+      player,
+      act: 4,
+      place: 3,
+      karma: createKarma(),
+      phase: { kind: 'main-menu' },
+    };
+    let r = step(state, { kind: 'menu', choice: 'continue' });
+    expect(r.state.phase).toEqual({ kind: 'verdict', outcome: 'cast-down' });
+
+    // Continue: cast-down advances to act 5 (outro → intro → the Hollow battle).
+    r = step(r.state, { kind: 'continue' });
+    expect(r.state.phase.kind).toBe('act-outro');
+    expect(r.state.act).toBe(5);
+    r = step(r.state, { kind: 'continue' }); // act-outro → act-intro(5)
+    expect(r.state.phase.kind).toBe('act-intro');
+    r = step(r.state, { kind: 'continue' }); // act-intro(5) → the Hollow battle
+    expect(r.state.phase.kind).toBe('battle');
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.final).toBe(true);
+      expect(r.state.phase.battle.boss?.bossId).toBe('hollow');
+    }
+  });
+
+  it('reverence OUTWEIGHS cruelty at the gate → grace (3×2 + 1×−4 = 2 ≥ 1)', () => {
+    const player = makePlayer({ xp: 1000 });
+    const state: GameState = {
+      version: 8,
+      rngState: 5,
+      player,
+      act: 4,
+      place: 3,
+      karma: karmaOf({ reverenceDesecration: 2, mercyCruelty: -4 }),
+      phase: { kind: 'main-menu' },
+    };
+    const r = step(state, { kind: 'menu', choice: 'continue' });
+    expect(r.state.phase).toEqual({ kind: 'verdict', outcome: 'grace' });
+  });
+});
+
+describe('M12 two endings are distinct and both terminate', () => {
+  it('grace and damnation carry distinct endingType + distinct placeholder prose', () => {
+    const grace = getGraceEnding();
+    const dam = getDamnationEnding();
+    expect(grace.header).not.toBe(dam.header);
+    expect(grace.body).not.toBe(dam.body);
+  });
+});
+
+describe('M12 off-equivalence: a normal battle invokes no boss hook', () => {
+  it('an ongoing normal round carries no boss and emits no boss events; a normal win → main-menu', () => {
+    const player = makePlayer({ hp: 9999, maxHp: 9999 });
+    const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(2));
+    const battle: BattleState = { player, enemy: { ...enemy, hp: 50, maxHp: 50 }, act: 1, canFlee: true };
+    const state: GameState = {
+      version: 8,
+      rngState: 9,
+      player,
+      act: 1,
+      place: 0,
+      karma: createKarma(),
+      phase: { kind: 'battle', battle, started: true, final: false },
+    };
+    const r = step(state, { kind: 'battle-action', action: 'fight' });
+    // Still fighting, no boss anywhere, no boss-mechanic events.
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.boss).toBeUndefined();
+    }
+    const bossKinds = ['boss-summon', 'boss-minion-damage', 'boss-adapt'];
+    expect(r.events.some((e) => bossKinds.includes(e.kind))).toBe(false);
+
+    // A normal victory returns to the hub (no pending advance).
+    const winState: GameState = {
+      ...state,
+      player: makePlayer({ xp: 0, level: 100 }),
+      phase: { kind: 'battle-victory', final: false },
+    };
+    const w = step(winState, { kind: 'continue' });
+    expect(w.state.phase.kind).toBe('main-menu');
+    expect(w.state.pending).toBeUndefined();
+  });
+});
+
+describe('M12 Reflection adaptation drives a disadvantaged player attack', () => {
+  it('after REFLECTION_ADAPT_THRESHOLD fights, boss-adapt fires and the next attack is at disadvantage', () => {
+    const player = makePlayer({ name: 'Zara', hp: 9999, maxHp: 9999 });
+    // Enemy mirror kit = ['brace'] (0 damage, self-buff only) so the player never takes damage
+    // or a condition that could alter its adv/dis — isolating the boss's own disadvantage effect.
+    const enemy = {
+      ...generateEnemy({ act: 2, type: BOSSES.reflection.name, playerXp: 0 }, mulberry32(1)),
+      hp: 9999,
+      maxHp: 9999,
+      skillPool: ['brace'] as string[],
+    };
+    const battle: BattleState = {
+      player,
+      enemy,
+      act: 2,
+      canFlee: false,
+      boss: { bossId: 'reflection', round: 0, adapted: false, actionTally: {} },
+    };
+    let r: StepResult = {
+      state: {
+        version: 8,
+        rngState: 3,
+        player,
+        act: 2,
+        place: 1,
+        karma: createKarma(),
+        phase: { kind: 'battle', battle, started: true, final: false },
+      },
+      events: [],
+      awaiting: 'battle-action',
+    };
+    // Three fights reach the threshold; boss-adapt fires on the third.
+    let adaptRound = -1;
+    for (let i = 0; i < 3; i++) {
+      r = step(r.state, { kind: 'battle-action', action: 'fight' });
+      if (r.events.some((e) => e.kind === 'boss-adapt')) adaptRound = i;
+    }
+    expect(adaptRound).toBe(2); // the 3rd fight (0-indexed)
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.player.advantageDisadvantage).toBe(-1);
+    }
+    // The very next attack rolls at disadvantage (the two-draw-take-min path in combat.ts).
+    const next = step(r.state, { kind: 'battle-action', action: 'fight' });
+    expect(next.events).toContainEqual({ kind: 'disadvantage', subject: 'player' });
   });
 });
 
@@ -611,7 +886,7 @@ describe('JSON round-trip determinism', () => {
 function startedBattleState(player: Player, enemy: BattleState['enemy'], rngState: number): GameState {
   const battle: BattleState = { player, enemy, act: 1, canFlee: true };
   return {
-    version: 7,
+    version: 8,
     rngState,
     player,
     act: 1,

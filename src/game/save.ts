@@ -27,7 +27,7 @@ import { levelForXp } from './progression.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 /** The valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -45,6 +45,7 @@ const PHASE_KINDS: readonly string[] = [
   'level-up-draft',
   'level-up-result',
   'act-intro',
+  'verdict',
   'ending',
   'game-over',
 ];
@@ -143,6 +144,10 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
       case 6:
         value = upgrade6to7(value);
         current = 7;
+        break;
+      case 7:
+        value = upgrade7to8(value);
+        current = 8;
         break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
@@ -305,6 +310,22 @@ function upgrade6to7(raw: unknown): unknown {
     }
   }
   next.version = 7;
+  return next;
+}
+
+/**
+ * Migrate a v7 save (pre-M12) to the v8 shape (M12 bosses + verdict gate). Every M12 addition
+ * is ADDITIVE / OPTIONAL and lives inside the trusted phase payload or as an optional top-level
+ * flag: `phase.battle.boss` (a mid-boss battle), the new `verdict` / two-ending phases, and the
+ * `pending` routing flag are all absent in a v7 save and not deep-validated by the guard. A
+ * structurally valid v7 save is therefore already a structurally valid v8 save — this rung only
+ * stamps `version = 8` (matching the upgrade3to4 / upgrade5to6 additive-stamp precedent). A
+ * non-object input is returned with just the stamp so the caller's validation still runs.
+ */
+function upgrade7to8(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  next.version = 8;
   return next;
 }
 

@@ -65,7 +65,7 @@ function runInputs(
 describe('SAVE_VERSION', () => {
   it('mirrors the current GameState.version', () => {
     // Derived from game.ts: createGame stamps version 7 (M9 bumped 6 -> 7, level-up draft).
-    expect(SAVE_VERSION).toBe(7);
+    expect(SAVE_VERSION).toBe(8);
     expect(createGame(SEED).version).toBe(SAVE_VERSION);
   });
 });
@@ -107,7 +107,7 @@ describe('migration v2 -> v3 (legacy equipped ids -> paperdoll slots)', () => {
     expect(mp.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect('equippedWeaponId' in mp).toBe(false);
     expect('equippedArmorId' in mp).toBe(false);
-    expect(migrated!.version).toBe(7);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     // Modern midRunState seeds the SAME starting gear into slots, so the migrated v2 save
     // deep-equals the modern v3 state.
     expect(migrated).toEqual(modern);
@@ -143,7 +143,7 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
-    expect(migrated!.version).toBe(7);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     expect(migrated!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
     expect(migrated!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
@@ -161,12 +161,12 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     expect(migrated).not.toBeNull();
     expect(migrated!.karma).toEqual(ZERO_KARMA);
     expect(migrated!.player).toBeNull();
-    expect(migrated!.version).toBe(7);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     expect(migrated).toEqual(modern);
   });
 
-  it('rejects a future version 8 save without throwing', () => {
-    const s = { ...createGame(SEED), version: 8 };
+  it('rejects a future version 9 save without throwing', () => {
+    const s = { ...createGame(SEED), version: 9 };
     expect(() => decodeSave(JSON.stringify(s))).not.toThrow();
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
@@ -499,7 +499,7 @@ describe('M6 v3 -> v4 migration + effect-bearing item round-trip', () => {
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(7);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     expect(migrated).toEqual(modern);
   });
 
@@ -551,7 +551,7 @@ describe('M7 v4 -> v5 migration (gold retired)', () => {
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(7);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     expect('gold' in migrated!.player!).toBe(false);
     expect(migrated).toEqual(modern);
   });
@@ -562,14 +562,14 @@ describe('M7 v4 -> v5 migration (gold retired)', () => {
     old.version = 4;
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(7);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     expect(migrated!.player).toBeNull();
     expect(migrated).toEqual(modern);
   });
 
   it('a fresh v5 state round-trips deep-equal', () => {
     const m = midRunState(SEED);
-    expect(m.version).toBe(7);
+    expect(m.version).toBe(SAVE_VERSION);
     expect('gold' in m.player!).toBe(false);
     const decoded = decodeSave(encodeSave(m));
     expect(decoded).toEqual(m);
@@ -588,7 +588,7 @@ describe('M8 v5 -> v6 migration + family/affix enemy round-trip', () => {
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(7);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     expect(migrated).toEqual(modern);
   });
 
@@ -660,7 +660,7 @@ describe('M9 v6 -> v7 migration (level / perks / skillUpgrades injected)', () =>
 
     const migrated = decodeSave(JSON.stringify(old));
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(7);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     const p = migrated!.player!;
     expect(p.level).toBe(levelForXp(p.xp)); // xp 0 -> level 1
     expect(p.perks).toEqual([]);
@@ -738,5 +738,96 @@ describe('M9 mid-pending-draft save round-trip', () => {
     const resumed = step(restored, { kind: 'draft-pick', index: 1 });
     expect(resumed.events).toEqual(reference.events);
     expect(resumed.state).toEqual(reference.state);
+  });
+});
+
+// ------- M12 v7 -> v8 migration + boss / verdict / ending state round-trip ----
+
+describe('M12 v7 -> v8 migration (additive stamp)', () => {
+  it('a genuine v7 save (pre-M12) migrates to v8 and still loads deep-equal', () => {
+    // The M12 additions (phase.battle.boss, verdict/two-ending phases, the pending flag) are
+    // all additive/optional and absent from a v7 hub save, so the migrated result deep-equals a
+    // freshly-built modern (v8) state — the rung only stamps the version.
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    old.version = 7;
+    const migrated = decodeSave(JSON.stringify(old));
+    expect(migrated).not.toBeNull();
+    expect(migrated!.version).toBe(SAVE_VERSION); // 8
+    expect(migrated).toEqual(modern);
+  });
+});
+
+describe('M12 mid-boss / post-gate save round-trip', () => {
+  it('a MID-BOSS battle state (Kingpin with minions/round set) round-trips deep-equal', () => {
+    const base = midRunState(SEED);
+    const player = base.player!;
+    const enemy = generateEnemy({ act: 1, type: 'Undercity Kingpin', playerXp: player.xp }, mulberry32(1));
+    const battle = {
+      ...createBattle(player, enemy, 1),
+      canFlee: false,
+      boss: { bossId: 'kingpin' as const, round: 2, minions: 1 },
+    };
+    const state: GameState = { ...base, phase: { kind: 'battle', battle, started: true, final: false } };
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+    if (restored!.phase.kind === 'battle') {
+      expect(restored!.phase.battle.boss).toEqual({ bossId: 'kingpin', round: 2, minions: 1 });
+    }
+  });
+
+  it('a POST-GATE grace ending state round-trips deep-equal (act stays 4)', () => {
+    const base = midRunState(SEED);
+    const state: GameState = {
+      ...base,
+      act: 4,
+      place: 3,
+      phase: { kind: 'ending', endingType: 'grace' },
+    };
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+  });
+
+  it('a cast-down act-5 Hollow battle state (final, boss present) round-trips deep-equal', () => {
+    const base = midRunState(SEED);
+    const player = base.player!;
+    const enemy = generateEnemy({ act: 5, type: 'Hollow Self', playerXp: 300 }, mulberry32(9));
+    const battle = {
+      ...createBattle(player, enemy, 5),
+      canFlee: false,
+      boss: { bossId: 'hollow' as const, round: 0 },
+    };
+    const state: GameState = {
+      ...base,
+      act: 5,
+      place: 4,
+      phase: { kind: 'battle', battle, started: true, final: true },
+    };
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+  });
+
+  it('a state carrying the pending advance-act routing flag round-trips deep-equal', () => {
+    const base = midRunState(SEED);
+    const state: GameState = {
+      ...base,
+      pending: 'advance-act',
+      phase: { kind: 'battle-victory', final: false },
+    };
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
+    expect(restored!.pending).toBe('advance-act');
+  });
+
+  it('a verdict-phase state round-trips deep-equal', () => {
+    const base = midRunState(SEED);
+    const state: GameState = { ...base, act: 4, place: 3, phase: { kind: 'verdict', outcome: 'cast-down' } };
+    const restored = decodeSave(encodeSave(state));
+    expect(restored).not.toBeNull();
+    expect(restored).toEqual(state);
   });
 });

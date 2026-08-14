@@ -185,6 +185,13 @@ export function formatEvent(e: GameEvent): string {
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'final-battle-begins':
       return `The final battle begins: ${e.enemyName}.`;
+    case 'boss-encounter':
+      return `${e.enemyName} bars the way.`;
+    case 'verdict':
+      // Player-facing outcome only — never the karma numbers behind it.
+      return e.outcome === 'grace'
+        ? `Judgment falls: you are found worthy.`
+        : `Judgment falls: you are cast down.`;
     case 'ending':
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'game-over':

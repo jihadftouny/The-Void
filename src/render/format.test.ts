@@ -84,6 +84,9 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'spare-unavailable' },
     { kind: 'victory', xpGained: 5, extraRest: true, loot: [] },
     { kind: 'defeat' },
+    { kind: 'boss-summon', minions: 2 },
+    { kind: 'boss-minion-damage', amount: 4 },
+    { kind: 'boss-adapt' },
     // narrative
     { kind: 'title' },
     { kind: 'intro', header: 'H', lines: ['a', 'b'] },
@@ -107,11 +110,13 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'draft-picked', option: '+1 STR' },
     { kind: 'act-intro', act: 2, header: 'H', body: 'B' },
     { kind: 'final-battle-begins', enemyName: 'Boss' },
-    { kind: 'ending', header: 'H', body: 'B' },
+    { kind: 'boss-encounter', bossId: 'kingpin', enemyName: 'Undercity Kingpin' },
+    { kind: 'verdict', outcome: 'grace' },
+    { kind: 'ending', endingType: 'grace', header: 'H', body: 'B' },
     { kind: 'game-over', xp: 42 },
   ];
 
-  // Every kind, listed by hand (23 combat + 24 narrative = 47).
+  // Every kind, listed by hand (26 combat + 26 narrative = 52).
   const ALL_KINDS: GameEventKind[] = [
     'enemy-skill-used',
     'skill-cast',
@@ -136,6 +141,9 @@ describe('formatEvent — totality over every event kind', () => {
     'spare-unavailable',
     'victory',
     'defeat',
+    'boss-summon',
+    'boss-minion-damage',
+    'boss-adapt',
     'title',
     'intro',
     'stats-rolled',
@@ -158,6 +166,8 @@ describe('formatEvent — totality over every event kind', () => {
     'draft-picked',
     'act-intro',
     'final-battle-begins',
+    'boss-encounter',
+    'verdict',
     'ending',
     'game-over',
   ];
@@ -165,7 +175,7 @@ describe('formatEvent — totality over every event kind', () => {
   it('has one sample for every kind (no kind missed)', () => {
     const sampled = new Set(samples.map((s) => s.kind));
     expect(sampled).toEqual(new Set(ALL_KINDS));
-    expect(ALL_KINDS).toHaveLength(47);
+    expect(ALL_KINDS).toHaveLength(52);
   });
 
   it('yields a non-empty string for every kind', () => {

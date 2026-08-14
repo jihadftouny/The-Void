@@ -27,7 +27,7 @@ import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
 import { resolveRound, openBattle, type BattleState, type BattleAction } from './battle.ts';
 import { createBattle } from './battle.ts';
-import { generateEnemy } from './enemy.ts';
+import { generateBoss, bossPostRound, computeVerdict, type BossId } from './boss.ts';
 import {
   buildRandomBattle,
   buildChestLoot,
@@ -45,14 +45,18 @@ import {
 } from './deal.ts';
 import { summarizeLoot } from './loot.ts';
 import {
-  FINAL_BOSS_NAME,
-  FINAL_BOSS_XP,
   applyLevelUpHp,
   hasPendingLevelUp,
   shouldAdvance,
 } from './progression.ts';
 import { generateDraft, applyDraftOption, describeDraftOption, type DraftOption } from './draft.ts';
-import { getActIntro, getActOutro, getEnding, getIntro } from './story.ts';
+import {
+  getActIntro,
+  getActOutro,
+  getGraceEnding,
+  getDamnationEnding,
+  getIntro,
+} from './story.ts';
 import { playerArmorClass } from './defense.ts';
 import { pickUp } from './equipment.ts';
 import { type ItemInstance } from './item.ts';
@@ -77,12 +81,14 @@ export type Phase =
   | { kind: 'level-up-draft'; offers: DraftOption[] }
   | { kind: 'level-up-result' }
   | { kind: 'act-intro'; newAct: number }
-  | { kind: 'ending' }
+  // M12: the act-4 verdict reckoning (no combat) — grace ends the run, cast-down falls to act 5.
+  | { kind: 'verdict'; outcome: 'grace' | 'cast-down' }
+  | { kind: 'ending'; endingType: 'grace' | 'damnation' }
   | { kind: 'game-over' };
 
 /** The full, serializable game state. */
 export interface GameState {
-  version: 7;
+  version: 8;
   /** mulberry32 accumulator — the serializable RNG state; JSON round-trips it. */
   rngState: number;
   player: Player | null;
@@ -90,6 +96,13 @@ export interface GameState {
   act: number;
   /** Current floor index, 0..4 (place = act - 1). */
   place: number;
+  /**
+   * M12, OPTIONAL routing flag: `'advance-act'` is set on a floor-boss victory (acts 1–3) so
+   * that once any earned level-ups drain, the run advances an act (`resolvePostVictory`).
+   * ABSENT for all normal play ⇒ a normal victory routes to the main menu (unchanged). Plain
+   * data; JSON drops it when absent, so off-equivalence + save round-trip hold.
+   */
+  pending?: 'advance-act';
   /**
    * Four-axis Karma / Nature vector for this run. Recorded only in M1 (see
    * `karma.ts`); no engine outcome depends on it yet. Spread through every `step`
@@ -135,7 +148,7 @@ export interface StepResult {
 /** Build a fresh game at the title screen, seeded by `seed`. */
 export function createGame(seed: number): GameState {
   return {
-    version: 7,
+    version: 8,
     rngState: seed >>> 0,
     player: null,
     act: 1,
@@ -176,6 +189,8 @@ export function awaitingFor(phase: Phase): Awaiting {
       return 'continue';
     case 'act-intro':
       return 'continue';
+    case 'verdict':
+      return 'continue';
     case 'ending':
       return 'continue';
     case 'game-over':
@@ -207,7 +222,7 @@ export function step(state: GameState, input: GameInput): StepResult {
   const finish = (
     phase: Phase,
     events: GameEvent[],
-    patch: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma'>> = {},
+    patch: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>> = {},
   ): StepResult => {
     const next: GameState = {
       ...state,
@@ -298,10 +313,12 @@ export function step(state: GameState, input: GameInput): StepResult {
       if (input.kind !== 'continue') return noop;
       const player = requirePlayer(state);
       if (phase.final) {
-        const ending = getEnding();
-        return finish({ kind: 'ending' }, [
+        // M12: the Hollow Self fell — the run reaches the DAMNATION ending (act 5).
+        const ending = getDamnationEnding();
+        return finish({ kind: 'ending', endingType: 'damnation' }, [
           {
             kind: 'ending',
+            endingType: 'damnation',
             header: ending.header,
             body: substituteName(ending.body, player.name),
           },
@@ -309,11 +326,12 @@ export function step(state: GameState, input: GameInput): StepResult {
       }
       // M9: battle victory is the sole XP source, so the sole level-up hook. If the new XP
       // crossed one or more level thresholds, route into the draft (drains one at a time);
-      // otherwise straight back to the hub. Act advancement is checked separately at the menu.
+      // otherwise resolve the post-victory route (M12: a boss win advances the act; a normal
+      // win returns to the hub).
       if (hasPendingLevelUp(player)) {
         return enterLevelUp(player, rng, finish);
       }
-      return finish({ kind: 'main-menu' }, []);
+      return resolvePostVictory(state, finish);
     }
 
     case 'rest': {
@@ -367,24 +385,49 @@ export function step(state: GameState, input: GameInput): StepResult {
       if (hasPendingLevelUp(player)) {
         return enterLevelUp(player, rng, finish);
       }
-      return finish({ kind: 'main-menu' }, []);
+      return resolvePostVictory(state, finish);
     }
 
     case 'act-intro': {
       if (input.kind !== 'continue') return noop;
       if (phase.newAct === 5) {
+        // M12: act 5 opens on the HOLLOW SELF (a mirror of the player), replacing the retired
+        // `Jorginho Matagal` final boss. It scales off FINAL_BOSS_XP inside `generateBoss`.
         const player = requirePlayer(state);
-        const boss = generateEnemy(
-          { act: 5, type: FINAL_BOSS_NAME, playerXp: FINAL_BOSS_XP },
+        const { enemy, boss } = generateBoss({
+          bossId: 'hollow',
+          act: 5,
+          player,
+          karma: state.karma,
           rng,
-        );
-        const battle = createBattle(player, boss, 5);
+        });
+        const battle: BattleState = { ...createBattle(player, enemy, 5), boss, canFlee: false };
         return finish(
           { kind: 'battle', battle, started: false, final: true },
-          [{ kind: 'final-battle-begins', enemyName: boss.fullName }],
+          [{ kind: 'final-battle-begins', enemyName: enemy.fullName }],
         );
       }
       return finish({ kind: 'main-menu' }, []);
+    }
+
+    case 'verdict': {
+      // M12: the act-4 reckoning is resolved (no combat). GRACE ends the run as a terminal
+      // ascension (act stays 4; act 5 is never constructed). CAST-DOWN advances to act 5 → the
+      // Hollow → the damnation ending.
+      if (input.kind !== 'continue') return noop;
+      const player = requirePlayer(state);
+      if (phase.outcome === 'grace') {
+        const ending = getGraceEnding();
+        return finish({ kind: 'ending', endingType: 'grace' }, [
+          {
+            kind: 'ending',
+            endingType: 'grace',
+            header: ending.header,
+            body: substituteName(ending.body, player.name),
+          },
+        ]);
+      }
+      return advanceAct(state, finish);
     }
 
     case 'ending': {
@@ -403,7 +446,7 @@ export function step(state: GameState, input: GameInput): StepResult {
 type Finish = (
   phase: Phase,
   events: GameEvent[],
-  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma'>>,
+  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>>,
 ) => StepResult;
 
 function requirePlayer(state: GameState): Player {
@@ -411,7 +454,50 @@ function requirePlayer(state: GameState): Player {
   return state.player;
 }
 
-/** Java `continueJourney`: advance an act if earned, otherwise run an encounter. */
+/**
+ * Advance one act — the existing outro/intro machinery (M9), now driven by the boss gate
+ * (M12) rather than the raw XP threshold. Increments `act`/`place`, emits the CONCLUDED act's
+ * outro on entry to `act-outro`, and clears the `pending` advance flag. Reached from a
+ * floor-boss victory (via `resolvePostVictory`) and from a cast-down verdict.
+ */
+function advanceAct(state: GameState, finish: Finish): StepResult {
+  const newAct = state.act + 1;
+  const concluded = state.act;
+  const outro = getActOutro(concluded) ?? { header: '', body: '' };
+  const result = finish(
+    { kind: 'act-outro', newAct },
+    [{ kind: 'act-outro', act: concluded, header: outro.header, body: outro.body }],
+    { act: newAct, place: newAct - 1 },
+  );
+  // Clear the consumed routing flag so a LATER normal victory never re-advances the act.
+  // (Removed as a key, not set to undefined — honors exactOptionalPropertyTypes + save shape.)
+  const next: GameState = { ...result.state };
+  delete next.pending;
+  return { ...result, state: next };
+}
+
+/**
+ * Route after a victory's level-ups drain (M12). A floor-boss win set `pending = 'advance-act'`,
+ * so the run advances an act; otherwise a normal victory returns to the hub (unchanged).
+ */
+function resolvePostVictory(state: GameState, finish: Finish): StepResult {
+  if (state.pending === 'advance-act') {
+    return advanceAct(state, finish);
+  }
+  return finish({ kind: 'main-menu' }, []);
+}
+
+/** The floor boss id for acts 1–3 (act 4 is the verdict gate; act 5 is the Hollow). */
+const BOSS_BY_ACT: Record<number, BossId> = { 1: 'kingpin', 2: 'reflection', 3: 'sin' };
+
+/**
+ * `continueJourney` (M12): when the XP gate opens (`shouldAdvance`), the FLOOR BOSS — not an
+ * auto-advance — ends the floor. Acts 1–3 enter the boss battle for the CURRENT act (the act is
+ * not incremented until the boss falls, via `resolvePostVictory`). Act 4 enters the VERDICT
+ * gate (no combat). Act 5 never satisfies `shouldAdvance`, so the Hollow keeps firing on
+ * `act-intro(5)`. When the gate is not open, run a normal encounter (off-equivalence — the
+ * random-encounter/rest/chest/deal flow is untouched).
+ */
 function continueJourney(
   state: GameState,
   player: Player,
@@ -419,17 +505,24 @@ function continueJourney(
   finish: Finish,
 ): StepResult {
   if (shouldAdvance(state.act, player.xp)) {
-    const newAct = state.act + 1;
-    // M9: emit the concluded act's outro event on ENTRY to act-outro (the old
-    // act-outro -> level-up -> level-up-result -> act-intro chain is gone; act transitions
-    // never pass through a draft).
-    const concluded = newAct - 1;
-    const outro = getActOutro(concluded) ?? { header: '', body: '' };
-    return finish(
-      { kind: 'act-outro', newAct },
-      [{ kind: 'act-outro', act: concluded, header: outro.header, body: outro.body }],
-      { act: newAct, place: newAct - 1 },
-    );
+    if (state.act === 4) {
+      // The act-4 reckoning: a pure verdict, no brawl. Emits only the outcome (no karma).
+      const outcome = computeVerdict(state.karma);
+      return finish({ kind: 'verdict', outcome }, [{ kind: 'verdict', outcome }]);
+    }
+    // Acts 1–3: the floor boss for the CURRENT act. The act stays put until the boss falls.
+    const bossId = BOSS_BY_ACT[state.act]!;
+    const { enemy, boss } = generateBoss({
+      bossId,
+      act: state.act,
+      player,
+      karma: state.karma,
+      rng,
+    });
+    const battle: BattleState = { ...createBattle(player, enemy, state.act), boss, canFlee: false };
+    return finish({ kind: 'battle', battle, started: false, final: false }, [
+      { kind: 'boss-encounter', bossId, enemyName: enemy.fullName },
+    ]);
   }
   const encounter = selectEncounter(rng);
   if (encounter === 'battle') {
@@ -494,34 +587,50 @@ function resolveBattleRound(
 ): StepResult {
   const round = resolveRound(phase.battle, action, rng);
   const events: GameEvent[] = [...round.events];
-  const enemy = round.state.enemy;
-  switch (round.status) {
+  let battle = round.state;
+  let status = round.status;
+  // M12: layer the boss mechanic AFTER `resolveRound` — so the non-boss encounter flow stays
+  // byte-identical (a normal battle has no `boss`, so this whole block is skipped). Runs only
+  // on an ONGOING round of a boss battle; it may flip the round to `player-died` (Kingpin adds).
+  if (status === 'ongoing' && battle.boss) {
+    const post = bossPostRound(battle, action);
+    battle = post.battle;
+    events.push(...post.events);
+    status = post.status;
+  }
+  const enemy = battle.enemy;
+  switch (status) {
     case 'ongoing':
-      return finish({ ...phase, battle: round.state }, events);
+      return finish({ ...phase, battle }, events);
     case 'fled':
-      return finish({ kind: 'main-menu' }, events, { player: round.state.player });
+      return finish({ kind: 'main-menu' }, events, { player: battle.player });
     case 'spared':
       // Mercy: end the encounter with no rewards. Record the spare on the karma vector
       // (INPUT only — no world/tone effect yet). The action is data-sourced from the
       // family (the M10 seam), defaulting to the uniform mercy action.
       return finish({ kind: 'main-menu' }, events, {
-        player: round.state.player,
+        player: battle.player,
         karma: recordKarma(state.karma, getFamily(enemy.familyId)?.onSpare ?? 'spareWeighted'),
       });
     case 'player-won': {
-      // A moral (⚖) kill records cruelty; a plain enemy (and the final boss) records
-      // nothing. Karma is an INPUT only in M8 (effects deferred to M10/M14).
+      // A moral (⚖) kill records cruelty; a plain enemy (and every boss) records nothing.
+      // Karma is an INPUT only here (the first EFFECT is the act-4 verdict gate).
       const karma = enemy.karmaWeighted
         ? recordKarma(state.karma, getFamily(enemy.familyId)?.onKill ?? 'killWeighted')
         : state.karma;
-      return finish({ kind: 'battle-victory', final: phase.final }, events, {
-        player: round.state.player,
+      // M12: a floor-boss win (acts 1–3, non-final, boss present) schedules an act advance once
+      // any earned level-ups drain (`resolvePostVictory`). The Hollow (final) routes to the
+      // damnation ending via `battle-victory`. A normal victory is unchanged (no `pending`).
+      const patch: Partial<Pick<GameState, 'player' | 'karma' | 'pending'>> = {
+        player: battle.player,
         karma,
-      });
+      };
+      if (!phase.final && battle.boss) patch.pending = 'advance-act';
+      return finish({ kind: 'battle-victory', final: phase.final }, events, patch);
     }
     case 'player-died':
-      events.push({ kind: 'game-over', xp: round.state.player.xp });
-      return finish({ kind: 'game-over' }, events, { player: round.state.player });
+      events.push({ kind: 'game-over', xp: battle.player.xp });
+      return finish({ kind: 'game-over' }, events, { player: battle.player });
   }
 }
 

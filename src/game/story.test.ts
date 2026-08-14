@@ -5,6 +5,8 @@ import {
   getActIntro,
   getActOutro,
   getEnding,
+  getGraceEnding,
+  getDamnationEnding,
 } from './story.ts';
 
 // Hand-derived from Java `Story.java`. Intro opens "The capital of Absolution,
@@ -62,6 +64,18 @@ describe('ending', () => {
   it('has header END. and carries the {playerName} token', () => {
     expect(getEnding().header).toBe('END.');
     expect(getEnding().body).toContain('{playerName}');
+  });
+});
+
+describe('M12 two endings (grace / damnation)', () => {
+  it('grace and damnation each carry the {playerName} token', () => {
+    expect(getGraceEnding().body).toContain('{playerName}');
+    expect(getDamnationEnding().body).toContain('{playerName}');
+  });
+
+  it('are DISTINCT from each other (distinct header + body)', () => {
+    expect(getGraceEnding().header).not.toBe(getDamnationEnding().header);
+    expect(getGraceEnding().body).not.toBe(getDamnationEnding().body);
   });
 });
 

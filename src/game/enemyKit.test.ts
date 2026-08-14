@@ -212,9 +212,9 @@ describe('anchor 6 — determinism: identical scripted runs match on {skillId,da
   });
 });
 
-describe('save shape — themed pool stays plain string[] (no SAVE_VERSION bump)', () => {
-  it('SAVE_VERSION is still 7', () => {
-    expect(SAVE_VERSION).toBe(7);
+describe('save shape — themed pool stays plain string[] (needed no SAVE_VERSION bump of its own)', () => {
+  it('SAVE_VERSION is 8 (bumped later by M12 bosses, not by the themed pool)', () => {
+    expect(SAVE_VERSION).toBe(8);
   });
 
   it('a themed-pool enemy JSON round-trips unchanged and skillPool is string[]', () => {

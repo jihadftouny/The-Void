@@ -83,6 +83,9 @@ export function sceneFor(kind: Phase['kind']): SceneId {
       return 'narrative';
     case 'act-intro':
       return 'narrative';
+    case 'verdict':
+      // The act-4 reckoning is a continue-phase; the generic narrative scene shows its event.
+      return 'narrative';
     case 'ending':
       return 'ending';
     case 'game-over':
