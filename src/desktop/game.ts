@@ -5,10 +5,21 @@
 // This is the DOM game UI; the Kaplay layer (index.html) is a separate artifact.
 import { createGame, step, awaitingFor } from '../game/game.ts';
 import type { GameState, GameInput, Awaiting } from '../game/game.ts';
+import type { PlayerClass } from '../game/player.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun } from './persist.ts';
+import {
+  snapshotUnlocks,
+  classUnlocked,
+  foldRunEvents,
+  emptyRunSummary,
+  applyRunSummary,
+  type RunSummary,
+  type NewlyUnlocked,
+} from '../game/unlockStore.ts';
+import { loadUnlockStore, saveUnlockStore } from '../storage/unlockStorage.ts';
 import {
   displayPlayer,
   castOptions,
@@ -66,8 +77,43 @@ window.addEventListener('unhandledrejection', (ev) =>
   log.error('error', 'unhandled rejection', { reason: String(ev.reason) }),
 );
 
-let state: GameState = createGame(Date.now() >>> 0);
+// M13 meta-progression: the persistent cross-run unlock store, loaded once at boot. Read at
+// class-select (gating) and run start (snapshot); grown at run end (applyRunSummary + persist).
+let unlockStore = loadUnlockStore();
+let runSeed = Date.now() >>> 0;
+let state: GameState = createGame(runSeed, snapshotUnlocks(unlockStore));
 let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
+// The pure run-summary subscriber: folded from each step's events, applied to the store at the
+// terminal phase. Reset per run. `runApplied` guards against a double-apply (ending -> game-over).
+let runSummary: RunSummary = emptyRunSummary();
+let runApplied = false;
+// The ids most recently unlocked (for the deferred in-UI notification — NEEDS-HUMAN).
+let lastNewlyUnlocked: NewlyUnlocked | null = null;
+void lastNewlyUnlocked; // consumed by the deferred unlock-notification UI (out of scope here)
+
+/** The class-select buttons, gated by the unlock store (Enforcer always shown). */
+const CLASS_BUTTONS: readonly { classId: PlayerClass; label: string }[] = [
+  { classId: 'Enforcer', label: 'Enforcer — flesh and steel' },
+  { classId: 'Neuromancer', label: 'Neuromancer — mind and static' },
+  { classId: 'Scavver', label: 'Scavver — knives and tempo' },
+  { classId: 'Penitent', label: 'Penitent — devotion in blood' },
+  { classId: 'Hollow', label: 'Hollow — the Void within' },
+];
+
+/**
+ * At a terminal phase (an ending, or game-over), fold the run's summary into the persistent
+ * unlock store ONCE and persist it. Idempotent per run via `runApplied`. The newly-unlocked ids
+ * are stashed for a deferred in-UI notification (NEEDS-HUMAN).
+ */
+function applyRunOutcome(): void {
+  if (runApplied) return;
+  runApplied = true;
+  const applied = applyRunSummary(unlockStore, runSummary, runSeed);
+  unlockStore = applied.store;
+  saveUnlockStore(unlockStore);
+  lastNewlyUnlocked = applied.newlyUnlocked;
+  log.info('unlocks', 'run outcome applied', { newlyUnlocked: applied.newlyUnlocked });
+}
 
 window.void.onStatus((s) => {
   log.info('llm', `model ${s.phase}`, s);
@@ -362,6 +408,8 @@ async function dispatch(input: GameInput): Promise<void> {
     log.debug('ui', 'choice', input);
     const r = step(state, input);
     state = r.state;
+    // M13: fold this step into the run summary (pure subscriber — the engine flow is untouched).
+    runSummary = foldRunEvents(runSummary, r.events, r.state);
     log.debug('engine', `step -> ${r.awaiting}`, {
       input,
       awaiting: r.awaiting,
@@ -374,6 +422,10 @@ async function dispatch(input: GameInput): Promise<void> {
     await narrate(r.events);
     memory = rememberBeat(memory, r.events); // remember AFTER narrating
     renderChoices(r.awaiting);
+    // M13: at a terminal phase (an ending, or game-over) grow + persist the unlock store once.
+    if (r.state.phase.kind === 'ending' || r.awaiting === 'game-over') {
+      applyRunOutcome();
+    }
     if (r.awaiting === 'game-over') {
       clearRun();
       log.info('save', 'run cleared (game over)');
@@ -389,8 +441,14 @@ async function dispatch(input: GameInput): Promise<void> {
 function start(): void {
   clearRun();
   log.info('game', 'new run started');
-  state = createGame(Date.now() >>> 0);
+  // Freeze the current unlock snapshot into the new run (gradual reveal), and reset the pure
+  // run-summary subscriber. The store itself is only re-read here and at run end.
+  runSeed = Date.now() >>> 0;
+  state = createGame(runSeed, snapshotUnlocks(unlockStore));
   memory = createStoryMemory();
+  runSummary = emptyRunSummary();
+  runApplied = false;
+  lastNewlyUnlocked = null;
   narrationEl.innerHTML = '';
   renderSheet();
   renderChoices('title');
@@ -421,12 +479,13 @@ function renderChoices(awaiting: Awaiting): void {
       break;
     }
     case 'choose-class':
-      // All five selectable (M3); unlock gating is M13. Dispatch-only — the engine rules.
-      button('Enforcer — flesh and steel', () => void dispatch({ kind: 'class', classId: 'Enforcer' }));
-      button('Neuromancer — mind and static', () => void dispatch({ kind: 'class', classId: 'Neuromancer' }));
-      button('Scavver — knives and tempo', () => void dispatch({ kind: 'class', classId: 'Scavver' }));
-      button('Penitent — devotion in blood', () => void dispatch({ kind: 'class', classId: 'Penitent' }));
-      button('Hollow — the Void within', () => void dispatch({ kind: 'class', classId: 'Hollow' }));
+      // M13: Enforcer is always selectable; the other four appear only once their feat has
+      // unlocked them in the persistent store. (The locked-class visual treatment is NEEDS-HUMAN.)
+      for (const c of CLASS_BUTTONS) {
+        if (classUnlocked(unlockStore, c.classId)) {
+          button(c.label, () => void dispatch({ kind: 'class', classId: c.classId }));
+        }
+      }
       break;
     case 'accept-or-reroll-stats': {
       if (state.phase.kind === 'stats-roll') {
