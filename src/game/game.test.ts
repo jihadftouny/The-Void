@@ -9,7 +9,9 @@ import {
 } from './game.ts';
 import { createPlayer, type Player } from './player.ts';
 import { generateEnemy } from './enemy.ts';
-import { getFamily } from './enemyFamily.ts';
+import { getFamily, FAMILIES } from './enemyFamily.ts';
+import { AFFIXES } from './enemyAffix.ts';
+import { createUnlockStore, snapshotUnlocks, type RunUnlocks } from './unlockStore.ts';
 import { type BattleState } from './battle.ts';
 import { selectEncounter } from './encounter.ts';
 import { buildDeal, selectPool } from './deal.ts';
@@ -1078,8 +1080,11 @@ function decide(res: StepResult): GameInput {
   }
 }
 
-function runPlaythrough(seed: number): { events: GameEvent[]; final: GameState; steps: number } {
-  let r: StepResult = { state: createGame(seed), events: [], awaiting: 'title' };
+function runPlaythrough(
+  seed: number,
+  unlocks?: RunUnlocks,
+): { events: GameEvent[]; final: GameState; steps: number } {
+  let r: StepResult = { state: createGame(seed, unlocks), events: [], awaiting: 'title' };
   const events: GameEvent[] = [];
   let guard = 0;
   while (r.awaiting !== 'game-over' && guard < 100000) {
@@ -1109,5 +1114,86 @@ describe('full scripted playthrough', () => {
     // from a real seed): the terminal signal is the game-over event, not an ending.
     expect(a.events.some((e) => e.kind === 'game-over')).toBe(true);
     expect(a.events.some((e) => e.kind === 'ending')).toBe(false);
+  });
+});
+
+// ------- M13 gradual reveal + off-equivalence --------------------------------
+
+/** The full unlock snapshot: every family + every affix (an "all unlocked" store). */
+function fullSnapshot(): RunUnlocks {
+  return { families: FAMILIES.map((f) => f.id), affixes: AFFIXES.map((a) => a.id) };
+}
+
+/**
+ * Play a run and collect every family id an ordinary (non-boss) encounter drew — read from
+ * the battle state as it is entered, the ground truth the encounter generator produced.
+ */
+function collectEncounterFamilies(seed: number, unlocks?: RunUnlocks): Set<string> {
+  const seen = new Set<string>();
+  let r: StepResult = { state: createGame(seed, unlocks), events: [], awaiting: 'title' };
+  let guard = 0;
+  while (r.awaiting !== 'game-over' && guard < 100000) {
+    r = step(r.state, decide(r));
+    const p = r.state.phase;
+    if (p.kind === 'battle' && !p.started && !p.battle.boss) {
+      seen.add(p.battle.enemy.familyId);
+    }
+    guard++;
+  }
+  return seen;
+}
+
+describe('M13 gradual bestiary reveal reads the run snapshot', () => {
+  it('a default (front-load) snapshot never draws a long-tail family', () => {
+    // Independent oracle: the plan's long-tail families must NEVER appear under the default
+    // front-load snapshot; the front-load set is the only drawable pool.
+    const snap = snapshotUnlocks(createUnlockStore());
+    const frontLoad = new Set(snap.families);
+    const longTail = ['cyberEnforcers', 'fixers', 'mirrorSelves', 'staticWraiths', 'dread', 'numbness', 'sevenSins', 'guardians', 'seraphWardens', 'voidHorrors', 'theUnmade', 'theHollowed'];
+    const drawn = new Set<string>();
+    for (let seed = 0; seed < 120; seed++) {
+      for (const id of collectEncounterFamilies(seed, snap)) drawn.add(id);
+    }
+    // Something was actually drawn, and every drawn family is a front-load family.
+    expect(drawn.size).toBeGreaterThan(0);
+    for (const id of drawn) {
+      expect(frontLoad.has(id)).toBe(true);
+      expect(longTail).not.toContain(id);
+    }
+  });
+
+  it('after unlocking the whole roster, long-tail families become drawable', () => {
+    // With every family unlocked, the pool is the full act roster — long-tail families now
+    // appear across seeds (proving the snapshot, not a hard-coded pool, gates the draw).
+    const full = fullSnapshot();
+    const drawn = new Set<string>();
+    for (let seed = 0; seed < 200; seed++) {
+      for (const id of collectEncounterFamilies(seed, full)) drawn.add(id);
+    }
+    // At least one act-1 long-tail family (Cyber-Enforcers / Fixers) is now reachable.
+    expect(drawn.has('cyberEnforcers') || drawn.has('fixers')).toBe(true);
+  });
+});
+
+describe('M13 off-equivalence: an all-unlocked snapshot never perturbs the run', () => {
+  it('a full-snapshot run is byte-identical to a no-snapshot run (events + final state)', () => {
+    for (const seed of [12345, 777, 2026, 99]) {
+      const bare = runPlaythrough(seed);
+      const full = runPlaythrough(seed, fullSnapshot());
+      // The snapshot presence must not add, drop, or reorder a single RNG draw.
+      expect(JSON.stringify(full.events)).toBe(JSON.stringify(bare.events));
+      // The final states match once the snapshot key (absent in the bare run) is disregarded.
+      const stripped = { ...full.final };
+      delete stripped.unlocks;
+      expect(JSON.stringify(stripped)).toBe(JSON.stringify(bare.final));
+    }
+  });
+
+  it('two runs with the same snapshot + inputs are identical (reproducible)', () => {
+    const snap = snapshotUnlocks(createUnlockStore());
+    const a = runPlaythrough(4242, snap);
+    const b = runPlaythrough(4242, snap);
+    expect(JSON.stringify(b.events)).toBe(JSON.stringify(a.events));
+    expect(JSON.stringify(b.final)).toBe(JSON.stringify(a.final));
   });
 });

@@ -61,6 +61,45 @@ describe('rollAffix — fixed 2 draws, gated by ELITE_CHANCE', () => {
   });
 });
 
+describe('rollAffix — M13 restricted (unlocked) affix set', () => {
+  it('restricting to 2 affixes keeps the fixed 2 draws and indexes the FILTERED pool', () => {
+    // Pool filtered to authoring-order [ravenous, ancient] (indices 0,1 of AFFIXES). Gate open
+    // (0.1 < 0.15); index draw 0.6 -> randInt(_,2) = floor(1.2) = 1 -> filtered[1] = 'ancient'.
+    let draws = 0;
+    const rng: Rng = () => {
+      const seq = [0.1, 0.6];
+      return seq[draws++] ?? 0;
+    };
+    const only = new Set(['ravenous', 'ancient']);
+    const affix = rollAffix(rng, only);
+    expect(affix?.id).toBe('ancient');
+    expect(draws).toBe(2); // draw count unchanged by the restriction
+  });
+
+  it('a single-affix set always yields that affix when the gate opens (index draw irrelevant)', () => {
+    const only = new Set(['blessed']);
+    // index draw 0.99 -> randInt(_,1) = 0 -> the sole entry, regardless.
+    expect(rollAffix(scriptedRng([0.05, 0.99]), only)?.id).toBe('blessed');
+  });
+
+  it('every restricted roll over many seeds stays within the unlocked set (or null)', () => {
+    const allowed = new Set(['warped', 'cursed']);
+    for (let seed = 0; seed < 300; seed++) {
+      const affix = rollAffix(mulberry32(seed), allowed);
+      if (affix) expect(allowed.has(affix.id)).toBe(true);
+    }
+  });
+
+  it('the FULL set is byte-identical to the unrestricted roll (off-equivalence)', () => {
+    const full = new Set(AFFIXES.map((a) => a.id));
+    for (let seed = 0; seed < 300; seed++) {
+      const bare = rollAffix(mulberry32(seed));
+      const withFull = rollAffix(mulberry32(seed), full);
+      expect(withFull).toEqual(bare);
+    }
+  });
+});
+
 describe('applyAffix — pure, hand-derived stat deltas', () => {
   it('Ancient adds +2 to every stat and +8 maxHp/hp, recomputes mods, prefixes the name', () => {
     const base = baseEnemy();

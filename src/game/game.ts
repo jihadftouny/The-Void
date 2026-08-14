@@ -61,6 +61,7 @@ import { playerArmorClass } from './defense.ts';
 import { pickUp } from './equipment.ts';
 import { type ItemInstance } from './item.ts';
 import { type GameEvent } from './gameEvent.ts';
+import { type RunUnlocks } from './unlockStore.ts';
 
 // ------- State ---------------------------------------------------------------
 
@@ -109,6 +110,16 @@ export interface GameState {
    * transition, so it persists unchanged until a later milestone writes to it.
    */
   karma: KarmaState;
+  /**
+   * M13, OPTIONAL run-start SNAPSHOT of the meta-progression unlock sets (frozen for the
+   * whole run so a fixed unlock-set is fully reproducible from the seed). Only the two sets
+   * the encounter generator needs (families/affixes) are carried. ABSENT for a full/default
+   * run (`createGame(seed)` with no snapshot) — and when absent, `continueJourney` passes
+   * `undefined` down, so the encounter/affix draws are byte-identical to a pre-M13 run
+   * (off-equivalence). Plain data; JSON drops it when absent, so the save shape is unchanged
+   * and `version` legitimately stays 8 (an old save without it resumes as all-unlocked).
+   */
+  unlocks?: RunUnlocks;
   phase: Phase;
 }
 
@@ -145,9 +156,14 @@ export interface StepResult {
   awaiting: Awaiting;
 }
 
-/** Build a fresh game at the title screen, seeded by `seed`. */
-export function createGame(seed: number): GameState {
-  return {
+/**
+ * Build a fresh game at the title screen, seeded by `seed`. The optional `unlocks` snapshot
+ * (M13) freezes the meta-progression family/affix sets into the state for the whole run; when
+ * omitted the `unlocks` key is left OFF (exactOptionalPropertyTypes) so the state — and every
+ * downstream draw — is byte-identical to a pre-M13 run.
+ */
+export function createGame(seed: number, unlocks?: RunUnlocks): GameState {
+  const state: GameState = {
     version: 8,
     rngState: seed >>> 0,
     player: null,
@@ -156,6 +172,8 @@ export function createGame(seed: number): GameState {
     karma: createKarma(),
     phase: { kind: 'title' },
   };
+  if (unlocks) state.unlocks = unlocks;
+  return state;
 }
 
 /** Map a phase to the input it awaits. Total over the Phase union. */
@@ -526,7 +544,11 @@ function continueJourney(
   }
   const encounter = selectEncounter(rng);
   if (encounter === 'battle') {
-    const battle = buildRandomBattle(player, state.act, rng);
+    // M13 gradual reveal: restrict the family/affix draws to the run's frozen unlock snapshot.
+    // Absent snapshot ⇒ both sets are `undefined` ⇒ byte-identical to a pre-M13 draw.
+    const families = state.unlocks ? new Set(state.unlocks.families) : undefined;
+    const affixes = state.unlocks ? new Set(state.unlocks.affixes) : undefined;
+    const battle = buildRandomBattle(player, state.act, rng, families, affixes);
     return finish({ kind: 'battle', battle, started: false, final: false }, [
       { kind: 'encounter-start', enemyName: battle.enemy.fullName },
     ]);

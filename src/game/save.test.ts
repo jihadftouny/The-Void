@@ -194,6 +194,31 @@ describe('round-trip', () => {
     const decoded = decodeSave(encodeSave(m));
     expect(decoded).toEqual(m);
   });
+
+  it('preserves the M13 optional `unlocks` snapshot (version stays 8)', () => {
+    // A state carrying the additive run-start snapshot round-trips unchanged — no version bump.
+    const s = createGame(SEED, {
+      families: ['gangers', 'securityDrones'],
+      affixes: ['ravenous', 'ancient'],
+    });
+    expect(s.version).toBe(8);
+    const decoded = decodeSave(encodeSave(s));
+    expect(decoded).toEqual(s);
+    expect(decoded!.unlocks).toEqual({
+      families: ['gangers', 'securityDrones'],
+      affixes: ['ravenous', 'ancient'],
+    });
+  });
+
+  it('drops a malformed `unlocks` field but keeps the rest of the save (non-fatal guard)', () => {
+    // A v8 save whose `unlocks` is the wrong shape must not be rejected — the field is dropped
+    // (the run resumes as all-unlocked) and the save otherwise decodes.
+    const s = createGame(SEED) as unknown as Record<string, unknown>;
+    s.unlocks = { families: 'not-an-array' }; // malformed
+    const decoded = decodeSave(JSON.stringify(s));
+    expect(decoded).not.toBeNull();
+    expect(decoded!.unlocks).toBeUndefined();
+  });
 });
 
 describe('decodeSave rejection (returns null, never throws)', () => {

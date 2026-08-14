@@ -44,14 +44,22 @@ export const AFFIXES = enemyAffixesData as unknown as readonly EnemyAffix[];
 
 /**
  * Roll for an elite affix — PURE, exactly 2 rng draws. Draw 1 is the elite gate
- * (`< ELITE_CHANCE`); draw 2 selects an affix index (`randInt(rng, AFFIXES.length)`).
+ * (`< ELITE_CHANCE`); draw 2 selects an affix index (`randInt(rng, pool.length)`).
  * BOTH draws are always consumed so the call count is stable regardless of the outcome;
  * the selected affix is returned only when the gate passes, else `null`.
+ *
+ * M13 GRADUAL UNLOCK: `availableAffixIds`, when supplied, filters `AFFIXES` (preserving
+ * authoring order) to the unlocked set before the index draw. The two-draw discipline is
+ * unchanged (index is taken over `pool.length`). Omitting it — OR passing the full set —
+ * leaves `pool === AFFIXES`, so the draws and the returned affix are byte-identical to today
+ * (off-equivalence). The pool is computed BEFORE any draw, so the RNG stream is untouched by
+ * the presence of the argument.
  */
-export function rollAffix(rng: Rng): EnemyAffix | null {
+export function rollAffix(rng: Rng, availableAffixIds?: ReadonlySet<string>): EnemyAffix | null {
+  const pool = availableAffixIds ? AFFIXES.filter((a) => availableAffixIds.has(a.id)) : AFFIXES;
   const gate = rng();
-  const index = randInt(rng, AFFIXES.length);
-  if (gate < ELITE_CHANCE) return AFFIXES[index] ?? null;
+  const index = randInt(rng, pool.length);
+  if (gate < ELITE_CHANCE) return pool[index] ?? null;
   return null;
 }
 

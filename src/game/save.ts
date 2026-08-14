@@ -99,7 +99,23 @@ export function decodeSave(json: string): GameState | null {
     raw = migrated;
   }
 
-  return isValidGameState(raw) ? raw : null;
+  if (!isValidGameState(raw)) return null;
+
+  // M13: the optional, additive `unlocks` run-start snapshot. Light, NON-FATAL guard — if it
+  // is present but malformed (not a plain object carrying `families`/`affixes` arrays), DROP it
+  // (treat as absent ⇒ the run resumes as all-unlocked) rather than reject the whole save. No
+  // SAVE_VERSION bump: an old v8 save simply lacks the key. The store's own version guards the
+  // real cross-run artifact.
+  const obj = raw as unknown as Record<string, unknown>;
+  if ('unlocks' in obj) {
+    const u = obj.unlocks;
+    const ok =
+      isPlainObject(u) &&
+      Array.isArray((u as { families?: unknown }).families) &&
+      Array.isArray((u as { affixes?: unknown }).affixes);
+    if (!ok) delete obj.unlocks;
+  }
+  return raw;
 }
 
 /**

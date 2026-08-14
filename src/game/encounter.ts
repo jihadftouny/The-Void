@@ -66,22 +66,25 @@ export function buildChestLoot(rng: Rng): ItemInstance[] {
  *      optional `available` id set is the M13 gradual-unlock seam (omitted = all of
  *      the act's families).
  *   2. `generateEnemy({ act, family, playerXp })` — its own internal draws.
- *   3. `rollAffix(rng)` — a fixed 2 draws — then `applyAffix` (pure) when non-null,
- *      producing a seeded elite variant.
+ *   3. `rollAffix(rng, availableAffixes)` — a fixed 2 draws — then `applyAffix` (pure)
+ *      when non-null, producing a seeded elite variant. `availableAffixes` is the M13
+ *      gradual-unlock seam (omitted = all affixes).
  * Finally assembles the BattleState (`canFlee` false only in Act 5). A plain non-⚖
  * family with no affix behaves exactly like a pre-M8 enemy; only WHICH family/affix a
- * seed selects has changed.
+ * seed selects has changed. Omitting BOTH unlock sets (or passing full sets) is
+ * byte-identical to today (off-equivalence) — the sets never add or reorder a draw.
  */
 export function buildRandomBattle(
   player: Player,
   act: number,
   rng: Rng,
   available?: ReadonlySet<string>,
+  availableAffixes?: ReadonlySet<string>,
 ): BattleState {
   const readiedPlayer: Player = { ...player, advantageDisadvantage: 1 };
   const family = pick(rng, availableFamiliesForAct(act, available));
   let enemy = generateEnemy({ act, family, playerXp: player.xp }, rng);
-  const affix = rollAffix(rng);
+  const affix = rollAffix(rng, availableAffixes);
   if (affix) enemy = applyAffix(enemy, affix);
   return createBattle(readiedPlayer, enemy, act);
 }

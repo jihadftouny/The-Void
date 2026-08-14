@@ -166,6 +166,34 @@ describe('buildRandomBattle', () => {
     }
   });
 
+  it('a restricted AFFIX set never stamps an out-of-set affix (M13 seam)', () => {
+    const player = createPlayer({ name: 'H', classId: 'Enforcer', stats: stats() });
+    const allowedAffixes = new Set(['ravenous', 'ancient']);
+    let elites = 0;
+    for (let seed = 0; seed < 400; seed++) {
+      const battle = buildRandomBattle(player, 1, mulberry32(seed), undefined, allowedAffixes);
+      if (battle.enemy.affixId !== undefined) {
+        elites++;
+        expect(allowedAffixes.has(battle.enemy.affixId)).toBe(true);
+      }
+    }
+    expect(elites).toBeGreaterThan(0); // the front-load affixes still appear
+  });
+
+  it('full family+affix sets are byte-identical to no restriction (off-equivalence)', () => {
+    const player = createPlayer({ name: 'H', classId: 'Enforcer', stats: stats() });
+    const FULL_FAMILIES: Record<number, readonly string[]> = ROSTER;
+    const fullAffixes = new Set(['ravenous', 'ancient', 'warped', 'blessed', 'cursed']);
+    for (const act of [1, 2, 3, 4, 5]) {
+      const fullFams = new Set(FULL_FAMILIES[act]);
+      for (let seed = 0; seed < 60; seed++) {
+        const bare = buildRandomBattle(player, act, mulberry32(seed));
+        const restricted = buildRandomBattle(player, act, mulberry32(seed), fullFams, fullAffixes);
+        expect(restricted.enemy).toEqual(bare.enemy);
+      }
+    }
+  });
+
   it('some seeds spawn an elite (affix present) and the affix prefixes the name', () => {
     const player = createPlayer({ name: 'H', classId: 'Enforcer', stats: stats() });
     let elites = 0;
