@@ -9,6 +9,7 @@
     "onKill": "killWeighted",
     "theme": {
       "statBias": { "STR": 1 },
+      "skills": ["gangShiv", "gangStomp"],
       "behaviorNote": "swarm tactics; scaling with numbers — provisional, M10 floor hooks"
     }
   },
@@ -22,6 +23,7 @@
       "resistElement": "Physical",
       "resistAmount": 2,
       "statBias": { "DEX": 1 },
+      "skills": ["taserShot", "suppressiveFire"],
       "behaviorNote": "ranged, lightly armored"
     }
   },
@@ -35,6 +37,7 @@
       "resistElement": "Poison",
       "resistAmount": 2,
       "statBias": { "DEX": 1 },
+      "skills": ["poisonBite", "rabidClaw"],
       "behaviorNote": "fast, poison-tinged"
     }
   },
@@ -46,6 +49,7 @@
     "karmaWeighted": false,
     "theme": {
       "statBias": { "CON": 2 },
+      "skills": ["riotSlam", "shieldBash"],
       "behaviorNote": "tanky front line"
     }
   },
@@ -58,6 +62,7 @@
     "onSpare": "spareWeighted",
     "onKill": "killWeighted",
     "theme": {
+      "skills": ["desperateSwing"],
       "behaviorNote": "near-civilian; barely a threat — provisional, M10 floor hooks"
     }
   },
@@ -69,6 +74,7 @@
     "karmaWeighted": false,
     "theme": {
       "statBias": { "INT": 1 },
+      "skills": ["mirrorShard", "blurStrike"],
       "behaviorNote": "illusory doubles — provisional, M10 floor hooks (flat stat theme only now)"
     }
   },
@@ -79,6 +85,7 @@
     "floor": 2,
     "karmaWeighted": false,
     "theme": {
+      "skills": ["copiedStrike", "copiedHex"],
       "behaviorNote": "copies the player's kit — provisional, M10 floor hooks (flat stat theme only now)"
     }
   },
@@ -90,6 +97,7 @@
     "karmaWeighted": false,
     "theme": {
       "statBias": { "INT": 1 },
+      "skills": ["warpMind", "disorient"],
       "behaviorNote": "confusion / insanity — provisional, M10 floor hooks"
     }
   },
@@ -103,6 +111,7 @@
       "resistElement": "Electro",
       "resistAmount": 2,
       "statBias": { "DEX": 1 },
+      "skills": ["staticArc", "overload"],
       "behaviorNote": "evasive, Electro-charged"
     }
   },
@@ -115,6 +124,7 @@
     "onSpare": "spareWeighted",
     "onKill": "killWeighted",
     "theme": {
+      "skills": ["drainingSob", "heavyHeart"],
       "behaviorNote": "saps the player's resources — provisional, M10 floor hooks"
     }
   },
@@ -128,6 +138,7 @@
     "onKill": "killWeighted",
     "theme": {
       "statBias": { "STR": 2 },
+      "skills": ["furiousBlow", "wrathSmash"],
       "behaviorNote": "grows stronger when hurt — provisional, M10 floor hooks"
     }
   },
@@ -140,6 +151,7 @@
     "onSpare": "spareWeighted",
     "onKill": "killWeighted",
     "theme": {
+      "skills": ["creepingFear", "paralyzingDread"],
       "behaviorNote": "inflicts fear / weakness — provisional, M10 floor hooks"
     }
   },
@@ -152,6 +164,7 @@
     "onSpare": "spareWeighted",
     "onKill": "killWeighted",
     "theme": {
+      "skills": ["deadeningTouch", "numbingCold"],
       "behaviorNote": "deadens the player's actions — provisional, M10 floor hooks"
     }
   },
@@ -165,6 +178,7 @@
     "onKill": "killWeighted",
     "theme": {
       "statBias": { "CHA": 2 },
+      "skills": ["sinfulWhisper", "covetousStrike", "wrathfulLash"],
       "behaviorNote": "seven named elites; the floor-3 boss picks one — provisional, M12 boss selection"
     }
   },
@@ -175,6 +189,7 @@
     "floor": 3,
     "karmaWeighted": false,
     "theme": {
+      "skills": ["ashClaw"],
       "behaviorNote": "weak filler between the Feelings"
     }
   },
@@ -186,6 +201,7 @@
     "karmaWeighted": false,
     "theme": {
       "statBias": { "WIS": 1 },
+      "skills": ["dissonantHymn", "radiantRebuke"],
       "behaviorNote": "buffs allies / debuffs the player — provisional, M10 floor hooks"
     }
   },
@@ -199,6 +215,7 @@
       "resistElement": "Physical",
       "resistAmount": 2,
       "statBias": { "CON": 2 },
+      "skills": ["wardingStrike", "immovableSlam"],
       "behaviorNote": "blocks loot / passage — provisional, M10 floor hooks"
     }
   },
@@ -211,6 +228,7 @@
     "onSpare": "spareWeighted",
     "onKill": "killWeighted",
     "theme": {
+      "skills": ["sorrowfulGaze"],
       "behaviorNote": "non-hostile souls awaiting judgement — provisional, M10 floor hooks (§7 spare=reverence/kill=desecration seam)"
     }
   },
@@ -222,6 +240,7 @@
     "karmaWeighted": false,
     "theme": {
       "statBias": { "WIS": 2 },
+      "skills": ["smiteWicked", "blindingLight"],
       "behaviorNote": "punishes desecration — provisional, M10 floor hooks"
     }
   },
@@ -235,6 +254,7 @@
       "resistElement": "Pyro",
       "resistAmount": 2,
       "statBias": { "STR": 1 },
+      "skills": ["hellfire", "corruptClaw"],
       "behaviorNote": "Pyro / corruption"
     }
   },
@@ -246,6 +266,7 @@
     "karmaWeighted": false,
     "theme": {
       "statBias": { "INT": 1 },
+      "skills": ["maddeningGaze", "voidWhisper"],
       "behaviorNote": "inflicts insanity — provisional, M10 floor hooks"
     }
   },
@@ -256,6 +277,7 @@
     "floor": 5,
     "karmaWeighted": false,
     "theme": {
+      "skills": ["unmakeStrike", "negate"],
       "behaviorNote": "drains / negates — provisional, M10 floor hooks"
     }
   },
@@ -268,6 +290,7 @@
     "onSpare": "spareWeighted",
     "onKill": "killWeighted",
     "theme": {
+      "skills": ["echoedStrike", "echoedHex"],
       "behaviorNote": "your past kills, returned — provisional, M10 floor hooks"
     }
   },
@@ -278,6 +301,7 @@
     "floor": 5,
     "karmaWeighted": false,
     "theme": {
+      "skills": ["hollowGrasp", "desolateStrike"],
       "behaviorNote": "the former fallen of the Void"
     }
   }

@@ -132,9 +132,10 @@ export function generateEnemy(
     maxSkillCharges: ENEMY_MAX_SKILL_CHARGES,
     hitDie: { quantity: 1, sides: 8 }, // vestigial: enemies never roll a hit die
     resistances,
-    // Java `Enemy` seeds every enemy with SkillEnemy.testFireSkill so it can act; a family
-    // may override via `theme.skill` (only 'pyroBall' exists today).
-    skillPool: [family?.theme.skill ?? 'pyroBall'],
+    // A family enemy fights with its own themed skill pool (declared in enemyFamilies.json).
+    // The legacy / final-boss path (no family) keeps the safe default single Pyro Ball, so it
+    // stays byte-compatible with pre-family enemies. This assignment spends no rng draw.
+    skillPool: family?.theme.skills ?? ['pyroBall'],
     activeConditions: [],
   };
 }

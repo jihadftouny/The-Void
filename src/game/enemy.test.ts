@@ -133,7 +133,9 @@ describe('generateEnemy family path', () => {
     expect(enemy.resistances[poison]).toBe(2);
     // Only that one slot is non-zero.
     expect(enemy.resistances.reduce((a, b) => a + b, 0)).toBe(2);
-    expect(enemy.skillPool).toEqual(['pyroBall']);
+    // The enemy fights with mutantStrays' declared themed pool (enemyFamilies.json),
+    // NOT the legacy placeholder Pyro Ball.
+    expect(enemy.skillPool).toEqual(['poisonBite', 'rabidClaw']);
   });
 
   it('a ⚖ family sets karmaWeighted true and biases its themed stat', () => {
@@ -144,6 +146,8 @@ describe('generateEnemy family path', () => {
     expect(enemy.karmaWeighted).toBe(true);
     expect(enemy.stats.STR).toBe(14);
     expect(enemy.fullName.length).toBeGreaterThan(0);
+    // gangers fight with their declared themed pool, not Pyro Ball.
+    expect(enemy.skillPool).toEqual(['gangShiv', 'gangStomp']);
   });
 
   it('is deterministic and JSON-serializable', () => {

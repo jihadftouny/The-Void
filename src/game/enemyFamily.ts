@@ -25,8 +25,13 @@ import { type KarmaAction } from './karma.ts';
 
 /** A family's light, placeholder combat theme (all magnitudes are M15 placeholders). */
 export interface FamilyTheme {
-  /** Enemy skill id; defaults to 'pyroBall' (the only enemy skill today). */
-  skill?: string;
+  /**
+   * The family's themed enemy-skill pool (skill ids in `SKILLS`). Typed `string[]` to match
+   * the enemy `skillPool` and avoid JSON↔`SkillId` friction; a guard test enforces that every
+   * id resolves in `SKILLS`. When absent, `generateEnemy` falls back to `['pyroBall']` (the
+   * legacy/boss default). Magnitudes/theming are M15 placeholders.
+   */
+  skills?: string[];
   /** Element name whose resistance slot is seeded (see element.ts order). */
   resistElement?: string;
   /** The resistance value written into that slot. */
