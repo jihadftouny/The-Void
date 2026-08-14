@@ -19,6 +19,27 @@ Format per entry:
 
 ---
 
+## 2026-08-14 — balance-sim (M15 part 1: sim harness + winnability report) [stacked on unlock-store, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Scope: harness + MEASUREMENT only — NO balance tuning (target is author's feel-call; tuning would churn
+  hundreds of hand-derived tests). Pure-ADDITIVE: 4 new files, ZERO existing files touched.
+- Build-agent deviations: sim runs on STARTING GEAR (no equip GameInput exists — equip is a view-model
+  helper, M5; flagged as a "promote equip to step input" follow-up); charge-cost estimate uses def cost
+  (discount 0 on starting gear, conservative-safe); policy guards a control-condition infinite loop (fight
+  under stun/freeze/sleep so the round resolves) — a harness-policy fix, not gameplay logic.
+- Test failures before fixes: none. 943 → 953 tests (+10 structural sim tests; no existing test moved).
+- Plan open-questions: 4, all orchestrator-resolved (starting-gear lower-bound; baseline + merciful
+  policies; N=500×5×2 all-unlocked; difficulty target = NEEDS-HUMAN).
+- **KEY FINDING (docs/BALANCE-REPORT.md, real+deterministic): the game is currently 0% WINNABLE** —
+  0 wins / 2500 runs on BOTH baseline and merciful policies; **98% of deaths at Act 1**. Confirms the
+  long-standing "unwinnable" note with data: starting HP ~11-14 vs first-enemy ~30+ HP = an impassable
+  opening wall (M4 enemy-miss helped but nowhere near enough). Win-rate is a LOWER bound (sim can't equip).
+- Test-agent: confirmed pure-additive, report regenerates byte-identically, harness pure + valid-action,
+  termination test catches the infinite-loop class, 1 bite-check (broke determinism → 3 fails).
+- NEEDS-HUMAN (blocks the tuning follow-up): author must set the difficulty TARGET (win-rate + feel).
+- Manual engineer fixes: none yet
+
 ## 2026-08-14 — unlock-store (M13: meta-progression unlocks/feats) [stacked on boss-mechanics, unmerged]
 - Verdict: PASS
 - Fix rounds: 0

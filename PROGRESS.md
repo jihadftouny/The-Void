@@ -22,9 +22,12 @@ mechanics + karma verdict gate + two endings; tip). Each PASSED plan→build→t
 UI; bespoke Tibia visual polish deferred). **The karma pillar now has its first real EFFECT** — the
 floor-4 gate routes grace (ascension, ends at act 4) vs cast-down (→ Hollow-Self → damnation) by your
 hidden Nature. Then `unlock-store` (M13: meta-progression — persistent unlock store, feats wired to bosses/endings/spare,
-gradual bestiary reveal; **943 tests**). Next (in progress): **M15 balance** (sim harness + winnability
-measurement; final "tough but fair" tuning needs your feel-call). Boss dialogue/ending/floor prose still
-need your voice. **Play-test checklist: `HUMAN-CHECKS.md`.**
+gradual bestiary reveal; **943 tests**) → **`balance-sim`** (M15 part 1: deterministic sim harness +
+winnability report; **953 tests**; tip). **KEY FINDING — `docs/BALANCE-REPORT.md`: the game is 0%
+winnable (0/2500 runs), 98% of deaths at Act 1** — the opening floor is an impassable wall. The harness
+now makes tuning fast, but the **difficulty TARGET is the author's feel-call** (M15 part 2 = the tuning
+pass, awaiting that). Boss dialogue/ending/floor prose still need your voice (M10/M11/M12/M14).
+**Play-test checklist + balance finding: `HUMAN-CHECKS.md` / `docs/BALANCE-REPORT.md`.**
 
 | Milestone (v3) | Status |
 |---|---|
