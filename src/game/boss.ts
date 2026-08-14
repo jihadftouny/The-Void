@@ -62,18 +62,23 @@ export type KarmaAxis = keyof KarmaState;
 
 // ------- M15 BALANCE PLACEHOLDER constants (single-sourced) -------------------
 
-/** Kingpin: summon a new minion every N rounds. */
-export const KINGPIN_SUMMON_EVERY_ROUNDS = 2;
-/** Kingpin: extra damage the player takes per active minion, each round. */
-export const KINGPIN_MINION_DAMAGE = 2;
-/** Kingpin: the minion crew never grows past this many. */
-export const KINGPIN_MAX_MINIONS = 3;
+// M15 BALANCE: the Act-1 Kingpin was the single biggest Act-1 killer (≈31% of Act-1 deaths in
+// the sim) — a fresh, un-levelled character with NO attack advantage faces summoned minions
+// stacking flat damage every round. Softened across all three levers (slower summons, less
+// per-minion damage, a smaller crew) so the first boss is a threat, not a run-ender, and Act-1
+// deaths drop into line with the other floors. See docs/BALANCE-REPORT.md.
+/** Kingpin: summon a new minion every N rounds. M15: 2 → 3. */
+export const KINGPIN_SUMMON_EVERY_ROUNDS = 3;
+/** Kingpin: extra damage the player takes per active minion, each round. M15: 2 → 1. */
+export const KINGPIN_MINION_DAMAGE = 1;
+/** Kingpin: the minion crew never grows past this many. M15: 3 → 2. */
+export const KINGPIN_MAX_MINIONS = 2;
 
 /** Reflection: repeats of the SAME action before the boss reads + disadvantages it. */
 export const REFLECTION_ADAPT_THRESHOLD = 3;
 
-/** Sin: bonus max HP per point of magnitude on the indulged axis. */
-export const SIN_HP_PER_POINT = 5;
+/** Sin: bonus max HP per point of magnitude on the indulged axis. M15: 5 → 3. */
+export const SIN_HP_PER_POINT = 3;
 
 /**
  * Sin identity by the indulged (most-negative) karma axis. All `bossId:'sin'`; the `name`
@@ -100,8 +105,13 @@ export const SIN_AXIS_PRIORITY: readonly KarmaAxis[] = [
 /** Sin default axis when the player indulged nothing (every axis >= 0). */
 export const SIN_DEFAULT_AXIS: KarmaAxis = 'reverenceDesecration';
 
-/** Hollow: scale the mirror boss's HP by this factor over the base enemy roll. */
-export const HOLLOW_HP_SCALE = 1.5;
+/**
+ * Hollow: scale the mirror boss's HP by this factor over the base enemy roll. M15: 1.5 → 1.2.
+ * The Act-5 Hollow is the ONLY win the baseline (kill-everything → cast-down) policy can reach,
+ * so it is the win-rate gate. With the gentler enemy HP scaling it sat far too high; 1.2 keeps
+ * it a real terminal fight while letting runs that survive the descent actually close it out.
+ */
+export const HOLLOW_HP_SCALE = 1.2;
 
 // ------- The verdict gate (the first real karma EFFECT) ----------------------
 

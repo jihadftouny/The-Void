@@ -229,60 +229,64 @@ function kingpinBattle(player: Player): BattleState {
 
 describe('bossPostRound — Kingpin summons adds on cadence and the crew deals damage', () => {
   it('summons on the fixed cadence, caps at KINGPIN_MAX_MINIONS, deals minions × MINION_DAMAGE', () => {
-    // Constants used for the hand-derivation (re-stated, not measured):
-    expect(KINGPIN_SUMMON_EVERY_ROUNDS).toBe(2);
-    expect(KINGPIN_MAX_MINIONS).toBe(3);
+    // Constants used for the hand-derivation (re-stated, not measured; M15-tuned values):
+    expect(KINGPIN_SUMMON_EVERY_ROUNDS).toBe(3);
+    expect(KINGPIN_MAX_MINIONS).toBe(2);
+    expect(KINGPIN_MINION_DAMAGE).toBe(1);
 
     let battle = kingpinBattle(makePlayer({ hp: 500, maxHp: 500 }));
 
-    // Round 1: round→1, 1 % 2 ≠ 0 → no summon; minions still 0 → no damage.
+    // Rounds 1 & 2: round→1 then 2, neither % 3 = 0 → no summon; minions 0 → no damage.
     let r = bossPostRound(battle, 'fight');
     expect(r.battle.boss?.round).toBe(1);
     expect(r.battle.boss?.minions).toBe(0);
     expect(r.events).toEqual([]);
-    battle = r.battle;
+    battle = bossPostRound(r.battle, 'fight').battle; // r2 (round→2, still no summon/damage)
+    expect(battle.boss?.round).toBe(2);
+    expect(battle.boss?.minions).toBe(0);
 
-    // Round 2: round→2, 2 % 2 = 0 → summon → minions 1; damage = 1 × 2 = 2.
+    // Round 3: round→3, 3 % 3 = 0 & 0 < 2 → summon → minions 1; damage = 1 × 1 = 1.
     r = bossPostRound(battle, 'fight');
     expect(r.battle.boss?.minions).toBe(1);
     expect(r.events).toContainEqual({ kind: 'boss-summon', minions: 1 });
     expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 1 * KINGPIN_MINION_DAMAGE });
     battle = r.battle;
 
-    // Round 3: no summon; minions 1; damage 2.
-    r = bossPostRound(battle, 'fight');
+    // Rounds 4 & 5: no summon; minions 1; damage 1 each.
+    r = bossPostRound(battle, 'fight'); // r4
     expect(r.battle.boss?.minions).toBe(1);
     expect(r.events.some((e) => e.kind === 'boss-summon')).toBe(false);
-    expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 });
-    battle = r.battle;
+    expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 1 });
+    battle = bossPostRound(r.battle, 'fight').battle; // r5
 
-    // Round 4: summon → minions 2; damage 4.
+    // Round 6: round→6, 6 % 3 = 0 & 1 < 2 → summon → minions 2 (cap); damage = 2 × 1 = 2.
     r = bossPostRound(battle, 'fight');
     expect(r.battle.boss?.minions).toBe(2);
+    expect(r.events).toContainEqual({ kind: 'boss-summon', minions: 2 });
     expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 * KINGPIN_MINION_DAMAGE });
     battle = r.battle;
 
-    // Round 5: no summon; damage 4. Round 6: summon → minions 3 (cap).
-    battle = bossPostRound(battle, 'fight').battle; // r5
-    r = bossPostRound(battle, 'fight'); // r6
-    expect(r.battle.boss?.minions).toBe(3);
-    battle = r.battle;
-
-    // Round 7: no summon; Round 8: cadence hits but minions already at cap → no new summon.
+    // Rounds 7 & 8: no summon; minions 2; damage 2. Round 9: cadence hits (9 % 3 = 0) but
+    // minions already at cap 2 → no new summon; damage still 2 = MAX × DMG.
     battle = bossPostRound(battle, 'fight').battle; // r7
-    r = bossPostRound(battle, 'fight'); // r8
+    battle = bossPostRound(battle, 'fight').battle; // r8
+    r = bossPostRound(battle, 'fight'); // r9
+    expect(r.battle.boss?.round).toBe(9);
     expect(r.battle.boss?.minions).toBe(KINGPIN_MAX_MINIONS);
     expect(r.events.some((e) => e.kind === 'boss-summon')).toBe(false);
-    expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 3 * KINGPIN_MINION_DAMAGE });
+    expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 * KINGPIN_MINION_DAMAGE });
   });
 
   it('lethal minion damage ends the round in player-died with a defeat event', () => {
-    // Player at 2 HP. Round 1: no minions, no damage. Round 2: summon 1 → damage 2 → hp 0.
-    let battle = kingpinBattle(makePlayer({ hp: 2, maxHp: 40 }));
-    let r = bossPostRound(battle, 'fight');
+    // Player at 1 HP. Rounds 1 & 2: no minions, no damage. Round 3: first summon → minions 1
+    // → damage 1 × 1 = 1 → hp 0 → player-died (new cadence: every 3 rounds, 1 dmg/minion).
+    let battle = kingpinBattle(makePlayer({ hp: 1, maxHp: 40 }));
+    let r = bossPostRound(battle, 'fight'); // r1
     expect(r.status).toBe('ongoing');
-    battle = r.battle;
-    r = bossPostRound(battle, 'fight');
+    r = bossPostRound(r.battle, 'fight'); // r2
+    expect(r.status).toBe('ongoing');
+    expect(r.battle.player.hp).toBe(1);
+    r = bossPostRound(r.battle, 'fight'); // r3: summon + 1 damage
     expect(r.battle.player.hp).toBe(0);
     expect(r.status).toBe('player-died');
     expect(r.events).toContainEqual({ kind: 'defeat' });

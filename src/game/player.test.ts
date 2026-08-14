@@ -72,7 +72,7 @@ describe('createPlayer — Enforcer', () => {
   it('has the fixed game-start scalar defaults', () => {
     expect('gold' in player).toBe(false); // M7: gold retired
     expect(player.restsLeft).toBe(1);
-    expect(player.pots).toBe(2);
+    expect(player.pots).toBe(6); // M15: STARTING_POTS 2 -> 6
     expect(player.proficiency).toBe(2);
     expect(player.advantageDisadvantage).toBe(0);
     expect(player.xp).toBe(0);
@@ -136,17 +136,18 @@ describe('createPlayer — Neuromancer', () => {
     expect(getArmorByName(player.inventory.slots.armor!.defId)!.rarity).toBe('Rare');
   });
 
-  it('derives maxHp = 8, armorClass = 12 for CON 14 (1d6, CONmod 2)', () => {
-    expect(player.maxHp).toBe(8);
-    expect(player.hp).toBe(8);
+  it('derives maxHp = 10, armorClass = 12 for CON 14 (1d8, CONmod 2)', () => {
+    // M15: Neuromancer hitDie d6 -> d8. maxHp = hitDie.sides(8) + CONmod(2) = 10.
+    expect(player.maxHp).toBe(10);
+    expect(player.hp).toBe(10);
     expect(player.armorClass).toBe(12);
-    expect(player.hitDie).toEqual({ quantity: 1, sides: 6 });
+    expect(player.hitDie).toEqual({ quantity: 1, sides: 8 });
   });
 });
 
 // M3/M9 — all five classes selectable & created. Every expected value is hand-derived from
 // the class spec in classKit.ts + the fresh-character formulas (CON 14 -> CONmod 2 ->
-// maxHp = hitDie.sides + 2, AC 12). Hit dice: Enforcer d10, Neuromancer d6, Scavver d8,
+// maxHp = hitDie.sides + 2, AC 12). Hit dice: Enforcer d10, Neuromancer d8 (M15: was d6), Scavver d8,
 // Penitent d8 (M15 placeholder), Hollow d8 (M15 placeholder). M9 lean start: the skillPool
 // is the class's 1–2 `coreSkills`, NOT the full kit. Core pairs and provisional gear are
 // read from the plan's per-class table, NOT from code output.
@@ -161,7 +162,7 @@ describe('createPlayer — all five classes (creation table)', () => {
     core: string[];
   }> = [
     { classId: 'Enforcer', sides: 10, maxHp: 12, weaponId: 'Jaaj Sword 1', armorId: 'Jooj Armor 1', core: ['heavyStrike', 'brace'] },
-    { classId: 'Neuromancer', sides: 6, maxHp: 8, weaponId: 'Jooj Gun 1', armorId: 'Jaaj Armor 1', core: ['mindSpike', 'synapse'] },
+    { classId: 'Neuromancer', sides: 8, maxHp: 10, weaponId: 'Jooj Gun 1', armorId: 'Jaaj Armor 1', core: ['mindSpike', 'synapse'] },
     { classId: 'Scavver', sides: 8, maxHp: 10, weaponId: 'Jiij Rapier 1', armorId: 'Jooj Armor 1', core: ['backstab', 'venomCoat'] },
     { classId: 'Penitent', sides: 8, maxHp: 10, weaponId: 'Jaaj Sword 1', armorId: 'Jaaj Armor 1', core: ['smite', 'mend'] },
     { classId: 'Hollow', sides: 8, maxHp: 10, weaponId: 'Jooj Gun 1', armorId: 'Jooj Armor 1', core: ['siphon', 'sacrifice'] },

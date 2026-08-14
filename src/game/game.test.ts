@@ -1110,10 +1110,13 @@ describe('full scripted playthrough', () => {
     // The machine actually ran combat: at least one fight happened.
     expect(a.events.some((e) => e.kind === 'attack')).toBe(true);
 
-    // At the frozen M4/M5 balance this run ends in death (no ending is reachable
-    // from a real seed): the terminal signal is the game-over event, not an ending.
-    expect(a.events.some((e) => e.kind === 'game-over')).toBe(true);
-    expect(a.events.some((e) => e.kind === 'ending')).toBe(false);
+    // M15 REBALANCE: with the tuned constants a real seed can now survive the descent and
+    // reach an ENDING (a win) — previously (frozen M4/M5 balance) every real seed died. The
+    // terminal signal for a win is the `ending` event, and no `game-over` death event fires
+    // (the death path emits `game-over`; the win path ends on the ending, then goes terminal
+    // with no further event — see the ending→game-over transition test above).
+    expect(a.events.some((e) => e.kind === 'ending')).toBe(true);
+    expect(a.events.some((e) => e.kind === 'game-over')).toBe(false);
   });
 });
 

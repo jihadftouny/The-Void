@@ -17,10 +17,10 @@
 //      13 + floor(xp/4) + randInt(rng, floor(playerXp/4) + 1)
 //    (the +xp/4+3 sits OUTSIDE the random term). At playerXp=0 this pins every
 //    stat to exactly 13.
-//  - maxHp uses the intended `dmgCalculator` formula
-//      30 + floor(playerXp/3) + randInt(rng, playerXp)
-//    rather than Java's vAlpha 1-HP placeholder (super(type,1,xp)). hp = maxHp.
-//    [NEEDS-HUMAN: confirm/tune this scaling — it drives whole-game difficulty.]
+//  - maxHp uses the intended `dmgCalculator` formula, M15-tuned to labelled constants:
+//      ENEMY_BASE_HP + floor(playerXp/ENEMY_HP_XP_DIV) + randInt(rng, floor(playerXp/ENEMY_HP_RAND_DIV))
+//    rather than Java's vAlpha 1-HP placeholder (super(type,1,xp)). hp = maxHp. The three
+//    constants are the primary difficulty levers (see their doc-comment below).
 //  - Stat mods ARE computed (Java leaves an enemy's StatsMods at 0), for a
 //    coherent Character and usable M5 combat.
 //  - `hitDie` is a vestigial {1,8}: enemy HP comes from the formula and enemy
@@ -65,6 +65,29 @@ const ENEMY_ARMOR_CLASS = 10;
 const ENEMY_MAX_SKILL_CHARGES = 2;
 
 /**
+ * M15 BALANCE: enemy max-HP formula constants, single-sourced so the primary difficulty
+ * levers are one edit each. `maxHp = ENEMY_BASE_HP + floor(playerXp/ENEMY_HP_XP_DIV)
+ * + randInt(rng, floor(playerXp/ENEMY_HP_RAND_DIV))`.
+ *
+ *  - `ENEMY_BASE_HP` 30 → 14 (the Act-1 wall). At Act-1 xp≈0 both scaling terms are 0, so a
+ *    fresh enemy is exactly 14 HP; a fresh character (≈4–5 damage/landed hit) needs ~3 landed
+ *    hits to drop it — the author's "~3–4 hits" (anchor test). At the original 30 it took ~7.
+ *  - `ENEMY_HP_XP_DIV` 3 → 8 and `ENEMY_HP_RAND_DIV` 1 → 4 (DEVIATION from the plan, which
+ *    asked to leave the xp-scaling terms alone). Measured against the sim, the ORIGINAL steep
+ *    scaling (floor(xp/3)+randInt(xp), up to ≈+119 HP at xp≈90) made the mid/late descent
+ *    UNWINNABLE for the no-equipment lower-bound run — enemy HP outran static starting-gear
+ *    damage, so almost every run died before Act 5 and deaths could not spread. Gentler
+ *    divisors let starting-gear damage keep pace, so runs reach and die across Acts 2–5.
+ *    Both changes are DETERMINISM-SAFE: `randInt` always consumes exactly one rng draw
+ *    regardless of its argument (see rng.ts), so the draw order/count — and thus save-byte
+ *    reproducibility — is unchanged; only the resulting HP magnitude moves. Recorded per the
+ *    "override the plan + record the deviation" rule.
+ */
+export const ENEMY_BASE_HP = 14;
+export const ENEMY_HP_XP_DIV = 8;
+export const ENEMY_HP_RAND_DIV = 4;
+
+/**
  * Generate a deterministic enemy scaled by the player's xp. The rng draw order is
  * fixed (xp, then six stats in STAT_KEYS order, then maxHp, then the name) so a given
  * seed always reproduces the same enemy — identical whether or not a `family` is given.
@@ -99,7 +122,10 @@ export function generateEnemy(
   }
 
   // 3. Max HP (intended dmgCalculator formula), hp = maxHp.
-  const maxHp = 30 + Math.floor(playerXp / 3) + randInt(rng, playerXp);
+  const maxHp =
+    ENEMY_BASE_HP +
+    Math.floor(playerXp / ENEMY_HP_XP_DIV) +
+    randInt(rng, Math.floor(playerXp / ENEMY_HP_RAND_DIV));
   const hp = maxHp;
 
   // 4. Procedural name (draws first/middle/last through the same rng). The family path

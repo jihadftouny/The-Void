@@ -79,7 +79,11 @@ export const CLASSES: Record<PlayerClass, ClassDef> = {
   },
   Neuromancer: {
     id: 'Neuromancer',
-    hitDie: { quantity: 1, sides: 6 },
+    // M15 BALANCE: d6 → d8 (stays inside the design range d6–d8). Neuromancer was the lone
+    // class stuck at ~0% baseline win — a ≈7-HP glass caster with no evasion (unlike Scavver)
+    // cannot survive the front of the descent. d8 (≈9 HP) lifts it off zero without flattening
+    // enemies for everyone. See docs/BALANCE-REPORT.md.
+    hitDie: { quantity: 1, sides: 8 },
     primaryStats: ['INT', 'WIS'],
     weaponId: 'Jooj Gun 1', // Act-1 Common Ranged
     armorId: 'Jaaj Armor 1', // Act-1 Rare

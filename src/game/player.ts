@@ -95,7 +95,16 @@ export interface Player extends Character {
 
 /** Fixed game-start scalars (Java `GameLogic.startGame` / `Player` init). */
 const STARTING_RESTS = 1;
-const STARTING_POTS = 2;
+/**
+ * M15 BALANCE: starting healing potions, 2 → 6. Each potion is a full heal (battle.ts), so
+ * this is the cleanest early-survivability lever. The sim is a no-equipment LOWER BOUND — a
+ * fresh character has only its ≈7–14 base HP and no found/equipped gear, so it needs a deeper
+ * heal reserve to survive the un-levelled front of the descent; 6 potions lifts the baseline
+ * win-rate into range and pulls Act-1 deaths below 40% of the total. [NEEDS-HUMAN M15: 6 is
+ * generous for REAL play (equipment + found potions make the true run easier than the sim) —
+ * confirm the "tough-but-fair" feel in a play-test; trim toward 3–4 if real play is too soft.]
+ */
+const STARTING_POTS = 6;
 const PROFICIENCY = 2;
 const MAX_SKILL_CHARGES = 5;
 

@@ -169,24 +169,26 @@ describe('anchor 1 — poison family (mutantStrays) inflicts poison, not burn', 
 });
 
 describe('anchor 2 — psychic family (distortions) inflicts insanity', () => {
-  it('warpMind: Psychic base 2 vs 0 resist -> 2 dmg, applies insanity', () => {
+  it('warpMind: Psychic base 1 vs 0 resist -> 1 dmg, applies insanity', () => {
+    // M15: warpMind baseDamage shaved 2 -> 1 (Floor-2 family).
     const enemy = familyEnemy('distortions'); // pool ['warpMind','disorient']
     expect(enemy.skillPool[0]).toBe('warpMind');
     const out = forcedHit(enemy, target(), 0);
     expect(out.skillId).toBe('warpMind');
-    expect(out.damage).toBe(2);
+    expect(out.damage).toBe(1);
     expect(out.applied).toContain('insanity');
     expect(out.applied).not.toContain('poison');
   });
 });
 
 describe('anchor 3 — physical family (gangers) inflicts bleed', () => {
-  it('gangShiv: Physical base 2 vs 0 resist -> 2 dmg, applies bleed', () => {
+  it('gangShiv: Physical base 1 vs 0 resist -> 1 dmg, applies bleed', () => {
+    // M15: gangShiv baseDamage shaved 2 -> 1 (Floor-1 family).
     const enemy = familyEnemy('gangers'); // pool ['gangShiv','gangStomp']
     expect(enemy.skillPool[0]).toBe('gangShiv');
     const out = forcedHit(enemy, target(), 0);
     expect(out.skillId).toBe('gangShiv');
-    expect(out.damage).toBe(2);
+    expect(out.damage).toBe(1);
     expect(out.applied).toContain('bleed');
     expect(out.applied).not.toContain('insanity');
   });

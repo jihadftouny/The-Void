@@ -236,25 +236,28 @@ export const SKILLS: Record<SkillId, SkillDef> = {
   // values here are M15 BALANCE PLACEHOLDERS: this milestone delivers DISTINCTION, not balance.
 
   // Floor 1 — street / mech / beast.
-  gangShiv: { id: 'gangShiv', name: 'Gang Shiv', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
-  gangStomp: { id: 'gangStomp', name: 'Gang Stomp', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['fracture'] },
+  // M15 BALANCE: Floor-1/2 family skill baseDamage shaved by 1 on the ≥2 values (the
+  // highest early-burst enemy skills) to soften the Act-1/2 no-equipment attrition wall
+  // (lever 4). Player-kit skills are untouched. See docs/BALANCE-REPORT.md.
+  gangShiv: { id: 'gangShiv', name: 'Gang Shiv', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['bleed'] },
+  gangStomp: { id: 'gangStomp', name: 'Gang Stomp', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['fracture'] },
   taserShot: { id: 'taserShot', name: 'Taser Shot', element: 'Electro', chargeCost: 1, baseDamage: 1, conditions: ['electrify'] },
-  suppressiveFire: { id: 'suppressiveFire', name: 'Suppressive Fire', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  suppressiveFire: { id: 'suppressiveFire', name: 'Suppressive Fire', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
   poisonBite: { id: 'poisonBite', name: 'Poison Bite', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison'] },
-  rabidClaw: { id: 'rabidClaw', name: 'Rabid Claw', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
-  riotSlam: { id: 'riotSlam', name: 'Riot Slam', element: 'Physical', chargeCost: 2, baseDamage: 3, conditions: ['fracture'] },
+  rabidClaw: { id: 'rabidClaw', name: 'Rabid Claw', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['bleed'] },
+  riotSlam: { id: 'riotSlam', name: 'Riot Slam', element: 'Physical', chargeCost: 2, baseDamage: 2, conditions: ['fracture'] },
   shieldBash: { id: 'shieldBash', name: 'Shield Bash', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['stun'] },
   desperateSwing: { id: 'desperateSwing', name: 'Desperate Swing', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: [] },
 
   // Floor 2 — reflections / distortions / static.
-  mirrorShard: { id: 'mirrorShard', name: 'Mirror Shard', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['fool'] },
+  mirrorShard: { id: 'mirrorShard', name: 'Mirror Shard', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['fool'] },
   blurStrike: { id: 'blurStrike', name: 'Blur Strike', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
-  copiedStrike: { id: 'copiedStrike', name: 'Copied Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
+  copiedStrike: { id: 'copiedStrike', name: 'Copied Strike', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['bleed'] },
   copiedHex: { id: 'copiedHex', name: 'Copied Hex', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
-  warpMind: { id: 'warpMind', name: 'Warp Mind', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['insanity'] },
+  warpMind: { id: 'warpMind', name: 'Warp Mind', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['insanity'] },
   disorient: { id: 'disorient', name: 'Disorient', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['fool'] },
-  staticArc: { id: 'staticArc', name: 'Static Arc', element: 'Electro', chargeCost: 1, baseDamage: 2, conditions: ['electrify'] },
-  overload: { id: 'overload', name: 'Overload', element: 'Electro', chargeCost: 2, baseDamage: 2, conditions: ['stun'] },
+  staticArc: { id: 'staticArc', name: 'Static Arc', element: 'Electro', chargeCost: 1, baseDamage: 1, conditions: ['electrify'] },
+  overload: { id: 'overload', name: 'Overload', element: 'Electro', chargeCost: 2, baseDamage: 1, conditions: ['stun'] },
 
   // Floor 3 — the Feelings + Sins (proxy conditions, M10 real hooks pending).
   drainingSob: { id: 'drainingSob', name: 'Draining Sob', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },

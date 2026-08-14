@@ -260,11 +260,12 @@ describe('enemy family skills (this milestone) — data-driven, twist-free', () 
     chargeCost: number;
     baseDamage: number;
   }[] = [
-    { id: 'gangShiv', element: 'Physical', conditions: ['bleed'], chargeCost: 1, baseDamage: 2 },
+    // M15: Floor-1/2 family baseDamage shaved by 1 on the ≥2 values (gangShiv, warpMind, staticArc).
+    { id: 'gangShiv', element: 'Physical', conditions: ['bleed'], chargeCost: 1, baseDamage: 1 },
     { id: 'poisonBite', element: 'Poison', conditions: ['poison'], chargeCost: 1, baseDamage: 1 },
     { id: 'taserShot', element: 'Electro', conditions: ['electrify'], chargeCost: 1, baseDamage: 1 },
-    { id: 'warpMind', element: 'Psychic', conditions: ['insanity'], chargeCost: 1, baseDamage: 2 },
-    { id: 'staticArc', element: 'Electro', conditions: ['electrify'], chargeCost: 1, baseDamage: 2 },
+    { id: 'warpMind', element: 'Psychic', conditions: ['insanity'], chargeCost: 1, baseDamage: 1 },
+    { id: 'staticArc', element: 'Electro', conditions: ['electrify'], chargeCost: 1, baseDamage: 1 },
     { id: 'wrathSmash', element: 'Physical', conditions: ['fracture'], chargeCost: 2, baseDamage: 4 },
     { id: 'numbingCold', element: 'Cryo', conditions: ['sleep'], chargeCost: 1, baseDamage: 1 },
     { id: 'wrathfulLash', element: 'Pyro', conditions: ['burn'], chargeCost: 1, baseDamage: 2 },
