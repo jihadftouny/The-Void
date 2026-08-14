@@ -55,6 +55,25 @@ here** — that's our later art-direction session; this pass is about *functiona
 
 ---
 
+## 🧱 Autonomous mechanical-milestone run (M1–M9 + UI + enemy-kits + M12/M13/M15 built+verified, pending merge)
+
+**Later additions (2026-08-14), stacked further on the chain — all loop-verified:**
+- **enemy-kits** — fixes "all enemies do pyroBall": 24 families now cast distinct themed skills + drop
+  themed loot. (Play-test: confirm a mutant-stray poisons, a distortion drives insanity, a ganger bleeds.)
+- **M12 bosses** — 5 distinct boss mechanics + the **karma verdict gate** (grace ends at act 4 / cast-down
+  → Hollow-Self → damnation), routed by your hidden karma. Boss *dialogue* + floor/ending *prose* still
+  need your voice (M10/M11/M12/M14). (Play-test: reach a floor boss; a virtuous run → grace, an aggressive
+  run → cast-down to the Hollow.)
+- **M13 unlocks** — Enforcer-only at start; Neuromancer (beat the Kingpin), Scavver (spare 3), Penitent
+  (grace), Hollow (damnation) unlock and persist across runs. (Play-test: fresh profile shows only
+  Enforcer; beat the Kingpin → Neuromancer unlocks next run. Locked-class visuals + unlock popups deferred.)
+- **M15 balance harness** — ⚠️ **KEY FINDING (`docs/BALANCE-REPORT.md`): the game is currently 0% winnable
+  — 0 wins in 2,500 runs, 98% of deaths at Act 1.** The opening floor is an impassable wall (starting HP
+  ~11–20 vs first enemies ~20–30 HP). **The tuning pass (M15 part 2) is ready to run the moment you set a
+  difficulty TARGET** (see the question I asked). The sim harness makes re-tuning + re-measuring instant.
+
+---
+
 ## 🧱 Autonomous mechanical-milestone run (M1–M9 built+verified, pending your merge)
 
 I built these through the loop while you were hands-off, **stacked and unmerged** (your merge gate).
