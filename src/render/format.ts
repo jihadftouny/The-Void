@@ -130,6 +130,13 @@ export function formatEvent(e: GameEvent): string {
       return `The Void refuses your death — you rise with ${e.healedTo} HP.`;
     case 'stat-stolen':
       return `You devour the enemy's essence (+${e.amount} ${e.stat}).`;
+    // --- M12 boss combat mechanics ---
+    case 'boss-summon':
+      return `Reinforcements arrive — the crew is now ${e.minions} strong.`;
+    case 'boss-minion-damage':
+      return `The crew strikes you for ${e.amount} damage.`;
+    case 'boss-adapt':
+      return `Your foe reads your pattern — your next strike falters.`;
 
     // --- narrative events ---
     case 'title':

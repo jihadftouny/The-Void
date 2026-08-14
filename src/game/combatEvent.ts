@@ -96,7 +96,14 @@ export type CombatEvent =
   | { kind: 'shield-gained'; amount: number; text?: string }
   | { kind: 'shield-absorbed'; amount: number; text?: string }
   | { kind: 'revive'; healedTo: number; text?: string }
-  | { kind: 'stat-stolen'; stat: StatKey; amount: number; text?: string };
+  | { kind: 'stat-stolen'; stat: StatKey; amount: number; text?: string }
+  // ---- M12 boss combat mechanics (only a boss battle emits these) ----
+  /** Kingpin: a reinforcement joined the crew; `minions` is the new crew size. */
+  | { kind: 'boss-summon'; minions: number; text?: string }
+  /** Kingpin: the crew dealt `amount` extra damage to the player this round. */
+  | { kind: 'boss-minion-damage'; amount: number; text?: string }
+  /** Reflection: the boss read an over-used tactic; the player's next attack is disadvantaged. */
+  | { kind: 'boss-adapt'; text?: string };
 
 /** Every event `kind` string (handy for exhaustiveness / test assertions). */
 export type CombatEventKind = CombatEvent['kind'];

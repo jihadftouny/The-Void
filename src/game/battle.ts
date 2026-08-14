@@ -55,6 +55,14 @@ export interface BattleState {
    * still available. Only set when a revive gate triggers, so absent for a normal run.
    */
   reviveUsed?: boolean;
+  /**
+   * M12, OPTIONAL: the boss mechanic riding on this battle. ABSENT for every normal
+   * (non-boss) battle ⇒ byte-identical off-equivalence: `resolveRound` never reads it and it
+   * survives the `{ ...state, ... }` spreads untouched. The boss extras (`bossPostRound`) are
+   * layered by game.ts AFTER `resolveRound`, so combat stays fully off-equivalent. `BossState`
+   * is imported as a TYPE only (erased at build), so no runtime import cycle with `boss.ts`.
+   */
+  boss?: import('./boss.ts').BossState;
 }
 
 /**
