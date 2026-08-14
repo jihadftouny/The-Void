@@ -19,6 +19,27 @@ Format per entry:
 
 ---
 
+## 2026-08-14 — boss-mechanics (M12: 5 boss mechanics + karma verdict gate) [stacked on enemy-kits, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: `bossPostRound` takes no rng param (it's rng-free; noUnusedParameters); stages 1+2
+  in one commit (pre-wiring boss module — one green checkpoint); format.test ALL_KINDS 47→52 (5 new events);
+  enemyKit.test SAVE_VERSION 7→8 (M12 owns the bump); boss data as typed inline consts not JSON (keeps
+  BossId/SkillId/KarmaAxis typing tight — mirrors CLASSES/SKILLS precedent).
+- Test failures before fixes: none. 854 → 894 tests (+40).
+- Plan open-questions: 5, all orchestrator-resolved (gate weights {rev:3,others:1}/threshold 1 M15
+  placeholder; grace terminal at act 4; Warden pure verdict; base-kit mirror; keep Jorginho consts, retire use).
+- MAJOR: **first real karma EFFECT** — the floor-4 Warden `computeVerdict(karma)` weighted-sum gate routes
+  GRACE (terminal ascension ending at act 4, Hollow never built) vs CAST-DOWN (→ act 5 → Hollow-Self →
+  damnation). Two endings now (placeholder prose → M14). Hollow-Self mirror replaces Jorginho. **Karma
+  NEVER leaks** to any event/render (guard-tested: verdict event = {kind,outcome} only). Off-equivalence
+  held — resolveRound byte-unchanged, boss hook layered in game.ts after it. 5 unique boss mechanics
+  (Kingpin adds / Reflection kit-mirror+adapt / karma-SELECTED Sin+scale / Warden verdict / Hollow mirror).
+  Test-agent hand-derived gate arithmetic + Sin selection + 3 bite-checks.
+- NEEDS-HUMAN banked: boss feel/balance (M15); boss dialogue + LLM-agent (M11+voice); floor themes (M10);
+  grace/damnation ending prose (M14); in-UI boss/verdict/ending presentation.
+- Manual engineer fixes: none yet
+
 ## 2026-08-14 — enemy-kits (family-themed enemy skills + tag loot) [stacked on functional-ui, unmerged]
 - Verdict: PASS
 - Fix rounds: 0

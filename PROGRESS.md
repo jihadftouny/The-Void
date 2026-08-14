@@ -15,12 +15,14 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 Autonomous run (2026-08-10→11): built the entire **mechanical core** (M1–M9) through the loop, **stacked
 & unmerged** per your merge gate — you review/merge the chain. Chain: `main` → M1 `state-foundations` →
 M2 `skills-conditions` → M3 `class-kits` → M4 `combat-defense` → M5 `equip-engine` → M6 `items-content`
-→ M7 `sacrifice-economy` → M8 `enemy-roster` → M9 `levelup-loop` → `functional-ui` (surfaces the engine — hand-testable) → **`enemy-kits`** (24
-family-themed enemy skill sets + tag loot — fixes "all pyroBall"; tip). Each PASSED plan→build→test
-(typecheck + full tests + build + adversarial verify). **854 tests at the tip.** The game is now
-**playable/testable** (functional UI; bespoke Tibia visual polish deferred). Next (in progress):
-**M12 bosses → M13 unlocks → M15 balance** (mechanics; boss dialogue/ending prose + final tuning need
-your voice/feel). **Play-test checklist: `HUMAN-CHECKS.md`.**
+→ M7 `sacrifice-economy` → M8 `enemy-roster` → M9 `levelup-loop` → `functional-ui` (surfaces the engine — hand-testable) → `enemy-kits` (24
+family-themed enemy skills + tag loot — fixes "all pyroBall") → **`boss-mechanics`** (M12: 5 boss
+mechanics + karma verdict gate + two endings; tip). Each PASSED plan→build→test (typecheck + full tests
++ build + adversarial verify). **894 tests at the tip.** The game is now **playable/testable** (functional
+UI; bespoke Tibia visual polish deferred). **The karma pillar now has its first real EFFECT** — the
+floor-4 gate routes grace (ascension, ends at act 4) vs cast-down (→ Hollow-Self → damnation) by your
+hidden Nature. Next (in progress): **M13 unlocks → M15 balance** (boss dialogue/ending prose + final
+tuning need your voice/feel). **Play-test checklist: `HUMAN-CHECKS.md`.**
 
 | Milestone (v3) | Status |
 |---|---|
