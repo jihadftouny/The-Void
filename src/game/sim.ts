@@ -29,6 +29,7 @@ import {
 } from './game.ts';
 import { type PlayerClass } from './player.ts';
 import { spareAvailable, type BattleState, type BattleAction } from './battle.ts';
+import { hasControlCondition } from './condition.ts';
 import { resolveSkill, type SkillId } from './skill.ts';
 import { type DraftOption } from './draft.ts';
 import { effectiveMaxHp } from './statEffects.ts';
@@ -134,6 +135,12 @@ function chooseBattleAction(battle: BattleState, merciful: boolean): BattleActio
   // Merciful variant: release a living karma-weighted (⚖) non-boss foe to exercise the grace
   // path. The base policy never spares (a spare forfeits the kill XP the act gates require).
   if (merciful && !battle.boss && spareAvailable(battle)) return 'spare';
+
+  // Under a control condition (stun/freeze/sleep) the player cannot act: a potion is BLOCKED and
+  // a cast is skipped WITHOUT advancing the round — only fight/cast run the shared round that
+  // ticks the condition down. So `fight` (never `potion`/`run`, which stall) to let the round
+  // resolve and the control wear off; the player's swing is skipped but the condition ticks.
+  if (hasControlCondition(pl)) return 'fight';
 
   // 1. Heal with a potion when badly hurt and one remains.
   if (pl.pots > 0 && pl.hp <= 0.35 * cap) return 'potion';
