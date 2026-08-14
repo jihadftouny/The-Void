@@ -67,10 +67,15 @@ here** — that's our later art-direction session; this pass is about *functiona
 - **M13 unlocks** — Enforcer-only at start; Neuromancer (beat the Kingpin), Scavver (spare 3), Penitent
   (grace), Hollow (damnation) unlock and persist across runs. (Play-test: fresh profile shows only
   Enforcer; beat the Kingpin → Neuromancer unlocks next run. Locked-class visuals + unlock popups deferred.)
-- **M15 balance harness** — ⚠️ **KEY FINDING (`docs/BALANCE-REPORT.md`): the game is currently 0% winnable
-  — 0 wins in 2,500 runs, 98% of deaths at Act 1.** The opening floor is an impassable wall (starting HP
-  ~11–20 vs first enemies ~20–30 HP). **The tuning pass (M15 part 2) is ready to run the moment you set a
-  difficulty TARGET** (see the question I asked). The sim harness makes re-tuning + re-measuring instant.
+- **M15 balance — ✅ FIXED (the game is now winnable, proven by the simulator).** Target locked at "tough
+  but fair ~1 in 3". After tuning: baseline win **32.9%** / merciful **40.0%** (1000 grace endings), Act-1
+  deaths **98%→19%**, deaths now spread across all acts (modal = Act 3). Numbers in `docs/BALANCE-REPORT.md`.
+  Remaining balance items for YOUR play-test (the sim is a no-equipment *lower bound* — real play is easier):
+  - [ ] **Feel check** — does a careful run feel "tough but fair"? If too soft with equipment, the biggest
+        knob is **`STARTING_POTS = 6`** (generous; trim toward 3–4). All tuned numbers are single-sourced.
+  - [ ] **Per-class spread** — Scavver over-performs (~76% sim win) while the two **1d4-starting-gun** classes
+        (Neuromancer/Hollow ~16–19%) lag. A per-class pass (incl. the starting gun in `weapons.json`) is a
+        follow-up once you've felt it in play.
 
 ---
 

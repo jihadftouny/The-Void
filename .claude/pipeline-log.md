@@ -19,6 +19,34 @@ Format per entry:
 
 ---
 
+## 2026-08-14 — balance-tune (M15 part 2: tuning to the ~1-in-3 target) [stacked on balance-sim, unmerged]
+- Verdict: PASS
+- Fix rounds: 0 (but the FIRST build launch was interrupted mid-search with uncommitted partial work +
+  scratch scripts → orchestrator DISCARDED the partial and re-ran fresh; restart succeeded clean).
+- Author target (locked): baseline sim win ~25–35% (aim ~30%) + deaths SPREAD across acts (not Act-1 wall).
+- **RESULT — MET (independently re-measured by orchestrator + test-agent, report regenerates byte-identically):**
+  baseline win 0%→**32.9%**, merciful **40.0%** (1000 grace endings — both ending paths work), Act-1 death
+  share 98%→**19.2%**, modal death now Act 3 (33%), 4/5 acts ≥10%. Every class wins. **The long-standing
+  "unwinnable" blocker is RESOLVED and proven by simulation.**
+- Levers (constants only, single-sourced, M15-labelled): ENEMY_BASE_HP 30→10; ENEMY_HP_XP_DIV 3→8 +
+  ENEMY_HP_RAND_DIV 1→4 (deep-survival wall — draw-count-safe: randInt always 1 draw); Hollow HP scale
+  1.5→1.2; Sin HP/pt 5→3; Kingpin minion dmg/cadence/cap eased; STARTING_POTS 2→6; ~10 floor-1/2 enemy
+  skill baseDamage −1; Neuromancer hitDie d6→d8 (lone stuck class).
+- Build-agent deviations (all justified): tuned the enemy-HP xp-SCALING (plan said don't) — the steep
+  curve was the deep wall, determinism-safe; ENEMY_BASE_HP=10 below the 12–18 band (melee/finesse add NO
+  stat-mod to DAMAGE, only to-hit → ~2.5–4 dmg/hit); STARTING_POTS=6 (>plan's 3) — flagged generous for
+  equipped play; hits-to-kill [3,4] impossible for all 5 classes (1d4-gun to 1d8-rapier) → anchor asserts
+  [3,4] melee/finesse + documented [3,5] for the two gun classes.
+- Test failures before fixes: none (restart). 953 → 960 tests (+7 anchors). Constants only — no logic/
+  save/version/karma-gate/unlock/RNG-order change. Territory: the 5 constant files + tests + report + script.
+- Test-agent (focused pass): 4 hand-derivations all MATCH, anchors are robust bands (RED on pre-M15), bite
+  (2 mutants→8 fails). Not circular.
+- NEEDS-HUMAN: play-test the retuned feel (sim is a no-equipment LOWER bound — real play is easier);
+  STARTING_POTS=6 likely generous (trim to 3–4 after play-test); per-class SPREAD is wide — Scavver 76%
+  (outlier) vs ranged classes ~16–19% (1d4 starting gun); a per-class balance follow-up (weapons.json was
+  out of territory).
+- Manual engineer fixes: none yet
+
 ## 2026-08-14 — balance-sim (M15 part 1: sim harness + winnability report) [stacked on unlock-store, unmerged]
 - Verdict: PASS
 - Fix rounds: 0
