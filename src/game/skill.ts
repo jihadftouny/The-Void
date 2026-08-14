@@ -62,7 +62,59 @@ export type SkillId =
   | 'siphon'
   | 'corrupt'
   | 'sacrifice'
-  | 'unmake';
+  | 'unmake'
+  // ---- Enemy family kits (this milestone) — additive, twist-free enemy skills. ----
+  // Floor 1
+  | 'gangShiv'
+  | 'gangStomp'
+  | 'taserShot'
+  | 'suppressiveFire'
+  | 'poisonBite'
+  | 'rabidClaw'
+  | 'riotSlam'
+  | 'shieldBash'
+  | 'desperateSwing'
+  // Floor 2
+  | 'mirrorShard'
+  | 'blurStrike'
+  | 'copiedStrike'
+  | 'copiedHex'
+  | 'warpMind'
+  | 'disorient'
+  | 'staticArc'
+  | 'overload'
+  // Floor 3
+  | 'drainingSob'
+  | 'heavyHeart'
+  | 'furiousBlow'
+  | 'wrathSmash'
+  | 'creepingFear'
+  | 'paralyzingDread'
+  | 'deadeningTouch'
+  | 'numbingCold'
+  | 'sinfulWhisper'
+  | 'covetousStrike'
+  | 'wrathfulLash'
+  | 'ashClaw'
+  // Floor 4
+  | 'dissonantHymn'
+  | 'radiantRebuke'
+  | 'wardingStrike'
+  | 'immovableSlam'
+  | 'sorrowfulGaze'
+  | 'smiteWicked'
+  | 'blindingLight'
+  // Floor 5
+  | 'hellfire'
+  | 'corruptClaw'
+  | 'maddeningGaze'
+  | 'voidWhisper'
+  | 'unmakeStrike'
+  | 'negate'
+  | 'echoedStrike'
+  | 'echoedHex'
+  | 'hollowGrasp'
+  | 'desolateStrike';
 
 /**
  * A skill definition as plain, data-driven content. The base fields (id..conditions)
@@ -174,6 +226,70 @@ export const SKILLS: Record<SkillId, SkillDef> = {
   corrupt: { id: 'corrupt', name: 'Corrupt', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison', 'insanity'] },
   sacrifice: { id: 'sacrifice', name: 'Sacrifice', element: 'Psychic', chargeCost: 1, baseDamage: 0, conditions: [], maxHpCost: 3 },
   unmake: { id: 'unmake', name: 'Unmake', element: 'Psychic', chargeCost: 2, baseDamage: 3, conditions: [], corruptionScale: 1, lifestealFraction: 0.5 },
+
+  // ---- Enemy family kits (this milestone). Twist-FREE — only the base fields, so the enemy
+  // path (`useSkill` reading `SKILLS` directly) is fully covered and the player-kit twist
+  // system is untouched. Elements/conditions follow each family's §9 theme; Feelings/Angels
+  // use the closest existing condition/element as an M15-PLACEHOLDER PROXY (Force for
+  // radiant/holy; weak/slow/stun/insanity for the Feelings) — the real fear/radiant/
+  // resource-sap behaviors wait for the M10 behaviorNote hooks. ALL baseDamage/chargeCost
+  // values here are M15 BALANCE PLACEHOLDERS: this milestone delivers DISTINCTION, not balance.
+
+  // Floor 1 — street / mech / beast.
+  gangShiv: { id: 'gangShiv', name: 'Gang Shiv', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
+  gangStomp: { id: 'gangStomp', name: 'Gang Stomp', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['fracture'] },
+  taserShot: { id: 'taserShot', name: 'Taser Shot', element: 'Electro', chargeCost: 1, baseDamage: 1, conditions: ['electrify'] },
+  suppressiveFire: { id: 'suppressiveFire', name: 'Suppressive Fire', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  poisonBite: { id: 'poisonBite', name: 'Poison Bite', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison'] },
+  rabidClaw: { id: 'rabidClaw', name: 'Rabid Claw', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
+  riotSlam: { id: 'riotSlam', name: 'Riot Slam', element: 'Physical', chargeCost: 2, baseDamage: 3, conditions: ['fracture'] },
+  shieldBash: { id: 'shieldBash', name: 'Shield Bash', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['stun'] },
+  desperateSwing: { id: 'desperateSwing', name: 'Desperate Swing', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: [] },
+
+  // Floor 2 — reflections / distortions / static.
+  mirrorShard: { id: 'mirrorShard', name: 'Mirror Shard', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['fool'] },
+  blurStrike: { id: 'blurStrike', name: 'Blur Strike', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  copiedStrike: { id: 'copiedStrike', name: 'Copied Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
+  copiedHex: { id: 'copiedHex', name: 'Copied Hex', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  warpMind: { id: 'warpMind', name: 'Warp Mind', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['insanity'] },
+  disorient: { id: 'disorient', name: 'Disorient', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['fool'] },
+  staticArc: { id: 'staticArc', name: 'Static Arc', element: 'Electro', chargeCost: 1, baseDamage: 2, conditions: ['electrify'] },
+  overload: { id: 'overload', name: 'Overload', element: 'Electro', chargeCost: 2, baseDamage: 2, conditions: ['stun'] },
+
+  // Floor 3 — the Feelings + Sins (proxy conditions, M10 real hooks pending).
+  drainingSob: { id: 'drainingSob', name: 'Draining Sob', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  heavyHeart: { id: 'heavyHeart', name: 'Heavy Heart', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['slow'] },
+  furiousBlow: { id: 'furiousBlow', name: 'Furious Blow', element: 'Physical', chargeCost: 1, baseDamage: 3, conditions: ['bleed'] },
+  wrathSmash: { id: 'wrathSmash', name: 'Wrath Smash', element: 'Physical', chargeCost: 2, baseDamage: 4, conditions: ['fracture'] },
+  creepingFear: { id: 'creepingFear', name: 'Creeping Fear', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  paralyzingDread: { id: 'paralyzingDread', name: 'Paralyzing Dread', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['stun'] },
+  deadeningTouch: { id: 'deadeningTouch', name: 'Deadening Touch', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['slow'] },
+  numbingCold: { id: 'numbingCold', name: 'Numbing Cold', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['sleep'] },
+  sinfulWhisper: { id: 'sinfulWhisper', name: 'Sinful Whisper', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['insanity'] },
+  covetousStrike: { id: 'covetousStrike', name: 'Covetous Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  wrathfulLash: { id: 'wrathfulLash', name: 'Wrathful Lash', element: 'Pyro', chargeCost: 1, baseDamage: 2, conditions: ['burn'] },
+  ashClaw: { id: 'ashClaw', name: 'Ash Claw', element: 'Pyro', chargeCost: 1, baseDamage: 1, conditions: ['burn'] },
+
+  // Floor 4 — Angels / Ancestral (Force proxy for radiant/holy).
+  dissonantHymn: { id: 'dissonantHymn', name: 'Dissonant Hymn', element: 'Force', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  radiantRebuke: { id: 'radiantRebuke', name: 'Radiant Rebuke', element: 'Force', chargeCost: 1, baseDamage: 3, conditions: [] },
+  wardingStrike: { id: 'wardingStrike', name: 'Warding Strike', element: 'Force', chargeCost: 1, baseDamage: 2, conditions: ['fracture'] },
+  immovableSlam: { id: 'immovableSlam', name: 'Immovable Slam', element: 'Physical', chargeCost: 2, baseDamage: 3, conditions: ['stun'] },
+  sorrowfulGaze: { id: 'sorrowfulGaze', name: 'Sorrowful Gaze', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  smiteWicked: { id: 'smiteWicked', name: 'Smite the Wicked', element: 'Force', chargeCost: 2, baseDamage: 4, conditions: [] },
+  blindingLight: { id: 'blindingLight', name: 'Blinding Light', element: 'Force', chargeCost: 1, baseDamage: 2, conditions: ['stun'] },
+
+  // Floor 5 — Demons / Void-Horrors / the Unmade / Echoes / Hollowed.
+  hellfire: { id: 'hellfire', name: 'Hellfire', element: 'Pyro', chargeCost: 1, baseDamage: 3, conditions: ['burn'] },
+  corruptClaw: { id: 'corruptClaw', name: 'Corrupt Claw', element: 'Poison', chargeCost: 1, baseDamage: 2, conditions: ['poison'] },
+  maddeningGaze: { id: 'maddeningGaze', name: 'Maddening Gaze', element: 'Psychic', chargeCost: 1, baseDamage: 3, conditions: ['insanity'] },
+  voidWhisper: { id: 'voidWhisper', name: 'Void Whisper', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['fool'] },
+  unmakeStrike: { id: 'unmakeStrike', name: 'Unmake Strike', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  negate: { id: 'negate', name: 'Negate', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['dumb'] },
+  echoedStrike: { id: 'echoedStrike', name: 'Echoed Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
+  echoedHex: { id: 'echoedHex', name: 'Echoed Hex', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['insanity'] },
+  hollowGrasp: { id: 'hollowGrasp', name: 'Hollow Grasp', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  desolateStrike: { id: 'desolateStrike', name: 'Desolate Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
 };
 
 /**

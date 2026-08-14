@@ -6,9 +6,10 @@ import {
   resolveSkill,
   applySkillUpgrade,
   type SkillUpgrade,
+  type SkillId,
 } from './skill.ts';
 import { type Character } from './character.ts';
-import { makeCondition, type ActiveCondition } from './condition.ts';
+import { makeCondition, type ActiveCondition, type ConditionType } from './condition.ts';
 
 // Expected damage values are hand-derived from the Java resistance formula
 //   damage = base - floor(res/100) * base
@@ -247,4 +248,48 @@ describe('useSkill — purity', () => {
     expect(c).toEqual(cSnap);
     expect(t).toEqual(tSnap);
   });
+});
+
+describe('enemy family skills (this milestone) — data-driven, twist-free', () => {
+  // Each expectation is derived independently from the plan's skill table (element /
+  // conditions / chargeCost / baseDamage), NOT read back from the SKILLS record.
+  const CASES: {
+    id: SkillId;
+    element: string;
+    conditions: ConditionType[];
+    chargeCost: number;
+    baseDamage: number;
+  }[] = [
+    { id: 'gangShiv', element: 'Physical', conditions: ['bleed'], chargeCost: 1, baseDamage: 2 },
+    { id: 'poisonBite', element: 'Poison', conditions: ['poison'], chargeCost: 1, baseDamage: 1 },
+    { id: 'taserShot', element: 'Electro', conditions: ['electrify'], chargeCost: 1, baseDamage: 1 },
+    { id: 'warpMind', element: 'Psychic', conditions: ['insanity'], chargeCost: 1, baseDamage: 2 },
+    { id: 'staticArc', element: 'Electro', conditions: ['electrify'], chargeCost: 1, baseDamage: 2 },
+    { id: 'wrathSmash', element: 'Physical', conditions: ['fracture'], chargeCost: 2, baseDamage: 4 },
+    { id: 'numbingCold', element: 'Cryo', conditions: ['sleep'], chargeCost: 1, baseDamage: 1 },
+    { id: 'wrathfulLash', element: 'Pyro', conditions: ['burn'], chargeCost: 1, baseDamage: 2 },
+    { id: 'radiantRebuke', element: 'Force', conditions: [], chargeCost: 1, baseDamage: 3 },
+    { id: 'smiteWicked', element: 'Force', conditions: [], chargeCost: 2, baseDamage: 4 },
+    { id: 'hellfire', element: 'Pyro', conditions: ['burn'], chargeCost: 1, baseDamage: 3 },
+    { id: 'maddeningGaze', element: 'Psychic', conditions: ['insanity'], chargeCost: 1, baseDamage: 3 },
+    { id: 'negate', element: 'Psychic', conditions: ['dumb'], chargeCost: 1, baseDamage: 2 },
+    { id: 'desolateStrike', element: 'Physical', conditions: ['bleed'], chargeCost: 1, baseDamage: 2 },
+  ];
+
+  for (const c of CASES) {
+    it(`${c.id} carries its themed element/conditions/cost/damage`, () => {
+      const def = SKILLS[c.id];
+      expect(def.element).toBe(c.element);
+      expect(def.conditions).toEqual(c.conditions);
+      expect(def.chargeCost).toBe(c.chargeCost);
+      expect(def.baseDamage).toBe(c.baseDamage);
+      // Twist-free: none of the M3 class-kit knobs are set on an enemy skill.
+      expect(def.hpCost).toBeUndefined();
+      expect(def.maxHpCost).toBeUndefined();
+      expect(def.spendMomentum).toBeUndefined();
+      expect(def.detonate).toBeUndefined();
+      expect(def.appliesExposure).toBeUndefined();
+      expect(def.selfConditions).toBeUndefined();
+    });
+  }
 });
