@@ -5,6 +5,7 @@ import { SKILLS } from './skill.ts';
 import { mulberry32, type Rng } from './rng.ts';
 import { resolveEnemyAttack, type SkillTarget } from './combat.ts';
 import { type ConditionType } from './condition.ts';
+import { SAVE_VERSION } from './save.ts';
 
 // The expected pools are transcribed independently from the plan's §B pool map — NOT read
 // back from enemyFamilies.json. If the data drifts from the design, these bite.
@@ -208,5 +209,27 @@ describe('anchor 6 — determinism: identical scripted runs match on {skillId,da
     const b = forcedHit(familyEnemy('mutantStrays'), target(), 0);
     expect(a).toEqual(b);
     expect(a).toEqual({ skillId: 'poisonBite', damage: 1, applied: ['poison'] });
+  });
+});
+
+describe('save shape — themed pool stays plain string[] (no SAVE_VERSION bump)', () => {
+  it('SAVE_VERSION is still 7', () => {
+    expect(SAVE_VERSION).toBe(7);
+  });
+
+  it('a themed-pool enemy JSON round-trips unchanged and skillPool is string[]', () => {
+    const enemy = familyEnemy('gangers'); // pool ['gangShiv','gangStomp']
+    const round = JSON.parse(JSON.stringify(enemy)) as Enemy;
+    expect(round).toEqual(enemy);
+    expect(Array.isArray(round.skillPool)).toBe(true);
+    expect(round.skillPool.every((s) => typeof s === 'string')).toBe(true);
+    expect(round.skillPool).toEqual(['gangShiv', 'gangStomp']);
+  });
+
+  it('a legacy pre-existing enemy (skillPool [pyroBall]) still round-trips unchanged', () => {
+    const legacy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(3));
+    const round = JSON.parse(JSON.stringify(legacy)) as Enemy;
+    expect(round).toEqual(legacy);
+    expect(round.skillPool).toEqual(['pyroBall']);
   });
 });

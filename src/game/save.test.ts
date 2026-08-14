@@ -616,6 +616,9 @@ describe('M8 v5 -> v6 migration + family/affix enemy round-trip', () => {
       expect(rp.phase.battle.enemy.familyId).toBe('grief');
       expect(rp.phase.battle.enemy.karmaWeighted).toBe(true);
       expect(rp.phase.battle.enemy.affixId).toBe('ancient');
+      // The themed enemy skill pool (grief = [drainingSob, heavyHeart]) survives the trip
+      // as plain string[] — no save-version bump (skillPool shape unchanged).
+      expect(rp.phase.battle.enemy.skillPool).toEqual(['drainingSob', 'heavyHeart']);
     }
   });
 });
