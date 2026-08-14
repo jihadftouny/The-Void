@@ -30,5 +30,13 @@
     "chestItemCount": 1,
     "rarityWeights": { "Common": 2, "Rare": 3, "Legendary": 2 },
     "slotWeights": { "mainHand": 2, "armor": 2, "ring": 1, "amulet": 1 }
+  },
+  "byTag": {
+    "Mech": { "mainHand": 3, "offHand": 2, "armor": 2, "ammo": 2 },
+    "Humanoid": { "mainHand": 2, "armor": 2, "boots": 2, "ring": 2 },
+    "Beast": { "mainHand": 2, "armor": 2, "ring": 2 },
+    "Magical": { "ring": 3, "amulet": 3, "helmet": 2 },
+    "Ancestral": { "amulet": 3, "ring": 2, "armor": 2, "helmet": 2 },
+    "Nightmare": { "amulet": 2, "ring": 2, "mainHand": 2, "legs": 2 }
   }
 }

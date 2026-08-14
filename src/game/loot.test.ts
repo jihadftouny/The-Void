@@ -75,6 +75,44 @@ describe('rollLootDrop — seeded, hand-derived anchors (act 1)', () => {
   });
 });
 
+describe('rollLootDrop — family-tag slot bias (act 1, hand-derived)', () => {
+  // Act-1 slotWeights {mainHand:2,armor:2,ring:1}; SLOT_ORDER present-subset in order:
+  // mainHand(2), armor(2), ring(1). Tag-free total 5, cumulative mainHand2,armor4,ring5.
+  // The 'Mech' byTag map {mainHand:3,offHand:2,armor:2,ammo:2} multiplies WITHIN the act's
+  // set only (offHand & ammo are NOT in act-1's slots, so they are never added): mainHand
+  // 2*3=6, armor 2*2=4, ring 1*1=1 (Mech omits ring -> x1). Mech total 11, cumulative
+  // mainHand6, armor10, ring11.
+  //
+  // Shared draw queue [gate 0.1, rarity 0.0, slot 0.5, mag 0.0, proc 0.0]:
+  //   gate 0.1 < 0.5 -> drop. rarity r=1+floor(0.0*9)=1 -> Common. slot draw 0.5:
+  //     tag-free: r = 1 + floor(0.5*5) = 1+2 = 3 -> cumulative mainHand2,armor4 >= 3 -> ARMOR.
+  //     Mech:     r = 1 + floor(0.5*11) = 1+5 = 6 -> cumulative mainHand6 >= 6 -> MAINHAND.
+  //   Same single slot draw, different slot -> the bias re-weights the SAME roll.
+  const queue = () => scriptedRng([0.1, 0.0, 0.5, 0.0, 0.0]);
+
+  it('the same slot draw lands on armor tag-free but mainHand under the Mech bias', () => {
+    const bare = rollLootDrop(1, queue());
+    const mech = rollLootDrop(1, queue(), 'Mech');
+    expect(bare!.rolled!.slot).toBe('armor');
+    expect(mech!.rolled!.slot).toBe('mainHand');
+    expect(bare!.rolled!.rarity).toBe('Common'); // hand-derived golden for the tag-free roll
+  });
+
+  it('off-equivalence: an undefined or unknown tag is byte-identical to the tag-free roll', () => {
+    const bare = rollLootDrop(1, queue());
+    const explicitUndefined = rollLootDrop(1, queue(), undefined);
+    const unknownTag = rollLootDrop(1, queue(), 'NotATag');
+    expect(explicitUndefined).toEqual(bare);
+    expect(unknownTag).toEqual(bare);
+  });
+
+  it('is deterministic: same seed + act + tag rolls the identical biased drop', () => {
+    const a = rollLootDrop(1, mulberry32(555), 'Mech');
+    const b = rollLootDrop(1, mulberry32(555), 'Mech');
+    expect(a).toEqual(b);
+  });
+});
+
 describe('rollChestLoot — guaranteed, seeded (no drop gate)', () => {
   // Chest table: rarityWeights {Common:2,Rare:3,Legendary:2} (total 7), slotWeights
   // {mainHand:2,armor:2,ring:1,amulet:1} (SLOT_ORDER: amulet1,mainHand2,armor2,ring1; total 6),

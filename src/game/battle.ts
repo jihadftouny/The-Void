@@ -20,6 +20,7 @@
 
 import { type Player } from './player.ts';
 import { type Enemy } from './enemy.ts';
+import { getFamily } from './enemyFamily.ts';
 import { type Rng } from './rng.ts';
 import { type CombatEvent } from './combatEvent.ts';
 import { hasControlCondition, tickConditions, type ConditionType } from './condition.ts';
@@ -439,7 +440,7 @@ function resolveCast(state: BattleState, skillId: SkillId, rng: Rng): RoundResul
 
 /**
  * The shared victory block — PURE. Grants xp = enemy.xp, rolls the extra-rest chance
- * (`rng()*100+1 <= 25`) THEN a found-loot drop (`rollLootDrop(state.act, rng)`) IN THAT ORDER,
+ * (`rng()*100+1 <= 25`) THEN a found-loot drop (`rollLootDrop(state.act, rng, familyTag)`) IN THAT ORDER,
  * and emits the `victory` event. Extracted so an enemy killed by its own DoT tick (before it
  * acts) awards exactly the same rewards as a kill by the player's action. M7: the old gold
  * draw is replaced by the loot roll — a non-null drop is picked up into the backpack and
@@ -455,7 +456,10 @@ function applyVictory(
 ): RoundResult {
   const xpGained = enemy.xp;
   const extraRest = rng() * 100 + 1 <= 25;
-  const drop = rollLootDrop(state.act, rng);
+  // M8+: bias the drop slot by the enemy's broad family tag. A legacy/boss enemy whose
+  // familyId is a bare type string resolves to no family ⇒ tag undefined ⇒ the roll is
+  // byte-identical to the pre-family behaviour (off-equivalence for family-less enemies).
+  const drop = rollLootDrop(state.act, rng, getFamily(enemy.familyId)?.tag);
   const inventory = drop ? pickUp(player.inventory, drop) : player.inventory;
   const loot = drop ? [summarizeLoot(drop)] : [];
   const newPlayer: Player = {

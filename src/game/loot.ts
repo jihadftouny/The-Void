@@ -29,6 +29,18 @@
 //                  (4,5) generateItem's two draws (magnitude, proc)
 //   rollChestLoot: for each of chestItemCount items, in order:
 //                  (1) rarity, (2) slot, (3,4) generateItem's two draws  (NO drop gate)
+//
+// FAMILY-AWARE LOOT (this milestone): rollLootDrop takes an optional `tag` (the enemy's
+// broad family tag: Mech / Humanoid / Beast / Magical / Ancestral / Nightmare). When the
+// tag is present in `byTag`, each act slot weight is MULTIPLIED by the tag's per-slot
+// multiplier (default x1 for any slot the tag omits). This BIASES only WITHIN the act's
+// own slot set — a multiplier can never introduce a slot the act table lacks (the tag map
+// is applied on top of the act's `slotWeights`, so an act-absent slot stays absent) nor
+// remove one (its weight only scales). So the M7 per-act power curve is preserved and only
+// the slot FLAVOUR shifts. The draw ORDER and COUNT are unchanged (still gate -> rarity ->
+// slot -> two item draws); only the slot entry weights are reshaped, so a tag-free call
+// (`tag` undefined, or a tag absent from `byTag`) is BYTE-IDENTICAL to the pre-family code.
+// All multipliers are M15 balance placeholders.
 
 import { weightedPick, type Rng } from './rng.ts';
 import { type Rarity } from './weapon.ts';
@@ -54,9 +66,14 @@ export interface ChestTable {
   slotWeights: Partial<Record<EquipSlot, number>>;
 }
 
+/** Per-tag slot multipliers (default x1 for an omitted slot). M15 balance placeholders. */
+export type TagSlotBias = Partial<Record<EquipSlot, number>>;
+
 interface DropTablesFile {
   perAct: Record<string, DropTable>;
   chest: ChestTable;
+  /** Family-tag slot re-weighting (multiplies the act slot weights within the act's set). */
+  byTag: Record<string, TagSlotBias>;
 }
 
 const TABLES = dropTablesData as unknown as DropTablesFile;
@@ -103,12 +120,19 @@ function rarityEntries(weights: Partial<Record<Rarity, number>>): (readonly [Rar
   );
 }
 
-/** Build the ordered slot weight entries for `weightedPick` (skips zero/absent weights). */
+/**
+ * Build the ordered slot weight entries for `weightedPick` (skips zero/absent weights).
+ * With a `bias` map each act weight is multiplied by the tag's per-slot multiplier (default
+ * x1). The filter is on the ACT weight, so the bias only re-weights slots the act already
+ * allows — it never adds nor removes a slot. With `bias` undefined every slot is x1, so the
+ * entries are byte-identical to the tag-free call (off-equivalence).
+ */
 function slotEntries(
   weights: Partial<Record<EquipSlot, number>>,
+  bias?: TagSlotBias,
 ): (readonly [EquipSlot, number])[] {
   return SLOT_ORDER.filter((s) => (weights[s] ?? 0) > 0).map(
-    (s) => [s, weights[s] as number] as const,
+    (s) => [s, (weights[s] as number) * (bias?.[s] ?? 1)] as const,
   );
 }
 
@@ -119,15 +143,22 @@ function slotEntries(
  * The dropped item's stat (for a ring/amulet) defaults to STR — no extra draw is spent (see
  * DEVIATION note in loot.test.ts: the design's separate stat-pick draw is omitted so the loot
  * stream stays at the documented five draws).
+ *
+ * `tag` (optional) is the felling enemy's broad family tag. When present in `byTag` it biases
+ * the slot draw within the act's own slot set (see the module header's FAMILY-AWARE LOOT note);
+ * absent/unknown ⇒ byte-identical to the tag-free roll, so family-less (legacy/boss) enemies
+ * and the chest path are unchanged.
  */
-export function rollLootDrop(act: number, rng: Rng): ItemInstance | null {
+export function rollLootDrop(act: number, rng: Rng, tag?: string): ItemInstance | null {
   const table = getDropTable(act);
   // (1) drop gate.
   if (!(rng() < table.dropChance)) return null;
-  // (2) rarity, (3) slot.
+  // (2) rarity, (3) slot. A known `tag` re-weights (multiplies) the slot entries within the
+  // act's own slot set; an undefined/unknown tag leaves them byte-identical (off-equivalence).
   const rarity = weightedPick(rng, rarityEntries(table.rarityWeights));
   if (!rarity) throw new Error(`rollLootDrop: empty rarity table for act ${act}`);
-  const slot = weightedPick(rng, slotEntries(table.slotWeights));
+  const bias = tag ? TABLES.byTag[tag] : undefined;
+  const slot = weightedPick(rng, slotEntries(table.slotWeights, bias));
   if (!slot) throw new Error(`rollLootDrop: empty slot table for act ${act}`);
   // (4,5) the item itself (magnitude then proc gate) — via M6's seeded generator.
   return generateItem(rng, { slot, rarity });
