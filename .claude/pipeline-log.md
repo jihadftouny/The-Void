@@ -19,6 +19,24 @@ Format per entry:
 
 ---
 
+## 2026-08-14 — enemy-kits (family-themed enemy skills + tag loot) [stacked on functional-ui, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Trigger: AUTHOR FEEDBACK during play-test — "enemies all do pyroBall." Root cause: M8 gave families
+  themes but never wired distinct skills; `enemy.ts` hard-coded `skillPool:['pyroBall']` for all.
+- Build note: first build-agent launch was interrupted by the user mid-run (had committed stages 1-2);
+  resumed agent finished stages 3-5. Per-stage commits made the interrupt recoverable (0 lost work).
+- Build-agent deviations: none material (strengthened existing save tests instead of duplicating fixtures).
+- Test failures before fixes: none. 753 → 854 tests (+101; ~46 new enemy skills + 24 family pools + anchors).
+- Plan open-questions: 4, all orchestrator-resolved (single SKILLS table +~46 additive enemy skills;
+  loot by 6 broad tags; tag = multiplier WITHIN act's slot set; Feelings/Angels proxy conditions provisional).
+- Notable: 24 families now cast distinct theme-appropriate skills (poison/insanity/bleed/freeze/etc.),
+  hand-verified. Off-equivalence held — legacy/boss no-family path stays `['pyroBall']` byte-compatible.
+  Loot tag-bias re-weights only allowed slots (preserves act curve). Magnitudes are M15 placeholders —
+  distinction delivered, balance is M15. Feelings/Angels use proxy conditions until M10 behaviorNote hooks.
+- NEEDS-HUMAN banked: enemy variety play-test; M15 balance tuning; in-UI enemy-skill-name display.
+- Manual engineer fixes: none yet
+
 ## 2026-08-11 — functional-ui (surface M2–M9 engine in the desktop UI) [stacked on M9, unmerged]
 - Verdict: PASS
 - Fix rounds: 0
