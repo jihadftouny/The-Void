@@ -19,6 +19,27 @@ Format per entry:
 
 ---
 
+## 2026-08-14 — unlock-store (M13: meta-progression unlocks/feats) [stacked on boss-mechanics, unmerged]
+- Verdict: PASS
+- Fix rounds: 0
+- Build-agent deviations: reach-act-1..5 not 2..5 (acceptance criteria authoritative — floor-1 long-tail
+  via reach-act-1 on player-created); affix partition {ravenous,ancient} front-load + warped via
+  first-boss-kill (blessed/cursed future feats); SAVE_VERSION stays 8 (additive optional `unlocks?`);
+  desktop run-summary is SESSION-LOCAL (a save resumed in a fresh session folds from empty — endings
+  normally complete in one session; flagged as possible follow-up for mid-run cross-session crediting).
+- Test failures before fixes: none. 894 → 943 tests (+49, all additive; no existing value moved).
+- Plan open-questions: 3, all orchestrator-resolved (Enforcer-only + curated family/affix subset w/ ⚖ on
+  floor 1; existing tests stay all-unlocked/no-snapshot; no SAVE_VERSION bump — store has own version).
+- Notable: persistent unlock store SEPARATE from run save (own UNLOCK_STORE_VERSION=1 + key thevoid:unlocks).
+  Feat triggers now REAL (M12 bosses/endings + M8 spare): Kingpin→Neuromancer, spare-3→Scavver,
+  grace→Penitent, damnation→Hollow + progression/mastery feats. Gradual bestiary reveal off-equivalent
+  (byte-identical w/ full unlock set) & RNG-NEUTRAL (fixed draw counts under filter). Cross-run karma
+  memory stored but flavor-only (no mechanical consumer — grep-confirmed). Test-agent hand-traced feat
+  thresholds + off-equivalence + 3 bite-checks.
+- NEEDS-HUMAN banked: locked-class visual treatment + unlock-earned notifications (in-UI, deferred);
+  unlock pacing/feel + final feat list + family/affix partition (M15); real desktop boot smoke.
+- Manual engineer fixes: none yet
+
 ## 2026-08-14 — boss-mechanics (M12: 5 boss mechanics + karma verdict gate) [stacked on enemy-kits, unmerged]
 - Verdict: PASS
 - Fix rounds: 0
