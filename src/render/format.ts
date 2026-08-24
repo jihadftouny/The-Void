@@ -13,7 +13,12 @@
 // bars.
 
 import type { GameEvent } from '../game/gameEvent.ts';
-import type { CombatSubject } from '../game/combatEvent.ts';
+import type {
+  CombatEvent,
+  CombatSubject,
+  DamageSource,
+  DamageSourceKind,
+} from '../game/combatEvent.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { Stats } from '../game/character.ts';
 
@@ -197,4 +202,72 @@ export function formatEvent(e: GameEvent): string {
     case 'game-over':
       return `Game over. Final XP: ${e.xp}.`;
   }
+}
+
+// ---------------------------------------------------------------------------
+// The expandable roll detail (docs/UI-DESIGN.md §3).
+//
+// `formatEvent` gives the plain one-line story of a blow. `formatRollDetail` is what the
+// player opens when they want to know WHY: the dice, the modifier, the AC, and the damage
+// broken into the terms that produced it. It re-derives nothing — every number is read
+// straight off the event the engine emitted.
+// ---------------------------------------------------------------------------
+
+/** An `attack` event, narrowed out of the union. */
+type AttackEvent = Extract<CombatEvent, { kind: 'attack' }>;
+
+/**
+ * The short name for a damage term that carries no dice notation. Exhaustive over
+ * DamageSourceKind, so a new kind in the engine fails the build here rather than rendering
+ * as `undefined` in the middle of a line.
+ */
+const DAMAGE_TERM_NAME: Record<DamageSourceKind, string> = {
+  'weapon-dice': 'weapon',
+  'crit-dice': 'crit die',
+  'ability-mod': 'mod',
+  equipment: 'gear',
+  perk: 'perk',
+  skill: 'skill',
+  base: 'strike',
+  'crit-multiplier': 'crit',
+  'low-hp-bonus': 'low HP',
+  'damage-mult': 'multiplier',
+  'first-hit-reduction': 'reduction',
+  clamp: 'floor',
+};
+
+/** Dice notation when the term has it (e.g. '1d8'), else the term's short name. */
+function termName(source: DamageSource): string {
+  return source.label ?? DAMAGE_TERM_NAME[source.kind];
+}
+
+/** ", 1d8 + 1d8 = 9" — empty when the blow dealt no damage terms at all. */
+function damagePhrase(event: AttackEvent): string {
+  if (event.damageSources.length === 0) return '';
+  return `, ${event.damageSources.map(termName).join(' + ')} = ${event.damage}`;
+}
+
+/**
+ * One line of dice detail for an attack. Formats only — no rule is recomputed.
+ *
+ *   hit    d20+2 = 17 vs AC 13 → hit, 1d8 = 4
+ *   miss   d20+2 = 12 vs AC 13 → miss
+ *   adv    d20 adv (7,15)+2 = 17 vs AC 13 → hit, 1d8 = 4
+ *   crit   nat 20 → critical, 1d8 + 1d8 = 9
+ *   fumble nat 1 → fumble
+ *
+ * A crit and a fumble drop the "vs AC" clause on purpose: neither consults the armor class
+ * (a natural 20 lands whatever the AC, a natural 1 always fails), so printing a comparison
+ * that did not happen would be a lie about the rules.
+ */
+export function formatRollDetail(event: AttackEvent): string {
+  const { faces, advDis, modifier, total, targetAc } = event.roll;
+  const damage = damagePhrase(event);
+  if (event.outcome === 'crit') return `nat 20 → critical${damage}`;
+  if (event.outcome === 'fumble') return `nat 1 → fumble`;
+
+  const mod = modifier === 0 ? '' : modifier > 0 ? `+${modifier}` : `${modifier}`;
+  const dice =
+    advDis === 0 ? 'd20' : `d20 ${advDis === 1 ? 'adv' : 'dis'} (${faces.join(',')})`;
+  return `${dice}${mod} = ${total} vs AC ${targetAc} → ${event.outcome}${damage}`;
 }
