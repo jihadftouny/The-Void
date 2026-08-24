@@ -219,18 +219,59 @@ consumables plus weapons and armour — too many to review in one sitting, and t
 is probably an icon per slot-and-rarity rather than per individual item. That is a **[OPEN]**
 question for after the first batch proves the style.
 
-### Open questions blocking the art pipeline **[OPEN]**
+### API investigation — findings **[VERIFIED 2026-08-24, live against the API]**
 
-1. **The API key.** Nothing can be generated until it is supplied. It must arrive as a `.env` file
-   or an environment variable — please do not paste it into chat, where it would be recorded in the
-   transcript.
-2. **The exact model.** The engineer asked for "banana pro". The Nano Banana family are Google's
-   image models; the precise current model id and whether it exposes a true batch endpoint (as
-   opposed to concurrent single calls) must be **verified against live documentation** before the
-   script is written, not assumed from memory.
-3. **Style lock.** 117 images generated against an unproven prompt style is a large batch to throw
-   away. Recommend a **style probe first**: three assets, three variations each, confirming the
-   "austere plate against near-black" look actually lands, before committing to the full run.
+The key was supplied and probed directly. Results:
+
+**The key is valid.** Text generation works (`gemini-3.5-flash` returned normally) and the model
+list is readable, so authentication and project access are fine.
+
+**Model identified.** "Banana Pro" is `gemini-3-pro-image` (display name "Nano Banana Pro",
+description "Gemini 3 Pro Image"). `nano-banana-pro-preview` is the same model under its preview
+alias — **prefer the stable `gemini-3-pro-image`**. Related models on the same key:
+`gemini-3.1-flash-image` ("Nano Banana 2") and `gemini-2.5-flash-image` (the original Nano Banana).
+
+**A true batch endpoint exists.** All three image models list `batchGenerateContent` among their
+`supportedGenerationMethods`, so the batch request the engineer asked for is real and not merely
+concurrent single calls.
+
+**BLOCKER — image generation is not on the free tier.** Every image model returns HTTP 429 with
+`Quota exceeded … generate_content_free_tier_requests, limit: 0`. A limit of *zero*, not a limit
+that resets: the free tier permits no image generation at all. Google's pricing page confirms "free
+tier: not available" for all three image models. **Billing must be enabled on the Google Cloud
+project behind the key before a single image can be generated.** Text generation on the same key is
+unaffected, which is why the key otherwise looks healthy.
+
+**Cost, once billing is enabled** (117 images = 39 assets × 3 variations):
+
+| Model | Per image | Style probe (9) | Full batch (117) |
+|---|---|---|---|
+| `gemini-3-pro-image` (Nano Banana Pro), 1K–2K | $0.134 | ~$1.21 | **~$15.68** |
+| `gemini-3-pro-image`, 4K | $0.24 | ~$2.16 | ~$28.08 |
+| `gemini-3.1-flash-image` (Nano Banana 2), 1K | $0.067 | ~$0.60 | ~$7.84 |
+| `gemini-2.5-flash-image` | $0.039 | ~$0.35 | ~$4.56 |
+
+**Recommendation:** Nano Banana Pro at 1K–2K. Roughly sixteen dollars for the whole first batch is
+not a figure worth economising on, and the Pro model's stronger prompt adherence matters a great
+deal here — every enemy must land in the *same* house style or the roster will not read as one game.
+
+### Remaining open questions **[OPEN]**
+
+1. **Billing.** Must be enabled before anything can be generated. Nothing else blocks the pipeline.
+2. **Style lock.** 117 images against an unproven prompt style is a large batch to discard. A
+   **style probe** is written and ready (3 assets — an enemy, a floor backdrop, a class portrait —
+   at 3 variations each) and will run the moment billing is live, for about a dollar.
+3. **Resolution.** 1K or 2K. 2K gives headroom for the full-bleed floor backdrops on a large
+   desktop window; 1K is likely sufficient for enemy sprites. Same price either way on the Pro
+   model, so this is a file-size question, not a cost one.
+
+### Key handling — a warning on record **[SECURITY]**
+
+The key was pasted into a chat transcript rather than delivered as a file, so **it must be treated
+as exposed and rotated.** This matters more, not less, once billing is enabled: an exposed key on a
+billed project is a financial exposure, not merely a privacy one. It has been written to the
+gitignored `.env` and confirmed ignored via `git check-ignore`; it is not in any commit. Recommended
+sequence: enable billing → run the probe and the batch → **rotate the key** → update `.env`.
 
 ---
 
