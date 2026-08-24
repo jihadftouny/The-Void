@@ -12,8 +12,11 @@
 // optional `text` on the narrative events is a UI convenience only.
 
 import type { CombatEvent } from './combatEvent.ts';
-import type { Stats, StatKey } from './character.ts';
+import type { Stats } from './character.ts';
 import type { PlayerClass } from './player.ts';
+import type { Rarity } from './weapon.ts';
+import type { Pool } from './deal.ts';
+import type { BossId } from './boss.ts';
 
 /** The narrative (non-combat) half of the game event stream. */
 export type NarrativeEvent =
@@ -34,34 +37,34 @@ export type NarrativeEvent =
   | { kind: 'rest-full'; text?: string }
   | { kind: 'rest-declined'; text?: string }
   | { kind: 'no-rests'; text?: string }
+  // ---- M7 sacrifice-deal encounter (replaces the gold shop) ----
+  | { kind: 'deal-offer'; pool: Pool; cost: string; reward: string; text?: string }
+  | { kind: 'deal-taken'; cost: string; reward: string; text?: string }
+  | { kind: 'deal-unaffordable'; cost: string; text?: string }
+  | { kind: 'deal-declined'; text?: string }
+  // ---- M7 chest/cache encounter ----
+  | { kind: 'chest-found'; text?: string }
   | {
-      kind: 'shop-offer';
-      itemKind: 'armor' | 'weapon';
-      itemId: string;
-      itemName: string;
-      price: number;
-      currentId: string;
-      currentName: string;
+      kind: 'chest-loot';
+      loot: readonly { defId: string; name: string; rarity: Rarity }[];
       text?: string;
     }
-  | { kind: 'shop-purchased'; itemId: string; price: number; gold: number; text?: string }
-  | { kind: 'shop-insufficient'; text?: string }
-  | { kind: 'shop-declined'; text?: string }
-  | { kind: 'character-info'; text?: string }
   | { kind: 'act-outro'; act: number; header: string; body: string; text?: string }
-  | {
-      kind: 'level-up';
-      picks: readonly [StatKey, StatKey];
-      newStats: Stats;
-      hpRoll: number;
-      newMaxHp: number;
-      conModChanged: boolean;
-      proficiency: number;
-      text?: string;
-    }
+  // ---- M9 frequent level-up draft ----
+  | { kind: 'level-up'; newLevel: number; hpRoll: number; newMaxHp: number; text?: string }
+  | { kind: 'draft-offer'; options: readonly string[]; text?: string }
+  | { kind: 'draft-picked'; option: string; text?: string }
   | { kind: 'act-intro'; act: number; header: string; body: string; text?: string }
   | { kind: 'final-battle-begins'; enemyName: string; text?: string }
-  | { kind: 'ending'; header: string; body: string; text?: string }
+  // ---- M12 boss encounter + the verdict gate + the two endings ----
+  /** A floor boss appears (acts 1/2/3/5). Carries only the boss id + its display name. */
+  | { kind: 'boss-encounter'; bossId: BossId; enemyName: string; text?: string }
+  /**
+   * The act-4 reckoning result. Carries ONLY the outcome (grace/cast-down) + optional
+   * placeholder prose — NEVER a karma axis value/number (karma stays hidden).
+   */
+  | { kind: 'verdict'; outcome: 'grace' | 'cast-down'; text?: string }
+  | { kind: 'ending'; endingType: 'grace' | 'damnation'; header: string; body: string; text?: string }
   | { kind: 'game-over'; xp: number; text?: string };
 
 /** The full game event stream: combat events plus narrative events. */

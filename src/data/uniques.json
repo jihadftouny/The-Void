@@ -1,0 +1,53 @@
+[
+  {
+    "id": "reflections-edge",
+    "name": "Reflection's Edge",
+    "kind": "weapon",
+    "slot": "mainHand",
+    "rarity": "Legendary",
+    "floor": 2,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "onHit",
+        "action": { "kind": "dealDamage", "params": { "perEnemyCondition": 1 } }
+      }
+    ]
+  },
+  {
+    "id": "ashen-crown",
+    "name": "Ashen Crown",
+    "kind": "armor",
+    "slot": "helmet",
+    "rarity": "Legendary",
+    "floor": 3,
+    "effects": [
+      { "type": "bonusStat", "params": { "int": 2 } },
+      { "type": "dotTickMultiplier", "params": { "mult": 2 } }
+    ]
+  },
+  {
+    "id": "grace-forged-aegis",
+    "name": "Grace-Forged Aegis",
+    "kind": "trinket",
+    "slot": "amulet",
+    "rarity": "Legendary",
+    "floor": 4,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "startOfBattle",
+        "action": { "kind": "gainShield", "params": { "amount": 5 } }
+      }
+    ]
+  },
+  {
+    "id": "hollow-regalia",
+    "name": "Hollow Regalia",
+    "kind": "armor",
+    "slot": "armor",
+    "rarity": "Legendary",
+    "floor": 5,
+    "effects": [{ "type": "bonusArmorClass", "params": { "amount": 5 } }]
+  }
+]

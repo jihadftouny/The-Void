@@ -20,7 +20,7 @@ export type SceneId =
   | 'main-menu'
   | 'battle'
   | 'rest'
-  | 'shop'
+  | 'deal'
   | 'level-up'
   | 'narrative'
   | 'ending'
@@ -39,7 +39,7 @@ export const SCENE_IDS: ReadonlySet<SceneId> = new Set<SceneId>([
   'main-menu',
   'battle',
   'rest',
-  'shop',
+  'deal',
   'level-up',
   'narrative',
   'ending',
@@ -48,8 +48,8 @@ export const SCENE_IDS: ReadonlySet<SceneId> = new Set<SceneId>([
 
 /**
  * Map a phase kind to the scene that renders it. Total over the `Phase` union
- * (exhaustive switch, no `default`). The four narrative "continue" phases share the
- * generic `narrative` scene; the rest each have their own screen.
+ * (exhaustive switch, no `default`). The narrative "continue" phases (including the
+ * chest reveal) share the generic `narrative` scene; the rest each have their own screen.
  */
 export function sceneFor(kind: Phase['kind']): SceneId {
   switch (kind) {
@@ -69,15 +69,22 @@ export function sceneFor(kind: Phase['kind']): SceneId {
       return 'narrative';
     case 'rest':
       return 'rest';
-    case 'shop':
-      return 'shop';
+    case 'deal':
+      return 'deal';
+    case 'chest':
+      // The chest reveal is a continue-phase; the generic narrative scene shows its events.
+      return 'narrative';
     case 'act-outro':
       return 'narrative';
-    case 'level-up':
+    case 'level-up-draft':
+      // The draft picker reuses the dedicated `level-up` scene id.
       return 'level-up';
     case 'level-up-result':
       return 'narrative';
     case 'act-intro':
+      return 'narrative';
+    case 'verdict':
+      // The act-4 reckoning is a continue-phase; the generic narrative scene shows its event.
       return 'narrative';
     case 'ending':
       return 'ending';

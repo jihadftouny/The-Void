@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { SKILLS, computeSkillDamage, useSkill } from './skill.ts';
+import {
+  SKILLS,
+  computeSkillDamage,
+  useSkill,
+  resolveSkill,
+  applySkillUpgrade,
+  type SkillUpgrade,
+  type SkillId,
+} from './skill.ts';
 import { type Character } from './character.ts';
-import { makeCondition, type ActiveCondition } from './condition.ts';
+import { makeCondition, type ActiveCondition, type ConditionType } from './condition.ts';
 
 // Expected damage values are hand-derived from the Java resistance formula
 //   damage = base - floor(res/100) * base
 // with Pyro at element index 2 and Cryo at index 1 (elements.json order).
 
-function caster(overrides: Partial<Character> = {}): Character {
+function caster(
+  overrides: Partial<Character & { activeConditions: ActiveCondition[] }> = {},
+): Character & { activeConditions: ActiveCondition[] } {
   return {
     name: 'Enemy',
     stats: { STR: 13, DEX: 13, CON: 13, INT: 13, WIS: 13, CHA: 13 },
@@ -19,6 +29,7 @@ function caster(overrides: Partial<Character> = {}): Character {
     skillCharges: 2,
     maxSkillCharges: 2,
     hitDie: { quantity: 1, sides: 8 },
+    activeConditions: [],
     ...overrides,
   };
 }
@@ -90,6 +101,143 @@ describe('useSkill — Pyro Ball applies no condition', () => {
   });
 });
 
+describe('useSkill — INT cascade skill power (Sharp/Dull)', () => {
+  // base INT 14 -> mod 2. smart (+2 INT -> 16 -> mod 3) = +1 delta; dumb (-2 -> 12 ->
+  // mod 1) = -1 delta. Ember base 2 at 0 resistance: Sharp -> 2+1 = 3, Dull -> 2-1 = 1,
+  // no augment -> 2. Hand-derived from floor((stat-10)/2).
+  const int14 = { STR: 13, DEX: 13, CON: 13, INT: 14, WIS: 13, CHA: 13 };
+  it('Sharp (+1 INT mod) adds 1 to skill damage', () => {
+    const c = caster({ stats: int14, activeConditions: [makeCondition('smart')] });
+    expect(useSkill(c, target(), SKILLS.ember).damage).toBe(3);
+  });
+  it('Dull (-1 INT mod) subtracts 1 from skill damage', () => {
+    const c = caster({ stats: int14, activeConditions: [makeCondition('dumb')] });
+    expect(useSkill(c, target(), SKILLS.ember).damage).toBe(1);
+  });
+  it('no INT augment leaves the base damage unchanged (enemy path)', () => {
+    const c = caster({ stats: int14 });
+    expect(useSkill(c, target(), SKILLS.ember).damage).toBe(2);
+  });
+});
+
+describe('useSkill — starter pool casts (damage + condition)', () => {
+  it('strike deals base 2 (Physical) and applies bleed', () => {
+    const r = useSkill(caster(), target(), SKILLS.strike);
+    expect(r.damage).toBe(2);
+    expect(r.target.activeConditions).toEqual([makeCondition('bleed')]);
+    expect(r.events).toContainEqual({ kind: 'condition-applied', subject: 'player', conditionType: 'bleed' });
+  });
+  it('venom deals base 1 (Poison) and applies poison; a second cast stacks intensity 2', () => {
+    const once = useSkill(caster(), target(), SKILLS.venom);
+    expect(once.damage).toBe(1);
+    expect(once.target.activeConditions).toEqual([makeCondition('poison')]);
+    // Second cast onto the already-poisoned target -> stacked (intensity 2), event still fires.
+    const twice = useSkill(caster(), once.target, SKILLS.venom);
+    expect(twice.target.activeConditions).toEqual([
+      { type: 'poison', remainingTurns: 2, maxTurns: 2, intensity: 2 },
+    ]);
+    expect(twice.events).toContainEqual({ kind: 'condition-applied', subject: 'player', conditionType: 'poison' });
+  });
+  it('enfeeble applies the deprivation weak to the enemy target', () => {
+    const r = useSkill(caster(), target(), SKILLS.enfeeble);
+    expect(r.damage).toBe(1);
+    expect(r.target.activeConditions).toEqual([makeCondition('weak')]);
+  });
+});
+
+describe('M3 kit skill data (rows are content, not logic)', () => {
+  // Spot-check a few kit rows against the plan's per-class table (element/cost/base/
+  // conditions), hand-transcribed from the design — not read off the impl.
+  it('carries the tabled base fields for representative kit skills', () => {
+    expect(SKILLS.heavyStrike.element).toBe('Physical');
+    expect(SKILLS.heavyStrike.chargeCost).toBe(2);
+    expect(SKILLS.heavyStrike.baseDamage).toBe(3);
+    expect(SKILLS.heavyStrike.conditions).toEqual(['fracture']);
+
+    expect(SKILLS.synapse.element).toBe('Electro');
+    expect(SKILLS.synapse.conditions).toEqual([]);
+
+    expect(SKILLS.corrupt.element).toBe('Poison');
+    expect(SKILLS.corrupt.conditions).toEqual(['poison', 'insanity']);
+
+    expect(SKILLS.smite.element).toBe('Force');
+    expect(SKILLS.smite.baseDamage).toBe(3);
+  });
+
+  it('exposes the optional twist knobs as data on the right skills', () => {
+    expect(SKILLS.heavyStrike.spendMomentum).toBe(true);
+    expect(SKILLS.heavyStrike.momentumDamagePer).toBe(1);
+    expect(SKILLS.synapse.detonate).toEqual({ damagePer: 2, group: 'mental' });
+    expect(SKILLS.venomCoat.exposureScale).toBe(1);
+    expect(SKILLS.backstab.appliesExposure).toBe(1);
+    expect(SKILLS.smite.hpCost).toBe(2);
+    expect(SKILLS.smite.scaleStat).toBe('WIS');
+    expect(SKILLS.sacrifice.maxHpCost).toBe(3);
+    expect(SKILLS.unmake.corruptionScale).toBe(1);
+    expect(SKILLS.siphon.lifestealFraction).toBe(0.5);
+    // A twist-free generic skill has NO twist knobs (so castSkill == useSkill for it).
+    expect(SKILLS.strike.spendMomentum).toBeUndefined();
+    expect(SKILLS.strike.detonate).toBeUndefined();
+    expect(SKILLS.strike.hpCost).toBeUndefined();
+  });
+});
+
+// ------- M9 skill upgrades (resolveSkill / applySkillUpgrade) -----------------
+// Expected values hand-derived from the heavyStrike row (baseDamage 3, chargeCost 2,
+// conditions ['fracture']) and the SkillUpgrade merge rules.
+
+describe('resolveSkill — merges an owned upgrade, else returns the base def', () => {
+  it('no upgrade returns the EXACT base def (referential + deep equal, off-equivalence)', () => {
+    const resolved = resolveSkill({ skillUpgrades: {} }, 'heavyStrike');
+    expect(resolved).toBe(SKILLS.heavyStrike); // same reference
+    expect(resolved).toEqual(SKILLS.heavyStrike);
+    // A player with no skillUpgrades field at all also gets the base.
+    expect(resolveSkill({}, 'heavyStrike')).toBe(SKILLS.heavyStrike);
+  });
+
+  it('damageBonus +2 raises baseDamage 3 -> 5 (cost/conditions unchanged)', () => {
+    const resolved = resolveSkill(
+      { skillUpgrades: { heavyStrike: { damageBonus: 2 } } },
+      'heavyStrike',
+    );
+    expect(resolved.baseDamage).toBe(5);
+    expect(resolved.chargeCost).toBe(2);
+    expect(resolved.conditions).toEqual(['fracture']);
+    // Purity: the base table is untouched.
+    expect(SKILLS.heavyStrike.baseDamage).toBe(3);
+  });
+
+  it('chargeDelta -1 lowers chargeCost 2 -> 1, and clamps at 0', () => {
+    expect(resolveSkill({ skillUpgrades: { heavyStrike: { chargeDelta: -1 } } }, 'heavyStrike').chargeCost).toBe(1);
+    // -3 would give -1 -> clamped to 0.
+    expect(resolveSkill({ skillUpgrades: { heavyStrike: { chargeDelta: -3 } } }, 'heavyStrike').chargeCost).toBe(0);
+  });
+
+  it('addConditions are unioned onto the inflicted conditions', () => {
+    const resolved = resolveSkill(
+      { skillUpgrades: { heavyStrike: { addConditions: ['burn'] } } },
+      'heavyStrike',
+    );
+    expect(resolved.conditions).toEqual(['fracture', 'burn']);
+  });
+});
+
+describe('applySkillUpgrade — accumulates onto any existing entry', () => {
+  it('first upgrade folds onto an empty record', () => {
+    const out = applySkillUpgrade({}, 'heavyStrike', { damageBonus: 2 });
+    expect(out.heavyStrike).toEqual({ damageBonus: 2, chargeDelta: 0, addConditions: [] });
+  });
+
+  it('a second damage upgrade stacks to +4 (numeric fields add)', () => {
+    let up: Record<string, SkillUpgrade> = applySkillUpgrade({}, 'heavyStrike', { damageBonus: 2 });
+    up = applySkillUpgrade(up, 'heavyStrike', { damageBonus: 2 });
+    expect(up.heavyStrike?.damageBonus).toBe(4);
+    // Two +2 upgrades on heavyStrike (base 3) resolve to baseDamage 7.
+    expect(resolveSkill({ skillUpgrades: up }, 'heavyStrike').baseDamage).toBe(7);
+    // Purity: the intermediate record is not mutated (still +2).
+  });
+});
+
 describe('useSkill — purity', () => {
   it('does not mutate the input caster or target', () => {
     const c = caster({ skillCharges: 2 });
@@ -100,4 +248,49 @@ describe('useSkill — purity', () => {
     expect(c).toEqual(cSnap);
     expect(t).toEqual(tSnap);
   });
+});
+
+describe('enemy family skills (this milestone) — data-driven, twist-free', () => {
+  // Each expectation is derived independently from the plan's skill table (element /
+  // conditions / chargeCost / baseDamage), NOT read back from the SKILLS record.
+  const CASES: {
+    id: SkillId;
+    element: string;
+    conditions: ConditionType[];
+    chargeCost: number;
+    baseDamage: number;
+  }[] = [
+    // M15: Floor-1/2 family baseDamage shaved by 1 on the ≥2 values (gangShiv, warpMind, staticArc).
+    { id: 'gangShiv', element: 'Physical', conditions: ['bleed'], chargeCost: 1, baseDamage: 1 },
+    { id: 'poisonBite', element: 'Poison', conditions: ['poison'], chargeCost: 1, baseDamage: 1 },
+    { id: 'taserShot', element: 'Electro', conditions: ['electrify'], chargeCost: 1, baseDamage: 1 },
+    { id: 'warpMind', element: 'Psychic', conditions: ['insanity'], chargeCost: 1, baseDamage: 1 },
+    { id: 'staticArc', element: 'Electro', conditions: ['electrify'], chargeCost: 1, baseDamage: 1 },
+    { id: 'wrathSmash', element: 'Physical', conditions: ['fracture'], chargeCost: 2, baseDamage: 4 },
+    { id: 'numbingCold', element: 'Cryo', conditions: ['sleep'], chargeCost: 1, baseDamage: 1 },
+    { id: 'wrathfulLash', element: 'Pyro', conditions: ['burn'], chargeCost: 1, baseDamage: 2 },
+    { id: 'radiantRebuke', element: 'Force', conditions: [], chargeCost: 1, baseDamage: 3 },
+    { id: 'smiteWicked', element: 'Force', conditions: [], chargeCost: 2, baseDamage: 4 },
+    { id: 'hellfire', element: 'Pyro', conditions: ['burn'], chargeCost: 1, baseDamage: 3 },
+    { id: 'maddeningGaze', element: 'Psychic', conditions: ['insanity'], chargeCost: 1, baseDamage: 3 },
+    { id: 'negate', element: 'Psychic', conditions: ['dumb'], chargeCost: 1, baseDamage: 2 },
+    { id: 'desolateStrike', element: 'Physical', conditions: ['bleed'], chargeCost: 1, baseDamage: 2 },
+  ];
+
+  for (const c of CASES) {
+    it(`${c.id} carries its themed element/conditions/cost/damage`, () => {
+      const def = SKILLS[c.id];
+      expect(def.element).toBe(c.element);
+      expect(def.conditions).toEqual(c.conditions);
+      expect(def.chargeCost).toBe(c.chargeCost);
+      expect(def.baseDamage).toBe(c.baseDamage);
+      // Twist-free: none of the M3 class-kit knobs are set on an enemy skill.
+      expect(def.hpCost).toBeUndefined();
+      expect(def.maxHpCost).toBeUndefined();
+      expect(def.spendMomentum).toBeUndefined();
+      expect(def.detonate).toBeUndefined();
+      expect(def.appliesExposure).toBeUndefined();
+      expect(def.selfConditions).toBeUndefined();
+    });
+  }
 });

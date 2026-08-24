@@ -5,12 +5,35 @@
 // This is the DOM game UI; the Kaplay layer (index.html) is a separate artifact.
 import { createGame, step, awaitingFor } from '../game/game.ts';
 import type { GameState, GameInput, Awaiting } from '../game/game.ts';
+import type { PlayerClass } from '../game/player.ts';
 import { STAT_KEYS } from '../game/character.ts';
-import type { StatKey } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun } from './persist.ts';
-import { displayPlayer } from './view-model.ts';
+import {
+  snapshotUnlocks,
+  classUnlocked,
+  foldRunEvents,
+  emptyRunSummary,
+  applyRunSummary,
+  type RunSummary,
+  type NewlyUnlocked,
+} from '../game/unlockStore.ts';
+import { loadUnlockStore, saveUnlockStore } from '../storage/unlockStorage.ts';
+import {
+  displayPlayer,
+  castOptions,
+  consumableOptions,
+  spareOffered,
+  describeInventory,
+  equipFromBackpack,
+  unequipSlot,
+  characterSheet,
+  dealView,
+  draftCards,
+  chestReveal,
+} from './view-model.ts';
+import type { ItemView } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 
@@ -54,8 +77,43 @@ window.addEventListener('unhandledrejection', (ev) =>
   log.error('error', 'unhandled rejection', { reason: String(ev.reason) }),
 );
 
-let state: GameState = createGame(Date.now() >>> 0);
+// M13 meta-progression: the persistent cross-run unlock store, loaded once at boot. Read at
+// class-select (gating) and run start (snapshot); grown at run end (applyRunSummary + persist).
+let unlockStore = loadUnlockStore();
+let runSeed = Date.now() >>> 0;
+let state: GameState = createGame(runSeed, snapshotUnlocks(unlockStore));
 let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
+// The pure run-summary subscriber: folded from each step's events, applied to the store at the
+// terminal phase. Reset per run. `runApplied` guards against a double-apply (ending -> game-over).
+let runSummary: RunSummary = emptyRunSummary();
+let runApplied = false;
+// The ids most recently unlocked (for the deferred in-UI notification — NEEDS-HUMAN).
+let lastNewlyUnlocked: NewlyUnlocked | null = null;
+void lastNewlyUnlocked; // consumed by the deferred unlock-notification UI (out of scope here)
+
+/** The class-select buttons, gated by the unlock store (Enforcer always shown). */
+const CLASS_BUTTONS: readonly { classId: PlayerClass; label: string }[] = [
+  { classId: 'Enforcer', label: 'Enforcer — flesh and steel' },
+  { classId: 'Neuromancer', label: 'Neuromancer — mind and static' },
+  { classId: 'Scavver', label: 'Scavver — knives and tempo' },
+  { classId: 'Penitent', label: 'Penitent — devotion in blood' },
+  { classId: 'Hollow', label: 'Hollow — the Void within' },
+];
+
+/**
+ * At a terminal phase (an ending, or game-over), fold the run's summary into the persistent
+ * unlock store ONCE and persist it. Idempotent per run via `runApplied`. The newly-unlocked ids
+ * are stashed for a deferred in-UI notification (NEEDS-HUMAN).
+ */
+function applyRunOutcome(): void {
+  if (runApplied) return;
+  runApplied = true;
+  const applied = applyRunSummary(unlockStore, runSummary, runSeed);
+  unlockStore = applied.store;
+  saveUnlockStore(unlockStore);
+  lastNewlyUnlocked = applied.newlyUnlocked;
+  log.info('unlocks', 'run outcome applied', { newlyUnlocked: applied.newlyUnlocked });
+}
 
 window.void.onStatus((s) => {
   log.info('llm', `model ${s.phase}`, s);
@@ -81,7 +139,7 @@ function renderSheet(): void {
     `<b>${p.name}</b>`,
     `${p.classId}`,
     `HP ${p.hp}/${p.maxHp}`,
-    `XP ${p.xp} · Gold ${p.gold}`,
+    `XP ${p.xp}`,
     `Act ${state.act}`,
     `Pots ${p.pots} · Rests ${p.restsLeft}`,
   ];
@@ -135,6 +193,197 @@ function button(label: string, onClick: () => void): void {
   choicesEl.appendChild(b);
 }
 
+// Append one option button to an arbitrary container (used by the inline pickers and the
+// inventory/sheet screens). A disabled option (e.g. an unaffordable skill) is visibly
+// greyed and inert. `once` so a click can't double-fire before the re-render clears it.
+function optionButton(
+  parent: HTMLElement,
+  label: string,
+  onClick: () => void,
+  disabled = false,
+): void {
+  const b = document.createElement('button');
+  b.textContent = label;
+  if (disabled) {
+    b.disabled = true;
+    b.classList.add('disabled');
+  } else {
+    b.addEventListener('click', onClick, { once: true });
+  }
+  parent.appendChild(b);
+}
+
+// An inline expander: a toggle button in #choices that reveals/hides a sub-list of option
+// buttons built by `build`. Keeps the battle Cast / Use-item pickers on the existing
+// containers — no desktop.html change needed.
+function pickerButton(label: string, build: (list: HTMLElement) => void): void {
+  const wrap = document.createElement('div');
+  wrap.className = 'picker';
+  const toggle = document.createElement('button');
+  toggle.textContent = label;
+  const list = document.createElement('div');
+  list.className = 'picker-list';
+  list.style.display = 'none';
+  toggle.addEventListener('click', () => {
+    list.style.display = list.style.display === 'none' ? 'block' : 'none';
+  });
+  wrap.appendChild(toggle);
+  wrap.appendChild(list);
+  build(list);
+  choicesEl.appendChild(wrap);
+}
+
+// Render-layer UI mode for the hub screens (NOT game state): the plain game flow, the
+// inventory/equipment screen, or the full character sheet. Only reachable from the hub;
+// reset to 'game' whenever a real engine action is dispatched.
+let screen: 'game' | 'inventory' | 'sheet' = 'game';
+
+// Re-render the current phase's choices + HUD WITHOUT dispatching to the engine — used by
+// the hub screen buttons (Inventory / Character sheet / Back) and the equip/unequip actions.
+function rerender(): void {
+  renderSheet();
+  renderChoices(awaitingFor(state.phase));
+}
+
+// A labelled row (label + value/name), the shared building block for the inventory and
+// character-sheet screens. Returns the row so callers can append action buttons.
+function vmRow(parent: HTMLElement, label: string, value: string, empty = false): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'vm-row';
+  const lab = document.createElement('span');
+  lab.className = 'vm-label';
+  lab.textContent = label;
+  const val = document.createElement('span');
+  val.className = empty ? 'vm-empty' : 'vm-name';
+  val.textContent = value;
+  row.appendChild(lab);
+  row.appendChild(val);
+  parent.appendChild(row);
+  return row;
+}
+
+// One "Name — Rarity" fragment plus an effects line, appended to a row's value cell.
+function itemLabel(item: ItemView): string {
+  return `${item.name} · ${item.rarity}`;
+}
+
+// The hub inventory / equipment screen: paperdoll slots (each equipped item with Unequip)
+// and the backpack (each item with Equip). Equip/unequip go through the PURE view-model
+// action-mapping helpers, then autosave + re-render. Reads state.player (hub-authoritative).
+function renderInventoryScreen(): void {
+  const p = state.player;
+  if (!p) {
+    screen = 'game';
+    rerender();
+    return;
+  }
+  const view = describeInventory(p);
+  const wrap = document.createElement('div');
+  wrap.className = 'vm-screen';
+
+  const gearHead = document.createElement('h3');
+  gearHead.textContent = 'Equipped';
+  wrap.appendChild(gearHead);
+  for (const s of view.slots) {
+    const row = vmRow(wrap, s.slot, s.item ? itemLabel(s.item) : '(empty)', !s.item);
+    if (s.item) {
+      optionButton(row, 'Unequip', () => {
+        const r = unequipSlot(state, s.slot);
+        if (r.ok) {
+          state = r.state;
+          saveRun(state, memory);
+        }
+        rerender();
+      });
+    }
+  }
+
+  const packHead = document.createElement('h3');
+  packHead.textContent = 'Backpack';
+  wrap.appendChild(packHead);
+  if (view.backpack.length === 0) {
+    vmRow(wrap, '', '(empty)', true);
+  }
+  for (const b of view.backpack) {
+    const row = vmRow(wrap, `#${b.index}`, itemLabel(b.item));
+    if (b.item.effects.length > 0) {
+      const fx = document.createElement('span');
+      fx.className = 'vm-effects';
+      fx.textContent = b.item.effects.join('; ');
+      row.appendChild(fx);
+    }
+    // Equip only slottable gear (usables have slot: null — no equip target).
+    if (b.item.slot) {
+      optionButton(row, 'Equip', () => {
+        const r = equipFromBackpack(state, b.index);
+        if (r.ok) {
+          state = r.state;
+          saveRun(state, memory);
+        }
+        rerender();
+      });
+    }
+  }
+
+  choicesEl.appendChild(wrap);
+  button('Back', () => {
+    screen = 'game';
+    rerender();
+  });
+}
+
+// The hub full character sheet: level, six stats (+mods), HP, AC, skill charges, skills,
+// equipped gear, and the class build-resource. NEVER karma/Nature (the view-model omits it).
+function renderSheetScreen(): void {
+  const p = state.player;
+  if (!p) {
+    screen = 'game';
+    rerender();
+    return;
+  }
+  const sheet = characterSheet(p);
+  const wrap = document.createElement('div');
+  wrap.className = 'vm-screen';
+
+  vmRow(wrap, 'Name', sheet.name);
+  vmRow(wrap, 'Class', `${sheet.classId} · level ${sheet.level}`);
+  vmRow(wrap, 'HP', `${sheet.hp} / ${sheet.maxHp}`);
+  vmRow(wrap, 'Armor class', String(sheet.armorClass));
+  vmRow(wrap, 'XP', String(sheet.xp));
+  vmRow(wrap, 'Charges', `${sheet.skillCharges} / ${sheet.maxSkillCharges}`);
+  if (sheet.resource) {
+    vmRow(wrap, sheet.resource.kind, String(sheet.resource.value));
+  }
+
+  const statHead = document.createElement('h3');
+  statHead.textContent = 'Stats';
+  wrap.appendChild(statHead);
+  for (const s of sheet.stats) {
+    vmRow(wrap, s.key, `${s.score} (${s.mod >= 0 ? '+' : ''}${s.mod})`);
+  }
+
+  const skillHead = document.createElement('h3');
+  skillHead.textContent = 'Skills';
+  wrap.appendChild(skillHead);
+  if (sheet.skills.length === 0) vmRow(wrap, '', '(none)', true);
+  for (const sk of sheet.skills) {
+    vmRow(wrap, sk.name, `${sk.chargeCost}⚡`);
+  }
+
+  const gearHead = document.createElement('h3');
+  gearHead.textContent = 'Equipped';
+  wrap.appendChild(gearHead);
+  for (const g of sheet.equipped) {
+    vmRow(wrap, g.slot, g.name ?? '(empty)', !g.name);
+  }
+
+  choicesEl.appendChild(wrap);
+  button('Back', () => {
+    screen = 'game';
+    rerender();
+  });
+}
+
 // Show a transient indicator while the narrator generates, in place of the
 // (already-cleared) choice buttons. renderChoices() clears this when done.
 function showThinking(): void {
@@ -153,11 +402,14 @@ let busy = false;
 async function dispatch(input: GameInput): Promise<void> {
   if (busy) return;
   busy = true;
+  screen = 'game'; // a real engine transition always returns to the plain game view
   try {
     choicesEl.innerHTML = '';
     log.debug('ui', 'choice', input);
     const r = step(state, input);
     state = r.state;
+    // M13: fold this step into the run summary (pure subscriber — the engine flow is untouched).
+    runSummary = foldRunEvents(runSummary, r.events, r.state);
     log.debug('engine', `step -> ${r.awaiting}`, {
       input,
       awaiting: r.awaiting,
@@ -170,6 +422,10 @@ async function dispatch(input: GameInput): Promise<void> {
     await narrate(r.events);
     memory = rememberBeat(memory, r.events); // remember AFTER narrating
     renderChoices(r.awaiting);
+    // M13: at a terminal phase (an ending, or game-over) grow + persist the unlock store once.
+    if (r.state.phase.kind === 'ending' || r.awaiting === 'game-over') {
+      applyRunOutcome();
+    }
     if (r.awaiting === 'game-over') {
       clearRun();
       log.info('save', 'run cleared (game over)');
@@ -185,8 +441,14 @@ async function dispatch(input: GameInput): Promise<void> {
 function start(): void {
   clearRun();
   log.info('game', 'new run started');
-  state = createGame(Date.now() >>> 0);
+  // Freeze the current unlock snapshot into the new run (gradual reveal), and reset the pure
+  // run-summary subscriber. The store itself is only re-read here and at run end.
+  runSeed = Date.now() >>> 0;
+  state = createGame(runSeed, snapshotUnlocks(unlockStore));
   memory = createStoryMemory();
+  runSummary = emptyRunSummary();
+  runApplied = false;
+  lastNewlyUnlocked = null;
   narrationEl.innerHTML = '';
   renderSheet();
   renderChoices('title');
@@ -217,8 +479,13 @@ function renderChoices(awaiting: Awaiting): void {
       break;
     }
     case 'choose-class':
-      button('Enforcer — flesh and steel', () => void dispatch({ kind: 'class', classId: 'Enforcer' }));
-      button('Neuromancer — mind and static', () => void dispatch({ kind: 'class', classId: 'Neuromancer' }));
+      // M13: Enforcer is always selectable; the other four appear only once their feat has
+      // unlocked them in the persistent store. (The locked-class visual treatment is NEEDS-HUMAN.)
+      for (const c of CLASS_BUTTONS) {
+        if (classUnlocked(unlockStore, c.classId)) {
+          button(c.label, () => void dispatch({ kind: 'class', classId: c.classId }));
+        }
+      }
       break;
     case 'accept-or-reroll-stats': {
       if (state.phase.kind === 'stats-roll') {
@@ -233,42 +500,114 @@ function renderChoices(awaiting: Awaiting): void {
       break;
     }
     case 'main-menu':
+      if (screen === 'inventory') {
+        renderInventoryScreen();
+        break;
+      }
+      if (screen === 'sheet') {
+        renderSheetScreen();
+        break;
+      }
       button('Continue the descent', () => void dispatch({ kind: 'menu', choice: 'continue' }));
-      button('The stranger / your self', () => void dispatch({ kind: 'menu', choice: 'character-info' }));
+      button('Seek a bargain', () => void dispatch({ kind: 'menu', choice: 'seek-deal' }));
       button('Abandon the descent', () => void dispatch({ kind: 'menu', choice: 'quit' }));
+      button('Inventory', () => {
+        screen = 'inventory';
+        rerender();
+      });
+      button('Character sheet', () => {
+        screen = 'sheet';
+        rerender();
+      });
       break;
-    case 'battle-action':
+    case 'battle-action': {
+      const p = displayPlayer(state);
       button('Fight', () => void dispatch({ kind: 'battle-action', action: 'fight' }));
+      // Cast: an inline picker of the player's skills with charge costs; unaffordable
+      // skills render disabled. The engine re-checks the charge on dispatch.
+      const casts = p ? castOptions(p) : [];
+      if (casts.length > 0) {
+        pickerButton('Cast', (list) => {
+          for (const c of casts) {
+            optionButton(
+              list,
+              `${c.name} (${c.chargeCost}⚡)`,
+              () => void dispatch({ kind: 'battle-action', action: { kind: 'cast', skillId: c.skillId } }),
+              !c.affordable,
+            );
+          }
+        });
+      }
+      // Spare: only against a living karma-weighted enemy (the engine's own gate).
+      if (spareOffered(state)) {
+        button('Spare', () => void dispatch({ kind: 'battle-action', action: 'spare' }));
+      }
+      // Use item: an inline picker of usable consumables in the backpack (by index).
+      const items = p ? consumableOptions(p) : [];
+      if (items.length > 0) {
+        pickerButton('Use item', (list) => {
+          for (const it of items) {
+            optionButton(list, `${it.name} (${it.rarity})`, () =>
+              void dispatch({ kind: 'battle-action', action: { kind: 'useConsumable', source: { index: it.index } } }),
+            );
+          }
+        });
+      }
       button('Potion', () => void dispatch({ kind: 'battle-action', action: 'potion' }));
       button('Run', () => void dispatch({ kind: 'battle-action', action: 'run' }));
       break;
+    }
     case 'continue':
+      // A chest/cache continue: reveal the dropped loot (name + rarity) before Continue.
+      if (state.phase.kind === 'chest') {
+        const loot = chestReveal(state.phase.loot);
+        const head = document.createElement('div');
+        head.className = 'stats-line';
+        head.textContent = loot.length > 0 ? 'You found:' : 'The cache is empty.';
+        choicesEl.appendChild(head);
+        for (const row of loot) {
+          const div = document.createElement('div');
+          div.className = 'loot-row vm-row';
+          div.innerHTML = `<span class="vm-name">${row.name}</span><span class="vm-rarity">${row.rarity}</span>`;
+          choicesEl.appendChild(div);
+        }
+      }
       button('Continue', () => void dispatch({ kind: 'continue' }));
       break;
-    case 'level-up-picks': {
-      const picks: StatKey[] = [];
+    case 'draft-pick': {
+      // M9: a functional draft picker — one readable card per offered option (index-dispatch).
       const note = document.createElement('div');
       note.className = 'stats-line';
-      note.textContent = 'Choose two — the descent reshapes you.';
+      note.textContent = 'Choose one — the descent reshapes you.';
       choicesEl.appendChild(note);
-      for (const k of STAT_KEYS) {
-        const b = document.createElement('button');
-        b.textContent = k;
-        b.addEventListener('click', () => {
-          picks.push(k);
-          b.classList.add('picked');
-          if (picks.length === 2) {
-            void dispatch({ kind: 'level-up-picks', picks: [picks[0]!, picks[1]!] });
-          }
-        });
-        choicesEl.appendChild(b);
+      if (state.phase.kind === 'level-up-draft') {
+        for (const card of draftCards(state.phase.offers)) {
+          const b = document.createElement('button');
+          b.className = 'draft-card';
+          b.textContent = card.label;
+          b.addEventListener('click', () => void dispatch({ kind: 'draft-pick', index: card.index }), {
+            once: true,
+          });
+          choicesEl.appendChild(b);
+        }
       }
       break;
     }
-    case 'shop-decision':
-      button('Make the trade', () => void dispatch({ kind: 'shop-decision', accept: true }));
-      button('Refuse', () => void dispatch({ kind: 'shop-decision', accept: false }));
+    case 'deal-decision': {
+      // A clear cost -> reward block; NEVER the karma-derived pool (view-model omits it).
+      if (state.phase.kind === 'deal') {
+        const dv = dealView(state.phase.deal);
+        const block = document.createElement('div');
+        block.className = 'deal-block';
+        block.innerHTML =
+          `<div class="deal-cost">Cost: ${dv.cost}</div>` +
+          `<div class="deal-reward">Reward: ${dv.reward}</div>`;
+        choicesEl.appendChild(block);
+      }
+      button('Pay the price', () => void dispatch({ kind: 'deal-decision', accept: true }));
+      button('Refuse', () => void dispatch({ kind: 'deal-decision', accept: false }));
       break;
+    }
     case 'rest-decision':
       button('Rest here', () => void dispatch({ kind: 'rest-decision', accept: true }));
       button('Press on', () => void dispatch({ kind: 'rest-decision', accept: false }));

@@ -1,0 +1,4 @@
+[
+  { "id": "Buckler", "name": "Buckler", "acBonus": 1, "rarity": "Common", "cost": 5 },
+  { "id": "Kite Shield", "name": "Kite Shield", "acBonus": 2, "rarity": "Rare", "cost": 5 }
+]

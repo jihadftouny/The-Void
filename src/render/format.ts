@@ -43,6 +43,10 @@ export function formatEvent(e: GameEvent): string {
     // --- combat events ---
     case 'enemy-skill-used':
       return `The enemy casts ${e.name}.`;
+    case 'skill-cast':
+      return `You cast ${e.name}.`;
+    case 'cast-unavailable':
+      return `You cannot cast that right now.`;
     case 'attack': {
       const who = sideName(e.subject);
       const verb = e.subject === 'player' ? 'strike' : 'strikes';
@@ -76,6 +80,17 @@ export function formatEvent(e: GameEvent): string {
       return `${e.conditionType} takes hold of ${sideName(e.subject).toLowerCase()}.`;
     case 'condition-expired':
       return `${e.conditionType} fades from ${sideName(e.subject).toLowerCase()}.`;
+    // --- M3 class-twist events ---
+    case 'resource-changed':
+      return `Your ${e.resource} is now ${e.value}.`;
+    case 'self-sacrifice':
+      return e.ofMaxHp
+        ? `You sacrifice ${e.amount} of your max HP to the Void.`
+        : `You spend ${e.amount} HP as fuel.`;
+    case 'lifesteal':
+      return `You drain ${e.amount} HP.`;
+    case 'detonate':
+      return `You detonate ${e.consumed} affliction(s) for ${e.bonusDamage} damage.`;
     case 'potion-drunk':
       return `You drink a potion — restored to ${e.healedTo} HP.`;
     case 'potion-unavailable':
@@ -88,12 +103,40 @@ export function formatEvent(e: GameEvent): string {
       return `Your escape fails — you take ${e.damage} damage.`;
     case 'escape-impossible':
       return `There is no escape from this one.`;
-    case 'victory':
-      return e.extraRest
-        ? `Victory! +${e.xpGained} XP, +${e.goldGained} gold, and you find a place to rest.`
-        : `Victory! +${e.xpGained} XP, +${e.goldGained} gold.`;
+    case 'spared':
+      return `You stay your hand. ${e.enemyName} is spared.`;
+    case 'spare-unavailable':
+      return `This one cannot be spared.`;
+    case 'victory': {
+      const rest = e.extraRest ? ', and you find a place to rest' : '';
+      const loot =
+        e.loot.length > 0 ? ` You scavenge ${e.loot.map((l) => l.name).join(', ')}.` : '';
+      return `Victory! +${e.xpGained} XP${rest}.${loot}`;
+    }
     case 'defeat':
       return `You have fallen.`;
+    // --- M6 items-content events ---
+    case 'relic-triggered':
+      return `A relic answers (${e.trigger}).`;
+    case 'consumable-used':
+      return `You use ${e.itemId}.`;
+    case 'consumable-unavailable':
+      return `You have nothing to use.`;
+    case 'shield-gained':
+      return `A shield forms around you (+${e.amount}).`;
+    case 'shield-absorbed':
+      return `Your shield absorbs ${e.amount} damage.`;
+    case 'revive':
+      return `The Void refuses your death — you rise with ${e.healedTo} HP.`;
+    case 'stat-stolen':
+      return `You devour the enemy's essence (+${e.amount} ${e.stat}).`;
+    // --- M12 boss combat mechanics ---
+    case 'boss-summon':
+      return `Reinforcements arrive — the crew is now ${e.minions} strong.`;
+    case 'boss-minion-damage':
+      return `The crew strikes you for ${e.amount} damage.`;
+    case 'boss-adapt':
+      return `Your foe reads your pattern — your next strike falters.`;
 
     // --- narrative events ---
     case 'title':
@@ -116,24 +159,39 @@ export function formatEvent(e: GameEvent): string {
       return `You press on without resting.`;
     case 'no-rests':
       return `You have no rest remaining.`;
-    case 'shop-offer':
-      return `The stranger offers ${e.itemName} (${e.itemKind}) for ${e.price} gold.`;
-    case 'shop-purchased':
-      return `You buy ${e.itemId} for ${e.price} gold — ${e.gold} gold left.`;
-    case 'shop-insufficient':
-      return `You cannot afford that.`;
-    case 'shop-declined':
-      return `You wave the stranger away.`;
-    case 'character-info':
-      return `— Your standing —`;
+    case 'deal-offer':
+      return `The altar offers ${e.reward} — the price is ${e.cost}.`;
+    case 'deal-taken':
+      return `You pay ${e.cost} and take ${e.reward}.`;
+    case 'deal-unaffordable':
+      return `You cannot pay ${e.cost}.`;
+    case 'deal-declined':
+      return `You turn from the altar.`;
+    case 'chest-found':
+      return `You uncover a cache in the dark.`;
+    case 'chest-loot':
+      return e.loot.length > 0
+        ? `Inside: ${e.loot.map((l) => l.name).join(', ')}.`
+        : `The cache is empty.`;
     case 'act-outro':
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'level-up':
-      return `Level up! You raise ${e.picks.join(', ')} — HP roll ${e.hpRoll}, max HP now ${e.newMaxHp}.`;
+      return `Level ${e.newLevel}! HP roll ${e.hpRoll}, max HP now ${e.newMaxHp}.`;
+    case 'draft-offer':
+      return `The descent offers a choice: ${e.options.join(' · ')}.`;
+    case 'draft-picked':
+      return `You take: ${e.option}.`;
     case 'act-intro':
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'final-battle-begins':
       return `The final battle begins: ${e.enemyName}.`;
+    case 'boss-encounter':
+      return `${e.enemyName} bars the way.`;
+    case 'verdict':
+      // Player-facing outcome only — never the karma numbers behind it.
+      return e.outcome === 'grace'
+        ? `Judgment falls: you are found worthy.`
+        : `Judgment falls: you are cast down.`;
     case 'ending':
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'game-over':

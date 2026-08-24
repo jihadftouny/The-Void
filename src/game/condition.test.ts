@@ -3,6 +3,8 @@ import {
   CONDITION_DATA,
   CONTROL_CONDITIONS,
   addCondition,
+  applyCondition,
+  cureCondition,
   hasControlCondition,
   makeCondition,
   tickConditions,
@@ -170,6 +172,54 @@ describe('tickConditions — Fracture forces disadvantage', () => {
   });
 });
 
+describe('exposed (M3 Scavver mark) — pure countdown, no hp/skip, DoT stacking', () => {
+  // Hand-derived from CONDITION_DATA.exposed (maxTurns 2, stacking 'dot'): onset (turn 1,
+  // no effect), active (turn 2, no effect), expiry (turn 3, removed). It rolls no save, so
+  // an empty scripted RNG proves it consumes zero draws.
+  it('ticks down over 3 turns with no hp delta and no skip, then expires', () => {
+    const opponent = creature();
+    let conditions: ActiveCondition[] = [makeCondition('exposed')];
+    expect(conditions[0]).toEqual({ type: 'exposed', remainingTurns: 2, maxTurns: 2 });
+
+    // Turn 1 — onset, no damage/skip, survives at remaining 1.
+    let r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    expect(r.hpDelta).toBe(0);
+    expect(r.skipTurn).toBe(false);
+    expect(r.events.map((e) => e.kind)).toEqual(['condition-onset']);
+    expect(r.conditions).toEqual([{ type: 'exposed', remainingTurns: 1, maxTurns: 2 }]);
+    conditions = r.conditions;
+
+    // Turn 2 — active, still no effect, survives at remaining 0.
+    r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    expect(r.hpDelta).toBe(0);
+    expect(r.skipTurn).toBe(false);
+    expect(r.events).toEqual([]);
+    expect(r.conditions).toEqual([{ type: 'exposed', remainingTurns: 0, maxTurns: 2 }]);
+    conditions = r.conditions;
+
+    // Turn 3 — expiry, removed.
+    r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    expect(r.events).toEqual([{ kind: 'condition-expired', subject: 'player', conditionType: 'exposed' }]);
+    expect(r.conditions).toEqual([]);
+  });
+
+  it('a second application stacks intensity to 2 and refreshes the duration', () => {
+    const list: ActiveCondition[] = [];
+    expect(applyCondition(list, 'exposed')).toBe('added');
+    expect(list).toEqual([{ type: 'exposed', remainingTurns: 2, maxTurns: 2 }]); // fresh = intensity 1
+
+    // Advance the duration, then re-apply: intensity -> 2 and duration refreshes to max.
+    list[0]!.remainingTurns = 1;
+    expect(applyCondition(list, 'exposed')).toBe('stacked');
+    expect(list).toEqual([{ type: 'exposed', remainingTurns: 2, maxTurns: 2, intensity: 2 }]);
+  });
+
+  it('is not a control condition (never blocks a turn)', () => {
+    expect(CONTROL_CONDITIONS.has('exposed')).toBe(false);
+    expect(hasControlCondition(creature({ activeConditions: [makeCondition('exposed')] }))).toBe(false);
+  });
+});
+
 describe('tickConditions — purity + serializability', () => {
   it('does not mutate the input conditions and returns serializable data', () => {
     const input: ActiveCondition[] = [makeCondition('bleed')];
@@ -177,6 +227,116 @@ describe('tickConditions — purity + serializability', () => {
     const r = tickConditions(creature({ activeConditions: input }), creature(), scriptedRng([]));
     expect(input).toEqual(snapshot); // input untouched
     expect(JSON.parse(JSON.stringify(r.conditions))).toEqual(r.conditions);
+  });
+});
+
+describe('tickConditions — Poison DoT + cure (three-phase, hand-derived like bleed)', () => {
+  // maxTurns 2, default intensity 1. onset (turn 1: 0 dmg), effect (turn 2: -1),
+  // expiry (turn 3: removed). Poison rolls NO saving throw, so an empty scripted RNG
+  // proves zero draws — derived from the chain, not from bleed's numbers.
+  it('deals 0 then -1 then expires, no rng draws', () => {
+    let conditions: ActiveCondition[] = [makeCondition('poison')];
+    const opponent = creature();
+
+    let r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    conditions = r.conditions;
+    expect(r.hpDelta).toBe(0);
+    expect(r.events.map((e) => e.kind)).toEqual(['condition-onset']);
+    expect(conditions).toHaveLength(1);
+
+    r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    conditions = r.conditions;
+    expect(r.hpDelta).toBe(-1);
+    expect(r.events).toEqual([{ kind: 'condition-damage', subject: 'player', conditionType: 'poison', amount: 1 }]);
+
+    r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    conditions = r.conditions;
+    expect(r.events).toEqual([{ kind: 'condition-expired', subject: 'player', conditionType: 'poison' }]);
+    expect(conditions).toEqual([]);
+  });
+
+  it('cureCondition removes poison (the CURE hook) and leaves other conditions', () => {
+    const list = [makeCondition('poison'), makeCondition('bleed')];
+    const cured = cureCondition(list, 'poison');
+    expect(cured).toEqual([makeCondition('bleed')]);
+    expect(list).toHaveLength(2); // input untouched (pure)
+  });
+});
+
+describe('applyCondition — mix-per-condition stacking', () => {
+  it('DoT stacks intensity and refreshes duration; a tick then deals the intensity', () => {
+    const list: ActiveCondition[] = [];
+    expect(applyCondition(list, 'poison')).toBe('added');
+    expect(list).toEqual([{ type: 'poison', remainingTurns: 2, maxTurns: 2 }]); // intensity implied 1
+
+    // Apply again BEFORE any tick: one instance, intensity 2, duration refreshed.
+    expect(applyCondition(list, 'poison')).toBe('stacked');
+    expect(list).toHaveLength(1);
+    expect(list[0]).toEqual({ type: 'poison', remainingTurns: 2, maxTurns: 2, intensity: 2 });
+
+    // A third application -> intensity 3.
+    expect(applyCondition(list, 'poison')).toBe('stacked');
+    expect(list[0]!.intensity).toBe(3);
+  });
+
+  it('an intensity-2 poison deals exactly -2 on its effect tick (hand-derived)', () => {
+    const cond: ActiveCondition = { type: 'poison', remainingTurns: 1, maxTurns: 2, intensity: 2 };
+    const r = tickConditions(creature({ activeConditions: [cond] }), creature(), scriptedRng([]));
+    expect(r.hpDelta).toBe(-2);
+    expect(r.events).toEqual([{ kind: 'condition-damage', subject: 'player', conditionType: 'poison', amount: 2 }]);
+  });
+
+  it('an intensity-3 bleed deals exactly -3 on its effect tick', () => {
+    const cond: ActiveCondition = { type: 'bleed', remainingTurns: 1, maxTurns: 2, intensity: 3 };
+    const r = tickConditions(creature({ activeConditions: [cond] }), creature(), scriptedRng([]));
+    expect(r.hpDelta).toBe(-3);
+  });
+
+  it('an augment REFRESHES duration, never stacks: single copy, no intensity, no doubling', () => {
+    const list: ActiveCondition[] = [];
+    expect(applyCondition(list, 'strong')).toBe('added');
+    list[0]!.remainingTurns = 1; // simulate a turn passing
+    expect(applyCondition(list, 'strong')).toBe('refreshed');
+    expect(list).toHaveLength(1);
+    expect(list[0]!.remainingTurns).toBe(2); // reset to maxTurns
+    expect('intensity' in list[0]!).toBe(false); // no intensity field ever
+  });
+});
+
+describe('tickConditions — every ConditionType counts down and expires (none dormant)', () => {
+  // Regression guard for the pre-M2 bug where poison + augment/deprivation were carried
+  // forever untouched. Opponent INT 30 makes burn/freeze/electrify saves always fail, so
+  // those expire purely by countdown (not an early break). DoTs must deal net damage.
+  const DOT_TYPES = new Set<ConditionType>(['poison', 'bleed', 'burn']);
+  const steady: Rng = () => 0.5; // never throws; d20 -> 11, save always < 30
+
+  it('every type survives-and-decrements on its onset tick, then expires by full duration', () => {
+    const opponent = creature({ stats: { STR: 10, DEX: 10, CON: 10, INT: 30, WIS: 10, CHA: 10 } });
+    for (const type of Object.keys(CONDITION_DATA) as ConditionType[]) {
+      const maxTurns = CONDITION_DATA[type].maxTurns;
+      let conditions: ActiveCondition[] = [makeCondition(type)];
+
+      // First (onset) tick: it must be HANDLED — still present, remainingTurns
+      // decremented by one. This bites both regressions: an unhandled type would be
+      // dropped (length 0), and the old "carry untouched" fallthrough would leave
+      // remainingTurns === maxTurns.
+      let r = tickConditions(creature({ activeConditions: conditions }), opponent, steady);
+      let cumulative = r.hpDelta;
+      conditions = r.conditions;
+      expect(conditions, `${type} should survive onset`).toHaveLength(1);
+      expect(conditions[0]!.remainingTurns, `${type} should count down on onset`).toBe(maxTurns - 1);
+
+      // Remaining ticks: it must eventually clear (never carried forever).
+      for (let i = 0; i < maxTurns; i++) {
+        r = tickConditions(creature({ activeConditions: conditions }), opponent, steady);
+        cumulative += r.hpDelta;
+        conditions = r.conditions;
+      }
+      expect(conditions, `${type} should have expired`).toEqual([]);
+      if (DOT_TYPES.has(type)) {
+        expect(cumulative, `${type} DoT should deal net damage`).toBeLessThan(0);
+      }
+    }
   });
 });
 

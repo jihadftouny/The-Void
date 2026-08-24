@@ -1,0 +1,195 @@
+[
+  {
+    "id": "overclock-chip",
+    "name": "Overclock Chip",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Rare",
+    "floor": 1,
+    "effects": [{ "type": "skillChargeDiscount", "params": { "amount": 1 } }]
+  },
+  {
+    "id": "scrap-plating",
+    "name": "Scrap Plating",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Common",
+    "floor": 1,
+    "effects": [{ "type": "firstHitReduction", "params": {} }]
+  },
+  {
+    "id": "adrenal-shunt",
+    "name": "Adrenal Shunt",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Rare",
+    "floor": 1,
+    "effects": [{ "type": "lowHpDamageBonus", "params": { "amount": 2, "thresholdPct": 50 } }]
+  },
+  {
+    "id": "mirror-shard",
+    "name": "Mirror Shard",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Rare",
+    "floor": 2,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "onTakeDamage",
+        "action": { "kind": "dealDamage", "params": { "pctOfDamageTaken": 25 } }
+      }
+    ]
+  },
+  {
+    "id": "doubling-glass",
+    "name": "Doubling Glass",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Legendary",
+    "floor": 2,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "onCast",
+        "action": { "kind": "dealDamage", "params": { "amount": 2 } }
+      }
+    ]
+  },
+  {
+    "id": "clear-sight",
+    "name": "Clear Sight",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Common",
+    "floor": 2,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "startOfBattle",
+        "action": { "kind": "applyConditionSelf", "params": {}, "condition": "wise" }
+      }
+    ]
+  },
+  {
+    "id": "ash-censer",
+    "name": "Ash Censer",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Rare",
+    "floor": 3,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "onHit",
+        "action": { "kind": "applyConditionEnemy", "params": {}, "condition": "burn" }
+      }
+    ]
+  },
+  {
+    "id": "grave-of-embers",
+    "name": "Grave of Embers",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Rare",
+    "floor": 3,
+    "effects": [{ "type": "dotTickMultiplier", "params": { "mult": 2 } }]
+  },
+  {
+    "id": "empty-vessel",
+    "name": "Empty Vessel",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Common",
+    "floor": 3,
+    "effects": [{ "type": "chargePerTurn", "params": { "amount": 1 } }]
+  },
+  {
+    "id": "halo-fragment",
+    "name": "Halo Fragment",
+    "kind": "trinket",
+    "slot": "amulet",
+    "rarity": "Legendary",
+    "floor": 4,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "onTakeDamage",
+        "action": { "kind": "revive", "params": { "pctMaxHp": 25 } }
+      }
+    ]
+  },
+  {
+    "id": "choirs-blessing",
+    "name": "Choir's Blessing",
+    "kind": "trinket",
+    "slot": "amulet",
+    "rarity": "Rare",
+    "floor": 4,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "startOfBattle",
+        "action": { "kind": "applyConditionSelf", "params": {}, "condition": "regeneration" }
+      }
+    ]
+  },
+  {
+    "id": "reliquary",
+    "name": "Reliquary",
+    "kind": "trinket",
+    "slot": "amulet",
+    "rarity": "Rare",
+    "floor": 4,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "onCast",
+        "action": { "kind": "healSelf", "params": { "amount": 3 } }
+      }
+    ]
+  },
+  {
+    "id": "hollow-heart",
+    "name": "Hollow Heart",
+    "kind": "trinket",
+    "slot": "amulet",
+    "rarity": "Legendary",
+    "floor": 5,
+    "effects": [
+      { "type": "skillChargeDiscount", "params": { "amount": 1 } },
+      {
+        "type": "triggered",
+        "trigger": "onCast",
+        "action": { "kind": "healSelf", "params": { "amount": 2 } }
+      }
+    ]
+  },
+  {
+    "id": "void-pact",
+    "name": "Void Pact",
+    "kind": "trinket",
+    "slot": "amulet",
+    "rarity": "Legendary",
+    "floor": 5,
+    "effects": [
+      { "type": "damageDealtMultiplier", "params": { "pct": 50 } },
+      { "type": "cannotHeal", "params": {} }
+    ]
+  },
+  {
+    "id": "devourers-maw",
+    "name": "Devourer's Maw",
+    "kind": "trinket",
+    "slot": "amulet",
+    "rarity": "Legendary",
+    "floor": 5,
+    "effects": [
+      {
+        "type": "triggered",
+        "trigger": "onKill",
+        "action": { "kind": "gainStat", "params": { "amount": 1 }, "stat": "STR" }
+      }
+    ]
+  }
+]

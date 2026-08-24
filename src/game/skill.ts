@@ -15,15 +15,114 @@
 //    (no random term). The caller (resolveEnemyAttack) owns the skill-pick draw.
 //  - `Skill.target` static global is dropped; the target is an explicit parameter.
 
-import type { Character } from './character.ts';
+import type { Character, StatKey } from './character.ts';
 import { getElement } from './element.ts';
-import { addCondition, type ActiveCondition, type ConditionType } from './condition.ts';
+import { applyCondition, type ActiveCondition, type ConditionType } from './condition.ts';
+import { statModDelta } from './statEffects.ts';
 import { subjectOf, type CombatEvent } from './combatEvent.ts';
 
-/** Every skill id (ported from `SkillEnemy.java`'s test skills). */
-export type SkillId = 'pyroBall' | 'freeze';
+/**
+ * Every skill id.
+ *  - `pyroBall`/`freeze` are the ported enemy test skills.
+ *  - `strike`/`ember`/`venom`/`frost`/`enfeeble` are the M2 generic pool: no longer
+ *    auto-granted to a player, but retained as valid castable defs for the enemy path
+ *    and the off-equivalence test (a twist-free skill through `castSkill`).
+ *  - The twenty class-kit ids (M3) are the five signature kits (four skills each). Their
+ *    optional twist knobs below are interpreted by `castSkill` in `classKit.ts`.
+ */
+export type SkillId =
+  | 'pyroBall'
+  | 'freeze'
+  | 'strike'
+  | 'ember'
+  | 'venom'
+  | 'frost'
+  | 'enfeeble'
+  // Enforcer kit (Momentum)
+  | 'heavyStrike'
+  | 'brace'
+  | 'intimidate'
+  | 'execute'
+  // Neuromancer kit (Detonate)
+  | 'mindSpike'
+  | 'unravel'
+  | 'lull'
+  | 'synapse'
+  // Scavver kit (Exposure)
+  | 'backstab'
+  | 'venomCoat'
+  | 'slip'
+  | 'scavenge'
+  // Penitent kit (Devotion / Martyr — HP-as-fuel)
+  | 'smite'
+  | 'mend'
+  | 'consecrate'
+  | 'martyr'
+  // Hollow kit (Corruption)
+  | 'siphon'
+  | 'corrupt'
+  | 'sacrifice'
+  | 'unmake'
+  // ---- Enemy family kits (this milestone) — additive, twist-free enemy skills. ----
+  // Floor 1
+  | 'gangShiv'
+  | 'gangStomp'
+  | 'taserShot'
+  | 'suppressiveFire'
+  | 'poisonBite'
+  | 'rabidClaw'
+  | 'riotSlam'
+  | 'shieldBash'
+  | 'desperateSwing'
+  // Floor 2
+  | 'mirrorShard'
+  | 'blurStrike'
+  | 'copiedStrike'
+  | 'copiedHex'
+  | 'warpMind'
+  | 'disorient'
+  | 'staticArc'
+  | 'overload'
+  // Floor 3
+  | 'drainingSob'
+  | 'heavyHeart'
+  | 'furiousBlow'
+  | 'wrathSmash'
+  | 'creepingFear'
+  | 'paralyzingDread'
+  | 'deadeningTouch'
+  | 'numbingCold'
+  | 'sinfulWhisper'
+  | 'covetousStrike'
+  | 'wrathfulLash'
+  | 'ashClaw'
+  // Floor 4
+  | 'dissonantHymn'
+  | 'radiantRebuke'
+  | 'wardingStrike'
+  | 'immovableSlam'
+  | 'sorrowfulGaze'
+  | 'smiteWicked'
+  | 'blindingLight'
+  // Floor 5
+  | 'hellfire'
+  | 'corruptClaw'
+  | 'maddeningGaze'
+  | 'voidWhisper'
+  | 'unmakeStrike'
+  | 'negate'
+  | 'echoedStrike'
+  | 'echoedHex'
+  | 'hollowGrasp'
+  | 'desolateStrike';
 
-/** A skill definition as plain, data-driven content. */
+/**
+ * A skill definition as plain, data-driven content. The base fields (id..conditions)
+ * drive `useSkill`; the OPTIONAL twist fields below drive `castSkill` (M3). Every twist
+ * field absent ⇒ `castSkill` returns exactly `useSkill`'s result, so the enemy path and
+ * the generic skills stay byte-identical. All twist magnitudes are M15 balance
+ * placeholders (see `classKit.ts`).
+ */
 export interface SkillDef {
   id: SkillId;
   name: string;
@@ -35,6 +134,51 @@ export interface SkillDef {
   baseDamage: number;
   /** Conditions this skill inflicts on its target. */
   conditions: ConditionType[];
+
+  // ---- Optional twist knobs (M3, interpreted by classKit.castSkill) ----
+  /** Penitent: spend this much caster HP on cast (clamped so caster never drops below 1). */
+  hpCost?: number;
+  /** Hollow: sacrifice this much caster maxHp; each point raises `corruption` by 1. */
+  maxHpCost?: number;
+  /** Penitent: heal the caster by this flat amount (clamped to effective max HP). */
+  selfHeal?: number;
+  /** Hollow: heal the caster by floor(damage × fraction) (clamped to effective max HP). */
+  lifestealFraction?: number;
+  /** Enforcer: consume all caster momentum, adding `momentumDamagePer × momentum` damage. */
+  spendMomentum?: boolean;
+  /** Enforcer: damage added per point of consumed momentum (pairs with `spendMomentum`). */
+  momentumDamagePer?: number;
+  /** Enforcer: grant this much momentum on cast (clamped to the cap). */
+  gainMomentum?: number;
+  /** Enforcer: bonus damage when the target is at/below `thresholdPct`% of its max HP. */
+  bonusVsBloodied?: { thresholdPct: number; bonus: number };
+  /** Neuromancer: remove every target condition in `group`, adding `damagePer × count`. */
+  detonate?: { damagePer: number; group: 'mental' };
+  /** Scavver: raise the target's `exposed` intensity by this many stacks on cast. */
+  appliesExposure?: number;
+  /** Scavver: damage added per point of the target's current `exposed` intensity. */
+  exposureScale?: number;
+  /** Hollow: damage added per point of the caster's current `corruption`. */
+  corruptionScale?: number;
+  /** Apply these conditions to the CASTER (self-buffs: brace/consecrate/slip). */
+  selfConditions?: ConditionType[];
+  /** Scavver: restore this many skill charges to the caster (clamped to the max). */
+  restoreCharges?: number;
+  /** Penitent: add the caster's mod for this stat to the skill's damage. */
+  scaleStat?: StatKey;
+}
+
+/**
+ * A per-skill accumulated upgrade (M9 draft rewards) as plain, serializable data. Every
+ * field is OPTIONAL and additive so a player with no upgrades round-trips unchanged and
+ * `resolveSkill` is off-equivalent. `damageBonus` adds to `baseDamage`; `chargeDelta` shifts
+ * `chargeCost` (clamped at 0); `addConditions` are unioned onto the skill's inflicted
+ * conditions. All magnitudes are M15 balance placeholders.
+ */
+export interface SkillUpgrade {
+  damageBonus?: number;
+  chargeDelta?: number;
+  addConditions?: ConditionType[];
 }
 
 /**
@@ -45,6 +189,110 @@ export interface SkillDef {
 export const SKILLS: Record<SkillId, SkillDef> = {
   pyroBall: { id: 'pyroBall', name: 'Pyro Ball', element: 'Pyro', chargeCost: 1, baseDamage: 2, conditions: [] },
   freeze: { id: 'freeze', name: 'Freeze!', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['freeze'] },
+  // ---- M2 generic starter pool (class-agnostic; each enemy-targeted, one condition). ----
+  strike: { id: 'strike', name: 'Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
+  ember: { id: 'ember', name: 'Ember', element: 'Pyro', chargeCost: 1, baseDamage: 2, conditions: ['burn'] },
+  venom: { id: 'venom', name: 'Venom', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison'] },
+  frost: { id: 'frost', name: 'Frost', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['freeze'] },
+  enfeeble: { id: 'enfeeble', name: 'Enfeeble', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+
+  // ---- M3 class kits (all magnitudes/costs are M15 balance placeholders). ----
+  // Enforcer (Momentum): spend banked momentum for burst; build it back with brace.
+  heavyStrike: { id: 'heavyStrike', name: 'Heavy Strike', element: 'Physical', chargeCost: 2, baseDamage: 3, conditions: ['fracture'], spendMomentum: true, momentumDamagePer: 1 },
+  brace: { id: 'brace', name: 'Brace', element: 'Force', chargeCost: 1, baseDamage: 0, conditions: [], selfConditions: ['healthy'], gainMomentum: 2 },
+  intimidate: { id: 'intimidate', name: 'Intimidate', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['stun'] },
+  execute: { id: 'execute', name: 'Execute', element: 'Physical', chargeCost: 2, baseDamage: 2, conditions: ['bleed'], bonusVsBloodied: { thresholdPct: 50, bonus: 4 } },
+
+  // Neuromancer (Detonate): stack mental conditions, then blow them up with synapse.
+  mindSpike: { id: 'mindSpike', name: 'Mind Spike', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['insanity'] },
+  unravel: { id: 'unravel', name: 'Unravel', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['fool'] },
+  lull: { id: 'lull', name: 'Lull', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['sleep'] },
+  synapse: { id: 'synapse', name: 'Synapse', element: 'Electro', chargeCost: 2, baseDamage: 1, conditions: [], detonate: { damagePer: 2, group: 'mental' } },
+
+  // Scavver (Exposure): mark a foe Exposed, then punish the mark. (Evasion half → M4.)
+  backstab: { id: 'backstab', name: 'Backstab', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'], appliesExposure: 1 },
+  venomCoat: { id: 'venomCoat', name: 'Venom Coat', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison'], exposureScale: 1 },
+  slip: { id: 'slip', name: 'Slip', element: 'Physical', chargeCost: 1, baseDamage: 0, conditions: [], selfConditions: ['quick'] },
+  scavenge: { id: 'scavenge', name: 'Scavenge', element: 'Physical', chargeCost: 1, baseDamage: 0, conditions: [], restoreCharges: 2 },
+
+  // Penitent (Devotion / Martyr): pay HP for holy burst; mend/consecrate to sustain.
+  smite: { id: 'smite', name: 'Smite', element: 'Force', chargeCost: 1, baseDamage: 3, conditions: [], hpCost: 2, scaleStat: 'WIS' },
+  mend: { id: 'mend', name: 'Mend', element: 'Force', chargeCost: 1, baseDamage: 0, conditions: [], selfHeal: 4 },
+  consecrate: { id: 'consecrate', name: 'Consecrate', element: 'Force', chargeCost: 1, baseDamage: 1, conditions: [], selfConditions: ['regeneration'] },
+  martyr: { id: 'martyr', name: 'Martyr', element: 'Force', chargeCost: 2, baseDamage: 5, conditions: [], hpCost: 5 },
+
+  // Hollow (Corruption): sacrifice max HP into corruption, then scale unmake by it.
+  siphon: { id: 'siphon', name: 'Siphon', element: 'Psychic', chargeCost: 1, baseDamage: 3, conditions: [], lifestealFraction: 0.5 },
+  corrupt: { id: 'corrupt', name: 'Corrupt', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison', 'insanity'] },
+  sacrifice: { id: 'sacrifice', name: 'Sacrifice', element: 'Psychic', chargeCost: 1, baseDamage: 0, conditions: [], maxHpCost: 3 },
+  unmake: { id: 'unmake', name: 'Unmake', element: 'Psychic', chargeCost: 2, baseDamage: 3, conditions: [], corruptionScale: 1, lifestealFraction: 0.5 },
+
+  // ---- Enemy family kits (this milestone). Twist-FREE — only the base fields, so the enemy
+  // path (`useSkill` reading `SKILLS` directly) is fully covered and the player-kit twist
+  // system is untouched. Elements/conditions follow each family's §9 theme; Feelings/Angels
+  // use the closest existing condition/element as an M15-PLACEHOLDER PROXY (Force for
+  // radiant/holy; weak/slow/stun/insanity for the Feelings) — the real fear/radiant/
+  // resource-sap behaviors wait for the M10 behaviorNote hooks. ALL baseDamage/chargeCost
+  // values here are M15 BALANCE PLACEHOLDERS: this milestone delivers DISTINCTION, not balance.
+
+  // Floor 1 — street / mech / beast.
+  // M15 BALANCE: Floor-1/2 family skill baseDamage shaved by 1 on the ≥2 values (the
+  // highest early-burst enemy skills) to soften the Act-1/2 no-equipment attrition wall
+  // (lever 4). Player-kit skills are untouched. See docs/BALANCE-REPORT.md.
+  gangShiv: { id: 'gangShiv', name: 'Gang Shiv', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['bleed'] },
+  gangStomp: { id: 'gangStomp', name: 'Gang Stomp', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['fracture'] },
+  taserShot: { id: 'taserShot', name: 'Taser Shot', element: 'Electro', chargeCost: 1, baseDamage: 1, conditions: ['electrify'] },
+  suppressiveFire: { id: 'suppressiveFire', name: 'Suppressive Fire', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  poisonBite: { id: 'poisonBite', name: 'Poison Bite', element: 'Poison', chargeCost: 1, baseDamage: 1, conditions: ['poison'] },
+  rabidClaw: { id: 'rabidClaw', name: 'Rabid Claw', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['bleed'] },
+  riotSlam: { id: 'riotSlam', name: 'Riot Slam', element: 'Physical', chargeCost: 2, baseDamage: 2, conditions: ['fracture'] },
+  shieldBash: { id: 'shieldBash', name: 'Shield Bash', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['stun'] },
+  desperateSwing: { id: 'desperateSwing', name: 'Desperate Swing', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: [] },
+
+  // Floor 2 — reflections / distortions / static.
+  mirrorShard: { id: 'mirrorShard', name: 'Mirror Shard', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['fool'] },
+  blurStrike: { id: 'blurStrike', name: 'Blur Strike', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  copiedStrike: { id: 'copiedStrike', name: 'Copied Strike', element: 'Physical', chargeCost: 1, baseDamage: 1, conditions: ['bleed'] },
+  copiedHex: { id: 'copiedHex', name: 'Copied Hex', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  warpMind: { id: 'warpMind', name: 'Warp Mind', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['insanity'] },
+  disorient: { id: 'disorient', name: 'Disorient', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['fool'] },
+  staticArc: { id: 'staticArc', name: 'Static Arc', element: 'Electro', chargeCost: 1, baseDamage: 1, conditions: ['electrify'] },
+  overload: { id: 'overload', name: 'Overload', element: 'Electro', chargeCost: 2, baseDamage: 1, conditions: ['stun'] },
+
+  // Floor 3 — the Feelings + Sins (proxy conditions, M10 real hooks pending).
+  drainingSob: { id: 'drainingSob', name: 'Draining Sob', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  heavyHeart: { id: 'heavyHeart', name: 'Heavy Heart', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['slow'] },
+  furiousBlow: { id: 'furiousBlow', name: 'Furious Blow', element: 'Physical', chargeCost: 1, baseDamage: 3, conditions: ['bleed'] },
+  wrathSmash: { id: 'wrathSmash', name: 'Wrath Smash', element: 'Physical', chargeCost: 2, baseDamage: 4, conditions: ['fracture'] },
+  creepingFear: { id: 'creepingFear', name: 'Creeping Fear', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  paralyzingDread: { id: 'paralyzingDread', name: 'Paralyzing Dread', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['stun'] },
+  deadeningTouch: { id: 'deadeningTouch', name: 'Deadening Touch', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['slow'] },
+  numbingCold: { id: 'numbingCold', name: 'Numbing Cold', element: 'Cryo', chargeCost: 1, baseDamage: 1, conditions: ['sleep'] },
+  sinfulWhisper: { id: 'sinfulWhisper', name: 'Sinful Whisper', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['insanity'] },
+  covetousStrike: { id: 'covetousStrike', name: 'Covetous Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  wrathfulLash: { id: 'wrathfulLash', name: 'Wrathful Lash', element: 'Pyro', chargeCost: 1, baseDamage: 2, conditions: ['burn'] },
+  ashClaw: { id: 'ashClaw', name: 'Ash Claw', element: 'Pyro', chargeCost: 1, baseDamage: 1, conditions: ['burn'] },
+
+  // Floor 4 — Angels / Ancestral (Force proxy for radiant/holy).
+  dissonantHymn: { id: 'dissonantHymn', name: 'Dissonant Hymn', element: 'Force', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  radiantRebuke: { id: 'radiantRebuke', name: 'Radiant Rebuke', element: 'Force', chargeCost: 1, baseDamage: 3, conditions: [] },
+  wardingStrike: { id: 'wardingStrike', name: 'Warding Strike', element: 'Force', chargeCost: 1, baseDamage: 2, conditions: ['fracture'] },
+  immovableSlam: { id: 'immovableSlam', name: 'Immovable Slam', element: 'Physical', chargeCost: 2, baseDamage: 3, conditions: ['stun'] },
+  sorrowfulGaze: { id: 'sorrowfulGaze', name: 'Sorrowful Gaze', element: 'Psychic', chargeCost: 1, baseDamage: 1, conditions: ['weak'] },
+  smiteWicked: { id: 'smiteWicked', name: 'Smite the Wicked', element: 'Force', chargeCost: 2, baseDamage: 4, conditions: [] },
+  blindingLight: { id: 'blindingLight', name: 'Blinding Light', element: 'Force', chargeCost: 1, baseDamage: 2, conditions: ['stun'] },
+
+  // Floor 5 — Demons / Void-Horrors / the Unmade / Echoes / Hollowed.
+  hellfire: { id: 'hellfire', name: 'Hellfire', element: 'Pyro', chargeCost: 1, baseDamage: 3, conditions: ['burn'] },
+  corruptClaw: { id: 'corruptClaw', name: 'Corrupt Claw', element: 'Poison', chargeCost: 1, baseDamage: 2, conditions: ['poison'] },
+  maddeningGaze: { id: 'maddeningGaze', name: 'Maddening Gaze', element: 'Psychic', chargeCost: 1, baseDamage: 3, conditions: ['insanity'] },
+  voidWhisper: { id: 'voidWhisper', name: 'Void Whisper', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['fool'] },
+  unmakeStrike: { id: 'unmakeStrike', name: 'Unmake Strike', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  negate: { id: 'negate', name: 'Negate', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['dumb'] },
+  echoedStrike: { id: 'echoedStrike', name: 'Echoed Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
+  echoedHex: { id: 'echoedHex', name: 'Echoed Hex', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['insanity'] },
+  hollowGrasp: { id: 'hollowGrasp', name: 'Hollow Grasp', element: 'Psychic', chargeCost: 1, baseDamage: 2, conditions: ['weak'] },
+  desolateStrike: { id: 'desolateStrike', name: 'Desolate Strike', element: 'Physical', chargeCost: 1, baseDamage: 2, conditions: ['bleed'] },
 };
 
 /**
@@ -63,6 +311,50 @@ export function computeSkillDamage(
   return Math.max(damage, 0);
 }
 
+/**
+ * Merge a player's accumulated `SkillUpgrade` for `skillId` into the base skill def — PURE.
+ * With NO upgrade the BASE def is returned unchanged (referential-equal ⇒ off-equivalence:
+ * an un-upgraded player casts byte-identically). With an upgrade: `baseDamage + damageBonus`,
+ * `chargeCost` shifted by `chargeDelta` and clamped at 0, and `addConditions` unioned onto
+ * the inflicted conditions. Player-only — the enemy cast path keeps reading `SKILLS` directly.
+ */
+export function resolveSkill(
+  player: { skillUpgrades?: Record<string, SkillUpgrade> },
+  skillId: SkillId,
+): SkillDef {
+  const base = SKILLS[skillId];
+  const up = player.skillUpgrades?.[skillId];
+  if (!base || !up) return base;
+  return {
+    ...base,
+    baseDamage: base.baseDamage + (up.damageBonus ?? 0),
+    chargeCost: Math.max(0, base.chargeCost + (up.chargeDelta ?? 0)),
+    conditions:
+      up.addConditions && up.addConditions.length > 0
+        ? [...base.conditions, ...up.addConditions]
+        : base.conditions,
+  };
+}
+
+/**
+ * Accumulate `upgrade` onto any existing entry for `skillId` — PURE, returns a NEW record.
+ * Numeric fields ADD (so two +2 damage upgrades stack to +4); `addConditions` concatenate.
+ * The absent-field default is 0 / [], so a first upgrade folds cleanly onto no prior entry.
+ */
+export function applySkillUpgrade(
+  upgrades: Record<string, SkillUpgrade>,
+  skillId: SkillId,
+  upgrade: SkillUpgrade,
+): Record<string, SkillUpgrade> {
+  const prior = upgrades[skillId] ?? {};
+  const merged: SkillUpgrade = {
+    damageBonus: (prior.damageBonus ?? 0) + (upgrade.damageBonus ?? 0),
+    chargeDelta: (prior.chargeDelta ?? 0) + (upgrade.chargeDelta ?? 0),
+    addConditions: [...(prior.addConditions ?? []), ...(upgrade.addConditions ?? [])],
+  };
+  return { ...upgrades, [skillId]: merged };
+}
+
 /** The result of casting a skill — new caster/target plus damage and events. */
 export interface UseSkillResult<C extends Character, T extends Character> {
   caster: C;
@@ -73,16 +365,19 @@ export interface UseSkillResult<C extends Character, T extends Character> {
 
 /**
  * Cast a skill from `caster` at `target` — PURE. Spends exactly one caster charge,
- * computes the resistance-adjusted damage (NOT applied to hp — the round applies hp),
- * and appends the skill's condition(s) to a COPY of the target's activeConditions
- * (deduped by type). Emits `enemy-skill-used` and one `condition-applied` per newly
- * added condition. Reusable by the enemy turn and (later) a player cast-skill action.
+ * computes the resistance-adjusted damage PLUS the caster's INT-mod delta (Sharp/Dull
+ * skill power — 0 when the caster carries no INT augment, so the enemy path is
+ * unchanged), and applies the skill's condition(s) to a COPY of the target's
+ * activeConditions via the mix-per-condition rule. Damage is NOT applied to hp — the
+ * round applies hp. Emits `enemy-skill-used` and one `condition-applied` per condition
+ * that was newly added OR stacked (never on a bare duration refresh — preserves the
+ * freeze-dedup "no event" behaviour). Reusable by the enemy turn and the player cast.
  */
 export function useSkill<
-  C extends Character,
+  C extends Character & { activeConditions: ActiveCondition[] },
   T extends Character & { activeConditions: ActiveCondition[]; resistances: number[] },
 >(caster: C, target: T, skill: SkillDef): UseSkillResult<C, T> {
-  const damage = computeSkillDamage(skill, target);
+  const damage = Math.max(computeSkillDamage(skill, target) + statModDelta(caster, 'INT'), 0);
   const newCaster: C = { ...caster, skillCharges: caster.skillCharges - skill.chargeCost };
 
   const conditions = target.activeConditions.map((c) => ({ ...c }));
@@ -91,7 +386,8 @@ export function useSkill<
     { kind: 'enemy-skill-used', skillId: skill.id, name: skill.name },
   ];
   for (const type of skill.conditions) {
-    if (addCondition(conditions, type)) {
+    const result = applyCondition(conditions, type);
+    if (result === 'added' || result === 'stacked') {
       events.push({ kind: 'condition-applied', subject: targetSubject, conditionType: type });
     }
   }

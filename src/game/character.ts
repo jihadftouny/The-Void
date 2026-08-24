@@ -66,14 +66,18 @@ export const STAT_KEYS: readonly StatKey[] = [
 ];
 
 /**
- * Single-stat modifier (Java `Character.setMods`):
- *   mod = (stat > 30) ? 10 : 10 - ceil(|stat - 30| / 2).
- * Scores above 30 model Faults/Conditions and cap the modifier at 10.
+ * Single-stat modifier — standard D&D:
+ *   mod = floor((stat - 10) / 2).
+ * Uncapped and symmetric about 10 (10 -> +0, 12 -> +1, 8 -> -1, ...). This
+ * replaces the inherited Java tent formula `10 - ceil(|stat - 30| / 2)` (peaked
+ * at stat 30, +10). The two agree for every stat <= 30 and, given the old code's
+ * `stat > 30 -> 10` clamp, also at 31 (both +10); they diverge only at stat >= 32,
+ * where the D&D form keeps climbing (32 -> +11, 40 -> +15) instead of pinning +10.
+ * Rolled play stats live in [3, 18], where the two are identical, so the swap
+ * leaves normal-range HP/AC/to-hit/damage unchanged.
  */
 export function computeStatMod(stat: number): number {
-  if (stat > 30) return 10;
-  const diff = Math.abs(stat - 30);
-  return 10 - Math.ceil(diff / 2);
+  return Math.floor((stat - 10) / 2);
 }
 
 /** Map `computeStatMod` over all six stats, preserving keys. */

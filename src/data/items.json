@@ -1,0 +1,34 @@
+[
+  {
+    "id": "rusted-blade",
+    "name": "Rusted Blade",
+    "kind": "weapon",
+    "slot": "mainHand",
+    "rarity": "Common",
+    "effects": [{ "type": "bonusDamage", "params": { "amount": 1 } }]
+  },
+  {
+    "id": "void-plate",
+    "name": "Void Plate",
+    "kind": "armor",
+    "slot": "armor",
+    "rarity": "Rare",
+    "effects": [{ "type": "bonusArmorClass", "params": { "amount": 2 } }]
+  },
+  {
+    "id": "hollow-ring",
+    "name": "Hollow Ring",
+    "kind": "trinket",
+    "slot": "ring",
+    "rarity": "Rare",
+    "effects": [{ "type": "bonusStat", "params": { "con": 1 } }]
+  },
+  {
+    "id": "clarity-draught",
+    "name": "Clarity Draught",
+    "kind": "usable",
+    "slot": null,
+    "rarity": "Common",
+    "effects": [{ "type": "heal", "params": { "amount": 8 } }]
+  }
+]

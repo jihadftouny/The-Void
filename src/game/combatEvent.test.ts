@@ -8,6 +8,8 @@ import { subjectOf, type CombatEvent } from './combatEvent.ts';
 describe('CombatEvent JSON round-trip', () => {
   const samples: CombatEvent[] = [
     { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
+    { kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember' },
+    { kind: 'cast-unavailable' },
     { kind: 'attack', subject: 'player', outcome: 'crit', damage: 7 },
     { kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2 },
     { kind: 'advantage', subject: 'player' },
@@ -25,7 +27,7 @@ describe('CombatEvent JSON round-trip', () => {
     { kind: 'fled' },
     { kind: 'escape-failed', damage: 2 },
     { kind: 'escape-impossible' },
-    { kind: 'victory', xpGained: 3, goldGained: 1, extraRest: true },
+    { kind: 'victory', xpGained: 3, extraRest: true, loot: [] },
     { kind: 'defeat' },
   ];
 

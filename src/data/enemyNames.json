@@ -226,5 +226,80 @@
         ["Death", 1]
       ]
     }
+  },
+  "byFamily": {
+    "grief": {
+      "first": [["Wailing", 1], ["Silent", 1], ["Hollow", 1], ["Drowning", 1]],
+      "middle": [],
+      "last": [["Grief", 1], ["Sorrow", 1], ["Mourning", 1], ["Loss", 1]]
+    },
+    "rage": {
+      "first": [["Seething", 1], ["Burning", 1], ["Blind", 1], ["Roaring", 1]],
+      "middle": [],
+      "last": [["Rage", 1], ["Fury", 1], ["Wrath", 1], ["Ire", 1]]
+    },
+    "dread": {
+      "first": [["Creeping", 1], ["Cold", 1], ["Nameless", 1], ["Gnawing", 1]],
+      "middle": [],
+      "last": [["Dread", 1], ["Fear", 1], ["Terror", 1], ["Panic", 1]]
+    },
+    "numbness": {
+      "first": [["Grey", 1], ["Empty", 1], ["Deadened", 1], ["Distant", 1]],
+      "middle": [],
+      "last": [["Numbness", 1], ["Void", 1], ["Silence", 1], ["Nothing", 1]]
+    },
+    "sevenSins": {
+      "first": [],
+      "middle": [],
+      "last": [
+        ["Pride", 1],
+        ["Envy", 1],
+        ["Wrath", 1],
+        ["Sloth", 1],
+        ["Greed", 1],
+        ["Gluttony", 1],
+        ["Lust", 1]
+      ]
+    },
+    "ashWraiths": {
+      "first": [["Drifting", 1], ["Smouldering", 1], ["Faint", 1], ["Pale", 1]],
+      "middle": [],
+      "last": [["Ash-Wraith", 1], ["Cinder", 1], ["Ember-Shade", 1], ["Ash", 1]]
+    },
+    "choir": {
+      "first": [["Radiant", 1], ["Dissonant", 1], ["Whispering", 1], ["Golden", 1]],
+      "middle": [],
+      "last": [["Choir", 1], ["Chorus", 1], ["Hymn", 1], ["Refrain", 1]]
+    },
+    "theJudged": {
+      "first": [["The Accused", 1], ["The Repentant", 1], ["The Condemned", 1], ["The Weighed", 1]],
+      "middle": [],
+      "last": [["Soul", 1], ["Penitent", 1], ["Shade", 1], ["Supplicant", 1]]
+    },
+    "demons": {
+      "first": [["Infernal", 1], ["Charred", 1], ["Horned", 1], ["Screaming", 1]],
+      "middle": [],
+      "last": [["Demon", 1], ["Fiend", 1], ["Devil", 1], ["Imp", 1]]
+    },
+    "voidHorrors": {
+      "first": [["Writhing", 1], ["Faceless", 1], ["Unfolding", 1], ["Gibbering", 1]],
+      "middle": [],
+      "last": [["Horror", 1], ["Terror", 1], ["Aberration", 1], ["Thing", 1]]
+    },
+    "theUnmade": {
+      "first": [["The Unraveled", 1], ["The Erased", 1], ["The Undone", 1], ["The Blank", 1]],
+      "middle": [],
+      "last": [["Unmade", 1], ["Nullity", 1], ["Absence", 1], ["Unbeing", 1]]
+    },
+    "echoesOfYou": {
+      "first": [["Echoing", 1], ["Familiar", 1], ["Mirrored", 1], ["Remembered", 1]],
+      "middle": [],
+      "last": [["Echo", 1], ["Reflection", 1], ["Memory", 1], ["Ghost", 1]]
+    },
+    "theHollowed": {
+      "first": [["The Hollow", 1], ["The Emptied", 1], ["The Husk", 1], ["The Spent", 1]],
+      "middle": [],
+      "last": [["Hollowed", 1], ["Husk", 1], ["Shell", 1], ["Remnant", 1]]
+    }
   }
 }

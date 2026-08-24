@@ -15,10 +15,10 @@ describe('hpText', () => {
 });
 
 describe('formatEvent — anchored player-facing strings', () => {
-  it('victory carries the XP and gold numbers', () => {
-    const s = formatEvent({ kind: 'victory', xpGained: 12, goldGained: 7, extraRest: false });
+  it('victory carries the XP number (M7: no gold)', () => {
+    const s = formatEvent({ kind: 'victory', xpGained: 12, extraRest: false, loot: [] });
     expect(s).toContain('12');
-    expect(s).toContain('7');
+    expect(s.toLowerCase()).not.toContain('gold');
   });
 
   it('an enemy miss names the enemy side and says "miss"', () => {
@@ -39,18 +39,16 @@ describe('formatEvent — anchored player-facing strings', () => {
     expect(s).toContain('15/20');
   });
 
-  it('level-up mentions both picked stats', () => {
-    const s = formatEvent({
-      kind: 'level-up',
-      picks: ['STR', 'CON'],
-      newStats: STATS,
-      hpRoll: 4,
-      newMaxHp: 16,
-      conModChanged: false,
-      proficiency: 2,
-    });
-    expect(s).toContain('STR');
-    expect(s).toContain('CON');
+  it('level-up carries the new level and max HP', () => {
+    const s = formatEvent({ kind: 'level-up', newLevel: 3, hpRoll: 4, newMaxHp: 16 });
+    expect(s).toContain('3'); // new level
+    expect(s).toContain('16'); // new max HP
+  });
+
+  it('draft-offer lists the offered option labels', () => {
+    const s = formatEvent({ kind: 'draft-offer', options: ['Learn Intimidate', '+1 STR'] });
+    expect(s).toContain('Learn Intimidate');
+    expect(s).toContain('+1 STR');
   });
 
   it('prefers a logic-populated `text` over the template', () => {
@@ -64,6 +62,8 @@ describe('formatEvent — totality over every event kind', () => {
   const samples: GameEvent[] = [
     // combat
     { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
+    { kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember' },
+    { kind: 'cast-unavailable' },
     { kind: 'attack', subject: 'player', outcome: 'hit', damage: 3 },
     { kind: 'advantage', subject: 'player' },
     { kind: 'disadvantage', subject: 'enemy' },
@@ -80,8 +80,13 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'fled' },
     { kind: 'escape-failed', damage: 4 },
     { kind: 'escape-impossible' },
-    { kind: 'victory', xpGained: 5, goldGained: 3, extraRest: true },
+    { kind: 'spared', enemyName: 'Grief' },
+    { kind: 'spare-unavailable' },
+    { kind: 'victory', xpGained: 5, extraRest: true, loot: [] },
     { kind: 'defeat' },
+    { kind: 'boss-summon', minions: 2 },
+    { kind: 'boss-minion-damage', amount: 4 },
+    { kind: 'boss-adapt' },
     // narrative
     { kind: 'title' },
     { kind: 'intro', header: 'H', lines: ['a', 'b'] },
@@ -93,38 +98,29 @@ describe('formatEvent — totality over every event kind', () => {
     { kind: 'rest-full' },
     { kind: 'rest-declined' },
     { kind: 'no-rests' },
-    {
-      kind: 'shop-offer',
-      itemKind: 'weapon',
-      itemId: 'W',
-      itemName: 'W',
-      price: 10,
-      currentId: 'C',
-      currentName: 'C',
-    },
-    { kind: 'shop-purchased', itemId: 'W', price: 10, gold: 5 },
-    { kind: 'shop-insufficient' },
-    { kind: 'shop-declined' },
-    { kind: 'character-info' },
+    { kind: 'deal-offer', pool: 'standard', cost: '8 HP', reward: '12 HP restored' },
+    { kind: 'deal-taken', cost: '8 HP', reward: '12 HP restored' },
+    { kind: 'deal-unaffordable', cost: 'a relic' },
+    { kind: 'deal-declined' },
+    { kind: 'chest-found' },
+    { kind: 'chest-loot', loot: [{ defId: 'gen:Common:ring', name: 'Common ring', rarity: 'Common' }] },
     { kind: 'act-outro', act: 1, header: 'H', body: 'B' },
-    {
-      kind: 'level-up',
-      picks: ['STR', 'CON'],
-      newStats: STATS,
-      hpRoll: 4,
-      newMaxHp: 16,
-      conModChanged: false,
-      proficiency: 2,
-    },
+    { kind: 'level-up', newLevel: 2, hpRoll: 4, newMaxHp: 16 },
+    { kind: 'draft-offer', options: ['Learn Intimidate', '+1 STR'] },
+    { kind: 'draft-picked', option: '+1 STR' },
     { kind: 'act-intro', act: 2, header: 'H', body: 'B' },
     { kind: 'final-battle-begins', enemyName: 'Boss' },
-    { kind: 'ending', header: 'H', body: 'B' },
+    { kind: 'boss-encounter', bossId: 'kingpin', enemyName: 'Undercity Kingpin' },
+    { kind: 'verdict', outcome: 'grace' },
+    { kind: 'ending', endingType: 'grace', header: 'H', body: 'B' },
     { kind: 'game-over', xp: 42 },
   ];
 
-  // Every kind, listed by hand (19 combat + 21 narrative = 40).
+  // Every kind, listed by hand (26 combat + 26 narrative = 52).
   const ALL_KINDS: GameEventKind[] = [
     'enemy-skill-used',
+    'skill-cast',
+    'cast-unavailable',
     'attack',
     'advantage',
     'disadvantage',
@@ -141,8 +137,13 @@ describe('formatEvent — totality over every event kind', () => {
     'fled',
     'escape-failed',
     'escape-impossible',
+    'spared',
+    'spare-unavailable',
     'victory',
     'defeat',
+    'boss-summon',
+    'boss-minion-damage',
+    'boss-adapt',
     'title',
     'intro',
     'stats-rolled',
@@ -153,15 +154,20 @@ describe('formatEvent — totality over every event kind', () => {
     'rest-full',
     'rest-declined',
     'no-rests',
-    'shop-offer',
-    'shop-purchased',
-    'shop-insufficient',
-    'shop-declined',
-    'character-info',
+    'deal-offer',
+    'deal-taken',
+    'deal-unaffordable',
+    'deal-declined',
+    'chest-found',
+    'chest-loot',
     'act-outro',
     'level-up',
+    'draft-offer',
+    'draft-picked',
     'act-intro',
     'final-battle-begins',
+    'boss-encounter',
+    'verdict',
     'ending',
     'game-over',
   ];
@@ -169,7 +175,7 @@ describe('formatEvent — totality over every event kind', () => {
   it('has one sample for every kind (no kind missed)', () => {
     const sampled = new Set(samples.map((s) => s.kind));
     expect(sampled).toEqual(new Set(ALL_KINDS));
-    expect(ALL_KINDS).toHaveLength(40);
+    expect(ALL_KINDS).toHaveLength(52);
   });
 
   it('yields a non-empty string for every kind', () => {

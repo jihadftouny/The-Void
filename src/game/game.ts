@@ -14,33 +14,54 @@
 //
 // Ported from `GameLogic` (startGame -> checkAct -> gameLoop -> encounters -> battle
 // -> progression -> finalBattle -> ending). Confirmed faithful/cleaned choices:
-//  - Menu option 2 bundles shop THEN character-info (the only path to the shop).
+//  - Menu option 2 (`seek-deal`) opens the sacrifice-deal encounter (replaces the gold shop).
 //  - Level-up raises maxHp but does not heal; the final boss gets no auto-advantage.
 //  - The ending shows only on a win; death goes to game-over.
 //  - Name/class confirm loops and per-round continue gates are dropped (events carry
 //    the narration; confirmation UX belongs to the render layer).
 
 import { createRng, type Rng } from './rng.ts';
-import { type StatKey, type Stats } from './character.ts';
+import { type Stats } from './character.ts';
+import { createKarma, recordKarma, type KarmaState } from './karma.ts';
+import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
-import { resolveRound, type BattleState, type BattleAction } from './battle.ts';
+import { resolveRound, openBattle, type BattleState, type BattleAction } from './battle.ts';
 import { createBattle } from './battle.ts';
-import { generateEnemy } from './enemy.ts';
+import { generateBoss, bossPostRound, computeVerdict, type BossId } from './boss.ts';
 import {
   buildRandomBattle,
+  buildChestLoot,
   computeRestHeal,
   selectEncounter,
   selectLore,
 } from './encounter.ts';
-import { buildShopOffer, applyShopPurchase, type ShopOffer } from './shop.ts';
 import {
-  FINAL_BOSS_NAME,
-  FINAL_BOSS_XP,
-  levelUpPlayer,
+  buildDeal,
+  applyDeal,
+  canAfford,
+  describeCost,
+  describeReward,
+  type SacrificeDeal,
+} from './deal.ts';
+import { summarizeLoot } from './loot.ts';
+import {
+  applyLevelUpHp,
+  hasPendingLevelUp,
   shouldAdvance,
 } from './progression.ts';
-import { getActIntro, getActOutro, getEnding, getIntro } from './story.ts';
+import { generateDraft, applyDraftOption, describeDraftOption, type DraftOption } from './draft.ts';
+import {
+  getActIntro,
+  getActOutro,
+  getGraceEnding,
+  getDamnationEnding,
+  getIntro,
+} from './story.ts';
+import { playerArmorClass } from './defense.ts';
+import { pickUp } from './equipment.ts';
+import { type ItemInstance } from './item.ts';
 import { type GameEvent } from './gameEvent.ts';
+import { type RunUnlocks } from './unlockStore.ts';
 
 // ------- State ---------------------------------------------------------------
 
@@ -54,17 +75,21 @@ export type Phase =
   | { kind: 'battle'; battle: BattleState; started: boolean; final: boolean }
   | { kind: 'battle-victory'; final: boolean }
   | { kind: 'rest'; restOffered: boolean }
-  | { kind: 'shop'; offer: ShopOffer }
+  | { kind: 'deal'; deal: SacrificeDeal }
+  | { kind: 'chest'; loot: ItemInstance[] }
   | { kind: 'act-outro'; newAct: number }
-  | { kind: 'level-up'; newAct: number }
-  | { kind: 'level-up-result'; newAct: number }
+  // M9: a level-up presents a seeded draft of 3; the picked option is applied on draft-pick.
+  | { kind: 'level-up-draft'; offers: DraftOption[] }
+  | { kind: 'level-up-result' }
   | { kind: 'act-intro'; newAct: number }
-  | { kind: 'ending' }
+  // M12: the act-4 verdict reckoning (no combat) — grace ends the run, cast-down falls to act 5.
+  | { kind: 'verdict'; outcome: 'grace' | 'cast-down' }
+  | { kind: 'ending'; endingType: 'grace' | 'damnation' }
   | { kind: 'game-over' };
 
 /** The full, serializable game state. */
 export interface GameState {
-  version: 1;
+  version: 8;
   /** mulberry32 accumulator — the serializable RNG state; JSON round-trips it. */
   rngState: number;
   player: Player | null;
@@ -72,6 +97,29 @@ export interface GameState {
   act: number;
   /** Current floor index, 0..4 (place = act - 1). */
   place: number;
+  /**
+   * M12, OPTIONAL routing flag: `'advance-act'` is set on a floor-boss victory (acts 1–3) so
+   * that once any earned level-ups drain, the run advances an act (`resolvePostVictory`).
+   * ABSENT for all normal play ⇒ a normal victory routes to the main menu (unchanged). Plain
+   * data; JSON drops it when absent, so off-equivalence + save round-trip hold.
+   */
+  pending?: 'advance-act';
+  /**
+   * Four-axis Karma / Nature vector for this run. Recorded only in M1 (see
+   * `karma.ts`); no engine outcome depends on it yet. Spread through every `step`
+   * transition, so it persists unchanged until a later milestone writes to it.
+   */
+  karma: KarmaState;
+  /**
+   * M13, OPTIONAL run-start SNAPSHOT of the meta-progression unlock sets (frozen for the
+   * whole run so a fixed unlock-set is fully reproducible from the seed). Only the two sets
+   * the encounter generator needs (families/affixes) are carried. ABSENT for a full/default
+   * run (`createGame(seed)` with no snapshot) — and when absent, `continueJourney` passes
+   * `undefined` down, so the encounter/affix draws are byte-identical to a pre-M13 run
+   * (off-equivalence). Plain data; JSON drops it when absent, so the save shape is unchanged
+   * and `version` legitimately stays 8 (an old save without it resumes as all-unlocked).
+   */
+  unlocks?: RunUnlocks;
   phase: Phase;
 }
 
@@ -84,8 +132,8 @@ export type Awaiting =
   | 'main-menu'
   | 'continue'
   | 'battle-action'
-  | 'level-up-picks'
-  | 'shop-decision'
+  | 'draft-pick'
+  | 'deal-decision'
   | 'rest-decision'
   | 'game-over';
 
@@ -95,10 +143,10 @@ export type GameInput =
   | { kind: 'name'; name: string }
   | { kind: 'class'; classId: PlayerClass }
   | { kind: 'stats-decision'; accept: boolean }
-  | { kind: 'menu'; choice: 'continue' | 'character-info' | 'quit' }
+  | { kind: 'menu'; choice: 'continue' | 'seek-deal' | 'quit' }
   | { kind: 'battle-action'; action: BattleAction }
-  | { kind: 'level-up-picks'; picks: [StatKey, StatKey] }
-  | { kind: 'shop-decision'; accept: boolean }
+  | { kind: 'draft-pick'; index: number }
+  | { kind: 'deal-decision'; accept: boolean }
   | { kind: 'rest-decision'; accept: boolean };
 
 /** What `step` returns: the next state, the ordered events, and the next Awaiting. */
@@ -108,16 +156,24 @@ export interface StepResult {
   awaiting: Awaiting;
 }
 
-/** Build a fresh game at the title screen, seeded by `seed`. */
-export function createGame(seed: number): GameState {
-  return {
-    version: 1,
+/**
+ * Build a fresh game at the title screen, seeded by `seed`. The optional `unlocks` snapshot
+ * (M13) freezes the meta-progression family/affix sets into the state for the whole run; when
+ * omitted the `unlocks` key is left OFF (exactOptionalPropertyTypes) so the state — and every
+ * downstream draw — is byte-identical to a pre-M13 run.
+ */
+export function createGame(seed: number, unlocks?: RunUnlocks): GameState {
+  const state: GameState = {
+    version: 8,
     rngState: seed >>> 0,
     player: null,
     act: 1,
     place: 0,
+    karma: createKarma(),
     phase: { kind: 'title' },
   };
+  if (unlocks) state.unlocks = unlocks;
+  return state;
 }
 
 /** Map a phase to the input it awaits. Total over the Phase union. */
@@ -139,15 +195,19 @@ export function awaitingFor(phase: Phase): Awaiting {
       return 'continue';
     case 'rest':
       return phase.restOffered ? 'rest-decision' : 'continue';
-    case 'shop':
-      return 'shop-decision';
+    case 'deal':
+      return 'deal-decision';
+    case 'chest':
+      return 'continue';
     case 'act-outro':
       return 'continue';
-    case 'level-up':
-      return 'level-up-picks';
+    case 'level-up-draft':
+      return 'draft-pick';
     case 'level-up-result':
       return 'continue';
     case 'act-intro':
+      return 'continue';
+    case 'verdict':
       return 'continue';
     case 'ending':
       return 'continue';
@@ -180,7 +240,7 @@ export function step(state: GameState, input: GameInput): StepResult {
   const finish = (
     phase: Phase,
     events: GameEvent[],
-    patch: Partial<Pick<GameState, 'player' | 'act' | 'place'>> = {},
+    patch: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>> = {},
   ): StepResult => {
     const next: GameState = {
       ...state,
@@ -225,11 +285,13 @@ export function step(state: GameState, input: GameInput): StepResult {
       const intro = getIntro();
       const events: GameEvent[] = [
         {
+          // M4: report the player's REAL armored AC (from gear/dexCap/strReq/shield) so
+          // the HUD shows that defense matters, not the stored unarmored 10 + CONmod base.
           kind: 'player-created',
           name: player.name,
           classId: player.classId,
           maxHp: player.maxHp,
-          armorClass: player.armorClass,
+          armorClass: playerArmorClass(player),
         },
         {
           kind: 'intro',
@@ -246,8 +308,8 @@ export function step(state: GameState, input: GameInput): StepResult {
       if (input.choice === 'quit') {
         return finish({ kind: 'game-over' }, [{ kind: 'game-over', xp: player.xp }]);
       }
-      if (input.choice === 'character-info') {
-        return openShop(state, player, rng, finish);
+      if (input.choice === 'seek-deal') {
+        return openDeal(state, rng, finish);
       }
       // 'continue' — Java continueJourney: checkAct first, else an encounter.
       return continueJourney(state, player, rng, finish);
@@ -256,26 +318,38 @@ export function step(state: GameState, input: GameInput): StepResult {
     case 'battle': {
       if (!phase.started) {
         if (input.kind !== 'continue') return noop;
-        return finish({ ...phase, started: true }, []);
+        // M6: fire startOfBattle relic triggers as the battle becomes active. Off-equivalent
+        // (same battle, no events) for a player with no startOfBattle relics equipped.
+        const opened = openBattle(phase.battle);
+        return finish({ ...phase, battle: opened.battle, started: true }, opened.events);
       }
       if (input.kind !== 'battle-action') return noop;
-      return resolveBattleRound(phase, input.action, rng, finish);
+      return resolveBattleRound(state, phase, input.action, rng, finish);
     }
 
     case 'battle-victory': {
       if (input.kind !== 'continue') return noop;
+      const player = requirePlayer(state);
       if (phase.final) {
-        const player = requirePlayer(state);
-        const ending = getEnding();
-        return finish({ kind: 'ending' }, [
+        // M12: the Hollow Self fell — the run reaches the DAMNATION ending (act 5).
+        const ending = getDamnationEnding();
+        return finish({ kind: 'ending', endingType: 'damnation' }, [
           {
             kind: 'ending',
+            endingType: 'damnation',
             header: ending.header,
             body: substituteName(ending.body, player.name),
           },
         ]);
       }
-      return finish({ kind: 'main-menu' }, []);
+      // M9: battle victory is the sole XP source, so the sole level-up hook. If the new XP
+      // crossed one or more level thresholds, route into the draft (drains one at a time);
+      // otherwise resolve the post-victory route (M12: a boss win advances the act; a normal
+      // win returns to the hub).
+      if (hasPendingLevelUp(player)) {
+        return enterLevelUp(player, rng, finish);
+      }
+      return resolvePostVictory(state, finish);
     }
 
     case 'rest': {
@@ -287,26 +361,20 @@ export function step(state: GameState, input: GameInput): StepResult {
       return resolveRestDecision(state, input.accept, rng, finish);
     }
 
-    case 'shop': {
-      if (input.kind !== 'shop-decision') return noop;
-      return resolveShopDecision(state, phase.offer, input.accept, finish);
+    case 'deal': {
+      if (input.kind !== 'deal-decision') return noop;
+      return resolveDealDecision(state, phase.deal, input.accept, finish);
+    }
+
+    case 'chest': {
+      if (input.kind !== 'continue') return noop;
+      // The loot was already picked up when the chest was found; continue to the hub.
+      return finish({ kind: 'main-menu' }, []);
     }
 
     case 'act-outro': {
-      if (input.kind !== 'continue') return noop;
-      const concluded = phase.newAct - 1;
-      const outro = getActOutro(concluded) ?? { header: '', body: '' };
-      return finish({ kind: 'level-up', newAct: phase.newAct }, [
-        { kind: 'act-outro', act: concluded, header: outro.header, body: outro.body },
-      ]);
-    }
-
-    case 'level-up': {
-      if (input.kind !== 'level-up-picks') return noop;
-      return resolveLevelUp(state, phase.newAct, input.picks, rng, finish);
-    }
-
-    case 'level-up-result': {
+      // M9: act flow is decoupled from level-up. The outro event was already emitted when
+      // this phase was entered (continueJourney); continuing goes straight to the act intro.
       if (input.kind !== 'continue') return noop;
       const intro = getActIntro(phase.newAct) ?? { header: '', body: '' };
       return finish({ kind: 'act-intro', newAct: phase.newAct }, [
@@ -314,21 +382,70 @@ export function step(state: GameState, input: GameInput): StepResult {
       ]);
     }
 
+    case 'level-up-draft': {
+      if (input.kind !== 'draft-pick') return noop;
+      const index = input.index;
+      if (index < 0 || index >= phase.offers.length) return noop; // out-of-range: no-op
+      const player = requirePlayer(state);
+      const picked = applyDraftOption(player, phase.offers[index]!);
+      return finish(
+        { kind: 'level-up-result' },
+        [{ kind: 'draft-picked', option: picked.describe }],
+        { player: picked.player },
+      );
+    }
+
+    case 'level-up-result': {
+      // Drain the next queued level-up if XP still owes one; else return to the hub. Act
+      // advancement is handled independently at the menu, never through this chain.
+      if (input.kind !== 'continue') return noop;
+      const player = requirePlayer(state);
+      if (hasPendingLevelUp(player)) {
+        return enterLevelUp(player, rng, finish);
+      }
+      return resolvePostVictory(state, finish);
+    }
+
     case 'act-intro': {
       if (input.kind !== 'continue') return noop;
       if (phase.newAct === 5) {
+        // M12: act 5 opens on the HOLLOW SELF (a mirror of the player), replacing the retired
+        // `Jorginho Matagal` final boss. It scales off FINAL_BOSS_XP inside `generateBoss`.
         const player = requirePlayer(state);
-        const boss = generateEnemy(
-          { act: 5, type: FINAL_BOSS_NAME, playerXp: FINAL_BOSS_XP },
+        const { enemy, boss } = generateBoss({
+          bossId: 'hollow',
+          act: 5,
+          player,
+          karma: state.karma,
           rng,
-        );
-        const battle = createBattle(player, boss, 5);
+        });
+        const battle: BattleState = { ...createBattle(player, enemy, 5), boss, canFlee: false };
         return finish(
           { kind: 'battle', battle, started: false, final: true },
-          [{ kind: 'final-battle-begins', enemyName: boss.fullName }],
+          [{ kind: 'final-battle-begins', enemyName: enemy.fullName }],
         );
       }
       return finish({ kind: 'main-menu' }, []);
+    }
+
+    case 'verdict': {
+      // M12: the act-4 reckoning is resolved (no combat). GRACE ends the run as a terminal
+      // ascension (act stays 4; act 5 is never constructed). CAST-DOWN advances to act 5 → the
+      // Hollow → the damnation ending.
+      if (input.kind !== 'continue') return noop;
+      const player = requirePlayer(state);
+      if (phase.outcome === 'grace') {
+        const ending = getGraceEnding();
+        return finish({ kind: 'ending', endingType: 'grace' }, [
+          {
+            kind: 'ending',
+            endingType: 'grace',
+            header: ending.header,
+            body: substituteName(ending.body, player.name),
+          },
+        ]);
+      }
+      return advanceAct(state, finish);
     }
 
     case 'ending': {
@@ -347,7 +464,7 @@ export function step(state: GameState, input: GameInput): StepResult {
 type Finish = (
   phase: Phase,
   events: GameEvent[],
-  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place'>>,
+  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>>,
 ) => StepResult;
 
 function requirePlayer(state: GameState): Player {
@@ -355,7 +472,50 @@ function requirePlayer(state: GameState): Player {
   return state.player;
 }
 
-/** Java `continueJourney`: advance an act if earned, otherwise run an encounter. */
+/**
+ * Advance one act — the existing outro/intro machinery (M9), now driven by the boss gate
+ * (M12) rather than the raw XP threshold. Increments `act`/`place`, emits the CONCLUDED act's
+ * outro on entry to `act-outro`, and clears the `pending` advance flag. Reached from a
+ * floor-boss victory (via `resolvePostVictory`) and from a cast-down verdict.
+ */
+function advanceAct(state: GameState, finish: Finish): StepResult {
+  const newAct = state.act + 1;
+  const concluded = state.act;
+  const outro = getActOutro(concluded) ?? { header: '', body: '' };
+  const result = finish(
+    { kind: 'act-outro', newAct },
+    [{ kind: 'act-outro', act: concluded, header: outro.header, body: outro.body }],
+    { act: newAct, place: newAct - 1 },
+  );
+  // Clear the consumed routing flag so a LATER normal victory never re-advances the act.
+  // (Removed as a key, not set to undefined — honors exactOptionalPropertyTypes + save shape.)
+  const next: GameState = { ...result.state };
+  delete next.pending;
+  return { ...result, state: next };
+}
+
+/**
+ * Route after a victory's level-ups drain (M12). A floor-boss win set `pending = 'advance-act'`,
+ * so the run advances an act; otherwise a normal victory returns to the hub (unchanged).
+ */
+function resolvePostVictory(state: GameState, finish: Finish): StepResult {
+  if (state.pending === 'advance-act') {
+    return advanceAct(state, finish);
+  }
+  return finish({ kind: 'main-menu' }, []);
+}
+
+/** The floor boss id for acts 1–3 (act 4 is the verdict gate; act 5 is the Hollow). */
+const BOSS_BY_ACT: Record<number, BossId> = { 1: 'kingpin', 2: 'reflection', 3: 'sin' };
+
+/**
+ * `continueJourney` (M12): when the XP gate opens (`shouldAdvance`), the FLOOR BOSS — not an
+ * auto-advance — ends the floor. Acts 1–3 enter the boss battle for the CURRENT act (the act is
+ * not incremented until the boss falls, via `resolvePostVictory`). Act 4 enters the VERDICT
+ * gate (no combat). Act 5 never satisfies `shouldAdvance`, so the Hollow keeps firing on
+ * `act-intro(5)`. When the gate is not open, run a normal encounter (off-equivalence — the
+ * random-encounter/rest/chest/deal flow is untouched).
+ */
 function continueJourney(
   state: GameState,
   player: Player,
@@ -363,18 +523,51 @@ function continueJourney(
   finish: Finish,
 ): StepResult {
   if (shouldAdvance(state.act, player.xp)) {
-    const newAct = state.act + 1;
-    return finish({ kind: 'act-outro', newAct }, [], {
-      act: newAct,
-      place: newAct - 1,
+    if (state.act === 4) {
+      // The act-4 reckoning: a pure verdict, no brawl. Emits only the outcome (no karma).
+      const outcome = computeVerdict(state.karma);
+      return finish({ kind: 'verdict', outcome }, [{ kind: 'verdict', outcome }]);
+    }
+    // Acts 1–3: the floor boss for the CURRENT act. The act stays put until the boss falls.
+    const bossId = BOSS_BY_ACT[state.act]!;
+    const { enemy, boss } = generateBoss({
+      bossId,
+      act: state.act,
+      player,
+      karma: state.karma,
+      rng,
     });
+    const battle: BattleState = { ...createBattle(player, enemy, state.act), boss, canFlee: false };
+    return finish({ kind: 'battle', battle, started: false, final: false }, [
+      { kind: 'boss-encounter', bossId, enemyName: enemy.fullName },
+    ]);
   }
   const encounter = selectEncounter(rng);
   if (encounter === 'battle') {
-    const battle = buildRandomBattle(player, state.act, rng);
+    // M13 gradual reveal: restrict the family/affix draws to the run's frozen unlock snapshot.
+    // Absent snapshot ⇒ both sets are `undefined` ⇒ byte-identical to a pre-M13 draw.
+    const families = state.unlocks ? new Set(state.unlocks.families) : undefined;
+    const affixes = state.unlocks ? new Set(state.unlocks.affixes) : undefined;
+    const battle = buildRandomBattle(player, state.act, rng, families, affixes);
     return finish({ kind: 'battle', battle, started: false, final: false }, [
       { kind: 'encounter-start', enemyName: battle.enemy.fullName },
     ]);
+  }
+  if (encounter === 'chest') {
+    // A chest/cache: roll its guaranteed loot, pick every item up into the backpack, then
+    // show the reveal. `continue` from the chest phase returns to the hub.
+    const loot = buildChestLoot(rng);
+    let inventory = player.inventory;
+    for (const item of loot) inventory = pickUp(inventory, item);
+    const nextPlayer: Player = { ...player, inventory };
+    return finish(
+      { kind: 'chest', loot },
+      [
+        { kind: 'chest-found' },
+        { kind: 'chest-loot', loot: loot.map(summarizeLoot) },
+      ],
+      { player: nextPlayer },
+    );
   }
   // Rest: show lore, then offer a rest if any remain.
   const lore = selectLore(state.act, rng);
@@ -389,25 +582,26 @@ function continueJourney(
   return finish({ kind: 'rest', restOffered: false }, events);
 }
 
-/** Java option 2: the mysterious stranger's shop offer. */
-function openShop(state: GameState, player: Player, rng: Rng, finish: Finish): StepResult {
-  const offer = buildShopOffer(state.act, rng);
-  const currentId =
-    offer.itemKind === 'armor' ? player.equippedArmorId : player.equippedWeaponId;
-  return finish({ kind: 'shop', offer }, [
+/**
+ * The sacrifice-deal encounter (menu option 2, `seek-deal`) — an altar/stranger offers a
+ * reward for a cost paid from the player. `buildDeal` reads the karma vector (for the pool)
+ * and rolls any reward item, so the offer is fully determined here; the take/leave decision
+ * is resolved by `resolveDealDecision`.
+ */
+function openDeal(state: GameState, rng: Rng, finish: Finish): StepResult {
+  const deal = buildDeal(state.karma, state.act, rng);
+  return finish({ kind: 'deal', deal }, [
     {
-      kind: 'shop-offer',
-      itemKind: offer.itemKind,
-      itemId: offer.itemId,
-      itemName: offer.itemName,
-      price: offer.price,
-      currentId,
-      currentName: currentId,
+      kind: 'deal-offer',
+      pool: deal.pool,
+      cost: describeCost(deal.cost),
+      reward: describeReward(deal.reward),
     },
   ]);
 }
 
 function resolveBattleRound(
+  state: GameState,
   phase: Extract<Phase, { kind: 'battle' }>,
   action: BattleAction,
   rng: Rng,
@@ -415,18 +609,50 @@ function resolveBattleRound(
 ): StepResult {
   const round = resolveRound(phase.battle, action, rng);
   const events: GameEvent[] = [...round.events];
-  switch (round.status) {
+  let battle = round.state;
+  let status = round.status;
+  // M12: layer the boss mechanic AFTER `resolveRound` — so the non-boss encounter flow stays
+  // byte-identical (a normal battle has no `boss`, so this whole block is skipped). Runs only
+  // on an ONGOING round of a boss battle; it may flip the round to `player-died` (Kingpin adds).
+  if (status === 'ongoing' && battle.boss) {
+    const post = bossPostRound(battle, action);
+    battle = post.battle;
+    events.push(...post.events);
+    status = post.status;
+  }
+  const enemy = battle.enemy;
+  switch (status) {
     case 'ongoing':
-      return finish({ ...phase, battle: round.state }, events);
+      return finish({ ...phase, battle }, events);
     case 'fled':
-      return finish({ kind: 'main-menu' }, events, { player: round.state.player });
-    case 'player-won':
-      return finish({ kind: 'battle-victory', final: phase.final }, events, {
-        player: round.state.player,
+      return finish({ kind: 'main-menu' }, events, { player: battle.player });
+    case 'spared':
+      // Mercy: end the encounter with no rewards. Record the spare on the karma vector
+      // (INPUT only — no world/tone effect yet). The action is data-sourced from the
+      // family (the M10 seam), defaulting to the uniform mercy action.
+      return finish({ kind: 'main-menu' }, events, {
+        player: battle.player,
+        karma: recordKarma(state.karma, getFamily(enemy.familyId)?.onSpare ?? 'spareWeighted'),
       });
+    case 'player-won': {
+      // A moral (⚖) kill records cruelty; a plain enemy (and every boss) records nothing.
+      // Karma is an INPUT only here (the first EFFECT is the act-4 verdict gate).
+      const karma = enemy.karmaWeighted
+        ? recordKarma(state.karma, getFamily(enemy.familyId)?.onKill ?? 'killWeighted')
+        : state.karma;
+      // M12: a floor-boss win (acts 1–3, non-final, boss present) schedules an act advance once
+      // any earned level-ups drain (`resolvePostVictory`). The Hollow (final) routes to the
+      // damnation ending via `battle-victory`. A normal victory is unchanged (no `pending`).
+      const patch: Partial<Pick<GameState, 'player' | 'karma' | 'pending'>> = {
+        player: battle.player,
+        karma,
+      };
+      if (!phase.final && battle.boss) patch.pending = 'advance-act';
+      return finish({ kind: 'battle-victory', final: phase.final }, events, patch);
+    }
     case 'player-died':
-      events.push({ kind: 'game-over', xp: round.state.player.xp });
-      return finish({ kind: 'game-over' }, events, { player: round.state.player });
+      events.push({ kind: 'game-over', xp: battle.player.xp });
+      return finish({ kind: 'game-over' }, events, { player: battle.player });
   }
 }
 
@@ -452,59 +678,51 @@ function resolveRestDecision(
   });
 }
 
-function resolveShopDecision(
+/**
+ * Resolve the player's take/leave on a sacrifice deal — returns to the hub either way. On
+ * decline, nothing changes (`deal-declined`). On accept, `applyDeal` pays the cost and grants
+ * the reward: an affordable deal patches BOTH player and karma (`deal-taken`); an unaffordable
+ * one (e.g. an HP cost >= current HP, or a relic cost with no relic) changes nothing
+ * (`deal-unaffordable`). A karma-shifting cost flows through the real `recordKarma`.
+ */
+function resolveDealDecision(
   state: GameState,
-  offer: ShopOffer,
+  deal: SacrificeDeal,
   accept: boolean,
   finish: Finish,
 ): StepResult {
   const player = requirePlayer(state);
-  const events: GameEvent[] = [];
-  let nextPlayer = player;
   if (!accept) {
-    events.push({ kind: 'shop-declined' });
-  } else {
-    const result = applyShopPurchase(player, offer);
-    if (result.outcome === 'bought') {
-      nextPlayer = result.player;
-      events.push({
-        kind: 'shop-purchased',
-        itemId: offer.itemId,
-        price: offer.price,
-        gold: result.player.gold,
-      });
-    } else {
-      events.push({ kind: 'shop-insufficient' });
-    }
+    return finish({ kind: 'main-menu' }, [{ kind: 'deal-declined' }]);
   }
-  // Java bundles character-info after the shop.
-  events.push({ kind: 'character-info' });
-  return finish({ kind: 'main-menu' }, events, { player: nextPlayer });
+  if (!canAfford(player, deal.cost)) {
+    return finish({ kind: 'main-menu' }, [
+      { kind: 'deal-unaffordable', cost: describeCost(deal.cost) },
+    ]);
+  }
+  const result = applyDeal(player, state.karma, deal);
+  return finish(
+    { kind: 'main-menu' },
+    [{ kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
+    { player: result.player, karma: result.karma },
+  );
 }
 
-function resolveLevelUp(
-  state: GameState,
-  newAct: number,
-  picks: [StatKey, StatKey],
-  rng: Rng,
-  finish: Finish,
-): StepResult {
-  const player = requirePlayer(state);
-  const oldConMod = player.mods.CON;
-  const leveled = levelUpPlayer(player, picks, newAct, rng);
-  const conModChanged = oldConMod !== leveled.mods.CON;
-  // The floored dice+conMod roll = total maxHp delta minus the CON-changed bonus.
-  const delta = leveled.maxHp - player.maxHp;
-  const hpRoll = delta - (conModChanged ? newAct - 1 : 0);
-  return finish({ kind: 'level-up-result', newAct }, [
-    {
-      kind: 'level-up',
-      picks,
-      newStats: leveled.stats,
-      hpRoll,
-      newMaxHp: leveled.maxHp,
-      conModChanged,
-      proficiency: leveled.proficiency,
-    },
-  ], { player: leveled });
+/**
+ * Enter ONE level-up (M9): auto max-HP growth (one hit-die draw) then a seeded draft of 3
+ * (its draws). Sets the `level-up-draft` phase with the offers, patches the leveled player,
+ * and emits the `level-up` + `draft-offer` events. Called from `battle-victory` and, to
+ * drain a queued level, from `level-up-result`.
+ */
+function enterLevelUp(player: Player, rng: Rng, finish: Finish): StepResult {
+  const { player: leveled, hpRoll } = applyLevelUpHp(player, rng);
+  const offers = generateDraft(leveled, rng);
+  return finish(
+    { kind: 'level-up-draft', offers },
+    [
+      { kind: 'level-up', newLevel: leveled.level, hpRoll, newMaxHp: leveled.maxHp },
+      { kind: 'draft-offer', options: offers.map(describeDraftOption) },
+    ],
+    { player: leveled },
+  );
 }

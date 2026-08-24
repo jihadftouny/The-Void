@@ -15,7 +15,11 @@
 // it never throws. The player-facing meaning of a `null` is "start a new game".
 
 import { type GameState } from './game.ts';
+import { createKarma } from './karma.ts';
+import { createInventory } from './inventory.ts';
+import { EQUIP_SLOTS } from './item.ts';
 import { type PlayerClass } from './player.ts';
+import { levelForXp } from './progression.ts';
 
 /**
  * The current save-format version. Single source of version truth: it mirrors the
@@ -23,9 +27,9 @@ import { type PlayerClass } from './player.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 8;
 
-/** The 15 valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
+/** The valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
   'title',
   'name-entry',
@@ -35,17 +39,25 @@ const PHASE_KINDS: readonly string[] = [
   'battle',
   'battle-victory',
   'rest',
-  'shop',
+  'deal',
+  'chest',
   'act-outro',
-  'level-up',
+  'level-up-draft',
   'level-up-result',
   'act-intro',
+  'verdict',
   'ending',
   'game-over',
 ];
 
-/** The two valid player classes (mirrors `PlayerClass` in player.ts). */
-const PLAYER_CLASSES: readonly PlayerClass[] = ['Enforcer', 'Neuromancer'];
+/** The five valid player classes (mirrors `PlayerClass`, defined in classKit.ts). */
+const PLAYER_CLASSES: readonly PlayerClass[] = [
+  'Enforcer',
+  'Neuromancer',
+  'Scavver',
+  'Penitent',
+  'Hollow',
+];
 
 // ------- Encode / decode -----------------------------------------------------
 
@@ -87,39 +99,250 @@ export function decodeSave(json: string): GameState | null {
     raw = migrated;
   }
 
-  return isValidGameState(raw) ? raw : null;
+  if (!isValidGameState(raw)) return null;
+
+  // M13: the optional, additive `unlocks` run-start snapshot. Light, NON-FATAL guard — if it
+  // is present but malformed (not a plain object carrying `families`/`affixes` arrays), DROP it
+  // (treat as absent ⇒ the run resumes as all-unlocked) rather than reject the whole save. No
+  // SAVE_VERSION bump: an old v8 save simply lacks the key. The store's own version guards the
+  // real cross-run artifact.
+  const obj = raw as unknown as Record<string, unknown>;
+  if ('unlocks' in obj) {
+    const u = obj.unlocks;
+    const ok =
+      isPlainObject(u) &&
+      Array.isArray((u as { families?: unknown }).families) &&
+      Array.isArray((u as { affixes?: unknown }).affixes);
+    if (!ok) delete obj.unlocks;
+  }
+  return raw;
 }
 
 /**
  * Upgrade seam for old saves. Called only when `fromVersion < SAVE_VERSION`.
  * Structured as a version ladder so future format bumps slot in without touching
- * `decodeSave`: each `case` upgrades one step and bumps `current`, e.g.
+ * `decodeSave`: each `case` upgrades one step and bumps `current`.
  *
- *   while (current < SAVE_VERSION) {
- *     switch (current) {
- *       case 1: value = upgrade1to2(value); current = 2; break;
- *       case 2: value = upgrade2to3(value); current = 3; break;
- *       default: return null; // unknown/unsupported source version
- *     }
- *   }
- *
- * Today SAVE_VERSION is 1, so the only reachable `fromVersion` here is `< 1`, for
- * which there is nothing to upgrade -> `null` (unsupported). Returns the upgraded
- * plain value (still unvalidated — `decodeSave` validates the result), or `null`
- * if the source version cannot be migrated.
+ * Today the reachable source versions are `1` (upgraded via `upgrade1to2` -> `upgrade2to3`
+ * -> `upgrade3to4` -> `upgrade4to5` -> `upgrade5to6`), `2`, `3`, `4`, `5`, and anything `< 1`
+ * (nothing to upgrade -> `null`, unsupported). The ladder composes: a v1 save gains an empty
+ * inventory at 1->2, then its legacy equipped ids populate the paperdoll slots at 2->3, then
+ * the M6 additive fields need no change at 3->4 (only a version stamp), then the M7 gold field
+ * is DROPPED from the player at 4->5, then the M8 roster fields are additive/optional at 5->6
+ * (only a version stamp). Returns the upgraded plain value (still unvalidated — `decodeSave`
+ * validates the result), or `null` if the source version cannot be migrated.
  */
 function migrate(raw: unknown, fromVersion: number): unknown | null {
   let current = fromVersion;
   let value = raw;
   while (current < SAVE_VERSION) {
     switch (current) {
-      // Future example:
-      // case 1: value = upgrade1to2(value); current = 2; break;
+      case 1:
+        value = upgrade1to2(value);
+        current = 2;
+        break;
+      case 2:
+        value = upgrade2to3(value);
+        current = 3;
+        break;
+      case 3:
+        value = upgrade3to4(value);
+        current = 4;
+        break;
+      case 4:
+        value = upgrade4to5(value);
+        current = 5;
+        break;
+      case 5:
+        value = upgrade5to6(value);
+        current = 6;
+        break;
+      case 6:
+        value = upgrade6to7(value);
+        current = 7;
+        break;
+      case 7:
+        value = upgrade7to8(value);
+        current = 8;
+        break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
     }
   }
   return value;
+}
+
+/**
+ * Migrate a v1 save (no `karma`, player with no `inventory`) to the v2 shape by
+ * INJECTING the defaults M1 added: a neutral karma vector, and — when a player is
+ * present — an empty inventory. Pure: it shallow-clones the parsed plain object and
+ * fills only the absent fields, then stamps `version = 2`. A non-object input is
+ * returned unchanged so the caller's validation rejects it.
+ */
+function upgrade1to2(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (!('karma' in next) || next.karma === undefined) {
+    next.karma = createKarma();
+  }
+  if (isPlainObject(next.player)) {
+    const player = next.player as Record<string, unknown>;
+    if (!('inventory' in player) || player.inventory === undefined) {
+      next.player = { ...player, inventory: createInventory() };
+    }
+  }
+  next.version = 2;
+  return next;
+}
+
+/**
+ * Migrate a v2 save (player with legacy `equipped*Id` fields, paperdoll alongside) to the v3
+ * shape (M5: the paperdoll is authoritative). When a player is present: ensure `inventory`
+ * with a 9-slot record exists, MOVE `equippedWeaponId -> slots.mainHand`,
+ * `equippedArmorId -> slots.armor`, and (if present) `equippedShieldId -> slots.offHand` as
+ * `{ defId }` instances, then DELETE the three legacy fields. Pure: shallow-clones the parsed
+ * plain object and rewrites only the player's inventory, then stamps `version = 3`. A
+ * non-object input (or absent/null player) is returned with only the version stamped so the
+ * caller's validation still runs.
+ */
+function upgrade2to3(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (isPlainObject(next.player)) {
+    const player = { ...(next.player as Record<string, unknown>) };
+    // Start from the existing inventory's slots (or a fresh empty 9-slot record).
+    const existingInv = isPlainObject(player.inventory)
+      ? (player.inventory as Record<string, unknown>)
+      : {};
+    const empty = createInventory();
+    const slots: Record<string, unknown> = { ...empty.slots };
+    if (isPlainObject(existingInv.slots)) {
+      for (const slot of EQUIP_SLOTS) {
+        const cell = (existingInv.slots as Record<string, unknown>)[slot];
+        if (cell !== undefined) slots[slot] = cell;
+      }
+    }
+    // Move each legacy id into its slot (only if a non-empty string is present).
+    if (typeof player.equippedWeaponId === 'string' && player.equippedWeaponId !== '') {
+      slots.mainHand = { defId: player.equippedWeaponId };
+    }
+    if (typeof player.equippedArmorId === 'string' && player.equippedArmorId !== '') {
+      slots.armor = { defId: player.equippedArmorId };
+    }
+    if (typeof player.equippedShieldId === 'string' && player.equippedShieldId !== '') {
+      slots.offHand = { defId: player.equippedShieldId };
+    }
+    const backpack = Array.isArray(existingInv.backpack) ? existingInv.backpack : [];
+    delete player.equippedWeaponId;
+    delete player.equippedArmorId;
+    delete player.equippedShieldId;
+    player.inventory = { slots, backpack };
+    next.player = player;
+  }
+  next.version = 3;
+  return next;
+}
+
+/**
+ * Migrate a v3 save (M5 paperdoll) to the v4 shape (M6 items content). Every M6 addition
+ * — `ItemInstance.rolled`, the extended `ItemEffect` union, `Player.shield`, the new
+ * relic/unique/consumable catalogs — is OPTIONAL and additive, so a structurally valid v3
+ * save is already a structurally valid v4 save. This step therefore only stamps
+ * `version = 4`; a non-object input is returned with just the stamp so the caller's
+ * validation still runs. (Kept as an explicit ladder rung so a future v5 slots in cleanly.)
+ */
+function upgrade3to4(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  next.version = 4;
+  return next;
+}
+
+/**
+ * Migrate a v4 save (M6 items content) to the v5 shape (M7 pure sacrifice economy). Gold is
+ * retired: DELETE `player.gold` so an old save's balance simply vanishes. Everything else is
+ * unchanged — the new loot/deal/chest state is additive and only appears in fresh v5 runs, so
+ * a structurally valid v4 save minus its gold field is a structurally valid v5 save. Pure: it
+ * shallow-clones the parsed plain object (and its player) and stamps `version = 5`; a
+ * non-object input (or absent/null player) is returned with just the stamp so the caller's
+ * validation still runs.
+ */
+function upgrade4to5(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (isPlainObject(next.player)) {
+    const player = { ...(next.player as Record<string, unknown>) };
+    delete player.gold;
+    next.player = player;
+  }
+  next.version = 5;
+  return next;
+}
+
+/**
+ * Migrate a v5 save (M7 sacrifice economy) to the v6 shape (M8 enemy roster). Every M8
+ * addition — the `Enemy.familyId` / `karmaWeighted` / `affixId?` fields — lives only inside
+ * a mid-battle `phase.battle.enemy`, is additive/optional, and is not deep-validated by the
+ * save guard, so a structurally valid v5 save is already a structurally valid v6 save (a
+ * v5 mid-battle enemy simply reads `karmaWeighted` as falsy = non-weighted, which every
+ * pre-M8 enemy was). This step therefore only stamps `version = 6`; a non-object input is
+ * returned with just the stamp so the caller's validation still runs. (An explicit ladder
+ * rung so a future v7 slots in cleanly, matching the upgrade3to4 precedent.)
+ */
+function upgrade5to6(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  next.version = 6;
+  return next;
+}
+
+/**
+ * Migrate a v6 save (pre-M9) to the v7 shape (M9 frequent level-up draft). Injects the three
+ * additive Player fields: `level = levelForXp(player.xp)` (so a migrated run is already at the
+ * correct level — no giant catch-up cascade), `perks: []`, and `skillUpgrades: {}`. Because
+ * the M9 phase machine removed the old stat-pick `level-up` phase and re-routed act flow, a
+ * v6 save PARKED in an in-flight transition phase (`level-up`, `level-up-result`, or
+ * `act-outro`) can no longer be reconstructed; when a player exists it is DEFENSIVELY reset to
+ * `main-menu` (the run keeps its XP and re-triggers drafts on the next victory). Pure:
+ * shallow-clones the parsed plain object; stamps `version = 7`.
+ */
+function upgrade6to7(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (isPlainObject(next.player)) {
+    const player = { ...(next.player as Record<string, unknown>) };
+    if (!('level' in player) || player.level === undefined) {
+      player.level = levelForXp(typeof player.xp === 'number' ? player.xp : 0);
+    }
+    if (!('perks' in player) || player.perks === undefined) player.perks = [];
+    if (!('skillUpgrades' in player) || player.skillUpgrades === undefined) player.skillUpgrades = {};
+    next.player = player;
+    // Reset an in-flight old level-up / act transition phase to a safe hub state.
+    if (isPlainObject(next.phase)) {
+      const kind = (next.phase as { kind?: unknown }).kind;
+      if (kind === 'level-up' || kind === 'level-up-result' || kind === 'act-outro') {
+        next.phase = { kind: 'main-menu' };
+      }
+    }
+  }
+  next.version = 7;
+  return next;
+}
+
+/**
+ * Migrate a v7 save (pre-M12) to the v8 shape (M12 bosses + verdict gate). Every M12 addition
+ * is ADDITIVE / OPTIONAL and lives inside the trusted phase payload or as an optional top-level
+ * flag: `phase.battle.boss` (a mid-boss battle), the new `verdict` / two-ending phases, and the
+ * `pending` routing flag are all absent in a v7 save and not deep-validated by the guard. A
+ * structurally valid v7 save is therefore already a structurally valid v8 save — this rung only
+ * stamps `version = 8` (matching the upgrade3to4 / upgrade5to6 additive-stamp precedent). A
+ * non-object input is returned with just the stamp so the caller's validation still runs.
+ */
+function upgrade7to8(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  next.version = 8;
+  return next;
 }
 
 // ------- Shape guard ---------------------------------------------------------
@@ -159,10 +382,24 @@ function isValidGameState(v: unknown): v is GameState {
   if (typeof (v.phase as { kind?: unknown }).kind !== 'string') return false;
   if (!PHASE_KINDS.includes((v.phase as { kind: string }).kind)) return false;
 
+  // Karma vector: a plain object whose four axes are all finite numbers.
+  if (!isValidKarma(v.karma)) return false;
+
   // `player` is null before creation, otherwise a full Player envelope.
   if (v.player !== null && !isValidPlayer(v.player)) return false;
 
   return true;
+}
+
+/** Karma-vector check: a plain object with four finite-number axes. */
+function isValidKarma(v: unknown): boolean {
+  if (!isPlainObject(v)) return false;
+  return (
+    isFiniteNumber(v.mercyCruelty) &&
+    isFiniteNumber(v.restraintGreed) &&
+    isFiniteNumber(v.reverenceDesecration) &&
+    isFiniteNumber(v.clarityDelusion)
+  );
 }
 
 /** Top-level Player field/type check (not recursive into items/conditions). */
@@ -175,7 +412,6 @@ function isValidPlayer(v: unknown): boolean {
   if (!isFiniteNumber(v.maxHp)) return false;
   if (!isFiniteNumber(v.xp)) return false;
   if (!isFiniteNumber(v.armorClass)) return false;
-  if (!isFiniteNumber(v.gold)) return false;
   if (!isFiniteNumber(v.proficiency)) return false;
 
   // Nested plain-object fields.
@@ -186,14 +422,20 @@ function isValidPlayer(v: unknown): boolean {
   if (typeof v.classId !== 'string') return false;
   if (!PLAYER_CLASSES.includes(v.classId as PlayerClass)) return false;
 
-  // Equipment id strings.
-  if (typeof v.equippedWeaponId !== 'string') return false;
-  if (typeof v.equippedArmorId !== 'string') return false;
+  // Equipment (M5): no legacy `equipped*Id` — the paperdoll `inventory` (checked below) is
+  // the single source of truth for what is equipped.
 
   // Array fields.
   if (!Array.isArray(v.resistances)) return false;
   if (!Array.isArray(v.activeConditions)) return false;
   if (!Array.isArray(v.skillPool)) return false;
+
+  // Inventory: a plain object with a `slots` record and a `backpack` array.
+  // Shallow, matching this module's non-recursive validation depth — the per-slot
+  // and per-instance contents are trusted once the container shape is sound.
+  if (!isPlainObject(v.inventory)) return false;
+  if (!isPlainObject((v.inventory as { slots?: unknown }).slots)) return false;
+  if (!Array.isArray((v.inventory as { backpack?: unknown }).backpack)) return false;
 
   return true;
 }

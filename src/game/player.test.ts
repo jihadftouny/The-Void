@@ -4,11 +4,12 @@ import { STAT_KEYS, type Stats } from './character.ts';
 import { mulberry32 } from './rng.ts';
 import { getWeaponByName } from './weapon.ts';
 import { getArmorByName } from './armor.ts';
+import { CLASSES } from './classKit.ts';
 
-// All expected values are hand-derived from the Java class spec / formulas:
-//   computeStatMod(s) = (s>30) ? 10 : 10 - ceil(|s-30|/2)
-//     mod(14) = 10 - ceil(16/2) = 10 - 8 = 2
-//     mod(30) = 10 - ceil(0/2)  = 10 - 0 = 10
+// All expected values are hand-derived from the class spec / formulas:
+//   computeStatMod(s) = floor((s - 10) / 2)   (standard D&D, uncapped)
+//     mod(14) = floor(4/2)  = 2
+//     mod(30) = floor(20/2) = 10
 //   maxHp = hitDie.sides + CONmod ; hp = maxHp ; armorClass = 10 + CONmod
 //   Enforcer hitDie = 1d10, Neuromancer hitDie = 1d6
 // Starting scalars (Java Player / GameLogic.startGame): gold 1500, restsLeft 1,
@@ -42,13 +43,13 @@ describe('createPlayer — Enforcer', () => {
     stats: statsWithCon(14),
   });
 
-  it('equips the Rare Melee weapon "Jaaj Sword 1" and Common armor "Jooj Armor 1"', () => {
-    expect(player.equippedWeaponId).toBe('Jaaj Sword 1');
-    expect(player.equippedArmorId).toBe('Jooj Armor 1');
-    const weapon = getWeaponByName(player.equippedWeaponId)!;
+  it('seeds the Rare Melee weapon "Jaaj Sword 1" (mainHand) and Common armor "Jooj Armor 1" (armor slot)', () => {
+    expect(player.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
+    expect(player.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
+    const weapon = getWeaponByName(player.inventory.slots.mainHand!.defId)!;
     expect(weapon.rarity).toBe('Rare');
     expect(weapon.property).toBe('Melee');
-    expect(getArmorByName(player.equippedArmorId)!.rarity).toBe('Common');
+    expect(getArmorByName(player.inventory.slots.armor!.defId)!.rarity).toBe('Common');
   });
 
   it('derives maxHp = 12, hp = 12, armorClass = 12 for CON 14 (1d10, CONmod 2)', () => {
@@ -69,20 +70,53 @@ describe('createPlayer — Enforcer', () => {
   });
 
   it('has the fixed game-start scalar defaults', () => {
-    expect(player.gold).toBe(1500);
+    expect('gold' in player).toBe(false); // M7: gold retired
     expect(player.restsLeft).toBe(1);
-    expect(player.pots).toBe(2);
+    expect(player.pots).toBe(6); // M15: STARTING_POTS 2 -> 6
     expect(player.proficiency).toBe(2);
     expect(player.advantageDisadvantage).toBe(0);
     expect(player.xp).toBe(0);
     expect(player.skillCharges).toBe(5);
     expect(player.maxSkillCharges).toBe(5);
     expect(player.activeConditions).toEqual([]);
-    expect(player.skillPool).toEqual([]);
+    // M9 lean start: only the Enforcer's TWO core skills (heavyStrike, brace), NOT the full
+    // 4-skill kit; the rest (intimidate, execute) is drafted over the run.
+    expect(player.skillPool).toEqual(['heavyStrike', 'brace']);
+    // M9 progression fields at their fresh defaults.
+    expect(player.level).toBe(1);
+    expect(player.perks).toEqual([]);
+    expect(player.skillUpgrades).toEqual({});
+    // Resources start at 0 (Enforcer banks momentum; corruption harmless-0).
+    expect(player.momentum).toBe(0);
+    expect(player.corruption).toBe(0);
   });
 
   it('has a 7-slot all-zero resistance array', () => {
     expect(player.resistances).toEqual([0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it('has a full 9-slot paperdoll: starting gear seeded, the other 7 null, empty backpack', () => {
+    // The nine equip slots from item.ts, independently listed.
+    const expectedSlots = [
+      'helmet',
+      'amulet',
+      'mainHand',
+      'offHand',
+      'armor',
+      'legs',
+      'boots',
+      'ring',
+      'ammo',
+    ];
+    expect(Object.keys(player.inventory.slots).sort()).toEqual([...expectedSlots].sort());
+    // Only the two gear slots are seeded (M5); the other seven stay null.
+    const seeded = new Set(['mainHand', 'armor']);
+    for (const slot of expectedSlots) {
+      const cell = player.inventory.slots[slot as keyof typeof player.inventory.slots];
+      if (seeded.has(slot)) expect(cell).not.toBeNull();
+      else expect(cell).toBeNull();
+    }
+    expect(player.inventory.backpack).toEqual([]);
   });
 });
 
@@ -93,26 +127,96 @@ describe('createPlayer — Neuromancer', () => {
     stats: statsWithCon(14),
   });
 
-  it('equips the Common Ranged weapon "Jooj Gun 1" and Rare armor "Jaaj Armor 1"', () => {
-    expect(player.equippedWeaponId).toBe('Jooj Gun 1');
-    expect(player.equippedArmorId).toBe('Jaaj Armor 1');
-    const weapon = getWeaponByName(player.equippedWeaponId)!;
+  it('seeds the Common Ranged weapon "Jooj Gun 1" (mainHand) and Rare armor "Jaaj Armor 1" (armor slot)', () => {
+    expect(player.inventory.slots.mainHand).toEqual({ defId: 'Jooj Gun 1' });
+    expect(player.inventory.slots.armor).toEqual({ defId: 'Jaaj Armor 1' });
+    const weapon = getWeaponByName(player.inventory.slots.mainHand!.defId)!;
     expect(weapon.rarity).toBe('Common');
     expect(weapon.property).toBe('Ranged');
-    expect(getArmorByName(player.equippedArmorId)!.rarity).toBe('Rare');
+    expect(getArmorByName(player.inventory.slots.armor!.defId)!.rarity).toBe('Rare');
   });
 
-  it('derives maxHp = 8, armorClass = 12 for CON 14 (1d6, CONmod 2)', () => {
-    expect(player.maxHp).toBe(8);
-    expect(player.hp).toBe(8);
+  it('derives maxHp = 10, armorClass = 12 for CON 14 (1d8, CONmod 2)', () => {
+    // M15: Neuromancer hitDie d6 -> d8. maxHp = hitDie.sides(8) + CONmod(2) = 10.
+    expect(player.maxHp).toBe(10);
+    expect(player.hp).toBe(10);
     expect(player.armorClass).toBe(12);
-    expect(player.hitDie).toEqual({ quantity: 1, sides: 6 });
+    expect(player.hitDie).toEqual({ quantity: 1, sides: 8 });
+  });
+});
+
+// M3/M9 — all five classes selectable & created. Every expected value is hand-derived from
+// the class spec in classKit.ts + the fresh-character formulas (CON 14 -> CONmod 2 ->
+// maxHp = hitDie.sides + 2, AC 12). Hit dice: Enforcer d10, Neuromancer d8 (M15: was d6), Scavver d8,
+// Penitent d8 (M15 placeholder), Hollow d8 (M15 placeholder). M9 lean start: the skillPool
+// is the class's 1–2 `coreSkills`, NOT the full kit. Core pairs and provisional gear are
+// read from the plan's per-class table, NOT from code output.
+describe('createPlayer — all five classes (creation table)', () => {
+  const con14 = statsWithCon(14); // CONmod 2 for every row
+  const table: Array<{
+    classId: 'Enforcer' | 'Neuromancer' | 'Scavver' | 'Penitent' | 'Hollow';
+    sides: number;
+    maxHp: number;
+    weaponId: string;
+    armorId: string;
+    core: string[];
+  }> = [
+    { classId: 'Enforcer', sides: 10, maxHp: 12, weaponId: 'Jaaj Sword 1', armorId: 'Jooj Armor 1', core: ['heavyStrike', 'brace'] },
+    { classId: 'Neuromancer', sides: 8, maxHp: 10, weaponId: 'Jooj Gun 1', armorId: 'Jaaj Armor 1', core: ['mindSpike', 'synapse'] },
+    { classId: 'Scavver', sides: 8, maxHp: 10, weaponId: 'Jiij Rapier 1', armorId: 'Jooj Armor 1', core: ['backstab', 'venomCoat'] },
+    { classId: 'Penitent', sides: 8, maxHp: 10, weaponId: 'Jaaj Sword 1', armorId: 'Jaaj Armor 1', core: ['smite', 'mend'] },
+    { classId: 'Hollow', sides: 8, maxHp: 10, weaponId: 'Jooj Gun 1', armorId: 'Jooj Armor 1', core: ['siphon', 'sacrifice'] },
+  ];
+
+  for (const row of table) {
+    it(`${row.classId}: hitDie d${row.sides}, maxHp/hp ${row.maxHp}, AC 12, core skillPool, gear resolves, resources 0`, () => {
+      const player = createPlayer({ name: 'Nyx', classId: row.classId, stats: con14 });
+      expect(player.hitDie).toEqual({ quantity: 1, sides: row.sides });
+      expect(player.maxHp).toBe(row.maxHp);
+      expect(player.hp).toBe(row.maxHp);
+      expect(player.armorClass).toBe(12);
+      // M9 lean start: skillPool is exactly this class's core skills (deep-equal, ordered),
+      // length 1–2 — NOT the full 4-skill kit.
+      expect(player.skillPool).toEqual(row.core);
+      expect(player.skillPool.length).toBeGreaterThanOrEqual(1);
+      expect(player.skillPool.length).toBeLessThanOrEqual(2);
+      // M9 progression fields at their fresh defaults.
+      expect(player.level).toBe(1);
+      expect(player.perks).toEqual([]);
+      expect(player.skillUpgrades).toEqual({});
+      // Provisional starting gear seeded into the paperdoll, resolving in the M2 tables.
+      expect(player.inventory.slots.mainHand).toEqual({ defId: row.weaponId });
+      expect(player.inventory.slots.armor).toEqual({ defId: row.armorId });
+      expect(getWeaponByName(row.weaponId)).toBeDefined();
+      expect(getArmorByName(row.armorId)).toBeDefined();
+      // Resource state present and zeroed.
+      expect(player.momentum).toBe(0);
+      expect(player.corruption).toBe(0);
+    });
+  }
+});
+
+// M9 — every class's coreSkills must be a strict subset of its full kit (the draft source
+// is kit \ coreSkills), and length 1–2. Derived from the classKit.ts contract, not output.
+describe('coreSkills invariants (M9 lean start)', () => {
+  it('every class core is a 1–2 length subset of its kit', () => {
+    for (const [id, def] of Object.entries(CLASSES)) {
+      expect(def.coreSkills.length).toBeGreaterThanOrEqual(1);
+      expect(def.coreSkills.length).toBeLessThanOrEqual(2);
+      for (const s of def.coreSkills) {
+        expect(def.kit).toContain(s);
+      }
+      // Strict subset: at least one kit skill is left to draft.
+      expect(def.coreSkills.length).toBeLessThan(def.kit.length);
+      // Sanity: id key matches def.
+      expect(def.id).toBe(id);
+    }
   });
 });
 
 describe('serializability', () => {
-  it('a created player of either class round-trips through JSON unchanged', () => {
-    for (const classId of ['Enforcer', 'Neuromancer'] as const) {
+  it('a created player of every class round-trips through JSON unchanged', () => {
+    for (const classId of ['Enforcer', 'Neuromancer', 'Scavver', 'Penitent', 'Hollow'] as const) {
       const player = createPlayer({
         name: 'Nyx',
         classId,

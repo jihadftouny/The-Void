@@ -1,0 +1,33 @@
+[
+  {
+    "id": "ravenous",
+    "namePrefix": "Ravenous",
+    "statMods": { "STR": 2 },
+    "behaviorNote": "hungers; +damage via STR"
+  },
+  {
+    "id": "ancient",
+    "namePrefix": "Ancient",
+    "statMods": { "STR": 2, "DEX": 2, "CON": 2, "INT": 2, "WIS": 2, "CHA": 2 },
+    "maxHpBonus": 8,
+    "behaviorNote": "old and mighty; broadly boosted"
+  },
+  {
+    "id": "warped",
+    "namePrefix": "Warped",
+    "statMods": { "INT": 2, "WIS": 2 },
+    "behaviorNote": "inflict insanity / illusion — provisional, M10 floor hooks"
+  },
+  {
+    "id": "blessed",
+    "namePrefix": "Blessed",
+    "resistBonus": 2,
+    "behaviorNote": "warded against all elements"
+  },
+  {
+    "id": "cursed",
+    "namePrefix": "Cursed",
+    "statMods": { "STR": 2, "CON": 2 },
+    "behaviorNote": "karma-reactive — provisional, M8 uses flat mods only"
+  }
+]

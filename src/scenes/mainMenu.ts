@@ -1,6 +1,6 @@
 // Main-menu scene: the hub between encounters. Shows the player's standing and the
-// recent log, then Descend / Shop & Character / Quit -> dispatch {kind:'menu'}.
-// Note: 'character-info' opens the shop-then-info bundle (the only path to the shop).
+// recent log, then Descend / Seek a bargain / Quit -> dispatch {kind:'menu'}.
+// Note: 'seek-deal' opens the sacrifice-deal encounter (replaces the gold shop).
 
 import type { Engine } from '../render/engine.ts';
 import type { GameDriver } from '../render/driver.ts';
@@ -22,7 +22,7 @@ export function registerMainMenuScene(k: Engine, driver: GameDriver): void {
 
     if (player) {
       const stat = COLORS.dim;
-      const line = `HP ${hpText(player.hp, player.maxHp)}   Gold ${player.gold}   XP ${player.xp}   Rests ${player.restsLeft}   Potions ${player.pots}`;
+      const line = `HP ${hpText(player.hp, player.maxHp)}   XP ${player.xp}   Rests ${player.restsLeft}   Potions ${player.pots}`;
       k.add([
         k.text(line, { size: TEXT.small, font: FONT, width: content.w, align: 'left' }),
         k.pos(content.x, below),
@@ -33,8 +33,8 @@ export function registerMainMenuScene(k: Engine, driver: GameDriver): void {
     const buttonsTop = bottomButtons(k, content, [
       { label: 'Descend', onClick: () => driver.dispatch({ kind: 'menu', choice: 'continue' }) },
       {
-        label: 'Shop & Character',
-        onClick: () => driver.dispatch({ kind: 'menu', choice: 'character-info' }),
+        label: 'Seek a bargain',
+        onClick: () => driver.dispatch({ kind: 'menu', choice: 'seek-deal' }),
       },
       { label: 'Quit', onClick: () => driver.dispatch({ kind: 'menu', choice: 'quit' }) },
     ]);

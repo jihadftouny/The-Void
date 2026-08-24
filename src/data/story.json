@@ -29,5 +29,15 @@
   "ending": {
     "header": "END.",
     "body": "{playerName}"
+  },
+  "endings": {
+    "grace": {
+      "header": "ASCENSION",
+      "body": "{playerName} is judged worthy and rises from the Void, made whole."
+    },
+    "damnation": {
+      "header": "DAMNATION",
+      "body": "{playerName} is cast down, and the Void claims its own."
+    }
   }
 }

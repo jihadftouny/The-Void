@@ -24,10 +24,11 @@ function fakeEngine(): { k: Engine; last: () => string | null } {
   return { k, last: () => lastScene };
 }
 
-// Seed 1 is chosen (by exploration) so the first `continue` from the opening menu is a
-// battle whose first fight round stays ongoing — nothing about the assertions depends
-// on that beyond exercising the battle branch deterministically.
-const SEED = 1;
+// Seed 2 is chosen (by exploration) so the first `continue` from the opening menu is a
+// battle whose first fight round stays ongoing under the M7 6-slot encounter table —
+// nothing about the assertions depends on that beyond exercising the battle branch
+// deterministically.
+const SEED = 2;
 
 const CREATION: GameInput[] = [
   { kind: 'continue' },

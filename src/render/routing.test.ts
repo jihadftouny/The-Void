@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { sceneFor, SCENE_IDS, type SceneId } from './routing.ts';
 import type { Phase } from '../game/game.ts';
 
-// All 15 Phase kinds, listed by hand.
+// All 16 Phase kinds, listed by hand.
 const ALL_PHASE_KINDS: Phase['kind'][] = [
   'title',
   'name-entry',
@@ -16,9 +16,10 @@ const ALL_PHASE_KINDS: Phase['kind'][] = [
   'battle',
   'battle-victory',
   'rest',
-  'shop',
+  'deal',
+  'chest',
   'act-outro',
-  'level-up',
+  'level-up-draft',
   'level-up-result',
   'act-intro',
   'ending',
@@ -26,8 +27,8 @@ const ALL_PHASE_KINDS: Phase['kind'][] = [
 ];
 
 describe('routing totality', () => {
-  it('covers all 15 phase kinds', () => {
-    expect(ALL_PHASE_KINDS).toHaveLength(15);
+  it('covers all 16 phase kinds', () => {
+    expect(ALL_PHASE_KINDS).toHaveLength(16);
   });
 
   it('maps every phase kind to a registered scene', () => {
@@ -38,9 +39,10 @@ describe('routing totality', () => {
 });
 
 describe('specific routes', () => {
-  it('routes the four narrative "continue" phases to the shared narrative scene', () => {
+  it('routes the narrative "continue" phases to the shared narrative scene', () => {
     const narrativePhases: Phase['kind'][] = [
       'battle-victory',
+      'chest',
       'act-outro',
       'level-up-result',
       'act-intro',
@@ -59,8 +61,8 @@ describe('specific routes', () => {
       ['main-menu', 'main-menu'],
       ['battle', 'battle'],
       ['rest', 'rest'],
-      ['shop', 'shop'],
-      ['level-up', 'level-up'],
+      ['deal', 'deal'],
+      ['level-up-draft', 'level-up'],
       ['ending', 'ending'],
       ['game-over', 'game-over'],
     ];

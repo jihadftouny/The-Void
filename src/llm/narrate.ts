@@ -67,14 +67,20 @@ export function describeEvent(e: GameEvent): string {
       return `You rest; some wounds close.`;
     case 'rest-full':
       return `You are already whole; rest brings only quiet.`;
-    case 'shop-offer':
-      return `A shrouded stranger offers you a ${e.itemName}, in trade for your ${e.currentName}.`;
-    case 'shop-purchased':
-      return `The trade is made.`;
-    case 'shop-declined':
-      return `You turn the stranger away.`;
-    case 'shop-insufficient':
-      return `You lack what the stranger demands.`;
+    case 'deal-offer':
+      return `An altar in the dark offers ${e.reward}, and demands ${e.cost} in return.`;
+    case 'deal-taken':
+      return `You pay the price; the bargain is struck.`;
+    case 'deal-declined':
+      return `You turn from the altar untouched.`;
+    case 'deal-unaffordable':
+      return `You have nothing the altar will accept.`;
+    case 'chest-found':
+      return `You find a cache half-buried in the dark.`;
+    case 'chest-loot':
+      return e.loot.length > 0
+        ? `You pry it open and take ${e.loot.map((l) => l.name).join(', ')}.`
+        : `You pry it open, but it is hollow.`;
     case 'level-up':
       return `Something in you hardens; you are stronger than before.`;
     case 'act-outro':

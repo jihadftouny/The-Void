@@ -1,0 +1,16 @@
+{
+  "standard": [
+    { "cost": { "kind": "hp", "amount": 8 }, "reward": { "kind": "heal", "amount": 12 } },
+    { "cost": { "kind": "skillCharge", "amount": 1 }, "reward": { "kind": "itemRoll", "slot": "ring", "rarity": "Common" } },
+    { "cost": { "kind": "statPoint", "stat": "CHA" }, "reward": { "kind": "skillCharge", "amount": 2 } }
+  ],
+  "tempting": [
+    { "cost": { "kind": "desecrate" }, "reward": { "kind": "statPoint", "stat": "STR" } },
+    { "cost": { "kind": "greed" }, "reward": { "kind": "itemRoll", "slot": "mainHand", "rarity": "Legendary" } },
+    { "cost": { "kind": "maxHp", "amount": 6 }, "reward": { "kind": "itemRoll", "slot": "amulet", "rarity": "Rare" } }
+  ],
+  "grace": [
+    { "cost": { "kind": "hp", "amount": 5 }, "reward": { "kind": "heal", "amount": 20 } },
+    { "cost": { "kind": "statPoint", "stat": "CHA" }, "reward": { "kind": "item", "defId": "mirror-shard" } }
+  ]
+}

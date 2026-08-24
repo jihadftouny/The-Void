@@ -6,61 +6,86 @@
 //  - Deterministic seeded RNG: every decision (encounter type, enemy-type pick,
 //    lore pick, rest heal) threads the injected `Rng`; no Math.random / Date.now.
 //  - Data-driven content: lore is read by Act from the M2 lore loader; the enemy
-//    pool is a data table (all-Beast for now, matching Java's 5x"Beast").
+//    pool is the M8 per-floor family roster (src/data/enemyFamilies.json) with
+//    seeded elite affixes — adding content never edits this encounter code.
 //
 // Ported from `GameLogic.randomEncounter` / `randomBattle` / `takeRest` and
 // `Lore.java`. Faithful draw order preserved for reproducibility.
 
 import { pick, randInt, type Rng } from './rng.ts';
 import { generateEnemy } from './enemy.ts';
+import { availableFamiliesForAct } from './enemyFamily.ts';
+import { rollAffix, applyAffix } from './enemyAffix.ts';
 import { createBattle, type BattleState } from './battle.ts';
 import { getLore, type LoreEntry } from './lore.ts';
 import { type Player } from './player.ts';
+import { rollChestLoot } from './loot.ts';
+import { type ItemInstance } from './item.ts';
 
-/** The weighted 5-slot encounter table (Java `GameLogic.encounters`): 3:2 Battle:Rest. */
-export const ENCOUNTER_TABLE: readonly ('battle' | 'rest')[] = [
+/** The kinds of encounter the descent can present. */
+export type EncounterType = 'battle' | 'rest' | 'chest';
+
+/**
+ * The weighted 6-slot encounter table (M7): 3 Battle : 2 Rest : 1 Chest — the chest/cache is
+ * a 1/6 slot layered onto the Java 3:2 Battle:Rest split. The chest weight is an M15 balance
+ * placeholder (part of the ~50/50 found-loot vs sacrifice-deal split).
+ */
+export const ENCOUNTER_TABLE: readonly EncounterType[] = [
   'battle',
   'battle',
   'battle',
   'rest',
   'rest',
+  'chest',
 ];
 
 /**
- * Per-Act enemy type pool. All Beast for now, faithfully mirroring Java's
- * `enemies = {"Beast","Beast","Beast","Beast","Beast"}` (a single type). Later
- * content expansion happens here, in data, without touching combat code.
+ * Pick the next encounter type via one rng draw: `randInt(rng, 6)` indexes the 6-slot table
+ * `[B,B,B,R,R,C]`, so draws in [0,0.5) yield 'battle', [0.5,0.8333) yield 'rest', and
+ * [0.8333,1) yield 'chest' — a 3:2:1 split.
  */
-export const ENEMY_POOL_BY_ACT: Readonly<Record<number, readonly string[]>> = {
-  1: ['Beast'],
-  2: ['Beast'],
-  3: ['Beast'],
-  4: ['Beast'],
-  5: ['Beast'],
-};
-
-/**
- * Pick the next encounter type via one rng draw: `randInt(rng, 5)` indexes the
- * 5-slot table `[B,B,B,R,R]`, so draws in [0,0.6) yield 'battle' and [0.6,1)
- * yield 'rest' — a 3:2 split, exactly Java's `Math.random()*encounters.length`.
- */
-export function selectEncounter(rng: Rng): 'battle' | 'rest' {
+export function selectEncounter(rng: Rng): EncounterType {
   const index = randInt(rng, ENCOUNTER_TABLE.length);
   return ENCOUNTER_TABLE[index] ?? 'battle';
 }
 
 /**
- * Build a random battle for the given Act — PURE. Grants the player advantage
- * (Java `randomBattle` sets `advantageDisadvantage = 1`), draws once to pick the
- * enemy type from the Act pool, generates a per-Act enemy scaled by player xp,
- * then assembles the BattleState (`canFlee` false only in Act 5). Draw order
- * (type-pick, then enemy generation) mirrors Java for reproducibility.
+ * Build the loot a chest/cache yields — PURE, seeded. Delegates to `loot.rollChestLoot`
+ * (guaranteed items, no drop gate). Chests are act-agnostic for now (a single richer table);
+ * per-Act chest tables are an M8/M10 data expansion. Draw order is documented in loot.ts.
  */
-export function buildRandomBattle(player: Player, act: number, rng: Rng): BattleState {
+export function buildChestLoot(rng: Rng): ItemInstance[] {
+  return rollChestLoot(rng);
+}
+
+/**
+ * Build a random battle for the given Act — PURE. Grants the player advantage
+ * (Java `randomBattle` sets `advantageDisadvantage = 1`), then, in this fixed DRAW
+ * ORDER (for reproducibility):
+ *   1. `pick` a family from `availableFamiliesForAct(act, available)` — 1 draw. The
+ *      optional `available` id set is the M13 gradual-unlock seam (omitted = all of
+ *      the act's families).
+ *   2. `generateEnemy({ act, family, playerXp })` — its own internal draws.
+ *   3. `rollAffix(rng, availableAffixes)` — a fixed 2 draws — then `applyAffix` (pure)
+ *      when non-null, producing a seeded elite variant. `availableAffixes` is the M13
+ *      gradual-unlock seam (omitted = all affixes).
+ * Finally assembles the BattleState (`canFlee` false only in Act 5). A plain non-⚖
+ * family with no affix behaves exactly like a pre-M8 enemy; only WHICH family/affix a
+ * seed selects has changed. Omitting BOTH unlock sets (or passing full sets) is
+ * byte-identical to today (off-equivalence) — the sets never add or reorder a draw.
+ */
+export function buildRandomBattle(
+  player: Player,
+  act: number,
+  rng: Rng,
+  available?: ReadonlySet<string>,
+  availableAffixes?: ReadonlySet<string>,
+): BattleState {
   const readiedPlayer: Player = { ...player, advantageDisadvantage: 1 };
-  const pool = ENEMY_POOL_BY_ACT[act] ?? ['Beast'];
-  const type = pick(rng, pool);
-  const enemy = generateEnemy({ act, type, playerXp: player.xp }, rng);
+  const family = pick(rng, availableFamiliesForAct(act, available));
+  let enemy = generateEnemy({ act, family, playerXp: player.xp }, rng);
+  const affix = rollAffix(rng, availableAffixes);
+  if (affix) enemy = applyAffix(enemy, affix);
   return createBattle(readiedPlayer, enemy, act);
 }
 
