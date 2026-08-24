@@ -11,48 +11,47 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 1/18 merged · M1–M9 + functional-UI built+verified (pending your batch merge)** `[##########----------]`
-Autonomous run (2026-08-10→11): built the entire **mechanical core** (M1–M9) through the loop, **stacked
-& unmerged** per your merge gate — you review/merge the chain. Chain: `main` → M1 `state-foundations` →
-M2 `skills-conditions` → M3 `class-kits` → M4 `combat-defense` → M5 `equip-engine` → M6 `items-content`
-→ M7 `sacrifice-economy` → M8 `enemy-roster` → M9 `levelup-loop` → `functional-ui` (surfaces the engine — hand-testable) → `enemy-kits` (24
-family-themed enemy skills + tag loot — fixes "all pyroBall") → **`boss-mechanics`** (M12: 5 boss
-mechanics + karma verdict gate + two endings; tip). Each PASSED plan→build→test (typecheck + full tests
-+ build + adversarial verify). **894 tests at the tip.** The game is now **playable/testable** (functional
-UI; bespoke Tibia visual polish deferred). **The karma pillar now has its first real EFFECT** — the
-floor-4 gate routes grace (ascension, ends at act 4) vs cast-down (→ Hollow-Self → damnation) by your
-hidden Nature. Then `unlock-store` (M13: meta-progression — persistent unlock store, feats wired to bosses/endings/spare,
-gradual bestiary reveal; **943 tests**) → `balance-sim` (M15 part 1: sim harness + report) →
-**`balance-tune`** (M15 part 2: tuned to the ~1-in-3 target; **960 tests**; tip). **✅ THE GAME IS NOW
-WINNABLE — proven by simulation:** baseline win **32.9%** / merciful **40.0%**, Act-1 deaths **98%→19%**,
-deaths now spread across all acts (modal = Act 3). The long-standing "unwinnable" blocker is RESOLVED.
-Balance constants are M15-tuned (sim is a no-equipment LOWER bound — real play easier); a per-class
-refinement remains (Scavver strong / ranged classes weak — play-test + weapons follow-up). Still needing
-your voice: floor/boss/ending PROSE (M10/M11/M12/M14) + the LLM narrator layer (M11).
+**v3 overall: 12/18 milestones on `main` (M0–M9, M12, M13, M15) · 960 tests** `[#############-------]`
+**2026-08-24 — THE BIG MERGE IS DONE.** The entire stacked chain from the autonomous run
+(2026-08-10→11) is now merged into **`main`** in one gated merge, zero conflicts. Post-merge
+verification on the trunk: `npm run typecheck` clean, **960/960 tests pass**, `npm run build` OK.
+Chain merged (in order): M1 `state-foundations` → M2 `skills-conditions` → M3 `class-kits` →
+M4 `combat-defense` → M5 `equip-engine` → M6 `items-content` → M7 `sacrifice-economy` →
+M8 `enemy-roster` → M9 `levelup-loop` → `functional-ui` → `enemy-kits` → M12 `boss-mechanics` →
+M13 `unlock-store` → `balance-sim` → M15 `balance-tune`. Safety tag on the pre-merge trunk:
+`pre-merge-backup-m15`.
+
+**✅ THE GAME IS WINNABLE — proven by simulation:** baseline win **32.9%** / merciful **40.0%**,
+Act-1 deaths **98%→19%**, deaths spread across all acts (modal = Act 3). The long-standing
+"unwinnable" blocker is RESOLVED. The sim is a no-equipment LOWER bound, so real play is easier; a
+per-class refinement remains (Scavver strong / ranged classes weak — play-test + weapons follow-up).
+**The karma pillar has its first real EFFECT** — the floor-4 gate routes grace (ascension, ends at
+act 4) vs cast-down (→ Hollow-Self → damnation) by your hidden Nature.
+
+**Next up (decided 2026-08-24): M-UI — the turn-based battle UI.** The current battle screen is a
+flat choice list with a 220px text sheet; the engine already emits everything a proper turn-based
+RPG screen needs (per-round events, enemy HP, conditions, charges). Scope interview in progress.
 **Play-test checklist + balance: `HUMAN-CHECKS.md` / `docs/BALANCE-REPORT.md`.**
 
 | Milestone (v3) | Status |
 |---|---|
 | M0 — Consolidate base & reconcile to mechanics-first | ✅ merged to `main` (378 tests) |
-| M1 — Foundational state models (karma + item schema + inventory) | ✅ built+verified — branch `agentic/state-foundations` (411 tests), pending merge |
-| M2 — Player skills + full 24-condition system | ✅ built+verified — `agentic/skills-conditions` (456 tests), pending merge |
-| M3 — Classes & signature kits | ✅ built+verified — `agentic/class-kits` (494 tests), pending merge |
-| M4 — Combat overhaul: defense matters (enemies roll to-hit) | ✅ built+verified — `agentic/combat-defense` (526 tests), pending merge |
-| M5 — Inventory & equipment (Tibia-style) ★ | 🔶 ENGINE built+verified — `agentic/equip-engine` (561 tests); **Tibia visual UI deferred to a collab pass w/ you** |
-| M6 — Items content: relics, uniques, consumables | ✅ built+verified — `agentic/items-content` (625 tests); 15 relics + 4 uniques + 19 consumables + effect/trigger system + rarity gen; flavor co-write & in-UI display pending |
-| M7 — Loot sourcing & thematic economy | ✅ built+verified — `agentic/sacrifice-economy` (649 tests); **gold removed**, pure sacrifice-deals + loot drops + chests; karma-shift deals feed the pillar; balance/in-UI pending |
-| M8 — Enemies: families, affixes, karma-weighting | ✅ built+verified — `agentic/enemy-roster` (691 tests); 24 families + 5 affixes + spare action (9 ⚖ families feed karma); complex behaviors/flavor → M10, in-UI pending |
-| M9 — In-run progression (frequent level-up picks) | ✅ built+verified — `agentic/levelup-loop` (726 tests); XP-frequent leveling + draft-1-of-3 (skill/upgrade/perk/stat) + lean start + auto-HP; picker polish/balance pending |
-| M6 — Items content: relics, uniques, consumables | ⬜ |
-| M7 — Loot sourcing & thematic economy | ⬜ |
-| M8 — Enemies: families, affixes, karma-weighting | ⬜ |
-| M9 — In-run progression (frequent level-up picks) | ⬜ |
-| M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ |
+| M1 — Foundational state models (karma + item schema + inventory) | ✅ **merged to `main`** (411 tests) |
+| M2 — Player skills + full 24-condition system | ✅ **merged to `main`** (456 tests) |
+| M3 — Classes & signature kits | ✅ **merged to `main`** (494 tests) |
+| M4 — Combat overhaul: defense matters (enemies roll to-hit) | ✅ **merged to `main`** (526 tests) |
+| M5 — Inventory & equipment (Tibia-style) ★ | 🔶 ENGINE **merged to `main`** (561 tests); **Tibia visual UI deferred to a collab pass w/ you** |
+| M6 — Items content: relics, uniques, consumables | ✅ **merged to `main`** (625 tests); 15 relics + 4 uniques + 19 consumables + effect/trigger system + rarity gen; flavor co-write & in-UI display pending |
+| M7 — Loot sourcing & thematic economy | ✅ **merged to `main`** (649 tests); **gold removed**, pure sacrifice-deals + loot drops + chests; karma-shift deals feed the pillar |
+| M8 — Enemies: families, affixes, karma-weighting | ✅ **merged to `main`** (691 tests); 24 families + 5 affixes + spare action (9 ⚖ families feed karma) + family-themed kits; complex behaviors/flavor → M10 |
+| M9 — In-run progression (frequent level-up picks) | ✅ **merged to `main`** (726 tests); XP-frequent leveling + draft-1-of-3 (skill/upgrade/perk/stat) + lean start + auto-HP |
+| M-UI — Functional UI (surfaces the whole engine, hand-testable) | ✅ **merged to `main`** (753 tests); plain/utilitarian — the turn-based battle screen is the NEXT unit |
+| M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ needs your PROSE |
 | M11 — LLM layer to spec (narrate+choices, floor voices, boss-agent infra) | ⬜ (working narrator slice exists; not yet to spec) |
-| M12 — Bosses: five unique encounters as agents | ⬜ |
-| M13 — Meta-progression: unlocks & mastery feats | ⬜ |
-| M14 — Karma payoff: blended-spectrum endings | ⬜ |
-| M15 — Balance pass (tough but fair), sim-verified | ⬜ |
+| M12 — Bosses: five unique encounters as agents | ✅ **merged to `main`** (894 tests); 5 boss mechanics + the floor-4 karma verdict gate + two endings; boss PROSE still yours |
+| M13 — Meta-progression: unlocks & mastery feats | ✅ **merged to `main`** (943 tests); persistent unlock store, feats wired to bosses/endings/spare, gradual bestiary reveal |
+| M14 — Karma payoff: blended-spectrum endings | ⬜ (two endings exist via M12's gate; the blended spectrum + prose remain) |
+| M15 — Balance pass (tough but fair), sim-verified | ✅ **merged to `main`** (960 tests); sim harness + report + tuned constants; **32.9% baseline win**; per-class refinement pending |
 | M16 — Polish & game-feel | ⬜ |
 | M17 — Package & ship (itch) | ⬜ |
 
@@ -65,6 +64,22 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-08-24 — THE BIG MERGE: the whole M1–M15 stack lands on `main` ✅
+- **User-gated merge approved and executed.** Tagged `pre-merge-backup-m15` on the old trunk, then
+  `git merge --no-ff agentic/balance-tune` — the chain tip, which carries all 15 stacked units.
+  **Zero conflicts** (main's extra commits were docs-only: `PROGRESS.md`, `HUMAN-CHECKS.md`,
+  `.claude/pipeline-log.md`; the chain never touched them). 111 files, +16,100 / −1,251.
+- **Post-merge verification on `main`:** `npm run typecheck` clean · **960/960 tests pass** (57 files,
+  5.5s) · `npm run build` OK. The trunk now IS the game.
+- Notable shape changes now on trunk: `src/game/shop.ts` + `src/scenes/shop.ts` **deleted** (gold is
+  gone — replaced by `deal.ts` sacrifice-economy), and 40+ new engine modules (karma, equipment,
+  relics, loot, draft, boss, sim, unlockStore…).
+- The 16 unit worktrees under `worktrees/` and their `agentic/*` branches are now fully merged and
+  are safe to delete — **left in place pending the engineer's word** (they cost disk, nothing else).
+- **Next: a scope interview for the turn-based battle UI** (the engineer's call — the current battle
+  screen is a flat list of choice buttons; it must read like a turn-based RPG: enemy HP bar, own HP
+  bar, conditions, a round-by-round combat log).
 
 ### 2026-08-10 — M0 complete: consolidated to a single `main` trunk ✅
 - Merged the verified stack into **`main`** (user-gated, approved): `agentic/gpu-fix` (all engine +
