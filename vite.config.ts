@@ -8,9 +8,12 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: true,
     rollupOptions: {
-      // Multi-page: the Kaplay game (index.html) + the N1 desktop shell (desktop.html).
+      // Single-page: `desktop.html` is the ONE front-end. M-UI2 retired the standalone
+      // Kaplay build (index.html + src/main.ts + src/scenes/) — see docs/UI-DESIGN.md §8:
+      // two front-ends meant every feature had to be built twice, and the second one had
+      // fallen behind. Kaplay stays a dependency for the coming canvas atmosphere layer,
+      // which will render INTO this page rather than owning a page of its own.
       input: {
-        main: 'index.html',
         desktop: 'desktop.html',
       },
     },
