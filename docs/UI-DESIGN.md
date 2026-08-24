@@ -275,14 +275,52 @@ deal here — every enemy must land in the *same* house style or the roster will
 **$15.68**; each full re-roll of the batch ≈ $15.68. Realistic total for all game art across
 probes, the first batch, a couple of re-rolls and a later item-icon batch: **$50–75**.
 
+### Style probe — results **[RUN 2026-08-24, billing live, 9/9 generated]**
+
+Billing was enabled and the probe ran: 3 assets (ash-wretch enemy, Ash City backdrop, Enforcer
+class portrait) × 3 variations, all nine succeeded, ~$1.21.
+
+**Verdict on the direction: it works.** The Ash City backdrop is close to shippable — dark, smoky,
+a dull orange glow on the horizon, and crucially a deep-shadow foreground that text can sit on
+without a scrim. The Enforcer portrait is on-style: strong silhouette, muted palette, genuine
+menace, black ground. The "austere plate against near-black" idea holds up.
+
+**But the probe earned its keep by exposing three consistency failures.** These are exactly the
+problems that would have wasted the $15.68 batch, and each needs a fix in `art-pipeline`:
+
+1. **Background is not reliable — 1 in 3 failed.** Despite `pure flat black background` stated
+   twice in the prompt, one ash-wretch came back on a **white** background. Across 24 families
+   that is roughly eight unusable images per batch. **Fix:** harden the prompt *and* add an
+   automated gate — sample the four corner pixels, reject and regenerate anything whose corners
+   are not near-black. Cheap, deterministic, and catches precisely this failure.
+2. **Framing drifts badly.** One variation was full-body head-to-toe with margin; another was
+   cropped at mid-thigh and much closer in. A roster of 24 that must sit in the same on-screen
+   frame cannot have per-enemy zoom. **Fix:** explicit framing language (full body, head and feet
+   inside frame, ~10% margin) and, better, **reference-image conditioning** — the API accepts image
+   input, so once one enemy is approved it can be passed as a style-and-framing reference for the
+   other 23. That is the strongest lever available for cross-batch consistency.
+3. **No transparency is possible.** The model returns **`image/jpeg` only**; a prompt explicitly
+   demanding a transparent alpha channel and a PNG still returned JPEG. JPEG cannot carry
+   transparency at all. This matters because §4 composites enemy sprites over a full-bleed floor
+   backdrop — a black rectangle around every creature is not acceptable. **Options for the
+   `art-pipeline` unit, in preference order:** (a) post-process to PNG with a luminance-keyed alpha
+   channel, committing the keyed PNG as the final asset — deterministic, reviewable, done once;
+   (b) draw the sprite with additive/screen blending in Kaplay so black self-cancels — free, and
+   flattering to embers, but it thins the creature's own dark mid-tones; (c) a radial edge fade to
+   hide the box against a dark backdrop — cheapest, weakest. **(a) is the recommendation.**
+
+**Consequence:** `art-pipeline` is no longer just "call the API in a loop". It needs a
+**generate → validate → regenerate** loop with the corner-pixel gate, reference-image conditioning
+for style lock, and an alpha-keying post-process step. That is a bigger unit than first scoped, and
+the probe is why we know before spending the batch money rather than after.
+
 ### Remaining open questions **[OPEN]**
 
-1. **Billing — the only blocker.** Re-checked after the model decision: still HTTP 429,
-   `free_tier_requests limit: 0`. Nothing can generate until billing is enabled on the Google Cloud
-   project behind the key. Nothing else blocks the pipeline.
-2. **Style lock.** 117 images against an unproven prompt style is a large batch to discard. A
-   **style probe** is written and ready (3 assets — an enemy, a floor backdrop, a class portrait —
-   at 3 variations each) and runs the moment billing is live, for about a dollar.
+1. **Approve a reference enemy.** Consistency across the roster depends on locking one approved
+   enemy image as the style reference. Needs the engineer's eye, not a rule.
+2. **Alpha strategy.** Recommendation (a) above — luminance-keyed PNG — needs confirming, since it
+   adds an image-processing dependency (e.g. `sharp`) to the art tooling. Note this is *tooling*
+   only; it never ships in the game bundle.
 
 ### Key handling — a warning on record **[SECURITY]**
 
