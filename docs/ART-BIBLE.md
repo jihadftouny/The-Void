@@ -105,6 +105,49 @@ and dies out completely as you descend:
 | 4 | The Angelic Underground | **Zero** | *"Luminous, sacred, beautiful."* Angels, choirs, the judged. The moral crucible |
 | 5 | The True Void | **Zero** | *"Black, dark, hellish."* Demons, void-horrors, what you may become |
 
+### The tech level — **techno-occult** **[LOCKED 2026-08-25]**
+
+**The player characters are both technological and occult at once, and that is the point.** The
+setting already establishes magic as normal — an Arch-Mage gives the mission, his data-extraction
+specialists are "Memorians", and Electro sits beside Psychic as an equal element. So gear reads
+*both* ways: riot plate with a ward scratched into it by hand, an augmetic shaped like a reliquary,
+a shock baton with its haft wrapped in prayer cord.
+
+**Why this and not straight cyberpunk:** it is the only reading that survives the descent. The
+player walks from neon into angels; a pure riot-cop silhouette stops making sense on Floor 4 and is
+absurd on Floor 5. Gear that was *always* half-ritual simply changes meaning as you go down —
+equipment on Floor 1, superstition on Floor 3, and on Floor 5 it looks like it was liturgical all
+along. **The costume itself tells the story of the descent.** Rejected: fully cyberpunk (breaks
+below Floor 2) and full dark fantasy (contradicts 2100, brainchips and "rain, neon, grime").
+
+### The floor colour ramp **[LOCKED 2026-08-25 — author's own words]**
+
+| Floor | Accent | Author's direction |
+|---|---|---|
+| 1 The Undercity | **Toxic green** | *"undercity is green and toxic"* — sickly, chemical, contaminated. **Not** sodium amber, **not** magenta neon |
+| 2 Entrance to the Void | **Blinding white + red flecks** | *"blinding white with red flecks"* — matches the design doc's own "blinding white, red reflections" |
+| 3 The Ash City | **White, grey and black only** | *"purely white gray and black, the fire has settled already and it's just ash"* |
+| 4 The Angelic Underground | **Bone white** | warm, luminous, sacred |
+| 5 The True Void | **Arterial red** | black cannot be an accent against a near-black interface — the accent is the thing burning in the dark |
+
+**⚠ This OVERRULES the "ash-orange" written in `docs/UI-DESIGN.md` §5 and the `#c86a2a` accent the
+`ui-foundation` unit implemented.** The fire in the Ash City is *out*. Nothing there glows. The
+probe's Ash City backdrop — which had a dull orange glow on the horizon — is **wrong on this point**
+and must be regenerated cold. Ash is what is left after the burning, not the burning.
+
+**Distinguishing floors 3 and 4, since both are pale:** Floor 3 is **cold neutral grey** — dead,
+empty, drained. Floor 4 is **warm bone** — sacred, lit, alive. Cold versus warm is the whole
+difference, and it carries the meaning: emptiness against grace.
+
+### Floor 4's environment **[LOCKED 2026-08-25]**
+
+**Ancient overgrown ruins opening into a buried city.** You come through ruins with pale trees
+rooted in broken stone, and the City of Angels stands below in a vast cavern **lit from within, not
+from any sky**. This reconciles the current design ("Angelic Underground", luminous, sacred) with
+the original Java description ("ancient ruins, vast forests… then you find the City of Angels") and
+keeps "Underground" literally true — while giving the backdrop a genuine light source, so the sacred
+reads as beautiful rather than ironic.
+
 **Hard prohibitions:**
 - **No technology whatsoever on floors 3, 4 and 5.** No wires, no metal plating, no machinery.
 - **Never signpost mental illness.** No asylums, straitjackets, pills, or clinical/medical imagery.
@@ -124,6 +167,23 @@ this game's *holy* damage type — angels, choirs and the Penitent all use it.
 yourself at an **altar**. Never draw coins, gold, or a shop.
 
 ---
+
+## 4b. The asset list — 52 assets **[LOCKED 2026-08-25]**
+
+Raised from 39 to 52 because the original budget silently compromised three things the design
+actually needs. 52 × 3 variations = **156 images ≈ $20.90**.
+
+| Group | Count | Notes |
+|---|---|---|
+| Enemy family sprites | 24 | One per family in `src/data/enemyFamilies.json` |
+| **Seven Sins** | **+7** | Pride, Envy, Wrath, Sloth, Greed, Gluttony, Lust — *named elites*, and one becomes your Floor 3 boss. Sharing one sprite would be very visible |
+| Floor backdrops | 5 | 16:9, deep-shadow foreground |
+| Class portraits | 5 | Enforcer, Neuromancer, Scavver, Penitent, Hollow |
+| Boss portraits | 5 | Kingpin, The Reflection, The Indulged, The Warden, Hollow Self |
+| **Sin-boss identities** | **+3** | The Cruelty, The Avarice, The Delusion (The Desecration = the base boss portrait). The Floor 3 boss is *"your most-indulged sin made flesh, personal to each run"* — that lands far weaker if it looks identical every time |
+| **Warden — executioner form** | **+1** | The Warden has two mutually exclusive presentations: a merciful judge, or a punishing executioner. The judge is the base portrait |
+| **Altar / shrine** | **+2** | The sacrifice economy's vendor is an *"altar/stranger"*, and `desecrateShrine` / `leaveOffering` / `honorDead` are implemented actions. These had **no art at all** in the original budget |
+| **Total** | **52** | |
 
 ## 5. Known failure modes and their gates **[LOCKED]**
 
@@ -195,30 +255,18 @@ Every deviation from §1 or §2 gets a line here, with the reason. An undocument
 
 The design record is genuinely silent on these. Guessing produced the medieval-Enforcer error.
 
-1. **The tech level of the player characters, and the Enforcer specifically.** The design says Floor 1
-   is "neo-noir; rain, neon, grime" and the same-named *enemy* family is "Cyber-Enforcer" with Riot
-   Slam and Shield Bash — but the probe portrait came out as **medieval plate with a horned helm and
-   a bone-hilted sword, no technology at all.** These cannot both be right, and the answer sets the
-   tech level for the entire roster.
-2. **What the five classes actually wear.** There is *zero* costume, silhouette, species, age or
-   gender description for any of Enforcer, Neuromancer, Scavver, Penitent or Hollow anywhere in the
-   repo. All current gear ids are placeholder joke names ("Jaaj Sword 1", "Jooj Gun 1"). Note both
-   the Neuromancer and the Hollow are currently issued *a gun*.
-3. **The floor accent-colour ramp.** `UI-DESIGN.md` names only ash-orange (F3) and bone-white (F4),
-   then says "and so on". **F1, F2 and F5 are undefined**, and F5's stated "black" cannot serve as an
-   accent against a near-black interface.
-4. **Floor 4's environment.** The current name is "Angelic **Underground**", but the original Java
-   design describes it as *"ancient ruins, vast forests, little civilisation at first, then you find
-   the 'City of Angels'"*. Subterranean and vast forests do not reconcile, and this is a backdrop.
-5. **The Undercity's architecture.** "Rain, neon, grime" is three words. Sunken sublevel? Slum canyon?
-   Megablock? Sewer? And **the Rift** — the doorway from Floor 1 to Floor 2 — has no description at
-   all anywhere.
-6. **Asset-count mismatches.** The Seven Sins are *seven named elites* sharing **one** family sprite
-   in the current budget. The Floor-3 boss has **four** karma-chosen identities (The Desecration, The
-   Cruelty, The Avarice, The Delusion). The Floor-4 Warden has **two** mutually exclusive
-   presentations (a merciful judge, or a punishing executioner). The 39-asset budget accounts for
-   none of this.
-7. **Naming: "Ash-Wretch" does not exist.** The probe and the `UI-DESIGN.md` mockup both use it, but
+**RESOLVED 2026-08-25:** tech level (§4 — techno-occult), the floor colour ramp (§4), Floor 4's
+environment (§4), and the asset-count mismatches (§4b — 52 assets). Still open:
+
+1. **What the five classes actually wear.** The tech level is now settled, but there is still *zero*
+   costume, silhouette, species, age or gender description for Enforcer, Neuromancer, Scavver,
+   Penitent or Hollow. All current gear ids are placeholder joke names ("Jaaj Sword 1", "Jooj Gun
+   1"). Note both the Neuromancer and the Hollow are currently issued *a gun*.
+2. **The Undercity's architecture.** "Rain, neon, grime" is three words — and the accent is now
+   *toxic green*, which suggests contamination rather than neon signage. Sunken sublevel? Slum
+   canyon? Megablock? Flooded industrial works? And **the Rift** — the doorway from Floor 1 to Floor
+   2 — has no description at all anywhere.
+3. **Naming: "Ash-Wretch" does not exist.** The probe and the `UI-DESIGN.md` mockup both use it, but
    the actual family is **`ashWraiths` / "Ash-Wraith"**, whose design hook is *"endless weak filler"*
    and whose name table (*Drifting, Smouldering, Faint, Pale / Cinder, Ember-Shade*) suggests
    something far more **incorporeal** than the solid charred humanoid that was generated.

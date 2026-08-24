@@ -110,8 +110,17 @@ coupled to the render layer. The mitigations are non-negotiable:
 ## 5. Art direction **[DECIDED]**
 
 **Elevated terminal — austere and typographic.** Near-black, monospace, heavy rules, wide
-letter-spacing, no ornament, flat panels, and **one accent colour per floor** (ash-orange in the Ash
-City, bone-white in the Angelic Underground, and so on) so the palette itself marks the descent.
+letter-spacing, no ornament, flat panels, and **one accent colour per floor** so the palette itself
+marks the descent.
+
+**The full ramp is LOCKED in `docs/ART-BIBLE.md` §4** (author's direction, 2026-08-25): toxic green
+(Undercity) → blinding white with red flecks (Entrance) → **cold white/grey/black** (Ash City) →
+bone white (Angelic Underground) → arterial red (True Void).
+
+> **⚠ Correction.** An earlier draft of this section said "ash-orange in the Ash City". **That is
+> wrong and is overruled.** In the Ash City the fire has already gone out — it is *purely white,
+> grey and black*, and nothing there glows. Floors 3 and 4 are distinguished by temperature, not
+> hue: Floor 3 is cold neutral grey (dead, drained), Floor 4 is warm bone (sacred, lit).
 
 **The tension to hold, deliberately:** an austere typographic frame plus a lot of generated art
 could easily fight each other. The resolution is that **art is treated as a plate, not as
