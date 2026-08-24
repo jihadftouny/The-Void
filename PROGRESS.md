@@ -28,9 +28,15 @@ per-class refinement remains (Scavver strong / ranged classes weak — play-test
 **The karma pillar has its first real EFFECT** — the floor-4 gate routes grace (ascension, ends at
 act 4) vs cast-down (→ Hollow-Self → damnation) by your hidden Nature.
 
-**Next up (decided 2026-08-24): M-UI — the turn-based battle UI.** The current battle screen is a
-flat choice list with a 220px text sheet; the engine already emits everything a proper turn-based
-RPG screen needs (per-round events, enemy HP, conditions, charges). Scope interview in progress.
+**Next up: M-UI2 — turn-based battle screen + whole-game restyle.** Scope interview DONE
+(2026-08-24) — full record in **`docs/UI-DESIGN.md`**. Locked: JRPG-framed battle screen ·
+narration at bookends only (fast rounds) · combat log plain-with-expandable-dice · full-screen
+Kaplay canvas with DOM on top · "elevated terminal" art direction (austere, typographic, one accent
+colour per floor) · beat-by-beat auto-advancing rounds · restyle every screen · **retire the
+standalone Kaplay UI** (`index.html` + `src/scenes/`) · art **AI-generated** via Google AI Studio,
+~3 variations per asset. Decomposed into 5 pipeline units: `ui-foundation` → (`battle-screen`,
+`canvas-layer`, `screens-restyle`) with `art-pipeline` in parallel.
+**BLOCKED on the engineer:** the Google API key (via `.env`, not chat) before any art can generate.
 **Play-test checklist + balance: `HUMAN-CHECKS.md` / `docs/BALANCE-REPORT.md`.**
 
 | Milestone (v3) | Status |
@@ -77,9 +83,11 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
   relics, loot, draft, boss, sim, unlockStore…).
 - The 16 unit worktrees under `worktrees/` and their `agentic/*` branches are now fully merged and
   are safe to delete — **left in place pending the engineer's word** (they cost disk, nothing else).
-- **Next: a scope interview for the turn-based battle UI** (the engineer's call — the current battle
-  screen is a flat list of choice buttons; it must read like a turn-based RPG: enemy HP bar, own HP
-  bar, conditions, a round-by-round combat log).
+- **Desktop smoke test after the merge: PASS.** GPU selected (RTX 5060 via Vulkan), the 4B model
+  loaded, narration streamed at **89 tok/s, 181ms to first token**. The app is ready to play-test.
+- **UI scope interview: DONE.** All decisions recorded in **`docs/UI-DESIGN.md`** (see the summary
+  in the header above). Also added `.env` + `art-candidates/` to `.gitignore` and a `.env.example`,
+  ahead of the API key arriving — so a key can never be committed by accident.
 
 ### 2026-08-10 — M0 complete: consolidated to a single `main` trunk ✅
 - Merged the verified stack into **`main`** (user-gated, approved): `agentic/gpu-fix` (all engine +

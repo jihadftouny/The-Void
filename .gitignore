@@ -6,6 +6,15 @@ models/
 logs/
 scripts/*.log
 
+# API keys — the art-generation pipeline reads GOOGLE_API_KEY from here. NEVER commit a key.
+.env
+.env.*
+!.env.example
+
+# Generated art candidates awaiting the engineer's pick. Only the chosen finals get committed
+# (into src/assets/). See docs/UI-DESIGN.md §9.
+art-candidates/
+
 # Legacy Java/Python/Pixi ports: kept on disk for reference, not tracked by this
 # repo (each carries its own nested .git history). Consult them locally.
 .legacy/
