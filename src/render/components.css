@@ -1,0 +1,164 @@
+/* The shared presentational components (M-UI2 `ui-foundation`).
+ *
+ * Every value here reads a --void-* custom property with NO fallback, so the palette can
+ * only ever be defined in tokens.ts. Art direction: flat surfaces, square corners, heavy
+ * rules, wide tracking, no shadows, no gradients (docs/UI-DESIGN.md §5).
+ *
+ * OWNERSHIP: this file belongs to `ui-foundation`. Later UI units (`battle-screen`,
+ * `screens-restyle`, `canvas-layer`) add their OWN stylesheets rather than editing this
+ * one, so their territories stay disjoint.
+ */
+
+/* ---- Panel ---------------------------------------------------------------- */
+.void-panel {
+  background: var(--void-panel);
+  border: var(--void-rule-hair) solid var(--void-rule);
+  padding: var(--void-space-4);
+}
+
+.void-panel-title {
+  margin: 0 0 var(--void-space-3);
+  padding-bottom: var(--void-space-2);
+  border-bottom: var(--void-rule-heavy) solid var(--void-rule-strong);
+  font-size: var(--void-type-xs);
+  letter-spacing: var(--void-track-widest);
+  color: var(--void-ink-dim);
+}
+
+/* ---- Segmented bar -------------------------------------------------------- */
+.void-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--void-space-2);
+  font-size: var(--void-type-sm);
+}
+
+.void-bar-label {
+  min-width: 5.5em;
+  letter-spacing: var(--void-track-wide);
+  color: var(--void-ink-dim);
+  text-transform: uppercase;
+  font-size: var(--void-type-xs);
+}
+
+.void-bar-track {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.void-bar-cell {
+  flex: 1;
+  height: 10px;
+  min-width: 2px;
+  background: var(--void-rule);
+}
+
+/* The fill colour is the bar's ROLE, not a fixed colour: the player's vitals read as
+ * harm-coloured, the enemy's in the foe colour, resources in the current floor accent. */
+.void-bar-hp .void-bar-cell.is-filled { background: var(--void-harm); }
+.void-bar-foe .void-bar-cell.is-filled { background: var(--void-foe); }
+.void-bar-accent .void-bar-cell.is-filled { background: var(--void-accent); }
+
+.void-bar-text {
+  min-width: 5em;
+  text-align: right;
+  color: var(--void-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Condition chip ------------------------------------------------------- */
+.void-chip {
+  display: inline-block;
+  padding: 2px var(--void-space-2);
+  border: var(--void-rule-hair) solid currentColor;
+  font-size: var(--void-type-xs);
+  letter-spacing: var(--void-track-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.void-chip-control { color: var(--void-accent); }
+.void-chip-harm { color: var(--void-harm); }
+.void-chip-boon { color: var(--void-heal); }
+
+/* ---- Labelled row --------------------------------------------------------- */
+.void-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--void-space-3);
+  padding: var(--void-space-2) var(--void-space-3);
+  border: var(--void-rule-hair) solid var(--void-rule);
+  background: var(--void-panel);
+}
+
+.void-row-label {
+  min-width: 7em;
+  font-size: var(--void-type-xs);
+  letter-spacing: var(--void-track-wide);
+  text-transform: uppercase;
+  color: var(--void-ink-dim);
+}
+
+.void-row-value {
+  flex: 1;
+  color: var(--void-ink);
+}
+
+.void-row-value.is-empty {
+  color: var(--void-ink-faint);
+  font-style: italic;
+}
+
+/* ---- Action button -------------------------------------------------------- */
+.void-button {
+  padding: var(--void-space-3) var(--void-space-4);
+  background: var(--void-panel-raised);
+  border: var(--void-rule-hair) solid var(--void-rule-strong);
+  color: var(--void-ink);
+  font-family: var(--void-font-mono);
+  font-size: var(--void-type-md);
+  letter-spacing: var(--void-track-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 90ms linear, color 90ms linear;
+}
+
+.void-button:hover:not(:disabled) {
+  border-color: var(--void-accent);
+  color: var(--void-accent);
+}
+
+.void-button:active:not(:disabled) {
+  background: var(--void-bg);
+}
+
+.void-button:disabled,
+.void-button.is-disabled {
+  color: var(--void-ink-faint);
+  border-color: var(--void-rule);
+  cursor: not-allowed;
+}
+
+/* ---- Inline picker -------------------------------------------------------- */
+.void-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-2);
+}
+
+.void-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-2);
+  padding: var(--void-space-2);
+  border: var(--void-rule-hair) solid var(--void-rule);
+  background: var(--void-bg);
+}
+
+/* `hidden` must beat the flex display above, or the collapsed picker would still show. */
+.void-picker-list[hidden] {
+  display: none;
+}

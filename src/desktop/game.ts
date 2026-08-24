@@ -2,7 +2,10 @@
 //
 // Reuses everything: the pure engine (`step`) drives all rules, state, and the
 // legal choices; the local model narrates each beat (via the N1 IPC bridge).
-// This is the DOM game UI; the Kaplay layer (index.html) is a separate artifact.
+// This is THE game UI. (Until M-UI2 there was a second, standalone Kaplay front-end at
+// index.html + src/scenes/; it was deleted — see docs/UI-DESIGN.md §8 — and `src/render/`
+// is now the shared render foundation this file builds on: tokens, theme, components,
+// event formatting.)
 import { createGame, step, awaitingFor } from '../game/game.ts';
 import type { GameState, GameInput, Awaiting } from '../game/game.ts';
 import type { PlayerClass } from '../game/player.ts';
@@ -36,6 +39,10 @@ import {
 import type { ItemView } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
+// The shared render foundation (M-UI2 `ui-foundation`).
+import { applyTheme } from '../render/theme.ts';
+import { buttonModel, rowModel } from '../render/component-model.ts';
+import { appendButton, appendRow, picker } from '../render/components.ts';
 
 interface GenStats { text: string; tokens: number; tokensPerSecond: number; ttftMs: number }
 interface VoidApi {
@@ -127,6 +134,17 @@ window.void.onStatus((s) => {
   }
 });
 
+/**
+ * Re-tint the whole UI for the floor the player is currently on. The accent is a RUNTIME
+ * switch (`state.place`, 0..4), so descending re-colours every panel, chip, bar and focus
+ * ring at once with no reload and no per-floor CSS class. Called at boot and after every
+ * engine step, because a step is the only thing that can change the floor. `applyTheme`
+ * clamps `place`, so this can never throw mid-render.
+ */
+function retheme(): void {
+  applyTheme(document.documentElement, state.place);
+}
+
 function renderSheet(): void {
   // The live battle combatant during a battle (HP ticks down each round), else
   // the snapshot — the top-level state.player is stale mid-battle. See view-model.
@@ -186,51 +204,11 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
   }
 }
 
-function button(label: string, onClick: () => void): void {
-  const b = document.createElement('button');
-  b.textContent = label;
-  b.addEventListener('click', onClick, { once: true });
-  choicesEl.appendChild(b);
-}
-
-// Append one option button to an arbitrary container (used by the inline pickers and the
-// inventory/sheet screens). A disabled option (e.g. an unaffordable skill) is visibly
-// greyed and inert. `once` so a click can't double-fire before the re-render clears it.
-function optionButton(
-  parent: HTMLElement,
-  label: string,
-  onClick: () => void,
-  disabled = false,
-): void {
-  const b = document.createElement('button');
-  b.textContent = label;
-  if (disabled) {
-    b.disabled = true;
-    b.classList.add('disabled');
-  } else {
-    b.addEventListener('click', onClick, { once: true });
-  }
-  parent.appendChild(b);
-}
-
-// An inline expander: a toggle button in #choices that reveals/hides a sub-list of option
-// buttons built by `build`. Keeps the battle Cast / Use-item pickers on the existing
-// containers — no desktop.html change needed.
-function pickerButton(label: string, build: (list: HTMLElement) => void): void {
-  const wrap = document.createElement('div');
-  wrap.className = 'picker';
-  const toggle = document.createElement('button');
-  toggle.textContent = label;
-  const list = document.createElement('div');
-  list.className = 'picker-list';
-  list.style.display = 'none';
-  toggle.addEventListener('click', () => {
-    list.style.display = list.style.display === 'none' ? 'block' : 'none';
-  });
-  wrap.appendChild(toggle);
-  wrap.appendChild(list);
-  build(list);
-  choicesEl.appendChild(wrap);
+// The primary choice button: the shared `actionButton` component bound to the #choices
+// container. This is a partial application of the shared component, NOT a second
+// implementation of one — every button in the game is built by `src/render/components.ts`.
+function choice(label: string, onClick: () => void): void {
+  appendButton(choicesEl, buttonModel(label), onClick);
 }
 
 // Render-layer UI mode for the hub screens (NOT game state): the plain game flow, the
@@ -245,22 +223,9 @@ function rerender(): void {
   renderChoices(awaitingFor(state.phase));
 }
 
-// A labelled row (label + value/name), the shared building block for the inventory and
-// character-sheet screens. Returns the row so callers can append action buttons.
-function vmRow(parent: HTMLElement, label: string, value: string, empty = false): HTMLElement {
-  const row = document.createElement('div');
-  row.className = 'vm-row';
-  const lab = document.createElement('span');
-  lab.className = 'vm-label';
-  lab.textContent = label;
-  const val = document.createElement('span');
-  val.className = empty ? 'vm-empty' : 'vm-name';
-  val.textContent = value;
-  row.appendChild(lab);
-  row.appendChild(val);
-  parent.appendChild(row);
-  return row;
-}
+// A labelled row is now the shared `labelledRow` component; call sites build a `rowModel`
+// (or, where a screen wants its own wording for "nothing here", a literal RowModel) and
+// hand it to `appendRow`, which returns the row so actions can be appended to it.
 
 // One "Name — Rarity" fragment plus an effects line, appended to a row's value cell.
 function itemLabel(item: ItemView): string {
@@ -285,9 +250,9 @@ function renderInventoryScreen(): void {
   gearHead.textContent = 'Equipped';
   wrap.appendChild(gearHead);
   for (const s of view.slots) {
-    const row = vmRow(wrap, s.slot, s.item ? itemLabel(s.item) : '(empty)', !s.item);
+    const row = appendRow(wrap, rowModel(s.slot, s.item ? itemLabel(s.item) : null));
     if (s.item) {
-      optionButton(row, 'Unequip', () => {
+      appendButton(row, buttonModel('Unequip'), () => {
         const r = unequipSlot(state, s.slot);
         if (r.ok) {
           state = r.state;
@@ -302,10 +267,10 @@ function renderInventoryScreen(): void {
   packHead.textContent = 'Backpack';
   wrap.appendChild(packHead);
   if (view.backpack.length === 0) {
-    vmRow(wrap, '', '(empty)', true);
+    appendRow(wrap, rowModel('', null));
   }
   for (const b of view.backpack) {
-    const row = vmRow(wrap, `#${b.index}`, itemLabel(b.item));
+    const row = appendRow(wrap, rowModel(`#${b.index}`, itemLabel(b.item)));
     if (b.item.effects.length > 0) {
       const fx = document.createElement('span');
       fx.className = 'vm-effects';
@@ -314,7 +279,7 @@ function renderInventoryScreen(): void {
     }
     // Equip only slottable gear (usables have slot: null — no equip target).
     if (b.item.slot) {
-      optionButton(row, 'Equip', () => {
+      appendButton(row, buttonModel('Equip'), () => {
         const r = equipFromBackpack(state, b.index);
         if (r.ok) {
           state = r.state;
@@ -326,7 +291,7 @@ function renderInventoryScreen(): void {
   }
 
   choicesEl.appendChild(wrap);
-  button('Back', () => {
+  choice('Back', () => {
     screen = 'game';
     rerender();
   });
@@ -345,40 +310,44 @@ function renderSheetScreen(): void {
   const wrap = document.createElement('div');
   wrap.className = 'vm-screen';
 
-  vmRow(wrap, 'Name', sheet.name);
-  vmRow(wrap, 'Class', `${sheet.classId} · level ${sheet.level}`);
-  vmRow(wrap, 'HP', `${sheet.hp} / ${sheet.maxHp}`);
-  vmRow(wrap, 'Armor class', String(sheet.armorClass));
-  vmRow(wrap, 'XP', String(sheet.xp));
-  vmRow(wrap, 'Charges', `${sheet.skillCharges} / ${sheet.maxSkillCharges}`);
+  appendRow(wrap, rowModel('Name', sheet.name));
+  appendRow(wrap, rowModel('Class', `${sheet.classId} · level ${sheet.level}`));
+  appendRow(wrap, rowModel('HP', `${sheet.hp} / ${sheet.maxHp}`));
+  appendRow(wrap, rowModel('Armor class', String(sheet.armorClass)));
+  appendRow(wrap, rowModel('XP', String(sheet.xp)));
+  appendRow(wrap, rowModel('Charges', `${sheet.skillCharges} / ${sheet.maxSkillCharges}`));
   if (sheet.resource) {
-    vmRow(wrap, sheet.resource.kind, String(sheet.resource.value));
+    appendRow(wrap, rowModel(sheet.resource.kind, String(sheet.resource.value)));
   }
 
   const statHead = document.createElement('h3');
   statHead.textContent = 'Stats';
   wrap.appendChild(statHead);
   for (const s of sheet.stats) {
-    vmRow(wrap, s.key, `${s.score} (${s.mod >= 0 ? '+' : ''}${s.mod})`);
+    appendRow(wrap, rowModel(s.key, `${s.score} (${s.mod >= 0 ? '+' : ''}${s.mod})`));
   }
 
   const skillHead = document.createElement('h3');
   skillHead.textContent = 'Skills';
   wrap.appendChild(skillHead);
-  if (sheet.skills.length === 0) vmRow(wrap, '', '(none)', true);
+  // A skill-less character reads '(none)', not the generic '(empty)' — a deliberate
+  // per-screen wording, so this builds the RowModel literally rather than via rowModel().
+  if (sheet.skills.length === 0) {
+    appendRow(wrap, { label: '', value: '(none)', empty: true });
+  }
   for (const sk of sheet.skills) {
-    vmRow(wrap, sk.name, `${sk.chargeCost}⚡`);
+    appendRow(wrap, rowModel(sk.name, `${sk.chargeCost}⚡`));
   }
 
   const gearHead = document.createElement('h3');
   gearHead.textContent = 'Equipped';
   wrap.appendChild(gearHead);
   for (const g of sheet.equipped) {
-    vmRow(wrap, g.slot, g.name ?? '(empty)', !g.name);
+    appendRow(wrap, rowModel(g.slot, g.name));
   }
 
   choicesEl.appendChild(wrap);
-  button('Back', () => {
+  choice('Back', () => {
     screen = 'game';
     rerender();
   });
@@ -408,6 +377,7 @@ async function dispatch(input: GameInput): Promise<void> {
     log.debug('ui', 'choice', input);
     const r = step(state, input);
     state = r.state;
+    retheme(); // the step may have descended a floor — re-tint before anything re-renders
     // M13: fold this step into the run summary (pure subscriber — the engine flow is untouched).
     runSummary = foldRunEvents(runSummary, r.events, r.state);
     log.debug('engine', `step -> ${r.awaiting}`, {
@@ -450,6 +420,7 @@ function start(): void {
   runApplied = false;
   lastNewlyUnlocked = null;
   narrationEl.innerHTML = '';
+  retheme();
   renderSheet();
   renderChoices('title');
 }
@@ -460,7 +431,7 @@ function renderChoices(awaiting: Awaiting): void {
 
   switch (awaiting) {
     case 'title':
-      button('Descend into the Void', () => void dispatch({ kind: 'continue' }));
+      choice('Descend into the Void', () => void dispatch({ kind: 'continue' }));
       break;
     case 'enter-name': {
       const input = document.createElement('input');
@@ -474,7 +445,7 @@ function renderChoices(awaiting: Awaiting): void {
         if (e.key === 'Enter') submit();
       });
       choicesEl.appendChild(input);
-      button('Enter the Void', submit);
+      choice('Enter the Void', submit);
       input.focus();
       break;
     }
@@ -483,7 +454,7 @@ function renderChoices(awaiting: Awaiting): void {
       // unlocked them in the persistent store. (The locked-class visual treatment is NEEDS-HUMAN.)
       for (const c of CLASS_BUTTONS) {
         if (classUnlocked(unlockStore, c.classId)) {
-          button(c.label, () => void dispatch({ kind: 'class', classId: c.classId }));
+          choice(c.label, () => void dispatch({ kind: 'class', classId: c.classId }));
         }
       }
       break;
@@ -495,8 +466,8 @@ function renderChoices(awaiting: Awaiting): void {
         line.textContent = STAT_KEYS.map((k) => `${k} ${s[k]}`).join('   ');
         choicesEl.appendChild(line);
       }
-      button('Accept these', () => void dispatch({ kind: 'stats-decision', accept: true }));
-      button('Reroll', () => void dispatch({ kind: 'stats-decision', accept: false }));
+      choice('Accept these', () => void dispatch({ kind: 'stats-decision', accept: true }));
+      choice('Reroll', () => void dispatch({ kind: 'stats-decision', accept: false }));
       break;
     }
     case 'main-menu':
@@ -508,53 +479,52 @@ function renderChoices(awaiting: Awaiting): void {
         renderSheetScreen();
         break;
       }
-      button('Continue the descent', () => void dispatch({ kind: 'menu', choice: 'continue' }));
-      button('Seek a bargain', () => void dispatch({ kind: 'menu', choice: 'seek-deal' }));
-      button('Abandon the descent', () => void dispatch({ kind: 'menu', choice: 'quit' }));
-      button('Inventory', () => {
+      choice('Continue the descent', () => void dispatch({ kind: 'menu', choice: 'continue' }));
+      choice('Seek a bargain', () => void dispatch({ kind: 'menu', choice: 'seek-deal' }));
+      choice('Abandon the descent', () => void dispatch({ kind: 'menu', choice: 'quit' }));
+      choice('Inventory', () => {
         screen = 'inventory';
         rerender();
       });
-      button('Character sheet', () => {
+      choice('Character sheet', () => {
         screen = 'sheet';
         rerender();
       });
       break;
     case 'battle-action': {
       const p = displayPlayer(state);
-      button('Fight', () => void dispatch({ kind: 'battle-action', action: 'fight' }));
+      choice('Fight', () => void dispatch({ kind: 'battle-action', action: 'fight' }));
       // Cast: an inline picker of the player's skills with charge costs; unaffordable
       // skills render disabled. The engine re-checks the charge on dispatch.
       const casts = p ? castOptions(p) : [];
       if (casts.length > 0) {
-        pickerButton('Cast', (list) => {
+        picker(choicesEl, 'Cast', (list) => {
           for (const c of casts) {
-            optionButton(
+            appendButton(
               list,
-              `${c.name} (${c.chargeCost}⚡)`,
+              buttonModel(c.name, { disabled: !c.affordable, hint: `(${c.chargeCost}⚡)` }),
               () => void dispatch({ kind: 'battle-action', action: { kind: 'cast', skillId: c.skillId } }),
-              !c.affordable,
             );
           }
         });
       }
       // Spare: only against a living karma-weighted enemy (the engine's own gate).
       if (spareOffered(state)) {
-        button('Spare', () => void dispatch({ kind: 'battle-action', action: 'spare' }));
+        choice('Spare', () => void dispatch({ kind: 'battle-action', action: 'spare' }));
       }
       // Use item: an inline picker of usable consumables in the backpack (by index).
       const items = p ? consumableOptions(p) : [];
       if (items.length > 0) {
-        pickerButton('Use item', (list) => {
+        picker(choicesEl, 'Use item', (list) => {
           for (const it of items) {
-            optionButton(list, `${it.name} (${it.rarity})`, () =>
+            appendButton(list, buttonModel(it.name, { hint: `(${it.rarity})` }), () =>
               void dispatch({ kind: 'battle-action', action: { kind: 'useConsumable', source: { index: it.index } } }),
             );
           }
         });
       }
-      button('Potion', () => void dispatch({ kind: 'battle-action', action: 'potion' }));
-      button('Run', () => void dispatch({ kind: 'battle-action', action: 'run' }));
+      choice('Potion', () => void dispatch({ kind: 'battle-action', action: 'potion' }));
+      choice('Run', () => void dispatch({ kind: 'battle-action', action: 'run' }));
       break;
     }
     case 'continue':
@@ -565,14 +535,14 @@ function renderChoices(awaiting: Awaiting): void {
         head.className = 'stats-line';
         head.textContent = loot.length > 0 ? 'You found:' : 'The cache is empty.';
         choicesEl.appendChild(head);
+        // The shared labelled row, with the rarity as the (dim, tracked) label and the
+        // item name as the value. Replaces a hand-built innerHTML row — which also means
+        // an item name is now set as TEXT, never interpolated into markup.
         for (const row of loot) {
-          const div = document.createElement('div');
-          div.className = 'loot-row vm-row';
-          div.innerHTML = `<span class="vm-name">${row.name}</span><span class="vm-rarity">${row.rarity}</span>`;
-          choicesEl.appendChild(div);
+          appendRow(choicesEl, rowModel(row.rarity, row.name));
         }
       }
-      button('Continue', () => void dispatch({ kind: 'continue' }));
+      choice('Continue', () => void dispatch({ kind: 'continue' }));
       break;
     case 'draft-pick': {
       // M9: a functional draft picker — one readable card per offered option (index-dispatch).
@@ -582,13 +552,10 @@ function renderChoices(awaiting: Awaiting): void {
       choicesEl.appendChild(note);
       if (state.phase.kind === 'level-up-draft') {
         for (const card of draftCards(state.phase.offers)) {
-          const b = document.createElement('button');
-          b.className = 'draft-card';
-          b.textContent = card.label;
-          b.addEventListener('click', () => void dispatch({ kind: 'draft-pick', index: card.index }), {
-            once: true,
-          });
-          choicesEl.appendChild(b);
+          const b = appendButton(choicesEl, buttonModel(card.label), () =>
+            void dispatch({ kind: 'draft-pick', index: card.index }),
+          );
+          b.classList.add('draft-card');
         }
       }
       break;
@@ -604,16 +571,16 @@ function renderChoices(awaiting: Awaiting): void {
           `<div class="deal-reward">Reward: ${dv.reward}</div>`;
         choicesEl.appendChild(block);
       }
-      button('Pay the price', () => void dispatch({ kind: 'deal-decision', accept: true }));
-      button('Refuse', () => void dispatch({ kind: 'deal-decision', accept: false }));
+      choice('Pay the price', () => void dispatch({ kind: 'deal-decision', accept: true }));
+      choice('Refuse', () => void dispatch({ kind: 'deal-decision', accept: false }));
       break;
     }
     case 'rest-decision':
-      button('Rest here', () => void dispatch({ kind: 'rest-decision', accept: true }));
-      button('Press on', () => void dispatch({ kind: 'rest-decision', accept: false }));
+      choice('Rest here', () => void dispatch({ kind: 'rest-decision', accept: true }));
+      choice('Press on', () => void dispatch({ kind: 'rest-decision', accept: false }));
       break;
     case 'game-over':
-      button('Descend again', () => start());
+      choice('Descend again', () => start());
       break;
   }
 }
@@ -626,15 +593,17 @@ function renderResume(): void {
   p.textContent = 'A descent lies unfinished. Return to it, or begin anew.';
   narrationEl.appendChild(p);
   choicesEl.innerHTML = '';
-  button('Continue your descent', () => renderChoices(awaitingFor(state.phase)));
-  button('Begin a new descent', () => start());
+  choice('Continue your descent', () => renderChoices(awaitingFor(state.phase)));
+  choice('Begin a new descent', () => start());
 }
 
+retheme(); // paint the floor-0 palette before the first frame
 const saved = loadRun();
 if (saved) {
   log.info('save', 'resumable run found', { act: saved.state.act, phase: saved.state.phase.kind });
   state = saved.state;
   memory = saved.memory;
+  retheme(); // a resumed run may be deep in the descent — adopt ITS floor, not floor 0
   renderSheet();
   renderResume();
 } else {
