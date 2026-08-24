@@ -22,13 +22,25 @@ describe('formatEvent — anchored player-facing strings', () => {
   });
 
   it('an enemy miss names the enemy side and says "miss"', () => {
-    const s = formatEvent({ kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0 });
+    const s = formatEvent({
+      kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0,
+      roll: { natural: 5, faces: [5], advDis: 0, modifier: 1, total: 6, targetAc: 13 },
+      damageSources: [],
+    });
     expect(s.toLowerCase()).toContain('miss');
     expect(s.toLowerCase()).toContain('enemy');
   });
 
   it('a player crit carries a critical marker and the damage', () => {
-    const s = formatEvent({ kind: 'attack', subject: 'player', outcome: 'crit', damage: 9 });
+    const s = formatEvent({
+      kind: 'attack', subject: 'player', outcome: 'crit', damage: 9,
+      roll: { natural: 20, faces: [20], advDis: 0, modifier: 1, total: 21, targetAc: 13 },
+      damageSources: [
+        { kind: 'weapon-dice', amount: 4, label: '1d8' },
+        { kind: 'crit-dice', amount: 4, label: '1d8' },
+        { kind: 'ability-mod', amount: 1 },
+      ],
+    });
     expect(s.toLowerCase()).toContain('crit');
     expect(s).toContain('9');
   });
@@ -62,9 +74,13 @@ describe('formatEvent — totality over every event kind', () => {
   const samples: GameEvent[] = [
     // combat
     { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
-    { kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember' },
+    // A pure-condition cast: 0 damage, and therefore no damage terms at all.
+    { kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember', damage: 0,
+      damageSources: [] },
     { kind: 'cast-unavailable' },
-    { kind: 'attack', subject: 'player', outcome: 'hit', damage: 3 },
+    { kind: 'attack', subject: 'player', outcome: 'hit', damage: 3,
+      roll: { natural: 15, faces: [15], advDis: 0, modifier: 2, total: 17, targetAc: 13 },
+      damageSources: [{ kind: 'weapon-dice', amount: 3, label: '1d8' }] },
     { kind: 'advantage', subject: 'player' },
     { kind: 'disadvantage', subject: 'enemy' },
     { kind: 'player-unable-to-act', conditionType: 'stun' },

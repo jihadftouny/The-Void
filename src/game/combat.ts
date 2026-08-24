@@ -30,7 +30,13 @@ import { rollDice, rollDie, randInt, type Rng } from './rng.ts';
 import { SKILLS, useSkill, type SkillId } from './skill.ts';
 import type { ActiveCondition } from './condition.ts';
 import { effectiveMods, effectiveArmorClass, statModDelta } from './statEffects.ts';
-import type { AttackOutcome, CombatEvent } from './combatEvent.ts';
+import type {
+  AttackOutcome,
+  AttackRollDetail,
+  CombatEvent,
+  DamageSource,
+} from './combatEvent.ts';
+import { sumDamageSources } from './combatEvent.ts';
 
 export type { AttackOutcome } from './combatEvent.ts';
 
@@ -62,6 +68,12 @@ export interface SkillTarget extends Character {
 /** The natural d20 face rolled, plus which adv/dis mode produced it. */
 export interface D20Roll {
   natural: number;
+  /**
+   * EVERY face rolled, in draw order: `[n]` at advDis 0, `[a, b]` at ±1. Reported so the
+   * combat log can show the player both dice under advantage instead of only the winner.
+   * Purely additive — the same draws, in the same order, produce it.
+   */
+  faces: readonly number[];
   advDis: -1 | 0 | 1;
 }
 
@@ -73,12 +85,25 @@ export interface D20Roll {
  */
 export function rollD20WithAdvantage(advDis: -1 | 0 | 1, rng: Rng): D20Roll {
   if (advDis === 0) {
-    return { natural: rollDie(rng, 20), advDis };
+    const natural = rollDie(rng, 20);
+    return { natural, faces: [natural], advDis };
   }
   const a = rollDie(rng, 20);
   const b = rollDie(rng, 20);
   const natural = advDis === 1 ? Math.max(a, b) : Math.min(a, b);
-  return { natural, advDis };
+  return { natural, faces: [a, b], advDis };
+}
+
+/**
+ * Total the terms and clamp the result at 0, appending the corrective 'clamp' term when the
+ * raw arithmetic went negative (a big Weak deprivation can outweigh a small damage die).
+ * Keeps the sum-equals-damage invariant true on every path, including the clamped one.
+ */
+function totalWithClamp(sources: DamageSource[]): number {
+  const raw = sumDamageSources(sources);
+  if (raw >= 0) return raw;
+  sources.push({ kind: 'clamp', amount: -raw });
+  return 0;
 }
 
 /**
@@ -138,6 +163,11 @@ export interface PlayerAttackResult {
  * battle.ts. `equipDamageBonus` adds to a hit's total ONCE and to a crit's total ONCE (like
  * an ability mod, NOT per die); it is 0 for legacy gear, so a normal run is off-equivalent.
  * The rng DRAW ORDER is unchanged (equipDamageBonus is pure arithmetic, no draw).
+ *
+ * M-UI2: `perkDamageBonus` is the wired-perk flat damage, split out of the single combined
+ * number battle.ts used to pass so the emitted breakdown can tell gear from perks. It
+ * defaults to 0 and is added at exactly the same point, so the arithmetic — and therefore
+ * every damage number and every draw — is identical.
  */
 export function resolvePlayerAttack(
   player: Attacker,
@@ -145,15 +175,21 @@ export function resolvePlayerAttack(
   weapon: Weapon,
   equipDamageBonus: number,
   rng: Rng,
+  perkDamageBonus = 0,
 ): PlayerAttackResult {
   const advDis = normalizeAdvDis(player.advantageDisadvantage);
-  const { natural } = rollD20WithAdvantage(advDis, rng);
+  const { natural, faces } = rollD20WithAdvantage(advDis, rng);
   // To-hit uses the EFFECTIVE mods (Strong/Weak on STR, Quick/Slow on DEX cascade in);
   // the defender AC is the enemy's EFFECTIVE AC (Hardy/Frail + Quick/Slow). Both are
   // off-equivalent: with no augment active they equal the stored mods / stored AC.
   const em = effectiveMods(player);
-  const total = natural + weaponModifier({ ...player, mods: em }, weapon);
-  const outcome = resolveAttackOutcome(natural, total, effectiveArmorClass(enemy));
+  const modifier = weaponModifier({ ...player, mods: em }, weapon);
+  const total = natural + modifier;
+  const targetAc = effectiveArmorClass(enemy);
+  const outcome = resolveAttackOutcome(natural, total, targetAc);
+  // Every number the log needs, captured where it was decided — nothing is re-derived
+  // downstream, and nothing new is rolled to produce it.
+  const roll: AttackRollDetail = { natural, faces, advDis, modifier, total, targetAc };
 
   const events: CombatEvent[] = [];
   if (advDis === 1) events.push({ kind: 'advantage', subject: 'player' });
@@ -167,21 +203,38 @@ export function resolvePlayerAttack(
       ? statModDelta(player, 'STR')
       : 0;
 
-  let damage = 0;
-  if (outcome === 'hit') {
-    damage =
-      rollDice(rng, weapon.damage.quantity, weapon.damage.sides) +
-      meleeDamageDelta +
-      equipDamageBonus;
-  } else if (outcome === 'crit') {
-    damage =
-      rollDice(rng, weapon.damage.quantity, weapon.damage.sides) +
-      rollDice(rng, weapon.damage.quantity, weapon.damage.sides) +
-      meleeDamageDelta +
-      equipDamageBonus;
+  const notation = `${weapon.damage.quantity}d${weapon.damage.sides}`;
+  const damageSources: DamageSource[] = [];
+  if (outcome === 'hit' || outcome === 'crit') {
+    damageSources.push({
+      kind: 'weapon-dice',
+      amount: rollDice(rng, weapon.damage.quantity, weapon.damage.sides),
+      label: notation,
+    });
+    if (outcome === 'crit') {
+      // A crit rolls the weapon dice a SECOND time (it does not double a total), so it is
+      // its own term with its own notation.
+      damageSources.push({
+        kind: 'crit-dice',
+        amount: rollDice(rng, weapon.damage.quantity, weapon.damage.sides),
+        label: notation,
+      });
+    }
+    // Zero-valued terms are omitted: a breakdown listing "+0 from gear" is noise, and the
+    // sum invariant is unaffected by leaving them out.
+    if (meleeDamageDelta !== 0) {
+      damageSources.push({ kind: 'ability-mod', amount: meleeDamageDelta });
+    }
+    if (equipDamageBonus !== 0) {
+      damageSources.push({ kind: 'equipment', amount: equipDamageBonus });
+    }
+    if (perkDamageBonus !== 0) {
+      damageSources.push({ kind: 'perk', amount: perkDamageBonus });
+    }
   }
-  damage = Math.max(damage, 0);
-  events.push({ kind: 'attack', subject: 'player', outcome, damage });
+  // A miss or fumble rolls no damage die at all (0 draws) and so has no terms.
+  const damage = totalWithClamp(damageSources);
+  events.push({ kind: 'attack', subject: 'player', outcome, damage, roll, damageSources });
 
   return { outcome, damage, events };
 }
@@ -231,17 +284,29 @@ export function resolveEnemyAttack<E extends SkillUser, T extends SkillTarget>(
   enemyAdvDis: -1 | 0 | 1,
   rng: Rng,
 ): EnemyAttackResult<E, T> {
-  const { natural } = rollD20WithAdvantage(enemyAdvDis, rng);
-  const total = natural + effectiveMods(enemy).STR;
+  const { natural, faces } = rollD20WithAdvantage(enemyAdvDis, rng);
+  const modifier = effectiveMods(enemy).STR;
+  const total = natural + modifier;
   const outcome = resolveAttackOutcome(natural, total, defenderAc);
+  const roll: AttackRollDetail = {
+    natural,
+    faces,
+    advDis: enemyAdvDis,
+    modifier,
+    total,
+    targetAc: defenderAc,
+  };
 
   const events: CombatEvent[] = [];
   if (enemyAdvDis === 1) events.push({ kind: 'advantage', subject: 'enemy' });
   else if (enemyAdvDis === -1) events.push({ kind: 'disadvantage', subject: 'enemy' });
 
-  // Miss / fumble: no charge, no condition, no skill-pick draw.
+  // Miss / fumble: no charge, no condition, no skill-pick draw. The roll detail is still
+  // recorded — a miss is exactly the case where the player wants to see the dice.
   if (outcome === 'miss' || outcome === 'fumble') {
-    events.push({ kind: 'attack', subject: 'enemy', outcome, damage: 0 });
+    events.push({
+      kind: 'attack', subject: 'enemy', outcome, damage: 0, roll, damageSources: [],
+    });
     return { enemy, target: player, damage: 0, events };
   }
 
@@ -253,13 +318,23 @@ export function resolveEnemyAttack<E extends SkillUser, T extends SkillTarget>(
     const skill = SKILLS[skillId];
     if (skill) {
       const used = useSkill(enemy, player, skill);
-      const damage = Math.max(used.damage * critMultiplier, 0);
-      events.push(...used.events, { kind: 'attack', subject: 'enemy', outcome, damage });
+      // The skill's own damage enters as ONE term; a crit doubles it, which is recorded as
+      // a second term of equal size rather than by silently scaling the first.
+      const damageSources: DamageSource[] = [{ kind: 'skill', amount: used.damage }];
+      if (critMultiplier === 2) {
+        damageSources.push({ kind: 'crit-multiplier', amount: used.damage });
+      }
+      const damage = totalWithClamp(damageSources);
+      events.push(...used.events, {
+        kind: 'attack', subject: 'enemy', outcome, damage, roll, damageSources,
+      });
       return { enemy: used.caster, target: used.target, damage, events };
     }
   }
-  const damage = Math.max(1 * critMultiplier, 0);
-  events.push({ kind: 'attack', subject: 'enemy', outcome, damage });
+  const damageSources: DamageSource[] = [{ kind: 'base', amount: 1 }];
+  if (critMultiplier === 2) damageSources.push({ kind: 'crit-multiplier', amount: 1 });
+  const damage = totalWithClamp(damageSources);
+  events.push({ kind: 'attack', subject: 'enemy', outcome, damage, roll, damageSources });
   return { enemy, target: player, damage, events };
 }
 

@@ -429,3 +429,127 @@ describe('Halo Fragment revive (anchor) — once per battle', () => {
     expect(r2.status).toBe('player-died');
   });
 });
+
+// ---------------------------------------------------------------------------
+// M-UI2 — THE REPORTED DAMAGE IS THE DAMAGE ACTUALLY DEALT.
+//
+// These three modifiers are applied by battle.ts AFTER combat.ts has already emitted the
+// attack event. Before M-UI2 the event kept announcing the pre-modifier number while the
+// combatant lost the post-modifier one, so the log and the HP bar disagreed. Each case
+// below pins BOTH the event and the HP change, and requires them to be the same number.
+//
+// Player: STR 14 -> +2 melee, maxHp 10, AC 11, Jaaj Sword 1 (Melee 1d6).
+// Enemy:  all stats 10 -> +0 to hit, AC 10, hp 30, no skill charges (so a hit deals 1).
+// ---------------------------------------------------------------------------
+
+/** Sum a damaging event's terms — they must equal what the event reports as `damage`. */
+function sumTerms(e: { damageSources: readonly { amount: number }[] }): number {
+  return e.damageSources.reduce((t, s) => t + s.amount, 0);
+}
+
+describe('post-hoc damage modifiers are folded back into the event', () => {
+  it('Void Pact: a 6-damage hit reports 9, with the +50% recorded as a +3 term', () => {
+    // Enemy fumbles (nat 1). Player nat 10 + 2 = 12 >= AC 10 -> hit; 1d6 lands on 6.
+    // Void Pact multiplies by 1.5: floor(6 * 1.5) = 9, i.e. 3 more than was rolled.
+    const player = makePlayer({ amulet: { defId: 'void-pact' } });
+    const r = resolveRound(
+      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(1), d20(10), d6(6)]),
+    );
+    const attack = r.events.find((e) => e.kind === 'attack' && e.subject === 'player');
+    expect(attack).toBeDefined();
+    if (attack?.kind !== 'attack') throw new Error('no player attack event');
+
+    expect(attack.damage).toBe(9);
+    expect(attack.damageSources).toEqual([
+      { kind: 'weapon-dice', amount: 6, label: '1d6' },
+      { kind: 'damage-mult', amount: 3 },
+    ]);
+    expect(sumTerms(attack)).toBe(attack.damage);
+    // And the enemy really lost 9: 30 - 9 = 21. Reported damage == damage dealt.
+    expect(r.state.enemy.hp).toBe(30 - attack.damage);
+    expect(r.state.enemy.hp).toBe(21);
+  });
+
+  it('WITHOUT Void Pact the same round reports and deals the rolled 6', () => {
+    const r = resolveRound(
+      createBattle(makePlayer(), makeEnemy(), 1), 'fight', seqRng([d20(1), d20(10), d6(6)]),
+    );
+    const attack = r.events.find((e) => e.kind === 'attack' && e.subject === 'player');
+    if (attack?.kind !== 'attack') throw new Error('no player attack event');
+    expect(attack.damage).toBe(6);
+    expect(attack.damageSources).toEqual([{ kind: 'weapon-dice', amount: 6, label: '1d6' }]);
+    expect(r.state.enemy.hp).toBe(24);
+  });
+
+  it('Adrenal Shunt: a 4-damage hit below half HP reports 6, with the +2 named', () => {
+    // hp 4 < 5 (half of maxHp 10) so the relic fires. 1d6 lands on 4, +2 = 6.
+    const player = makePlayer({ ring: { defId: 'adrenal-shunt' } }, { hp: 4 });
+    const r = resolveRound(
+      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(1), d20(10), d6(4)]),
+    );
+    const attack = r.events.find((e) => e.kind === 'attack' && e.subject === 'player');
+    if (attack?.kind !== 'attack') throw new Error('no player attack event');
+    expect(attack.damage).toBe(6);
+    expect(attack.damageSources).toEqual([
+      { kind: 'weapon-dice', amount: 4, label: '1d6' },
+      { kind: 'low-hp-bonus', amount: 2 },
+    ]);
+    expect(sumTerms(attack)).toBe(attack.damage);
+    expect(r.state.enemy.hp).toBe(30 - attack.damage);
+  });
+
+  it('Scrap Plating: the voided first hit reports 0, not the 2 that was rolled', () => {
+    // Enemy crits (nat 20) with no charges: plain 1, doubled to 2. Scrap Plating voids the
+    // first hit of the battle, so the player loses NOTHING — and the event must say so.
+    const player = makePlayer({ ring: { defId: 'scrap-plating' } });
+    const r1 = resolveRound(
+      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(20), d20(1)]),
+    );
+    const first = r1.events.find((e) => e.kind === 'attack' && e.subject === 'enemy');
+    if (first?.kind !== 'attack') throw new Error('no enemy attack event');
+    expect(first.damage).toBe(0);
+    expect(first.damageSources).toEqual([
+      { kind: 'base', amount: 1 },
+      { kind: 'crit-multiplier', amount: 1 },
+      { kind: 'first-hit-reduction', amount: -2 },
+    ]);
+    expect(sumTerms(first)).toBe(0);
+    expect(r1.state.player.hp).toBe(10); // untouched, exactly as the event reports
+
+    // Round two: the relic is spent, so the identical roll now reports AND deals 2.
+    const r2 = resolveRound(r1.state, 'fight', seqRng([d20(20), d20(1)]));
+    const second = r2.events.find((e) => e.kind === 'attack' && e.subject === 'enemy');
+    if (second?.kind !== 'attack') throw new Error('no enemy attack event');
+    expect(second.damage).toBe(2);
+    expect(second.damageSources).toEqual([
+      { kind: 'base', amount: 1 },
+      { kind: 'crit-multiplier', amount: 1 },
+    ]);
+    expect(r2.state.player.hp).toBe(8); // 10 - 2
+  });
+
+  it('shield absorption is NOT folded into the attack — it has its own event', () => {
+    // The attack reports the damage the ENEMY dealt (2); the shield then eats 1 of it, in
+    // its own `shield-absorbed` event. Folding it into the attack would double-count, and
+    // would also hide that the blow landed at full force. The pair must reconcile:
+    // hp lost = attack.damage - absorbed = 2 - 1 = 1.
+    const player = makePlayer({}, { shield: 1 });
+    const r = resolveRound(
+      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(20), d20(1)]),
+    );
+    const attack = r.events.find((e) => e.kind === 'attack' && e.subject === 'enemy');
+    const absorbed = r.events.find((e) => e.kind === 'shield-absorbed');
+    if (attack?.kind !== 'attack') throw new Error('no enemy attack event');
+    if (absorbed?.kind !== 'shield-absorbed') throw new Error('no shield-absorbed event');
+
+    expect(attack.damage).toBe(2); // pre-shield, as rolled
+    expect(attack.damageSources).toEqual([
+      { kind: 'base', amount: 1 },
+      { kind: 'crit-multiplier', amount: 1 },
+    ]);
+    expect(absorbed.amount).toBe(1);
+    expect(r.state.player.shield).toBe(0);
+    expect(10 - r.state.player.hp).toBe(attack.damage - absorbed.amount);
+    expect(r.state.player.hp).toBe(9);
+  });
+});

@@ -22,7 +22,15 @@ const baseState: GameState = {
 
 describe('describeEvent', () => {
   it('describes a critical player attack in player-facing terms', () => {
-    const e: GameEvent = { kind: 'attack', subject: 'player', outcome: 'crit', damage: 7 };
+    const e: GameEvent = {
+      kind: 'attack', subject: 'player', outcome: 'crit', damage: 7,
+      roll: { natural: 20, faces: [20], advDis: 0, modifier: 2, total: 22, targetAc: 13 },
+      damageSources: [
+        { kind: 'weapon-dice', amount: 3, label: '1d8' },
+        { kind: 'crit-dice', amount: 2, label: '1d8' },
+        { kind: 'ability-mod', amount: 2 },
+      ],
+    };
     expect(describeEvent(e)).toContain('devastating');
   });
   it('returns empty string for events that need no narration', () => {
@@ -48,7 +56,11 @@ describe('buildNarrationPrompt', () => {
     m = rememberBeat(m, [{ kind: 'encounter-start', enemyName: 'Feral Rat' }]);
     m = rememberBeat(m, [{ kind: 'victory', xpGained: 5, extraRest: false, loot: [] }]);
     const p = buildNarrationPrompt(
-      [{ kind: 'attack', subject: 'player', outcome: 'hit', damage: 3 }],
+      [{
+        kind: 'attack', subject: 'player', outcome: 'hit', damage: 3,
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 2, total: 17, targetAc: 13 },
+        damageSources: [{ kind: 'weapon-dice', amount: 3, label: '1d8' }],
+      }],
       baseState,
       m,
     );

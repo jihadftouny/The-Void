@@ -22,7 +22,7 @@ import { type Player } from './player.ts';
 import { type Enemy } from './enemy.ts';
 import { getFamily } from './enemyFamily.ts';
 import { type Rng } from './rng.ts';
-import { type CombatEvent } from './combatEvent.ts';
+import { type CombatEvent, type DamageSource, withDamageSource } from './combatEvent.ts';
 import { hasControlCondition, tickConditions, type ConditionType } from './condition.ts';
 import { resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
 import { resolveSkill, type SkillDef, type SkillId } from './skill.ts';
@@ -231,8 +231,17 @@ function resolvePlayerTurn(
     player = ea.target;
     enemyDamage = ea.damage;
     events.push(...ea.events);
+    // `resolveEnemyAttack` always pushes its `attack` event LAST, so after this spread the
+    // attack sits at the end of `events`. Asserted by a test in combat.test.ts.
+    const enemyAttackIndex = events.length - 1;
     // Scrap Plating: the first enemy hit each battle is reduced to 0 (once per battle).
     if (mods.firstHitReduction && !firstHitDone && enemyDamage > 0) {
+      // Fold the reduction into the event as a NEGATIVE term, so the attack reports the 0
+      // HP the player actually loses instead of the damage that was rolled and then voided.
+      foldDamageSource(events, enemyAttackIndex, {
+        kind: 'first-hit-reduction',
+        amount: -enemyDamage,
+      });
       enemyDamage = 0;
       firstHitDone = true;
     }
@@ -259,6 +268,9 @@ function resolvePlayerTurn(
   let didHit = false;
   let didCrit = false;
   let didCast = false;
+  // Where the player's damaging event landed in `events`, so step 4b's post-hoc modifiers
+  // can be folded back into it. -1 when the player dealt no damaging action this round.
+  let playerDamageEventIndex = -1;
   if (ptc.skipTurn) {
     events.push({ kind: 'player-unable-to-act', conditionType: skipCause(ptc.events) });
   } else if (action.kind === 'fight') {
@@ -267,14 +279,24 @@ function resolvePlayerTurn(
     // Both are off-equivalent for legacy gear (real weapon, 0 bonus), so the draw order and
     // damage are unchanged for a normal run.
     const weapon = weaponForSlot(player.inventory) ?? UNARMED;
-    // M9: fold the player's wired damage perks (sharpEdge) into the SAME flat-damage seam as
-    // the equip bonus. Off-equivalent (0) for a player with no such perk.
-    const flatDamage = mods.flatDamage + perkModifiers(player.perks).flatDamage;
-    const pa = resolvePlayerAttack(player, enemy, weapon, flatDamage, rng);
+    // M9: the player's wired damage perks (sharpEdge) ride the SAME flat-damage seam as the
+    // equip bonus. Off-equivalent (0) for a player with no such perk. M-UI2 passes the two
+    // SEPARATELY (they used to be summed here) purely so the emitted breakdown can name
+    // gear and perks apart; they are added at the same point, so the total is unchanged.
+    const pa = resolvePlayerAttack(
+      player,
+      enemy,
+      weapon,
+      mods.flatDamage,
+      rng,
+      perkModifiers(player.perks).flatDamage,
+    );
     playerDamage = pa.damage;
     didHit = pa.outcome === 'hit' || pa.outcome === 'crit';
     didCrit = pa.outcome === 'crit';
     events.push(...pa.events);
+    // `resolvePlayerAttack` pushes its `attack` event last.
+    playerDamageEventIndex = events.length - 1;
   } else {
     // Cast: spend one charge and resolve the skill through `castSkill` — the base
     // useSkill damage/condition PLUS the class signature twist, all deterministic (NO rng
@@ -294,7 +316,18 @@ function resolvePlayerTurn(
         skillCharges: Math.min(player.skillCharges + refund, player.maxSkillCharges),
       };
     }
-    events.push({ kind: 'skill-cast', subject: 'player', skillId: action.skill.id, name: action.skill.name });
+    // The cast's damage rides the event as a single 'skill' term (the skill resolver owns
+    // how it was computed). A pure-condition cast deals 0 and carries no terms — which
+    // still satisfies "the terms sum to the damage".
+    events.push({
+      kind: 'skill-cast',
+      subject: 'player',
+      skillId: action.skill.id,
+      name: action.skill.name,
+      damage: playerDamage,
+      damageSources: playerDamage !== 0 ? [{ kind: 'skill', amount: playerDamage }] : [],
+    });
+    playerDamageEventIndex = events.length - 1;
     for (const e of cast.events) {
       if (
         e.kind === 'condition-applied' ||
@@ -310,15 +343,30 @@ function resolvePlayerTurn(
 
   // 4b. Player-damage passive modifiers (RNG-free). Adrenal Shunt adds a flat bonus below
   //     the HP threshold; Void Pact multiplies the total. Both no-op for a normal run.
+  //
+  //     Each one is ALSO folded back into the event that already reported the damage. Before
+  //     M-UI2 they were applied only to the local `playerDamage`, so the emitted event kept
+  //     announcing the pre-modifier number while the enemy lost the post-modifier one.
   if (playerDamage > 0) {
     if (
       mods.lowHpDamageBonus &&
       player.hp < (mods.lowHpDamageBonus.thresholdPct / 100) * effectiveMaxHp(player)
     ) {
       playerDamage += mods.lowHpDamageBonus.amount;
+      foldDamageSource(events, playerDamageEventIndex, {
+        kind: 'low-hp-bonus',
+        amount: mods.lowHpDamageBonus.amount,
+      });
     }
     if (mods.damageDealtMult > 0) {
-      playerDamage = Math.floor(playerDamage * (1 + mods.damageDealtMult / 100));
+      const before = playerDamage;
+      playerDamage = Math.floor(before * (1 + mods.damageDealtMult / 100));
+      // Record the DELTA the multiplier actually produced (after flooring), not the
+      // percentage — the terms have to sum to the damage, and a percentage does not.
+      const delta = playerDamage - before;
+      if (delta !== 0) {
+        foldDamageSource(events, playerDamageEventIndex, { kind: 'damage-mult', amount: delta });
+      }
     }
   }
 
@@ -564,6 +612,26 @@ function enemyCounterAttack(state: BattleState, rng: Rng): RoundResult {
     return { state: { ...state, player, enemy }, events, status: 'player-died' };
   }
   return { state: { ...state, player, enemy }, events, status: 'ongoing' };
+}
+
+/**
+ * Fold a post-hoc damage modifier back into the event that already reported the damage —
+ * PURE, no rng.
+ *
+ * `index` is the position of the attack / skill-cast event in `events`, captured the moment
+ * it was pushed. It has to be captured rather than searched for: the cast branch pushes
+ * further events (conditions applied, resources changed) after the `skill-cast`, so "the
+ * last event" is not reliable by the time step 4b runs.
+ *
+ * A no-op if the index does not point at a damaging event, so a future reordering degrades
+ * to "the breakdown is missing a term" rather than to a corrupted event.
+ */
+function foldDamageSource(events: CombatEvent[], index: number, source: DamageSource): void {
+  const event = events[index];
+  if (!event) return;
+  if (event.kind === 'attack' || event.kind === 'skill-cast') {
+    events[index] = withDamageSource(event, source);
+  }
 }
 
 /** Name the condition that made the player skip, from the emitted skip events. */

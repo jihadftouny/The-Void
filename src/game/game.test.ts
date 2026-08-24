@@ -926,7 +926,11 @@ describe('cast battle-action flows through step', () => {
       expect(b.player.skillCharges).toBe(4);
       expect(b.enemy.activeConditions.some((c) => c.type === 'burn')).toBe(true);
     }
-    expect(r.events).toContainEqual({ kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember' });
+    // Ember deals 2 (the enemy fell 30 -> 28 above), carried on the event as one term.
+    expect(r.events).toContainEqual({
+      kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember', damage: 2,
+      damageSources: [{ kind: 'skill', amount: 2 }],
+    });
     expect(r.events).toContainEqual({ kind: 'condition-applied', subject: 'enemy', conditionType: 'burn' });
   });
 

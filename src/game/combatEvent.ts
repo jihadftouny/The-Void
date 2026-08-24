@@ -27,16 +27,89 @@ export type CombatSubject = 'player' | 'enemy';
  */
 export type AttackOutcome = 'hit' | 'crit' | 'miss' | 'fumble';
 
+/**
+ * The d20 that decided an attack — everything the combat log needs to show the real dice,
+ * so the renderer never re-derives a number the engine already computed (M-UI2 §3).
+ */
+export interface AttackRollDetail {
+  /** The face that DECIDED the outcome (the max under advantage, the min under disadvantage). */
+  natural: number;
+  /** Every face rolled: `[n]` normally, `[a, b]` under advantage/disadvantage. */
+  faces: readonly number[];
+  advDis: -1 | 0 | 1;
+  /** The to-hit modifier added to `natural`. */
+  modifier: number;
+  /** `natural + modifier`. */
+  total: number;
+  /** The defender's EFFECTIVE armor class this roll was measured against. */
+  targetAc: number;
+}
+
+/**
+ * One signed term of an attack's damage, in the order the engine applied it.
+ *
+ *  - 'weapon-dice'         the damage die roll
+ *  - 'crit-dice'           the SECOND die roll a critical hit adds
+ *  - 'ability-mod'         the STR-mod delta a melee/finesse augment contributes
+ *  - 'equipment'           flat damage from equipped gear AND wired perks (the engine
+ *                          merges the two before combat sees them; see `perk` below)
+ *  - 'perk'                flat damage from a wired perk, when supplied separately
+ *  - 'skill'               damage the skill/cast resolver produced, as one term
+ *  - 'base'                the enemy's plain unarmed strike (1) when it casts no skill
+ *  - 'crit-multiplier'     the extra a critical adds by DOUBLING an already-computed total
+ *  - 'low-hp-bonus'        Adrenal Shunt's below-threshold flat bonus
+ *  - 'damage-mult'         the extra (or loss) from a percentage multiplier, e.g. Void Pact
+ *  - 'first-hit-reduction' Scrap Plating voiding the first enemy hit — a NEGATIVE term
+ *  - 'clamp'               the floor-at-zero correction, so the terms still sum to the
+ *                          reported damage when the raw arithmetic went negative
+ *
+ * INVARIANT: the terms SUM to the event's `damage`. That is what makes the breakdown
+ * trustworthy — the number the log explains is the number the player actually loses.
+ */
+export type DamageSourceKind =
+  | 'weapon-dice'
+  | 'crit-dice'
+  | 'ability-mod'
+  | 'equipment'
+  | 'perk'
+  | 'skill'
+  | 'base'
+  | 'crit-multiplier'
+  | 'low-hp-bonus'
+  | 'damage-mult'
+  | 'first-hit-reduction'
+  | 'clamp';
+
+export interface DamageSource {
+  kind: DamageSourceKind;
+  /** Signed. The terms sum to the event's `damage`. */
+  amount: number;
+  /** Dice notation, e.g. '1d8' — DATA for the renderer to format, never prose. */
+  label?: string;
+}
+
 /** An ordered, structured record of one thing that happened during combat. */
 export type CombatEvent =
   | { kind: 'enemy-skill-used'; skillId: SkillId; name: string; text?: string }
-  | { kind: 'skill-cast'; subject: 'player'; skillId: SkillId; name: string; text?: string }
+  | {
+      kind: 'skill-cast';
+      subject: 'player';
+      skillId: SkillId;
+      name: string;
+      /** Damage the cast dealt. Equals the sum of `damageSources`. */
+      damage: number;
+      damageSources: readonly DamageSource[];
+      text?: string;
+    }
   | { kind: 'cast-unavailable'; text?: string }
   | {
       kind: 'attack';
       subject: CombatSubject;
       outcome: AttackOutcome;
+      /** The damage ACTUALLY dealt, after every modifier. Equals the sum of `damageSources`. */
       damage: number;
+      roll: AttackRollDetail;
+      damageSources: readonly DamageSource[];
       text?: string;
     }
   | { kind: 'advantage'; subject: CombatSubject; text?: string }
@@ -116,4 +189,29 @@ export type CombatEventKind = CombatEvent['kind'];
  */
 export function subjectOf(character: object): CombatSubject {
   return 'classId' in character ? 'player' : 'enemy';
+}
+
+/** Every event that reports damage broken down by source. */
+export type DamagingEvent = Extract<CombatEvent, { damageSources: readonly DamageSource[] }>;
+
+/** Total a list of damage terms. The result is what the event's `damage` must equal. */
+export function sumDamageSources(sources: readonly DamageSource[]): number {
+  return sources.reduce((total, s) => total + s.amount, 0);
+}
+
+/**
+ * Append a damage term to an attack / skill-cast event, returning a NEW event whose
+ * `damage` is the sum of its sources — PURE, no rng, no mutation.
+ *
+ * WHY THIS EXISTS. Damage is decided in two places: `combat.ts` rolls it and emits the
+ * event, and then `battle.ts` applies post-hoc modifiers (Adrenal Shunt's low-HP bonus,
+ * Void Pact's multiplier, Scrap Plating voiding the first enemy hit). Before M-UI2 those
+ * modifiers changed the damage AFTER the event had been emitted, so the event reported a
+ * number that was NOT what the player actually lost — a real correctness bug, not merely a
+ * display gap. Folding each modifier back in through this helper keeps the event honest by
+ * construction: `damage` is never set independently of the terms that explain it.
+ */
+export function withDamageSource<E extends DamagingEvent>(event: E, source: DamageSource): E {
+  const damageSources = [...event.damageSources, source];
+  return { ...event, damageSources, damage: sumDamageSources(damageSources) };
 }
