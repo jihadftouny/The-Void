@@ -255,15 +255,34 @@ unaffected, which is why the key otherwise looks healthy.
 not a figure worth economising on, and the Pro model's stronger prompt adherence matters a great
 deal here — every enemy must land in the *same* house style or the roster will not read as one game.
 
+### Model and resolution **[DECIDED 2026-08-24]**
+
+**`gemini-3-pro-image` (Nano Banana Pro) at `imageSize: "1K"`.** Chosen by the engineer.
+
+- **Why the Pro model over the Flash ones:** roughly $16 versus $8 for the whole first batch. The
+  difference is not worth optimising, and prompt adherence is the thing that matters most here —
+  all 24 enemy families must land in the *same* house style or the roster will not read as one
+  game. Style consistency across a large batch is exactly where the Pro model earns the delta.
+- **Why 1K rather than 2K or 4K:** same price as 2K on this model, so this is a file-size and
+  repository-weight decision, not a cost one. 1K is ample for enemy sprites and class portraits at
+  the sizes they appear on screen. **Watch item:** the full-bleed floor backdrops are the one asset
+  class that might want 2K on a large desktop window — if a 1K backdrop looks soft in the probe,
+  raise *only the backdrops* to 2K rather than the whole batch.
+- **Use the stable id, not `nano-banana-pro-preview`** — same model, but a preview alias can be
+  withdrawn or re-pointed without notice, and this script needs to keep working for years.
+
+**Estimated spend at this setting:** style probe (9 images) ≈ **$1.21**; first batch (117 images) ≈
+**$15.68**; each full re-roll of the batch ≈ $15.68. Realistic total for all game art across
+probes, the first batch, a couple of re-rolls and a later item-icon batch: **$50–75**.
+
 ### Remaining open questions **[OPEN]**
 
-1. **Billing.** Must be enabled before anything can be generated. Nothing else blocks the pipeline.
+1. **Billing — the only blocker.** Re-checked after the model decision: still HTTP 429,
+   `free_tier_requests limit: 0`. Nothing can generate until billing is enabled on the Google Cloud
+   project behind the key. Nothing else blocks the pipeline.
 2. **Style lock.** 117 images against an unproven prompt style is a large batch to discard. A
    **style probe** is written and ready (3 assets — an enemy, a floor backdrop, a class portrait —
-   at 3 variations each) and will run the moment billing is live, for about a dollar.
-3. **Resolution.** 1K or 2K. 2K gives headroom for the full-bleed floor backdrops on a large
-   desktop window; 1K is likely sufficient for enemy sprites. Same price either way on the Pro
-   model, so this is a file-size question, not a cost one.
+   at 3 variations each) and runs the moment billing is live, for about a dollar.
 
 ### Key handling — a warning on record **[SECURITY]**
 
