@@ -19,6 +19,59 @@ Format per entry:
 
 ---
 
+## 2026-08-25 — ui-foundation (M-UI2 unit 1 of 5: tokens, shared components, retire 2nd front-end, widen combat events) [branch `agentic/ui-foundation`, unmerged]
+- Verdict: **PASS**, then **PASS again after 1 fix round**. 960 → 1014 → **1026 tests**.
+- **First run where build-agent had the `Agent` tool** (doctrine change this session: fan out
+  Explore sub-agents for READING, but the build agent remains the ONLY writer — parallel writers in
+  one worktree reintroduce exactly the clash worktrees exist to prevent, with no git isolation to
+  catch it). Used it to map consumers before a 33-file deletion; **zero live importers** found, and
+  the deletion accounting came out exact.
+- **The plan found a REAL ENGINE BUG that had nothing to do with the UI task.** `battle.ts` modified
+  damage *after* `combat.ts` emitted the attack event (step 4b `lowHpDamageBonus` /
+  `damageDealtMultiplier`, and the `firstHitReduction` relic), so events reported a number the player
+  never lost — a Scrap Plating round reported **2 damage while the player lost 0**. Invisible for the
+  entire project because nothing displayed it; surfaced only because the expandable dice log needed
+  the numbers to be true. Fixed via a pure `withDamageSource` fold that re-derives damage from its
+  terms, with `sum(damageSources) === damage` asserted over every event of six full simulated runs.
+  **Doctrine signal: building a display for existing state is a cheap correctness audit of that state.**
+- Build-agent deviations (all justified): `base`/`clamp` added to `DamageSourceKind` (an unarmed strike
+  is not a "skill"; the floor-at-zero needs a corrective term, else the sum invariant is false);
+  `resolvePlayerAttack` gained an optional `perkDamageBonus` param (battle.ts pre-summed gear+perk, so
+  the plan's separate terms were unobtainable); steps 5+6 share one commit (splitting leaves a
+  non-compiling intermediate); CSS chains via `@import` to keep `desktop.html` untouched as planned.
+- Test failures before fixes: none. **Honest self-disclosed coverage gap** — the whole-run invariant
+  never exercises `equipment` flat-damage terms (build agent proved it by sabotaging that term and
+  watching the run test still pass); covered instead by a hand-derived unit test. Test-agent verified
+  that specific claim and found it true (dropping the term fails 5 tests).
+- Test-agent rigour: re-derived the deletion arithmetic from `main` independently (960/57 files;
+  per-file counts driver 5 / persistence 12 / routing 4 / layout 17), ran a **14-mutant battery,
+  14/14 killed**, recomputed WCAG ratios from raw hexes rather than through the project's own helper,
+  and **walked all 66 modules over a live dev server** to prove the surviving front-end boots rather
+  than merely compiles. Also caught that assertion counts rose rather than fell (no silent weakening).
+- **Fix round was NOT a test failure — it was the engineer's visual sign-off coming back** (doctrine
+  §5). Author overruled 3 of 5 floor accents; `docs/ART-BIBLE.md` §4 now supersedes the "ash-orange"
+  that `docs/UI-DESIGN.md` had specified, which is what the palette had been derived from.
+- Fix round surfaced a **genuine design problem the orchestrator flagged rather than let ship**: the
+  corrected ramp made floors 2/3/4 all pale, which would have defeated the purpose of a per-floor
+  accent. Build agent resolved it by taking floor 2's accent from the *red flecks* rather than the
+  white ground — decisive argument being a UI one, that `--void-ink` is already `#e8e8ee`, so a
+  blinding-white accent would be indistinguishable from ordinary body text and the floor would
+  effectively have no accent at all. Exported a pre-verified one-line flip for the alternative.
+- Build agent also **fixed a collision it created and was not asked about**: floor 2's red collided
+  with `--void-harm`, so control chips became filled rather than outlined — "you cannot act" is now a
+  *shape* difference. Flagged for human sign-off as beyond-brief.
+- Root-caused its own line-ending churn honestly: Python's `open(path,'w')` translates `\n`→`\r\n` on
+  Windows, so 10 Python-edited files flipped to CRLF. Added `.gitattributes` + renormalized in one
+  content-free commit (`game.test.ts` diff went from 2408 lines to 6). **Worth generalising: agents
+  editing files via Python on Windows silently corrupt line endings.**
+- Plan open-questions: none blocking. Two recorded as cheap-to-overrule decisions instead.
+- NEEDS-HUMAN: the 5 accent hexes visually on their floors (contrast is gated, *feel* is not);
+  `npm run desktop` boot to a battle (agents cannot run Electron); picker/toggle behaviour after the
+  component consolidation (the DOM half carries no unit tests by recorded deviation); the floor-2
+  red-vs-white decision; the filled control chip; and confirmation that losing the browser
+  (non-Electron) path is acceptable — cheapest to reverse now, before 3 units branch off this one.
+- Manual engineer fixes: none yet
+
 ## 2026-08-14 — balance-tune (M15 part 2: tuning to the ~1-in-3 target) [stacked on balance-sim, unmerged]
 - Verdict: PASS
 - Fix rounds: 0 (but the FIRST build launch was interrupted mid-search with uncommitted partial work +
