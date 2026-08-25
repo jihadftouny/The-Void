@@ -124,6 +124,52 @@ and that is the Hollow, and that is the voice narrating your game (§0).
 - **Floor 1 is real because you still have your chip.** The moment of extraction is the moment the
   world stops being solid. That is exactly where the design already put the boundary.
 
+### THE WHOLE GAME HAPPENS DURING THE EXTRACTION **[LOCKED 2026-08-25]**
+
+**This is the final structural fact, and it is the largest one in the document.**
+
+> **The descent is not after the extraction. The descent *is* the extraction.**
+> Every floor, every fight, every choice happens **while your life is being drawn out of you**,
+> and **you are awake for all of it.**
+
+Extraction is not a yank. It is a **reading** — slow, continuous, and performed on a conscious
+person. The five floors are the **stages of that reading**. The game is real-time inside a procedure
+that is still going on.
+
+**Everything reorganises around this:**
+
+| | |
+|---|---|
+| **Floor 1 — before** | You still have your life. The world is solid because nothing has been taken yet |
+| **Floor 2 — fracture** | The reading has begun. You come apart into pieces because you are being *taken apart to be read* |
+| **Floor 3 — grief** | **You are walking through the part they have already finished.** The ash is the portion of your life that has been consumed — see below |
+| **Floor 4 — judgement** | The decisive moment. The procedure is not complete and **you can still come back** |
+| **Floor 5 — absence** | The reading running to completion. There is less of you than there was because *there is literally less of you than there was* |
+
+**The narrator's first words arrive mid-procedure.** There is no "before" in the game — it opens
+with the reading already underway. And the narrator *is* the condition (§0), which means **the voice
+telling you the story is the sound of your own life being taken.**
+
+### The ascent — waking mid-procedure **[LOCKED 2026-08-25]**
+
+**Going through the Void is the descent. Getting past it is the ascent — back into reality.**
+
+> Grace means **you wake up mid-procedure and reclaim your integrity.**
+
+The good ending is not a rescue, a return, or a restoration. It is **interruption**. You surface
+while they are still working, and you stop being something being read.
+
+**This is exactly consistent with the consumption rule below, and the two together give the ending
+its real shape:** what has already been read is **gone** — there is no getting it back — but the
+procedure did not finish. You do not recover your life. **You reclaim your integrity**: you are
+still a person, still whole *as a person*, with a piece of yourself permanently missing.
+
+That is what *"made whole"* means, and why it never says *made well*. Whole is intactness, not
+completeness. **Survivor, not cured** (§9), stated in the mechanism itself.
+
+**Damnation is the procedure completing.** Cast down means the reading was not interrupted. Floor 5
+is what the last of it looks like from inside, and your Hollow Self is what is left when it is done.
+
 ### The reading destroys it — nothing is recoverable **[LOCKED 2026-08-25]**
 
 **Extraction is not storage. It is consumption.** The Memorians read what they need and **the
@@ -247,9 +293,31 @@ is waiting for a report. Nothing you do down there serves anyone above.
 mechanism for getting you down there.
 
 > **Read with §0b.** The Kingpins are not merely partners in a betrayal — they are **accomplices in
-> causing the condition**. "Throwing you into the Void" is the act of *inducing* it. Whether the
-> Kingpins understand what they are actually accomplices to, or believe the folklore like everyone
-> else and think they are simply dropping a body down a hole, is **[OPEN]** and is a rich choice.
+> causing the condition**, and they **know exactly what they are doing and are paid for it**
+> (§0c). "Throwing you into the Void" is the act of *inducing* it.
+
+### How floor 1 actually ends **[LOCKED 2026-08-25]**
+
+**You beat him — and you do not kill him.** You win the fight. Then he plays a countermeasure he had
+ready, **takes the high ground**, and takes you.
+
+**Where this happens matters:** the Kingpin is waiting **at the very entrance of the Rift — the last
+place you could still have turned around.** He is not deep in the Undercity; he is standing on the
+threshold, because the threshold is the point.
+
+**For prose, this is the most important scene in the game:**
+- The fight is a real fight and your victory is a **real victory**. Nothing about it is faked or
+  scripted to fail. You win, and winning changes nothing, and that is far worse than losing.
+- **He is not surprised.** He knew how the fight would go and had the next step prepared.
+- He is the only character in the game who **could** explain the truth to you, because he is fully
+  informed (§0c). Whether he does — and how little he needs to say — is the author's scene to write.
+- The extraction begins **here**, at the threshold, and does not stop. Everything after this line is
+  §0c: the descent is the procedure, and it has already started.
+
+**Design note:** this is a boss you defeat and then lose to anyway. That is unusual and it must be
+handled with care so it does not read as the game cheating — the engine should let the player
+genuinely *win* the encounter, and the reversal belongs to the narration that follows it, not to the
+combat resolution.
 
 This reframes floor 1 entirely:
 - **Your target and your handler are on the same side**, and you are the only party who does not
@@ -473,5 +541,17 @@ Flagged here because they cross into other documents and will otherwise be misse
   inventing them now would constrain that.
 - **The Kingpins as people.** Now known to be Grandmore's collaborators (§4), but not who they are,
   how many, or what the rest of their plan was beyond disposing of you.
-- **Absolution above ground.** Only the flooded industrial underside is described
-  (`ART-BIBLE.md` §4). No asset needs it yet, but narration will.
+- ~~Absolution above ground.~~ **CLOSED 2026-08-25 — deliberately parked.** The game is a descent
+  and never goes up; the surface appears in perhaps three sentences total. Leave it a rumour rather
+  than over-building a city nobody visits.
+- ~~The Kingpins as people.~~ **CLOSED 2026-08-25** — see §4. Several of them, fully informed, fully
+  paid; you defeat one at the threshold and he takes you anyway.
+
+### Universal chips **[LOCKED 2026-08-25]**
+
+**Everyone in Absolution has a brainchip.** Fitted early, unremarkable, simply how a person is
+recorded in the last city.
+
+**Therefore everyone is harvestable.** This method could be used on any living person, the Memorians
+are the only ones who know it, and the folklore holds so completely that nobody has ever thought to
+be afraid of it. The horror scales to the entire population, and no one is looking.
