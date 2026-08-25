@@ -94,6 +94,18 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
   as a flooded industrial level, the Ash City as an *endless varied* city, Floor 4 as ruins opening
   into a buried city, and **Ash-Wraith vs Ash-Wretch as two different enemies** (a new family — an
   engine change, through the pipeline). Batch: 39 → **53 assets** (~$21).
+- **THE WORLD IS NOW WRITTEN — `docs/WORLD.md`.** A thorough worldbuilding interview replaced what
+  had been *one paragraph* of authored prose and a lore file reading "this is a lore this is a lore".
+  **Keystone: the condition IS the Hollow** — the Void is not a place, it is what happens to you, and
+  what happens is hollowing. That resolves the game onto one axis, and the grace ending's existing
+  words, *"made whole"*, turn out to be the win condition stated exactly: **whole is the opposite of
+  hollow.** Also locked: Absolution as the last city; houses as noble-magical bloodlines with
+  industrialised magic (so the techno-occult look is simply *accurate*); the Rift's origin unknown and
+  contested; **the mission ends after floor 1** (floors 2–5 are escape and survival); brainchips as
+  recorded lives; the Neuromancer as a Memorian, which makes the mission internally motivated; the
+  five stages (before → **fracture → grief → judgement → absence**); **floor 4's angels are REAL**,
+  making grace genuine mercy and the game a survivor's story rather than a horror story; and the
+  narrator as the hollowing itself, speaking.
 - Pipeline doctrine changed: **build-agent may now fan out `Explore` sub-agents for READING** but
   remains the only writer — parallel writers in one worktree recreate the exact clash worktrees
   exist to prevent, with no git isolation to catch it.

@@ -233,6 +233,27 @@ the original Java description ("ancient ruins, vast forests… then you find the
 keeps "Underground" literally true — while giving the backdrop a genuine light source, so the sacred
 reads as beautiful rather than ironic.
 
+### What the world record changes about the art **[LOCKED 2026-08-25 — see `docs/WORLD.md`]**
+
+The worldbuilding interview settled things that directly rewrite prompts. **Read `docs/WORLD.md`
+before writing any of them.** The five that matter most here:
+
+1. **The condition is the Hollow, and the floors are stages of it** — fracture, grief, judgement,
+   absence. Each backdrop must render its *stage*, not merely its scenery.
+2. **Floor 3 is GRIEF, not fear.** The ash is *what you lost*. Mourning and exhaustion, never
+   terror — which is also why nothing burns. This is the emotional register for the whole floor,
+   creatures included.
+3. **Floor 5 is ABSENCE, not destruction.** "There was less of you than you thought." Render it as
+   **negative space and things missing**, not as gore, ruin or violence. The Unmade, the Echoes and
+   the Hollowed are all saying that in different ways.
+4. **Floor 4's angels are REAL.** They must be rendered **solid, present and genuinely beautiful** —
+   never ghostly, never ambiguous, never ironic. Floor 4 is the one stage that reveals rather than
+   distorts, and grace is real mercy. If the angels read as hallucination, the art has broken the
+   game's one hopeful fact.
+5. **Techno-occult should look ordinary, not like a mashup.** Magic was industrialised; nobody
+   in-world finds a warded riot plate strange. Render it as *equipment* — worn, practical, unremarkable
+   to its owner — not as a striking juxtaposition of two aesthetics.
+
 **Hard prohibitions:**
 - **No technology whatsoever on floors 3, 4 and 5.** No wires, no metal plating, no machinery.
 - **Never signpost mental illness.** No asylums, straitjackets, pills, or clinical/medical imagery.
@@ -285,7 +306,7 @@ principle is **what constrains what** — never generate a thing before the thin
 
 | Stage | Group | Why here | Assets |
 |---|---|---|---|
-| **0** | **Worldbuilding interview** | Not art. Everything below depends on it, and the design record is thin outside the floors. **Nothing generates until this is done** | — |
+| **0** | ~~Worldbuilding interview~~ | ✅ **DONE 2026-08-25 → `docs/WORLD.md`.** Read it before writing any prompt | — |
 | **1** | **Environments** — 5 floor backdrops + altar/shrine | Establish light, palette, geometry and tech level for the whole game. Every later asset must read *against* these | 7 |
 | **2** | **Characters** — 5 class portraits | Must read against the environments. They also anchor the recursion set, so they cannot come after the enemies that mirror them | 5 |
 | **3** | **Enemies** — 24 families + 7 Sins + Ash-Wretch | Conditioned on both. The five mirror-enemies are versions of the *characters*, which must exist first | 32 |
