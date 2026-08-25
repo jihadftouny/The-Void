@@ -64,6 +64,11 @@ export interface FloorTheme {
  * records the author's own words and OVERRULES the earlier "ash-orange" in
  * `docs/UI-DESIGN.md` §5 that the first version of this table was derived from.
  *
+ * NUMBERING — the two schemes are off by one, so every mention below is explicit: "floor N"
+ * always means the 1-BASED numbering the design docs use, while `place` is the engine's
+ * 0-BASED index (`state.place`, and the array index here). ART-BIBLE floor N is `place` N-1;
+ * the Ash City is floor 3 and `place` 2.
+ *
  * THE PROBLEM THIS TABLE HAD TO SOLVE. Taken literally, three consecutive floors are pale:
  * floor 2 is "blinding white with red flecks", floor 3 is "purely white, grey and black",
  * floor 4 is "bone white". Three near-identical accents would defeat the entire point of a
@@ -103,7 +108,7 @@ export const FLOOR_THEMES: readonly FloorTheme[] = [
   // "purely white gray and black, the fire has settled already and it's just ash".
   // COLD neutral grey. Nothing in the Ash City glows any more; there is no ember left.
   { place: 2, name: 'Ash City', accent: '#aeb8c0' },
-  // WARM bone — sacred, lit, alive. The warm counterpart to floor 2's cold grey.
+  // WARM bone — sacred, lit, alive. The warm counterpart to the Ash City's cold grey.
   { place: 3, name: 'Angelic Underground', accent: '#e6e2d3' },
   // Arterial. Black cannot be an accent against a near-black interface, so the accent is
   // the thing burning in the dark. Deep and pink next to floor 2's fresh scarlet.
@@ -121,8 +126,8 @@ export const FLOOR_THEMES: readonly FloorTheme[] = [
  * `PALETTE.ink` (16.5:1), so floor 2's chrome — title, focus ring, hover, chips — would read
  * as plain white text rather than as an accent.
  *
- * To adopt it, put this value on floor 1's `accent` above and update the two expected hexes
- * in tokens.test.ts.
+ * To adopt it, put this value on the Entrance to the Void entry above — `place` 1, which is
+ * ART-BIBLE floor 2 — and update the two expected hexes in tokens.test.ts.
  */
 export const ENTRANCE_ALTERNATIVE_WHITE = '#eef4ff';
 

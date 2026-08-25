@@ -92,7 +92,8 @@ describe('the shipped palette clears its contrast budget', () => {
       const ratio = contrastRatio(floor.accent, PALETTE.bg);
       expect(
         ratio,
-        `floor ${floor.place} (${floor.name}) accent ${floor.accent} is ${ratio.toFixed(2)}:1`,
+        `place ${floor.place} / ART-BIBLE floor ${floor.place + 1} (${floor.name}): ` +
+          `accent ${floor.accent} is ${ratio.toFixed(2)}:1`,
       ).toBeGreaterThanOrEqual(4.5);
     }
   });
@@ -105,7 +106,8 @@ describe('the shipped palette clears its contrast budget', () => {
     expect(contrastRatio(PALETTE.inkDim, PALETTE.panel)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('the tightest accent is floor 1 at the hand-computed ~5.67:1', () => {
+  it('the tightest accent is the Entrance scarlet at the hand-computed ~5.67:1', () => {
+    // FLOOR_THEMES[1] — place 1, which is ART-BIBLE floor 2, the Entrance to the Void.
     // Entrance scarlet #ff3b2f. Red carries only 0.2126 of the luminance weight, so a
     // saturated red is always the tightest colour in a palette like this:
     //   R 255 -> 1.0            G 59 -> 0.043733        B 47 -> 0.028428
@@ -116,7 +118,7 @@ describe('the shipped palette clears its contrast budget', () => {
     expect(contrastRatio(FLOOR_THEMES[1]!.accent, PALETTE.bg)).toBeCloseTo(5.670, 2);
   });
 
-  it('the toxic green and the cold grey land where the hand computation says', () => {
+  it('the Undercity green and the Ash City grey land where the hand computation says', () => {
     // Undercity #9dc043: L = 0.2126*0.337163 + 0.7152*0.527117 + 0.0722*0.056127
     //   = 0.452779 -> 0.502779 / 0.052190 = 9.6336
     expect(contrastRatio(FLOOR_THEMES[0]!.accent, PALETTE.bg)).toBeCloseTo(9.634, 2);
@@ -129,9 +131,13 @@ describe('the shipped palette clears its contrast budget', () => {
 // The floors the ART-BIBLE describes as pale are the ones most at risk of collapsing into
 // one another. These tests encode the separation as a RULE, so a later palette tweak cannot
 // quietly undo it — which is exactly what a per-floor accent exists to prevent.
+// NUMBERING, because these two schemes are off by one and the confusion is easy:
+// `place` is the ENGINE's 0-based index (state.place, and the array index here);
+// docs/ART-BIBLE.md numbers the floors 1-5. place 2 IS ART-BIBLE floor 3, the Ash City.
+// Below, floors are named rather than numbered wherever a name will do.
 describe('the pale floors stay distinguishable (docs/ART-BIBLE.md §4)', () => {
-  const ASH = FLOOR_THEMES[2]!.accent; // cold neutral grey — dead, drained
-  const BONE = FLOOR_THEMES[3]!.accent; // warm bone — sacred, lit
+  const ASH = FLOOR_THEMES[2]!.accent; // place 2 = floor 3: cold neutral grey, drained
+  const BONE = FLOOR_THEMES[3]!.accent; // place 3 = floor 4: warm bone, sacred, lit
 
   it('Ash City is COLD: its blue channel exceeds its red', () => {
     // #aeb8c0 -> r 174, b 192. Blue leads by 18.
@@ -167,7 +173,9 @@ describe('the pale floors stay distinguishable (docs/ART-BIBLE.md §4)', () => {
     expect(boneRatio).toBeGreaterThan(ashRatio * 1.4);
   });
 
-  it("floor 1's scarlet cannot be mistaken for floor 4's arterial red", () => {
+  it("the Entrance scarlet cannot be mistaken for the True Void arterial red", () => {
+    // FLOOR_THEMES[1] (place 1 = ART-BIBLE floor 2, Entrance) against FLOOR_THEMES[4]
+    // (place 4 = ART-BIBLE floor 5, True Void).
     // #ff3b2f (fresh blood on white) vs #ef6076 (old blood in the dark).
     const scarlet = hexToRgb(FLOOR_THEMES[1]!.accent);
     const arterial = hexToRgb(FLOOR_THEMES[4]!.accent);
@@ -236,7 +244,7 @@ describe('floorTheme is total and clamped', () => {
     expect(floorTheme(99).place).toBe(4);
   });
 
-  it('degrades a non-finite place to floor 0 instead of throwing', () => {
+  it('degrades a non-finite place to place 0 (the Undercity) instead of throwing', () => {
     expect(floorTheme(Number.NaN).place).toBe(0);
     expect(floorTheme(Number.POSITIVE_INFINITY).place).toBe(0);
     expect(floorTheme(Number.NEGATIVE_INFINITY).place).toBe(0);
@@ -322,6 +330,34 @@ function stylesheetsUnder(dir: string): string[] {
   return found;
 }
 
+/**
+ * A stylesheet as the BROWSER sees it: comments removed. Both scans below must judge the
+ * rules that actually ship, not the prose around them — otherwise a comment mentioning
+ * `--void-accent:` would fail the build, and a typo inside a commented-out line would too.
+ */
+function shippingCss(file: string): string {
+  return readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+/**
+ * Matches a custom-property DECLARATION, and never a `var()` read.
+ *
+ * `(?:^|[{;])` is a declaration BOUNDARY — the only three places a CSS declaration can
+ * legally begin: opening a block, after the previous declaration's semicolon, or at the
+ * start of a line. Anchoring on `^` ALONE (the first version of this guard) was too strict:
+ * it only saw declarations that begin a line, so the single-line rule
+ * `.x { --void-accent: #fff; }` — which is this codebase's own house style — slipped past.
+ *
+ * It cannot fire on a read: in `color: var(--void-ink)` the character before the name is
+ * `(`, and `\s*` matches only whitespace, so no start position can reach it. The trailing
+ * `\s*:` is a second, independent guard — a line-leading name inside a wrapped
+ * `var(\n  --void-x\n)` still fails, because the next non-space character is `)`, not `:`.
+ */
+const DECLARATION = /(?:^|[{;])\s*(--void-[a-zA-Z0-9-]+)\s*:/gm;
+
+/** Matches a `var(--void-*)` READ, anywhere — deliberately unanchored. */
+const REFERENCE = /var\(\s*(--void-[a-zA-Z0-9-]+)/g;
+
 describe('every --void-* custom property the CSS reads is one the theme writes', () => {
   const files = stylesheetsUnder(SRC_ROOT);
   const defined = new Set(Object.keys(themeVars(0)));
@@ -334,8 +370,7 @@ describe('every --void-* custom property the CSS reads is one the theme writes',
     const missing: string[] = [];
     let references = 0;
     for (const file of files) {
-      const css = readFileSync(file, 'utf8');
-      for (const match of css.matchAll(/var\(\s*(--void-[a-zA-Z0-9-]+)/g)) {
+      for (const match of shippingCss(file).matchAll(REFERENCE)) {
         references += 1;
         const name = match[1]!;
         if (!defined.has(name)) missing.push(`${basename(file)} -> ${name}`);
@@ -352,11 +387,51 @@ describe('every --void-* custom property the CSS reads is one the theme writes',
     // to prevent, so it is a failure, not a style preference.
     const declarations: string[] = [];
     for (const file of files) {
-      const css = readFileSync(file, 'utf8');
-      for (const match of css.matchAll(/^[^\S\r\n]*(--void-[a-zA-Z0-9-]+)[^\S\r\n]*:/gm)) {
+      for (const match of shippingCss(file).matchAll(DECLARATION)) {
         declarations.push(`${basename(file)} -> ${match[1]!}`);
       }
     }
     expect(declarations, `token(s) redefined in CSS: ${declarations.join(', ')}`).toEqual([]);
+  });
+
+  // The regexes above are the load-bearing part of this guard, and the first version of the
+  // declaration one was wrong in a way the shipping stylesheets could not reveal (they
+  // contain no declarations at all, so it passed while catching nothing). These cases pin
+  // the behaviour directly, in every form the codebase actually writes CSS.
+  it('catches a declaration in EVERY form, including the single-line house style', () => {
+    const caught = (css: string): string[] =>
+      [...css.matchAll(DECLARATION)].map((m) => m[1]!);
+
+    // The house style throughout components.css and game.css — the form that was missed.
+    expect(caught('.void-rogue { --void-accent: #ffffff; }')).toEqual(['--void-accent']);
+    // Minified / no whitespace at all.
+    expect(caught('.rogue{--void-accent:#fff}')).toEqual(['--void-accent']);
+    // Second and later declarations in a single-line rule, after a semicolon.
+    expect(caught('.rogue { color: red; --void-ink: #fff; }')).toEqual(['--void-ink']);
+    // The multi-line form (all the first version of this guard could see).
+    expect(caught('.rogue {\n  --void-bg: #000;\n}')).toEqual(['--void-bg']);
+    // Several at once, mixed forms.
+    expect(caught('.a{--void-x:1px;--void-y:2px}')).toEqual(['--void-x', '--void-y']);
+  });
+
+  it('never mistakes a var() READ for a declaration', () => {
+    const caught = (css: string): string[] =>
+      [...css.matchAll(DECLARATION)].map((m) => m[1]!);
+
+    expect(caught('.a { color: var(--void-ink); }')).toEqual([]);
+    expect(caught('.a{color:var(--void-ink)}')).toEqual([]);
+    expect(caught('.a {\n  color: var(--void-ink);\n}')).toEqual([]);
+    // A fallback, and a nested read — both still reads.
+    expect(caught('.a { color: var(--void-ink, #fff); }')).toEqual([]);
+    expect(caught('.a { color: var(--void-a, var(--void-b)); }')).toEqual([]);
+    // A read wrapped so the NAME begins its own line — the trailing `:` is what saves this.
+    expect(caught('.a {\n  color: var(\n    --void-ink\n  );\n}')).toEqual([]);
+  });
+
+  it('judges the shipping rules, not the prose around them', () => {
+    // A commented-out declaration is not a declaration; a token named in an explanatory
+    // comment is not a redefinition. Neither may fail the build.
+    const commented = '/* --void-accent: #fff; is written by theme.ts */\n.a { color: red; }';
+    expect([...commented.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(DECLARATION)]).toEqual([]);
   });
 });
