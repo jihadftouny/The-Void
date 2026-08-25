@@ -283,9 +283,46 @@ insanity, push, aired. Activate the dormant 13:
 
 ## 8. The five floors **[DECIDED 2026-08-05 — details refine in M10/M12]**
 
-The descent is **stages into the mind**: it begins literal and becomes psychological. Each floor has
-its own tone, enemy families, a **signature mechanic** (the per-floor twist), and a **boss** (a
-distinct encounter with unique mechanics — an LLM agent with run-memory, built in M12).
+The descent is **stages of an extraction**: your recorded life is being read out of you while you are
+awake, and the floors are the stages of that reading. See **`docs/WORLD.md` §0c** — it supersedes the
+older framing of "stages into the mind", which was written before the mechanism existed. The stages
+are **before → fracture → grief → judgement → absence**.
+
+Each floor has its own tone, enemy families, a **signature mechanic** (the per-floor twist), and a
+**boss** (a distinct encounter with unique mechanics — an LLM agent with run-memory, built in M12).
+
+### How floor mechanics are implemented **[DECIDED 2026-08-25]**
+
+> **None of the five existed in code as of the 2026-08-25 audit** (`docs/SCOPE-AUDIT.md` §3.1). This
+> is how they get built, and **nothing else should be built on the battle loop until the hook
+> exists** — retrofitting it is the most expensive change available in this project.
+
+**A hybrid, chosen deliberately over a single mechanism:**
+
+- **Simple modifiers reuse the existing effect/trigger pipeline** (`src/game/relicEffects.ts`) —
+  already pure, RNG-free and tested. A floor gets an effect list in data, and the battle loop fires
+  the same named triggers relics already use. Adding a numeric floor modifier becomes a **data
+  edit**, not engine surgery. Floor 3's dampened healing and resource bleed go here.
+- **Mechanics that restructure the encounter get bespoke code**, because a flat action list cannot
+  express them honestly. Floor 2's illusory enemies and floor 5's kit corruption go here.
+
+The cost of the hybrid is two places to look; the cost of forcing everything into one is either a
+data format that cannot express illusions, or bespoke code for things that are just a number.
+
+### Per-floor rulings **[DECIDED 2026-08-25]**
+
+**Floor 2 — illusions are literal.** A seeded fraction of floor-2 encounters spawn an **illusory
+enemy**. Attacking it wastes the turn and deals nothing. A **WIS check** — a Study/Discern action, or
+passively each round — reveals it. This is the design as written, and it does two things nothing else
+currently does: it makes **WIS matter for the first time**, and it gives the **clarity↔delusion karma
+axis its only trigger** (the audit found that axis can currently never move, §1.2). Seeing through an
+illusion feeds `seeThroughIllusion`, which already exists.
+
+**Floor 3 — attrition only; the endlessness is prose, not structure.** Dampened healing plus a
+per-encounter resource bleed, both through the effect system. **No variable floor length and no
+find-the-exit condition** — those would change act progression, the save format, and every number
+M15 tuned. The *endless grey city* is carried by the narration and the backdrop, which is cheaper and
+likelier to work: endlessness is hard to make compelling and easy to make tedious.
 
 | # | Floor | Tone / imagery | Enemies | Signature mechanic | Boss |
 |---|---|---|---|---|---|
