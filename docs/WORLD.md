@@ -92,6 +92,28 @@ place and this is a real errand with a real target.
 from that moment the game is **escape and survival**. Not a new quest — the *absence* of one. Nobody
 is waiting for a report. Nothing you do down there serves anyone above.
 
+### The betrayal — the Kingpin works *with* Grandmore **[LOCKED 2026-08-25]**
+
+**The mission was the disposal.** The Undercity Kingpin and house Grandmore are collaborators, and
+**it is the Kingpin who throws you into the Void.** The errand you were sworn to carry out was the
+mechanism for getting you down there.
+
+This reframes floor 1 entirely:
+- **Your target and your handler are on the same side**, and you are the only party who does not
+  know it. The "convoluted plan of the Kingpins" was, at least in part, *you*.
+- **You still kill him** — that part is real. The betrayal is not that the fight was fake; it is
+  that winning it was the point, and what came after was arranged.
+- **The Arch-Mage knew exactly what he was ordering** (§5) is no longer merely institutional
+  callousness. It is a specific, personal, domestic betrayal — you were given up by the house you
+  are *sworn to*, in a world where the oath was not refusable (§7).
+- It gives the brainchips a second meaning. Whatever "all the available information" was for, the
+  chips were never the reason you were sent.
+- **Nothing above is coming for you.** The people who would have to notice you are missing are the
+  ones who arranged it.
+
+**For prose:** floor 1 must play the mission straight. The betrayal lands at its end, and every
+floor after it is coloured by the knowledge that the descent was done *to* you, not merely suffered.
+
 **Every narrator and every piece of prose must respect this break.** Floor 1 can talk about
 objectives. Floors 2–5 must not. The silence where the mission used to be is the point.
 
@@ -226,14 +248,35 @@ that is the whole game.
 
 ---
 
-## 10. Still open
+## 10. A descent cannot be seen from above **[LOCKED 2026-08-25]**
 
-- **The Kingpins.** Named as the mission's target and the last purely human enemy, but nothing says
-  who they are, how many, or what their "convoluted plan" was.
-- **The rival houses.** Three contested histories of the Rift implies at least three houses;
-  only Grandmore exists.
-- **What a descent looks like from above** — how someone is put into the Rift, and by whom.
-- **Absolution itself** as a place, above the Undercity. Only the flooded industrial underside is
-  described (`ART-BIBLE.md` §4).
-- **The Void's own name.** Who started calling it that, and whether the houses use a different word
-  in their archives.
+**There is nothing to watch.** A descent is not observable from outside — no vantage, no
+instrument, no report from the edge. Someone goes into the Rift and that is the last of it.
+
+This is the necessary consequence of the Void being a condition (§6): there is no *there* to look
+at. It also means:
+- **The archives in §5 are built from survivors, not observers.** The houses know the stages because
+  the few who came back all described the same ones — which makes the record a **debrief literature**
+  rather than a science, and makes it correct without anyone ever having verified it.
+- **Nobody witnessed your betrayal** (§4) and nobody could. Whatever the Kingpin and Grandmore
+  arranged, the moment you went in, it stopped being anything anyone can point at.
+- **The narrator cannot cut away.** There is no exterior shot available in this game — no scene
+  above ground while you are below, ever. Second person, inside, only.
+
+## 11. Naming **[LOCKED 2026-08-25]**
+
+**The houses call it the Void in their archives.** There is no secret internal term, no clinical
+euphemism, no older name that the initiated use. The word everyone uses is the word.
+
+That is quietly worse than a euphemism would have been. An institution that has documented this for
+generations, and never found it necessary to call it anything but what it is.
+
+## 12. Still open
+
+- **The rival houses.** Three contested histories of the Rift (§3) implies at least three houses,
+  and only Grandmore exists. **Explicitly undecided by the author** — deliberately parked, not
+  overlooked.
+- **The Kingpins as people.** Now known to be Grandmore's collaborators (§4), but not who they are,
+  how many, or what the rest of their plan was beyond disposing of you.
+- **Absolution above ground.** Only the flooded industrial underside is described
+  (`ART-BIBLE.md` §4). No asset needs it yet, but narration will.
