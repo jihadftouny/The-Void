@@ -94,7 +94,27 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
   as a flooded industrial level, the Ash City as an *endless varied* city, Floor 4 as ruins opening
   into a buried city, and **Ash-Wraith vs Ash-Wretch as two different enemies** (a new family — an
   engine change, through the pipeline). Batch: 39 → **53 assets** (~$21).
-- **THE WORLD IS NOW WRITTEN — `docs/WORLD.md`.** A thorough worldbuilding interview replaced what
+- **THE WORLD IS COMPLETE — `docs/WORLD.md`, six interview rounds, every open point closed.** The
+  full mechanism: **a brainchip holds a recorded life; taking it out leaves a person hollow; the
+  hollow is the Void.** The Memorians' ordinary day job *is* the cause, and only they know it —
+  everyone else believes the folklore that the Void is a hole in the ground. **The whole game
+  happens during the extraction**, which is a slow reading performed on a conscious person; the five
+  floors are its stages. **The mission was to harvest you.** Grace = waking mid-procedure and
+  reclaiming your integrity (whole ≠ well; what was read is gone). Damnation = the reading
+  completes, **and your stripped chip is installed in another emptied body — which is what a Hollow
+  is.** The Hollowed are literally previous subjects; the meta-progression unlock is diegetic.
+  Also closed: the pit is real and unexplained even to the Memorians; the angels are real because
+  *your own life was what blocked them*; chips are universal; the Kingpin is beaten but not killed
+  at the Rift's threshold; rival houses and the surface deliberately parked.
+- **All art-style decisions settled, nothing generated** (per the author's instruction). One sprite
+  per enemy with motion in code · affixes as shader effects (120 combos, zero assets) · transparency
+  by keying flat black to PNG in post · item icons deferred until the inventory is redesigned ·
+  **no generated interface art at all** — the austere typographic UI *is* the Memorians' file on you
+  · **hardware kept out of the art entirely**; the Hollow is rendered as wrongness of occupancy, not
+  as visible technology. Generation order locked: environments → characters → enemies → bosses.
+- **`docs/README.md` added** — indexes all nine documents, states which wins when two disagree, and
+  lists the corrections already on record so nobody re-derives from a stale line.
+- **Earlier the same day —** A thorough worldbuilding interview replaced what
   had been *one paragraph* of authored prose and a lore file reading "this is a lore this is a lore".
   **Keystone: the condition IS the Hollow** — the Void is not a place, it is what happens to you, and
   what happens is hollowing. That resolves the game onto one axis, and the grace ending's existing
