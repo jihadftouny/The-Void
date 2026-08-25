@@ -170,6 +170,43 @@ completeness. **Survivor, not cured** (§9), stated in the mechanism itself.
 **Damnation is the procedure completing.** Cast down means the reading was not interrupted. Floor 5
 is what the last of it looks like from inside, and your Hollow Self is what is left when it is done.
 
+### WHAT A HOLLOW IS **[LOCKED 2026-08-25]**
+
+> **On damnation, your chip is installed in another empty body.**
+> **That is what a Hollow is.**
+
+The reading consumes your recorded life (§ below) — but **the chip itself is hardware, and hardware
+is not wasted.** What survives the procedure is a chip with a person's life read out of it, and that
+chip is **put into a body whose own chip was taken.**
+
+**A Hollow is someone reinstalled.** Not their memories, not their life — those are gone — but
+whatever persists on a stripped chip, running in flesh that belonged to someone else.
+
+**This closes a loop the whole world was already implying:**
+- **Extraction produces empty bodies.** Universal chipping (§ below) means every extraction leaves
+  one behind. **They are not discarded — they are stock.** The operation is a closed system:
+  bodies out of one person, chips into another. Nothing is thrown away and nobody is spared.
+- **The Hollowed are literally other people.** This resolves the open question in §12d. They are not
+  a metaphor and not "what you fear becoming" — they are **previous subjects, reinstalled**, which is
+  exactly what the design note always said: *"former fallen descenders — what you may become."* It
+  was accurate all along.
+- **The Hollow class becomes fully diegetic.** Its locked costume — *"wearing what it wore before,
+  badly. Something missing from the silhouette. Negative space where a person should be"* — is now
+  a literal description. **The clothes are not theirs. The body is not theirs.** It is wearing
+  someone else's life, badly, because there is no life in it to wear anything well.
+- **The meta-progression stops being a menu.** You are cast down, you become a Hollow, and on the
+  next descent you can **play** as one. The unlock is not a reward — it is **what happened to you.**
+- **And it is why the Hollow is "what is left of a retainer with no house"** (§7). No house, no
+  body, no life. Only the hardware, still running.
+
+**Damnation is therefore not death.** It is worse and more specific: you continue, in someone else's
+body, without the life that made continuing mean anything. The Void claims its own, and then it
+*uses* them.
+
+> **[OPEN, minor] Where the body is during the procedure.** Extraction is long (§0c) and the body
+> must be somewhere. The natural reading, given the above, is that it is held wherever the stock is
+> held. Not settled, and not blocking any art.
+
 ### The reading destroys it — nothing is recoverable **[LOCKED 2026-08-25]**
 
 **Extraction is not storage. It is consumption.** The Memorians read what they need and **the
@@ -542,11 +579,10 @@ A consequence worth stating plainly, because it governs how every enemy is writt
   Sins, the Judged, the Unmade, the Echoes — these are your own content, being taken apart. This is
   why sparing them is a karma act: **on floor 3 you are choosing whether to be merciful to your own
   grief.**
-- **[OPEN, minor] The Hollowed.** Their design note calls them *"former fallen descenders — what you
-  may become"*. If the descent is entirely internal, they cannot literally be other people. The
-  natural readings: they are **what you fear becoming**, or the folklore's population made present,
-  or traces the Memorians' own archive leaves in the reading. Worth settling before floor 5 prose,
-  not before art.
+- ~~[OPEN] The Hollowed.~~ **CLOSED 2026-08-25 — they are literally other people.** See §0c "What a
+  Hollow is": a Hollow is a stripped chip reinstalled in an emptied body. The design note —
+  *"former fallen descenders — what you may become"* — was accurate in the plainest possible sense
+  the entire time.
 
 ## 12b. Still open
 

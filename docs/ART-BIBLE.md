@@ -495,10 +495,17 @@ The design record was genuinely silent on these. Guessing produced the medieval-
    defined** (`WORLD.md` §3): a **real pit**, older than the city, origin genuinely unknown even to
    the Memorians. It is a physical place that can be drawn, and the Kingpin waits at its **entrance**
    — the threshold where you could still have turned back (`WORLD.md` §4).
-3. **The socket, and the apparatus.** Chips are universal (`WORLD.md`), extraction is a **long**
-   procedure performed on a conscious person, and the whole game happens during it. That implies
-   visible hardware — a temple socket at minimum, and something the body is connected *to* for the
-   duration. How far the art commits to this is **[OPEN]** and is the last blocking art question.
+3. ~~The socket and the apparatus.~~ **CLOSED 2026-08-25 — keep the hardware OUT of the art.**
+   No temple sockets, no leads, no visible chip ports, on anyone. The mechanism is carried entirely
+   by the prose and the player pieces it together; the images never state it. This preserves the
+   ambiguity the design demands and keeps the reveal in the player's head rather than on the screen.
+
+   **But the Hollow is still rendered from what it *is*** (`WORLD.md` §0c — a stripped chip
+   reinstalled in someone else's emptied body). Render that as **wrongness of occupancy, not as
+   hardware**: clothes that do not fit and were not chosen, a body worn rather than inhabited,
+   negative space where a person should be, a posture nobody would hold on purpose. Same for the
+   Hollowed, the Echoes and the Hollow Self. **The horror is that it is wearing a person — and no
+   visible technology explains why.**
 3. **Naming: "Ash-Wretch" does not exist.** The probe and the `UI-DESIGN.md` mockup both use it, but
    the actual family is **`ashWraiths` / "Ash-Wraith"**, whose design hook is *"endless weak filler"*
    and whose name table (*Drifting, Smouldering, Faint, Pale / Cinder, Ember-Shade*) suggests
