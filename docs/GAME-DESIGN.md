@@ -291,6 +291,25 @@ are **before → fracture → grief → judgement → absence**.
 Each floor has its own tone, enemy families, a **signature mechanic** (the per-floor twist), and a
 **boss** (a distinct encounter with unique mechanics — an LLM agent with run-memory, built in M12).
 
+### Equip and unequip become engine inputs **[DECIDED 2026-08-25]**
+
+**Equipment changes must go through `step`.** Two new `GameInput` variants (`equip` / `unequip`)
+replace the render layer calling into state directly (`src/desktop/view-model.ts`, `game.ts`).
+
+**Why this is not cosmetic:**
+- It restores **reproducibility from `seed + inputs`** — `CLAUDE.md` principle 1. Today a run cannot
+  be replayed, because a load-bearing state change happens outside the engine's single path.
+- **It invalidates the current balance numbers, and that is the point.** `docs/BALANCE-REPORT.md`
+  states its own caveat: the simulation *"fights with starting gear the whole way — found loot lands
+  in the backpack unused"*, because `step` has no equip action. **The headline 32.9% win rate
+  describes a character who never equips anything it finds.** Once the sim can equip, the real
+  number is likely higher — possibly much higher.
+- Replay and determinism tests cannot currently cover the equipment path at all.
+
+**Therefore the balance pass must be re-run as part of, or immediately after, this change** — and
+`BALANCE-REPORT.md` is stale from the moment it lands. Cost today: one union member. Cost after the
+three remaining UI units build on the current view-model: a three-unit rewrite.
+
 ### How floor mechanics are implemented **[DECIDED 2026-08-25]**
 
 > **None of the five existed in code as of the 2026-08-25 audit** (`docs/SCOPE-AUDIT.md` §3.1). This
@@ -323,6 +342,24 @@ per-encounter resource bleed, both through the effect system. **No variable floo
 find-the-exit condition** — those would change act progression, the save format, and every number
 M15 tuned. The *endless grey city* is carried by the narration and the backdrop, which is cheaper and
 likelier to work: endlessness is hard to make compelling and easy to make tedious.
+
+**Floor 4 — temptation is gated by the FLOOR, not by karma.** The tempting deal pool is offered to
+**everyone who reaches floor 4**, regardless of how they have played. That is the point of a
+crucible: *the reverent player must be tempted, or reverence has cost them nothing.* Carried karma
+may still weight **which** temptation appears — not **whether** one does.
+
+> Implementation note: `buildDeal(karma, _act, rng)` (`src/game/deal.ts`) already takes the act and
+> explicitly ignores it — the parameter is named `_act` with a comment saying the placeholder tables
+> do not use it. The hook exists; it just needs reading.
+
+**Floor 5 — your skills warp.** Each of your own skills gains a corrupted variant on floor 5: costs
+shift, damage types change, something is gained and something taken. **You keep your kit and it
+stops being reliably yours** — which is precisely what *absence* means at this stage. It also makes
+the Hollow Self fight land, since it is wielding that same warped kit back at you.
+
+This is **bespoke code**, not an effect list, per the hybrid rule above — it restructures skill
+resolution rather than modifying a number. Note that floor 5 is only reached by players who were
+**cast down**, so it is the least-seen content in the game; weight the engineering accordingly.
 
 | # | Floor | Tone / imagery | Enemies | Signature mechanic | Boss |
 |---|---|---|---|---|---|
@@ -407,10 +444,27 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 ## 10. The LLM narration layer
 
 ### Decided
-- **Role: narrate + write the choices.** The narrator writes the prose for each beat and authors the
-  tappable choice options; the engine owns all rules/numbers, and choices are grammar-constrained to
-  valid engine actions. Free-text is a *bonus* mapped to a closed set of engine tools, not the primary
-  driver. **[DECIDED]** — reliable on a small (3–4B) local model.
+- **Role: narrate ONLY. The engine writes the choices.** **[DECIDED 2026-08-25 — REVERSES the
+  earlier decision]** The engine emits the legal action set and the UI renders it; the model writes
+  prose and nothing else.
+
+  **Why this reversed.** The original plan had the narrator authoring the choice buttons,
+  grammar-constrained to legal actions. Three things killed it: it adds a **model round-trip before
+  every menu render**, which is exactly what `UI-DESIGN.md` §2's "bookends only, fast rounds"
+  decision exists to avoid; it makes the action bar a **variable-shape surface**, which is very hard
+  to design a real battle screen against; and it pulls against **principle 5, engine-authoritative**
+  (`CLAUDE.md`) — if the engine must validate every proposed action anyway, having the model propose
+  them buys texture at the cost of predictability.
+
+  **Consequence: M11 shrinks substantially.** Grammar-constrained choices, the engine tool-registry
+  and free-text-to-tool mapping are **all dropped**. What remains is narration quality: per-floor
+  voices, beat significance (which beats deserve prose at all), boss agents with run-memory, and
+  karma reaching the prompt.
+
+  **What was given up, honestly:** flavoured action labels — *"Drive the baton through its throat"*
+  instead of *"Fight"* — would have been genuinely characterful. If that is ever wanted back, the
+  cheap version is the model rewriting **labels** over an engine-fixed action set, which keeps the
+  shape stable. Recorded so the option is not lost.
 - **Flavor systems: per-floor narrator prompts + boss agents with run-memory.** Each floor has its
   own voice/tone/imagery; each of the 5 bosses is an agent that remembers what you did. Regular
   enemies use lighter templates (not full personality cards, for now). **[DECIDED]**
