@@ -70,6 +70,27 @@ Format per entry:
   component consolidation (the DOM half carries no unit tests by recorded deviation); the floor-2
   red-vs-white decision; the filled control chip; and confirmation that losing the browser
   (non-Electron) path is acceptable — cheapest to reverse now, before 3 units branch off this one.
+- **Fix round 2 — test-agent returned VERDICT: FAIL on re-verification.** Everything previously
+  verified still held (33 deletions unchanged, determinism lock still first-commit and still red
+  under an injected draw, damage invariant killed at all 5 mutation sites, renormalisation proven
+  content-free by SHA-256 of CR-stripped blobs, all 5 accent ratios reproduced against an
+  independent WCAG implementation). **15 of 16 mutants killed; one guard stayed green.**
+- **THE ESCAPE — and it is a generalisable class, not a one-off.** The new "no stylesheet may
+  DECLARE a `--void-*`" guard anchored its regex to start-of-line, so it fired only on a
+  *multi-line* declaration. `.void-rogue { --void-accent: #fff; }` on one line sailed through.
+  **The build agent verified the guard in the form it had written, not the form it would be
+  violated in** — and single-line rules are the house style in the very files being scanned (5 in
+  `components.css`, 11 in `game.css`, including the two chip rules directly below its own new
+  block). Three downstream units inherit this guard and would each have written in that idiom.
+- **Doctrine change made in response** (`.claude/agents/build-agent.md`, "Writing tests"): tightened
+  the existing break-your-guard rule to require breaking it *in the form it will actually be
+  violated in — the surrounding code's own idiom*. A guard proven red only in the shape you
+  happened to test is untested in every other shape, and the violation that reaches it will be
+  written by someone following the house style, not yours. **This is the highest-value signal of
+  the run: the failure was not a missing check, it was a check verified against itself.**
+- Also of note: the test-agent's own rigour is what caught it — it did not re-run the build agent's
+  proof, it invented a *new* violation in the house idiom. Mutation testing that reuses the
+  author's mutant is worth much less than mutation testing that writes its own.
 - Manual engineer fixes: none yet
 
 ## 2026-08-14 — balance-tune (M15 part 2: tuning to the ~1-in-3 target) [stacked on balance-sim, unmerged]
