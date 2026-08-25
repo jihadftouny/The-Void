@@ -168,6 +168,58 @@ yourself at an **altar**. Never draw coins, gold, or a shop.
 
 ---
 
+### The five classes — costume **[LOCKED 2026-08-25]**
+
+No costume description existed anywhere in the repo; these are now canon. Every one carries the
+techno-occult read: street-tech gear marked, wrapped or blessed by someone who has been down there.
+
+| Class | Costume |
+|---|---|
+| **Enforcer** | Ballistic riot plate, rain-slick, corporate insignia half ground off. Full visor, one cracked lens. Shock baton, haft wrapped in prayer cord. A ward scratched into the chest plate by hand |
+| **Neuromancer** | Thin coat over a rig of trailing leads, sockets at the temple. Pistol holstered but never drawn — the hands are the weapon. Eyes wrong: too still, or not there |
+| **Scavver** | Layered scavenged plate, none of it matching. Respirator, goggles pushed up. Rapier and a dozen pouches — wire, hooks, vials. Built for leaving quickly |
+| **Penitent** | Coarse robe over surgical scarring. Barefoot. No weapon — the blood is the weapon. A censer, a length of chain. Self-inflicted marks that read as devotion, not damage |
+| **Hollow** | Wearing what it wore before, badly. Something missing from the silhouette — negative space where a person should be. Carries a gun it does not seem to need |
+
+### The Undercity — **flooded industrial** **[LOCKED 2026-08-25]**
+
+A sunken industrial level beneath Absolution: standing water with a green chemical sheen, corroded
+pipe galleries overhead, dripping runoff, low fog that tastes of metal, failing worklights and
+vent-glow, graffiti and tarpaulin shelters against the walls. **The green is what is in the water
+and the air, not what is on the signs** — the toxicity is literal, not decorative. It reads as *a
+place people were disposed of*, which is exactly what the design says it is: where Absolution sends
+its criminals.
+
+**Still undescribed anywhere:** **the Rift**, the doorway from Floor 1 down to Floor 2. It has no
+description in any source. Needs the author.
+
+### The Ash City — **endless and varied** **[LOCKED 2026-08-25]**
+
+Author's direction: *"the ash city is an endless city, with a lot of houses, buildings, varied
+architecture throughout it."* Not a ruin-field and not one repeated street — a real city that goes
+on past the horizon, with genuinely different buildings: houses beside towers beside civic
+structures, many periods and styles jumbled together. The horror is the **endlessness and the
+silence**, not destruction. Ash falls over all of it. **Nothing burns — the fire has already gone
+out.** The probe backdrop's orange horizon glow is wrong on this point and must be regenerated cold.
+
+### Ash-Wraith and Ash-Wretch — **two different enemies** **[LOCKED 2026-08-25]**
+
+The probe creature (a solid charred humanoid with ember veins) was generated under a name that does
+not exist in the game. Resolution: keep **both**, as distinct enemies.
+
+- **Ash-Wraith** — the existing family, corrected to match its own design. *Incorporeal*: a human
+  outline suspended in drifting ash, edges unravelling into the air, no solid mass, cold pale grey,
+  **no embers and no orange**. This fits its role as *"endless weak filler"* and its name table
+  (Drifting, Smouldering, Faint, Pale / Cinder, Ember-Shade), and it contrasts properly against the
+  solid Nightmares (Grief, Rage, Dread) that share the floor.
+- **Ash-Wretch** — a **new** enemy: the solid cracked-cinder humanoid from probe 01. Heavier and
+  more physically present than the wraith.
+
+> ⚠ **This is a game-data change, not just an art decision.** A new family must be added to
+> `src/data/enemyFamilies.json` with its own tag, element, stat bias, skills, name table entry and
+> floor assignment — and it must go through the pipeline like any other engine change, not be hand
+> edited. Asset count rises 52 → **53**. Flagged for the `art-pipeline` unit's plan.
+
 ## 4b. The asset list — 52 assets **[LOCKED 2026-08-25]**
 
 Raised from 39 to 52 because the original budget silently compromised three things the design
