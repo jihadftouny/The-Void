@@ -71,6 +71,31 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-08-25 — M-UI2 begins: `ui-foundation` built + verified; the art direction found
+- **`ui-foundation` (unit 1 of 5) — VERDICT PASS, then PASS again after one fix round. 1026 tests**
+  (960 → 1014 → 1026). Branch `agentic/ui-foundation`, **unmerged, awaiting your review.**
+  Delivered: design tokens + five per-floor accents, the shared panel/bar/chip/row/button
+  components, **the standalone Kaplay front-end deleted** (`index.html` + `src/scenes/` — one
+  front-end from here, bundle 205 kB → 116 kB), and combat events widened to carry real dice.
+- **A REAL ENGINE BUG was found and fixed, unrelated to the UI task.** `battle.ts` modified damage
+  *after* `combat.ts` emitted the attack event, so events reported damage the player never lost — a
+  Scrap Plating round reported **2 while the player lost 0**. Invisible for the whole project
+  because nothing displayed those numbers. Building the dice log is what surfaced it.
+- **Art direction FOUND — and it changed.** Three probes (~$3.60 total): painterly realism worked
+  but is superseded by **"32-bit era, but 2D"** — pre-rendered sprite art (Diablo 1 / Fallout /
+  PS1), dithered, murky, limited palette. It pairs with the austere monospace interface instead of
+  fighting it, and makes the alpha-keying problem tractable. Full record: **`docs/ART-BIBLE.md`**.
+- Also locked this session: **techno-occult** tech level (riot plate with a hand-scratched ward —
+  fixes a medieval-knight error), the five class costumes (none existed before), the floor colour
+  ramp in the author's own words (**toxic green** Undercity · red-fleck Entrance · **cold
+  white/grey/black** Ash City, the fire is OUT · bone Angelic · arterial True Void), the Undercity
+  as a flooded industrial level, the Ash City as an *endless varied* city, Floor 4 as ruins opening
+  into a buried city, and **Ash-Wraith vs Ash-Wretch as two different enemies** (a new family — an
+  engine change, through the pipeline). Batch: 39 → **53 assets** (~$21).
+- Pipeline doctrine changed: **build-agent may now fan out `Explore` sub-agents for READING** but
+  remains the only writer — parallel writers in one worktree recreate the exact clash worktrees
+  exist to prevent, with no git isolation to catch it.
+
 ### 2026-08-24 — THE BIG MERGE: the whole M1–M15 stack lands on `main` ✅
 - **User-gated merge approved and executed.** Tagged `pre-merge-backup-m15` on the old trunk, then
   `git merge --no-ff agentic/balance-tune` — the chain tip, which carries all 15 stacked units.
