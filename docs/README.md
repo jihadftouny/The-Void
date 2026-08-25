@@ -15,8 +15,14 @@ disagree. Keep this index current: a document not listed here will be missed by 
 | 4 | **[ROADMAP.md](ROADMAP.md)** | *What order we build it in.* The v3 milestone plan, M0–M17 | picking up the next milestone |
 | 5 | **[ART-BIBLE.md](ART-BIBLE.md)** | *How it looks, and how to reproduce it.* Exact model settings, the house style string, framing, posing, failure gates, generation order | generating a single image |
 | 6 | **[UI-DESIGN.md](UI-DESIGN.md)** | *How it reads on screen.* Battle screen, narration cadence, combat log, canvas architecture, the restyle's five units | any UI or render work |
-| 7 | **[BALANCE-REPORT.md](BALANCE-REPORT.md)** | *Whether it is winnable.* Generated from the sim — do not hand-edit | touching any balance constant |
-| 8 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
+| 7 | **[SCOPE-AUDIT.md](SCOPE-AUDIT.md)** | *Every hole.* An exhaustive 2026-08-25 inventory of what is undefined, deferred, placeholder, contradictory or missing, ranked by retrofit cost | committing to any new unit — check whether it sits on an unbuilt foundation |
+| 8 | **[BALANCE-REPORT.md](BALANCE-REPORT.md)** | *Whether it is winnable.* Generated from the sim — do not hand-edit. **Caveat: measured with no equipment**, because equip is not yet an engine input | touching any balance constant |
+| 9 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
+
+**Stale, kept for history — do NOT build from these:**
+
+- **[`../WHAT-WE-BUILT.md`](../WHAT-WE-BUILT.md)** — a plain-language explainer last true on 2026-08-10. Describes gold, a shop, and a Void that is a place. All three are wrong now.
+- **[`../itch-description.html`](../itch-description.html)** — public store copy, written against the pre-v3 game.
 
 **Also authoritative, outside `docs/`:**
 
