@@ -211,8 +211,11 @@ insanity, push, aired. Activate the dormant 13:
     opportunity cost. **[DECIDED]**
   - **Scarcity: meaningful but not scarce** — regularly found/used, a normal part of the kit (not a
     rare treat). **[DECIDED]** Acquired via found loot + sacrifice-deals (§11).
-- **Loot comes from drops + chests + shops** **[DECIDED]**: enemies drop loot, floors hide
-  chests/caches, shops sell curated stock.
+- **Loot comes from drops + chests + sacrifice-deals** **[DECIDED — corrected 2026-08-25]**: enemies
+  drop loot, floors hide chests/caches, and an altar/stranger offers **deals paid for with a part of
+  yourself**. **There are no shops and no currency** — an earlier draft of this line said "shops sell
+  curated stock", which §11 of this same document overruled the same day (*"No currency. No coin.
+  Anywhere. Ever."*) and which the code implemented. `src/game/shop.ts` is deleted.
 - **Armor stats finally apply** — activate the existing `dexCap` / `strReq` fields and use armor's own
   value in the AC/defense math (today only `10 + CONmod` is used). **[DECIDED — new]**
 

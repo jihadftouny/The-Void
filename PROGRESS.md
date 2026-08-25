@@ -72,10 +72,20 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 ## Session log
 
 ### 2026-08-25 — M-UI2 begins: `ui-foundation` built + verified; the art direction found
-- **`ui-foundation` (unit 1 of 5) — FINAL VERDICT PASS after 3 fix rounds. 1029 tests**
-  (960 → 1014 → 1026 → 1029). Branch `agentic/ui-foundation`, **unmerged, awaiting your review.**
-  One round was a genuine FAIL: a new guard was passing *vacuously* and could not have caught its
-  own bug. Fixed, and the lesson written into `.claude/agents/build-agent.md`.
+- **`ui-foundation` (unit 1 of 5) — ✅ MERGED to `main`. FINAL VERDICT PASS after 3 fix rounds,
+  1029 tests** (960 → 1014 → 1026 → 1029). Post-merge on the trunk: typecheck clean, 1029 tests,
+  build OK. One round was a genuine FAIL — a new guard was passing *vacuously* and could not have
+  caught its own bug; fixed, and the lesson written into `.claude/agents/build-agent.md`.
+  Safety tag on the pre-merge trunk: `pre-merge-ui-foundation`.
+- **⚠️ A full project audit followed the merge → `docs/SCOPE-AUDIT.md`.** Commissioned *before*
+  building the battle screen, and it stopped that plan: **not one of the five floor-specific
+  mechanics exists in code** (illusions/WIS, ash attrition, floor-4 temptation, floor-5 kit
+  corruption), and they touch the battle round loop, the encounter generator, healing, the skill
+  resolver and the RNG draw order — i.e. every determinism test and every balance number. Also
+  found: **equip is not a `step` input** (so the entire balance report is measured on a character
+  that never equips found loot), **no content schema has a description field**, the LLM layer is a
+  190-line prompt-builder against a nine-item M11 spec, and several documents locked on the same day
+  contradict each other. **Ranked by retrofit cost in the audit; working down Tier 1 before building.**
   Delivered: design tokens + five per-floor accents, the shared panel/bar/chip/row/button
   components, **the standalone Kaplay front-end deleted** (`index.html` + `src/scenes/` — one
   front-end from here, bundle 205 kB → 116 kB), and combat events widened to carry real dice.

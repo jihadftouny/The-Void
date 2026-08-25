@@ -282,7 +282,7 @@ techno-occult read: street-tech gear marked, wrapped or blessed by someone who h
 | Class | Costume |
 |---|---|
 | **Enforcer** | Ballistic riot plate, rain-slick, corporate insignia half ground off. Full visor, one cracked lens. Shock baton, haft wrapped in prayer cord. A ward scratched into the chest plate by hand |
-| **Neuromancer** | Thin coat over a rig of trailing leads, sockets at the temple. Pistol holstered but never drawn — the hands are the weapon. Eyes wrong: too still, or not there |
+| **Neuromancer** | Thin coat, gloved, precise. Pistol holstered but never drawn — the hands are the weapon. Eyes wrong: too still, or not there. **No visible hardware** — see the socket ruling in §9; a Memorian's craft leaves no mark you could point at |
 | **Scavver** | Layered scavenged plate, none of it matching. Respirator, goggles pushed up. Rapier and a dozen pouches — wire, hooks, vials. Built for leaving quickly |
 | **Penitent** | Coarse robe over surgical scarring. Barefoot. No weapon — the blood is the weapon. A censer, a length of chain. Self-inflicted marks that read as devotion, not damage |
 | **Hollow** | Wearing what it wore before, badly. Something missing from the silhouette — negative space where a person should be. Carries a gun it does not seem to need |
@@ -506,12 +506,17 @@ The design record was genuinely silent on these. Guessing produced the medieval-
    negative space where a person should be, a posture nobody would hold on purpose. Same for the
    Hollowed, the Echoes and the Hollow Self. **The horror is that it is wearing a person — and no
    visible technology explains why.**
-3. **Naming: "Ash-Wretch" does not exist.** The probe and the `UI-DESIGN.md` mockup both use it, but
-   the actual family is **`ashWraiths` / "Ash-Wraith"**, whose design hook is *"endless weak filler"*
-   and whose name table (*Drifting, Smouldering, Faint, Pale / Cinder, Ember-Shade*) suggests
-   something far more **incorporeal** than the solid charred humanoid that was generated.
-8. **Karma's world-objects have no art.** `desecrateShrine`, `leaveOffering` and `honorDead` are
-   implemented actions, and the sacrifice economy's vendor is an **altar/stranger** — yet no shrine,
-   altar or offering asset is in the 39.
-9. **The five affixes** (Ravenous, Ancient, Warped, Blessed, Cursed) rename an enemy but have no
-   visual treatment and no budget line. Recolour? Aura? Nothing?
+4. ~~Naming: "Ash-Wretch" does not exist.~~ **CLOSED** — Ash-Wraith and Ash-Wretch are now two
+   different enemies (§4). The wraith is incorporeal and cold; the wretch is the solid cinder
+   humanoid from probe 01. **Still requires a new enemy family in `src/data/enemyFamilies.json`,
+   through the pipeline** — tracked in `docs/SCOPE-AUDIT.md`.
+5. ~~Karma's world-objects have no art.~~ **CLOSED** — altar and shrine are in the 52-asset list
+   (§4b), which superseded the 39.
+6. ~~The five affixes have no visual treatment.~~ **CLOSED** — code effects, zero new art (§9
+   settled list above).
+7. **Reference approval.** Nothing has been approved as the style anchor yet, because probe 03's
+   three assets were generated before the world record existed and several are now wrong (the Ash
+   City is medieval-gothic; it must be a 2100 city gone quiet). **A fourth probe is needed** against
+   the finished `WORLD.md`, and one image from it approved, before any conditioned batch runs.
+8. **The API key must be rotated.** It was pasted into a chat transcript; it is in `.env` and no
+   commit, but the transcript is permanent. Rotate before or immediately after the first batch.

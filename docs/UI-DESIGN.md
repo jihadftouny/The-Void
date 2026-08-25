@@ -323,13 +323,17 @@ problems that would have wasted the $15.68 batch, and each needs a fix in `art-p
 for style lock, and an alpha-keying post-process step. That is a bigger unit than first scoped, and
 the probe is why we know before spending the batch money rather than after.
 
-### Remaining open questions **[OPEN]**
+### Remaining open questions
 
-1. **Approve a reference enemy.** Consistency across the roster depends on locking one approved
-   enemy image as the style reference. Needs the engineer's eye, not a rule.
-2. **Alpha strategy.** Recommendation (a) above — luminance-keyed PNG — needs confirming, since it
-   adds an image-processing dependency (e.g. `sharp`) to the art tooling. Note this is *tooling*
-   only; it never ships in the game bundle.
+> **⚠ This whole §9 is superseded.** `docs/ART-BIBLE.md` is now the authority on everything visual
+> (`docs/README.md` precedence rule 3) and carries the live versions of all of it — including the
+> **32-bit-era 2D pixel direction**, which replaced the painterly style described above. Read the
+> bible, not this section.
+
+1. ~~Approve a reference enemy.~~ Still true, but tracked in `ART-BIBLE.md` §9. A **fourth probe**
+   is needed first: probe 03 predates `docs/WORLD.md` and several of its assets are now wrong.
+2. ~~Alpha strategy.~~ **SETTLED** — key flat black to a PNG alpha channel in post-processing;
+   the keyed PNG is the committed asset (`ART-BIBLE.md` §9).
 
 ### Key handling — a warning on record **[SECURITY]**
 
