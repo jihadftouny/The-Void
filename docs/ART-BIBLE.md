@@ -28,6 +28,30 @@ Everything needed to reproduce the look. Do not change any of these without reco
 | Output format | `image/jpeg` — **always, unavoidably** | See §5. The model cannot emit PNG or alpha, whatever the prompt asks |
 | Aspect ratio | per asset type — see §3 | `imageConfig.aspectRatio` |
 | Variations | **3 per asset**, generated concurrently within an asset, sequential across assets | Keeps request rate sane and gives a real choice |
+| **Batch mode** | **`batchGenerateContent` — use it.** **50% of standard cost**, image models supported, target turnaround 24h but usually much faster | Halves the bill: $0.134 → **$0.067** per image. See §1b |
+
+### 1b. Batch mode — the discount and how to keep the approval gates **[LOCKED 2026-08-25]**
+
+The Batch API runs asynchronously **at 50% of standard cost**, and it supports image generation
+models. This resolves the apparent trade-off between "generate it all in one go and save money" and
+"generate group by group so I can approve as I go" — **you can have both.**
+
+**Batch WITHIN a group, gate BETWEEN groups.** Each group is submitted as one batch job (half
+price), the author reviews and approves that group's output, and only then is the next group
+submitted — conditioned on the approved references from the group before it. Nothing is lost by
+staging it.
+
+| | Standard | Batch |
+|---|---|---|
+| Per image | $0.134 | **$0.067** |
+| Full run, 156 images | $20.90 | **~$10.45** |
+| Turnaround | seconds | usually minutes, up to 24h |
+
+The only real cost of batching is latency, and asynchronous turnaround is a poor fit for a *probe*
+(where you want an answer in a minute) but a fine fit for a *group of 20–70 images* you are going to
+review in a sitting anyway. **Use interactive for probes, batch for groups.**
+
+
 
 **Cost at these settings:** $0.134 per image. 39 assets × 3 = 117 images ≈ **$15.68** per full batch.
 Image generation is **not available on the free tier at all** (`limit: 0`) — billing must be enabled
@@ -89,6 +113,34 @@ wrong, not the type.**
 **"concrete and unsettling."** It governs the images exactly as it governs the prose.
 
 ---
+
+## 2b. Posing — D&D positioning **[LOCKED 2026-08-25]**
+
+Author's direction: *"let's always make enemies front facing. the characters should be facing
+slightly angled, but we want a d&d positioning style for enemies and characters."*
+
+- **Enemies: always front-facing.** Square to the viewer, symmetrical stance, confronting you. This
+  is the tabletop read — the thing across the table from you.
+- **Player characters: three-quarter, slightly angled.** Turned a little off-axis so they read as
+  *actors* rather than *targets*. The angle is the visual difference between "you" and "it".
+- This distinction is load-bearing for the recursion set in §6: the mirror enemies (Mirror-Self, The
+  Reflection, Echo of You, The Hollowed, Hollow Self) are versions of the player rendered
+  **front-facing** — the moment your own reflection squares up to you is the moment it stops being
+  you. Do not angle them.
+
+## 2c. Render preference — the PS1 read, not the painted read **[LOCKED 2026-08-25]**
+
+Probe 03 produced two distinguishable interpretations of the style string, and the author picked
+between them: **take 02's look, not take 01's.**
+
+- **Wanted (take 02):** genuinely *rendered-from-3D* — chunky low-poly geometry, flat untextured
+  surfaces, hard planar shading, particles as sprites, a pure black foreground band. It reads like
+  a real-time PS1 scene. Closer to Silent Hill than to an illustration.
+- **Not wanted (take 01):** a detailed pixel *painting* — hand-illustrated, dense, painterly
+  despite the pixel grid.
+
+Push the prompt toward geometry and flat planar shading, away from illustration and detail density.
+Same for the ash-wraith, where take 02 was also the chosen read.
 
 ## 3. Per-asset-type rules **[LOCKED]**
 
@@ -226,6 +278,32 @@ its criminals.
 **Still undescribed anywhere:** **the Rift**, the doorway from Floor 1 down to Floor 2. It has no
 description in any source. Needs the author.
 
+### Generation order **[LOCKED 2026-08-25]**
+
+Generate in stages, each conditioned on the approved output of the stage before it. The ordering
+principle is **what constrains what** — never generate a thing before the thing it must sit against.
+
+| Stage | Group | Why here | Assets |
+|---|---|---|---|
+| **0** | **Worldbuilding interview** | Not art. Everything below depends on it, and the design record is thin outside the floors. **Nothing generates until this is done** | — |
+| **1** | **Environments** — 5 floor backdrops + altar/shrine | Establish light, palette, geometry and tech level for the whole game. Every later asset must read *against* these | 7 |
+| **2** | **Characters** — 5 class portraits | Must read against the environments. They also anchor the recursion set, so they cannot come after the enemies that mirror them | 5 |
+| **3** | **Enemies** — 24 families + 7 Sins + Ash-Wretch | Conditioned on both. The five mirror-enemies are versions of the *characters*, which must exist first | 32 |
+| **4** | **Bosses** — 5 + 3 Sin identities + Warden executioner | The most specific and most authored assets; they inherit everything above | 9 |
+| **5** | **Interface furniture** — if any | Designed *against* finished art, never before it. See the open question below | ? |
+
+**Why interface furniture is last and not first**, against the author's initial instinct: menus and
+buttons are the one group whose job is to *not* compete with the art. Designing them before the art
+exists means guessing what they must recede behind. They are also the cheapest to iterate and the
+easiest to redo.
+
+> **⚠ OPEN — a direction conflict the author must settle.** §5 art direction is *"austere and
+> typographic… flat panels, no ornament"*, and it explicitly **rejected** ornamented interface
+> furniture (the "grimy occult" option with inked frames and sigils). Generating menu and button art
+> would reverse that decision. It is a legitimate thing to reverse — pixel art changes the
+> calculation, since a pixel-art interface would *match* pixel-art assets rather than fight them,
+> which was the original objection. But it must be decided deliberately, not drifted into.
+
 ### The Ash City — **endless and varied** **[LOCKED 2026-08-25]**
 
 Author's direction: *"the ash city is an endless city, with a lot of houses, buildings, varied
@@ -234,6 +312,12 @@ on past the horizon, with genuinely different buildings: houses beside towers be
 structures, many periods and styles jumbled together. The horror is the **endlessness and the
 silence**, not destruction. Ash falls over all of it. **Nothing burns — the fire has already gone
 out.** The probe backdrop's orange horizon glow is wrong on this point and must be regenerated cold.
+
+**It is a 2100 city gone quiet [LOCKED 2026-08-25]** — author's words — *not* a medieval one. Probe
+03 produced castle towers and a cathedral; that is wrong. The variety must reach into the modern and
+the near-future: apartment blocks, civic concrete, infrastructure, signage frames with nothing lit on
+them, mixed in among older stock. The horror is that this was a **living contemporary city** and
+everyone is simply gone.
 
 ### Ash-Wraith and Ash-Wretch — **two different enemies** **[LOCKED 2026-08-25]**
 
