@@ -121,7 +121,30 @@ Format per entry:
 - Test-agent's own suggestion, worth taking in the next unit: **commit the Electron boot probe as a
   script**, so `battle-screen`, `canvas-layer` and `screens-restyle` inherit a headless boot check
   instead of each ending with an unrunnable manual step.
-- Manual engineer fixes: none yet
+- **PIPELINE ESCAPE — the NEEDS-HUMAN script asked for visual sign-off on components nothing
+  renders.** The engineer play-tested and reported *"not sure where I'm supposed to see things, the
+  UI is still very weird, and looks the same as before."* **He was right and the checklist was
+  impossible.** `ui-foundation` builds the bar and chip components and tests their pure models, but
+  `src/desktop/game.ts` imports only `appendButton`, `appendRow` and `picker` — **nothing renders a
+  bar or a chip yet.** HP is still plain text. So the checklist's "compare a Stun chip against a
+  Burn chip" and "check the accent on panel borders and bars" could not be performed at all, and the
+  only accent actually visible in the running app is the title colour and some button borders.
+- **Three causes, all worth fixing:**
+  1. **The test-agent wrote a checklist from the code that exists, not from the code that is
+     *reachable in the running app*.** A component with no consumer cannot be visually verified.
+     Its NEEDS-HUMAN steps should be filtered by "can the engineer actually reach this on screen?"
+  2. **The orchestrator (me) relayed it without applying that filter**, and compounded it by
+     launching the app and implying a visible change. A foundation unit is plumbing; it was never
+     going to look different.
+  3. **Nobody set the expectation that `ui-foundation` is deliberately invisible.** The unit's whole
+     purpose is tokens, shared components, deleting the second front-end, and widening combat
+     events. The visible restyle is units 2–5.
+- **Generic fix (test-agent):** NEEDS-HUMAN items must state how to *reach* the thing on screen, and
+  an item that cannot be reached in the current build must be marked **"not yet observable — defer
+  to unit X"** rather than listed as a check. **Project fix:** a foundation/plumbing unit should say
+  so in its handoff, and its visual criteria should be explicitly deferred to the first unit that
+  renders them.
+- Manual engineer fixes: none yet (no code defect — the escape is in the handoff, not the build)
 
 ## 2026-08-14 — balance-tune (M15 part 2: tuning to the ~1-in-3 target) [stacked on balance-sim, unmerged]
 - Verdict: PASS
