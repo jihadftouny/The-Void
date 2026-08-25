@@ -10,22 +10,39 @@ reads on screen).
 
 ---
 
-## 0. The spine — one axis
+## 0. The spine — one thing, four names
 
-> **The condition is the Hollow.**
+> **The Void *is* the Hollow *is* the narrator *is* the condition.**
+> **These are not four related things. They are one thing under four names.**
 
-That single line resolves the whole game. The Void is not a place you travel to; it is what happens
-to you, and what happens to you is **hollowing**. Everything else is that axis seen from a different
-angle:
+This is the single most important line in the document, and everything else is a consequence of it.
+The Void is not a place you travel to and not an entity you meet. It is **what happens to you** — and
+what happens to you is **hollowing** — and the voice narrating your descent **is that hollowing
+itself**. When the narrator speaks, the condition is speaking. When you fight your Hollow Self, the
+narrator is what you are fighting. There is no outside to it anywhere in the game.
+
+| Name | Same thing, seen from |
+|---|---|
+| **The Void** | outside — what the houses file it under, what the city calls the hole |
+| **The condition** | clinically — what is happening to a mind that goes far enough down |
+| **The Hollow** | personally — what it is doing to *you*, and what you become |
+| **The narrator** | from inside — the hollowing, given a voice, in second person |
+
+Everything else is that one thing at a different angle:
 
 | | |
 |---|---|
 | The descent | being hollowed out, stage by stage |
-| The **Hollowed** (floor 5 family) | people the condition finished |
-| Your **Hollow Self** (final boss) | the condition wearing your face |
-| The **Hollow** class | playing as the condition, openly, without the pretence |
-| The narrator's voice | the hollowing itself, speaking |
+| The **Hollowed** (floor 5 family) | people it finished |
+| Your **Hollow Self** (final boss) | it, wearing your face |
+| The **Hollow** class | playing as it, openly, without the pretence |
 | The grace ending — *"made whole"* | **the exact opposite of hollow** |
+
+**Consequences that bind every writer:**
+- The narrator can never describe the Void from outside, because it *is* the Void.
+- The narrator cannot be trusted and cannot be caught lying — it has no motive either way.
+- There is no second voice available. No guide, no companion, no exterior. Second person, inside, only.
+- Never use "hollow" casually anywhere in the game's text. It is the load-bearing word. Reserve it.
 
 The good ending does not say *made well*. It says **made whole**. That is not decoration; it is the
 win condition of the entire game stated in one word. Whole is what hollow is not.
@@ -34,6 +51,41 @@ win condition of the entire game stated in one word. Whole is what hollow is not
 load-bearing word. Reserve it.
 
 ---
+
+## 0b. THE SECRET — the folklore, and the truth beneath it **[LOCKED 2026-08-25]**
+
+**This is the game's central concealed fact, and almost nobody in the world knows it.**
+
+| | |
+|---|---|
+| **What everyone believes** | The Void is a **place**. A real hole beneath the last city. Criminals are sent down into it and do not come back. This is folklore, universal, and it is *wrong* |
+| **What is actually true** | The Void is **a place within your mind** — a condition (§6) |
+| **Who knows** | **Only the Memorians.** Not the city, not the Undercity, not other houses, not the retainers who serve beside them |
+| **And the part that damns them** | **The Memorians can *cause* it.** They do not merely study the condition. They induce it |
+| **The Kingpins** | **Accomplices.** The Undercity Kingpins are in on it — they are how it gets done to people (§4) |
+
+**This reframes every earlier fact in this document.**
+
+- **"Being thrown into the Rift" is not a fall. It is something done to you.** The descent is
+  induced, and the Kingpin who throws you is the instrument. You are not dropped into a hole; you
+  are *given* this.
+- **The houses' archives (§5) are not debriefs. They are records of their own work.** The Memorians
+  know the stages exactly because they *produce* them, generation after generation. The clinical
+  literature is a laboratory notebook. That is far worse than the earlier reading, and it keeps the
+  chilling part intact: there is a document upstairs that correctly describes what is happening
+  inside you, written by the people who put it there, and it does not help you at all.
+- **A descent cannot be seen from above (§10) because there is no down.** There was never anywhere
+  to look. Whatever a descender's body is doing, it is doing it somewhere in the world, and the
+  descent is happening entirely inside them.
+- **The Neuromancer is a Memorian (§7).** The playable class is drawn from **the only order that
+  knows the truth, and the order that does this to people.** How much a *given* Neuromancer knows is
+  live dramatic material — this is the most loaded fact in the game and it sits inside a class the
+  player can pick.
+- **The folklore is not a lie the houses tell.** It is what the world sincerely believes, and the
+  Memorians simply never correct it. Charms are sold against a hole that does not exist.
+
+**For prose:** every character the player meets believes the folklore. The narrator — which *is* the
+condition (§0) — is the only voice that could know better, and it will never say so plainly.
 
 ## 1. Absolution — the last city **[LOCKED]**
 
@@ -97,6 +149,11 @@ is waiting for a report. Nothing you do down there serves anyone above.
 **The mission was the disposal.** The Undercity Kingpin and house Grandmore are collaborators, and
 **it is the Kingpin who throws you into the Void.** The errand you were sworn to carry out was the
 mechanism for getting you down there.
+
+> **Read with §0b.** The Kingpins are not merely partners in a betrayal — they are **accomplices in
+> causing the condition**. "Throwing you into the Void" is the act of *inducing* it. Whether the
+> Kingpins understand what they are actually accomplices to, or believe the folklore like everyone
+> else and think they are simply dropping a body down a hole, is **[OPEN]** and is a rich choice.
 
 This reframes floor 1 entirely:
 - **Your target and your handler are on the same side**, and you are the only party who does not
@@ -271,7 +328,18 @@ euphemism, no older name that the initiated use. The word everyone uses is the w
 That is quietly worse than a euphemism would have been. An institution that has documented this for
 generations, and never found it necessary to call it anything but what it is.
 
-## 12. Still open
+## 12. Settled elsewhere, recorded here
+
+- **Death and restart are NOT explained** in the fiction **[LOCKED 2026-08-25]**. A new run is game
+  convention; the narration never acknowledges a previous one. Deliberately unexplained rather than
+  undecided — do not invent a diegetic justification for it later.
+- **Enemies get one sprite each, not animation frames**, with all motion done in code
+  (`ART-BIBLE.md`). **The interface stays austere and typographic with no generated art** — and now
+  has a reason beyond restraint: the cold, ruled, precise interface *is* the Memorians' record of
+  you (§0b, §5). The art is the experience; the interface is the file. Making the interface warm
+  would destroy that.
+
+## 12b. Still open
 
 - **The rival houses.** Three contested histories of the Rift (§3) implies at least three houses,
   and only Grandmore exists. **Explicitly undecided by the author** — deliberately parked, not
