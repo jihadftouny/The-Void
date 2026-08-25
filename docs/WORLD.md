@@ -124,6 +124,23 @@ and that is the Hollow, and that is the voice narrating your game (§0).
 - **Floor 1 is real because you still have your chip.** The moment of extraction is the moment the
   world stops being solid. That is exactly where the design already put the boundary.
 
+### The reading destroys it — nothing is recoverable **[LOCKED 2026-08-25]**
+
+**Extraction is not storage. It is consumption.** The Memorians read what they need and **the
+recorded life is gone.** There is no vault, no shelf, no chip with your name on it waiting to be
+returned.
+
+**So grace cannot mean recovery.** *"Made whole"* does not mean getting your life back — it means
+**becoming whole anyway, without it.** That is a harder and far more honest ending, and it is
+exactly what the author's own framing already required: **survivor, not cured** (§9).
+
+> **This is why the Ash City is ash.** The author's colour direction — *"the fire has settled
+> already and it's just ash"* — was given before this mechanism existed, and it turns out to be
+> describing it precisely. **The reading is the fire.** The Ash City is your recorded life *after it
+> has been consumed*: not burning, because the burning is what they already did to it. You walk an
+> endless city of your own years in the state they left them. Floor 3 is grief because there is
+> genuinely nothing left to recover, and the floor tells you so in every direction you look.
+
 ### Why they do it — disposal that leaves no body **[LOCKED]**
 
 **It is how the last city removes people.** Cleaner than execution: no body, no grave, no evidence,
@@ -190,17 +207,26 @@ with a hand-scratched ward is not a juxtaposition to anyone living there. It is 
 
 **The Void is the only thing in this world that is not understood.**
 
-## 3. The Rift — unknown, and contested **[LOCKED]**
+## 3. The Rift — a real hole, and genuinely unexplained **[LOCKED 2026-08-25]**
 
-Nobody knows where it came from. It has been there for all of living memory, every explanation is
-disputed, and **the houses each maintain the history that keeps them in charge** — three houses,
-three incompatible accounts, each doctrine serving whoever teaches it.
+**The pit is real.** There is an actual hole in the Undercity, it predates Absolution, and **nobody
+knows what it is — including the Memorians.** Every explanation is disputed; the houses each
+maintain the history that keeps them in charge, three incompatible accounts, each doctrine serving
+whoever teaches it.
 
-No answer is available in-world. The player's theory is as good as anyone's, and the narrator can
-never be pinned down on it.
+**The Memorians simply borrowed its reputation.** They did not invent the folklore and they do not
+need the pit — they needed a story that already explained why people disappear, and one was sitting
+there. So they took it.
 
-> **Note the deliberate split:** the houses do not know what the Rift *is* (§3) but they know
-> exactly what the descent *does* (§5). Origin is contested; consequence is documented.
+> **This preserves something important: there is one thing in this world that even the people who
+> know everything do not understand.** The Memorians know the Void is a condition, know they cause
+> it, know its five stages by name — and they are running their whole operation next to a hole whose
+> origin they cannot account for, using a legend they did not make.
+
+**Note the split, which is now three ways:** the houses do not know what the Rift *is* (§3); they
+know exactly what the descent *does*, because they cause it (§0c); and they do not know why the
+angels are there either (§6). Origin contested, consequence documented, and two things at the edges
+that no archive explains.
 
 ## 4. The mission — and the moment it stops being one **[LOCKED]**
 
@@ -306,6 +332,14 @@ That is what the Unmade, the Echoes and the Hollowed are all saying in different
 
 **They exist.** The condition does not manufacture them — it removes whatever normally stops you
 perceiving them. Going down is what lets you *see*.
+
+**Why the condition reveals them [LOCKED 2026-08-25]:** **your own recorded life was what stood in
+front of them.** A mind packed full of itself has no room to perceive anything else. Take the life
+out and what is left can finally see. Extraction does not *create* the vision — it **clears** it.
+
+So the Memorians, cutting people open for disposal, **accidentally made a window.** And they have
+documented it for generations, because they document everything, without ever understanding what
+they are looking at. Floor 4 is in their archives as a stage. They have no idea what it means.
 
 **This is the most important decision in the whole record.** It means:
 - **The descent is not purely delusion.** Something true is down there.
@@ -432,9 +466,11 @@ Flagged here because they cross into other documents and will otherwise be misse
 
 ## 12b. Still open
 
-- **The rival houses.** Three contested histories of the Rift (§3) implies at least three houses,
-  and only Grandmore exists. **Explicitly undecided by the author** — deliberately parked, not
-  overlooked.
+- ~~The rival houses.~~ **CLOSED 2026-08-25 — deliberately parked.** Other houses exist and are
+  referenced, but are **never named and never met.** This game is one descent by one retainer of one
+  house, and nothing in it requires them. The contested-histories line (§3) still works without
+  them. **Do not invent them to fill a gap** — they are left free for a sequel or later content, and
+  inventing them now would constrain that.
 - **The Kingpins as people.** Now known to be Grandmore's collaborators (§4), but not who they are,
   how many, or what the rest of their plan was beyond disposing of you.
 - **Absolution above ground.** Only the flooded industrial underside is described
