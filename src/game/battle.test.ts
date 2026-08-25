@@ -114,8 +114,18 @@ describe('resolveRound Fight — exact HP deltas + exact event list', () => {
     expect(r.state.enemy.skillCharges).toBe(1);
     expect(r.events).toEqual([
       { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
-      { kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2 },
-      { kind: 'attack', subject: 'player', outcome: 'hit', damage: 4 },
+      {
+        kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2,
+        // natural 15 + 1 (enemy STR mod) = 16 >= player AC 13.
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 1, total: 16, targetAc: 13 },
+        damageSources: [{ kind: 'skill', amount: 2 }],
+      },
+      {
+        kind: 'attack', subject: 'player', outcome: 'hit', damage: 4,
+        // natural 15 + 4 (player STR mod) = 19 >= enemy AC 10.
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 4, total: 19, targetAc: 10 },
+        damageSources: [{ kind: 'weapon-dice', amount: 4, label: '1d6' }],
+      },
     ]);
 
     // Input state deep-equals its pre-call snapshot (pure, returns a NEW state).
@@ -249,8 +259,16 @@ describe('resolveRound Cast — damage, charge spend, condition applied', () => 
     expect(r.state.enemy.activeConditions).toEqual([makeCondition('burn')]);
     expect(r.events).toEqual([
       { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
-      { kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2 },
-      { kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember' },
+      {
+        kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2,
+        // natural 15 + 1 (enemy STR mod) = 16 >= player AC 13.
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 1, total: 16, targetAc: 13 },
+        damageSources: [{ kind: 'skill', amount: 2 }],
+      },
+      {
+        kind: 'skill-cast', subject: 'player', skillId: 'ember', name: 'Ember', damage: 2,
+        damageSources: [{ kind: 'skill', amount: 2 }],
+      },
       { kind: 'condition-applied', subject: 'enemy', conditionType: 'burn' },
     ]);
   });
@@ -366,8 +384,18 @@ describe('resolveRound Fight — conditionless round, exact draw order (M4)', ()
     expect(r.state.enemy.skillCharges).toBe(1);
     expect(r.events).toEqual([
       { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
-      { kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2 },
-      { kind: 'attack', subject: 'player', outcome: 'hit', damage: 5 },
+      {
+        kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2,
+        // natural 15 + 1 (enemy STR mod) = 16 >= player AC 13.
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 1, total: 16, targetAc: 13 },
+        damageSources: [{ kind: 'skill', amount: 2 }],
+      },
+      {
+        kind: 'attack', subject: 'player', outcome: 'hit', damage: 5,
+        // natural 12 + 4 (player STR mod) = 16 >= enemy AC 10.
+        roll: { natural: 12, faces: [12], advDis: 0, modifier: 4, total: 16, targetAc: 10 },
+        damageSources: [{ kind: 'weapon-dice', amount: 5, label: '1d6' }],
+      },
     ]);
   });
 });
@@ -386,8 +414,18 @@ describe('resolveRound Fight — enemy misses (M4 defense matters)', () => {
     expect(r.state.enemy.hp).toBe(26); // 30 - 4
     expect(r.state.enemy.skillCharges).toBe(2); // no charge spent on a miss
     expect(r.events).toEqual([
-      { kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0 },
-      { kind: 'attack', subject: 'player', outcome: 'hit', damage: 4 },
+      {
+        kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0,
+        // natural 5 + 1 = 6 < player AC 13.
+        roll: { natural: 5, faces: [5], advDis: 0, modifier: 1, total: 6, targetAc: 13 },
+        damageSources: [],
+      },
+      {
+        kind: 'attack', subject: 'player', outcome: 'hit', damage: 4,
+        // natural 15 + 4 (player STR mod) = 19 >= enemy AC 10.
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 4, total: 19, targetAc: 10 },
+        damageSources: [{ kind: 'weapon-dice', amount: 4, label: '1d6' }],
+      },
     ]);
     expect(r.events.some((e) => e.kind === 'enemy-skill-used')).toBe(false);
   });
@@ -477,8 +515,16 @@ describe('resolveRound — M3 class twists in a full round', () => {
     expect(r.state.player.skillCharges).toBe(4);
     expect(r.events).toEqual([
       { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
-      { kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2 },
-      { kind: 'skill-cast', subject: 'player', skillId: 'strike', name: 'Strike' },
+      {
+        kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2,
+        // natural 15 + 1 (enemy STR mod) = 16 >= player AC 13.
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 1, total: 16, targetAc: 13 },
+        damageSources: [{ kind: 'skill', amount: 2 }],
+      },
+      {
+        kind: 'skill-cast', subject: 'player', skillId: 'strike', name: 'Strike', damage: 2,
+        damageSources: [{ kind: 'skill', amount: 2 }],
+      },
       { kind: 'condition-applied', subject: 'enemy', conditionType: 'bleed' },
     ]);
   });

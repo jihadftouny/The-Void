@@ -14,6 +14,7 @@ import { UNARMED } from './equipment.ts';
 import { makeCondition } from './condition.ts';
 import { effectiveMods } from './statEffects.ts';
 import { type Rng } from './rng.ts';
+import { sumDamageSources, type CombatEvent } from './combatEvent.ts';
 
 function scriptedRng(values: number[]): Rng {
   let i = 0;
@@ -107,13 +108,13 @@ describe('weaponModifier per weapon property', () => {
 
 describe('rollD20WithAdvantage', () => {
   it('no adv/dis: one draw, natural is that face', () => {
-    expect(rollD20WithAdvantage(0, scriptedRng([face(10, 20)]))).toEqual({ natural: 10, advDis: 0 });
+    expect(rollD20WithAdvantage(0, scriptedRng([face(10, 20)]))).toEqual({ natural: 10, faces: [10], advDis: 0 });
   });
   it('advantage takes the MAX of two faces (7,15) -> 15', () => {
-    expect(rollD20WithAdvantage(1, scriptedRng([face(7, 20), face(15, 20)]))).toEqual({ natural: 15, advDis: 1 });
+    expect(rollD20WithAdvantage(1, scriptedRng([face(7, 20), face(15, 20)]))).toEqual({ natural: 15, faces: [7, 15], advDis: 1 });
   });
   it('disadvantage takes the MIN of two faces (7,15) -> 7', () => {
-    expect(rollD20WithAdvantage(-1, scriptedRng([face(7, 20), face(15, 20)]))).toEqual({ natural: 7, advDis: -1 });
+    expect(rollD20WithAdvantage(-1, scriptedRng([face(7, 20), face(15, 20)]))).toEqual({ natural: 7, faces: [7, 15], advDis: -1 });
   });
 });
 
@@ -140,7 +141,12 @@ describe('resolvePlayerAttack — outcomes and damage', () => {
     const r = resolvePlayerAttack(player(), enemy({ armorClass: 10 }), SWORD, 0, scriptedRng([face(15, 20), face(4, 6)]));
     expect(r.outcome).toBe('hit');
     expect(r.damage).toBe(4);
-    expect(r.events).toEqual([{ kind: 'attack', subject: 'player', outcome: 'hit', damage: 4 }]);
+    expect(r.events).toEqual([{
+      kind: 'attack', subject: 'player', outcome: 'hit', damage: 4,
+      // natural 15, +4 STR = 19, against the enemy's AC 10.
+      roll: { natural: 15, faces: [15], advDis: 0, modifier: 4, total: 19, targetAc: 10 },
+      damageSources: [{ kind: 'weapon-dice', amount: 4, label: '1d6' }],
+    }]);
   });
 
   it('crit: natural 20, damage = TWO d6 (faces 3,4) = 7', () => {
@@ -297,7 +303,11 @@ describe('resolveEnemyAttack — enemy rolls to hit (M4)', () => {
     expect(r.enemy.skillCharges).toBe(1);
     expect(r.events).toEqual([
       { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
-      { kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2 },
+      {
+        kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 2,
+        roll: { natural: 12, faces: [12], advDis: 0, modifier: 1, total: 13, targetAc: AC },
+        damageSources: [{ kind: 'skill', amount: 2 }],
+      },
     ]);
   });
 
@@ -308,7 +318,11 @@ describe('resolveEnemyAttack — enemy rolls to hit (M4)', () => {
     expect(r.damage).toBe(0);
     expect(r.enemy.skillCharges).toBe(2); // unchanged
     expect(r.target.activeConditions).toEqual([]); // no condition applied
-    expect(r.events).toEqual([{ kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0 }]);
+    expect(r.events).toEqual([{
+      kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0,
+      roll: { natural: 11, faces: [11], advDis: 0, modifier: 1, total: 12, targetAc: AC },
+      damageSources: [],
+    }]);
   });
 
   it('crit: natural 20 ignores AC and DOUBLES the dealt Pyro Ball damage (2 -> 4)', () => {
@@ -318,7 +332,15 @@ describe('resolveEnemyAttack — enemy rolls to hit (M4)', () => {
     expect(r.enemy.skillCharges).toBe(1);
     expect(r.events).toEqual([
       { kind: 'enemy-skill-used', skillId: 'pyroBall', name: 'Pyro Ball' },
-      { kind: 'attack', subject: 'enemy', outcome: 'crit', damage: 4 },
+      {
+        kind: 'attack', subject: 'enemy', outcome: 'crit', damage: 4,
+        roll: { natural: 20, faces: [20], advDis: 0, modifier: 1, total: 21, targetAc: AC },
+        // The crit doubles the skill's 2 by ADDING an equal term, so 2 + 2 = 4.
+        damageSources: [
+          { kind: 'skill', amount: 2 },
+          { kind: 'crit-multiplier', amount: 2 },
+        ],
+      },
     ]);
   });
 
@@ -327,19 +349,35 @@ describe('resolveEnemyAttack — enemy rolls to hit (M4)', () => {
     const r = resolveEnemyAttack(e, skillTarget(), AC, 0, scriptedRng([face(1, 20)]));
     expect(r.damage).toBe(0);
     expect(r.enemy.skillCharges).toBe(2);
-    expect(r.events).toEqual([{ kind: 'attack', subject: 'enemy', outcome: 'fumble', damage: 0 }]);
+    expect(r.events).toEqual([{
+      kind: 'attack', subject: 'enemy', outcome: 'fumble', damage: 0,
+      // A fumble still records what it was rolled against.
+      roll: { natural: 1, faces: [1], advDis: 0, modifier: 1, total: 2, targetAc: AC },
+      damageSources: [],
+    }]);
   });
 
   it('with 0 charges on a hit: deals the plain 1 (natural 15 -> 16 >= AC 13)', () => {
     const r = resolveEnemyAttack(enemy({ skillCharges: 0 }), skillTarget(), AC, 0, scriptedRng([face(15, 20)]));
     expect(r.damage).toBe(1);
-    expect(r.events).toEqual([{ kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 1 }]);
+    expect(r.events).toEqual([{
+      kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 1,
+      roll: { natural: 15, faces: [15], advDis: 0, modifier: 1, total: 16, targetAc: AC },
+      damageSources: [{ kind: 'base', amount: 1 }],
+    }]);
   });
 
   it('with 0 charges on a crit: doubles the plain 1 to 2', () => {
     const r = resolveEnemyAttack(enemy({ skillCharges: 0 }), skillTarget(), AC, 0, scriptedRng([face(20, 20)]));
     expect(r.damage).toBe(2); // 1 * 2
-    expect(r.events).toEqual([{ kind: 'attack', subject: 'enemy', outcome: 'crit', damage: 2 }]);
+    expect(r.events).toEqual([{
+      kind: 'attack', subject: 'enemy', outcome: 'crit', damage: 2,
+      roll: { natural: 20, faces: [20], advDis: 0, modifier: 1, total: 21, targetAc: AC },
+      damageSources: [
+        { kind: 'base', amount: 1 },
+        { kind: 'crit-multiplier', amount: 1 },
+      ],
+    }]);
   });
 
   it('Scavver dodge: enemyAdvDis -1 rolls {12, 5}, uses the lower 5 -> 6 < AC 13 -> miss + disadvantage event', () => {
@@ -351,7 +389,12 @@ describe('resolveEnemyAttack — enemy rolls to hit (M4)', () => {
     expect(r.enemy.skillCharges).toBe(2); // no charge on a miss
     expect(r.events).toEqual([
       { kind: 'disadvantage', subject: 'enemy' },
-      { kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0 },
+      {
+        kind: 'attack', subject: 'enemy', outcome: 'miss', damage: 0,
+        // BOTH faces are reported, so the log can show the dodge that forced the low one.
+        roll: { natural: 5, faces: [12, 5], advDis: -1, modifier: 1, total: 6, targetAc: AC },
+        damageSources: [],
+      },
     ]);
   });
 
@@ -383,5 +426,163 @@ describe('resolveEnemyAttack — enemy rolls to hit (M4)', () => {
     expect(onMiss.damage).toBe(0);
     expect(onMiss.target.activeConditions).toEqual([]); // no freeze on a miss
     expect(onMiss.enemy.skillCharges).toBe(1); // charge unspent
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M-UI2: every attack event carries the dice that decided it, and a damage
+// breakdown whose terms SUM to the damage reported. All expectations below are
+// derived from the D&D arithmetic, never read back from a run.
+// ---------------------------------------------------------------------------
+
+// A player with STR mod +2 and DEX mod 0. The weapon table ships no MELEE 1d8, so the 1d8
+// Finesse rapier stands in: Finesse takes max(STR, DEX) = max(2, 0) = 2, giving exactly the
+// +2 to-hit the case calls for, and Finesse takes the same damage path as Melee.
+function d8Wielder(overrides: Partial<Attacker> = {}): Attacker {
+  return player({
+    stats: { STR: 14, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+    mods: { STR: 2, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 },
+    ...overrides,
+  });
+}
+const AC13 = enemy({ armorClass: 13 });
+
+/** The invariant that makes a breakdown worth showing at all. */
+function expectSourcesSumToDamage(events: readonly CombatEvent[]): void {
+  for (const e of events) {
+    if (e.kind !== 'attack' && e.kind !== 'skill-cast') continue;
+    expect(sumDamageSources(e.damageSources)).toBe(e.damage);
+  }
+}
+
+describe('attack events carry the roll that decided them', () => {
+  it('a hit records the natural, the modifier, the total and the AC it beat', () => {
+    // natural 15, +2 (Finesse -> max(STR 2, DEX 0)) = 17, against AC 13 -> hit.
+    // Damage: one d8 landing on 4.
+    const r = resolvePlayerAttack(
+      d8Wielder(), AC13, RAPIER, 0, scriptedRng([face(15, 20), face(4, 8)]),
+    );
+    expect(r.events).toEqual([{
+      kind: 'attack', subject: 'player', outcome: 'hit', damage: 4,
+      roll: { natural: 15, faces: [15], advDis: 0, modifier: 2, total: 17, targetAc: 13 },
+      damageSources: [{ kind: 'weapon-dice', amount: 4, label: '1d8' }],
+    }]);
+    expectSourcesSumToDamage(r.events);
+  });
+
+  it('under advantage it reports BOTH faces, not just the winner', () => {
+    // Two d20s (7, 15); advantage takes the max, 15. 15 + 2 = 17 >= AC 13 -> hit.
+    const r = resolvePlayerAttack(
+      d8Wielder({ advantageDisadvantage: 1 }), AC13, RAPIER, 0,
+      scriptedRng([face(7, 20), face(15, 20), face(4, 8)]),
+    );
+    expect(r.events).toEqual([
+      { kind: 'advantage', subject: 'player' },
+      {
+        kind: 'attack', subject: 'player', outcome: 'hit', damage: 4,
+        roll: { natural: 15, faces: [7, 15], advDis: 1, modifier: 2, total: 17, targetAc: 13 },
+        damageSources: [{ kind: 'weapon-dice', amount: 4, label: '1d8' }],
+      },
+    ]);
+  });
+
+  it('under disadvantage it reports both faces and keeps the LOWER as natural', () => {
+    // The same two faces (7, 15); disadvantage takes the min, 7. 7 + 2 = 9 < AC 13 -> miss,
+    // so no damage die is rolled at all (only two draws are scripted).
+    const r = resolvePlayerAttack(
+      d8Wielder({ advantageDisadvantage: -1 }), AC13, RAPIER, 0,
+      scriptedRng([face(7, 20), face(15, 20)]),
+    );
+    expect(r.events[1]).toEqual({
+      kind: 'attack', subject: 'player', outcome: 'miss', damage: 0,
+      roll: { natural: 7, faces: [7, 15], advDis: -1, modifier: 2, total: 9, targetAc: 13 },
+      damageSources: [],
+    });
+  });
+
+  it('a fumble records the AC it was measured against and carries no damage terms', () => {
+    // natural 1 is a fumble regardless of the total; 1 + 2 = 3 is still reported.
+    const r = resolvePlayerAttack(d8Wielder(), AC13, RAPIER, 0, scriptedRng([face(1, 20)]));
+    expect(r.events).toEqual([{
+      kind: 'attack', subject: 'player', outcome: 'fumble', damage: 0,
+      roll: { natural: 1, faces: [1], advDis: 0, modifier: 2, total: 3, targetAc: 13 },
+      damageSources: [],
+    }]);
+  });
+
+  it('a crit breaks the two dice rolls into separate terms', () => {
+    // natural 20 -> crit. Two d8 rolls, 4 and 5, so 9 damage from two named terms.
+    const r = resolvePlayerAttack(
+      d8Wielder(), AC13, RAPIER, 0, scriptedRng([face(20, 20), face(4, 8), face(5, 8)]),
+    );
+    expect(r.damage).toBe(9);
+    expect(r.events).toEqual([{
+      kind: 'attack', subject: 'player', outcome: 'crit', damage: 9,
+      roll: { natural: 20, faces: [20], advDis: 0, modifier: 2, total: 22, targetAc: 13 },
+      damageSources: [
+        { kind: 'weapon-dice', amount: 4, label: '1d8' },
+        { kind: 'crit-dice', amount: 5, label: '1d8' },
+      ],
+    }]);
+    expectSourcesSumToDamage(r.events);
+  });
+
+  it('names gear and perk flat damage as separate terms', () => {
+    // d8 face 4, +3 from gear, +1 from a perk = 8.
+    const r = resolvePlayerAttack(
+      d8Wielder(), AC13, RAPIER, 3, scriptedRng([face(15, 20), face(4, 8)]), 1,
+    );
+    expect(r.damage).toBe(8);
+    expect(r.events[0]).toMatchObject({
+      damageSources: [
+        { kind: 'weapon-dice', amount: 4, label: '1d8' },
+        { kind: 'equipment', amount: 3 },
+        { kind: 'perk', amount: 1 },
+      ],
+    });
+    expectSourcesSumToDamage(r.events);
+  });
+
+  it('keeps the terms summing to the damage even when the total is clamped at 0', () => {
+    // d8 face 4 with a -10 penalty is -6 raw, which the engine floors at 0. The breakdown
+    // records the floor as its own corrective term, so the invariant survives the clamp.
+    const r = resolvePlayerAttack(
+      d8Wielder(), AC13, RAPIER, -10, scriptedRng([face(15, 20), face(4, 8)]),
+    );
+    expect(r.damage).toBe(0);
+    expect(r.events[0]).toMatchObject({
+      damageSources: [
+        { kind: 'weapon-dice', amount: 4, label: '1d8' },
+        { kind: 'equipment', amount: -10 },
+        { kind: 'clamp', amount: 6 },
+      ],
+    });
+    expectSourcesSumToDamage(r.events);
+  });
+
+  it('always pushes the attack event LAST — the ordering battle.ts depends on', () => {
+    // battle.ts folds post-hoc modifiers into the attack event by the index it lands at,
+    // captured as `events.length - 1` right after the spread. If a resolver ever pushed
+    // something after the attack, that fold would silently target the wrong event.
+    const withAdv = resolvePlayerAttack(
+      d8Wielder({ advantageDisadvantage: 1 }), AC13, RAPIER, 0,
+      scriptedRng([face(7, 20), face(15, 20), face(4, 8)]),
+    );
+    expect(withAdv.events[withAdv.events.length - 1]!.kind).toBe('attack');
+
+    // The enemy path is the one that really matters: it pushes enemy-skill-used events too.
+    const ea = resolveEnemyAttack(
+      enemy({ skillCharges: 2 }), skillTarget(), 13, 0, scriptedRng([face(12, 20), 0.5]),
+    );
+    expect(ea.events.length).toBeGreaterThan(1);
+    expect(ea.events[ea.events.length - 1]!.kind).toBe('attack');
+  });
+
+  it('round-trips a widened attack event through JSON unchanged (still plain data)', () => {
+    const r = resolvePlayerAttack(
+      d8Wielder(), AC13, RAPIER, 0, scriptedRng([face(20, 20), face(4, 8), face(5, 8)]),
+    );
+    const event = r.events[0]!;
+    expect(JSON.parse(JSON.stringify(event))).toEqual(event);
   });
 });

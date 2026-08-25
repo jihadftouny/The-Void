@@ -150,6 +150,9 @@ describe('new-skill draft pick: a previously un-castable kit skill becomes casta
     const rAfter = resolveRound(createBattle(after, enemy, 1), { kind: 'cast', skillId: 'intimidate' }, scriptedRng([]));
     // intimidate base 1 (Psychic) vs 0 resist, no INT augment -> 1 damage. 200 - 1 = 199.
     expect(rAfter.state.enemy.hp).toBe(199);
-    expect(rAfter.events).toContainEqual({ kind: 'skill-cast', subject: 'player', skillId: 'intimidate', name: 'Intimidate' });
+    expect(rAfter.events).toContainEqual({
+      kind: 'skill-cast', subject: 'player', skillId: 'intimidate', name: 'Intimidate', damage: 1,
+      damageSources: [{ kind: 'skill', amount: 1 }],
+    });
   });
 });

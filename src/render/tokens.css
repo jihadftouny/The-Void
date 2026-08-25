@@ -1,0 +1,87 @@
+/* Base element styling for The Void, keyed entirely to the --void-* custom properties
+ * that `theme.ts` writes from `tokens.ts` at boot (M-UI2 `ui-foundation`).
+ *
+ * RULE: no colour literal may appear in this file, or in any other stylesheet, with ONE
+ * documented exception marked below. Everything reads `var(--void-*)` WITHOUT a fallback
+ * value, deliberately: a fallback would be a second definition of the same colour, and a
+ * second definition is exactly how the palette drifts out of sync with `tokens.ts`.
+ *
+ * Art direction (docs/UI-DESIGN.md §5): elevated terminal. Monospace everywhere, flat
+ * surfaces, square corners, heavy rules, wide tracking, no shadows, no gradients.
+ */
+
+html {
+  /* THE ONE DUPLICATED COLOUR. Source of truth: PALETTE.bg in tokens.ts ('#07070a').
+   * It is repeated here as a literal because CSS parses before any script runs, and
+   * without it the window paints white for a frame before applyTheme() sets --void-bg.
+   * If PALETTE.bg ever changes, change it here too. */
+  background: #07070a;
+}
+
+body {
+  margin: 0;
+  background: var(--void-bg);
+  color: var(--void-ink);
+  font-family: var(--void-font-mono);
+  font-size: var(--void-type-base);
+  line-height: 1.55;
+  letter-spacing: var(--void-track-tight);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Flat and square by default — the terminal look has no ornament to inherit. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-radius: var(--void-radius);
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--void-track-widest);
+  color: var(--void-ink);
+}
+
+h1 { font-size: var(--void-type-xxl); }
+h2 { font-size: var(--void-type-xl); }
+h3 { font-size: var(--void-type-lg); }
+h4 { font-size: var(--void-type-md); }
+
+hr {
+  border: 0;
+  border-top: var(--void-rule-hair) solid var(--void-rule);
+  margin: var(--void-space-4) 0;
+}
+
+a {
+  color: var(--void-accent);
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--void-accent);
+  color: var(--void-bg);
+}
+
+/* A single focus treatment for the whole game — the accent ring, no glow, no radius. */
+:focus-visible {
+  outline: var(--void-rule-heavy) solid var(--void-accent);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--void-bg); }
+::-webkit-scrollbar-thumb { background: var(--void-rule); }
+::-webkit-scrollbar-thumb:hover { background: var(--void-rule-strong); }
