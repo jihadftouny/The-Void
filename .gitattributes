@@ -1,0 +1,13 @@
+# Normalize line endings to LF in the repository, on every platform.
+#
+# WHY: this repo is developed on Windows but stores LF (the checked-in tree has always been
+# LF). Any tool that writes files with the platform default — a Python script using
+# open(path, 'w'), some editors, some shells — silently rewrites a file to CRLF. Git then
+# reports EVERY line of that file as changed, which buries the four lines that actually
+# changed and turns a readable diff into an unreviewable one. It also guarantees noisy
+# conflicts when parallel branches touch the same file.
+#
+# `text=auto` lets Git detect text files and normalize them to LF in the object database;
+# `eol=lf` checks them back out as LF rather than the platform default. Binary files are
+# left alone by the auto-detection.
+* text=auto eol=lf
