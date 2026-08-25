@@ -87,6 +87,76 @@ load-bearing word. Reserve it.
 **For prose:** every character the player meets believes the folklore. The narrator — which *is* the
 condition (§0) — is the only voice that could know better, and it will never say so plainly.
 
+## 0c. THE MECHANISM — extraction leaves the hollow **[LOCKED 2026-08-25]**
+
+**This is the answer the whole game is built on. Everything above resolves into it.**
+
+> A brainchip holds **a recorded life** (§4).
+> Taking it out leaves a person **hollow**.
+> **The hollow is the Void.**
+
+The Memorians do not have a secret technique for inducing madness. **Their ordinary, documented,
+generations-old day job *is* the cause.** They extract recorded lives from people, and what is left
+behind is a mind with its life taken out of it — and that is the condition, and that is the Void,
+and that is the Hollow, and that is the voice narrating your game (§0).
+
+### What this makes true
+
+- **The mission was to harvest *you*.** You were never sent to retrieve the Kingpins' chips. You
+  were sent so that the Kingpin could take **yours**. "Throwing you into the Void" is not a fall
+  down a hole and not a metaphor — **it is an extraction.** The betrayal (§4) is that your own house
+  sold you for parts, and the errand was the delivery mechanism.
+- **"Made whole" is literal, not poetic.** The grace ending does not mean *made well* or *at peace*.
+  **Whole means your life back inside you.** The single line of ending prose that already existed in
+  the repo turns out to have been describing the exact inverse of the exact injury. This is the
+  strongest thing in the entire design and no prose may soften it.
+- **The Ash City becomes devastating.** Floor 3 is grief, and *the ash is what you lost* (§6) —
+  which is now **literally your extracted life**, burned down to residue. You walk through an endless
+  city made of your own recorded years, and none of it is on fire any more because it is already
+  finished burning.
+- **The Hollowed are the extracted.** Floor 5's "former fallen descenders" are other people the
+  Memorians harvested. **Your Hollow Self is you, without your life in you.** The Echoes of You are
+  what is left loose after the chip comes out.
+- **The Neuromancer is the perpetrator.** A Memorian's craft — mind-reading, extraction — **is the
+  weapon that makes the Void.** The player can choose to be one. A Neuromancer descending has been
+  done to by their own order, using their own skill, and may or may not understand that. This is the
+  most loaded fact in the game and it sits inside a selectable class.
+- **Floor 1 is real because you still have your chip.** The moment of extraction is the moment the
+  world stops being solid. That is exactly where the design already put the boundary.
+
+### Why they do it — disposal that leaves no body **[LOCKED]**
+
+**It is how the last city removes people.** Cleaner than execution: no body, no grave, no evidence,
+and **the folklore does all the covering for them.** Everyone believes there is a hole; a person who
+is gone is simply someone who was sent down. A whole penal system resting on a lie **nobody ever had
+to tell** — the world invented the cover story by itself and the Memorians merely declined to
+correct it.
+
+The Kingpins are the **disposal contractors**. "Sent down" is a real sentence, lawfully passed,
+routinely carried out. It is just not literal.
+
+### The Kingpins know exactly **[LOCKED]**
+
+Fully informed, fully bought. The Memorians needed hands in the Undercity and paid for them. **The
+Kingpin who takes your chip knows precisely what you are about to become** — and may well tell you
+so. He is the cleanest villain this game will ever have, and the only one who could explain the
+truth to you, if he felt like it.
+
+### The archives call it **Disposition** **[LOCKED]**
+
+The Memorians' term for the hidden four-axis karma — what the design calls *Nature*, and what
+decides the floor-4 verdict.
+
+> *"the subject's disposition at the fourth stage"*
+
+It means a person's temperament, **and** how a case is filed and closed. That double meaning is the
+point: **to the Memorians, what you are and what is done with you are the same word.** It is a
+records-room word for a soul, and its smallness is characterisation.
+
+**Rules for using it:** never shown to the player, never a meter, never a number — the design's
+no-metering rule (`GAME-DESIGN.md` §7, §13) is unchanged. It exists so the narrator can *allude* to
+being filed, and so the archives have a voice.
+
 ## 1. Absolution — the last city **[LOCKED]**
 
 The capital of Absolution, 2100. **It is the last city.** Nothing viable exists outside the walls;
@@ -338,6 +408,27 @@ generations, and never found it necessary to call it anything but what it is.
   has a reason beyond restraint: the cold, ruled, precise interface *is* the Memorians' record of
   you (§0b, §5). The art is the experience; the interface is the file. Making the interface warm
   would destroy that.
+
+## 12c. Consequences the rest of the project must absorb
+
+Flagged here because they cross into other documents and will otherwise be missed.
+
+- **`ART-BIBLE.md` — the socket.** Chips are physical and sit in the head; the Neuromancer's locked
+  costume already has *"sockets at the temple"*. If a chip can be taken out, **an emptied socket is
+  a visible wound**, and it is the single most on-theme visual detail available. Applies to the
+  Hollow class, the Hollowed, the Echoes, and the Hollow Self. **[OPEN]** whether every class
+  portrait shows a socket, and whether post-extraction assets show it empty.
+- **`GAME-DESIGN.md` — the Ash City.** Floor 3's ash is now *literally the player's extracted life*
+  (§0c). The Feelings and Sins that live there are being mourned because they are **yours**.
+- **`UI-DESIGN.md` — the interface is the file.** The austere typographic interface is the
+  Memorians' record of you (§0b). This is now the reason for the direction, not merely a
+  justification found afterwards.
+- **M11 narrator work.** The narrator *is* the condition (§0), which is *caused by extraction*
+  (§0c). It is therefore the voice of an injury someone inflicted deliberately — not a place, not a
+  spirit, not the game. That should change how the persona prompt is written.
+- **The prose must never explain any of this.** §0b: everyone the player meets believes the
+  folklore. The narrator will never say it plainly. **The player should be able to finish the game
+  without ever being told**, and finish it a second time understanding what happened.
 
 ## 12b. Still open
 
