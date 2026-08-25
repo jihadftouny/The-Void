@@ -66,9 +66,10 @@ core (breaks reproducibility), and class instances/functions in saved state (bre
 - Node.js 18+, TypeScript 5 (strict), Vite 6, Vitest 2, Kaplay (atmosphere layer), DOM for
   narrative text. Desktop packaging: **Electron + node-llama-cpp** (GGUF 3–4B model,
   grammar-constrained output). Electron is settled — N1 validated it; Tauri is not in play.
-  **The model is downloaded on first run, not yet bundled** — bundling vs. download is an open M17
-  decision (`docs/SCOPE-AUDIT.md`), and until it lands the "offline, no keys" promise is only true
-  after that first download.
+  **The model is downloaded once on first run, by design** (decided 2026-08-25): a small installer,
+  a one-time ~2.5 GB fetch, then fully offline forever. Keeps the itch upload small and lets the
+  model be upgraded without shipping a new build. **The store copy must say so honestly**, and the
+  first-run flow needs a real failure path.
 - `npm run dev` — dev server. `npm run build` — typecheck (`tsc --noEmit`, which really checks `src`)
   + Vite build. `npm test` — Vitest (logic + llm cores, headless Node). `npm run typecheck`.
 - Min spec: typical laptop, no GPU. The logic and LLM cores must run and be tested headlessly in

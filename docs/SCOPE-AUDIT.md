@@ -4,6 +4,28 @@ _An exhaustive, evidence-based inventory of everything undefined, deferred, plac
 contradictory or missing across the whole project. Produced before committing to the UI restyle and
 the art batches, specifically to avoid building things that would have to be torn down._
 
+> ## ✅ TIER 1 IS RESOLVED (2026-08-25) — decisions live in `docs/GAME-DESIGN.md`
+>
+> All seven Tier-1 items below were decided in the scope interview. **Read the design doc, not this
+> section, for what was chosen.** Summary of the rulings:
+>
+> 1. **Floor mechanics** — hybrid: simple modifiers reuse the existing relic effect/trigger
+>    pipeline; encounter-restructuring mechanics (floor 2 illusions, floor 5 kit warp) get bespoke
+>    code. Floor 2 illusions are literal with a WIS reveal; floor 3 is attrition only; floor 4
+>    temptation is floor-gated; floor 5 warps your own skills.
+> 2. **Grammar-constrained choices** — **DROPPED. The engine writes the choices; the model narrates
+>    only.** M11 shrinks accordingly: no tool registry, no free-text mapping.
+> 3. **Equip as a `step` input** — yes, plus a mandatory balance re-run, because the current 32.9%
+>    measures a character that never equips found loot.
+> 4. **The floor-4 gate** — floor-4 karma counts double; no new state.
+> 5. **Description/flavour fields** — added to every content schema now; currently blocking all
+>    authoring.
+> 6. **The socket** — no visible hardware in any art; the Hollow is rendered as wrongness of
+>    occupancy instead. Already applied to `ART-BIBLE.md`.
+> 7. **Model bundling** — download once on first run, by design. Store copy must say so.
+>
+> Tiers 2 and 3 below are still live.
+
 **How to use this file:** it is a snapshot, not a living document. Work items out of it into
 `docs/GAME-DESIGN.md`, `docs/WORLD.md`, `docs/ART-BIBLE.md` or `docs/ROADMAP.md` as they are
 decided, and strike them here. **Do not treat an item as resolved because it was discussed — only

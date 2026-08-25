@@ -291,6 +291,30 @@ are **before → fracture → grief → judgement → absence**.
 Each floor has its own tone, enemy families, a **signature mechanic** (the per-floor twist), and a
 **boss** (a distinct encounter with unique mechanics — an LLM agent with run-memory, built in M12).
 
+### The floor-4 verdict weights floor-4 karma heavier **[DECIDED 2026-08-25]**
+
+`computeVerdict` currently takes the carried karma vector alone, so floor 4 is a **scoreboard for the
+four floors before it** rather than a crucible. Fix: **karma earned on floor 4 counts double** (or
+some N > 1) relative to karma carried in.
+
+- The crucible can genuinely **redeem or damn you** regardless of how you arrived, which is what a
+  reckoning has to be able to do.
+- It makes the floor-gated temptations above **mechanically decisive** rather than flavour.
+- It needs **no new state and no save change** — only weighted deltas while `state.act === 4`.
+
+Rejected: a discrete named floor-4 choice set tracked separately. More memorable (the player could
+point at exactly what damned them) but it means new state, new encounter phases, new save fields, and
+it re-opens M15. Recorded as the richer option if floor 4 is ever expanded.
+
+### Every content schema gains description and flavour **[DECIDED 2026-08-25]**
+
+Items, skills, conditions and perks each gain an optional **`description`** (what it does, plainly)
+and **`flavour`** (prose, optional). Both optional, so nothing existing breaks.
+
+**This is currently blocking all content authoring** — there is literally nowhere to put the words.
+It is cheap now and a schema migration once the item UI exists, which is why the audit ranks it
+Tier 1 despite looking like a chore.
+
 ### Equip and unequip become engine inputs **[DECIDED 2026-08-25]**
 
 **Equipment changes must go through `step`.** Two new `GameInput` variants (`equip` / `unequip`)
