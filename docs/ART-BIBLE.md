@@ -463,21 +463,42 @@ Every deviation from §1 or §2 gets a line here, with the reason. An undocument
 
 ---
 
-## 9. Blocking gaps — do not generate until these are answered **[PENDING]**
+## 9. Blocking gaps — do not generate until these are answered
 
-The design record is genuinely silent on these. Guessing produced the medieval-Enforcer error.
+The design record was genuinely silent on these. Guessing produced the medieval-Enforcer error.
 
-**RESOLVED 2026-08-25:** tech level (§4 — techno-occult), the floor colour ramp (§4), Floor 4's
-environment (§4), and the asset-count mismatches (§4b — 52 assets). Still open:
+### Settled 2026-08-25 — the production rules
 
-1. **What the five classes actually wear.** The tech level is now settled, but there is still *zero*
-   costume, silhouette, species, age or gender description for Enforcer, Neuromancer, Scavver,
-   Penitent or Hollow. All current gear ids are placeholder joke names ("Jaaj Sword 1", "Jooj Gun
-   1"). Note both the Neuromancer and the Hollow are currently issued *a gun*.
-2. **The Undercity's architecture.** "Rain, neon, grime" is three words — and the accent is now
-   *toxic green*, which suggests contamination rather than neon signage. Sunken sublevel? Slum
-   canyon? Megablock? Flooded industrial works? And **the Rift** — the doorway from Floor 1 to Floor
-   2 — has no description at all anywhere.
+- **Transparency — key to PNG in post.** Generate on flat black, then a script keys the black out to
+  an alpha channel and **the keyed PNG is the committed asset.** Deterministic, reviewable, done
+  once. Pixel art makes this far easier than painterly would have — flat colours and hard edges key
+  cleanly, with no soft JPEG halo to fight. Adds an image-processing dependency (`sharp` or similar)
+  to the **art tooling only**; it never ships in the game bundle and no test touches it.
+- **Affixes — code effects, zero new art.** Ravenous, Ancient, Warped, Blessed and Cursed are shader
+  and transform treatments over the base sprite: red tint plus faster jitter; desaturation, slow
+  drift and dust; a wobble or chromatic split; a pale outline and steady glow; a dark outline and
+  black particles. **24 families × 5 affixes = 120 combinations for zero extra assets**, consistent
+  with the one-sprite-plus-effects rule, and instantly readable — which matters, because an elite
+  that looks identical to a trash mob is a real legibility problem when it hits much harder.
+- **Item icons — deferred again, deliberately.** M5's Tibia-style inventory is still an unbuilt
+  collaborative pass. Icons designed before that screen exists risk being the wrong size, shape or
+  density. **Revisit only after the inventory has a real design**, then fit icons to it. Not in any
+  batch until then.
+- Also settled earlier this session: tech level (§4 techno-occult), the floor colour ramp (§4),
+  Floor 4's environment (§4), the asset counts (§4b), posing (§2b), the PS1 render read (§2c),
+  one-sprite-no-frames (§3), and no generated interface art (§4 generation order).
+
+### Still open
+
+1. ~~What the five classes wear.~~ **CLOSED** — costumes locked in §4.
+2. ~~The Undercity's architecture.~~ **CLOSED** — flooded industrial, §4. **The Rift is also now
+   defined** (`WORLD.md` §3): a **real pit**, older than the city, origin genuinely unknown even to
+   the Memorians. It is a physical place that can be drawn, and the Kingpin waits at its **entrance**
+   — the threshold where you could still have turned back (`WORLD.md` §4).
+3. **The socket, and the apparatus.** Chips are universal (`WORLD.md`), extraction is a **long**
+   procedure performed on a conscious person, and the whole game happens during it. That implies
+   visible hardware — a temple socket at minimum, and something the body is connected *to* for the
+   duration. How far the art commits to this is **[OPEN]** and is the last blocking art question.
 3. **Naming: "Ash-Wretch" does not exist.** The probe and the `UI-DESIGN.md` mockup both use it, but
    the actual family is **`ashWraiths` / "Ash-Wraith"**, whose design hook is *"endless weak filler"*
    and whose name table (*Drifting, Smouldering, Faint, Pale / Cinder, Ember-Shade*) suggests
