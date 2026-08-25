@@ -91,6 +91,20 @@ Format per entry:
 - Also of note: the test-agent's own rigour is what caught it — it did not re-run the build agent's
   proof, it invented a *new* violation in the house idiom. Mutation testing that reuses the
   author's mutant is worth much less than mutation testing that writes its own.
+- **Fix round 3 went deeper than the finding, and surfaced the better lesson.** The build agent
+  discovered the guard **could not reveal its own bug**: the shipping stylesheets contain *no*
+  `--void-*` declarations at all, so the check passed while catching nothing — *it looked healthy
+  precisely because it had nothing to catch.* **Vacuity is the deeper failure mode than
+  form-sensitivity:** a guard whose subject set is currently empty passes whether or not it works,
+  and no amount of running the suite will tell you. Second doctrine line added to build-agent.md in
+  response (kept near token-neutral by trimming the first).
+- It then re-proved guards it had **never** proved at all (the palette temperature and lightness
+  rules), added unrequested CSS-comment stripping so the guards judge what the browser parses, and
+  — most valuably — **demonstrated the coverage gap it had merely *disclosed* in round 1**: dropping
+  the `equipment` damage term leaves the whole-run invariant green while turning the hand-derived
+  unit test red, proving the gap is genuinely closed rather than argued away. **Doctrine signal: an
+  honestly-disclosed gap is still an unverified claim; make the agent demonstrate the compensating
+  cover, not just name it.** 1026 → 1029 tests.
 - Manual engineer fixes: none yet
 
 ## 2026-08-14 — balance-tune (M15 part 2: tuning to the ~1-in-3 target) [stacked on balance-sim, unmerged]
