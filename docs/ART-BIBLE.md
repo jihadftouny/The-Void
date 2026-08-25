@@ -35,10 +35,43 @@ on the project or every request returns HTTP 429.
 
 ---
 
-## 2. The house style string **[LOCKED]**
+## 2. The house style string
 
 Appended verbatim to **every** prompt. This is the load-bearing consistency mechanism; changing it
 invalidates the roster's coherence.
+
+### Current candidate — **"32-bit era, but 2D"** **[PROBED 2026-08-25, awaiting sign-off]**
+
+Pre-rendered 2D sprite art: Diablo 1, Fallout, early PlayStation. Rendered from 3D and flattened,
+dithered, murky, limited palette. **Probe 03 ran 9/9 and the results are strong** — see §7.
+
+```
+Pre-rendered 2D game sprite art in the visual style of late-1990s 32-bit era games — Diablo 1,
+Fallout, early PlayStation. Rendered from 3D and flattened into a 2D sprite: chunky low-fidelity
+forms, visible dithering instead of smooth gradients, a limited muted palette, hard crisp edges,
+deliberately coarse resolution. Dark, grim, murky, heavy shadow. Low fidelity that hides detail
+rather than showing it. NOT photorealistic, NOT smooth modern rendering, NOT soft or blurry, NOT
+cel-shaded, NOT anime. No text, no lettering, no watermark, no logo, no border, no
+user-interface elements.
+```
+
+**Why this beat the painterly style, on the evidence:**
+- **It pairs with the interface instead of fighting it.** The design direction is an austere
+  monospace terminal — a grid. Pixel art is also a grid. Painterly realism sat *on* that interface;
+  this sits *with* it.
+- **It solves the transparency problem almost for free.** §5 failure 3 was that the model cannot
+  emit alpha, so sprites needed luminance keying with messy JPEG edge artefacts. Flat colours and
+  hard pixel edges key out cleanly — the alpha step becomes reliable instead of delicate.
+- **Low fidelity does horror work.** What you cannot quite resolve is worse than what you can.
+- **It ages far better** than realism, which matters for a multi-year product.
+- **The technical risk did not materialise.** Image models are usually weak at pixel art — blurry
+  fake-pixel output, drifting palettes, inconsistent grids. This model held a consistent pixel grid
+  and real dithering across all nine images. That was the probe's main question and the answer was
+  clean.
+
+### Previous — painterly realism **[SUPERSEDED 2026-08-25]**
+
+Kept for the record; probe 01 used it. Do not use without re-deciding.
 
 ```
 Dark horror concept art for a video game. Muted, desaturated palette. Painterly and realistic
@@ -275,6 +308,28 @@ Generate these *after* the class portraits, conditioned on them.
 The strongest consistency lever available. The API accepts image input, so **once one asset is
 approved it is passed as a style-and-framing reference for the rest of its class.** Use it for all 24
 enemies and for the recursion set in §6.
+
+### Probe 03 results — the pixel-art test **[2026-08-25, 9/9 generated, ~$1.21]**
+
+Images at `art-candidates/probe-03-pixel/` (gitignored).
+
+**Enforcer — the techno-occult brief landed exactly.** Scuffed riot plate, a cracked orange visor,
+a corporate insignia worn off the shoulder, a baton with its haft wrapped in cord, and a ward
+scratched by hand into the chest plate. It reads as security equipment somebody has marked out of
+fear. This is the look. *(Take 03 has a very slightly green-tinted ground rather than pure black —
+the corner gate in §5 will catch that class of drift.)*
+
+**Ash City — on the corrected brief.** Densely built, architecturally varied, ash lying deep in the
+street, purely grey/white/black, **nothing burning**, and a near-black foreground third for text.
+**One item for the author:** the architecture skews strongly medieval-gothic (castle towers, a
+cathedral) with only a couple of industrial chimneys. Floor 3 is past the technological part of the
+descent so this may be right — but if the Ash City should still read as a *2100* city gone quiet,
+the prompt needs modern blocks and infrastructure mixed into the jumble.
+
+**Ash-Wraith — the white-background failure recurred.** Same defect as probe 01, in the same place,
+despite the prompt demanding a pure black background. **This settles it: the corner-pixel gate in §5
+is mandatory, not optional.** The creature itself is also more solid than "incorporeal" specifies —
+it dissolves at the edges but has a body. Needs a prompt push toward *less* mass.
 
 ### The approved reference **[PENDING — see §9]**
 Author's direction from probe 01, recorded verbatim:
