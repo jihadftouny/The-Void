@@ -105,6 +105,22 @@ Format per entry:
   unit test red, proving the gap is genuinely closed rather than argued away. **Doctrine signal: an
   honestly-disclosed gap is still an unverified claim; make the agent demonstrate the compensating
   cover, not just name it.** 1026 → 1029 tests.
+- **FINAL: VERDICT PASS at `782fe4f`. 1029 tests / 56 files, 0 skipped.** Test-agent wrote its own
+  30 regex cases (13 declaration forms, 12 read forms) rather than reusing the build agent's, proved
+  the guard red **at the real shipping call site**, and confirmed the old `^`-anchored regex now
+  turns the pinning test red so the round-2 bug cannot return silently. It also **booted `dist/`
+  in a real Electron renderer** with the app's actual preload: 0 console errors, title screen
+  renders, 33 `--void-*` properties written live with the correct Undercity accent — which closes
+  the *boot* half of the outstanding manual check headlessly.
+- **Two non-blocking findings carried forward to `battle-screen` (NOT fixed — fix-round ceiling
+  reached, and the verdict is PASS):** (a) the `shippingCss` comment-stripping helper is itself
+  **unpinned** — making it a no-op leaves the suite green, because one test duplicates the strip
+  regex inline instead of calling the helper. *This is the vacuity lesson a third time, in the very
+  round that learned it* — evidence the rule needed writing down. (b) A contrived `/*` in one CSS
+  string plus `*/` in a later one hides everything between; absent from the codebase today.
+- Test-agent's own suggestion, worth taking in the next unit: **commit the Electron boot probe as a
+  script**, so `battle-screen`, `canvas-layer` and `screens-restyle` inherit a headless boot check
+  instead of each ending with an unrunnable manual step.
 - Manual engineer fixes: none yet
 
 ## 2026-08-14 — balance-tune (M15 part 2: tuning to the ~1-in-3 target) [stacked on balance-sim, unmerged]

@@ -72,8 +72,10 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 ## Session log
 
 ### 2026-08-25 — M-UI2 begins: `ui-foundation` built + verified; the art direction found
-- **`ui-foundation` (unit 1 of 5) — VERDICT PASS, then PASS again after one fix round. 1026 tests**
-  (960 → 1014 → 1026). Branch `agentic/ui-foundation`, **unmerged, awaiting your review.**
+- **`ui-foundation` (unit 1 of 5) — FINAL VERDICT PASS after 3 fix rounds. 1029 tests**
+  (960 → 1014 → 1026 → 1029). Branch `agentic/ui-foundation`, **unmerged, awaiting your review.**
+  One round was a genuine FAIL: a new guard was passing *vacuously* and could not have caught its
+  own bug. Fixed, and the lesson written into `.claude/agents/build-agent.md`.
   Delivered: design tokens + five per-floor accents, the shared panel/bar/chip/row/button
   components, **the standalone Kaplay front-end deleted** (`index.html` + `src/scenes/` — one
   front-end from here, bundle 205 kB → 116 kB), and combat events widened to carry real dice.
