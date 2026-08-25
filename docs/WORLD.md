@@ -532,6 +532,22 @@ Flagged here because they cross into other documents and will otherwise be misse
   folklore. The narrator will never say it plainly. **The player should be able to finish the game
   without ever being told**, and finish it a second time understanding what happened.
 
+## 12d. What the enemies *are*, given all of the above
+
+A consequence worth stating plainly, because it governs how every enemy is written and drawn:
+
+- **Floor 1's enemies are real people and real machines.** Gangers, drones, strays, cyber-enforcers,
+  fixers. You are in the Undercity, physically, before anything has been taken.
+- **Floors 2–5 are inside the reading.** Reflections, Mirror-Selves, Distortions, the Feelings, the
+  Sins, the Judged, the Unmade, the Echoes — these are your own content, being taken apart. This is
+  why sparing them is a karma act: **on floor 3 you are choosing whether to be merciful to your own
+  grief.**
+- **[OPEN, minor] The Hollowed.** Their design note calls them *"former fallen descenders — what you
+  may become"*. If the descent is entirely internal, they cannot literally be other people. The
+  natural readings: they are **what you fear becoming**, or the folklore's population made present,
+  or traces the Memorians' own archive leaves in the reading. Worth settling before floor 5 prose,
+  not before art.
+
 ## 12b. Still open
 
 - ~~The rival houses.~~ **CLOSED 2026-08-25 — deliberately parked.** Other houses exist and are
