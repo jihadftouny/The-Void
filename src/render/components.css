@@ -79,7 +79,20 @@
   white-space: nowrap;
 }
 
-.void-chip-control { color: var(--void-accent); }
+/* A control condition means you LOSE YOUR TURN, so it gets the loudest treatment: filled
+ * with the floor accent and knocked out in the background colour, against the outlined
+ * harm/boon chips. This is a shape difference, not just a hue difference, which matters
+ * because the accent changes per floor — on the Entrance the accent is a scarlet that sits
+ * close to --void-harm, and two red outlined chips would be hard to tell apart at 11px.
+ * Filling it keeps "you cannot act" unmistakable on every floor.
+ *
+ * Legibility comes free: contrast is symmetric, so ink-on-accent here is the same ratio as
+ * accent-on-ink elsewhere, and the >= 4.5:1 accent gate in tokens.test.ts already covers it. */
+.void-chip-control {
+  background: var(--void-accent);
+  border-color: var(--void-accent);
+  color: var(--void-bg);
+}
 .void-chip-harm { color: var(--void-harm); }
 .void-chip-boon { color: var(--void-heal); }
 

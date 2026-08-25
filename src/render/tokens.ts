@@ -59,14 +59,72 @@ export interface FloorTheme {
  * player descends, so it carries the whole sense of place. Each value is gated by the
  * contrast test in tokens.test.ts (>= 4.5:1 against PALETTE.bg) — taste proposes, the
  * measured ratio disposes.
+ *
+ * AUTHORITY: `docs/ART-BIBLE.md` §4 "The floor colour ramp" [LOCKED 2026-08-25], which
+ * records the author's own words and OVERRULES the earlier "ash-orange" in
+ * `docs/UI-DESIGN.md` §5 that the first version of this table was derived from.
+ *
+ * THE PROBLEM THIS TABLE HAD TO SOLVE. Taken literally, three consecutive floors are pale:
+ * floor 2 is "blinding white with red flecks", floor 3 is "purely white, grey and black",
+ * floor 4 is "bone white". Three near-identical accents would defeat the entire point of a
+ * per-floor accent, which is to mark the descent. They are separated on two axes that are
+ * both thematically load-bearing rather than merely convenient:
+ *
+ *   - TEMPERATURE separates floors 3 and 4. Floor 3 is a COLD neutral grey — dead, drained,
+ *     emptied. Floor 4 is a WARM bone — sacred, lit, alive. Cold against warm IS the
+ *     difference between emptiness and grace (ART-BIBLE §4), so the palette is carrying the
+ *     meaning, not just avoiding a collision. The two are near-mirror images about neutral:
+ *     floor 3 is 18 points bluer than red, floor 4 is 19 points redder than blue.
+ *   - LIGHTNESS separates them again, as a second guard: floor 3 sits at ~10:1 against the
+ *     ground and floor 4 at ~15.5:1, so they differ even rendered in greyscale.
+ *
+ * FLOOR 2 — why the accent is the RED FLECK, not the blinding white. This was the hard one,
+ * and the choice is deliberately easy to reverse (see ENTRANCE_ALTERNATIVE_WHITE below).
+ * The white is the ENVIRONMENT; the red flecks are the thing that stands out in it — and
+ * standing out is precisely a UI accent's job. Three reasons the fleck wins:
+ *   1. `--void-ink` is already #e8e8ee, a near-white at 16.5:1. An accent of near-white
+ *      would be almost exactly the colour of ordinary body text, so on floor 2 the UI would
+ *      have no accent at all — the opposite of "the palette marks the descent".
+ *   2. It leaves ONE pale stretch (floors 3-4, split by temperature) instead of three
+ *      consecutive floors with no hue in the chrome.
+ *   3. The descent then reads as a real progression — toxic, blood, ash, bone, artery —
+ *      rather than green, white, white, white, red.
+ * It must not be confused with floor 5's arterial red, so it is a brighter, far more
+ * saturated, much less pink scarlet: fresh blood on white, against old blood in the dark.
+ * The blinding white itself is not lost — it belongs to floor 2's BACKDROP art, which the
+ * `canvas-layer` unit owns; this table only colours the interface chrome.
  */
 export const FLOOR_THEMES: readonly FloorTheme[] = [
-  { place: 0, name: 'Undercity', accent: '#8fb0c0' }, // cold sodium blue-grey
-  { place: 1, name: 'Entrance to the Void', accent: '#9b8ad6' }, // threshold violet
-  { place: 2, name: 'Ash City', accent: '#c86a2a' }, // ash-orange
-  { place: 3, name: 'Angelic Underground', accent: '#e6e2d3' }, // bone-white
-  { place: 4, name: 'True Void', accent: '#ef6076' }, // arterial
+  // "undercity is green and toxic" — sickly, chemical, contaminated. An acid yellow-green,
+  // deliberately not the soft sage of PALETTE.heal, so a status chip can never be misread.
+  { place: 0, name: 'Undercity', accent: '#9dc043' },
+  // "blinding white with red flecks" — the accent is the fleck. Bright, fresh, high-chroma.
+  { place: 1, name: 'Entrance to the Void', accent: '#ff3b2f' },
+  // "purely white gray and black, the fire has settled already and it's just ash".
+  // COLD neutral grey. Nothing in the Ash City glows any more; there is no ember left.
+  { place: 2, name: 'Ash City', accent: '#aeb8c0' },
+  // WARM bone — sacred, lit, alive. The warm counterpart to floor 2's cold grey.
+  { place: 3, name: 'Angelic Underground', accent: '#e6e2d3' },
+  // Arterial. Black cannot be an accent against a near-black interface, so the accent is
+  // the thing burning in the dark. Deep and pink next to floor 2's fresh scarlet.
+  { place: 4, name: 'True Void', accent: '#ef6076' },
 ];
+
+/**
+ * The reversible half of the floor-2 decision, kept here so flipping it is a one-line edit
+ * rather than a redesign: a blinding, cool white taken from floor 2's ground instead of its
+ * flecks. It clears the contrast gate (~18:1) and is both brighter and cooler than floors 3
+ * and 4, so the pale trio would still separate — a test pins all of that, so the swap is
+ * pre-verified rather than a leap.
+ *
+ * KNOWN COST, and the reason it is not the default: at 18:1 it sits very close to
+ * `PALETTE.ink` (16.5:1), so floor 2's chrome — title, focus ring, hover, chips — would read
+ * as plain white text rather than as an accent.
+ *
+ * To adopt it, put this value on floor 1's `accent` above and update the two expected hexes
+ * in tokens.test.ts.
+ */
+export const ENTRANCE_ALTERNATIVE_WHITE = '#eef4ff';
 
 /** Spacing scale, 4px base. Strictly increasing. */
 export const SPACE = {
