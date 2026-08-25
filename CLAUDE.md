@@ -1,10 +1,16 @@
 # The Void
 
-An **LLM-driven narrative RPG** about a descent through five floors of the Void — inspired by lived experience of psychosis and by Dungeons & Dragons mechanics. A **local language
-model** (3–4B, bundled — no cloud, no keys, no per-turn cost) narrates the descent and adapts to
-the player's choices; the deterministic engine owns every rule and number (dice combat, status
-conditions, skills, shop/rest, XP across five Acts, a final boss). Shipped as a **packaged desktop
-game** (itch.io). Full locked design: `docs/ROADMAP.md` (v2).
+A **mechanics-first roguelike RPG with a local-LLM narrator** — a deep D&D-style game the engine
+owns completely, with a language model narrating over the top. Inspired by lived experience of psychosis. A **local model** (3–4B, no cloud, no keys, no per-turn cost) narrates and
+adapts to the player's choices; the deterministic engine owns every rule and number (dice combat,
+status conditions, skills, sacrifice-deals/rest, XP across five Acts, bosses). Shipped as a
+**packaged desktop game** (itch.io).
+
+> **The Void is not a place — it is a condition, and the condition is the Hollow.** The fiction is
+> authoritative in **`docs/WORLD.md`**; anything written before it is wrong where it disagrees.
+> **`docs/README.md` indexes every document and states which one wins when two conflict.** Read
+> both before writing prose, art prompts, or design. Systems live in `docs/GAME-DESIGN.md`, the
+> milestone plan in `docs/ROADMAP.md` (v3), and every known gap in `docs/SCOPE-AUDIT.md`.
 
 The engine is a from-scratch port of the original Java implementation (`.legacy/The-Void/`) on
 TypeScript + **Vite** + **Vitest**, with **Kaplay** as the visual-atmosphere layer. Earlier ports
@@ -33,9 +39,10 @@ game logic reaching into Kaplay/DOM (breaks headless testing), `Math.random`/`Da
 core (breaks reproducibility), and class instances/functions in saved state (breaks saves).
 
 1. **Pure logic / render split.** All game rules live in framework-agnostic TypeScript under
-   `src/game` — no Kaplay, DOM, or canvas imports there, ever. Kaplay (under `src/render` and
-   `src/scenes`) only draws state and forwards input. The logic core must run and be tested
-   headlessly in Node.
+   `src/game` — no Kaplay, DOM, or canvas imports there, ever. The render layer (`src/render`,
+   `src/desktop`) only draws state and forwards input. **Every state change goes through `step`** —
+   a run must be reproducible from `seed + inputs` alone, so the renderer never mutates state
+   directly. The logic core must run and be tested headlessly in Node.
 2. **Deterministic seeded RNG.** Every gameplay random decision (dice, loot, encounters, enemy
    naming, prices) flows through the seeded RNG in `src/game/rng.ts`. Never call `Math.random()` or
    `Date.now()` inside `src/game` — a run must be reproducible from its seed, and tests must assert
@@ -58,7 +65,10 @@ core (breaks reproducibility), and class instances/functions in saved state (bre
 
 - Node.js 18+, TypeScript 5 (strict), Vite 6, Vitest 2, Kaplay (atmosphere layer), DOM for
   narrative text. Desktop packaging: **Electron + node-llama-cpp** (GGUF 3–4B model,
-  grammar-constrained output; Tauri is the fallback — N1 validates).
+  grammar-constrained output). Electron is settled — N1 validated it; Tauri is not in play.
+  **The model is downloaded on first run, not yet bundled** — bundling vs. download is an open M17
+  decision (`docs/SCOPE-AUDIT.md`), and until it lands the "offline, no keys" promise is only true
+  after that first download.
 - `npm run dev` — dev server. `npm run build` — typecheck (`tsc --noEmit`, which really checks `src`)
   + Vite build. `npm test` — Vitest (logic + llm cores, headless Node). `npm run typecheck`.
 - Min spec: typical laptop, no GPU. The logic and LLM cores must run and be tested headlessly in
@@ -69,7 +79,7 @@ core (breaks reproducibility), and class instances/functions in saved state (bre
 `PROGRESS.md` (repo root) is the live build tracker, driven by the milestone roadmap at
 `docs/ROADMAP.md`. As the **final step of any session that changes the build state**, update
 `PROGRESS.md`: flip the milestone status emoji (⬜/🔄/✅), tick completed sub-task checkboxes,
-recompute the overall % (M1–M11 are the core milestones; M12 is a stretch goal, not counted), and
+recompute the overall % (v3 runs **M0–M17**; all are counted), and
 prepend a dated Session-log entry. Everything a human must verify by hand — every NEEDS-HUMAN item
 the pipeline surfaces, plus feel/visual/mobile checks — is accumulated in `HUMAN-CHECKS.md`.
 
