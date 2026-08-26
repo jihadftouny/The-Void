@@ -72,7 +72,10 @@ core (breaks reproducibility), and class instances/functions in saved state (bre
   first-run flow needs a real failure path.
 - `npm run dev` — dev server. `npm run build` — typecheck (`tsc --noEmit`, which really checks `src`)
   + Vite build. `npm test` — Vitest (logic + llm cores, headless Node). `npm run typecheck`.
-- Min spec: typical laptop, no GPU. The logic and LLM cores must run and be tested headlessly in
+- **Min spec: a GPU is required** (decided 2026-08-26). The 4B model is the only tier shipped — the
+  1.7B fallback the N1 spike recommended was rejected. On a no-GPU machine 4B measures ~7.6 tok/s
+  and ~5 s to first token, against the 89 tok/s the narration cadence was designed on. **The store
+  page must state this plainly.** The logic and LLM cores must still run and be tested headlessly in
   Node (fake model — never real inference in tests).
 
 ## Progress tracking

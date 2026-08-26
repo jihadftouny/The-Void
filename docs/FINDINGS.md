@@ -45,13 +45,13 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | B2 | ~~Equipment slot set~~ | `DECIDED` | — | **Seven: head, body, hand ×2, feet, trinket ×2.** Cut amulet, ring, legs, back. Relics occupy the two trinket slots — wear two. `GAME-DESIGN.md` §14.7 |
 | B3 | ~~Two-handed vs shield vs dual-wield~~ | `DECIDED` | — | **All three: 1H+off-hand, dual-wield, or 2H which blocks the off-hand.** Dual-wield needs its own attack rules and is a real balance surface. `GAME-DESIGN.md` §14.6 |
 | B4 | ~~Backpack capacity / weight~~ | `DECIDED` | — | **A fixed slot count, no weight.** Exact N settles with the slot brainstorm. `GAME-DESIGN.md` §14.6 |
-| B5 | **Typeface** — three candidates, one **paid**, licence unchecked | `OPEN` | #6 #7 #8 | Every spacing token is provisional until a real face lands |
-| B6 | **Turn / initiative model** — `[OPEN]`; `initiativeOrderTwist` returns 0, "no-op until M4", M4 merged | `OPEN` | #6 | A battle screen showing turn order needs to know if one exists. Quick/Slow are half-inert |
+| B5 | ~~Typeface~~ | `DECIDED` | — | **JetBrains Mono** (SIL Open Font Licence, free to bundle). Chosen for legibility at small sizes — 11px condition chips and dense combat logs. Re-check the type scale against it |
+| B6 | ~~Turn / initiative model~~ | `DECIDED` | — | **No initiative system.** Fixed round order; Quick/Slow redefined to work without one. No turn queue to render. `GAME-DESIGN.md` §14.8 |
 | B7 | **`jsdom` vs `node` test environment** | `OPEN` | #6 #7 #8 | Decide once, or three units each invent an override |
 | B8 | **Min-spec quality gating** — what the canvas turns off on a no-GPU laptop | `OPEN` | #7 | `PLAN.md` has **no M16 item at all** |
 | B9 | **Performance targets** — no frame rate, memory or particle budget | `OPEN` | #7 | Nobody has asked whether the canvas and a 4B model can coexist on the min spec |
-| B10 | **Model tier: 4B-only vs dual-tier** — spike recommended both; code says 4B only; recorded nowhere | `OPEN` | #6, ship | Min spec measured **7.6 tok/s / ~5 s TTFT** vs the 89 tok/s the narration cadence was designed against |
-| B11 | **Consumables & uniques have no source** | `OPEN` | #9 #13 | Relics settled (deals only); these were left out |
+| B10 | ~~Model tier~~ | `DECIDED` | — | **4B only; the 1.7B fallback is rejected. MIN SPEC NOW REQUIRES A GPU** — a changed commitment, updated in `CLAUDE.md`. The store page must say so |
+| B11 | ~~Consumables & uniques source~~ | `DECIDED` | — | **Consumables from drops + chests; uniques as a rare drop from any enemy.** Accepted cost: with only 4 uniques, most runs see none. `GAME-DESIGN.md` §14.8 |
 | B12 | **Grace vs cast-down thresholds**, on unclamped karma | `OPEN` | #2 | Blocks the balance re-run |
 | B13 | **Ending text: deterministic vs generative** | `OPEN` | #12 #13 | |
 | B14 | **Enemy scaling formula** + **affix list** — both `[OPEN → M8]`, M8 merged unanswered | `OPEN` | #9 | Two affixes still "provisional" in data |
@@ -128,3 +128,7 @@ _Struck items stay here permanently. Never delete a row._
 - ~~Hands / dual-wield~~ → **DECIDED**: three configurations; `GAME-DESIGN.md` §14.6.
 - ~~Backpack capacity~~ → **DECIDED**: fixed slots, no weight; `GAME-DESIGN.md` §14.6.
 - ~~Equipment slot set~~ → **DECIDED**: seven slots, two trinkets; `GAME-DESIGN.md` §14.7.
+- ~~Typeface~~ → **DECIDED**: JetBrains Mono, OFL.
+- ~~Initiative~~ → **DECIDED**: none; fixed round order; `GAME-DESIGN.md` §14.8.
+- ~~Model tier~~ → **DECIDED**: 4B only, **min spec now requires a GPU**.
+- ~~Consumable/unique sources~~ → **DECIDED**; `GAME-DESIGN.md` §14.8.

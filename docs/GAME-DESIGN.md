@@ -783,3 +783,37 @@ must be tuned for pairs, not singles**, and some pairings will need watching in 
 competes for one of two trinket slots — **two decisions per relic, not one**. What you sacrificed to
 get it, and whether it earns a slot over what you already wear. Relics you own but do not wear stay
 in the bag as future options, so swapping mid-run is a real tactical choice.
+
+### 14.8 Initiative, loot sources, and the model tier **[DECIDED 2026-08-26]**
+
+**No initiative system. The round order stays fixed** — you act, then it acts, always. **Quick and
+Slow are redefined** so they work without one: acting first *within* the round, gaining an extra
+action, acting last, or losing the round entirely. Exact effects settle in the floor-mechanics unit.
+
+*Why:* an initiative system is a real mechanic to build, a real balance surface, and a turn queue the
+battle screen would have to render in competition with everything else on the frame. Redefining the
+two conditions costs nothing, **makes them meaningful instead of inert** (`initiativeOrderTwist`
+currently returns 0, a no-op left over from M4), and fits the beat-by-beat *exchange* the JRPG frame
+already implies. This closes `GAME-DESIGN.md` §5's long-standing `[OPEN]`.
+
+**Loot sources, completing §14.1:**
+
+| Source | Content |
+|---|---|
+| **Sacrifice-deals** | **Relics only** (§14.1) |
+| **Enemy drops + chests** | **Consumables** — they are spent, so they need volume — plus ordinary gear |
+| **Any enemy, rarely** | **Uniques** — a rare drop from anything, not tied to bosses |
+
+> **The accepted cost of random uniques:** with only **four** uniques in the game, a rare trickle
+> means **most runs will see none**. That is the trade for the unexpected-orange thrill. If it proves
+> too thin in play, the cheapest fixes are more uniques or a pity/guarantee rule — **not** moving them
+> to bosses, which was the rejected option.
+
+**Model tier: 4B only — and the minimum spec rises to require a GPU.** The N1 spike recommended
+shipping a 1.7B fallback and auto-selecting; that is **rejected**. One model, one narration quality,
+far less to build, test and package.
+
+> **This changes a stated commitment.** `CLAUDE.md` said min spec was "typical laptop, **no GPU**" —
+> it is not any more. On a no-GPU machine the 4B measured **7.6 tok/s and ~5 s to first token**
+> against the **89 tok/s / 0.18 s** the narration cadence was designed on. **The store page must
+> state the GPU requirement plainly**, and this cuts off some players deliberately.
