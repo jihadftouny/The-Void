@@ -100,5 +100,11 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 | **Lore / world** | ✅ **Done.** Six rounds. Remaining items (rival houses, the Kingpins as people, Absolution above ground, where the body is) are **deliberately parked** and block nothing |
 | **Scope / Tier 1** | ✅ **Done.** All seven decided — see the banner in `SCOPE-AUDIT.md` |
 | **Floor mechanics** | ✅ **Done.** All five specified in `GAME-DESIGN.md` §8 |
-| **Visual** | 🔄 in progress — audio and fonts were **never discussed at all**, and audio gates #6 |
-| **Design / Tier 2** | 🔄 in progress — loot acquisition, karma's mid-run effects, class twists, progression |
+| **Visual** | ✅ **Done 2026-08-26.** Audio in scope at full ambition (effects + ambience + a composed score; Lyria is on the same key); bundle one open monospace; all four ship-asset groups in scope; backdrops stay 1K. `ART-BIBLE.md` §10–12 |
+| **Design / Tier 2** | ✅ **Done 2026-08-26.** Relics only from deals; karma bends the world and never the numbers; finish the three half-wired progression systems; rename conditions to the design vocabulary. `GAME-DESIGN.md` §14 |
+
+**The interviews are finished.** One item is left open *inside* a decision — where **consumables and
+uniques** come from, since the loot ruling covered relics only (`GAME-DESIGN.md` §14.1). A proposal is
+recorded there; it needs a yes or a change, and it is the last content-design question outstanding.
+
+Everything else that remains is **building** and **authoring**, not deciding.

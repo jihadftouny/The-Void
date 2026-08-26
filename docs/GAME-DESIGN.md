@@ -636,3 +636,78 @@ Docs like this one are exempt from the loop; the code that implements them is no
 > RPG") predates this interview. The game is now **mechanics-first with an LLM narrator**. Worth a
 > one-line tweak to the CLAUDE.md summary when convenient (flagged, not silently changed — that file
 > is yours).
+
+---
+
+## 14. Decisions from the 2026-08-26 design interview
+
+Closing the Tier-2 items in `docs/SCOPE-AUDIT.md`. Everything here is **[DECIDED 2026-08-26]**.
+
+### 14.1 Loot: relics are bought with yourself, never found
+
+**Relics come ONLY from sacrifice-deals.** They are never dropped, never in a chest, never given.
+The only way to gain a build-defining relic is to trade a piece of yourself for it at the altar.
+
+**Why this over spreading them across every source:** it makes your build *literally made of what you
+gave up*, and it wires the relic system — the deepest build system in the game — directly into the
+karma pillar rather than leaving them as parallel systems that never touch. A run's identity becomes
+a record of its costs.
+
+**Accepted trade-offs, stated so nobody re-litigates them later:**
+- Relics become **rarer and more predictable** than a scattered drop table would make them.
+- **Chests lose their best prize** and need to be worth opening for another reason (see below).
+- Deal frequency now controls relic pacing, so the two must be tuned together.
+
+**The gap this leaves — [OPEN, needs the author].** The ruling covers relics. It does not say where
+**19 consumables** and **4 uniques** come from, and they are equally unreachable today. The natural
+completion, *proposed not decided*:
+
+| Source | Content |
+|---|---|
+| **Sacrifice-deals** | **Relics** (locked above), and possibly uniques |
+| Enemy drops | Ordinary gear + **consumables** — they are consumed, so they need volume |
+| Chests | Consumables, gear, and whatever replaces the relic as the reason to open one |
+| Bosses | **Uniques** — rare, memorable, tied to a specific fight |
+
+**A hard rule regardless of the answer:** *nothing ships that is not in at least one pool.* Add a
+test asserting **every content id is reachable** from some source, so this class of bug cannot recur.
+
+### 14.2 Karma bends the world, never the numbers
+
+Karma gains real mid-run expression — it currently does nothing until the floor-4 gate — but **only
+through the world, never through the player's stats.**
+
+**Karma DOES:** weight which enemy families you draw · shape which deals the altar offers you ·
+colour the narrator's tone.
+**Karma NEVER:** buff or debuff you · appear as a number, a bar, or any visible readout.
+
+**Why not mechanical scaling:** the design's hardest rule is that the theme is *felt and never
+metered* (§13) — *"the player should feel it and be unable to point at the 'sanity mechanic', because
+there isn't one."* A karma-driven stat bonus is a sanity bar with extra steps: the moment it changes a
+number the player can feel, it becomes a system to optimise rather than a mirror. Bending the world
+keeps it unmeterable and un-gameable, and needs no new combat maths, so balance barely moves.
+
+> **Known tension:** floor 5's design line says *"carried karma directly empowers or punishes you"*,
+> which is mechanical scaling. **Floor 5 is the one exception** — by then you have been cast down,
+> the Void is corrupting your kit anyway (§8), and there is no longer anything to hide.
+
+Also fixed here: karma must be **clamped**, must **reach the LLM prompt** (today `buildNarrationPrompt`
+reads only act and place), and its **cross-run memory must be read** — it is currently written and
+never consumed.
+
+### 14.3 Finish the three half-wired progression systems
+
+All three have the expensive part built and only the wiring missing. **Highest gameplay-per-hour
+work remaining.**
+
+1. **Two of three class twists are no-ops.** The class-select screen already promises them.
+2. **Blessed and Cursed affixes can never appear** — two of five elite modifiers are unreachable.
+3. **The unlock store accumulates relics and skills the run never reads.** Wire them in.
+
+### 14.4 Rename conditions to the design vocabulary
+
+The code's condition ids and display names diverge from this document's vocabulary. **Align the code
+to the design**, inside `engine-foundations` (#1), while it is a rename plus test updates.
+
+After the battle screen renders condition chips, the log names them, and prose references them, the
+same change touches four more surfaces — and the design vocabulary is the one authored prose will use.
