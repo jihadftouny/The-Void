@@ -660,3 +660,36 @@ things only other people can tell you:
   there is exactly one difficulty and no assists
 - **whether the subject matter lands the way you intend.** This is the one that needs trusted people
   rather than strangers, and it is the reason not to do a public early access first.
+
+---
+
+## 15. The line between ART and INTERFACE **[LOCKED 2026-08-26]**
+
+Raised by the author: *"how does [no interface art] fit with the inventory system that has art for
+the items?"* It fits, and the rule that resolves it is the same one §2 already states — it just needs
+saying explicitly, because it governs every future asset question.
+
+> **Art depicts things that exist in the world. The interface that frames them stays flat.**
+
+| This is ART — generate it | This is INTERFACE — never generate it |
+|---|---|
+| Enemy sprites | Panel borders and frames |
+| Floor backdrops | Buttons and their states |
+| Class and boss portraits | The inventory grid's cells and rules |
+| The altar and shrine | Dividers, headers, scrollbars |
+| **Item icons** — a relic is a *thing*, like a creature | Ornament of any kind |
+
+An item icon is a **picture of an object in the world**, exactly as an enemy sprite is a picture of a
+creature. A panel border is **chrome around it**. So the inventory is a **flat ruled grid** — no
+carved frames, no decorated slots — **with art inside the cells.** The icon is the plate; the grid is
+the frame; and §2's principle holds unchanged: *the art is what you look at, the interface is what
+you read.*
+
+**The test for any future asset:** *does this depict something the player character could see in the
+world?* If yes it is art. If it exists only to organise the screen, it is interface, and it stays
+typographic.
+
+**Settled with it — the three contradictory passages in this file:** interface furniture is
+**confirmed as no generated art**, with a small set of **functional marks** (cursor, loading
+indicator) as the only exception, admitted because they *indicate* rather than *decorate*. The
+earlier "OPEN — the author must settle" and the table's literal `?` are both closed by this.

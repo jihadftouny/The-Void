@@ -494,3 +494,19 @@ almost free compared to what it would cost a canvas-first game.
 
 **The one exception:** the Kaplay canvas is decorative by design (§4) and does not need to be
 described. Everything load-bearing is already DOM — which is exactly why the split was drawn there.
+
+## 16. Performance target **[DECIDED 2026-08-26]**
+
+**30fps, and every canvas effect always on.** No automatic quality degradation.
+
+Every player sees the same thing, which is simpler to build, simpler to reason about, and removes a
+whole class of "it looks different on my machine" bug. 30fps is entirely adequate for a turn-based
+game with no twitch input.
+
+**The one thing this still requires:** nobody has ever measured whether the full-screen canvas and
+active 4B inference can coexist on the minimum machine. **Measure it before `canvas-layer` (#7)
+ships** — if 30fps with everything on is not achievable alongside inference, this decision has to be
+revisited rather than quietly missed.
+
+The **reduced-motion setting** (§13) remains the player's manual control, and is unaffected — it is
+an accessibility feature, not a performance one.

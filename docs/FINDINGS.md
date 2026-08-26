@@ -48,15 +48,15 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | B5 | ~~Typeface~~ | `DECIDED` | — | **JetBrains Mono** (SIL Open Font Licence, free to bundle). Chosen for legibility at small sizes — 11px condition chips and dense combat logs. Re-check the type scale against it |
 | B6 | ~~Turn / initiative model~~ | `DECIDED` | — | **No initiative system.** Fixed round order; Quick/Slow redefined to work without one. No turn queue to render. `GAME-DESIGN.md` §14.8 |
 | B7 | **`jsdom` vs `node` test environment** | `OPEN` | #6 #7 #8 | Decide once, or three units each invent an override |
-| B8 | **Min-spec quality gating** — what the canvas turns off on a no-GPU laptop | `OPEN` | #7 | `PLAN.md` has **no M16 item at all** |
-| B9 | **Performance targets** — no frame rate, memory or particle budget | `OPEN` | #7 | Nobody has asked whether the canvas and a 4B model can coexist on the min spec |
+| B8 | ~~Min-spec quality gating~~ | `DECIDED` | — | **No degradation — everything always on.** Every player sees the same thing. `UI-DESIGN.md` §16 |
+| B9 | **Performance target** | `DECIDED`, one **measurement outstanding** | #7 | **30fps.** But nobody has ever measured the canvas + 4B inference together on the min machine — **do it before #7 ships**, and revisit if 30fps is not achievable. `UI-DESIGN.md` §16 |
 | B10 | ~~Model tier~~ | `DECIDED` | — | **4B only; the 1.7B fallback is rejected. MIN SPEC NOW REQUIRES A GPU** — a changed commitment, updated in `CLAUDE.md`. The store page must say so |
 | B11 | ~~Consumables & uniques source~~ | `DECIDED` | — | **Consumables from drops + chests; uniques as a rare drop from any enemy.** Accepted cost: with only 4 uniques, most runs see none. `GAME-DESIGN.md` §14.8 |
 | B12 | **Grace vs cast-down thresholds**, on unclamped karma | `OPEN` | #2 | Blocks the balance re-run |
 | B13 | ~~Ending text~~ | `DECIDED` | — | **Authored anchors, narrated specifics.** "Made whole" is the thesis and must be the author's words; the run's specifics are generated. Same shape as the death summary. `GAME-DESIGN.md` §14.10 |
 | B14 | **Enemy scaling formula** + **affix list** — both `[OPEN → M8]`, M8 merged unanswered | `OPEN` | #9 | Two affixes still "provisional" in data |
 | B15 | ~~Item-icon granularity~~ | `DECIDED` | — | **Bespoke, one per item.** Deadlock broken by the slot set landing. 50 items today ≈ 150 images ≈ $10 batched — but ⚠ **a permanent commitment: every new item needs art forever.** `ART-BIBLE.md` §13 |
-| B16 | **Interface furniture** — three contradictory positions in one file | `OPEN` | #8 | Locked table with a literal `?` for the count |
+| B16 | ~~Interface furniture~~ | `DECIDED` | — | **No generated interface art**; cursor + loading indicator excepted as *functional marks*. Resolved by the art/interface rule: **art depicts things in the world; the interface that frames them stays flat.** `ART-BIBLE.md` §15 |
 
 ## 3. Product areas never discussed
 
@@ -83,7 +83,7 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | G6 | **Log written inside the install dir, uncapped** | `BUG` — **fix decided** | high | Move to user-data, cap and rotate. `docs/SHIPPING.md` |
 | G7 | **Equip bypasses the engine** | `DECIDED` → task #1 | ⛔ | Balance report is fiction until fixed |
 | G8 | **Run seed is wall-clock, never shown or stored** | `BUG` | medium | No seeded runs, no daily challenge, **no reproducible bug reports from testers** |
-| G9 | **Floor length inherited from the Java port** | `OPEN` | medium | Encounters-per-floor is an emergent side-effect. The 45–90 min target has never been measured |
+| G9 | ~~Floor length inherited from the Java port~~ | `DECIDED` | medium | **Measure it in the balance re-run and tune the XP curve to the 45–90 min target.** The sim already plays full runs; make it report encounters and minutes per floor, and the grace-vs-damnation asymmetry. `GAME-DESIGN.md` §14.11 |
 | G10 | ~~Death has no run-summary screen~~ | `DECIDED` | medium | **A run summary written by the narrator** — reached, killed by, your build, unlocked, plus the Void's account. The one place karma is *felt* without being metered. `GAME-DESIGN.md` §14.9 |
 
 ## 5. Document hygiene
@@ -139,3 +139,6 @@ _Struck items stay here permanently. Never delete a row._
 - ~~Ending text~~ → **DECIDED**: authored anchors + narrated specifics; `GAME-DESIGN.md` §14.10.
 - ~~Item icons~~ → **DECIDED**: bespoke per item; `ART-BIBLE.md` §13.
 - ~~External playtesting~~ → **DECIDED**: a small trusted group; `ART-BIBLE.md` §14.
+- ~~Interface furniture~~ → **DECIDED** via the art/interface rule; `ART-BIBLE.md` §15.
+- ~~Performance / quality gating~~ → **DECIDED**: 30fps, no degradation; `UI-DESIGN.md` §16.
+- ~~Run length~~ → **DECIDED**: measure and tune in the balance re-run; `GAME-DESIGN.md` §14.11.

@@ -865,3 +865,24 @@ share machinery and a voice.
 
 **Rejected:** fully generated endings. The biggest gamble available in the project: a weak ending
 undoes everything before it, and the output cannot be guaranteed.
+
+### 14.11 Run length becomes a measured number **[DECIDED 2026-08-26]**
+
+Floor length is currently an **accident inherited from the Java port** — `ACT_XP_THRESHOLDS` was
+copied from `GameLogic.checkAct`, so *how many encounters a floor has* is an emergent side-effect of
+an XP curve nobody chose, and the **45–90 minute target in §2 has never been measured.**
+
+**Fix it in the balance re-run (#2), using machinery that already exists.** The simulation already
+plays complete runs; make it **report**:
+
+- encounters per floor
+- estimated minutes per floor and per run
+- **the grace path (4 floors) versus the damnation path (5)** — an asymmetry flagged in §8 and never
+  measured in minutes
+
+Then **tune the XP curve until the run lands in 45–90 minutes.** This turns an inherited accident
+into a designed number without any structural change to act progression or the save format.
+
+**Rejected:** switching to explicit per-floor encounter counts. More predictable and easier to pace,
+but it is a structural change to progression and saves, and it removes the run-to-run variety that
+emergent length provides. Recorded in case the tuned curve proves too unpredictable in play.
