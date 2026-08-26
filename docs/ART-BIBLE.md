@@ -53,7 +53,9 @@ review in a sitting anyway. **Use interactive for probes, batch for groups.**
 
 
 
-**Cost at these settings:** $0.134 per image. 39 assets × 3 = 117 images ≈ **$15.68** per full batch.
+**Cost at these settings:** $0.134 per image interactive, **$0.067 batched** (§1b).
+**The live asset count is in §4b (53) plus the item icons in §13 (~50)** — the "39" figure that used to
+sit here is superseded and was never updated when the batch grew.
 Image generation is **not available on the free tier at all** (`limit: 0`) — billing must be enabled
 on the project or every request returns HTTP 429.
 

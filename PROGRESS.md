@@ -11,7 +11,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 12/18 milestones on `main` (M0–M9, M12, M13, M15) · 960 tests** `[#############-------]`
+**v3 overall: 12/18 milestones + M-UI on `main` · 1029 tests** `[#############-------]`
 **2026-08-24 — THE BIG MERGE IS DONE.** The entire stacked chain from the autonomous run
 (2026-08-10→11) is now merged into **`main`** in one gated merge, zero conflicts. Post-merge
 verification on the trunk: `npm run typecheck` clean, **960/960 tests pass**, `npm run build` OK.
@@ -28,15 +28,28 @@ per-class refinement remains (Scavver strong / ranged classes weak — play-test
 **The karma pillar has its first real EFFECT** — the floor-4 gate routes grace (ascension, ends at
 act 4) vs cast-down (→ Hollow-Self → damnation) by your hidden Nature.
 
-**Next up: M-UI2 — turn-based battle screen + whole-game restyle.** Scope interview DONE
-(2026-08-24) — full record in **`docs/UI-DESIGN.md`**. Locked: JRPG-framed battle screen ·
-narration at bookends only (fast rounds) · combat log plain-with-expandable-dice · full-screen
-Kaplay canvas with DOM on top · "elevated terminal" art direction (austere, typographic, one accent
-colour per floor) · beat-by-beat auto-advancing rounds · restyle every screen · **retire the
-standalone Kaplay UI** (`index.html` + `src/scenes/`) · art **AI-generated** via Google AI Studio,
-~3 variations per asset. Decomposed into 5 pipeline units: `ui-foundation` → (`battle-screen`,
-`canvas-layer`, `screens-restyle`) with `art-pipeline` in parallel.
-**BLOCKED on the engineer:** the Google API key (via `.env`, not chat) before any art can generate.
+**Next up: the engine foundations, then everything else.** Two full project audits
+(`docs/SCOPE-AUDIT.md`, `docs/SCOPE-AUDIT-2.md`) and seven scope-interview rounds have since
+reshaped the plan. **The live list of what is open is `docs/FINDINGS.md`; the live work plan is
+`docs/PLAN.md`.**
+
+**Now decided and written down** (31 items): the whole world (`docs/WORLD.md` — the Void is a
+*condition*, the condition is the Hollow, and the descent happens *during* an extraction); all five
+floor mechanics; the art direction (32-bit-era 2D pixel, `docs/ART-BIBLE.md`); audio at full
+ambition; the equipment slot set; a content warning on every fresh run (`docs/CONTENT-WARNING.md`);
+full accessibility including a screen-reader pass; licence, free itch release and no telemetry
+(`docs/SHIPPING.md`). **The engine writes the choices — the LLM-authored-choices plan is dropped**,
+which shrinks M11 substantially. **Min spec now requires a GPU.**
+
+**In flight:** `engine-foundations` (equip as a `step` input · description/flavour fields · the
+floor-mechanic hook · floor-4 verdict weighting · condition rename · Quick/Slow redefined) and
+`art-pipeline` (batch mode · corner-pixel gate · reference conditioning · alpha keying), planning in
+parallel on disjoint territory.
+
+**⚠️ Known and unfixed:** three bugs silently destroy player data — quitting mid-run voids all
+unlock progress, winning leaves a resumable save, and a corrupt unlock store wipes everything with
+no warning. Fixes are specified in `docs/FINDINGS.md` §4; the code has not changed yet.
+
 **Play-test checklist + balance: `HUMAN-CHECKS.md` / `docs/BALANCE-REPORT.md`.**
 
 | Milestone (v3) | Status |
@@ -240,7 +253,7 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
   - M9 (`agentic/save-load`): pure save/load core (safe encode/decode, corrupt-save rejection,
     version/migration seam) + a Node-safe browser localStorage adapter outside `src/game`. 31 new
     tests; logic core stays pure.
-  - M10 (`agentic/ui-shell`): mobile-first, responsive Kaplay UI shell (portrait 540×1080,
+  - M10 (`agentic/ui-shell`): responsive Kaplay UI shell (portrait 540×1080,
     letterboxed, ≥44px touch targets, safe-area insets) rendering the pure `step` controller.
     **The game became playable on screen.**
 

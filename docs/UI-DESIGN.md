@@ -213,7 +213,7 @@ inference out of the test suite.
 It is never committed, never pasted into a source file, never written into a document, and never
 echoed into a log or a commit message.
 
-**Proposed first batch [PROPOSAL]** — "everything we need", enumerated:
+**Proposed first batch [SUPERSEDED — see `ART-BIBLE.md` §4b and §13]** — "everything we need", enumerated:
 
 | Assets | Count | × 3 variations |
 |---|---|---|

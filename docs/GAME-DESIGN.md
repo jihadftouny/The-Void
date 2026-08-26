@@ -639,7 +639,7 @@ Docs like this one are exempt from the loop; the code that implements them is no
 
 ---
 
-## 14. Decisions from the 2026-08-26 design interview
+## 16. Decisions from the 2026-08-26 design interview
 
 Closing the Tier-2 items in `docs/SCOPE-AUDIT.md`. Everything here is **[DECIDED 2026-08-26]**.
 
