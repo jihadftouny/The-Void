@@ -103,8 +103,23 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 | **Visual** | ✅ **Done 2026-08-26.** Audio in scope at full ambition (effects + ambience + a composed score; Lyria is on the same key); bundle one open monospace; all four ship-asset groups in scope; backdrops stay 1K. `ART-BIBLE.md` §10–12 |
 | **Design / Tier 2** | ✅ **Done 2026-08-26.** Relics only from deals; karma bends the world and never the numbers; finish the three half-wired progression systems; rename conditions to the design vocabulary. `GAME-DESIGN.md` §14 |
 
-**The interviews are finished.** One item is left open *inside* a decision — where **consumables and
-uniques** come from, since the loot ruling covered relics only (`GAME-DESIGN.md` §14.1). A proposal is
-recorded there; it needs a yes or a change, and it is the last content-design question outstanding.
-
-Everything else that remains is **building** and **authoring**, not deciding.
+> ## ⛔ THE INTERVIEWS ARE **NOT** FINISHED
+>
+> An earlier version of this file claimed *"everything else that remains is building and authoring,
+> not deciding."* **That was wrong**, and a second audit (`docs/SCOPE-AUDIT-2.md`, 2026-08-26) proved
+> it. It found:
+>
+> - **24 open decisions** still in the authoritative docs, including **five live `[PROPOSAL]` tags**.
+>   At least five block units **#6–#8**, which this file listed as ready to build — the equipment
+>   **slot set**, the **typeface**, the **turn/initiative model**, the **test environment**, and
+>   **min-spec quality gating**.
+> - **12 whole product areas never discussed at all.** Only localisation and telemetry are safe
+>   defaults. **Four block shipping:** legal/licensing, the **content warning**, the update
+>   mechanism, and **accessibility**.
+> - **11 decisions already made by accident in code**, three of which **silently destroy player
+>   data** — quitting mid-run voids all unlock progress, winning leaves a resumable save, and a
+>   corrupt unlock store wipes everything with no warning. Plus: **you can flee the floor-4 Warden**,
+>   the encounter whose entire function is to deliver the verdict.
+>
+> **Do not start #6, #7 or #8 until §A of audit 2 is worked through.** The rest of this file's
+> ordering still holds.

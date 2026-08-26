@@ -16,7 +16,8 @@ disagree. Keep this index current: a document not listed here will be missed by 
 | 5 | **[ART-BIBLE.md](ART-BIBLE.md)** | *How it looks, and how to reproduce it.* Exact model settings, the house style string, framing, posing, failure gates, generation order | generating a single image |
 | 6 | **[UI-DESIGN.md](UI-DESIGN.md)** | *How it reads on screen.* Battle screen, narration cadence, combat log, canvas architecture, the restyle's five units | any UI or render work |
 | 7 | **[PLAN.md](PLAN.md)** | *What to do next.* The live work plan with dependencies — what blocks what, and what is unblocked right now | starting any piece of work |
-| 8 | **[SCOPE-AUDIT.md](SCOPE-AUDIT.md)** | *Every hole.* An exhaustive 2026-08-25 inventory of what is undefined, deferred, placeholder, contradictory or missing, ranked by retrofit cost | committing to any new unit — check whether it sits on an unbuilt foundation |
+| 8 | **[SCOPE-AUDIT.md](SCOPE-AUDIT.md)** | *Every hole, part 1.* Content, systems and document contradictions (2026-08-25), ranked by retrofit cost | committing to any new unit — check whether it sits on an unbuilt foundation |
+| 9 | **[SCOPE-AUDIT-2.md](SCOPE-AUDIT-2.md)** | *Every hole, part 2.* Open decisions, **product areas nobody discussed** (accessibility, settings, legal, content warning, updates, QA), and **decisions already made by accident in code** — including three that silently destroy player data | before claiming anything is fully scoped, and before starting any UI unit |
 | 8 | **[BALANCE-REPORT.md](BALANCE-REPORT.md)** | *Whether it is winnable.* Generated from the sim — do not hand-edit. **Caveat: measured with no equipment**, because equip is not yet an engine input | touching any balance constant |
 | 9 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
 
