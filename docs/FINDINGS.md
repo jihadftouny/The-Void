@@ -62,12 +62,12 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| N1 | **Onboarding / tutorial** | `OPEN` | Must teach 24 conditions, hidden karma, deals, drafting, a paperdoll. No tooltips, glossary, codex or help screen exist. Design forbids the usual crutch — karma must stay unreadable |
+| N1 | ~~Onboarding / tutorial~~ | `DECIDED` | **Tooltips on everything + a codex that fills in as you go. No scripted tutorial.** Depends on the description fields from #1. Karma stays exempt and unreadable. `UI-DESIGN.md` §14 |
 | N2 | ~~Difficulty / assist options~~ | `DECIDED` | **One difficulty. No modes, no assists**, stated up front on the store page. The unlock system is the accessibility ramp. Accepted cost recorded: some players bounce permanently. `GAME-DESIGN.md` §14.5 |
-| N3 | **Save slots** | `OPEN` | One save, one run, no slots, no export — in **`localStorage`** in a packaged desktop game |
-| N4 | **Error handling / crash recovery** | `OPEN` | LLM failure continues silently; corrupt save discarded with no message; disk-full swallowed. Only the canvas fallback was actually decided |
-| N5 | **Window management** | `OPEN` | Entire policy is `1100×820`. No min size, resizable, fullscreen, DPI or multi-monitor handling — under a full-screen-canvas mandate |
-| N6 | **Input model** | `OPEN` | Mouse-only in practice, but `:focus-visible` is styled — half-supported keyboard nobody decided |
+| N3 | ~~Save slots~~ | `DECIDED` | **Multiple named slots, moved to a real file on disk.** ⚠ Mitigation required: slots are for *parallel* runs, not rewinding — autosave overwrites its own slot, no manual save, no reload. Otherwise save-scumming guts permadeath. `UI-DESIGN.md` §14 |
+| N4 | ~~Error handling~~ | `DECIDED` | **Tell the player, retry, and recover.** Nothing silent. Includes a **backup copy of the unlock store** — which is the fix for G3. `UI-DESIGN.md` §14 |
+| N5 | ~~Window management~~ | `DECIDED` | **Min size, resizable, fullscreen toggle, remembered bounds, DPI-aware.** The minimum is the layout's design target. `UI-DESIGN.md` §14 |
+| N6 | ~~Input model~~ | `DECIDED` | **Mouse is primary and hover is now load-bearing** (tooltips). Keyboard navigation must be **complete rather than half-supported**. Gamepad out of scope. `UI-DESIGN.md` §14 |
 | N7 | **External playtest / QA** | `OPEN` | One engineer, one laptop, checklist stale since 2026-08-14. No external testers, no feedback channel, **no plan to playtest the subject matter with anyone** |
 | N8 | **Localisation** | `PARKED` | English-only is right for a 4B English narrator. State it on the store page |
 
@@ -77,7 +77,7 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 |---|---|---|---|---|
 | G1 | **Quitting mid-run voids all unlock progress** | `BUG` | ⛔ severe | Resume never rebuilds `runSummary`/`runSeed`. Earn an unlock, quit, return, win — you get nothing. **The whole meta-progression pillar** |
 | G2 | **Winning leaves a resumable save** | `BUG` | ⛔ | `ending` maps to `continue`, not `game-over`. Relaunch after victory: *"A descent lies unfinished."* |
-| G3 | **Corrupt unlock store wipes everything silently** | `BUG` | ⛔ | `decode(raw) ?? createUnlockStore()`. No message, no backup. The only permanent artifact the game has |
+| G3 | **Corrupt unlock store wipes everything silently** | `BUG` — **fix decided** | ⛔ | Keep a **backup copy** and restore from it; if that fails, say exactly what was lost. Also moves to a real file with the saves (N3) |
 | G4 | **You can flee the floor-4 Warden** | `BUG`+design | ⛔ | No boss check in the flee path. The verdict encounter is escapable on ~25%. Smoke Vial makes it guaranteed |
 | G5 | **"Abandon the descent" — one click, no confirmation** | `BUG` | high | Third in the hub menu; destroys a 45–90 min run. No `confirm` anywhere in the render layer |
 | G6 | **Log written inside the install dir, uncapped** | `BUG` | high | Commonly read-only when packaged → **logging silently dies in the shipped product**. No rotation |
@@ -132,3 +132,4 @@ _Struck items stay here permanently. Never delete a row._
 - ~~Initiative~~ → **DECIDED**: none; fixed round order; `GAME-DESIGN.md` §14.8.
 - ~~Model tier~~ → **DECIDED**: 4B only, **min spec now requires a GPU**.
 - ~~Consumable/unique sources~~ → **DECIDED**; `GAME-DESIGN.md` §14.8.
+- ~~Onboarding, saves, errors, window, input~~ → **DECIDED** 2026-08-26; `UI-DESIGN.md` §14.

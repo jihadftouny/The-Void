@@ -424,3 +424,54 @@ accessibility failure.
 **Requirement on `battle-screen` (#6) and `canvas-layer` (#7):** both must read the flag and route
 every motion effect through it. **The hook costs nothing now and is a rewrite of the sequencing layer
 afterwards** — the same argument already made and accepted for audio hooks (`ART-BIBLE.md` §10).
+
+## 14. Onboarding, saves, errors and the window **[DECIDED 2026-08-26]**
+
+### Onboarding — teach in place, never with a scripted tutorial
+
+**Tooltips on everything + a codex that fills in as you go.** No forced tutorial sequence.
+
+- **Tooltips:** every condition chip, skill, item, stat and perk explains itself on hover or click.
+  This is what makes 24 conditions learnable without a manual. **Depends on the `description` fields
+  from `engine-foundations` (#1)** — there is currently nowhere to put the text.
+- **Codex:** fills in as you encounter things, reusing the gradual bestiary-reveal machinery that
+  already exists. It is where you look up the thing you met two floors ago.
+- **No scripted first run.** A roguelike teaches by repetition, and floor 1 is already designed as
+  the teaching floor ("the world is still solid").
+- **Karma is exempt and stays unreadable** — no tooltip, no codex entry, ever (`GAME-DESIGN.md` §13).
+
+**Input, following from tooltips:** **the mouse is the primary input**, and hover is a real
+affordance the design now depends on. Keyboard navigation must be **complete rather than
+half-supported** — today `:focus-visible` is styled but nothing handles keys, which is the worst of
+both. Gamepad is out of scope; say so on the store page.
+
+### Saves — multiple slots
+
+**Several named runs at once**, and **the save moves out of `localStorage` to a real file** in the
+app's user-data directory. Today's save lives in the Chromium profile, where an Electron upgrade or
+a profile reset destroys it, with no backup and no way to move it between machines.
+
+> **The tension this creates, recorded so it is handled rather than discovered.** Slots in a
+> permadeath roguelike invite **save-scumming** — reload before a bad fight and death stops meaning
+> anything, which is the pillar the whole design rests on. **Mitigation to implement:** slots are for
+> *parallel* runs, not for rewinding one. **Autosave overwrites its own slot; there is no manual save
+> and no reload-to-an-earlier-point.** You may keep several descents going; you may not un-die.
+
+### Errors — tell the player, retry, and recover
+
+Nothing fails silently. Every failure gets a plain, quiet message and the game continues in the best
+degraded state it can — **and where recovery is possible, it is attempted.**
+
+| Failure | Behaviour |
+|---|---|
+| Narration fails | Say so, **retry**, and offer to continue without the narrator. The engine is the game; the narrator is a layer |
+| Save unreadable | Say so **before** discarding it |
+| Disk full | Warn that the run is not being saved |
+| Unlock store corrupt | **Restore from a backup copy** — keep one. Otherwise say exactly what was lost. This is the fix for the silent total wipe in `FINDINGS.md` G3 |
+| Canvas fails | Already decided (§4): the DOM game keeps working |
+
+### Window
+
+**Minimum size, resizable above it, a real fullscreen toggle, remembered bounds, and DPI-aware.**
+The minimum matters most: **without it the responsive layout has no design target**, and `#6`/`#7`
+need to know the range they must hold up across.
