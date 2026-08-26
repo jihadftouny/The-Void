@@ -817,3 +817,30 @@ far less to build, test and package.
 > it is not any more. On a no-GPU machine the 4B measured **7.6 tok/s and ~5 s to first token**
 > against the **89 tok/s / 0.18 s** the narration cadence was designed on. **The store page must
 > state the GPU requirement plainly**, and this cuts off some players deliberately.
+
+### 14.9 Fleeing bosses, and the death screen **[DECIDED 2026-08-26]**
+
+**Bosses cannot be fled.** No Run option on any boss encounter, and the **Smoke Vial's "guaranteed
+flee" explicitly fails** against them — *"there is nowhere to go."*
+
+A floor boss is the gate between floors, and **the floor-4 Warden is the moral climax of the entire
+run**; fleeing the verdict on a dice roll is absurd. Today there is no boss check anywhere in the
+flee path (`FINDINGS.md` G4), so this is a guard to add plus one item exception. **The UI must
+explain *why* the option is unavailable**, not merely hide the button.
+
+**Death gets a run summary, written by the narrator.**
+
+```
+reached      Ash City, encounter 14
+killed by    Wrath, an Ancient Sin
+your build   3 relics, 7 skills, Enforcer lv6
+unlocked     Scavver — you spared three
+```
+
+…and beneath it, **the Void's own account of the descent**.
+
+**Why this matters more than statistics:** it is the one place **karma can finally be *felt* without
+ever being metered** — the narrator can say what the run made of you while never showing a number,
+which is exactly what §13 requires. It turns a loss into the end of a story rather than a failure
+screen, and it is currently the only moment where unlocks earned in that run would be surfaced at
+all.

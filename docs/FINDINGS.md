@@ -26,16 +26,16 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | # | Item | Status | Blocks | Notes |
 |---|---|---|---|---|
 | S1 | ~~Content warning~~ | `DECIDED` | — | **Policy set: shown at the start of EVERY fresh run, not just the first**, plus store page and README. `docs/CONTENT-WARNING.md`. **The words are still the author's to write** |
-| S2 | **LICENSE / NOTICE / third-party attribution** — no file exists; `package.json` has no licence, author or repo | `OPEN` | ship | Redistributing Qwen3 (Apache-2.0) **requires** it. Also Electron, llama.cpp, Kaplay, the font |
+| S2 | ~~LICENSE / NOTICE / attribution~~ | `DECIDED` | — | **Proprietary game + a THIRD-PARTY file** with Qwen3, Electron, llama.cpp, Kaplay, JetBrains Mono. `package.json` fields still to fill. `docs/SHIPPING.md` |
 | S3 | **Generated-asset licence** — commercial redistribution terms for the images recorded nowhere | `OPEN` | ship | And separately for the **music** — art and music terms can differ |
 | S4a | ~~Colour is the only state channel~~ | `DECIDED` | — | **A persistent floor-name tag + a narration beat on every descent.** The accent becomes reinforcement, not information. Rule: the accent may never be the only carrier of any state. `UI-DESIGN.md` §11 |
 | S4b | ~~Reduced motion~~ | `DECIDED` | — | **One setting; shake off, flash becomes a soft tint, particles reduced, beat timing unchanged. Honours the OS `prefers-reduced-motion` by default.** #6 and #7 must route every motion effect through the flag. `UI-DESIGN.md` §13 |
 | S4c | **Text size / high contrast / screen reader / keyboard** | `OPEN` | ship, #8 | Settings screen now exists to hold them (B1 resolved) |
-| S5 | **Update mechanism** — none; no `publish` block; version `0.0.0` | `OPEN` | ship | A 2.5 GB first-run download with no patch path |
-| S6 | **Age rating / content descriptor** — itch requires self-declaration | `OPEN` | ship | Follows from S1 |
-| S7 | **Privacy statement** — app writes to disk; no statement | `OPEN` | ship | Trivial once S8 is decided |
-| S8 | **Telemetry / crash reporting** | `OPEN` | ship | Shipping none is almost certainly right — but **write it down** |
-| S9 | **itch pricing + store page copy** | `OPEN` | ship | `itch-description.html` currently claims text-based, four floors, LLM-generated enemies, a shop — all false |
+| S5 | ~~Update mechanism~~ | `DECIDED` | — | **The itch app handles updates.** No electron-updater, no publish block. Needs butler and a real version number. `docs/SHIPPING.md` |
+| S6 | ~~Age rating~~ | `DECIDED` | — | Self-declare honestly, following `docs/CONTENT-WARNING.md`. `docs/SHIPPING.md` |
+| S7 | ~~Privacy statement~~ | `DECIDED` | — | No network calls beyond the model download; say so. `docs/SHIPPING.md` |
+| S8 | ~~Telemetry~~ | `DECIDED` | — | **None.** A decision, not an omission. `docs/SHIPPING.md` |
+| S9 | ~~itch pricing~~ | `DECIDED` | — | **Free, optional donation.** Store copy still to WRITE — it must state the 2.5 GB download, the GPU requirement, English-only, one difficulty, and carry the content warning |
 
 ## 2. Blocks building
 
@@ -78,13 +78,13 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | G1 | **Quitting mid-run voids all unlock progress** | `BUG` | ⛔ severe | Resume never rebuilds `runSummary`/`runSeed`. Earn an unlock, quit, return, win — you get nothing. **The whole meta-progression pillar** |
 | G2 | **Winning leaves a resumable save** | `BUG` | ⛔ | `ending` maps to `continue`, not `game-over`. Relaunch after victory: *"A descent lies unfinished."* |
 | G3 | **Corrupt unlock store wipes everything silently** | `BUG` — **fix decided** | ⛔ | Keep a **backup copy** and restore from it; if that fails, say exactly what was lost. Also moves to a real file with the saves (N3) |
-| G4 | **You can flee the floor-4 Warden** | `BUG`+design | ⛔ | No boss check in the flee path. The verdict encounter is escapable on ~25%. Smoke Vial makes it guaranteed |
+| G4 | **You can flee the floor-4 Warden** | `BUG` — **fix decided** | ⛔ | **Bosses cannot be fled at all**; Smoke Vial explicitly fails against them. UI must explain why, not just hide the button. `GAME-DESIGN.md` §14.9 |
 | G5 | **"Abandon the descent" — one click, no confirmation** | `BUG` | high | Third in the hub menu; destroys a 45–90 min run. No `confirm` anywhere in the render layer |
-| G6 | **Log written inside the install dir, uncapped** | `BUG` | high | Commonly read-only when packaged → **logging silently dies in the shipped product**. No rotation |
+| G6 | **Log written inside the install dir, uncapped** | `BUG` — **fix decided** | high | Move to user-data, cap and rotate. `docs/SHIPPING.md` |
 | G7 | **Equip bypasses the engine** | `DECIDED` → task #1 | ⛔ | Balance report is fiction until fixed |
 | G8 | **Run seed is wall-clock, never shown or stored** | `BUG` | medium | No seeded runs, no daily challenge, **no reproducible bug reports from testers** |
 | G9 | **Floor length inherited from the Java port** | `OPEN` | medium | Encounters-per-floor is an emergent side-effect. The 45–90 min target has never been measured |
-| G10 | **Death has no run-summary screen** | `OPEN` | medium | One button. Yet Halo Fragment grants "revive once per run" |
+| G10 | ~~Death has no run-summary screen~~ | `DECIDED` | medium | **A run summary written by the narrator** — reached, killed by, your build, unlocked, plus the Void's account. The one place karma is *felt* without being metered. `GAME-DESIGN.md` §14.9 |
 
 ## 5. Document hygiene
 
@@ -133,3 +133,5 @@ _Struck items stay here permanently. Never delete a row._
 - ~~Model tier~~ → **DECIDED**: 4B only, **min spec now requires a GPU**.
 - ~~Consumable/unique sources~~ → **DECIDED**; `GAME-DESIGN.md` §14.8.
 - ~~Onboarding, saves, errors, window, input~~ → **DECIDED** 2026-08-26; `UI-DESIGN.md` §14.
+- ~~Licence, updates, pricing, telemetry, privacy, age rating~~ → **DECIDED**; `docs/SHIPPING.md`.
+- ~~Fleeing bosses, death screen~~ → **DECIDED**; `GAME-DESIGN.md` §14.9.
