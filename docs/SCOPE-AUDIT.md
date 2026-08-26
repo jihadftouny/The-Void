@@ -26,6 +26,9 @@ the art batches, specifically to avoid building things that would have to be tor
 >
 > Tiers 2 and 3 below are still live.
 
+> **⚠ This is a FROZEN EVIDENCE SNAPSHOT (2026-08-25).** The live list of what is still open is
+> **`docs/FINDINGS.md`** — go there first. This file is kept for its file-and-line evidence.
+
 **How to use this file:** it is a snapshot, not a living document. Work items out of it into
 `docs/GAME-DESIGN.md`, `docs/WORLD.md`, `docs/ART-BIBLE.md` or `docs/ROADMAP.md` as they are
 decided, and strike them here. **Do not treat an item as resolved because it was discussed — only

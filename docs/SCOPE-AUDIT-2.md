@@ -8,6 +8,8 @@ rounds still missed._
 contradictions. This one covers **open decisions, unexamined product areas, and decisions already
 made by accident in code.**
 
+> **⚠ This is a FROZEN EVIDENCE SNAPSHOT (2026-08-26).** The live list is **`docs/FINDINGS.md`**.
+
 **How to use:** same as audit 1 — work items out into the authoritative docs as they are decided and
 strike them here. An item is resolved only when it is *written down*, not when it is discussed.
 
