@@ -751,3 +751,35 @@ choice. The exact N (12? 16?) is a balance number, settled with the slot brainst
 > **STILL OPEN — the equipment slot set.** The author's direction is to **trim the Tibia list to a
 > leaner set**, and to **brainstorm it** rather than pick from a menu. Until that lands,
 > `screens-restyle` (#8) cannot draw the paperdoll. See `docs/FINDINGS.md` B2.
+
+### 14.7 The equipment slot set — seven **[DECIDED 2026-08-26]**
+
+Trimmed from the nine-slot Tibia proposal. **Cut: amulet, ring, legs, back.**
+
+```
+              HEAD
+   HAND       BODY       HAND        TRINKET
+              FEET                   TRINKET
+```
+
+| Slot | Notes |
+|---|---|
+| **Head** | |
+| **Body** | |
+| **Hand** ×2 | Shield/focus, dual-wield, or a two-hander that blocks the second (§14.6) |
+| **Feet** | |
+| **Trinket** ×2 | **Where relics go — you wear two** |
+
+**Why seven rather than six or nine.** Nine made the player wear most of what they found rather than
+choose; five left too few places for ordinary loot to be interesting. Seven keeps every slot with a
+clear identity, and the second trinket is the deliberate part: **relic *combinations* become the
+build**, and more of the fifteen relics are seen per run.
+
+**The accepted trade:** with two trinket slots each individual relic choice costs less than it would
+with one. That is the price of combinatorial builds, and it is worth it — but it means **relic power
+must be tuned for pairs, not singles**, and some pairings will need watching in the balance pass.
+
+**Relics are equipment.** A relic is bought with a piece of yourself at the altar (§14.1) *and* then
+competes for one of two trinket slots — **two decisions per relic, not one**. What you sacrificed to
+get it, and whether it earns a slot over what you already wear. Relics you own but do not wear stay
+in the bag as future options, so swapping mid-run is a real tactical choice.

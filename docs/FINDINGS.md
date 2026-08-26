@@ -42,7 +42,7 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | # | Item | Status | Blocks | Notes |
 |---|---|---|---|---|
 | B1 | ~~Settings / options screen~~ | `DECIDED` | — | **Added to `screens-restyle` (#8) as its own screen**, routed from both title and hub: audio, accessibility, text speed, model tier, display. `UI-DESIGN.md` §12 |
-| B2 | **Equipment slot set** | `OPEN` — **brainstorm scheduled** | #8 | Direction set: **trim the Tibia list to a leaner set.** The author wants to brainstorm it, not pick from a menu. Blocks the paperdoll |
+| B2 | ~~Equipment slot set~~ | `DECIDED` | — | **Seven: head, body, hand ×2, feet, trinket ×2.** Cut amulet, ring, legs, back. Relics occupy the two trinket slots — wear two. `GAME-DESIGN.md` §14.7 |
 | B3 | ~~Two-handed vs shield vs dual-wield~~ | `DECIDED` | — | **All three: 1H+off-hand, dual-wield, or 2H which blocks the off-hand.** Dual-wield needs its own attack rules and is a real balance surface. `GAME-DESIGN.md` §14.6 |
 | B4 | ~~Backpack capacity / weight~~ | `DECIDED` | — | **A fixed slot count, no weight.** Exact N settles with the slot brainstorm. `GAME-DESIGN.md` §14.6 |
 | B5 | **Typeface** — three candidates, one **paid**, licence unchecked | `OPEN` | #6 #7 #8 | Every spacing token is provisional until a real face lands |
@@ -127,3 +127,4 @@ _Struck items stay here permanently. Never delete a row._
 - ~~Reduced motion~~ → **DECIDED** 2026-08-26: one OS-aware setting; `UI-DESIGN.md` §13.
 - ~~Hands / dual-wield~~ → **DECIDED**: three configurations; `GAME-DESIGN.md` §14.6.
 - ~~Backpack capacity~~ → **DECIDED**: fixed slots, no weight; `GAME-DESIGN.md` §14.6.
+- ~~Equipment slot set~~ → **DECIDED**: seven slots, two trinkets; `GAME-DESIGN.md` §14.7.
