@@ -356,3 +356,49 @@ Deliberately out of scope here, tracked elsewhere:
   and weapons follow-up, not a UI concern.
 - **Audio.** Never discussed. Flagged as **[OPEN]** — a turn-based battle screen with beat-by-beat
   sequencing is the natural place for hit and impact sound, and it will feel oddly silent without it.
+
+---
+
+## 11. The floor is announced, not implied **[DECIDED 2026-08-26]**
+
+> Author: *"we must make a clear statement that you are now on a different level, through the
+> narration, and a tag above of where we are."*
+
+**Two channels, both explicit:**
+
+1. **A persistent floor tag in the interface** — always visible, naming where you are. Not a colour,
+   not an icon: **the name, in text.**
+2. **A narration beat on every descent** — the narrator states plainly that you have gone down a
+   level, at the moment it happens.
+
+**This also resolves two previously-open items:**
+
+- **It fixes the accessibility problem** flagged in `docs/FINDINGS.md` S4. The per-floor accent
+  colour was the *only* channel carrying floor state, which is unreadable for a colourblind player
+  and invisible to a screen reader. Now the accent is **reinforcement, not information** — the name
+  carries the meaning and the colour carries the mood. **General rule from here: the accent may never
+  be the only carrier of any state.**
+- **It answers "should floor names surface in the UI?"** — the question `ui-foundation` left open,
+  where `FLOOR_THEMES` holds the names and nothing renders them. **Yes. Render them.**
+
+**Still open and NOT covered by this:** reduced motion (the battle screen's shake, flash and
+particles) and text size. See `FINDINGS.md`.
+
+---
+
+## 12. Settings screen **[DECIDED 2026-08-26 — added to the restyle scope]**
+
+There was no settings screen anywhere in the design, and it is not new scope — it is **the bill for
+scope already taken on.** Audio went in at full ambition with no volume control; accessibility
+commitments have nowhere to live; the model tier needs an override on slow machines.
+
+| Group | Controls |
+|---|---|
+| **Audio** | Master · music · ambience · effects |
+| **Accessibility** | Reduced motion · text size · high contrast |
+| **Text** | Narration speed · skip / instant |
+| **Model** | Quality tier, for slower machines — see the 4B-vs-dual-tier decision in `FINDINGS.md` B10 |
+| **Display** | Fullscreen · window size |
+
+Add it to `screens-restyle` (#8) as its own screen, and give it a route from both the title and the
+hub — a player who needs reduced motion should not have to start a run to find it.

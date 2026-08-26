@@ -711,3 +711,19 @@ to the design**, inside `engine-foundations` (#1), while it is a rename plus tes
 
 After the battle screen renders condition chips, the log names them, and prose references them, the
 same change touches four more surfaces — and the design vocabulary is the one authored prose will use.
+
+### 14.5 One difficulty **[DECIDED 2026-08-26]**
+
+**No difficulty modes. No assist toggles. No easy mode.** The game is what it is, and that is
+**stated up front on the store page** rather than discovered after a purchase.
+
+**Why:** it matches the locked "tough but fair, mastery-driven" pillar (§2), it keeps every balance
+number meaningful (one curve to tune, one set of numbers that describe the real game), and **the
+unlock system already is the accessibility ramp** — a new player is not handed the whole roster at
+once, and the gradual bestiary reveal (§12) is an onboarding and difficulty curve in one.
+
+**The accepted cost, stated plainly so it is never mistaken for an oversight:** some players will
+bounce off permanently, including some who came for the subject matter rather than the combat. That
+is a deliberate trade, not an accident.
+
+An ascension-style ladder remains a **post-launch** idea (§3), not a launch feature.

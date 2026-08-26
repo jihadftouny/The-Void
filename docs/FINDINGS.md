@@ -25,10 +25,12 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 
 | # | Item | Status | Blocks | Notes |
 |---|---|---|---|---|
-| S1 | **Content warning** — zero mentions anywhere, in a game about lived psychosis | `OPEN` | ship | Free to add. Most conspicuous omission in the project |
+| S1 | ~~Content warning~~ | `DECIDED` | — | **Policy set: shown at the start of EVERY fresh run, not just the first**, plus store page and README. `docs/CONTENT-WARNING.md`. **The words are still the author's to write** |
 | S2 | **LICENSE / NOTICE / third-party attribution** — no file exists; `package.json` has no licence, author or repo | `OPEN` | ship | Redistributing Qwen3 (Apache-2.0) **requires** it. Also Electron, llama.cpp, Kaplay, the font |
 | S3 | **Generated-asset licence** — commercial redistribution terms for the images recorded nowhere | `OPEN` | ship | And separately for the **music** — art and music terms can differ |
-| S4 | **Accessibility** — colour is the only state channel; unskippable shake/flash; no text size, no high contrast | `OPEN` | ship, #6, #7 | Hooks are free now, a rewrite after the battle screen |
+| S4a | ~~Colour is the only state channel~~ | `DECIDED` | — | **A persistent floor-name tag + a narration beat on every descent.** The accent becomes reinforcement, not information. Rule: the accent may never be the only carrier of any state. `UI-DESIGN.md` §11 |
+| S4b | **Reduced motion** — unskippable shake, flash, particles | `OPEN` | ship, #6, #7 | Still open. Hook is free now, a rewrite after the battle screen |
+| S4c | **Text size / high contrast / screen reader / keyboard** | `OPEN` | ship, #8 | Settings screen now exists to hold them (B1 resolved) |
 | S5 | **Update mechanism** — none; no `publish` block; version `0.0.0` | `OPEN` | ship | A 2.5 GB first-run download with no patch path |
 | S6 | **Age rating / content descriptor** — itch requires self-declaration | `OPEN` | ship | Follows from S1 |
 | S7 | **Privacy statement** — app writes to disk; no statement | `OPEN` | ship | Trivial once S8 is decided |
@@ -39,7 +41,7 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 
 | # | Item | Status | Blocks | Notes |
 |---|---|---|---|---|
-| B1 | **Settings / options screen** — mentioned nowhere; not in the restyle scope | `OPEN` | #6 #7 #8 | Audio is in scope with no volume control; no home for reduced-motion or text speed |
+| B1 | ~~Settings / options screen~~ | `DECIDED` | — | **Added to `screens-restyle` (#8) as its own screen**, routed from both title and hub: audio, accessibility, text speed, model tier, display. `UI-DESIGN.md` §12 |
 | B2 | **Equipment slot set** — `[PROPOSAL]`, "confirm/trim this list", never confirmed | `OPEN` | #8 | Cannot draw a paperdoll against an unapproved slot list |
 | B3 | **Two-handed vs shield vs dual-wield** | `OPEN` | #8 | Is the second hand a slot or a mode? |
 | B4 | **Backpack capacity / weight** | `OPEN` | #8 | |
@@ -61,7 +63,7 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | # | Item | Status | Notes |
 |---|---|---|---|
 | N1 | **Onboarding / tutorial** | `OPEN` | Must teach 24 conditions, hidden karma, deals, drafting, a paperdoll. No tooltips, glossary, codex or help screen exist. Design forbids the usual crutch — karma must stay unreadable |
-| N2 | **Difficulty / assist options** | `OPEN` | 45–90 min permadeath, 32.9% win rate, no easy mode, no assists. A legitimate position — **write it down as one** |
+| N2 | ~~Difficulty / assist options~~ | `DECIDED` | **One difficulty. No modes, no assists**, stated up front on the store page. The unlock system is the accessibility ramp. Accepted cost recorded: some players bounce permanently. `GAME-DESIGN.md` §14.5 |
 | N3 | **Save slots** | `OPEN` | One save, one run, no slots, no export — in **`localStorage`** in a packaged desktop game |
 | N4 | **Error handling / crash recovery** | `OPEN` | LLM failure continues silently; corrupt save discarded with no message; disk-full swallowed. Only the canvas fallback was actually decided |
 | N5 | **Window management** | `OPEN` | Entire policy is `1100×820`. No min size, resizable, fullscreen, DPI or multi-monitor handling — under a full-screen-canvas mandate |
@@ -117,3 +119,8 @@ _Struck items stay here permanently. Never delete a row._
 - ~~Model bundling~~ → **DECIDED**: download once on first run.
 - ~~Audio scope~~ → **DECIDED**: effects + ambience + score (licence still `OPEN`, see S3).
 - ~~Rival houses, Absolution above ground~~ → **PARKED** deliberately; `WORLD.md` §12b.
+- ~~Content warning policy~~ → **DECIDED** 2026-08-26: every fresh run; `docs/CONTENT-WARNING.md`.
+- ~~Colour as the only state channel~~ → **DECIDED**: floor-name tag + narration beat; `UI-DESIGN.md` §11.
+- ~~Settings screen~~ → **DECIDED**: added to #8; `UI-DESIGN.md` §12.
+- ~~Difficulty modes~~ → **DECIDED**: one difficulty, no assists; `GAME-DESIGN.md` §14.5.
+- ~~Should floor names surface in the UI?~~ → **DECIDED**: yes, render them (falls out of §11).
