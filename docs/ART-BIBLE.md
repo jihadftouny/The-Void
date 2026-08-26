@@ -520,3 +520,92 @@ The design record was genuinely silent on these. Guessing produced the medieval-
    the finished `WORLD.md`, and one image from it approved, before any conditioned batch runs.
 8. **The API key must be rotated.** It was pasted into a chat transcript; it is in `.env` and no
    commit, but the transcript is permanent. Rotate before or immediately after the first batch.
+
+---
+
+## 10. Audio **[DECIDED 2026-08-26]**
+
+Audio was never discussed until now. It is **in scope, at full ambition**, and it is recorded here
+rather than in a separate document because it shares this file's pipeline: same API, same key, same
+generate → review → commit → gitignore-the-candidates flow.
+
+### Scope — three layers **[LOCKED]**
+
+| Layer | What | Notes |
+|---|---|---|
+| **Impact effects** | Per combat beat: hit, miss, crit, skill, condition tick, death | The layer that actually makes combat *feel*. Must line up with the beat-by-beat sequencing in `UI-DESIGN.md` §6 |
+| **Ambient beds** | One long loop per floor — dripping water and machinery in the flooded Undercity, wind through ash on floor 3, a held choir-tone on floor 4, near-silence on 5 | Cheap, and it does most of the atmospheric work |
+| **Music** | **A composed soundtrack per floor** | The author chose the full ambition. See the sourcing note below |
+
+**Restraint rule.** The visual direction is austere and typographic, and the same discipline applies
+here: the score must never fight the interface or the silence. `UI-DESIGN.md` §2 chose bookend
+narration so that *most rounds are quiet* — audio must preserve that quiet, not fill it. **Silence
+between beats is a designed element, not an absence.**
+
+### Sourcing — Lyria is available on the same key **[VERIFIED 2026-08-26]**
+
+Probed live against the project's own key:
+
+| Model | What |
+|---|---|
+| `lyria-3-pro-preview` | "Lyria 3 Pro Preview" — Google's music generation model, `generateContent` |
+| `lyria-3-clip-preview` | "Lyria 3 30s model Preview" — 30-second clips |
+
+**So the soundtrack can be generated through the same tooling as the art**, rather than commissioned
+or licence-hunted. Both are `-preview` models, so unlike `gemini-3-pro-image` there is **no stable id
+to pin** — record the exact id used in §8 whenever audio is generated, because a preview alias can be
+re-pointed or withdrawn.
+
+**Unverified and must be checked before committing to this route:** pricing, whether image-model
+billing covers it, output format and length, and **licensing for commercial redistribution in a
+paid/free itch release.** Generated *art* and generated *music* can carry different terms. **Do not
+assume the art answer applies.**
+
+**Fallback if the licence does not permit it:** licensed library music, or a commission. Ambient beds
+and impact effects are far easier to source freely than a score, so a licence problem degrades to
+"layers 1 and 2 only" rather than to silence.
+
+### Consequence for `battle-screen` (#6) **[BLOCKING]**
+
+The battle screen **must expose audio hooks on every beat** even if no sound file exists yet —
+otherwise adding audio later means reopening the sequencing code. Cheap now; a rewrite afterwards.
+
+---
+
+## 11. Typeface **[DECIDED 2026-08-26]**
+
+**Bundle one open-licence monospace.** The art direction is *typographic* — the type is the design —
+so letting the operating system choose it is letting the OS design the game. Today there is no
+bundled font and the interface renders differently on Windows, macOS and Linux, which also means
+every spacing decision is only true on the machine it was made on.
+
+- **One face, monospace, open licence permitting redistribution.** Roughly 200–400 KB.
+- Candidates worth auditioning: **JetBrains Mono** (sharp, technical, very legible), **IBM Plex Mono**
+  (institutional, slightly warmer — arguably the most on-theme, since the interface *is* an
+  institution's record). Berkeley Mono suits the tone best and is **paid**, so it needs a purchase
+  decision before it can be considered.
+- **Verify the licence permits bundling in a distributed desktop app** before committing.
+- The type scale in `src/render/tokens.ts` was built against a system default and **will need
+  re-checking** once a real face is in place.
+
+**Rejected:** a second face for prose. Long narration in monospace is genuinely more tiring to read,
+and the split would have been thematically neat — the record is typed, the experience is written.
+Recorded in case reading comfort proves to be a problem in play-testing.
+
+---
+
+## 12. Ship assets — beyond the 53 **[DECIDED 2026-08-26, all four in scope]**
+
+None of these were on any list, and a product cannot ship without the first three.
+
+| Asset | Why |
+|---|---|
+| **App icon + installer art** | Taskbar, dock, installer, itch thumbnail. Electron ships a **default placeholder** otherwise, which reads as unfinished the instant anyone sees it |
+| **Title screen art** | The first thing anyone sees; currently styled text on black. One strong image does more marketing work than anything else in the project |
+| **itch.io store page art** | Cover, screenshots, banner. Required for a listing — and `itch-description.html` is wrong about nearly everything, so the page is being rebuilt regardless |
+| **Cursors + small UI marks** | Custom cursor, loading indicator, and the few small marks an interface needs |
+
+> **Noted tension, deliberately accepted:** cursors and UI marks push against the
+> no-generated-interface-art decision (§4 generation order). They are admitted as **small functional
+> marks, not chrome ornament** — the rule that the interface stays flat, ruled and unornamented is
+> unchanged. If a mark starts decorating rather than indicating, it is wrong.
