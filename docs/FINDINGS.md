@@ -142,3 +142,6 @@ _Struck items stay here permanently. Never delete a row._
 - ~~Interface furniture~~ → **DECIDED** via the art/interface rule; `ART-BIBLE.md` §15.
 - ~~Performance / quality gating~~ → **DECIDED**: 30fps, no degradation; `UI-DESIGN.md` §16.
 - ~~Run length~~ → **DECIDED**: measure and tune in the balance re-run; `GAME-DESIGN.md` §14.11.
+- ~~Quick/Slow effects~~ → **DECIDED**: a **tempo gauge** driven by DEX, visible on both combatants; `GAME-DESIGN.md` §16.1.
+- ~~Mid-battle equipping~~ → **DECIDED**: hub-only; `GAME-DESIGN.md` §16.2.
+- ~~Art running ahead of the engine~~ → **DECIDED**: no — engine first. Ash-Wretch and the Warden executioner drop out of the art list until they exist in code.

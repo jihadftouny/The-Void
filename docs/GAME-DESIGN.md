@@ -886,3 +886,66 @@ into a designed number without any structural change to act progression or the s
 **Rejected:** switching to explicit per-floor encounter counts. More predictable and easier to pace,
 but it is a structural change to progression and saves, and it removes the run-to-run variety that
 emergent length provides. Recorded in case the tuned curve proves too unpredictable in play.
+
+### 16.1 The tempo gauge — replaces the initiative question entirely **[DECIDED 2026-08-26]**
+
+The author's idea, and it is better than any of the three options offered. **Quick and Slow stop
+being flags and become a gauge that fills.**
+
+**One number per combatant.** Each round it changes by a rate; crossing a threshold spends it.
+
+```
+rate per round = DEXmod × 0.1     (+0.3 while Quick,  −0.3 while Slow)
+
+  tempo ≥ +1.0  →  EXTRA ACTION this round,  tempo −= 1.0  (carry the remainder)
+  tempo ≤ −1.0  →  LOSE the turn,            tempo += 1.0
+```
+
+| DEX | mod | rate | Effect |
+|---|---|---|---|
+| 18 | +4 | +0.4 | An extra action every ~2.5 rounds |
+| 14 | +2 | +0.2 | Every 5 rounds |
+| 10 | 0 | 0.0 | Never — plain, normal turns |
+| 6 | −2 | −0.2 | **Loses** a turn every 5 rounds |
+| 18 + Quick | | +0.7 | Almost every other round |
+| 10 + Slow | | −0.3 | Loses one every ~3 rounds |
+
+**Why this is the right answer:**
+
+- **It finally makes DEX matter.** WIS got meaning from floor 2's illusion checks; this is the same
+  move for DEX. Speed becomes **a build you invest in**, not a condition that happens to you.
+- **A dump stat costs you something real.** Negative DEX does not merely fail to help — it takes
+  turns away, which is the first genuine downside to ignoring a stat.
+- **It is pure arithmetic with no RNG**, so the determinism tests and the RNG draw order are
+  untouched — the thing that made every other initiative proposal expensive.
+- **Quick and Slow become potent without being binary**, and they stack with the build rather than
+  overriding it.
+- **It replaces the initiative question outright.** §14.8 said "no initiative system"; this delivers
+  what initiative was *for* — speed differentiating combatants — without a turn queue to render or a
+  round order to reorder.
+
+**The gauge is VISIBLE**, shown on both combatants beside their HP.
+
+> **Why visible when karma is hidden.** They are different kinds of thing. **Karma is thematic** —
+> §13 requires it be felt and never metered. **Tempo is tactical**: it decides who acts twice, and a
+> player who cannot see it experiences unpredictable extra turns as *arbitrary*, not mysterious.
+> Showing it lets you play around it — hold the big skill for the round you know you double. It is
+> also consistent with a combat log that already expands to raw dice.
+
+**Balance note for the re-run:** extra actions are among the strongest effects in any combat system.
+The 0.1-per-DEX-modifier rate is a **starting proposal, not a tuned number** — it must be measured in
+the balance pass, and the base is deliberately zero so an average character sees no change at all.
+
+### 16.2 Equipping is hub-only **[DECIDED 2026-08-26]**
+
+Equip and unequip are legal **only in the hub**, between encounters — never mid-battle.
+
+- **Technical:** during a battle the live combatant is `phase.battle.player`, a different object from
+  `state.player`. A hub-style equip mid-battle would be **silently discarded** — a bug avoided by
+  construction rather than by care.
+- **Design:** a free mid-fight swap is strictly better than not swapping, so everyone would always do
+  it; and a swap that costs a turn is a whole new mechanic with its own balance cost and a battle
+  screen that must surface the entire inventory mid-fight.
+
+**Recorded now so `battle-screen` (#6) does not assume the affordance exists.** If mid-battle
+swapping is ever wanted, it is a separate decision — and it must cost a turn.
