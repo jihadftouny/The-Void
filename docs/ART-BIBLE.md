@@ -360,10 +360,13 @@ not exist in the game. Resolution: keep **both**, as distinct enemies.
 > floor assignment — and it must go through the pipeline like any other engine change, not be hand
 > edited. Asset count rises 52 → **53**. Flagged for the `art-pipeline` unit's plan.
 
-## 4b. The asset list — 52 assets **[LOCKED 2026-08-25]**
+## 4b. The asset list — 53 assets **[LOCKED 2026-08-25, arithmetic corrected 2026-08-26]**
 
-Raised from 39 to 52 because the original budget silently compromised three things the design
-actually needs. 52 × 3 variations = **156 images ≈ $20.90**.
+Raised from 39 because the original budget silently compromised three things the design actually
+needs, then to **53** when Ash-Wretch became a separate enemy from Ash-Wraith (§4).
+**53 × 3 variations = 159 images ≈ $10.65 batched** (§1b). *An earlier version of this line said
+"52 × 3 = 156 ≈ $20.90" — the count was stale and the price was the interactive rate, not the
+batched one.* **Item icons are additional — see §13 (~50 more assets).**
 
 | Group | Count | Notes |
 |---|---|---|
@@ -375,7 +378,8 @@ actually needs. 52 × 3 variations = **156 images ≈ $20.90**.
 | **Sin-boss identities** | **+3** | The Cruelty, The Avarice, The Delusion (The Desecration = the base boss portrait). The Floor 3 boss is *"your most-indulged sin made flesh, personal to each run"* — that lands far weaker if it looks identical every time |
 | **Warden — executioner form** | **+1** | The Warden has two mutually exclusive presentations: a merciful judge, or a punishing executioner. The judge is the base portrait |
 | **Altar / shrine** | **+2** | The sacrifice economy's vendor is an *"altar/stranger"*, and `desecrateShrine` / `leaveOffering` / `honorDead` are implemented actions. These had **no art at all** in the original budget |
-| **Total** | **52** | |
+| **Ash-Wretch** | **+1** | A new enemy, distinct from the Ash-Wraith (§4). **Needs an `enemyFamilies.json` entry — engine work, tracked separately** |
+| **Total** | **53** | |
 
 ## 5. Known failure modes and their gates **[LOCKED]**
 
