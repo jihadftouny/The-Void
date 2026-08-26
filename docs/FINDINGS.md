@@ -30,7 +30,7 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | S3 | **Generated-asset licence** — commercial redistribution terms for the images recorded nowhere | `OPEN` | ship | And separately for the **music** — art and music terms can differ |
 | S4a | ~~Colour is the only state channel~~ | `DECIDED` | — | **A persistent floor-name tag + a narration beat on every descent.** The accent becomes reinforcement, not information. Rule: the accent may never be the only carrier of any state. `UI-DESIGN.md` §11 |
 | S4b | ~~Reduced motion~~ | `DECIDED` | — | **One setting; shake off, flash becomes a soft tint, particles reduced, beat timing unchanged. Honours the OS `prefers-reduced-motion` by default.** #6 and #7 must route every motion effect through the flag. `UI-DESIGN.md` §13 |
-| S4c | **Text size / high contrast / screen reader / keyboard** | `OPEN` | ship, #8 | Settings screen now exists to hold them (B1 resolved) |
+| S4c | ~~Text size / contrast / screen reader / keyboard~~ | `DECIDED` | — | **Full commitment, including a tested screen-reader pass.** Viable because the game is text-heavy DOM — a blind player could plausibly play all of it. Keyboard must be *completed*, not left half-styled. `UI-DESIGN.md` §15 |
 | S5 | ~~Update mechanism~~ | `DECIDED` | — | **The itch app handles updates.** No electron-updater, no publish block. Needs butler and a real version number. `docs/SHIPPING.md` |
 | S6 | ~~Age rating~~ | `DECIDED` | — | Self-declare honestly, following `docs/CONTENT-WARNING.md`. `docs/SHIPPING.md` |
 | S7 | ~~Privacy statement~~ | `DECIDED` | — | No network calls beyond the model download; say so. `docs/SHIPPING.md` |
@@ -53,9 +53,9 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | B10 | ~~Model tier~~ | `DECIDED` | — | **4B only; the 1.7B fallback is rejected. MIN SPEC NOW REQUIRES A GPU** — a changed commitment, updated in `CLAUDE.md`. The store page must say so |
 | B11 | ~~Consumables & uniques source~~ | `DECIDED` | — | **Consumables from drops + chests; uniques as a rare drop from any enemy.** Accepted cost: with only 4 uniques, most runs see none. `GAME-DESIGN.md` §14.8 |
 | B12 | **Grace vs cast-down thresholds**, on unclamped karma | `OPEN` | #2 | Blocks the balance re-run |
-| B13 | **Ending text: deterministic vs generative** | `OPEN` | #12 #13 | |
+| B13 | ~~Ending text~~ | `DECIDED` | — | **Authored anchors, narrated specifics.** "Made whole" is the thesis and must be the author's words; the run's specifics are generated. Same shape as the death summary. `GAME-DESIGN.md` §14.10 |
 | B14 | **Enemy scaling formula** + **affix list** — both `[OPEN → M8]`, M8 merged unanswered | `OPEN` | #9 | Two affixes still "provisional" in data |
-| B15 | **Item-icon granularity** — a closed deadlock: icons wait on inventory, inventory waits on a "collaborative pass" | `OPEN` | — | Someone must break the circle |
+| B15 | ~~Item-icon granularity~~ | `DECIDED` | — | **Bespoke, one per item.** Deadlock broken by the slot set landing. 50 items today ≈ 150 images ≈ $10 batched — but ⚠ **a permanent commitment: every new item needs art forever.** `ART-BIBLE.md` §13 |
 | B16 | **Interface furniture** — three contradictory positions in one file | `OPEN` | #8 | Locked table with a literal `?` for the count |
 
 ## 3. Product areas never discussed
@@ -68,7 +68,7 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | N4 | ~~Error handling~~ | `DECIDED` | **Tell the player, retry, and recover.** Nothing silent. Includes a **backup copy of the unlock store** — which is the fix for G3. `UI-DESIGN.md` §14 |
 | N5 | ~~Window management~~ | `DECIDED` | **Min size, resizable, fullscreen toggle, remembered bounds, DPI-aware.** The minimum is the layout's design target. `UI-DESIGN.md` §14 |
 | N6 | ~~Input model~~ | `DECIDED` | **Mouse is primary and hover is now load-bearing** (tooltips). Keyboard navigation must be **complete rather than half-supported**. Gamepad out of scope. `UI-DESIGN.md` §14 |
-| N7 | **External playtest / QA** | `OPEN` | One engineer, one laptop, checklist stale since 2026-08-14. No external testers, no feedback channel, **no plan to playtest the subject matter with anyone** |
+| N7 | ~~External playtest / QA~~ | `DECIDED` | **A small trusted group, 5–10 people, before any public release.** The subject matter especially needs trusted people rather than strangers. `ART-BIBLE.md` §14 |
 | N8 | **Localisation** | `PARKED` | English-only is right for a 4B English narrator. State it on the store page |
 
 ## 4. Bugs — fix, don't decide
@@ -135,3 +135,7 @@ _Struck items stay here permanently. Never delete a row._
 - ~~Onboarding, saves, errors, window, input~~ → **DECIDED** 2026-08-26; `UI-DESIGN.md` §14.
 - ~~Licence, updates, pricing, telemetry, privacy, age rating~~ → **DECIDED**; `docs/SHIPPING.md`.
 - ~~Fleeing bosses, death screen~~ → **DECIDED**; `GAME-DESIGN.md` §14.9.
+- ~~Accessibility (full, incl. screen reader)~~ → **DECIDED**; `UI-DESIGN.md` §15.
+- ~~Ending text~~ → **DECIDED**: authored anchors + narrated specifics; `GAME-DESIGN.md` §14.10.
+- ~~Item icons~~ → **DECIDED**: bespoke per item; `ART-BIBLE.md` §13.
+- ~~External playtesting~~ → **DECIDED**: a small trusted group; `ART-BIBLE.md` §14.

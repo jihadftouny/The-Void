@@ -844,3 +844,24 @@ ever being metered** — the narrator can say what the run made of you while nev
 which is exactly what §13 requires. It turns a loss into the end of a story rather than a failure
 screen, and it is currently the only moment where unlocks earned in that run would be surfaced at
 all.
+
+### 14.10 Ending text — authored anchors, narrated specifics **[DECIDED 2026-08-26]**
+
+**You write the anchors; the narrator interpolates between them.**
+
+| Authored, word for word | Generated per run |
+|---|---|
+| What grace **is** and what it costs | What *you* did — what you spared, what you took |
+| What damnation is | What the descent made of you |
+| The lines that must land exactly | The specifics that make it yours |
+
+**Why the split falls here:** *"made whole"* is the thesis of the entire game (`WORLD.md` §0) — the
+literal inverse of the injury, and the one phrase everything has been building toward. **Those words
+must be the author's, not a 4B model's.** But an ending that cannot reference what actually happened
+in the run reads identically every time, which wastes the karma system that produced it.
+
+This is the same shape as the death summary (§14.9) — authored frame, generated content — so the two
+share machinery and a voice.
+
+**Rejected:** fully generated endings. The biggest gamble available in the project: a weak ending
+undoes everything before it, and the output cannot be guaranteed.

@@ -475,3 +475,22 @@ degraded state it can — **and where recovery is possible, it is attempted.**
 **Minimum size, resizable above it, a real fullscreen toggle, remembered bounds, and DPI-aware.**
 The minimum matters most: **without it the responsive layout has no design target**, and `#6`/`#7`
 need to know the range they must hold up across.
+
+## 15. Accessibility — the full commitment **[DECIDED 2026-08-26]**
+
+Beyond reduced motion (§13), the game commits to:
+
+- **Text size** — at minimum small / normal / large, in the settings screen.
+- **Complete keyboard navigation.** Today `:focus-visible` is styled and **nothing handles keys**,
+  which is the worst of both states: focus rings appear and nothing responds. Finish it.
+- **High contrast** — falls largely out of the WCAG contrast gate already in `tokens.ts`.
+- **Screen-reader support.** Proper semantics throughout, and **tested with a real screen reader** —
+  a claim that is not tested is not a claim.
+
+**Why the full commitment is reasonable here specifically:** this is a text-heavy DOM game. The
+narration already lives in an `aria-live` region and every choice is a real button. **A blind player
+could plausibly play the whole thing** — which is a genuinely rare thing to be able to offer, and
+almost free compared to what it would cost a canvas-first game.
+
+**The one exception:** the Kaplay canvas is decorative by design (§4) and does not need to be
+described. Everything load-bearing is already DOM — which is exactly why the split was drawn there.

@@ -609,3 +609,54 @@ None of these were on any list, and a product cannot ship without the first thre
 > no-generated-interface-art decision (§4 generation order). They are admitted as **small functional
 > marks, not chrome ornament** — the rule that the interface stays flat, ruled and unornamented is
 > unchanged. If a mark starts decorating rather than indicating, it is wrong.
+
+---
+
+## 13. Item icons — bespoke, one per item **[DECIDED 2026-08-26]**
+
+The deadlock is broken: icons were waiting on an inventory design that was waiting on a collaborative
+pass, and **the slot set is now decided** (`GAME-DESIGN.md` §14.7 — seven slots, two trinkets). So
+the inventory has a real shape to design against.
+
+**Every item gets its own icon.** Not a slot-and-rarity system.
+
+**Counted against the current data:**
+
+| Source | Items |
+|---|---|
+| Relics | 15 |
+| Uniques | 4 |
+| Consumables | 19 |
+| Base items | 4 |
+| Weapons · armor · shields | 3 · 3 · 2 |
+| **Total today** | **50** → ×3 variations = **150 images ≈ $10.05 batched** |
+
+**Two things to be clear-eyed about:**
+
+1. **That total will grow.** `weapons.json` and `armor.json` currently hold **three entries each of
+   placeholder joke names** ("Jaaj Sword 1"). The real tables, once authored (#13), will be
+   substantially larger — and each new one needs an icon.
+2. **This is a permanent commitment, not a one-off cost.** Bespoke icons mean **every item added to
+   the game from now on needs art before it can ship.** The $10 is not the real price; the ongoing
+   obligation is. Accepted deliberately — a memorable inventory is worth it — but it should shape how
+   many items get authored.
+
+**Generation:** treat icons as a fifth batch, after bosses, conditioned on the approved style. Same
+rules as everything else — flat black ground, keyed to PNG alpha, front-facing, no visible hardware.
+
+---
+
+## 14. Playtesting **[DECIDED 2026-08-26]**
+
+**A small trusted group — five to ten people — given a build and a simple feedback route, before any
+public release.**
+
+The current QA plan is one engineer on one laptop with a checklist last touched 2026-08-14. Four
+things only other people can tell you:
+
+- whether it **runs on a machine that is not yours** (nothing ever has)
+- whether it is **comprehensible without you in the room**
+- whether the difficulty reads as **tough-but-fair or simply unfair** — which matters more now that
+  there is exactly one difficulty and no assists
+- **whether the subject matter lands the way you intend.** This is the one that needs trusted people
+  rather than strangers, and it is the reason not to do a public early access first.
