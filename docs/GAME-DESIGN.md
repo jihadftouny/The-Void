@@ -727,3 +727,27 @@ bounce off permanently, including some who came for the subject matter rather th
 is a deliberate trade, not an accident.
 
 An ascension-style ladder remains a **post-launch** idea (§3), not a launch feature.
+
+### 14.6 Equipment: hands and capacity **[DECIDED 2026-08-26]**
+
+**Dual-wielding is in.** Three configurations, not two:
+
+| Configuration | Effect |
+|---|---|
+| One-handed **+ off-hand** (shield/focus) | The defensive build |
+| One-handed **+ one-handed** | **Dual-wield** — suits the Scavver's tempo/exposure identity |
+| **Two-handed** | Occupies both hands; equipping one **auto-unequips** the off-hand |
+
+**Scope this adds, stated plainly:** dual-wield needs its **own attack rules** (does the second
+weapon swing every round? at a penalty? does it only apply on-hit effects?) and it is a **real
+balance surface** — it must be re-measured in the balance re-run, not assumed. The two-handed
+conflict also needs a clear UI state so the player understands *why* the off-hand is unavailable.
+
+**Backpack: a fixed slot count, no weight.** The bag holds N items; full is full. Readable at a
+glance, draws as a grid, and the interesting decision is **what to drop** when something better falls
+late in a run. Weight systems add arithmetic the player has to do in their head without adding much
+choice. The exact N (12? 16?) is a balance number, settled with the slot brainstorm below.
+
+> **STILL OPEN — the equipment slot set.** The author's direction is to **trim the Tibia list to a
+> leaner set**, and to **brainstorm it** rather than pick from a menu. Until that lands,
+> `screens-restyle` (#8) cannot draw the paperdoll. See `docs/FINDINGS.md` B2.

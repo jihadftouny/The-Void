@@ -29,7 +29,7 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | S2 | **LICENSE / NOTICE / third-party attribution** — no file exists; `package.json` has no licence, author or repo | `OPEN` | ship | Redistributing Qwen3 (Apache-2.0) **requires** it. Also Electron, llama.cpp, Kaplay, the font |
 | S3 | **Generated-asset licence** — commercial redistribution terms for the images recorded nowhere | `OPEN` | ship | And separately for the **music** — art and music terms can differ |
 | S4a | ~~Colour is the only state channel~~ | `DECIDED` | — | **A persistent floor-name tag + a narration beat on every descent.** The accent becomes reinforcement, not information. Rule: the accent may never be the only carrier of any state. `UI-DESIGN.md` §11 |
-| S4b | **Reduced motion** — unskippable shake, flash, particles | `OPEN` | ship, #6, #7 | Still open. Hook is free now, a rewrite after the battle screen |
+| S4b | ~~Reduced motion~~ | `DECIDED` | — | **One setting; shake off, flash becomes a soft tint, particles reduced, beat timing unchanged. Honours the OS `prefers-reduced-motion` by default.** #6 and #7 must route every motion effect through the flag. `UI-DESIGN.md` §13 |
 | S4c | **Text size / high contrast / screen reader / keyboard** | `OPEN` | ship, #8 | Settings screen now exists to hold them (B1 resolved) |
 | S5 | **Update mechanism** — none; no `publish` block; version `0.0.0` | `OPEN` | ship | A 2.5 GB first-run download with no patch path |
 | S6 | **Age rating / content descriptor** — itch requires self-declaration | `OPEN` | ship | Follows from S1 |
@@ -42,9 +42,9 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | # | Item | Status | Blocks | Notes |
 |---|---|---|---|---|
 | B1 | ~~Settings / options screen~~ | `DECIDED` | — | **Added to `screens-restyle` (#8) as its own screen**, routed from both title and hub: audio, accessibility, text speed, model tier, display. `UI-DESIGN.md` §12 |
-| B2 | **Equipment slot set** — `[PROPOSAL]`, "confirm/trim this list", never confirmed | `OPEN` | #8 | Cannot draw a paperdoll against an unapproved slot list |
-| B3 | **Two-handed vs shield vs dual-wield** | `OPEN` | #8 | Is the second hand a slot or a mode? |
-| B4 | **Backpack capacity / weight** | `OPEN` | #8 | |
+| B2 | **Equipment slot set** | `OPEN` — **brainstorm scheduled** | #8 | Direction set: **trim the Tibia list to a leaner set.** The author wants to brainstorm it, not pick from a menu. Blocks the paperdoll |
+| B3 | ~~Two-handed vs shield vs dual-wield~~ | `DECIDED` | — | **All three: 1H+off-hand, dual-wield, or 2H which blocks the off-hand.** Dual-wield needs its own attack rules and is a real balance surface. `GAME-DESIGN.md` §14.6 |
+| B4 | ~~Backpack capacity / weight~~ | `DECIDED` | — | **A fixed slot count, no weight.** Exact N settles with the slot brainstorm. `GAME-DESIGN.md` §14.6 |
 | B5 | **Typeface** — three candidates, one **paid**, licence unchecked | `OPEN` | #6 #7 #8 | Every spacing token is provisional until a real face lands |
 | B6 | **Turn / initiative model** — `[OPEN]`; `initiativeOrderTwist` returns 0, "no-op until M4", M4 merged | `OPEN` | #6 | A battle screen showing turn order needs to know if one exists. Quick/Slow are half-inert |
 | B7 | **`jsdom` vs `node` test environment** | `OPEN` | #6 #7 #8 | Decide once, or three units each invent an override |
@@ -124,3 +124,6 @@ _Struck items stay here permanently. Never delete a row._
 - ~~Settings screen~~ → **DECIDED**: added to #8; `UI-DESIGN.md` §12.
 - ~~Difficulty modes~~ → **DECIDED**: one difficulty, no assists; `GAME-DESIGN.md` §14.5.
 - ~~Should floor names surface in the UI?~~ → **DECIDED**: yes, render them (falls out of §11).
+- ~~Reduced motion~~ → **DECIDED** 2026-08-26: one OS-aware setting; `UI-DESIGN.md` §13.
+- ~~Hands / dual-wield~~ → **DECIDED**: three configurations; `GAME-DESIGN.md` §14.6.
+- ~~Backpack capacity~~ → **DECIDED**: fixed slots, no weight; `GAME-DESIGN.md` §14.6.

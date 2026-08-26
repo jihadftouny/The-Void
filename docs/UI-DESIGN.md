@@ -402,3 +402,25 @@ commitments have nowhere to live; the model tier needs an override on slow machi
 
 Add it to `screens-restyle` (#8) as its own screen, and give it a route from both the title and the
 hub — a player who needs reduced motion should not have to start a run to find it.
+
+## 13. Reduced motion **[DECIDED 2026-08-26]**
+
+**One setting, honoured by default from the operating system.**
+
+| Effect | Reduced-motion behaviour |
+|---|---|
+| Screen shake | **Off** |
+| Hit flash | A **soft tint**, never a strobe |
+| Particles | Reduced or off |
+| Beat timing | **Unchanged** — the exchange must still read as an exchange |
+
+**Default from the OS:** respect `prefers-reduced-motion`, so anyone who has already set it
+system-wide gets it without finding the settings screen.
+
+**Why this is not a preference like any other:** flashing is a genuine health issue, not a taste
+question — and an unskippable strobe in *this specific game* is a thematic own-goal on top of an
+accessibility failure.
+
+**Requirement on `battle-screen` (#6) and `canvas-layer` (#7):** both must read the flag and route
+every motion effect through it. **The hook costs nothing now and is a rewrite of the sequencing layer
+afterwards** — the same argument already made and accepted for audio hooks (`ART-BIBLE.md` §10).
