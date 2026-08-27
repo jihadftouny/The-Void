@@ -48,9 +48,9 @@ Nothing gets built until this is worked through.
 | B3 | ~~The Memorians as a final encounter~~ | **Not a fight.** They cannot see it as a person. Mirrors the Warden inversely | #18 #11 | `DONE` | `WORLD.md` §14 |
 | B4 | ~~The bosses as characters~~ | Kingpins hold **domains**; the Reflection **speaks as you**; the Sin **accuses**; the Hollow Self is **calm and right**. Names still the author's | #11 #13 | `DONE` | `WORLD.md` §15 |
 | **B4b** | ~~Talking to bosses~~ | **Free text, free to use, and it can change the fight** through engine-defined outcomes only. ⚠ Exploit flagged + a concession-cap proposed | #6 #11 #12 | `DONE` | `GAME-DESIGN.md` §20 |
-| B5 | **The 24 enemy families** | Which have identity beyond a name; nine still carry legacy Java joke names; what each *is* now the world exists | #9 #13 | `QUEUED` | GAME-DESIGN |
-| B6 | **The 24 conditions** | Whether all 24 earn their place; which are inert; their vocabulary now the rename is happening; `exposed` is a 25th with no design entry | #1 #6 | `QUEUED` | GAME-DESIGN |
-| B7 | **Elements & resistances** | Seven elements — do they interact, resist, combo? Currently mostly flavour | #2 #9 | `QUEUED` | GAME-DESIGN |
+| B5 | ~~The 24 enemy families~~ | **All rewritten against the world**, not just the nine broken ones. ⚠ **Must land before art batch 3** — 32 sprites prompt from these | #9 #13 | `DONE` | `GAME-DESIGN.md` §21.3 |
+| B6 | ~~The conditions~~ | **25, and the six stat pairs stay** — learnable by pattern, and what makes stats matter in a fight. `exposed` is the 25th: **fix the doc, not the code** | #1 #6 | `DONE` | `GAME-DESIGN.md` §21.1 |
+| B7 | ~~Elements & resistances~~ | **Resistances only, no combos.** Depth lives in conditions, tempo and builds | #2 #9 | `DONE` | `GAME-DESIGN.md` §21.4 |
 | B8 | **Class kits in detail** | Four skills each — final? The signature twists, two of which are no-ops. What each class *plays* like | #9 #13 | `QUEUED` | GAME-DESIGN |
 | B9 | **The Neuromancer's knowledge** | Flagged in WORLD §0b as "live dramatic material" — how much does a *given* Neuromancer know about what their own order does? | #13 | `QUEUED` | WORLD |
 | B10 | **The codex & tooltips** | What the codex actually contains; how much it explains; what stays unexplained on purpose | #8 #13 | `QUEUED` | UI-DESIGN |
@@ -89,6 +89,7 @@ _Newest first. Every round that has been asked and written down._
 
 | Date | Round | Outcome |
 |---|---|---|
+| 2026-08-27 | **B5–B7** — conditions, enemies, elements | 25 conditions with the six stat pairs kept (learnable by pattern); `exposed` is the 25th and the **doc** was wrong; **all 24 enemy families rewritten against the world — must precede art batch 3**; elements gate resistances only. `GAME-DESIGN.md` §21 |
 | 2026-08-27 | **B4 + B4b** — bosses & talking | Kingpins hold domains; the Reflection speaks as you; the Sin accuses; the Hollow Self is calm and right. **New feature: you can TALK to bosses in free text**, free of turn cost, and it can change the fight through engine-defined outcomes. `WORLD.md` §15 / `GAME-DESIGN.md` §20 |
 | 2026-08-27 | **A4b + B1–B3** — levelling & the ascent's end | Stats leave the draft (per-level allowance, **max level 20**); Absolution is stratified by height but only **glimpsed**, since the ascent ends at the Undercity threshold; **extraction happens in the Rift**, closing R1/R2 and the old body-location question; the Memorians **do not fight**. `WORLD.md` §14 / `GAME-DESIGN.md` §19.5 |
 | 2026-08-27 | **A3–A6** — death, XP, seeds, confirms | Revive stays (bought with yourself); **enemy XP now derives from the ENEMY, fixing a feedback loop where it was rolled from the player's own XP**; the seed is shown/stored/enterable; Abandon gets a confirm and moves. `GAME-DESIGN.md` §19. **A4b re-queued.** |

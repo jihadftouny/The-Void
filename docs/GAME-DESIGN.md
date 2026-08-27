@@ -1309,3 +1309,73 @@ while removing the spam-until-concession strategy.
   account for it, including how you dismiss it to just fight.
 - **It must degrade.** With no model available, the talk affordance is simply absent and the fight is
   fully playable — the same rule the narrator and the canvas already follow.
+
+---
+
+## 21. Conditions, enemies and elements **[DECIDED 2026-08-27]**
+
+### 21.1 The condition set is 25, and the six pairs stay
+
+**Twelve of the twenty-five are a symmetrical buff/debuff set — one pair per stat.** That is
+deliberate and it is kept.
+
+| Stat | Buff / debuff |
+|---|---|
+| STR | strong / weak |
+| DEX | **quick / slow** |
+| CON | healthy / sick |
+| INT | smart / dumb |
+| WIS | wise / fool |
+| CHA | charming / repulsive |
+
+Plus the thirteen distinctive ones: bleed, burn, freeze, poison, electrify, stun, fracture, sleep,
+insanity, regeneration, push, aired, **exposed**.
+
+**Why the pairs earn their place:** one per stat makes the set **learnable by pattern rather than by
+memory** — 25 conditions is a lot to teach, and half of them following a single rule is what makes
+that possible. They are also **what makes stats matter inside a fight** rather than only at creation
+and level-up. That has become truer since: **quick/slow now drive the tempo gauge** (§16.1) instead of
+sitting on a dead no-op, and **WIS gates floor-2's illusion checks** (§8).
+
+### 21.2 `exposed` is the 25th — the design document was wrong, not the code
+
+`exposed` is applied by **Backstab** and scaled off by **Venom Coat**: it *is* the Scavver's
+"Tempo / Exposure" signature twist (§4) working as designed. The design document simply never
+recorded it and has said "24 conditions" throughout.
+
+**Fix the document, not the code.** It stays **Scavver-flavoured** rather than being generalised —
+generalising it would dilute the only thing that currently makes the class mechanically distinct.
+
+### 21.3 The 24 enemy families get rewritten against the world
+
+**All of them, not just the broken ones.** Nine still carry names inherited from the Java joke tables,
+and **the rest were written before `docs/WORLD.md` existed at all**, so most will contradict it
+somewhere.
+
+What each family must now be checked against:
+
+- **Floor 1 is a flooded industrial undercity** — standing water, chemical sheen, corroded pipework.
+  Not the neon rain the older text implies.
+- **Floor 3's enemies are things you are *mourning*.** The ash is your own extracted life (`WORLD.md`
+  §0c), so the Feelings and Sins are not monsters, they are losses.
+- **Floor 5's are people the Memorians harvested** — the Hollowed are literally previous subjects
+  (`WORLD.md` §0c), not metaphors.
+- **The cyberpunk gradient** (`ART-BIBLE.md` §4): high on floor 1, zero by floor 3.
+
+> **This is not cosmetic and it is not deferrable.** **Art batch 3 generates 32 enemy sprites from
+> these names and themes.** Prompting sprites from text that predates the world is exactly the
+> mistake that produced a medieval knight in a cyberpunk game. **The rewrite must land before that
+> batch.**
+
+### 21.4 Elements gate resistances, and nothing more
+
+The seven elements — Physical, Cryo, Pyro, Electro, Poison, Psychic, **Force** — determine **what an
+enemy resists** and **what condition a hit tends to apply.** There are **no elemental reactions or
+combos.**
+
+Already built and already balanced against, and it keeps combat legible. **The depth in this game
+comes from conditions, the tempo gauge and build assembly** — an elemental reaction system would be
+a second combat game layered on top of a player already learning 25 conditions.
+
+**Force remains the holy element**, shared by the angels, the Choir, the Seraph-Wardens and the
+Penitent (`WORLD.md` §7).
