@@ -58,6 +58,19 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | B15 | ~~Item-icon granularity~~ | `DECIDED` | — | **Bespoke, one per item.** Deadlock broken by the slot set landing. 50 items today ≈ 150 images ≈ $10 batched — but ⚠ **a permanent commitment: every new item needs art forever.** `ART-BIBLE.md` §13 |
 | B16 | ~~Interface furniture~~ | `DECIDED` | — | **No generated interface art**; cursor + loading indicator excepted as *functional marks*. Resolved by the art/interface rule: **art depicts things in the world; the interface that frames them stays flat.** `ART-BIBLE.md` §15 |
 
+## 2b. Reopened by the Hollow ascent (2026-08-27)
+
+The Hollow campaign ends at the surface, which reopens two things that were **deliberately parked**
+on the grounds that the game is a descent and never goes up. `docs/WORLD.md` §13.
+
+| # | Item | Status | Blocks | Notes |
+|---|---|---|---|---|
+| R1 | **Absolution above ground** | `OPEN` | Hollow prose | Parked 2026-08-25 as "the game never goes up". The ascent ends there |
+| R2 | **House Grandmore as a place** | `OPEN` | Hollow prose | The Hollow climbs to reach the Memorians; where they are must exist |
+| R3 | **The Memorians as a final encounter** | `OPEN` | #11, balance | A boss with no descent counterpart — new mechanics, new balance, new prose |
+| R4 | **Second prose pass, all five floors** | `OPEN` | #13 | The inverted register. Roughly doubles floor *content* work |
+| R5 | **Floor hook must be direction-aware** | `OPEN` | #1 #2 | Cheap in `engine-foundations`; expensive after floor mechanics are built one-way |
+
 ## 3. Product areas never discussed
 
 | # | Item | Status | Notes |

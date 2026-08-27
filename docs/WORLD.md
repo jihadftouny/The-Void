@@ -555,7 +555,7 @@ Flagged here because they cross into other documents and will otherwise be misse
 - **`ART-BIBLE.md` — the socket.** Chips are physical and sit in the head; the Neuromancer's locked
   costume already has *"sockets at the temple"*. If a chip can be taken out, **an emptied socket is
   a visible wound**, and it is the single most on-theme visual detail available. Applies to the
-  Hollow class, the Hollowed, the Echoes, and the Hollow Self. **[OPEN]** whether every class
+  Hollow class, the Hollowed, the Echoes, and the Hollow Self. **[CLOSED — `ART-BIBLE.md` §9 wins on visual: NO hardware in any art]** whether every class
   portrait shows a socket, and whether post-extraction assets show it empty.
 - **`GAME-DESIGN.md` — the Ash City.** Floor 3's ash is now *literally the player's extracted life*
   (§0c). The Feelings and Sins that live there are being mourned because they are **yours**.
@@ -607,3 +607,65 @@ recorded in the last city.
 **Therefore everyone is harvestable.** This method could be used on any living person, the Memorians
 are the only ones who know it, and the folklore holds so completely that nobody has ever thought to
 be afraid of it. The horror scales to the entire population, and no one is looking.
+
+---
+
+## 13. THE ASCENT — the Hollow's campaign **[LOCKED 2026-08-27]**
+
+> **The Hollow does not descend. It rises.**
+> Floor 5 to floor 1, and then out.
+
+The descender falls from the Undercity into absence. **The Hollow starts in absence and climbs.** It
+is the only character in the game who goes *up*, and the phrase for it is already written into the
+game's best line: *"rises from the Void."*
+
+**Why it can only be the Hollow.** A Hollow is a stripped chip reinstalled in an emptied body
+(§0c) — it is *made* at the bottom. It has no descent to make because it is already there. Everything
+above it is somewhere it has not been in this body.
+
+### What it is climbing toward — **the Memorians** **[LOCKED]**
+
+Not wholeness, and not nothing. **It climbs to reach the people who made it.**
+
+The descender never learns who did this to them, or that anyone did. **The Hollow knows** — it is the
+only character in the game who does, because it is what the process leaves behind and it has been
+lying at the bottom of that process. The ascent is a return to the source.
+
+> **⚠ This reopens two things that were deliberately parked** (§12b): **Absolution above ground** and
+> **house Grandmore as a place**. The descent never needed them — the game is a descent and never
+> goes up. **The ascent ends there**, so both now need designing. Recorded in `docs/FINDINGS.md`.
+
+### Floor 4 — the Warden does not fight the Hollow **[LOCKED]**
+
+**The Warden is compassionate.** It does not fight, does not judge, and does not turn the Hollow
+back. There is an **important conversation**, and then it lets the Hollow through.
+
+**This is the thematic keystone of the second campaign**, and it should be written as such:
+
+- The angels are **real** (§6) — the one thing in this world that is genuinely what it appears to be,
+  and the only thing outside the Memorians' machine.
+- So the **only mercy a Hollow is ever shown comes from the only real thing in the game.** Everyone
+  else — the house, the Kingpins, the Memorians, the city — made it or used it or looked away.
+- It also inverts the descent exactly. Descending, floor 4 **weighs you and may cast you down**.
+  Ascending, it **weighs nothing and lets you pass.** The same floor, opposite behaviour, and the
+  difference says everything about who each character is.
+
+**The other floor bosses are still there** and still fight. Only the Warden is different — which is
+what makes it land.
+
+### What every floor means, going up
+
+The floors, enemies and mechanics are **the same**; the *meaning* inverts, and that inversion is
+carried by the prose.
+
+| Floor | Descending | Ascending |
+|---|---|---|
+| 5 True Void | absence — the reading completing | **where you begin.** Home, if it is anything |
+| 4 Angelic | judgement — grace or cast down | **mercy, freely given.** The Warden lets you through |
+| 3 Ash City | grief — the ash is what you lost | **the ash is what you are walking back through** |
+| 2 Entrance | fracture — coming apart | reassembling, or trying to |
+| 1 Undercity | the last real place, before | **the last floor.** Where it was done to you |
+| — | — | **and then out, to the Memorians** |
+
+**For prose:** the Hollowed stop being *what you may become* and are simply *what you are*. That
+single shift reframes floor 5's entire family without changing one line of code.

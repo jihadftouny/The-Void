@@ -151,7 +151,7 @@ insanity, push, aired. Activate the dormant 13:
 ### Open
 - Whether basic attacks can miss vs only special attacks (you chose full "enemies roll to hit"; keep
   simple = everything rolls). **[settled unless you want nuance]**
-- Turn/initiative model beyond the current enemy→player round order. **[OPEN]**
+- ~~Turn/initiative model~~ **CLOSED §14.8 / §16.1** — there is no initiative system; speed is the **tempo gauge**.
 
 ---
 
@@ -160,7 +160,7 @@ insanity, push, aired. Activate the dormant 13:
 ### Decided
 - **Full multi-slot inventory, Tibia-style** **[DECIDED]**: an equipment paperdoll plus a backpack
   container.
-  - **[PROPOSAL] Slot set** (Tibia-derived): helmet, amulet/neck, two hands (weapon + shield or
+  - ~~**[PROPOSAL] Slot set**~~ **CLOSED §14.7 — seven slots** (head, body, hand x2, feet, trinket x2). Superseded list follows: helmet, amulet/neck, two hands (weapon + shield or
     off-hand/second weapon), armor (torso), legs, boots, ring, ammo/hip, + backpack container.
     Confirm/trim this list.
 - **Build-defining relic trinkets** **[DECIDED]**: passive effects and synergies that reshape a build
@@ -221,9 +221,9 @@ insanity, push, aired. Activate the dormant 13:
 
 ### Open / to brainstorm
 - Backpack capacity & weight — does Tibia-style **weight/capacity** matter, or just slot count?
-  **[OPEN]**
-- Two-handed vs weapon+shield trade-offs; dual-wield? **[OPEN]**
-- **[PROPOSAL — relic/unique ideas]** to seed the brainstorm: *Mirror Shard* (reflect a % of a hit
+  ~~**[OPEN]**~~ **CLOSED §14.6 — a fixed slot count, no weight.**
+- ~~Two-handed vs weapon+shield; dual-wield?~~ **CLOSED §14.6** — all three configurations; a two-hander blocks the off-hand.
+- **[SUPERSEDED — the fuller relic catalogue above is live]** early seed ideas: *Mirror Shard* (reflect a % of a hit
   back — floor 2), *Ash Censer* (each kill stacks a burn aura — floor 3), *Halo Fragment* (auto-revive
   once, but marks you — floor 4), *Hollow Heart* (spend HP to power skills — floor 5). Themed drops
   tie loot to the floors.
@@ -1053,3 +1053,40 @@ curve, so make it curricular on purpose rather than by accident.
 
 **Also to fix here** (from the audit): the unlock store **accumulates relics and skills the run never
 reads**, and two of five affixes can never be unlocked. Half-wired systems, wiring missing.
+
+### 17.5 The Hollow campaign — reversed, and built bidirectionally **[DECIDED 2026-08-27]**
+
+Full fiction in `docs/WORLD.md` §13. The mechanical shape:
+
+**Same floors, same enemies, same mechanics, same bosses, same karma — reversed order, inverted
+meaning.** Engine cost is a **direction flag** plus floor ordering; the real cost is **a second pass
+of prose**, which is where the inversion lives.
+
+| | |
+|---|---|
+| **Order** | 5 → 4 → 3 → 2 → 1 → out |
+| **Floor 4** | **No Warden fight.** A dialogue encounter; the Warden lets the Hollow pass |
+| **Other bosses** | Unchanged — they still fight |
+| **Karma** | Same four axes, same triggers. What it *resolves into* at the end differs |
+| **The end** | Reaching **the Memorians** — a new final encounter that does not exist in the descent |
+
+**BUILT BIDIRECTIONALLY FROM THE START.** The author's ruling: floor mechanics are designed for both
+directions rather than retrofitted. This **grows the floor-mechanics unit (#2)** — it must take a
+direction and behave correctly either way, rather than assuming descent. That is more coherent than
+bolting a reverse mode on later, and the alternative (designing the ascent against floors that do not
+exist yet) was the thing to avoid.
+
+**New work this creates, stated plainly so it is not discovered later:**
+
+1. **Absolution above ground and house Grandmore must be designed.** Both were *deliberately parked*
+   because the descent never goes up. **The ascent ends there.** This is a genuine reopening.
+2. **A final encounter with the Memorians** — a boss that has no descent counterpart. New mechanics,
+   new balance, new prose.
+3. **A second pass of prose for all five floors**, in the inverted register.
+4. **The floor-mechanic hook must be direction-aware** — cheap now, in `engine-foundations` (#1);
+   expensive after floor mechanics are built one-way.
+
+**Recorded honestly: this is the largest scope addition since the art batches.** It is also the
+strongest — the Hollow class unlock previously promised a story that did not exist, and this is that
+story. But it should be sequenced knowing it roughly doubles the floor *content* work even though it
+barely touches the floor *engine* work.
