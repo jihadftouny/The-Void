@@ -949,3 +949,107 @@ Equip and unequip are legal **only in the hub**, between encounters — never mi
 
 **Recorded now so `battle-screen` (#6) does not assume the affordance exists.** If mid-battle
 swapping is ever wanted, it is a separate decision — and it must cost a turn.
+
+---
+
+## 17. Decisions from the 2026-08-27 interview
+
+### 17.1 The blended-spectrum ending **[DECIDED 2026-08-27]**
+
+Pillar 4 has always promised a *"blended, analog ending"* and M14 is named for it — **and it did not
+exist.** The code has a binary `'grace' | 'damnation'`. This is how the spectrum is delivered.
+
+**The floor-4 gate stays binary. The ending *within* each path blends.**
+
+| | |
+|---|---|
+| **The gate** | Unchanged — grace or cast-down, from the weighted karma sum (§14) |
+| **The ending** | Coloured by **where all four axes actually landed**, not just the gate's verdict |
+
+```
+grace  + high mercy       → you rose, and gently
+grace  + high cruelty     → you rose anyway. it noticed.
+damnation + high reverence → you fell, but not for nothing
+damnation + high greed     → you fell, and took what you could on the way
+```
+
+**Why this shape works with everything already decided:**
+- **No new state.** The four-axis karma vector already exists and is already carried to the gate.
+- **It fits the authored-anchor model** (§14.10 / §16 ending text): **the anchors are per-path** —
+  you write what grace *is* and what damnation *is* — and **the axes colour what the narrator says
+  between them.** The two decisions were made separately and turn out to compose exactly.
+- **Floor 5 survives.** A fully analog ending with no discrete branch was rejected because the whole
+  floor-5 structure hangs off *being cast down*, and floor 4's verdict is the run's dramatic climax.
+
+**This is what makes a four-axis hidden karma system worth having** over a single good/evil bar. If
+the ending only reads the gate, three of the four axes never surface anywhere a player could feel
+them.
+
+### 17.2 The Seven Sins each fight like their sin **[DECIDED 2026-08-27]**
+
+Seven distinct behaviours, not seven names on one statblock. Sketches — exact numbers are balance
+work, and each must be checked against the existing 24-condition vocabulary rather than inventing:
+
+| Sin | Behaviour |
+|---|---|
+| **Pride** | **Cannot be spared** — refuses mercy. The one Sin that denies you the karma choice |
+| **Envy** | Copies your last-used skill |
+| **Wrath** | Grows stronger the more damage it takes |
+| **Sloth** | Applies Slow; drags the fight out (now meaningful — see the tempo gauge, §16.1) |
+| **Greed** | Steals an item or skill charges on hit |
+| **Gluttony** | Heals itself by damaging you |
+| **Lust** | Compels — forces a wasted action |
+
+**Why it matters more than variety:** the floor-3 boss is *"your most-indulged sin made flesh,
+personal to each run"*. If all seven play identically, **the most personal fight in the game plays
+the same no matter what you indulged** — which defeats the mechanic. Seven sprites are already
+budgeted in the art list, so the art side is unaffected.
+
+**Note:** Pride's "cannot be spared" is the sharpest of these — it is the only enemy in the game that
+takes the mercy decision away from you, which is a strong statement in a game whose karma pillar runs
+on that decision.
+
+### 17.3 Boss agents choose their own actions **[DECIDED 2026-08-27 — with hard constraints]**
+
+M12's premise was *"each boss is an LLM agent that remembers your run"*, and **none of it exists** —
+`boss.ts` has zero LLM references and `StoryMemory` is never given to a boss. The author's ruling:
+**the model both speaks with knowledge of the run AND chooses the boss's actions.**
+
+> **This is the riskiest decision in the project**, because it puts a language model inside the
+> combat loop of a game built on reproducibility. It is workable — but only under all five of the
+> following. **None is optional.**
+
+1. **The model SELECTS; it never invents.** The engine computes the boss's legal action set and the
+   model picks one, grammar-constrained to that set. The engine still owns every rule and number —
+   `CLAUDE.md` principle 5 is preserved, not bent.
+2. **The choice is an INPUT, exactly like a player's.** It enters through `step` and is **recorded in
+   the run like any other input.** This is what preserves principle 2: a run stays reproducible from
+   **seed + inputs**, because the boss's choices are *part of the inputs*. Determinism is not
+   weakened; the input stream simply has a second author.
+3. **An illegal or absent choice falls back deterministically.** If the model returns something
+   invalid, times out, or is not running at all, the engine uses a fixed policy. **Boss fights must
+   be fully playable with no model** — the same resilience rule the narrator already follows.
+4. **Tests and the simulation never call a real model.** Both use a deterministic fake policy.
+   The balance sim must remain reproducible, or every number it produces is meaningless.
+5. **The accepted cost, stated plainly:** a model call **per boss turn**. That is precisely what
+   "bookends only" (`UI-DESIGN.md` §2) was chosen to avoid, so **boss fights will be slower than
+   ordinary fights.** That may even be right — a boss *should* feel different — but it is a real
+   change to the game's rhythm and it must be play-tested as one, not discovered.
+
+### 17.4 Unlock feats teach the game **[DECIDED 2026-08-27]**
+
+The feat list is currently a seed, not a designed list. **Design each unlock so earning it requires
+understanding something** — the unlock system is already the onboarding ramp (§12) and the difficulty
+curve, so make it curricular on purpose rather than by accident.
+
+| Unlock | The lesson |
+|---|---|
+| **Scavver** — spare 3 karma-weighted enemies | *Mercy is being read.* Teaches the karma pillar exists without ever naming it |
+| **Neuromancer** — beat the Undercity Kingpin | The basic loop, start to first boss |
+| **Penitent** — reach the floor-4 grace ending | The whole arc, played well |
+| **Hollow** — be cast down and beat your Hollow self | The dark path — and per `WORLD.md`, *becoming* one |
+| Bestiary reveal | Gradual difficulty ramp, already built |
+| Relic-related feats | Teaches that relics are bought with yourself |
+
+**Also to fix here** (from the audit): the unlock store **accumulates relics and skills the run never
+reads**, and two of five affixes can never be unlocked. Half-wired systems, wiring missing.
