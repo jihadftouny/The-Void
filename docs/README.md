@@ -15,12 +15,13 @@ disagree. Keep this index current: a document not listed here will be missed by 
 | 4 | **[ROADMAP.md](ROADMAP.md)** | *What order we build it in.* The v3 milestone plan, M0–M17 | picking up the next milestone |
 | 5 | **[ART-BIBLE.md](ART-BIBLE.md)** | *How it looks, and how to reproduce it.* Exact model settings, the house style string, framing, posing, failure gates, generation order | generating a single image |
 | 6 | **[UI-DESIGN.md](UI-DESIGN.md)** | *How it reads on screen.* Battle screen, narration cadence, combat log, canvas architecture, the restyle's five units | any UI or render work |
-| 7 | **[FINDINGS.md](FINDINGS.md)** | ⭐ **The living register of everything still open.** Updated continuously — decisions, gaps, bugs and doc hygiene, with a `BLOCKS` column. **New findings go here, not into a new audit file** | starting any work, and whenever anything is decided or discovered |
-| 8 | **[PLAN.md](PLAN.md)** | *What to do next.* The work plan with dependencies — what blocks what, and what is unblocked | starting any piece of work |
-| 8 | **[SCOPE-AUDIT.md](SCOPE-AUDIT.md)** | *Every hole, part 1.* Content, systems and document contradictions (2026-08-25), ranked by retrofit cost | committing to any new unit — check whether it sits on an unbuilt foundation |
-| 9 | **[SCOPE-AUDIT-2.md](SCOPE-AUDIT-2.md)** | *Every hole, part 2.* Open decisions, **product areas nobody discussed** (accessibility, settings, legal, content warning, updates, QA), and **decisions already made by accident in code** — including three that silently destroy player data | before claiming anything is fully scoped, and before starting any UI unit |
-| 8 | **[BALANCE-REPORT.md](BALANCE-REPORT.md)** | *Whether it is winnable.* Generated from the sim — do not hand-edit. **Caveat: measured with no equipment**, because equip is not yet an engine input | touching any balance constant |
-| 9 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
+| 7 | **[INTERVIEW-PLAN.md](INTERVIEW-PLAN.md)** | ⭐ **The queue of everything still to ask the author**, and the record of what has been asked. Adaptive — answers may add, drop or reorder rounds. **Nothing is built until Phase A is done** | before asking anything, and update it in the same turn as any answer |
+| 8 | **[FINDINGS.md](FINDINGS.md)** | ⭐ **The living register of everything still open.** Updated continuously — decisions, gaps, bugs and doc hygiene, with a `BLOCKS` column. **New findings go here, not into a new audit file** | starting any work, and whenever anything is decided or discovered |
+| 9 | **[PLAN.md](PLAN.md)** | *What to do next.* The work plan with dependencies — what blocks what, and what is unblocked | starting any piece of work |
+| 10 | **[SCOPE-AUDIT.md](SCOPE-AUDIT.md)** | *Every hole, part 1.* Content, systems and document contradictions (2026-08-25), ranked by retrofit cost | committing to any new unit — check whether it sits on an unbuilt foundation |
+| 11 | **[SCOPE-AUDIT-2.md](SCOPE-AUDIT-2.md)** | *Every hole, part 2.* Open decisions, **product areas nobody discussed** (accessibility, settings, legal, content warning, updates, QA), and **decisions already made by accident in code** — including three that silently destroy player data | before claiming anything is fully scoped, and before starting any UI unit |
+| 12 | **[BALANCE-REPORT.md](BALANCE-REPORT.md)** | *Whether it is winnable.* Generated from the sim — do not hand-edit. **Caveat: measured with no equipment**, because equip is not yet an engine input | touching any balance constant |
+| 13 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
 
 **Stale, kept for history — do NOT build from these:**
 
@@ -63,10 +64,16 @@ disagree. Keep this index current: a document not listed here will be missed by 
 ## The one-paragraph version
 
 An **LLM-narrated, mechanics-first roguelike** about descending five floors of the Void. A local
-3–4B model narrates; the deterministic engine owns every rule and number. **The Void is not a place
+4B model narrates; the deterministic engine owns every rule and number. **The Void is not a place
 — it is a condition, and the condition is the Hollow.** You are a sworn retainer of house Grandmore,
-sent to kill an Undercity Kingpin who turns out to be your own house's collaborator; he throws you
-in. After that there is no mission, only escape. Five stages — *before, fracture, grief, judgement,
-absence* — and a hidden four-axis karma that decides whether the floor-4 Warden grants grace or casts
-you down. The angels there are **real**. The good ending does not say *made well*; it says
-**made whole**, which is the exact opposite of hollow, and that is the whole game.
+sent to kill an Undercity Kingpin who turns out to be your own house's collaborator. He does not
+throw you down a hole — **he takes your brainchip**, and the whole game happens during that
+extraction while you are awake. Five stages — *before, fracture, grief, judgement, absence* — and a
+hidden four-axis karma that decides whether the floor-4 Warden grants grace or casts you down. The
+angels there are **real**: your own recorded life was what stood in front of them. The good ending
+does not say *made well*; it says **made whole**, which is the exact opposite of hollow, and that is
+the whole game.
+
+**And there is a second campaign.** A Hollow — a stripped chip reinstalled in an emptied body — does
+not descend. **It rises**, floor 5 to floor 1, to reach the Memorians who made it. The Warden does
+not judge it. The Warden lets it through.
