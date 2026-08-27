@@ -65,9 +65,9 @@ on the grounds that the game is a descent and never goes up. `docs/WORLD.md` §1
 
 | # | Item | Status | Blocks | Notes |
 |---|---|---|---|---|
-| R1 | **Absolution above ground** | `OPEN` | Hollow prose | Parked 2026-08-25 as "the game never goes up". The ascent ends there |
-| R2 | **House Grandmore as a place** | `OPEN` | Hollow prose | The Hollow climbs to reach the Memorians; where they are must exist |
-| R3 | **The Memorians as a final encounter** | `OPEN` | #11, balance | A boss with no descent counterpart — new mechanics, new balance, new prose |
+| R1 | ~~Absolution above ground~~ | `MOSTLY CLOSED` | — | **The ascent ends at the Undercity's exit — the Hollow never enters the city.** Only enough to be *glimpsed*. Shape decided: stratified by height. `WORLD.md` §14 |
+| R2 | ~~House Grandmore as a place~~ | `CLOSED` | — | **Not needed.** Extractions happen in **Memorian infrastructure inside the Rift**, not in a noble seat. `WORLD.md` §14 |
+| R3 | ~~The Memorians as a final encounter~~ | `DECIDED` | #11 | **Not a fight.** They do not fight because to them it is not a person. Mirrors and inverts the Warden — one does not fight because it sees you, the other because it cannot. `WORLD.md` §14 |
 | R4 | **Second prose pass, all five floors** | `OPEN` | #13 | The inverted register. Roughly doubles floor *content* work |
 | R5 | **Floor hook must be direction-aware** | `OPEN` | #1 #2 | Cheap in `engine-foundations`; expensive after floor mechanics are built one-way |
 

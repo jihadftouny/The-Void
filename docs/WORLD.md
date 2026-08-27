@@ -203,7 +203,8 @@ whatever persists on a stripped chip, running in flesh that belonged to someone 
 body, without the life that made continuing mean anything. The Void claims its own, and then it
 *uses* them.
 
-> **[OPEN, minor] Where the body is during the procedure.** Extraction is long (§0c) and the body
+> **~~[OPEN, minor] Where the body is during the procedure.~~ CLOSED 2026-08-27 — §14: a Memorian
+> facility inside the Rift, for the whole length of the game.** Original note: Extraction is long (§0c) and the body
 > must be somewhere. The natural reading, given the above, is that it is held wherever the stock is
 > held. Not settled, and not blocking any art.
 
@@ -669,3 +670,73 @@ carried by the prose.
 
 **For prose:** the Hollowed stop being *what you may become* and are simply *what you are*. That
 single shift reframes floor 5's entire family without changing one line of code.
+
+---
+
+## 14. Absolution's shape, and where the extraction happens **[LOCKED 2026-08-27]**
+
+### The city is stratified by height
+
+**Vertical position is social position.** The houses live high and in the light; the city below them;
+the **Undercity** flooded and toxic beneath that; and the **Rift** beneath even that.
+
+**This makes the whole game one continuous fall.** You were already being sent *downward* socially
+before the Kingpin ever touched you — the descent starts as a class position and becomes a literal
+one. And **the Hollow rising is climbing that same ladder back up.** One axis carries class,
+geography and the plot at once.
+
+### The extraction happens inside the Rift **[LOCKED — and it closes an old question]**
+
+**There is Memorian infrastructure in the Rift**, and that is where extractions are performed.
+
+> **This answers §0c's "[OPEN, minor] where the body is during the procedure."** It is in a Memorian
+> facility inside the Rift, for the whole duration — and since the descent *is* the extraction (§0c),
+> the body lies there for the entire length of the game.
+
+It also tightens the folklore (§0b) into something almost elegant: the world believes people are
+*sent down into the Rift and do not come back*, and **that is materially true.** Bodies go into the
+Rift. There is a facility there. The only thing the folklore gets wrong is what happens once they
+arrive — and nobody who could correct it ever comes back up.
+
+**Consequence:** house Grandmore does **not** need designing as a place. The work happens in the
+Rift, not in a noble seat.
+
+### The ascent ends at the threshold, not in the city **[LOCKED]**
+
+**The Hollow's campaign ends when it reaches the exit of the Undercity into Absolution.** It does not
+enter the city.
+
+- **Absolution above ground therefore does not need building** — only enough to be *glimpsed* at the
+  moment of arrival. **R1 and R2 in `docs/FINDINGS.md` largely close.**
+- **The ending is a threshold, and that is the right shape.** A Hollow reaching the edge of the
+  living world and stopping there says more than any scene inside it could. Whether it can pass, or
+  wants to, or is seen — that is the ending, and it is the author's to write.
+
+### Reading the two together — the ascent's real sequence
+
+Floors 2–5 are internal (§12d). **Emerging means waking up** — in the facility, mid-procedure, on the
+table. So:
+
+| | |
+|---|---|
+| Floors 5 → 2 | the reading, climbed backwards, inside |
+| **Surfacing** | **you wake in the Memorian facility in the Rift** — where your life was taken |
+| **The reckoning** | The Memorians. **Not a fight** — see below |
+| Floor 1 | the Undercity, climbed |
+| **The end** | the exit into Absolution |
+
+### The Memorians do not fight **[LOCKED]**
+
+The Hollow arrives and **they do not fight it, because to them it is not a person.** It is a processed
+unit that has walked back in. No villain speech, no duel — **just people who did their job, and
+cannot understand why the job is standing in the room.**
+
+**This mirrors the Warden exactly, and inverts it.** Neither the Warden nor the Memorians fight the
+Hollow — the Warden **because it sees it**, the Memorians **because they cannot.** Mercy at one end of
+the climb, and at the other, not being seen at all. That symmetry should be preserved in the prose.
+
+**The banality is the horror**, and it is the payoff of §0b: an institution that has done this for
+generations, correctly, and filed it.
+
+**What the Hollow does about that is the ending** — which is exactly right for a game whose hidden
+karma has been reading every choice for two campaigns.

@@ -1223,3 +1223,27 @@ permadeath run. There is no `confirm` anywhere in the render layer.
   feel that the beat-by-beat design exists to create.
 - **Also move it**, because the adjacency is what causes the misclick — a confirmation alone treats
   the symptom.
+
+### 19.5 Levelling: stat points every level, max level 20 **[DECIDED 2026-08-27]**
+
+**Stats leave the draft and become their own per-level award**, D&D-style.
+
+| At each level-up | |
+|---|---|
+| **Stat points** | A fixed allowance you **spread across the sheet yourself** |
+| **The draft** | 1 of 3 — **new skills and upgrades to skills you own** |
+| **HP** | Continues to auto-grow from the hit die (existing behaviour) |
+| **Max level** | **20** |
+
+**What changes from the current design:** §4 had stat bumps competing *inside* the draft as one
+option among many. They now sit outside it — so every level gives you **both** a build choice and a
+character choice, and the draft becomes purely about your kit.
+
+**Why this is better here:** a stat point is now worth much more than it was. The **tempo gauge**
+(§16.1) means DEX literally buys turns, floor 2's WIS checks make WIS matter, and CON drives HP and
+AC. Forcing stats to compete with a new skill in a 1-of-3 would mean most players never take one —
+and a stat that is never taken may as well not exist.
+
+**A max level of 20 is new information** and it constrains several things that must be re-derived
+rather than assumed: the XP curve (§19.2), how many skills a class can accumulate, and the total
+stat points available across a run. **All three belong to the balance re-run.**

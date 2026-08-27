@@ -33,7 +33,7 @@ Nothing gets built until this is worked through.
 | A2 | ~~The spare mechanic~~ | **sparing costs the loot and the XP** — mercy against greed in one press | #2 #6 | `DONE` | `GAME-DESIGN.md` §18.3 |
 | A3 | ~~Death, revive & permadeath~~ | **the revive stays — you bought it with yourself.** Permadeath holds: you cannot reload, only pre-pay | #1 #6 | `DONE` | `GAME-DESIGN.md` §19.1 |
 | A4 | ~~XP comes from the enemy~~ | **fixed an inherited defect** — enemy XP was rolled at random from the *player's* XP. Now derived from the enemy's own strength + a base | #2 | `DONE` | `GAME-DESIGN.md` §19.2 |
-| **A4b** | **The level-up draft pool** — *re-queued* | Draft weighting was not answered (A4 redirected to XP). How the 1-of-3 pool weights new skills vs upgrades vs perks vs stat bumps, now that a DEX point buys turns via the tempo gauge | #2 | `QUEUED` | GAME-DESIGN |
+| **A4b** | ~~The level-up draft pool~~ | **Stats LEAVE the draft** — a per-level allowance you spread yourself, D&D-style. The draft is skills + upgrades. **Max level 20** | #2 | `DONE` | `GAME-DESIGN.md` §19.5 |
 | A5 | ~~The seed~~ | **shown, stored and enterable.** Unlocks reproducible bug reports, which the playtest plan had no way to get | #1 #8 | `DONE` | `GAME-DESIGN.md` §19.3 |
 | A6 | ~~Confirmations~~ | **confirm on abandon + slot overwrite, and MOVE Abandon** out of the top group — the adjacency is the actual cause | #8 | `DONE` | `GAME-DESIGN.md` §19.4 |
 
@@ -43,9 +43,9 @@ Nothing gets built until this is worked through.
 
 | # | Round | Covers | Blocks | Status | Lands in |
 |---|---|---|---|---|---|
-| B1 | **Absolution above ground** ⚠ | Reopened by the ascent (R1). What the last city looks like, how it is organised, what living in the last one feels like | #18 #13 | `QUEUED` | WORLD |
-| B2 | **House Grandmore as a place** ⚠ | Reopened by the ascent (R2). Where the Memorians work; where the ascent ends | #18 #13 | `QUEUED` | WORLD |
-| B3 | **The Memorians as a final encounter** ⚠ | R3. A boss with no descent counterpart — what it is, whether it is a fight at all, what beating it means | #18 #11 | `QUEUED` | GAME-DESIGN |
+| B1 | ~~Absolution above ground~~ | **Stratified by height** — vertical position is social position. But the ascent **ends at the threshold**, so the city is only glimpsed | #18 #13 | `DONE` | `WORLD.md` §14 |
+| B2 | ~~House Grandmore as a place~~ | **Not needed** — extraction happens in Memorian infrastructure **inside the Rift**. Also closes the old "where is the body" question | #18 #13 | `DONE` | `WORLD.md` §14 |
+| B3 | ~~The Memorians as a final encounter~~ | **Not a fight.** They cannot see it as a person. Mirrors the Warden inversely | #18 #11 | `DONE` | `WORLD.md` §14 |
 | B4 | **The five bosses as characters** | Names (all still placeholders — the final boss ships as `'Jorginho Matagal'`), personality, what each says, what each wants | #11 #13 | `QUEUED` | WORLD / GAME-DESIGN |
 | B5 | **The 24 enemy families** | Which have identity beyond a name; nine still carry legacy Java joke names; what each *is* now the world exists | #9 #13 | `QUEUED` | GAME-DESIGN |
 | B6 | **The 24 conditions** | Whether all 24 earn their place; which are inert; their vocabulary now the rename is happening; `exposed` is a 25th with no design entry | #1 #6 | `QUEUED` | GAME-DESIGN |
@@ -88,6 +88,7 @@ _Newest first. Every round that has been asked and written down._
 
 | Date | Round | Outcome |
 |---|---|---|
+| 2026-08-27 | **A4b + B1–B3** — levelling & the ascent's end | Stats leave the draft (per-level allowance, **max level 20**); Absolution is stratified by height but only **glimpsed**, since the ascent ends at the Undercity threshold; **extraction happens in the Rift**, closing R1/R2 and the old body-location question; the Memorians **do not fight**. `WORLD.md` §14 / `GAME-DESIGN.md` §19.5 |
 | 2026-08-27 | **A3–A6** — death, XP, seeds, confirms | Revive stays (bought with yourself); **enemy XP now derives from the ENEMY, fixing a feedback loop where it was rolled from the player's own XP**; the seed is shown/stored/enterable; Abandon gets a confirm and moves. `GAME-DESIGN.md` §19. **A4b re-queued.** |
 | 2026-08-27 | **A1 + A2** — recovery & sparing | Rest restores HP **and charges** and is the build-management point; chests carry consumables/gear + a rare unique; **sparing costs loot and XP**; **healing becomes scarce** (potion fold-in flagged for confirmation). `GAME-DESIGN.md` §18 |
 | 2026-08-27 | Hollow ascent | It **rises** 5→1 to reach the Memorians; the Warden shows mercy instead of judgement; same floors reversed; built bidirectionally. **Opened R1–R5.** `WORLD.md` §13 |
