@@ -46,7 +46,8 @@ Nothing gets built until this is worked through.
 | B1 | ~~Absolution above ground~~ | **Stratified by height** — vertical position is social position. But the ascent **ends at the threshold**, so the city is only glimpsed | #18 #13 | `DONE` | `WORLD.md` §14 |
 | B2 | ~~House Grandmore as a place~~ | **Not needed** — extraction happens in Memorian infrastructure **inside the Rift**. Also closes the old "where is the body" question | #18 #13 | `DONE` | `WORLD.md` §14 |
 | B3 | ~~The Memorians as a final encounter~~ | **Not a fight.** They cannot see it as a person. Mirrors the Warden inversely | #18 #11 | `DONE` | `WORLD.md` §14 |
-| B4 | **The five bosses as characters** | Names (all still placeholders — the final boss ships as `'Jorginho Matagal'`), personality, what each says, what each wants | #11 #13 | `QUEUED` | WORLD / GAME-DESIGN |
+| B4 | ~~The bosses as characters~~ | Kingpins hold **domains**; the Reflection **speaks as you**; the Sin **accuses**; the Hollow Self is **calm and right**. Names still the author's | #11 #13 | `DONE` | `WORLD.md` §15 |
+| **B4b** | **Talking to bosses** — *new, raised by the author* | Bosses are agents, so the player could **converse** with them. Free text or options? Does it cost a turn? Can it change the fight, or only what you learn? | #6 #11 #12 | `QUEUED` | GAME-DESIGN |
 | B5 | **The 24 enemy families** | Which have identity beyond a name; nine still carry legacy Java joke names; what each *is* now the world exists | #9 #13 | `QUEUED` | GAME-DESIGN |
 | B6 | **The 24 conditions** | Whether all 24 earn their place; which are inert; their vocabulary now the rename is happening; `exposed` is a 25th with no design entry | #1 #6 | `QUEUED` | GAME-DESIGN |
 | B7 | **Elements & resistances** | Seven elements — do they interact, resist, combo? Currently mostly flavour | #2 #9 | `QUEUED` | GAME-DESIGN |

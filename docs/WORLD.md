@@ -740,3 +740,57 @@ generations, correctly, and filed it.
 
 **What the Hollow does about that is the ending** — which is exactly right for a game whose hidden
 karma has been reading every choice for two campaigns.
+
+---
+
+## 15. The bosses as characters **[LOCKED 2026-08-27]**
+
+Mechanics existed; identities did not. Names remain **the author's to write** — every name in
+`boss.ts` is a placeholder, and the final boss currently ships as `'Jorginho Matagal'`.
+
+### The Kingpins — territorial powers of the Undercity
+
+**There are several, and each holds his own domain** — a Kingpin controls a part of the Undercity,
+and the others control theirs. The mission names one target; the rest are still out there, and they
+are all in on the arrangement with Grandmore (§4).
+
+This explains the plural in the original text and how floor 1 ends: you defeat *one* Kingpin in his
+own territory, and it changes nothing about the machine he is part of.
+
+### The Reflection (floor 2) — you, mid-fracture, and it speaks as you
+
+Floor 2 is **fracture**: the mind coming apart into pieces that argue with each other (§6). **The
+Reflection is one of those pieces**, wearing your face, using your kit — and **speaking in your
+voice**, saying things you would recognise.
+
+It is **the first of the five mirror-encounters** (§6: Mirror-Self → The Reflection → Echo of You →
+The Hollowed → Hollow Self), and the first time the game turns you on yourself. **It should know
+things only you know.**
+
+### The Sin (floor 3) — accusatory. It blames you.
+
+The floor-3 boss is your most-indulged sin made flesh, in one of four identities: **The Desecration,
+The Cruelty, The Avarice, The Delusion.**
+
+**It confronts you with what you did and holds you responsible.** It names specific choices,
+accurately, and you cannot deny any of it.
+
+> **This is the only place karma can be spoken aloud without ever being metered.** §13 forbids a
+> meter or a number anywhere — but an enemy that *accuses you of specific acts* tells you exactly
+> where your Nature has gone, in the only register the design permits. Four identities means four
+> different accusations.
+
+### The Hollow Self (floor 5) — calm, and already won
+
+**No rage. No taunting. It does not threaten because it does not need to.** It has been where you are
+going and it is not afraid of you. It is simply what is left.
+
+**It should be right about everything it says.** §7 records that beating it means *acknowledging* it
+— so the fight is less "defeat an enemy" and more "refuse to agree with something telling the truth."
+Calm is far worse than rage here, and winning **unlocks playing as it**, which makes the unlock a
+confession rather than a reward.
+
+### The Warden and the Memorians
+
+Already recorded: the Warden judges on the descent and **shows the Hollow mercy** on the ascent
+(§13); the Memorians **do not fight** because they cannot see a person (§14).
