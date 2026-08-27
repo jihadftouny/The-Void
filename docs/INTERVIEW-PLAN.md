@@ -47,7 +47,7 @@ Nothing gets built until this is worked through.
 | B2 | ~~House Grandmore as a place~~ | **Not needed** — extraction happens in Memorian infrastructure **inside the Rift**. Also closes the old "where is the body" question | #18 #13 | `DONE` | `WORLD.md` §14 |
 | B3 | ~~The Memorians as a final encounter~~ | **Not a fight.** They cannot see it as a person. Mirrors the Warden inversely | #18 #11 | `DONE` | `WORLD.md` §14 |
 | B4 | ~~The bosses as characters~~ | Kingpins hold **domains**; the Reflection **speaks as you**; the Sin **accuses**; the Hollow Self is **calm and right**. Names still the author's | #11 #13 | `DONE` | `WORLD.md` §15 |
-| **B4b** | **Talking to bosses** — *new, raised by the author* | Bosses are agents, so the player could **converse** with them. Free text or options? Does it cost a turn? Can it change the fight, or only what you learn? | #6 #11 #12 | `QUEUED` | GAME-DESIGN |
+| **B4b** | ~~Talking to bosses~~ | **Free text, free to use, and it can change the fight** through engine-defined outcomes only. ⚠ Exploit flagged + a concession-cap proposed | #6 #11 #12 | `DONE` | `GAME-DESIGN.md` §20 |
 | B5 | **The 24 enemy families** | Which have identity beyond a name; nine still carry legacy Java joke names; what each *is* now the world exists | #9 #13 | `QUEUED` | GAME-DESIGN |
 | B6 | **The 24 conditions** | Whether all 24 earn their place; which are inert; their vocabulary now the rename is happening; `exposed` is a 25th with no design entry | #1 #6 | `QUEUED` | GAME-DESIGN |
 | B7 | **Elements & resistances** | Seven elements — do they interact, resist, combo? Currently mostly flavour | #2 #9 | `QUEUED` | GAME-DESIGN |
@@ -89,6 +89,7 @@ _Newest first. Every round that has been asked and written down._
 
 | Date | Round | Outcome |
 |---|---|---|
+| 2026-08-27 | **B4 + B4b** — bosses & talking | Kingpins hold domains; the Reflection speaks as you; the Sin accuses; the Hollow Self is calm and right. **New feature: you can TALK to bosses in free text**, free of turn cost, and it can change the fight through engine-defined outcomes. `WORLD.md` §15 / `GAME-DESIGN.md` §20 |
 | 2026-08-27 | **A4b + B1–B3** — levelling & the ascent's end | Stats leave the draft (per-level allowance, **max level 20**); Absolution is stratified by height but only **glimpsed**, since the ascent ends at the Undercity threshold; **extraction happens in the Rift**, closing R1/R2 and the old body-location question; the Memorians **do not fight**. `WORLD.md` §14 / `GAME-DESIGN.md` §19.5 |
 | 2026-08-27 | **A3–A6** — death, XP, seeds, confirms | Revive stays (bought with yourself); **enemy XP now derives from the ENEMY, fixing a feedback loop where it was rolled from the player's own XP**; the seed is shown/stored/enterable; Abandon gets a confirm and moves. `GAME-DESIGN.md` §19. **A4b re-queued.** |
 | 2026-08-27 | **A1 + A2** — recovery & sparing | Rest restores HP **and charges** and is the build-management point; chests carry consumables/gear + a rare unique; **sparing costs loot and XP**; **healing becomes scarce** (potion fold-in flagged for confirmation). `GAME-DESIGN.md` §18 |

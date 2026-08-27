@@ -1247,3 +1247,65 @@ and a stat that is never taken may as well not exist.
 **A max level of 20 is new information** and it constrains several things that must be re-derived
 rather than assumed: the XP curve (§19.2), how many skills a class can accumulate, and the total
 stat points available across a run. **All three belong to the balance re-run.**
+
+---
+
+## 20. Talking to bosses **[DECIDED 2026-08-27]**
+
+Bosses are agents with run-memory (§17.3), so **the player can talk to them, and they answer.**
+
+| | |
+|---|---|
+| **How** | **Free text.** A field during a boss fight — you type whatever you want |
+| **Effect** | It **can change the fight**, but only through **engine-defined outcomes** |
+| **Cost** | **Free.** Talk as much as you like; it does not consume your turn |
+
+### Why free text is safe here specifically
+
+The engine writes the **actions** (§16 — the LLM-authored-choices plan was dropped). So talk drives
+**no mechanic directly** and cannot corrupt the rules. This is the one place free text belongs, and
+**typing at the thing wearing your own face** is a materially different act from picking a menu line.
+
+### How it can change the fight without the model touching rules
+
+**Same shape as the boss-action decision (§17.3): the model *selects*, the engine *defines the set*.**
+
+```
+the engine owns   WHAT a conversation can possibly earn:
+                    pause · reveal a weakness · drop a mechanic · accept a surrender
+the model judges  WHETHER this conversation earned one
+```
+
+The engine validates every outcome, exactly as it validates a boss's chosen action. **Rules stay
+engine-owned; consequence stays real.**
+
+### ⚠ Free talk + earnable outcomes is an exploit, and needs a cap
+
+**Flagged, with a proposed fix the author may overrule.** If talking is free *and* can earn a
+mechanical concession, the optimal play is to **talk repeatedly until the model grants one.** That is
+not a hypothetical — it is simply the dominant strategy, and it would also mean a model call per
+line with no bound.
+
+**Proposed mitigation — a concession budget, not a talk budget:**
+
+1. **A boss concedes at most once per fight** (probably exactly once), no matter how much is said.
+   Talking stays free; the *reward* is what is capped.
+2. **The model judges the conversation as a whole**, not line by line — so persistence alone earns
+   nothing and what you actually said is what counts.
+3. **A boss may become less willing** if its time is wasted. Repetition should cost goodwill, which
+   is both an anti-spam measure and good characterisation.
+4. **Rate-limit the model calls** regardless, so a player holding down the key cannot spawn unbounded
+   inference.
+
+**This preserves the author's decision** — talk is free, and you are never punished for speaking —
+while removing the spam-until-concession strategy.
+
+### Consequences to handle
+
+- **Latency.** Every line is a model round-trip, which is exactly what "bookends only"
+  (`UI-DESIGN.md` §2) exists to avoid. Boss fights are already slower (§17.3); this compounds it.
+  Acceptable — a boss *should* feel different — but it must be play-tested, not assumed.
+- **The battle screen needs a text input**, which no other screen has. `battle-screen` (#6) must
+  account for it, including how you dismiss it to just fight.
+- **It must degrade.** With no model available, the talk affordance is simply absent and the fight is
+  fully playable — the same rule the narrator and the canvas already follow.
