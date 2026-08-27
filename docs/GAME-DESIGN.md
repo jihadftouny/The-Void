@@ -87,8 +87,10 @@ Each is a different way of confronting the descent. Signature twist in **bold**.
 - **XP-driven and frequent:** every kill grants XP; you level up **several times per floor** (retune
   the current act-gated XP thresholds). Reuses the existing XP system.
 - **Each level-up = auto HP + a draft.** Max-HP **auto-grows** (rolled from the hit die, deterministic)
-  so survivability keeps pace; *plus* you **draft 1 of 3** offered options. The narrator frames the
-  draft thematically ("the Void offers you…"), grammar-constrained to the valid option set.
+  so survivability keeps pace; *plus* you **draft 1 of 3** offered options. **[CORRECTED §16 /
+  §19.5]** — **the engine writes the options**; the narrator may *frame* the moment in prose but does
+  not author or label the choices, and **stats are no longer in the draft** (a per-level allowance
+  instead). The earlier "grammar-constrained to the valid option set" is superseded.
 - **Draft pool = class kit + shared pool:** weighted toward your class (new signature skills; or
   upgrades to owned skills — +damage / +charge / add a condition / cheaper cost), mixed with universal
   perks (max charges, crit, evasion, lifesteal…) and **stat bumps** (investing a stat point is one
@@ -139,7 +141,7 @@ insanity, push, aired. Activate the dormant 13:
   | Stat | Augment | Deprivation | Twist |
   |---|---|---|---|
   | STR | **Strong** (+dmg) | **Weak** (−dmg) | — |
-  | DEX | **Quick** (+evasion) | **Slow** (−evasion) | *twist: Quick nudges initiative earlier, Slow later* |
+  | DEX | **Quick** (+evasion) | **Slow** (−evasion) | *twist: drives the **tempo gauge** (§16.1). There is **no initiative system** (§14.8)* |
   | CON | **Hardy** (+max-HP/AC) | **Frail** (−HP/AC) | — |
   | INT | **Sharp** (+skill power) | **Dull** (−skill power) | — |
   | WIS | **Lucid** (+resist) | **Clouded** (−resist) | *twist: Lucid sees through floor-2 illusions; Clouded is fooled* |
@@ -171,8 +173,9 @@ insanity, push, aired. Activate the dormant 13:
     relics carry a floor's motif (reflection F2, ash/burn F3, grace F4, void/corruption F5, grit F1)
     for coherence with the descent, but draw from a **shared pool** rather than being hard-gated to
     one floor. Variety of a big pool + thematic tie to the world.
-  - **Acquisition: all sources** **[DECIDED]** — boss rewards, hidden chests, AND sacrifice-deals
-    (pay a piece of yourself for a relic). Fits the ~50/50 found-vs-deals economy (§11).
+  - **Acquisition: SACRIFICE-DEALS ONLY** **[DECIDED 2026-08-26 — §14.1, supersedes this line]** —
+    relics are never dropped, never in a chest, never a boss reward. A build is literally made of what
+    you gave up. *(This row previously read "all sources … ~50/50 found-vs-deals"; both are wrong now.)*
   - **Relics are karma-NEUTRAL** **[DECIDED]** — pure build pieces; karma stays in combat behavior,
     sacrifice-deals, and events. (No karma-reactive relics — the seed "Halo Fragment" and "Warden's
     Verdict" below are reworked to mechanical, not karma, effects.)
@@ -493,16 +496,18 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 - **Flavor systems: per-floor narrator prompts + boss agents with run-memory.** Each floor has its
   own voice/tone/imagery; each of the 5 bosses is an agent that remembers what you did. Regular
   enemies use lighter templates (not full personality cards, for now). **[DECIDED]**
-- **Local, offline, packaged desktop** (Electron + node-llama-cpp, GGUF 3–4B, grammar-constrained).
-  See ROADMAP v2 for the model/packaging detail. **[DECIDED — inherited]**
+- **Packaged desktop** (Electron + node-llama-cpp, GGUF **4B only**). **Offline after a one-time
+  first-run download**, not bundled; **a GPU is required**. See **`docs/SHIPPING.md`** — not ROADMAP v2.
+  **[UPDATED 2026-08-26/27]**
 - **Engine-authoritative & headlessly testable** against a fake model; determinism preserved. **[DECIDED]**
 
 ### Notes
 - The narrator receives **floor context + hidden karma state** and colors everything accordingly —
   this is how the "ambiguous hints" for karma (§7) and the "subtle theme" (§2) are delivered.
-- Current `src/llm/narrate.ts` is a pure prompt-builder stub; real model integration, streaming,
-  grammar-constrained choices, the engine tool-registry, floor prompts, and boss agents are all still
-  to build (ROADMAP N-series).
+- Current `src/llm/narrate.ts` is a pure prompt-builder stub. Still to build: real model integration,
+  streaming, per-floor prompts, beat significance, karma-in-the-prompt, and boss agents.
+  **~~grammar-constrained choices~~ and ~~the engine tool-registry~~ are DROPPED** — the engine writes
+  the choices (§16), which shrinks M11 substantially.
 
 ---
 
@@ -620,7 +625,8 @@ milestone's plan:
 - **Content authoring** (co-written): floor prose, boss dialogue, the relic/unique catalog, the full
   feat list, consumable catalog — M6/M8/M10/M12/M13, author's final voice.
 - **Boss mechanics** per floor — M12. **Grace/cast-down thresholds** + **balance targets** (needs your
-  difficulty-feel input) — M10/M15. **Slot list** confirm + **turn/initiative** model — M4/M5.
+  difficulty-feel input) — M10/M15. ~~**Slot list** confirm~~ **CLOSED §14.7 (seven slots)** ·
+  ~~**turn/initiative** model~~ **CLOSED §14.8 / §16.1 (no initiative; tempo gauge)**.
 - **Enemy scaling** (CR formula vs per-floor budget) + **affix list** — M8.
 
 ---
