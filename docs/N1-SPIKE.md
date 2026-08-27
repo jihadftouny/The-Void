@@ -1,5 +1,11 @@
 # N1 — Local LLM inference spike
 
+> **⚠ HISTORICAL RECORD (2026-08-02). Its measurements stand; its RECOMMENDATION does not.**
+> This spike recommended shipping both a 4B and a 1.7B and auto-selecting by hardware. That was
+> **rejected on 2026-08-26**: the game ships **4B only**, and the **minimum spec now requires a
+> GPU**. The no-GPU figures below are why — not a supported configuration.
+> See `CLAUDE.md` and `docs/GAME-DESIGN.md` §14.8.
+
 The one question this answers: **can a small local model stream narration fast enough, and return
 strictly-structured choices, on a typical machine?** That decides whether the whole local-LLM design
 is viable and which model + minimum spec we commit to.

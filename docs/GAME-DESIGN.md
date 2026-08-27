@@ -41,7 +41,8 @@ you *do* — everything you do — is read by the Void and decides how it ends.
 ## 3. Core loop & run structure **[DECIDED]**
 
 - **A run = descend 5 floors, or die trying.** Each floor is a sequence of encounters (combat,
-  rest, shop, events, chests) ending in a **floor boss**, then descent to the next floor.
+  rest, **sacrifice-deals**, events, chests) ending in a **floor boss**, then descent to the next
+  floor. *(An earlier draft said "shop" — there are no shops and no currency; §11.)*
 - **Death restarts the run.** Roguelike: you lose your build and items on death. What persists is
   **unlocks** (§8) — new classes, skills, items, enemies become available for future runs — but you
   never start mechanically *stronger*; you win on skill and knowledge, not grind.

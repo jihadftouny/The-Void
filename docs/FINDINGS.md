@@ -106,7 +106,7 @@ on the grounds that the game is a descent and never goes up. `docs/WORLD.md` §1
 | D1 | Four different asset totals in circulation (39 / 52 / 53) | `OPEN` |
 | D2 | `GAME-DESIGN.md` has **two §14s**; §15 still says "the brainstorm is essentially complete" | `OPEN` |
 | D3 | Three dead `[PROPOSAL]` tags to retag or delete (P2, P3, P5) | `OPEN` |
-| D4 | `.env.example` still says the model is "bundled" | `OPEN` |
+| D4 | ~~`.env.example` says "bundled"~~ | `FIXED` 2026-08-26 |
 | D5 | `PROGRESS.md` still describes the shell as "mobile-first, portrait 540×1080" | `OPEN` |
 | D6 | `HUMAN-CHECKS.md` stale since 2026-08-14; 5 un-ticked author rulings incl. flee 25% vs 35% | `OPEN` |
 | D7 | 18 stale worktrees on disk | `OPEN` |

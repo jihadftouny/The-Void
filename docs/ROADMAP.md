@@ -34,8 +34,9 @@ intent and this file is reconciled to it.
 
 ### Stack & targets (from `CLAUDE.md`)
 Node 18+, TypeScript 5 (strict), Vite 6, Vitest 2, Kaplay (atmosphere), DOM (narrative text).
-Desktop packaging: **Electron + node-llama-cpp** (GGUF 3–4B, grammar-constrained). Min spec: typical
-laptop, no GPU. Logic + LLM cores run and are tested **headlessly in Node** (fake model — never real
+Desktop packaging: **Electron + node-llama-cpp** (GGUF 4B, grammar-constrained). **Min spec: a GPU is
+required** — decided 2026-08-26; the 1.7B fallback was rejected and 4B is the only tier shipped
+(`CLAUDE.md`, `GAME-DESIGN.md` §14.8). *This line previously said "typical laptop, no GPU".* Logic + LLM cores run and are tested **headlessly in Node** (fake model — never real
 inference in tests).
 
 ### ✅ What already exists (completed infrastructure)
@@ -206,9 +207,12 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 
 ### M17 — Package & ship (itch)
 - **Goal:** A double-click game.
-- **Done when:** installers (Win/macOS/Linux); **model bundled** in the installer with a first-run
-  load/download UX; itch.io release page; crash/telemetry decision. (Folds v2 N10.)
-- **Key decisions:** bundle vs. first-run download of the model; store page + pricing.
+- **Done when:** installers (Win/macOS/Linux); **the model DOWNLOADED once on first run** (decided
+  2026-08-25 — not bundled) with honest progress and a real failure path; itch.io release page.
+  (Folds v2 N10.)
+- **Key decisions — ALL NOW SETTLED, see `docs/SHIPPING.md`:** ~~bundle vs. first-run download~~
+  → **download**; ~~store page + pricing~~ → **free, optional donation, itch app handles updates**;
+  ~~crash/telemetry~~ → **none**.
 
 ---
 
