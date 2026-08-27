@@ -29,7 +29,7 @@ Nothing gets built until this is worked through.
 
 | # | Round | Covers | Blocks | Status | Lands in |
 |---|---|---|---|---|---|
-| A1 | ~~The rest & recovery loop~~ | rest heals HP **and charges**, and is the build-management point; chests = consumables/gear + rare unique; **healing becomes scarce** | #2 #6 | `DONE` | `GAME-DESIGN.md` §18 |
+| A1 | ~~The rest & recovery loop~~ | rest heals HP **and charges**; chests = consumables/gear + rare unique; **healing becomes scarce** | #2 #6 | `DONE (partial)` — **the potion fold-in still needs confirming** (FINDINGS A1b) | `GAME-DESIGN.md` §18 |
 | A2 | ~~The spare mechanic~~ | **sparing costs the loot and the XP** — mercy against greed in one press | #2 #6 | `DONE` | `GAME-DESIGN.md` §18.3 |
 | A3 | ~~Death, revive & permadeath~~ | **the revive stays — you bought it with yourself.** Permadeath holds: you cannot reload, only pre-pay | #1 #6 | `DONE` | `GAME-DESIGN.md` §19.1 |
 | A4 | ~~XP comes from the enemy~~ | **DECIDED, NOT BUILT** — `enemy.ts:117` still rolls XP from `playerXp`. Ruling: derive it from the enemy's own strength + a base | #2 | `DONE` *(decision only)* | `GAME-DESIGN.md` §19.2 |
@@ -47,7 +47,7 @@ Nothing gets built until this is worked through.
 | B2 | ~~House Grandmore as a place~~ | **Not needed** — extraction happens in Memorian infrastructure **inside the Rift**. Also closes the old "where is the body" question | #18 #13 | `DONE` | `WORLD.md` §14 |
 | B3 | ~~The Memorians as a final encounter~~ | **Not a fight.** They cannot see it as a person. Mirrors the Warden inversely | #18 #11 | `DONE` | `WORLD.md` §14 |
 | B4 | ~~The bosses as characters~~ | Kingpins hold **domains**; the Reflection **speaks as you**; the Sin **accuses**; the Hollow Self is **calm and right**. Names still the author's | #11 #13 | `DONE` | `WORLD.md` §15 |
-| **B4b** | ~~Talking to bosses~~ | **Free text, free to use, and it can change the fight** through engine-defined outcomes only. ⚠ Exploit flagged + a concession-cap proposed | #6 #11 #12 | `DONE` | `GAME-DESIGN.md` §20 |
+| **B4b** | ~~Talking to bosses~~ | **Free text, free to use, changes the fight** via engine-defined outcomes | #6 #11 #12 | `DONE (partial)` — **the concession cap is still OPEN** (FINDINGS B4c) | `GAME-DESIGN.md` §20 |
 | B5 | ~~The 24 enemy families~~ | **All rewritten against the world**, not just the nine broken ones. ⚠ **Must land before art batch 3** — **30** sprites prompt from these | #9 #13 | `DONE` | `GAME-DESIGN.md` §21.3 |
 | B6 | ~~The conditions~~ | **25, and the six stat pairs stay** — learnable by pattern, and what makes stats matter in a fight. `exposed` is the 25th: **fix the doc, not the code** | #1 #6 | `DONE` | `GAME-DESIGN.md` §21.1 |
 | B7 | ~~Elements & resistances~~ | **Resistances only, no combos.** Depth lives in conditions, tempo and builds | #2 #9 | `DONE` | `GAME-DESIGN.md` §21.4 |
@@ -75,10 +75,10 @@ work — see `docs/FINDINGS.md` and `docs/PLAN.md`.
 |---|---|
 | Generated-art & music licence (S3) | **Verification** — and it blocks shipping |
 | Canvas + 4B inference on the min machine (B9) | **Measurement**, before #7 |
-| `jsdom` vs `node` test environment (B7) | **Technical** — decide inside #1 |
+| `jsdom` vs `node` test environment (B7) | **Technical** — decide inside #1. Now listed explicitly as change 8 in `PLAN.md` #1, so it cannot be missed |
 | Grace/cast-down thresholds (B12), enemy scaling (B14) | **Balance numbers** — belong to the re-run in #2 |
 | Localisation (N8) | **Parked** — English-only, stated on the store page |
-| G1–G8 | **Bugs** — fixes already specified in FINDINGS §4 |
+| G3–G8 | **Bugs** — fixes specified in FINDINGS §4. ⚠ **G1 and G2 have NO fix specified yet** |
 | R4 second prose pass, R5 direction-aware hook | **Build work** — #13 and #1 |
 
 ---

@@ -391,7 +391,8 @@ system, and it means the Neuromancer's own office is the one that performs the v
 
 ## 5. What the houses know **[LOCKED]**
 
-**They know exactly.** The floors are named in their archives. Memorians debrief what returns. The
+**They know exactly.** The floors are named in their archives. Memorians **record their own procedure** (§0b — the archive is a *laboratory notebook*, not a
+debrief of survivors). The
 descent has been documented, studied and managed by these bloodlines for generations.
 
 **The Arch-Mage knew precisely what he was ordering you into.** The mission is a knowing betrayal
@@ -525,9 +526,11 @@ instrument, no report from the edge. Someone goes into the Rift and that is the 
 
 This is the necessary consequence of the Void being a condition (§6): there is no *there* to look
 at. It also means:
-- **The archives in §5 are built from survivors, not observers.** The houses know the stages because
-  the few who came back all described the same ones — which makes the record a **debrief literature**
-  rather than a science, and makes it correct without anyone ever having verified it.
+- **The archives in §5 are records of their own work** (§0b/§0c) — **not** debriefs of survivors. The
+  Memorians know the stages because they **produce** them, generation after generation. *(An earlier
+  draft of this bullet called it a "debrief literature built from survivors"; that predates §0b and is
+  wrong — §14 establishes that nobody who could correct the folklore ever comes back up.)* The record
+  is still correct, and still useless to the person inside it.
 - **Nobody witnessed your betrayal** (§4) and nobody could. Whatever the Kingpin and Grandmore
   arranged, the moment you went in, it stopped being anything anyone can point at.
 - **The narrator cannot cut away.** There is no exterior shot available in this game — no scene

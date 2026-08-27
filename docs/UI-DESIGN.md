@@ -8,7 +8,9 @@ _Authoritative record of the UI scope decided in the 2026-08-24 scope interview.
 
 ## 0. Why this exists
 
-The engine is finished and merged (M1–M15, 960 tests). The UI is not. Today the battle screen is a
+The **v2** engine is merged (M1–M15). **The v3 engine work is NOT** — `PLAN.md` #1 and #2 (floor
+mechanics, equip-as-input, the tempo gauge, the XP fix) come *before* anything in this document, and
+`#6 battle-screen` must not start until #2 lands. **This document is the render layer only.** Today the battle screen is a
 220-pixel sidebar of plain text lines plus a flat row of buttons: you press **Fight**, a line of
 narration replaces the last one, and two numbers change in the corner. It does not read as a fight,
 and it hides almost everything the engine actually computes — 25 status conditions, dice rolls,
@@ -40,12 +42,14 @@ line, with the full log expandable.
 │ JIHAD  Enforcer lv4   │  ▸ Fight             │
 │ HP █████████ 41/52    │    Cast              │
 │ ⚡ 3/5   Rage 2       │    Item              │
-│ ⌁ Guarded (2)         │    Item / Spare      │
+│ ⌁ Guarded (2)         │    Spare / Run       │
 │ tempo ▆▆▆▆░ 0.8       │    Talk (boss only)  │
 └───────────────────────┴──────────────────────┘
 ```
 
-Everything in that frame already exists in engine state and is simply not being shown today: the
+Everything in that frame **except the tempo gauge and Talk** already exists in engine state and is
+simply not being shown today (**those two are decided but unbuilt** — `statEffects.ts` still returns 0
+and `boss.ts` has no LLM references): the
 enemy's family and affix, both HP pools, the active conditions on both sides with their remaining
 duration, skill charges, and the class build-resource.
 
@@ -186,7 +190,13 @@ built from the desktop UI rather than from a second divergent one.
 
 ---
 
-## 9. Art generation **[DECIDED in principle, OPEN on specifics]**
+## 9. Art generation — **SUPERSEDED by `docs/ART-BIBLE.md`, kept for history**
+
+> **⚠ DO NOT BUILD FROM THIS SECTION.** `ART-BIBLE.md` is the authority on everything visual.
+> Everything below is the **painterly** era and is wrong in at least four ways: the style is now
+> **32-bit-era 2D pixel**; the budget is **~$10.45 batched**, not $50–75; the Ash City probe it
+> praises has an **orange horizon glow that is explicitly wrong** (the fire is out); and item icons
+> are **bespoke per item**, not slot-and-rarity.
 
 Art is **AI-generated** through Google AI Studio, using the engineer's own API key, with **roughly
 three variations of every asset** produced in one large batch for the engineer to choose from.

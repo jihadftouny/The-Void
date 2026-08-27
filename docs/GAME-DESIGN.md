@@ -68,8 +68,7 @@ you *do* — everything you do — is read by the Void and decides how it ends.
 - **Karma = thematic flavor only:** classes *lean* toward karma axes in tone/story (Penitent→reverence,
   Hollow→desecration) but have **no mechanical karma coupling**, so class balance stays independent of
   the pillar. **[DECIDED]**
-- **Frequent in-run growth:** level up often; each level offers a **choice** (a new/upgraded skill or a perk) **plus a separate stat allowance you spread yourself** (§19.5 — stats left the draft; max level 20)
-  stat bump, or a perk). Roguelike "snowball your build" loop, replacing the 4-total act-gated
+- **Frequent in-run growth:** level up often; each level offers a **choice** (a new/upgraded skill or a perk) **plus a separate stat allowance you spread yourself** (§19.5 — stats left the draft; max level 20). Roguelike "snowball your build" loop, replacing the 4-total act-gated
   level-ups. **[DECIDED]**
 - Six D&D stats stay (STR/DEX/CON/INT/WIS/CHA), rolled at character creation. **[DECIDED — inherited]**
 
@@ -88,7 +87,7 @@ Each is a different way of confronting the descent. Signature twist in **bold**.
 - **XP-driven and frequent:** every kill grants XP; you level up **several times per floor** (retune
   the current act-gated XP thresholds). Reuses the existing XP system.
 - **Each level-up = auto HP + a draft.** Max-HP **auto-grows** (rolled from the hit die, deterministic)
-  so survivability keeps pace; *plus* you **draft 1 of 3** offered options. **[CORRECTED §16 /
+  so survivability keeps pace; *plus* you **draft 1 of 3** offered options. **[CORRECTED §10 /
   §19.5]** — **the engine writes the options**; the narrator may *frame* the moment in prose but does
   not author or label the choices, and **stats are no longer in the draft** (a per-level allowance
   instead). The earlier "grammar-constrained to the valid option set" is superseded.
@@ -475,6 +474,13 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 
 ## 10. The LLM narration layer
 
+> **⚠ PARTLY SUPERSEDED by §17.3 and §20 (2026-08-27).** The ruling below — *the engine writes the
+> choices, and grammar-constrained selection is dropped* — **still holds for ordinary play.** But
+> **bosses are the exception**: a boss **selects its own actions**, grammar-constrained to an
+> engine-computed legal set (§17.3), and the player can **talk to bosses in free text** (§20).
+> So M11 shrinks **less** than the text below claims: grammar constraints and free-text handling
+> both return for boss encounters, and there is a **per-boss-turn inference cost**.
+
 ### Decided
 - **Role: narrate ONLY. The engine writes the choices.** **[DECIDED 2026-08-25 — REVERSES the
   earlier decision]** The engine emits the legal action set and the UI renders it; the model writes
@@ -589,6 +595,9 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 
 ## 14. What exists vs. what to build (scope map)
 
+> **⚠ §14.1–§14.11 are NOT subsections of this section.** They live under **§16b** (the 2026-08-26
+> interview) and cover loot, karma, equipment, floors and the model tier. Search for `### 14.1`.
+
 | System | Today | Target | Gap size |
 |---|---|---|---|
 | Core dice combat | ✅ works | keep; add enemy to-hit rolls, `cast` action | small |
@@ -651,7 +660,13 @@ Docs like this one are exempt from the loop; the code that implements them is no
 
 ---
 
-## 16. Decisions from the 2026-08-26 design interview
+## 16b. Decisions from the 2026-08-26 design interview
+
+> **⚠ NUMBERING NOTE.** This section's subsections are numbered **§14.1–§14.11** and
+> **§16.1–§16.2** for historical reasons — they are **NOT** children of §14 (the scope map) or of
+> §16 (build-order principle). Every `§14.x` and `§16.x` reference in this repo points *here*.
+> The numbers are unique anchors: search for the exact string (e.g. `### 14.7`) rather than
+> navigating by section hierarchy.
 
 Closing the Tier-2 items in `docs/SCOPE-AUDIT.md`. Everything here is **[DECIDED 2026-08-26]**.
 

@@ -14,7 +14,7 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
   #1 engine-foundations ─┬─> #2 floor-mechanics ─┬─> #6 battle-screen ─┬─> #7 canvas-layer
                          │   (+ balance re-run)  │                     └─> #8 screens-restyle
                          └─> #13 content authoring
-  #3 art-pipeline ───────┬─> #5 art batches (4, gated) ──> #7 canvas-layer
+  #3 art-pipeline ───────┬─> #5 art batches (5, gated) ──> #7 canvas-layer
   #4 probe 04 + approve ─┘
   #9 #10 #11 #12 #14 — independent, sequenced by judgement
 ```
@@ -35,6 +35,10 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 4. **Floor-4 karma counts double** in the verdict. No new state.
 5. **Rename conditions** to the design vocabulary (§14.4). Needs a `SAVE_VERSION` bump + migration.
 6. **Redefine Quick/Slow** as the **tempo gauge** (§16.1) — `initiativeOrderTwist` is a dead no-op.
+7. **Rework the level-up draft** (§19.5) — remove `stat` from `draft.ts` `CATEGORY_WEIGHTS`, add the
+   **per-level stat allowance**, and add a **level cap of 20** (none exists in `src/` today).
+8. **Decide `jsdom` vs `node`** as the test environment — once, here, or three UI units each invent
+   their own override.
 
 **#2 `floor-mechanics` + balance re-run** — all five floors per `GAME-DESIGN.md` §8. Floor 2's
 illusions matter most: they are the **only trigger for the clarity↔delusion karma axis**, which
@@ -52,12 +56,16 @@ against the finished world, approve one image as the style anchor. **Also rotate
 
 **#5 five gated batches** — environments (7) → characters (5) → enemies (**30**) → bosses (8) →
 **item icons (~68, `ART-BIBLE.md` §13)**.
-**50 buildable now** (150 images ≈ $10.05 batched); 52 once Ash-Wretch and the Warden executioner exist in code. **No interface batch** — the austere typographic UI is
+**Game assets:** 50 buildable now (150 images ≈ $10.05 batched); 52 once Ash-Wretch and the Warden
+executioner exist in code. **Item icons:** ~68 more (204 images ≈ $13.67). **Total ≈ 118 assets /
+354 images / ~$23.72 batched.** **No interface batch** — the austere typographic UI is
 the Memorians' file on you.
 
 ### UI
 
 **#6 `battle-screen`** · **#7 `canvas-layer`** · **#8 `screens-restyle`** — per `UI-DESIGN.md`.
+**#6 also needs two things recorded elsewhere:** **audio hooks on every beat** (`ART-BIBLE.md` §10 —
+marked BLOCKING; free now, a rewrite after) and **a free-text input** for talking to bosses (§20).
 #6 must not start before #2: building on a battle loop with no floor-modifier hook is the most
 expensive mistake available.
 

@@ -63,7 +63,7 @@ no warning. Fixes are specified in `docs/FINDINGS.md` §4; the code has not chan
 | M6 — Items content: relics, uniques, consumables | ✅ **merged to `main`** (625 tests); 15 relics + 4 uniques + 19 consumables + effect/trigger system + rarity gen; flavor co-write & in-UI display pending |
 | M7 — Loot sourcing & thematic economy | ✅ **merged to `main`** (649 tests); **gold removed**, pure sacrifice-deals + loot drops + chests; karma-shift deals feed the pillar |
 | M8 — Enemies: families, affixes, karma-weighting | ✅ **merged to `main`** (691 tests); 24 families + 5 affixes + spare action (9 ⚖ families feed karma) + family-themed kits; complex behaviors/flavor → M10 |
-| M9 — In-run progression (frequent level-up picks) | ✅ **merged to `main`** (726 tests); XP-frequent leveling + draft-1-of-3 (skill/upgrade/perk/stat) + lean start + auto-HP |
+| M9 — In-run progression (frequent level-up picks) | 🔶 **merged, then partly reversed by design** (726 tests). Shipped: XP-frequent leveling + draft-1-of-3 + lean start + auto-HP. **But §19.5 removed `stat` from the draft** (per-level allowance instead) **and set a level cap of 20** — neither is in `src/` yet |
 | M-UI — Functional UI (surfaces the whole engine, hand-testable) | ✅ **merged to `main`** (753 tests); plain/utilitarian — the turn-based battle screen is the NEXT unit |
 | M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ needs your PROSE |
 | M11 — LLM layer to spec (**narrate ONLY** — floor voices, beat significance, karma-in-prompt, boss agents, boss talk) | ⬜ **shrank 2026-08-25** — grammar-constrained choices + the tool registry are DROPPED; the engine writes the choices |

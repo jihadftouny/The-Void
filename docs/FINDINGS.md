@@ -68,8 +68,20 @@ on the grounds that the game is a descent and never goes up. `docs/WORLD.md` §1
 | R1 | ~~Absolution above ground~~ | `MOSTLY CLOSED` | — | **The ascent ends at the Undercity's exit — the Hollow never enters the city.** Only enough to be *glimpsed*. Shape decided: stratified by height. `WORLD.md` §14 |
 | R2 | ~~House Grandmore as a place~~ | `CLOSED` | — | **Not needed.** Extractions happen in **Memorian infrastructure inside the Rift**, not in a noble seat. `WORLD.md` §14 |
 | R3 | ~~The Memorians as a final encounter~~ | `DECIDED` | #11 | **Not a fight.** They do not fight because to them it is not a person. Mirrors and inverts the Warden — one does not fight because it sees you, the other because it cannot. `WORLD.md` §14 |
-| R4 | **Second prose pass, all five floors** | `OPEN` | #13 | The inverted register. Roughly doubles floor *content* work |
-| R5 | **Floor hook must be direction-aware** | `OPEN` | #1 #2 | Cheap in `engine-foundations`; expensive after floor mechanics are built one-way |
+| R4 | ~~Second prose pass, all five floors~~ | `DECIDED` | — | **Authoring work, not a decision** — folded into #13. The inverted register roughly doubles floor *content* work |
+| R5 | ~~Floor hook must be direction-aware~~ | `DECIDED` | — | **Build work, not a decision.** Specified in `PLAN.md` #1.3 and locked in `GAME-DESIGN.md` §17.5 ("built bidirectionally"). *It was wrongly listed as blocking #1, contradicting `PLAN.md`.* |
+
+## 2c. Logged as settled, but actually still needs the author (found 2026-08-27)
+
+Both were marked `DONE` in the interview plan while the design document itself says the author must
+confirm. That is the worst failure mode of this system — a question that looks answered.
+
+| # | Item | Status | Blocks | Notes |
+|---|---|---|---|---|
+| A1b | **The potion fold-in** | `OPEN` | #2 | §18.4 says outright: *"⚠ Interpretation flagged for the author… if the intent was to keep the separate potion resource and merely reduce it, say so and this section changes."* It also gates the balance re-run |
+| B4c | **The boss-talk concession cap** | `OPEN` | #6 #11 #12 | §20 says: *"Flagged, with a proposed fix the author may overrule."* Free talk + earnable concessions is an exploit; the proposed cap is one concession per fight |
+| B17 | **The draft reversal is in no work plan** | `OPEN` → build | #1 #2 #9 | Stats left the draft, per-level allowance, **max level 20** (§19.5) — but `draft.ts` still has `CATEGORY_WEIGHTS.stat` and **no level cap exists in `src/`**. M9 shipped ✅ with the mechanic this reversed |
+| B18 | **`#6 battle-screen` has two unrecorded requirements** | `OPEN` → build | #6 | **Audio hooks on every beat** (`ART-BIBLE.md` §10, marked BLOCKING) and **a free-text input** for boss talk (§20). Neither reaches `PLAN.md` |
 
 ## 3. Product areas never discussed
 
@@ -88,14 +100,14 @@ on the grounds that the game is a descent and never goes up. `docs/WORLD.md` §1
 
 | # | Item | Status | Severity | Notes |
 |---|---|---|---|---|
-| G1 | **Quitting mid-run voids all unlock progress** | `BUG` | ⛔ severe | Resume never rebuilds `runSummary`/`runSeed`. Earn an unlock, quit, return, win — you get nothing. **The whole meta-progression pillar** |
-| G2 | **Winning leaves a resumable save** | `BUG` | ⛔ | `ending` maps to `continue`, not `game-over`. Relaunch after victory: *"A descent lies unfinished."* |
+| G1 | **Quitting mid-run voids all unlock progress** | `BUG` — ⚠ **no fix specified yet** | ⛔ severe | Resume never rebuilds `runSummary`/`runSeed`. Earn an unlock, quit, return, win — you get nothing. **The whole meta-progression pillar** |
+| G2 | **Winning leaves a resumable save** | `BUG` — ⚠ **no fix specified yet** | ⛔ | `ending` maps to `continue`, not `game-over`. Relaunch after victory: *"A descent lies unfinished."* |
 | G3 | **Corrupt unlock store wipes everything silently** | `BUG` — **fix decided** | ⛔ | Keep a **backup copy** and restore from it; if that fails, say exactly what was lost. Also moves to a real file with the saves (N3) |
 | G4 | **You can flee the floor-4 Warden** | `BUG` — **fix decided** | ⛔ | **Bosses cannot be fled at all**; Smoke Vial explicitly fails against them. UI must explain why, not just hide the button. `GAME-DESIGN.md` §14.9 |
-| G5 | **"Abandon the descent" — one click, no confirmation** | `BUG` | high | Third in the hub menu; destroys a 45–90 min run. No `confirm` anywhere in the render layer |
+| G5 | **"Abandon the descent" — one click, no confirmation** | `BUG` — **fix decided** | high | **Confirm on abandon + slot overwrite, and MOVE it out of the top group** (`GAME-DESIGN.md` §19.4). Never confirm ordinary combat actions |
 | G6 | **Log written inside the install dir, uncapped** | `BUG` — **fix decided** | high | Move to user-data, cap and rotate. `docs/SHIPPING.md` |
 | G7 | **Equip bypasses the engine** | `DECIDED` → task #1 | ⛔ | Balance report is fiction until fixed |
-| G8 | **Run seed is wall-clock, never shown or stored** | `BUG` | medium | No seeded runs, no daily challenge, **no reproducible bug reports from testers** |
+| G8 | **Run seed is wall-clock, never shown or stored** | `BUG` — **fix decided** | medium | **Shown, stored and enterable** (`GAME-DESIGN.md` §19.3). Unlocks reproducible tester bug reports |
 | G9 | ~~Floor length inherited from the Java port~~ | `DECIDED` | medium | **Measure it in the balance re-run and tune the XP curve to the 45–90 min target.** The sim already plays full runs; make it report encounters and minutes per floor, and the grace-vs-damnation asymmetry. `GAME-DESIGN.md` §14.11 |
 | G10 | ~~Death has no run-summary screen~~ | `DECIDED` | medium | **A run summary written by the narrator** — reached, killed by, your build, unlocked, plus the Void's account. The one place karma is *felt* without being metered. `GAME-DESIGN.md` §14.9 |
 
@@ -104,12 +116,12 @@ on the grounds that the game is a descent and never goes up. `docs/WORLD.md` §1
 | # | Item | Status |
 |---|---|---|
 | D1 | ~~Asset totals in circulation~~ | `FIXED` 2026-08-27 — reconciled to **50 buildable / 52 eventual** (§4b); the double-counted Sins were the cause |
-| D2 | `GAME-DESIGN.md` has **two §14s**; §15 still says "the brainstorm is essentially complete" | `OPEN` |
+| D2 | ~~two §14s~~ — it was **two `## 16`s** (fixed 2026-08-27: the second is now `## 16b`, with numbering notes at §14 and §16b). §15 still says "the brainstorm is essentially complete" | `PARTLY FIXED` |
 | D3 | Three dead `[PROPOSAL]` tags to retag or delete (P2, P3, P5) | `OPEN` |
 | D4 | ~~`.env.example` says "bundled"~~ | `FIXED` 2026-08-26 |
 | D5 | `PROGRESS.md` still describes the shell as "mobile-first, portrait 540×1080" | `OPEN` |
 | D6 | `HUMAN-CHECKS.md` stale since 2026-08-14; 5 un-ticked author rulings incl. flee 25% vs 35% | `OPEN` |
-| D7 | 18 stale worktrees on disk | `OPEN` |
+| D7 | **20** stale worktrees on disk (`PROGRESS.md` says 16; both were wrong) | `OPEN` |
 | D8 | `WHAT-WE-BUILT.md` + `itch-description.html` describe a game with gold and a shop | `OPEN` |
 
 ---

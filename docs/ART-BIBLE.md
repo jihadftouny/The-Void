@@ -44,7 +44,8 @@ staging it.
 | | Standard | Batch |
 |---|---|---|
 | Per image | $0.134 | **$0.067** |
-| Full run, 156 images | $20.90 | **~$10.45** |
+| The 52-asset run, 156 images | $20.90 | **~$10.45** |
+| *(item icons are separate — 68 assets, 204 images)* | *$27.34* | ***~$13.67*** |
 | Turnaround | seconds | usually minutes, up to 24h |
 
 The only real cost of batching is latency, and asynchronous turnaround is a poor fit for a *probe*
@@ -387,7 +388,7 @@ are four combat bosses, not five. Art does not run ahead of the engine.
 | *Warden — executioner* | *+1* | ⏸ **Deferred** — the floor-4 executioner fight does not exist in code |
 | **Total once the engine catches up** | **52** | **156 images ≈ $10.45 batched** |
 
-**Item icons are additional** — see §13 (~50 more assets, 150 images ≈ $10.05 batched).
+**Item icons are additional** — see §13 (**~68** more assets, **204 images ≈ $13.67** batched).
 
 ## 5. Known failure modes and their gates **[LOCKED]**
 
@@ -654,7 +655,7 @@ the inventory has a real shape to design against.
    directly. The real tables, once authored (#13), will be
    substantially larger — and each new one needs an icon.
 2. **This is a permanent commitment, not a one-off cost.** Bespoke icons mean **every item added to
-   the game from now on needs art before it can ship.** The $10 is not the real price; the ongoing
+   the game from now on needs art before it can ship.** The $13.67 is not the real price; the ongoing
    obligation is. Accepted deliberately — a memorable inventory is worth it — but it should shape how
    many items get authored.
 
