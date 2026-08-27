@@ -1090,3 +1090,57 @@ exist yet) was the thing to avoid.
 strongest — the Hollow class unlock previously promised a story that did not exist, and this is that
 story. But it should be sequenced knowing it roughly doubles the floor *content* work even though it
 barely touches the floor *engine* work.
+
+---
+
+## 18. The recovery loop **[DECIDED 2026-08-27]**
+
+### 18.1 Rest
+
+A rest restores **HP *and* skill charges**, and is **the safe place to manage your build** — open the
+inventory, swap gear, read the codex.
+
+- Pairs with **hub-only equipping** (§16.2): rest is where equipment decisions actually happen.
+- **Floor 3 dampens the healing** (§8), so attrition bites hardest exactly where the design says it
+  should — the ash drains you and rest cannot fully answer it.
+- Rests stay **limited** (`restsLeft`), so taking one is a decision rather than a habit.
+- Restoring charges is deliberate: without it, long runs become charge-starved and classes stop
+  playing like themselves in the back half of a run.
+
+### 18.2 Chests
+
+**Consumables and ordinary gear, with a rare unique as the jackpot.** Chests are the reliable source
+of the things you *spend*; they do **not** carry relics.
+
+> Chests supply **volume**; the altar supplies **identity**. Relics are deal-only (§14.1), so a chest
+> can never hand you a build — only the means to keep playing one.
+
+### 18.3 Sparing costs you the kill
+
+**A spared enemy drops no loot and grants no XP.** The fight simply ends and your Nature moves.
+
+**This is the point.** Mercy with no price is not mercy, it is the obviously-correct button — and
+without a cost, sparing would be strictly better than fighting whenever it is offered. Making it cost
+the reward **sets two karma axes against each other in a single press**: mercy against greed, every
+time a karma-weighted enemy is on screen.
+
+It also gives **Pride** its weight (§17.2). The one Sin that *refuses to be spared* is denying you a
+choice that genuinely costs something — which is only meaningful because the choice was real.
+
+### 18.4 Healing becomes scarce
+
+**Healing is scarce.** The current model — six potions at start, each a *full* heal, freely usable in
+battle — is too generous, and M15's own report already flagged the starting count as such.
+
+> **⚠ Interpretation flagged for the author.** The instruction was *"but make them scarcer"* without
+> picking between two options. Recorded as: **potions fold into the consumable system** — healing
+> becomes an item you find and carry, not a separate counter with its own button — **and healing is
+> scarce overall.** If the intent was instead to *keep* the separate potion resource and merely
+> reduce it, say so and this section changes.
+
+**Why folding in is the reading I took:** it removes a parallel resource nobody designed, it makes
+healing **compete for backpack slots** against everything else, and it makes the **19 consumables
+already written** genuinely relevant instead of sitting beside a free, better, unlimited-use heal.
+
+**Balance consequence:** this is a significant nerf and it interacts with §18.1's charge restore and
+floor 3's dampening. All three must be measured together in the balance re-run, not assumed.

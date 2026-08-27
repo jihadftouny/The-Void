@@ -29,8 +29,8 @@ Nothing gets built until this is worked through.
 
 | # | Round | Covers | Blocks | Status | Lands in |
 |---|---|---|---|---|---|
-| A1 | **The rest & recovery loop** | What resting actually does; whether rests are limited; what a chest/cache contains now relics are deal-only; whether potions stay a separate resource | #2 #6 | `QUEUED` | GAME-DESIGN |
-| A2 | **The spare mechanic** | What sparing *does* beyond karma; can every karma-weighted enemy be spared; what a spared enemy does; Pride refusing mercy as the exception | #2 #6 | `QUEUED` | GAME-DESIGN |
+| A1 | ~~The rest & recovery loop~~ | rest heals HP **and charges**, and is the build-management point; chests = consumables/gear + rare unique; **healing becomes scarce** | #2 #6 | `DONE` | `GAME-DESIGN.md` §18 |
+| A2 | ~~The spare mechanic~~ | **sparing costs the loot and the XP** — mercy against greed in one press | #2 #6 | `DONE` | `GAME-DESIGN.md` §18.3 |
 | A3 | **Death, revive & permadeath** | The Halo Fragment grants "revive once per run" — how that squares with permadeath; what the death screen offers; whether a run can ever be continued | #1 #6 | `QUEUED` | GAME-DESIGN |
 | A4 | **The level-up draft** | Draft pool weighting; how many skills a class ends a run with; whether stat bumps compete with skills; how the tempo gauge changes DEX's draft value | #2 | `QUEUED` | GAME-DESIGN |
 | A5 | **Save slots & the seed** | How many slots; whether the seed is shown, stored and enterable (currently wall-clock and invisible — no seeded runs, and **testers cannot report reproducible bugs**) | #1 #8 | `QUEUED` | UI-DESIGN |
@@ -87,6 +87,7 @@ _Newest first. Every round that has been asked and written down._
 
 | Date | Round | Outcome |
 |---|---|---|
+| 2026-08-27 | **A1 + A2** — recovery & sparing | Rest restores HP **and charges** and is the build-management point; chests carry consumables/gear + a rare unique; **sparing costs loot and XP**; **healing becomes scarce** (potion fold-in flagged for confirmation). `GAME-DESIGN.md` §18 |
 | 2026-08-27 | Hollow ascent | It **rises** 5→1 to reach the Memorians; the Warden shows mercy instead of judgement; same floors reversed; built bidirectionally. **Opened R1–R5.** `WORLD.md` §13 |
 | 2026-08-27 | Endings · Sins · boss agents · unlock feats | Blended within a binary gate; seven distinct Sin behaviours; the model chooses boss actions under five hard constraints; feats designed to teach. `GAME-DESIGN.md` §17 |
 | 2026-08-26 | Tempo & equipping | The **tempo gauge** (DEX-driven, visible); equipping is hub-only. `GAME-DESIGN.md` §16 |
