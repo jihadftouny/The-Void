@@ -56,7 +56,7 @@ no warning. Fixes are specified in `docs/FINDINGS.md` §4; the code has not chan
 |---|---|
 | M0 — Consolidate base & reconcile to mechanics-first | ✅ merged to `main` (378 tests) |
 | M1 — Foundational state models (karma + item schema + inventory) | ✅ **merged to `main`** (411 tests) |
-| M2 — Player skills + full 24-condition system | ✅ **merged to `main`** (456 tests) |
+| M2 — Player skills + full 25-condition system | ✅ **merged to `main`** (456 tests) |
 | M3 — Classes & signature kits | ✅ **merged to `main`** (494 tests) |
 | M4 — Combat overhaul: defense matters (enemies roll to-hit) | ✅ **merged to `main`** (526 tests) |
 | M5 — Inventory & equipment (Tibia-style) ★ | 🔶 ENGINE **merged to `main`** (561 tests); **Tibia visual UI deferred to a collab pass w/ you** |

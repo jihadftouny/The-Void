@@ -10,6 +10,15 @@ the LLM pivot is retired; ignore any older "open http://localhost" instructions.
 
 ## How to run the latest build
 
+> **⚠ CORRECTED 2026-08-27.** This section used to send you to `worktrees/functional-ui`. **Do not.**
+> That worktree is pinned at 2026-08-13 and **predates M12, M13 and M15** — no `boss.ts`, no
+> `unlockStore.ts`, no `sim.ts`. Testing it produces false failures. **Everything is merged to
+> `main`** (2026-08-24), so run from the repo root with `npm run desktop`. The model lives in the
+> Electron user-data directory; the old `VOID_MODELS_DIR` recipe pointed at `./models`, which is
+> empty.
+
+*Superseded text below, kept so the change is traceable:*
+
 All new work lives on stacked review branches (not merged yet — your gate). To play the newest build
 **without re-downloading the ~2.5 GB model**, run from the tip worktree and point it at the model you
 already have:

@@ -8,7 +8,7 @@
 ## Context
 
 The Void is a **mechanics-first, roguelike descent** through five floors of the Void: a crunchy
-D&D-style RPG where a **local language model narrates** the journey and writes the player's choices,
+D&D-style RPG where a **local language model narrates** the journey; the **engine writes every player choice**,
 while the deterministic engine owns every rule and number. A run = descend five floors or die; death
 restarts the run but **unlocks** new content for future runs (breadth, never raw power). Everything
 the player does is read into a **hidden, multi-axis "Nature" (karma)** that bends the world and the
@@ -26,7 +26,7 @@ intent and this file is reconciled to it.
 - **Karma / "Nature" = core pillar, hidden, multi-axis.** Live from floor 1; **floor 4 is the
   reckoning** (carried karma × floor-4 choices decides grace vs. being cast into floor 5). Endings are
   a blended spectrum the narrator renders.
-- **Engine-authoritative LLM.** Narrator writes prose + choices; engine owns dice/damage/loot/state;
+- **Engine-authoritative LLM.** Narrator writes **prose only** — the engine writes every choice; engine owns dice/damage/loot/state;
   all game-feeding LLM output is grammar/JSON-constrained.
 - **Tough but fair.** Real challenge, meaningful death, mastery-driven.
 - Full item detail (Tibia-style paperdoll, relics, uniques + rarity, rich consumables), enemy detail
@@ -78,7 +78,8 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
    never means editing combat code.
 4. **Serializable plain-data state.** Game state (incl. **inventory** and **multi-axis karma**)
    round-trips through JSON. No class instances/functions/canvas objects in state; save/load migrates.
-5. **Engine-authoritative LLM.** The narrator narrates and writes choices; the engine owns all
+5. **Engine-authoritative LLM.** The narrator narrates; **the ENGINE writes every player choice**
+   (reversed 2026-08-25 — `CLAUDE.md` §5, `GAME-DESIGN.md` §16); the engine owns all
    numbers and **all karma changes** (never the LLM). LLM output is grammar/JSON-constrained. The LLM
    layer (`src/llm`) is pure and testable against a fake model.
 6. **Desktop-first, responsive.** Target desktop; keep layouts responsive for a later mobile path.
@@ -104,7 +105,7 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 - **Key decisions:** the karma axis set (`GAME-DESIGN §7`); slot list (`§6`); item-effect
   representation as plain data (so effects are content, not code). **Determinism is won or lost here.**
 
-### M2 — Player skills + the full 24-condition system
+### M2 — Player skills + the full 25-condition system
 - **Goal:** Players can finally act tactically; status play becomes real.
 - **Done when:** a `cast` action exists in the battle loop; a first skill set applies conditions; **all
   25 conditions** (poison + 6 augments + 6 deprivations + `exposed`) tick correctly with hand-derived
@@ -146,7 +147,8 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
   and no currency; `GAME-DESIGN.md` §11/§14.1)*; the economy is **reworked thematically**
   (chosen direction — sacrifice / dual-currency / karma-priced, `§11`) with real sinks
   (gear/consumables/rerolls/services); the one-offer "mysterious stranger" is replaced by a proper
-  shop encounter.
+  **sacrifice-deal altar** encounter. *(This bullet previously said "shop encounter" — there are no
+  shops and no currency.)*
 - **Key decisions:** pick the economy direction; drop-table design (data-driven, seeded).
 
 ### M8 — Enemies: families, affixes, karma-weighting

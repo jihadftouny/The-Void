@@ -50,7 +50,8 @@ never in the game bundle, never touched by a test.
 **#4 probe 04 + approve references** — probe 03 predates `WORLD.md` and is partly wrong. Re-probe
 against the finished world, approve one image as the style anchor. **Also rotate the API key.**
 
-**#5 four gated batches** — environments (7) → characters (5) → enemies (**30**) → bosses (8).
+**#5 five gated batches** — environments (7) → characters (5) → enemies (**30**) → bosses (8) →
+**item icons (~68, `ART-BIBLE.md` §13)**.
 **50 buildable now** (150 images ≈ $10.05 batched); 52 once Ash-Wretch and the Warden executioner exist in code. **No interface batch** — the austere typographic UI is
 the Memorians' file on you.
 

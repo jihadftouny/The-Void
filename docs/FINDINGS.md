@@ -55,7 +55,7 @@ deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
 | B12 | **Grace vs cast-down thresholds**, on unclamped karma | `OPEN` | #2 | Blocks the balance re-run |
 | B13 | ~~Ending text~~ | `DECIDED` | — | **Authored anchors, narrated specifics.** "Made whole" is the thesis and must be the author's words; the run's specifics are generated. Same shape as the death summary. `GAME-DESIGN.md` §14.10 |
 | B14 | **Enemy scaling formula** + **affix list** — both `[OPEN → M8]`, M8 merged unanswered | `OPEN` | #9 | Two affixes still "provisional" in data |
-| B15 | ~~Item-icon granularity~~ | `DECIDED` | — | **Bespoke, one per item.** Deadlock broken by the slot set landing. 50 items today ≈ 150 images ≈ $10 batched — but ⚠ **a permanent commitment: every new item needs art forever.** `ART-BIBLE.md` §13 |
+| B15 | ~~Item-icon granularity~~ | `DECIDED` | — | **Bespoke, one per item.** Deadlock broken by the slot set landing. **68** items today ≈ 204 images ≈ $13.67 batched — but ⚠ **a permanent commitment: every new item needs art forever.** `ART-BIBLE.md` §13 |
 | B16 | ~~Interface furniture~~ | `DECIDED` | — | **No generated interface art**; cursor + loading indicator excepted as *functional marks*. Resolved by the art/interface rule: **art depicts things in the world; the interface that frames them stays flat.** `ART-BIBLE.md` §15 |
 
 ## 2b. Reopened by the Hollow ascent (2026-08-27)
@@ -103,7 +103,7 @@ on the grounds that the game is a descent and never goes up. `docs/WORLD.md` §1
 
 | # | Item | Status |
 |---|---|---|
-| D1 | Four different asset totals in circulation (39 / 52 / 53) | `OPEN` |
+| D1 | ~~Asset totals in circulation~~ | `FIXED` 2026-08-27 — reconciled to **50 buildable / 52 eventual** (§4b); the double-counted Sins were the cause |
 | D2 | `GAME-DESIGN.md` has **two §14s**; §15 still says "the brainstorm is essentially complete" | `OPEN` |
 | D3 | Three dead `[PROPOSAL]` tags to retag or delete (P2, P3, P5) | `OPEN` |
 | D4 | ~~`.env.example` says "bundled"~~ | `FIXED` 2026-08-26 |

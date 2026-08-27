@@ -41,7 +41,7 @@ you *do* — everything you do — is read by the Void and decides how it ends.
 
 ## 3. Core loop & run structure **[DECIDED]**
 
-- **A run = descend 5 floors, or die trying.** Each floor is a sequence of encounters (combat,
+- **A run = descend 5 floors, or die trying** *(the Hollow **ascends** 5→1, §17.5)*. Each floor is a sequence of encounters (combat,
   rest, **sacrifice-deals**, events, chests) ending in a **floor boss**, then descent to the next
   floor. *(An earlier draft said "shop" — there are no shops and no currency; §11.)*
 - **Death restarts the run.** Roguelike: you lose your build and items on death. What persists is
@@ -68,7 +68,7 @@ you *do* — everything you do — is read by the Void and decides how it ends.
 - **Karma = thematic flavor only:** classes *lean* toward karma axes in tone/story (Penitent→reverence,
   Hollow→desecration) but have **no mechanical karma coupling**, so class balance stays independent of
   the pillar. **[DECIDED]**
-- **Frequent in-run growth:** level up often; each level offers a **choice** (a new/upgraded skill, a
+- **Frequent in-run growth:** level up often; each level offers a **choice** (a new/upgraded skill or a perk) **plus a separate stat allowance you spread yourself** (§19.5 — stats left the draft; max level 20)
   stat bump, or a perk). Roguelike "snowball your build" loop, replacing the 4-total act-gated
   level-ups. **[DECIDED]**
 - Six D&D stats stay (STR/DEX/CON/INT/WIS/CHA), rolled at character creation. **[DECIDED — inherited]**
@@ -670,16 +670,25 @@ a record of its costs.
 - **Chests lose their best prize** and need to be worth opening for another reason (see below).
 - Deal frequency now controls relic pacing, so the two must be tuned together.
 
-**The gap this leaves — [OPEN, needs the author].** The ruling covers relics. It does not say where
-**19 consumables** and **4 uniques** come from, and they are equally unreachable today. The natural
-completion, *proposed not decided*:
+~~**The gap this leaves — [OPEN, needs the author].**~~ **CLOSED 2026-08-26/27 by §14.8 and §18.2.**
+The proposed table below was overruled point by point and is kept only so the reversal is traceable.
+
+**The live answer:**
 
 | Source | Content |
 |---|---|
-| **Sacrifice-deals** | **Relics** (locked above), and possibly uniques |
-| Enemy drops | Ordinary gear + **consumables** — they are consumed, so they need volume |
-| Chests | Consumables, gear, and whatever replaces the relic as the reason to open one |
-| Bosses | **Uniques** — rare, memorable, tied to a specific fight |
+| **Sacrifice-deals** | **Relics ONLY** — never uniques (§14.8) |
+| Enemy drops + chests | **Consumables** and ordinary gear; chests also carry a rare unique (§18.2) |
+| **Any enemy, rarely** | **Uniques** — a rare drop from *anything*, **explicitly not tied to bosses** (§14.8) |
+
+*Superseded proposal:*
+
+| Source | Content |
+|---|---|
+| ~~Sacrifice-deals~~ | ~~Relics, and possibly uniques~~ |
+| ~~Enemy drops~~ | ~~Ordinary gear + consumables~~ |
+| ~~Chests~~ | ~~Consumables, gear, and whatever replaces the relic~~ |
+| ~~Bosses~~ | ~~Uniques — tied to a specific fight~~ |
 
 **A hard rule regardless of the answer:** *nothing ships that is not in at least one pool.* Add a
 test asserting **every content id is reachable** from some source, so this class of bug cannot recur.
@@ -1001,7 +1010,7 @@ them.
 ### 17.2 The Seven Sins each fight like their sin **[DECIDED 2026-08-27]**
 
 Seven distinct behaviours, not seven names on one statblock. Sketches — exact numbers are balance
-work, and each must be checked against the existing 24-condition vocabulary rather than inventing:
+work, and each must be checked against the existing **25**-condition vocabulary (§21.1) rather than inventing:
 
 | Sin | Behaviour |
 |---|---|
@@ -1081,7 +1090,7 @@ of prose**, which is where the inversion lives.
 | **Floor 4** | **No Warden fight.** A dialogue encounter; the Warden lets the Hollow pass |
 | **Other bosses** | Unchanged — they still fight |
 | **Karma** | Same four axes, same triggers. What it *resolves into* at the end differs |
-| **The end** | Reaching **the Memorians** — a new final encounter that does not exist in the descent |
+| **The end** | Reaching **the Memorians** — **NOT a fight** (`WORLD.md` §14). A dialogue/terminal encounter, mirroring the ascent Warden. No descent counterpart |
 
 **BUILT BIDIRECTIONALLY FROM THE START.** The author's ruling: floor mechanics are designed for both
 directions rather than retrofitted. This **grows the floor-mechanics unit (#2)** — it must take a
@@ -1093,8 +1102,9 @@ exist yet) was the thing to avoid.
 
 1. **Absolution above ground and house Grandmore must be designed.** Both were *deliberately parked*
    because the descent never goes up. **The ascent ends there.** This is a genuine reopening.
-2. **A final encounter with the Memorians** — a boss that has no descent counterpart. New mechanics,
-   new balance, new prose.
+2. **A final encounter with the Memorians** — **not a boss fight** (`WORLD.md` §14: they do not fight,
+   because to them it is not a person). A dialogue/terminal encounter. New prose; **no new combat
+   balance, and no boss sprite** — `ART-BIBLE.md` §4b deliberately does not budget one.
 3. **A second pass of prose for all five floors**, in the inverted register.
 4. **The floor-mechanic hook must be direction-aware** — cheap now, in `engine-foundations` (#1);
    expensive after floor mechanics are built one-way.
@@ -1265,7 +1275,8 @@ stat points available across a run. **All three belong to the balance re-run.**
 
 ## 20. Talking to bosses **[DECIDED 2026-08-27]**
 
-Bosses are agents with run-memory (§17.3), so **the player can talk to them, and they answer.**
+Bosses **will be** agents with run-memory (§17.3 — **not yet built**; `boss.ts` has zero LLM
+references), and that is what makes talking to them possible.
 
 | | |
 |---|---|
@@ -1412,7 +1423,7 @@ tuning — though the exact XP curve is still balance work.
 | In the codex | Never in the codex |
 |---|---|
 | Conditions, skills, items, stats | Lore, world history, what the Void is |
-| The bestiary (fills as you meet things — already built) | **Karma, in any form** |
+| The bestiary (fills as you meet things — **net-new state**, see `UI-DESIGN.md` §14) | **Karma, in any form** |
 
 **The split is the point.** The mechanics are a system to *master*, and a game with 25 conditions and
 a tempo gauge owes the player clarity about them. **The world is something to piece together** — and

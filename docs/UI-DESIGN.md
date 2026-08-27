@@ -355,7 +355,7 @@ Deliberately out of scope here, tracked elsewhere:
   restyle in `screens-restyle` is a restyle of the current functional screen, not that redesign.
 - **Per-class balance** — Scavver strong, ranged classes weak (`docs/BALANCE-REPORT.md`). A play-test
   and weapons follow-up, not a UI concern.
-- **Audio.** Never discussed. Flagged as **[OPEN]** — a turn-based battle screen with beat-by-beat
+- ~~**Audio.** Never discussed.~~ **CLOSED** — in scope at full ambition (`ART-BIBLE.md` §10) with a thinning score (§16). *Original note:* — a turn-based battle screen with beat-by-beat
   sequencing is the natural place for hit and impact sound, and it will feel oddly silent without it.
 
 ---
@@ -398,7 +398,7 @@ commitments have nowhere to live; the model tier needs an override on slow machi
 | **Audio** | Master · music · ambience · effects |
 | **Accessibility** | Reduced motion · text size · high contrast |
 | **Text** | Narration speed · skip / instant |
-| **Model** | Quality tier, for slower machines — see the 4B-vs-dual-tier decision in `FINDINGS.md` B10 |
+| **Narration** | On / off. *(**Not** a model quality tier — 4B is the only tier shipped and the 1.7B fallback was rejected; `CLAUDE.md`. A quality control would have exactly one legal value.)* |
 | **Display** | Fullscreen · window size |
 
 Add it to `screens-restyle` (#8) as its own screen, and give it a route from both the title and the
@@ -435,8 +435,10 @@ afterwards** — the same argument already made and accepted for audio hooks (`A
 - **Tooltips:** every condition chip, skill, item, stat and perk explains itself on hover or click.
   This is what makes 25 conditions learnable without a manual. **Depends on the `description` fields
   from `engine-foundations` (#1)** — there is currently nowhere to put the text.
-- **Codex:** fills in as you encounter things, reusing the gradual bestiary-reveal machinery that
-  already exists. It is where you look up the thing you met two floors ago.
+- **Codex:** fills in as you encounter things — where you look up the thing you met two floors ago.
+  ⚠ **Net-new state, not a reuse.** The existing "gradual bestiary reveal" (`unlockStore.ts`) is a
+  **spawn-table gate** driven by cross-run feats: it decides which families may be *drawn* and records
+  nothing about what the player has *seen*.
 - **No scripted first run.** A roguelike teaches by repetition, and floor 1 is already designed as
   the teaching floor ("the world is still solid").
 - **Karma is exempt and stays unreadable** — no tooltip, no codex entry, ever (`GAME-DESIGN.md` §13).

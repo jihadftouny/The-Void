@@ -54,7 +54,7 @@ review in a sitting anyway. **Use interactive for probes, batch for groups.**
 
 
 **Cost at these settings:** $0.134 per image interactive, **$0.067 batched** (§1b).
-**The live asset count is in §4b (53) plus the item icons in §13 (~50)** — the "39" figure that used to
+**The live asset count is in §4b (50 buildable / 52 eventual) plus the item icons in §13 (~68)** — the "39" figure that used to
 sit here is superseded and was never updated when the batch grew.
 Image generation is **not available on the free tier at all** (`limit: 0`) — billing must be enabled
 on the project or every request returns HTTP 429.
@@ -146,7 +146,7 @@ Same for the ash-wraith, where take 02 was also the chosen read.
 
 ## 3. Per-asset-type rules **[LOCKED]**
 
-### Enemy sprites — 24, one per family
+### Enemy sprites — 30 (23 families + the 7 named Sins)
 - **Aspect `1:1`.**
 - **Framing is strict and non-negotiable: full body, head and feet both inside the frame, roughly
   10% margin, subject centred, facing the viewer.** The roster must sit in one on-screen frame; per
@@ -298,8 +298,8 @@ and the air, not what is on the signs** — the toxicity is literal, not decorat
 place people were disposed of*, which is exactly what the design says it is: where Absolution sends
 its criminals.
 
-**Still undescribed anywhere:** **the Rift**, the doorway from Floor 1 down to Floor 2. It has no
-description in any source. Needs the author.
+~~**Still undescribed anywhere:** the Rift.~~ **CLOSED** — `WORLD.md` §14 puts the **Memorian
+extraction facility inside the Rift**, so the location now has content to prompt from.
 
 ### Generation order **[LOCKED 2026-08-25]**
 
@@ -312,7 +312,7 @@ principle is **what constrains what** — never generate a thing before the thin
 | **1** | **Environments** — 5 floor backdrops + altar/shrine | Establish light, palette, geometry and tech level for the whole game. Every later asset must read *against* these | 7 |
 | **2** | **Characters** — 5 class portraits | Must read against the environments. They also anchor the recursion set, so they cannot come after the enemies that mirror them | 5 |
 | **3** | **Enemies** — 23 families + 7 Sins | Conditioned on both. The five mirror-enemies are versions of the *characters*, which must exist first. *(Ash-Wretch deferred — §4b)* | **30** |
-| **4** | **Bosses** — 5 + 3 Sin identities + Warden executioner | The most specific and most authored assets; they inherit everything above | 9 |
+| **4** | **Bosses** — 5 portraits + 3 Sin identities | The most specific and most authored assets; they inherit everything above. *(Warden executioner deferred — §4b)* | **8** |
 | **5** | **Interface furniture** — if any | Designed *against* finished art, never before it. See the open question below | ? |
 
 **Why interface furniture is last and not first**, against the author's initial instinct: menus and
@@ -358,7 +358,8 @@ not exist in the game. Resolution: keep **both**, as distinct enemies.
 > ⚠ **This is a game-data change, not just an art decision.** A new family must be added to
 > `src/data/enemyFamilies.json` with its own tag, element, stat bias, skills, name table entry and
 > floor assignment — and it must go through the pipeline like any other engine change, not be hand
-> edited. Asset count rises 52 → **53**. Flagged for the `art-pipeline` unit's plan.
+> edited. Ash-Wretch adds one asset — but it is **deferred until the family exists in code** (§4b).
+> Flagged for the `art-pipeline` unit's plan.
 
 ## 4b. The asset list — 50 now, 52 eventually **[CORRECTED 2026-08-27]**
 
@@ -524,7 +525,7 @@ The design record was genuinely silent on these. Guessing produced the medieval-
    different enemies (§4). The wraith is incorporeal and cold; the wretch is the solid cinder
    humanoid from probe 01. **Still requires a new enemy family in `src/data/enemyFamilies.json`,
    through the pipeline** — tracked in `docs/SCOPE-AUDIT.md`.
-5. ~~Karma's world-objects have no art.~~ **CLOSED** — altar and shrine are in the asset list (§4b, now **53**)
+5. ~~Karma's world-objects have no art.~~ **CLOSED** — altar and shrine are in the asset list (§4b)
    (§4b), which superseded the 39.
 6. ~~The five affixes have no visual treatment.~~ **CLOSED** — code effects, zero new art (§9
    settled list above).
@@ -608,7 +609,7 @@ Recorded in case reading comfort proves to be a problem in play-testing.
 
 ---
 
-## 12. Ship assets — beyond the 53 **[DECIDED 2026-08-26, all four in scope]**
+## 12. Ship assets — beyond the game assets **[DECIDED 2026-08-26, all four in scope]**
 
 None of these were on any list, and a product cannot ship without the first three.
 
@@ -642,13 +643,15 @@ the inventory has a real shape to design against.
 | Uniques | 4 |
 | Consumables | 19 |
 | Base items | 4 |
-| Weapons · armor · shields | 3 · 3 · 2 |
-| **Total today** | **50** → ×3 variations = **150 images ≈ $10.05 batched** |
+| Weapons · armor · shields | **12 · 12 · 2** |
+| **Total today** | **68** → ×3 variations = **204 images ≈ $13.67 batched** |
 
 **Two things to be clear-eyed about:**
 
-1. **That total will grow.** `weapons.json` and `armor.json` currently hold **three entries each of
-   placeholder joke names** ("Jaaj Sword 1"). The real tables, once authored (#13), will be
+1. **That total will change.** `weapons.json` and `armor.json` hold **three archetypes × four act
+   tiers = twelve entries each**, all placeholder joke names ("Jaaj Sword 1"). **⚠ How many weapons and
+   armour pieces the game actually ships is an OPEN DESIGN QUESTION** — and it moves this budget
+   directly. The real tables, once authored (#13), will be
    substantially larger — and each new one needs an icon.
 2. **This is a permanent commitment, not a one-off cost.** Bespoke icons mean **every item added to
    the game from now on needs art before it can ship.** The $10 is not the real price; the ongoing

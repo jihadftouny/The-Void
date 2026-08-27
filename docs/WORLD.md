@@ -635,9 +635,10 @@ The descender never learns who did this to them, or that anyone did. **The Hollo
 only character in the game who does, because it is what the process leaves behind and it has been
 lying at the bottom of that process. The ascent is a return to the source.
 
-> **⚠ This reopens two things that were deliberately parked** (§12b): **Absolution above ground** and
-> **house Grandmore as a place**. The descent never needed them — the game is a descent and never
-> goes up. **The ascent ends there**, so both now need designing. Recorded in `docs/FINDINGS.md`.
+> **⚠ This briefly reopened two parked items** (§12b): Absolution above ground and house Grandmore as
+> a place. **Both were closed again the same day by §14** — the ascent ends at the *Undercity
+> threshold*, so the city is only glimpsed, and the extraction happens inside the **Rift**, so
+> Grandmore never needs to exist as a place.
 
 ### Floor 4 — the Warden does not fight the Hollow **[LOCKED]**
 

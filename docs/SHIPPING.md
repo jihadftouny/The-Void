@@ -18,7 +18,7 @@ everything redistributed:
 | Electron | MIT |
 | node-llama-cpp / llama.cpp | MIT |
 | Kaplay | MIT |
-| **JetBrains Mono** | SIL Open Font Licence |
+| **JetBrains Mono** | SIL Open Font Licence — ⏸ **not bundled yet** (`PLAN.md` #16; `tokens.ts` still uses the OS monospace stack) |
 | **Generated art + music** | ⚠ **UNVERIFIED — see `FINDINGS.md` S3.** Terms for commercial redistribution of Gemini image output and Lyria audio output are recorded nowhere, and art and music terms can differ. **Check before release.** |
 
 **Also required:** fill in `package.json` — `license`, `author`, `description`, `repository`, and a
