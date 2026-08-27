@@ -54,15 +54,15 @@ Nothing gets built until this is worked through.
 | B8 | ~~Class kits~~ | **Four signature skills = identity**; start with 1–2, draft to ~6–8 from the shared pool. Twist-wiring **sequencing deferred to the milestone pass** | #9 #13 | `DONE` | `GAME-DESIGN.md` §21.5 |
 | B9 | ~~The Neuromancer's knowledge~~ | **A junior — they do not know yet.** The order is the perpetrator; the playable one discovers it alongside the player. **Corrects an over-strong line in WORLD §0c** | #13 | `DONE` | `WORLD.md` §0c |
 | B10 | ~~The codex~~ | **Mechanics fully; the world never.** A lore codex would destroy the central secret in a menu | #8 #13 | `DONE` | `GAME-DESIGN.md` §21.6 |
-| B11 | **Audio, floor by floor** | What each floor *sounds* like; what the score is doing; where silence sits | #15 | `QUEUED` | ART-BIBLE |
+| B11 | ~~Audio, floor by floor~~ | **The score THINS as you descend** and near-vanishes by floor 5. Floor 4 choir is the exception and should shock. The ascent reverses it | #15 | `DONE` | `ART-BIBLE.md` §16 |
 
 ## Phase C — presentation & release
 
 | # | Round | Covers | Blocks | Status | Lands in |
 |---|---|---|---|---|---|
-| C1 | **Title, identity & store page** | The game's own title treatment; what the itch page says; screenshots; the content warning's placement | #14 #17 | `QUEUED` | SHIPPING |
-| C2 | **Text speed, defaults & first-run** | Narration speed default; what the very first launch does; where the content warning sits in that flow | #8 | `QUEUED` | UI-DESIGN |
-| C3 | **The playtest build** | Who the 5–10 people are; what you want from them; how they report back; what build they get | #14 | `QUEUED` | SHIPPING |
+| C1 | ~~Store page~~ | **Honest and plain**, warning near the top, requirements unburied | #14 #17 | `DONE` | `SHIPPING.md` |
+| C2 | ~~First run~~ | **Warning → download → play.** Warning BEFORE the 2.5 GB fetch; no setup wizard | #8 | `DONE` | `SHIPPING.md` |
+| C3 | ~~The playtest~~ | **Three questions:** does it run elsewhere, is it comprehensible, **does the subject land** | #14 | `DONE` | `SHIPPING.md` |
 
 ---
 
@@ -89,6 +89,7 @@ _Newest first. Every round that has been asked and written down._
 
 | Date | Round | Outcome |
 |---|---|---|
+| 2026-08-27 | **B11 + C1–C3** — audio & release | The score **thins as you descend**, the ascent climbs back into sound; store page honest and unburied; first run is warning then download then play; the playtest asks three questions in priority order |
 | 2026-08-27 | **B8–B10** — kits, the Neuromancer, the codex | Four signature skills drafted up to ~6–8; **the playable Neuromancer is a JUNIOR who does not know** (corrects WORLD §0c); the codex explains mechanics and never the world. Twist-wiring order deferred to the milestone pass |
 | 2026-08-27 | **B5–B7** — conditions, enemies, elements | 25 conditions with the six stat pairs kept (learnable by pattern); `exposed` is the 25th and the **doc** was wrong; **all 24 enemy families rewritten against the world — must precede art batch 3**; elements gate resistances only. `GAME-DESIGN.md` §21 |
 | 2026-08-27 | **B4 + B4b** — bosses & talking | Kingpins hold domains; the Reflection speaks as you; the Sin accuses; the Hollow Self is calm and right. **New feature: you can TALK to bosses in free text**, free of turn cost, and it can change the fight through engine-defined outcomes. `WORLD.md` §15 / `GAME-DESIGN.md` §20 |

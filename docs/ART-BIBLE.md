@@ -699,3 +699,35 @@ typographic.
 **confirmed as no generated art**, with a small set of **functional marks** (cursor, loading
 indicator) as the only exception, admitted because they *indicate* rather than *decorate*. The
 earlier "OPEN — the author must settle" and the table's literal `?` are both closed by this.
+
+---
+
+## 16. The score thins as you descend **[DECIDED 2026-08-27]**
+
+**The music is being taken from you, the same way your life is.**
+
+| Floor | What you hear |
+|---|---|
+| **1 Undercity** | Real music. Recognisable, structured, almost normal |
+| **2 Entrance** | It starts coming apart — fewer instruments, longer gaps |
+| **3 Ash City** | A held tone and falling ash. Barely music at all |
+| **4 Angelic** | **A choir.** The only genuinely beautiful sound in the game |
+| **5 True Void** | Near silence |
+
+**Why this and not five distinct tracks:** the floors are not five places, they are **five stages of
+one continuous process** (`WORLD.md` §0c). A score that thins *is* that process, heard. By the True
+Void there is almost nothing left to listen to, which is precisely what has been happening to the
+player the whole time.
+
+**Floor 4 is the deliberate exception and it should shock.** Everything has been draining away for
+three floors, and then there is a choir — because the angels are **real** (`WORLD.md` §6) and floor 4
+is the one stage that reveals rather than distorts. **It should be the most beautiful thing in the
+game**, and it arrives at the point of maximum deprivation.
+
+**The ascent reverses it.** The Hollow climbs **back into sound** — from near-silence, through the
+choir, and up into music. Same five beds walked the other way, so the reversal costs nothing extra to
+produce.
+
+> **This composes with the restraint rule (§10):** bookend narration keeps most rounds quiet, and a
+> thinning score means the lower floors are quiet *by design* rather than empty. Silence stops being
+> an absence and becomes the loudest thing in the game.

@@ -51,3 +51,48 @@ directory, cap it, and rotate it.
 
 itch requires self-declaration. Follows directly from `docs/CONTENT-WARNING.md` — declare the mental
 health themes honestly rather than minimally.
+
+---
+
+## The store page **[DECIDED 2026-08-27]**
+
+**Honest and plain. Lead with what it is.**
+
+1. **What the game is** — a mechanics-first roguelike with a local-LLM narrator.
+2. **Who made it and why** — the lived-experience origin, stated plainly.
+3. **The content warning, near the top** — not in a footer (`docs/CONTENT-WARNING.md`).
+4. **The requirements, unburied:** a **GPU is required** · a **one-time ~2.5 GB download** on first
+   run · **English only** · **one difficulty, no assist options**.
+
+> **Why not lead with the hook and bury the requirements** where store pages normally put them: **the
+> game is about being told the truth too late.** A page that oversells it, or hides a GPU requirement
+> and a 2.5 GB download until after the click, would be a strange way to introduce that — and it is
+> how you earn refunds and bad reviews for a game that is otherwise honest.
+
+## First run **[DECIDED 2026-08-27]**
+
+**Warning → download → play.** Nothing else.
+
+1. **The content warning, before the download.** Somebody who reads it and decides the game is not
+   for them must not have spent 2.5 GB and an evening first.
+2. **The model download**, with honest progress and **a real failure path** — not a spinner that
+   stops.
+3. **The title screen.**
+
+**No setup wizard.** Settings exist and are reachable from the title and the hub (`UI-DESIGN.md`
+§12); putting a form between someone and a game they just waited to download is the wrong trade.
+Reduced motion still picks itself up from the OS signal, so the player who most needs a setting gets
+it without ever finding one.
+
+## The playtest — what to ask for **[DECIDED 2026-08-27]**
+
+Five to ten trusted people, before any public release. **Three questions, in priority order:**
+
+1. **Does it run on a machine that is not yours?** Nothing ever has.
+2. **Is it comprehensible without you in the room?**
+3. **Does the subject matter land the way you intend?** — the one you cannot judge yourself, and the
+   reason this is a trusted group rather than a public build.
+
+**Give them the seed feature** (`GAME-DESIGN.md` §19.3) so anything they hit comes back reproducible.
+**Balance feedback is a bonus, not the point** — the simulation can already measure balance, and it
+cannot measure any of the three above.
