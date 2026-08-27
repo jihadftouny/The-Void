@@ -87,7 +87,8 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
 
 - **M1 (state foundations)** — no play-check; pure serializable state (karma vector, item/inventory
   schema, standard D&D stat formula, save migration). Verified headlessly (411 tests).
-- **M2 (skills + 24 conditions)** — the engine can now `cast` and all 24 status effects work, but:
+- **M2 (skills + conditions)** — the engine can now `cast` and all status effects work *(the set is
+  **25**, not 24 — `exposed` is the 25th; `GAME-DESIGN.md` §21.2)*, but:
   - [ ] **In-UI Cast button + skill picker** is NOT wired yet (engine-only this milestone) — a render
         follow-up. Confirm you're OK that casting isn't yet clickable in the desktop UI.
   - [ ] **Combat feel with casting** — once wired: are starting charges too scarce? Is enemy-side
@@ -105,7 +106,8 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
         meeting str-req/playing Scavver each *visibly* making you harder to hit. Wrong = trivially easy,
         or defense choices produce no felt difference. (All constants are **M15 placeholders**.)
 - **M5 (equipment engine — Tibia UI DEFERRED)** — the inventory paperdoll is now the authoritative
-  equipment system (equip/unequip/swap across 9 slots + backpack; combat & AC read from the slots; save
+  equipment system (equip/unequip/swap across 9 slots + backpack — ⚠ **the design is now SEVEN slots**
+  (`GAME-DESIGN.md` §14.7); the shipped engine still has 9 and needs a migration; combat & AC read from the slots; save
   migrated v2→v3). **The bespoke Tibia-style visual UI was deliberately NOT built** — it needs your
   art-direction and can't be verified headlessly:
   - [ ] **The Tibia visual paperdoll UI is a dedicated collaboration pass with you** (drag-drop slots,

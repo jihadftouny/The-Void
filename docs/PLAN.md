@@ -27,14 +27,14 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 1 — engine, before any UI
 
-**#1 `engine-foundations`** — one pipeline unit, four changes, all cheap now and expensive later:
-1. **Equip/unequip become `step` inputs.** Restores reproducibility from `seed + inputs`. Today the
-   render layer mutates state directly.
-2. **`description` + `flavour` on every content schema** (items, skills, conditions, perks).
-   Currently blocks *all* content authoring — there is nowhere to put the words.
-3. **The floor-mechanic hook** — let the battle loop fire the existing relic effect/trigger pipeline
-   with a per-floor effect list from data.
-4. **Floor-4 karma counts double** in `computeVerdict`. No new state.
+**#1 `engine-foundations`** — one pipeline unit, **six** changes, all cheap now and expensive later:
+1. **Equip/unequip become `step` inputs.** Restores reproducibility from `seed + inputs`.
+2. **`description` + `flavour` on every content schema.** Blocks *all* content authoring today.
+3. **The floor-mechanic hook** — fire the existing relic trigger pipeline with a per-floor effect
+   list from data. **Must be DIRECTION-AWARE** (the Hollow ascent runs 5→1).
+4. **Floor-4 karma counts double** in the verdict. No new state.
+5. **Rename conditions** to the design vocabulary (§14.4). Needs a `SAVE_VERSION` bump + migration.
+6. **Redefine Quick/Slow** as the **tempo gauge** (§16.1) — `initiativeOrderTwist` is a dead no-op.
 
 **#2 `floor-mechanics` + balance re-run** — all five floors per `GAME-DESIGN.md` §8. Floor 2's
 illusions matter most: they are the **only trigger for the clarity↔delusion karma axis**, which
@@ -50,8 +50,8 @@ never in the game bundle, never touched by a test.
 **#4 probe 04 + approve references** — probe 03 predates `WORLD.md` and is partly wrong. Re-probe
 against the finished world, approve one image as the style anchor. **Also rotate the API key.**
 
-**#5 four gated batches** — environments (7) → characters (5) → enemies (32) → bosses (9).
-53 assets × 3 ≈ 159 images ≈ $10.65 batched. **No interface batch** — the austere typographic UI is
+**#5 four gated batches** — environments (7) → characters (5) → enemies (**30**) → bosses (8).
+**50 buildable now** (150 images ≈ $10.05 batched); 52 once Ash-Wretch and the Warden executioner exist in code. **No interface batch** — the austere typographic UI is
 the Memorians' file on you.
 
 ### UI
@@ -95,31 +95,32 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 
 ## Interview status
 
+**✅ ALL TWENTY ROUNDS ARE DONE** (2026-08-25 → 27). The queue and the full record are in
+**`docs/INTERVIEW-PLAN.md`**; every answer is written into an authoritative document.
+
 | Area | State |
 |---|---|
-| **Lore / world** | ✅ **Done.** Six rounds. Remaining items (rival houses, the Kingpins as people, Absolution above ground, where the body is) are **deliberately parked** and block nothing |
-| **Scope / Tier 1** | ✅ **Done.** All seven decided — see the banner in `SCOPE-AUDIT.md` |
-| **Floor mechanics** | ✅ **Done.** All five specified in `GAME-DESIGN.md` §8 |
-| **Visual** | ✅ **Done 2026-08-26.** Audio in scope at full ambition (effects + ambience + a composed score; Lyria is on the same key); bundle one open monospace; all four ship-asset groups in scope; backdrops stay 1K. `ART-BIBLE.md` §10–12 |
-| **Design / Tier 2** | ✅ **Done 2026-08-26.** Relics only from deals; karma bends the world and never the numbers; finish the three half-wired progression systems; rename conditions to the design vocabulary. `GAME-DESIGN.md` §14 |
+| Lore / world | ✅ Six rounds + the Hollow ascent. `WORLD.md` |
+| Scope / Tier 1 | ✅ All seven decided |
+| Floor mechanics | ✅ All five, and **bidirectional** |
+| Visual & audio | ✅ Art direction, typeface, ship assets, and the **thinning score** |
+| Design / Tier 2 | ✅ Loot, karma, progression, conditions, elements, class kits |
+| Bosses & talk | ✅ Identities, boss agents, and **talking to bosses** in free text |
+| Release | ✅ Licence, free on itch, no telemetry, store page, first run, playtest |
 
-> ## ⛔ THE INTERVIEWS ARE **NOT** FINISHED
->
-> An earlier version of this file claimed *"everything else that remains is building and authoring,
-> not deciding."* **That was wrong**, and a second audit (`docs/SCOPE-AUDIT-2.md`, 2026-08-26) proved
-> it. It found:
->
-> - **24 open decisions** still in the authoritative docs, including **five live `[PROPOSAL]` tags**.
->   At least five block units **#6–#8**, which this file listed as ready to build — the equipment
->   **slot set**, the **typeface**, the **turn/initiative model**, the **test environment**, and
->   **min-spec quality gating**.
-> - **12 whole product areas never discussed at all.** Only localisation and telemetry are safe
->   defaults. **Four block shipping:** legal/licensing, the **content warning**, the update
->   mechanism, and **accessibility**.
-> - **11 decisions already made by accident in code**, three of which **silently destroy player
->   data** — quitting mid-run voids all unlock progress, winning leaves a resumable save, and a
->   corrupt unlock store wipes everything with no warning. Plus: **you can flee the floor-4 Warden**,
->   the encounter whose entire function is to deliver the verdict.
->
-> **Do not start #6, #7 or #8 until §A of audit 2 is worked through.** The rest of this file's
-> ordering still holds.
+**What is left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
+generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
+one **parked** (localisation), and eight **bugs** whose fixes are already specified.
+
+### Newer work items not in the dependency graph above
+
+| # | Item |
+|---|---|
+| **#15** | The audio layer — effects, ambient beds, and the thinning score (Lyria is on the same key) |
+| **#16** | Bundle **JetBrains Mono**, re-check the type scale against a real face |
+| **#17** | Ship assets — app icon, title art, store art, cursors |
+| **#18** | **The Hollow ascent campaign** — 5→1, ends at the Undercity threshold |
+
+> **Still true and worth repeating:** three bugs **silently destroy player data** (quitting mid-run
+> voids all unlock progress; winning leaves a resumable save; a corrupt unlock store wipes
+> everything). Fixes are specified in `FINDINGS.md` §4. **The code has not changed yet.**

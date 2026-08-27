@@ -7,7 +7,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > D&D-style game with a **local-LLM narrator** over the top (engine owns all rules/numbers). Five-floor
 > psyche-descent, die-and-restart with **unlocks-only** meta-progression, a **hidden multi-axis karma
 > ("Nature")** that bends world + mechanics and resolves into a **blended ending** (floor 4 is the
-> karma reckoning). Full-depth systems: classes + signature skills, 24 conditions, ~24 enemy families +
+> karma reckoning). Full-depth systems: classes + signature skills, **25** conditions, 24 enemy families +
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
@@ -41,7 +41,7 @@ full accessibility including a screen-reader pass; licence, free itch release an
 (`docs/SHIPPING.md`). **The engine writes the choices — the LLM-authored-choices plan is dropped**,
 which shrinks M11 substantially. **Min spec now requires a GPU.**
 
-**In flight:** `engine-foundations` (equip as a `step` input · description/flavour fields · the
+**Next up (NOT started — both branches are empty; only plans exist):** `engine-foundations` (equip as a `step` input · description/flavour fields · the
 floor-mechanic hook · floor-4 verdict weighting · condition rename · Quick/Slow redefined) and
 `art-pipeline` (batch mode · corner-pixel gate · reference conditioning · alpha keying), planning in
 parallel on disjoint territory.
@@ -66,8 +66,8 @@ no warning. Fixes are specified in `docs/FINDINGS.md` §4; the code has not chan
 | M9 — In-run progression (frequent level-up picks) | ✅ **merged to `main`** (726 tests); XP-frequent leveling + draft-1-of-3 (skill/upgrade/perk/stat) + lean start + auto-HP |
 | M-UI — Functional UI (surfaces the whole engine, hand-testable) | ✅ **merged to `main`** (753 tests); plain/utilitarian — the turn-based battle screen is the NEXT unit |
 | M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ needs your PROSE |
-| M11 — LLM layer to spec (narrate+choices, floor voices, boss-agent infra) | ⬜ (working narrator slice exists; not yet to spec) |
-| M12 — Bosses: five unique encounters as agents | ✅ **merged to `main`** (894 tests); 5 boss mechanics + the floor-4 karma verdict gate + two endings; boss PROSE still yours |
+| M11 — LLM layer to spec (**narrate ONLY** — floor voices, beat significance, karma-in-prompt, boss agents, boss talk) | ⬜ **shrank 2026-08-25** — grammar-constrained choices + the tool registry are DROPPED; the engine writes the choices |
+| M12 — Bosses: five unique encounters as agents | 🔶 **4 of 5** merged (894 tests) — `boss.ts` has **four** combat bosses; the **floor-4 executioner fight does not exist** (`PLAN.md` #11). Karma verdict gate + two endings done. **No boss is an agent yet.** Boss prose still yours |
 | M13 — Meta-progression: unlocks & mastery feats | ✅ **merged to `main`** (943 tests); persistent unlock store, feats wired to bosses/endings/spare, gradual bestiary reveal |
 | M14 — Karma payoff: blended-spectrum endings | ⬜ (two endings exist via M12's gate; the blended spectrum + prose remain) |
 | M15 — Balance pass (tough but fair), sim-verified | ✅ **merged to `main`** (960 tests); sim harness + report + tuned constants; **32.9% baseline win**; per-class refinement pending |
@@ -75,7 +75,7 @@ no warning. Fixes are specified in `docs/FINDINGS.md` §4; the code has not chan
 | M17 — Package & ship (itch) | ⬜ |
 
 **Pre-M0 base (built, verified, on a stacked review branch awaiting merge):** deterministic engine
-(combat/stats/2 stub classes/act-gated leveling/enemies/11-of-24 conditions/shop/rest/gold/5-act/final
+(combat/stats/2 stub classes/act-gated leveling/enemies/11-of-25 conditions/shop/rest/gold/5-act/final
 boss/`step` controller), save/load, Kaplay UI shell, desktop Electron app w/ local LLM narrator
 (full run narrated), device-agnostic GPU selection, shared model-cache. ~378 tests green. The v1 Java
 port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M11–M12.
@@ -116,7 +116,8 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
   white/grey/black** Ash City, the fire is OUT · bone Angelic · arterial True Void), the Undercity
   as a flooded industrial level, the Ash City as an *endless varied* city, Floor 4 as ruins opening
   into a buried city, and **Ash-Wraith vs Ash-Wretch as two different enemies** (a new family — an
-  engine change, through the pipeline). Batch: 39 → **53 assets** (~$21).
+  engine change, through the pipeline). Batch: **50 buildable now, 52 once the engine catches up**
+  (~$10.05 / $10.45 **batched** — batch mode is half the interactive rate).
 - **THE WORLD IS COMPLETE — `docs/WORLD.md`, six interview rounds, every open point closed.** The
   full mechanism: **a brainchip holds a recorded life; taking it out leaves a person hollow; the
   hollow is the Void.** The Memorians' ordinary day job *is* the cause, and only they know it —
@@ -190,7 +191,7 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 ### 2026-08-05 — Full scope interview + mechanics-first re-scope (M0 docs)
 - Ran a thorough scope interview. **Recalibrated to mechanics-first** (deep RPG is the heart; LLM
   narrates over it) and expanded scope: several distinct classes w/ signature kits, player skills +
-  all 24 conditions, ~24 enemy families + affixes, 5 boss agents, full Tibia-style inventory,
+  all **25** conditions, 24 enemy families + affixes, 5 boss agents, full Tibia-style inventory,
   build-defining relic trinkets, authored uniques + rarity-scaling, rich consumables, drops+chests+
   shops loot, thematic economy, unlocks-only meta-progression, hidden multi-axis karma with a
   blended-spectrum ending, and the locked five-floor spine (Undercity → Entrance to the Void → Ash

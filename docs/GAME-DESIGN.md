@@ -13,8 +13,8 @@
 ## 1. The one-line pitch
 
 A **mechanics-first, roguelike descent** through five floors of the Void — a crunchy Dungeons &
-Dragons-style RPG where a **local language model narrates** the journey and writes your choices, but
-the deterministic engine owns every rule and number. The descent is lived experience of
+Dragons-style RPG where a **local language model narrates** the journey, but the deterministic engine
+owns every rule and number — **including the choices** (§10). The descent is lived experience of
 psychosis rendered as a dungeon: it starts literal and becomes a journey into a fracturing mind. What
 you *do* — everything you do — is read by the Void and decides how it ends.
 
@@ -32,8 +32,9 @@ you *do* — everything you do — is read by the Void and decides how it ends.
 4. **Karma / "Nature" is a core pillar — and hidden.** The Void reads everything you do into a hidden
    nature state that bends both the world and the mechanics mid-run and resolves into a *blended,
    analog* ending. The player perceives it only through the narrator's tone and the world's reactions.
-5. **Engine-authoritative LLM.** The narrator narrates and writes the choice options; the engine owns
-   all dice, damage, loot, and state. Every LLM output that feeds the game is grammar/JSON-constrained.
+5. **Engine-authoritative LLM.** The narrator **narrates only**; the engine owns all dice, damage,
+   loot, state **and the choice options** (§10 — reversed 2026-08-25). Every LLM output that feeds the
+   game is grammar/JSON-constrained.
 6. **Tough but fair.** Real challenge, meaningful death, mastery-driven. Target run length ~45–90 min.
 
 ---
@@ -91,10 +92,11 @@ Each is a different way of confronting the descent. Signature twist in **bold**.
   §19.5]** — **the engine writes the options**; the narrator may *frame* the moment in prose but does
   not author or label the choices, and **stats are no longer in the draft** (a per-level allowance
   instead). The earlier "grammar-constrained to the valid option set" is superseded.
-- **Draft pool = class kit + shared pool:** weighted toward your class (new signature skills; or
+- **Draft pool = class kit + shared pool** *(stat bumps REMOVED from the draft — §19.5)***:** weighted toward your class (new signature skills; or
   upgrades to owned skills — +damage / +charge / add a condition / cheaper cost), mixed with universal
   perks (max charges, crit, evasion, lifesteal…) and **stat bumps** (investing a stat point is one
-  draftable option — stats do **not** auto-grow).
+  draftable option — stats do **not** auto-grow). **~~SUPERSEDED §19.5~~ — stats LEFT the draft:
+  a per-level allowance you spread yourself, max level 20.**
 - **Start lean, draft your kit:** begin with only **1–2 core class skills**; assemble the rest of the
   kit + perks over the run — so no two runs of the same class play alike.
 - Exact numbers (XP curve, hit dice for Penitent/Hollow, charge costs, skill/perk values) settle in
@@ -114,12 +116,14 @@ Each is a different way of confronting the descent. Signature twist in **bold**.
 - **d20 to-hit** with advantage/disadvantage, crits (nat 20), fumbles (nat 1) — **kept**.
 - **Enemies now roll to hit vs your Armor Class** (fixing the "enemies always hit" gap), so armor,
   dexterity, and shields have real defensive value. **[DECIDED — new]**
-- **Status effects are a full tactical layer:** implement **all 24 conditions** (the 13 currently
+- **Status effects are a full tactical layer:** implement **all 25 conditions** *(24 + `exposed`;
+  §21.2 — the code was right and this document was miscounting)* (the 13 currently
   inert — poison + the six stat *augments* and six *deprivations* — become real), so skills, weapons,
   relics, and enemies all apply/cure/exploit them. **[DECIDED]**
 - **Elements & resistances** (the existing 7-element resistance array) become meaningful now that
   players cast elemental skills and wear gear with resistances. **[DECIDED — activated]**
-- **Battle actions:** fight · **cast** (new, §"Player skills") · potion · run · **spare/release**
+- **Battle actions:** fight · **cast** (new, §"Player skills") · **item** · run · **spare/release**
+  · **talk** (bosses only, §20). *No separate "potion" action — healing folded into items, §18.4.*
   (new — offered vs karma-weighted enemies; moves Nature, sometimes riskier/costlier than killing; see
   §9). **[DECIDED]**
 
@@ -129,7 +133,7 @@ Each is a different way of confronting the descent. Signature twist in **bold**.
   (element + up to 2 inflicted/removed conditions + charge cost).
 - Depth = **signature kits** (a handful of strong abilities per class), not a sprawling spellbook.
 
-### The 24 status conditions **[DECIDED 2026-08-05 — activation plan]**
+### The 25 status conditions **[DECIDED 2026-08-05 — activation plan; count corrected §21.2]**
 Already functional (11): burn, freeze, electrify, bleed, stun, fracture, regeneration, sleep,
 insanity, push, aired. Activate the dormant 13:
 - **poison** — damage-over-time that partly ignores mitigation; cured by *antidote* (a consumable,
@@ -211,10 +215,10 @@ insanity, push, aired. Activate the dormant 13:
   - **Utility/tools:** Smoke Vial (guaranteed flee), Lodestone (reroll a draft/offer), Ash-Mask (negate
     floor-3 ash-drain), Static Flare (reveal/destroy illusions; floor-2), Echo Bell (reveal a
     sacrifice-deal's true cost first).
-  - **Using a consumable costs your turn** (a battle action, like the current potion) — real
+  - **Using a consumable costs your turn** (a battle action) — real
     opportunity cost. **[DECIDED]**
-  - **Scarcity: meaningful but not scarce** — regularly found/used, a normal part of the kit (not a
-    rare treat). **[DECIDED]** Acquired via found loot + sacrifice-deals (§11).
+  - ~~**Scarcity: meaningful but not scarce**~~ **REVERSED §18.4 — healing IS scarce**, and potions
+    fold into the consumable system. Acquired via drops + chests (§14.8).
 - **Loot comes from drops + chests + sacrifice-deals** **[DECIDED — corrected 2026-08-25]**: enemies
   drop loot, floors hide chests/caches, and an altar/stranger offers **deals paid for with a part of
   yourself**. **There are no shops and no currency** — an earlier draft of this line said "shops sell
@@ -391,7 +395,7 @@ resolution rather than modifying a number. Note that floor 5 is only reached by 
 
 | # | Floor | Tone / imagery | Enemies | Signature mechanic | Boss |
 |---|---|---|---|---|---|
-| 1 | **The Undercity** | grounded neo-noir; rain, neon, grime — the last "real" place | Gangers, Security Drones (Mech), Mutant Strays (Beast), Cyber-Enforcers | *The world is still solid.* No distortion; teaches the base rules and takes your **first karma readings** | **Undercity Kingpin** — the mission's literal target; the last purely human enemy. His end pulls you into the Void |
+| 1 | **The Undercity** | **flooded industrial** — standing water with a green chemical sheen, corroded pipework, low metallic fog. *(§21.3: NOT the "rain, neon, grime" this cell used to say)* — the last "real" place | Gangers, Security Drones (Mech), Mutant Strays (Beast), Cyber-Enforcers | *The world is still solid.* No distortion; teaches the base rules and takes your **first karma readings** | **Undercity Kingpin** — the mission's literal target; the last purely human enemy. His end pulls you into the Void |
 | 2 | **Entrance to the Void** | blinding white, red reflections, distortion — onset of madness | Reflections, Mirror-Selves, Distortions, Static-wraiths | *You can't trust what you see.* Illusory enemies (striking them wastes a turn); **WIS checks** to tell real from false; Mirror-Selves copy your kit. The **clarity↔delusion** floor | **The Reflection** — a mirror of you that fights with your own class's abilities |
 | 3 | **The Ash City** | endless grey city, falling ash, silence — emptiness of madness | **Feelings** (Grief, Rage, Dread, Numbness) and the **Seven Sins** as named elites — all **karma-weighted** | *The ash drains you.* Dampened healing, bleeding resources, an **endless** city until you find the way down — attrition mirroring emptiness | **Your most-indulged Sin/Feeling made flesh** — chosen by your karma, so it's a different, personal fight each run |
 | 4 | **The Angelic Underground** | luminous, sacred, beautiful — the moral crucible | Angels, Choir, Guardians (Ancestral), the Judged — fighting them can *be* desecration | *The reckoning.* Every irreversible choice is tracked and **amplified by carried karma** (§7); the floor tempts you with loot you can only take by desecrating | **The Warden/Judge** — an angel whose verdict is grace or cast-down, decided by carried karma × your floor-4 choices |
@@ -554,7 +558,8 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
     karma-weighted enemies in a run; Penitent = reach the floor-4 grace ending; Hollow = be cast down
     and beat your Hollow self.
   - **Skill/perk feats** (mastery, broaden the draft pool): e.g. Detonate 5 conditions in one hit →
-    Neuromancer skill; win a battle unhurt → defensive perk; get a kill with each DoT → a DoT relic;
+    Neuromancer skill; win a battle unhurt → defensive perk; get a kill with each DoT → a DoT **deal
+    offer** (*not a relic drop — relics are deal-only, §14.1*);
     3-crit streak → crit perk.
   - **Relic feats:** first time reaching each floor → that floor's relics enter the pool; first
     sacrifice-deal → deal-themed relics; beat a floor boss → a themed relic. Full list in M13.
@@ -590,7 +595,7 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 | Classes | 2 stubs (hit die + gear only) | ~3–5 distinct classes w/ signature kits | **large** |
 | In-run leveling | 4 act-gated | frequent level-up choices | medium |
 | Player skills | none (players can't cast) | signature kits per class | **large** |
-| Status conditions | 11 of 24 work | all 24 as a tactical layer | medium |
+| Status conditions | 11 of 25 worked at v2 | **all 25** as a tactical layer (§21.1) | medium |
 | Enemy variety | only "Beast" spawns | ~24 families + affixes | **large** |
 | Bosses | 1 plain scaled enemy | 5 unique bosses, each an LLM agent | **large** |
 | Inventory | swap 1 weapon + 1 armor | full Tibia-style paperdoll + backpack | **large** |
@@ -603,7 +608,7 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 | Spare/release action | none | new combat action for karma-weighted enemies | small |
 | Meta-progression | none | unlock-only, feat-based | medium |
 | Floors/story prose | empty bodies | 5 authored floors + arcs | **large** |
-| LLM layer | prompt-builder stub | narrate+choices, floor prompts, boss agents | **large** |
+| LLM layer | prompt-builder stub | **narrate only** — floor prompts, beat significance, karma-in-prompt, boss agents + boss talk (§10/§20) | **medium** — *shrank; choices are engine-written* |
 | Balance | possibly unwinnable | tough-but-fair, sim-verified | medium |
 
 ---
@@ -753,9 +758,10 @@ conflict also needs a clear UI state so the player understands *why* the off-han
 **Backpack: a fixed slot count, no weight.** The bag holds N items; full is full. Readable at a
 glance, draws as a grid, and the interesting decision is **what to drop** when something better falls
 late in a run. Weight systems add arithmetic the player has to do in their head without adding much
-choice. The exact N (12? 16?) is a balance number, settled with the slot brainstorm below.
+choice. The exact N (12? 16?) is a balance number.
 
-> **STILL OPEN — the equipment slot set.** The author's direction is to **trim the Tibia list to a
+> **~~STILL OPEN — the equipment slot set.~~ CLOSED — see §14.7 immediately below: seven slots.**
+> *(Original note kept for history:)* The author's direction is to **trim the Tibia list to a
 > leaner set**, and to **brainstorm it** rather than pick from a menu. Until that lands,
 > `screens-restyle` (#8) cannot draw the paperdoll. See `docs/FINDINGS.md` B2.
 
@@ -1341,8 +1347,9 @@ insanity, regeneration, push, aired, **exposed**.
 **Why the pairs earn their place:** one per stat makes the set **learnable by pattern rather than by
 memory** — 25 conditions is a lot to teach, and half of them following a single rule is what makes
 that possible. They are also **what makes stats matter inside a fight** rather than only at creation
-and level-up. That has become truer since: **quick/slow now drive the tempo gauge** (§16.1) instead of
-sitting on a dead no-op, and **WIS gates floor-2's illusion checks** (§8).
+and level-up. That becomes truer once **quick/slow drive the tempo gauge** (§16.1) and **WIS gates
+floor-2's illusion checks** (§8). ⚠ **Neither is built yet** — `initiativeOrderTwist` and
+`illusionSightTwist` both still return 0. Scheduled in `PLAN.md` #1/#2.
 
 ### 21.2 `exposed` is the 25th — the design document was wrong, not the code
 
@@ -1369,7 +1376,7 @@ What each family must now be checked against:
   (`WORLD.md` §0c), not metaphors.
 - **The cyberpunk gradient** (`ART-BIBLE.md` §4): high on floor 1, zero by floor 3.
 
-> **This is not cosmetic and it is not deferrable.** **Art batch 3 generates 32 enemy sprites from
+> **This is not cosmetic and it is not deferrable.** **Art batch 3 generates 30 enemy sprites from
 > these names and themes.** Prompting sprites from text that predates the world is exactly the
 > mistake that produced a medieval knight in a cyberpunk game. **The rewrite must land before that
 > batch.**

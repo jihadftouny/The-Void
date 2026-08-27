@@ -11,7 +11,7 @@ _Authoritative record of the UI scope decided in the 2026-08-24 scope interview.
 The engine is finished and merged (M1–M15, 960 tests). The UI is not. Today the battle screen is a
 220-pixel sidebar of plain text lines plus a flat row of buttons: you press **Fight**, a line of
 narration replaces the last one, and two numbers change in the corner. It does not read as a fight,
-and it hides almost everything the engine actually computes — 24 status conditions, dice rolls,
+and it hides almost everything the engine actually computes — 25 status conditions, dice rolls,
 skill charges, affixes, per-round exchanges. This document is the plan for fixing that.
 
 The guiding constraint is unchanged from `CLAUDE.md` §1: **all of this is render layer.** Not one
@@ -40,7 +40,8 @@ line, with the full log expandable.
 │ JIHAD  Enforcer lv4   │  ▸ Fight             │
 │ HP █████████ 41/52    │    Cast              │
 │ ⚡ 3/5   Rage 2       │    Item              │
-│ ⌁ Guarded (2)         │    Potion / Spare    │
+│ ⌁ Guarded (2)         │    Item / Spare      │
+│ tempo ▆▆▆▆░ 0.8       │    Talk (boss only)  │
 └───────────────────────┴──────────────────────┘
 ```
 
@@ -432,7 +433,7 @@ afterwards** — the same argument already made and accepted for audio hooks (`A
 **Tooltips on everything + a codex that fills in as you go.** No forced tutorial sequence.
 
 - **Tooltips:** every condition chip, skill, item, stat and perk explains itself on hover or click.
-  This is what makes 24 conditions learnable without a manual. **Depends on the `description` fields
+  This is what makes 25 conditions learnable without a manual. **Depends on the `description` fields
   from `engine-foundations` (#1)** — there is currently nowhere to put the text.
 - **Codex:** fills in as you encounter things, reusing the gradual bestiary-reveal machinery that
   already exists. It is where you look up the thing you met two floors ago.

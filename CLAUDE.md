@@ -13,7 +13,8 @@ status conditions, skills, sacrifice-deals/rest, XP across five Acts, bosses). S
 > milestone plan in `docs/ROADMAP.md` (v3), and every known gap in `docs/SCOPE-AUDIT.md`.
 
 The engine is a from-scratch port of the original Java implementation (`.legacy/The-Void/`) on
-TypeScript + **Vite** + **Vitest**, with **Kaplay** as the visual-atmosphere layer. Earlier ports
+TypeScript + **Vite** + **Vitest**. **Kaplay is a dependency that nothing imports yet** — reserved
+for the **not-yet-built** canvas atmosphere layer (`docs/PLAN.md` #7). Earlier ports
 (`.legacy/The-Void-Py`, `.legacy/The-Void-Web`) are reference only — the Java version is canonical
 for the base mechanics.
 
@@ -54,8 +55,9 @@ core (breaks reproducibility), and class instances/functions in saved state (bre
    saves work and state is inspectable. No class instances, functions, or canvas objects in state.
 5. **Engine-authoritative LLM.** The local model narrates and adjudicates *within* the rules — it
    selects which engine mechanics fire, but never invents numbers or mutates state directly; all
-   outcomes flow through the engine. Every LLM output that feeds the game (choices, tool
-   invocations) is grammar/JSON-constrained. The LLM layer (`src/llm`) is pure and headlessly
+   outcomes flow through the engine. **The ENGINE writes all player choices** (decided 2026-08-25 —
+   `docs/GAME-DESIGN.md` §10; the model-authored-choices plan is dropped). Every LLM output that does
+   feed the game is grammar/JSON-constrained. The LLM layer (`src/llm`) is pure and headlessly
    testable against a fake model; the real model sits behind the runtime interface only.
 6. **Desktop-first, responsive.** (Amended 2026-08-02 from mobile-first: local LLMs are weakest on
    phones.) Target desktop; keep layouts responsive so a mobile path (smaller model or engine-only
@@ -70,7 +72,9 @@ core (breaks reproducibility), and class instances/functions in saved state (bre
   a one-time ~2.5 GB fetch, then fully offline forever. Keeps the itch upload small and lets the
   model be upgraded without shipping a new build. **The store copy must say so honestly**, and the
   first-run flow needs a real failure path.
-- `npm run dev` — dev server. `npm run build` — typecheck (`tsc --noEmit`, which really checks `src`)
+- **`npm run desktop` — run the game** (Electron). `npm run dev` serves `desktop.html` only and
+  **cannot run outside Electron** (the renderer calls the Electron IPC at module scope).
+  `npm run build` — typecheck (`tsc --noEmit`, which really checks `src`)
   + Vite build. `npm test` — Vitest (logic + llm cores, headless Node). `npm run typecheck`.
 - **Min spec: a GPU is required** (decided 2026-08-26). The 4B model is the only tier shipped — the
   1.7B fallback the N1 spike recommended was rejected. On a no-GPU machine 4B measures ~7.6 tok/s

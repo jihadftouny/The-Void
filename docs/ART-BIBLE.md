@@ -186,7 +186,7 @@ and dies out completely as you descend:
 
 | Floor | Name | Tech level | Imagery |
 |---|---|---|---|
-| 1 | The Undercity | **High** | Neo-noir: rain, neon, grime. Drones, augmetics, riot gear, gangs, fixers. *The last "real" place* |
+| 1 | The Undercity | **High** | **Flooded industrial** — standing water with a green chemical sheen, corroded pipe galleries, low metallic fog. Drones, augmetics, riot gear, gangs, fixers. *The last "real" place.* **(§4: the green is in the water and the air, NOT on signage — this is not neon rain)** |
 | 2 | Entrance to the Void | **Near zero** | *"Blinding white, red reflections, distortion."* Mirrors, doubles, static, signal. Onset of madness |
 | 3 | The Ash City | **Zero** | *"Endless grey city, falling ash, silence."* Emotions made flesh; the Seven Sins |
 | 4 | The Angelic Underground | **Zero** | *"Luminous, sacred, beautiful."* Angels, choirs, the judged. The moral crucible |
@@ -311,7 +311,7 @@ principle is **what constrains what** — never generate a thing before the thin
 | **0** | ~~Worldbuilding interview~~ | ✅ **DONE 2026-08-25 → `docs/WORLD.md`.** Read it before writing any prompt | — |
 | **1** | **Environments** — 5 floor backdrops + altar/shrine | Establish light, palette, geometry and tech level for the whole game. Every later asset must read *against* these | 7 |
 | **2** | **Characters** — 5 class portraits | Must read against the environments. They also anchor the recursion set, so they cannot come after the enemies that mirror them | 5 |
-| **3** | **Enemies** — 24 families + 7 Sins + Ash-Wretch | Conditioned on both. The five mirror-enemies are versions of the *characters*, which must exist first | 32 |
+| **3** | **Enemies** — 23 families + 7 Sins | Conditioned on both. The five mirror-enemies are versions of the *characters*, which must exist first. *(Ash-Wretch deferred — §4b)* | **30** |
 | **4** | **Bosses** — 5 + 3 Sin identities + Warden executioner | The most specific and most authored assets; they inherit everything above | 9 |
 | **5** | **Interface furniture** — if any | Designed *against* finished art, never before it. See the open question below | ? |
 
@@ -360,26 +360,33 @@ not exist in the game. Resolution: keep **both**, as distinct enemies.
 > floor assignment — and it must go through the pipeline like any other engine change, not be hand
 > edited. Asset count rises 52 → **53**. Flagged for the `art-pipeline` unit's plan.
 
-## 4b. The asset list — 53 assets **[LOCKED 2026-08-25, arithmetic corrected 2026-08-26]**
+## 4b. The asset list — 50 now, 52 eventually **[CORRECTED 2026-08-27]**
 
-Raised from 39 because the original budget silently compromised three things the design actually
-needs, then to **53** when Ash-Wretch became a separate enemy from Ash-Wraith (§4).
-**53 × 3 variations = 159 images ≈ $10.65 batched** (§1b). *An earlier version of this line said
-"52 × 3 = 156 ≈ $20.90" — the count was stale and the price was the interactive rate, not the
-batched one.* **Item icons are additional — see §13 (~50 more assets).**
+> **⚠ An off-by-one is fixed here.** Earlier versions said 53, by adding "+7 Seven Sins" on top of
+> "24 enemy families". But **`sevenSins` IS one of the 24 families** (verified against
+> `src/data/enemyFamilies.json`, which has exactly 24 ids including it) — so the seven named Sins are
+> a net **+6**, not +7. The old 39-asset budget decomposed as 24 families + 5 backdrops + 5 class +
+> 5 boss, which confirms the 24 was always the complete family list.
+
+**Two of the assets are DEFERRED** by the engine-first ruling (2026-08-26): the **Ash-Wretch** has no
+`enemyFamilies.json` entry, and the **Warden's executioner form** has no encounter in code — there
+are four combat bosses, not five. Art does not run ahead of the engine.
 
 | Group | Count | Notes |
 |---|---|---|
-| Enemy family sprites | 24 | One per family in `src/data/enemyFamilies.json` |
-| **Seven Sins** | **+7** | Pride, Envy, Wrath, Sloth, Greed, Gluttony, Lust — *named elites*, and one becomes your Floor 3 boss. Sharing one sprite would be very visible |
+| Enemy family sprites | 23 | The 24 families **minus** `sevenSins`, which is itemised below |
+| **Seven Sins** | **7** | Pride, Envy, Wrath, Sloth, Greed, Gluttony, Lust — *named elites*, each fighting like its sin (§17.2 of GAME-DESIGN). One becomes your Floor 3 boss |
 | Floor backdrops | 5 | 16:9, deep-shadow foreground |
 | Class portraits | 5 | Enforcer, Neuromancer, Scavver, Penitent, Hollow |
-| Boss portraits | 5 | Kingpin, The Reflection, The Indulged, The Warden, Hollow Self |
-| **Sin-boss identities** | **+3** | The Cruelty, The Avarice, The Delusion (The Desecration = the base boss portrait). The Floor 3 boss is *"your most-indulged sin made flesh, personal to each run"* — that lands far weaker if it looks identical every time |
-| **Warden — executioner form** | **+1** | The Warden has two mutually exclusive presentations: a merciful judge, or a punishing executioner. The judge is the base portrait |
-| **Altar / shrine** | **+2** | The sacrifice economy's vendor is an *"altar/stranger"*, and `desecrateShrine` / `leaveOffering` / `honorDead` are implemented actions. These had **no art at all** in the original budget |
-| **Ash-Wretch** | **+1** | A new enemy, distinct from the Ash-Wraith (§4). **Needs an `enemyFamilies.json` entry — engine work, tracked separately** |
-| **Total** | **53** | |
+| Boss portraits | 5 | Kingpin, The Reflection, The Indulged, The Warden (judge), Hollow Self |
+| **Sin-boss identities** | **+3** | The Cruelty, The Avarice, The Delusion (The Desecration = the base boss portrait) |
+| **Altar / shrine** | **+2** | The sacrifice economy's vendor, plus the shrine that `desecrateShrine` / `leaveOffering` / `honorDead` act on |
+| **BUILDABLE NOW** | **50** | **150 images ≈ $10.05 batched** |
+| *Ash-Wretch* | *+1* | ⏸ **Deferred** — needs an `enemyFamilies.json` entry first |
+| *Warden — executioner* | *+1* | ⏸ **Deferred** — the floor-4 executioner fight does not exist in code |
+| **Total once the engine catches up** | **52** | **156 images ≈ $10.45 batched** |
+
+**Item icons are additional** — see §13 (~50 more assets, 150 images ≈ $10.05 batched).
 
 ## 5. Known failure modes and their gates **[LOCKED]**
 
@@ -486,7 +493,8 @@ The design record was genuinely silent on these. Guessing produced the medieval-
   black particles. **24 families × 5 affixes = 120 combinations for zero extra assets**, consistent
   with the one-sprite-plus-effects rule, and instantly readable — which matters, because an elite
   that looks identical to a trash mob is a real legibility problem when it hits much harder.
-- **Item icons — deferred again, deliberately.** M5's Tibia-style inventory is still an unbuilt
+- ~~**Item icons — deferred again, deliberately.**~~ **SUPERSEDED §13 (2026-08-26): bespoke, one icon
+  per item, as a fifth batch.** The deadlock broke when the slot set landed. *(Original note:)* M5's Tibia-style inventory is still an unbuilt
   collaborative pass. Icons designed before that screen exists risk being the wrong size, shape or
   density. **Revisit only after the inventory has a real design**, then fit icons to it. Not in any
   batch until then.
@@ -516,7 +524,7 @@ The design record was genuinely silent on these. Guessing produced the medieval-
    different enemies (§4). The wraith is incorporeal and cold; the wretch is the solid cinder
    humanoid from probe 01. **Still requires a new enemy family in `src/data/enemyFamilies.json`,
    through the pipeline** — tracked in `docs/SCOPE-AUDIT.md`.
-5. ~~Karma's world-objects have no art.~~ **CLOSED** — altar and shrine are in the 52-asset list
+5. ~~Karma's world-objects have no art.~~ **CLOSED** — altar and shrine are in the asset list (§4b, now **53**)
    (§4b), which superseded the 39.
 6. ~~The five affixes have no visual treatment.~~ **CLOSED** — code effects, zero new art (§9
    settled list above).

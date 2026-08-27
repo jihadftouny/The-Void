@@ -39,15 +39,22 @@ required** — decided 2026-08-26; the 1.7B fallback was rejected and 4B is the 
 (`CLAUDE.md`, `GAME-DESIGN.md` §14.8). *This line previously said "typical laptop, no GPU".* Logic + LLM cores run and are tested **headlessly in Node** (fake model — never real
 inference in tests).
 
-### ✅ What already exists (completed infrastructure)
-A large base is built and verified, currently on a **stacked review branch awaiting merge** (the
-user's gate):
+### ⚠ The pre-M0 base — **HISTORICAL, superseded 2026-08-24. For today's state read `PROGRESS.md`.**
+
+*This section described the codebase as of ~2026-08-05 and was never updated. It is kept for
+history. **Everything below is out of date:*** the stack merged to `main` on 2026-08-24;
+**`shop` and `gold` are DELETED** (replaced by sacrifice-deals); there are **25 conditions, not
+"11 of 24"**; the **standalone Kaplay UI shell is DELETED** (`index.html` + `src/scenes/`, retired by
+M-UI2 — Kaplay is now a dependency nothing imports, reserved for the unbuilt canvas layer); and the
+count is **1029 tests, not ~378**.
+
+*Original text:*
 - **Deterministic engine** (`src/game`, pure, seeded RNG): d20 combat w/ advantage/crits/fumbles, 6
-  stats, 2 stub classes, act-gated leveling/XP, enemy generation, **11 of 24 status conditions**,
+  stats, 2 stub classes, act-gated leveling/XP, enemy generation, 11 of 24 status conditions,
   shop, rest, gold, the 5-act state machine, a final boss, and a serializable `step(state, input)`
   controller that plays a full run headlessly.
 - **Save/load** (safe encode/decode, corrupt-save rejection, version/migration seam).
-- **Kaplay UI shell** + **desktop Electron app** with a **local LLM narrator** that narrates a full
+- Kaplay UI shell + **desktop Electron app** with a **local LLM narrator** that narrates a full
   run beat-by-beat (Qwen3-4B GGUF, streaming, engine-authoritative fallback), **device-agnostic GPU
   selection**, and **shared model-cache**. ~378 tests green.
 - **The agentic loop** (plan/build/test/retro agents), `PROGRESS.md`, `HUMAN-CHECKS.md`, doctrine.
@@ -62,8 +69,8 @@ build from zero.
 From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if retrofitted:
 
 1. **Pure logic / render split.** All rules in framework-agnostic TS under `src/game` — no Kaplay,
-   DOM, or canvas there, ever. `src/render`/`src/scenes` (Kaplay) and `src/desktop` (DOM) only draw
-   state and forward input. The logic core runs and is tested headlessly in Node.
+   DOM, or canvas there, ever. `src/render` and `src/desktop` only draw state and forward input.
+   *(`src/scenes/` was deleted by M-UI2.)* The logic core runs and is tested headlessly in Node.
 2. **Deterministic seeded RNG.** Every gameplay random (dice, loot, encounters, prices, **karma
    resolution**) flows through `src/game/rng.ts`. Never `Math.random()`/`Date.now()` in `src/game`.
 3. **Data-driven content.** Weapons, armor, trinkets, uniques, consumables, skills, conditions,
@@ -100,7 +107,7 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 ### M2 — Player skills + the full 24-condition system
 - **Goal:** Players can finally act tactically; status play becomes real.
 - **Done when:** a `cast` action exists in the battle loop; a first skill set applies conditions; **all
-  24 conditions** (poison + 6 augments + 6 deprivations now active) tick correctly with hand-derived
+  25 conditions** (poison + 6 augments + 6 deprivations + `exposed`) tick correctly with hand-derived
   tests; elements/resistances affect skill damage; enemies use the same framework.
 - **Key decisions:** augment/deprivation names + effects (`GAME-DESIGN §5`); charge/cost model.
 
@@ -118,7 +125,9 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 
 ### M5 — Inventory & equipment (Tibia-style)  ★ first big new interactive system
 - **Goal:** A real inventory game on screen.
-- **Done when:** a paperdoll (helmet, amulet, two hands, armor, legs, boots, ring, ammo) + backpack
+- **Done when:** a paperdoll of **seven slots — head, body, hand ×2, feet, trinket ×2**
+  (`GAME-DESIGN.md` §14.7; amulet/ring/legs/back are **cut**) + backpack.
+  ⚠ **The shipped engine has 9 slots — a migration is needed.** Original line: (helmet, amulet, two hands, armor, legs, boots, ring, ammo) + backpack
   container; equip/unequip across slots; item comparison; **equipped effects apply** to stats/combat;
   fully serializable; DOM UI, responsive.
 - **Key decisions:** capacity/weight vs. slot-count only; two-handed vs. weapon+shield (`§6`).
@@ -133,7 +142,8 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 
 ### M7 — Loot sourcing & the thematic economy
 - **Goal:** Where gear comes from, and what you spend.
-- **Done when:** loot flows from **drops + chests + shops**; the economy is **reworked thematically**
+- **Done when:** loot flows from **drops + chests + sacrifice-deals** *(**not shops** — there are none,
+  and no currency; `GAME-DESIGN.md` §11/§14.1)*; the economy is **reworked thematically**
   (chosen direction — sacrifice / dual-currency / karma-priced, `§11`) with real sinks
   (gear/consumables/rerolls/services); the one-offer "mysterious stranger" is replaced by a proper
   shop encounter.
@@ -211,7 +221,9 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 - **Done when:** inventory/combat UX polish, hit/damage feedback, **per-floor Kaplay atmosphere**
   (white/red distortion, falling ash, angelic light, void dark), transitions — all render-side, none
   touching determinism; responsive.
-- **Key decisions:** what's quality-gated for the min-spec no-GPU laptop.
+- ~~**Key decisions:** what's quality-gated for the min-spec no-GPU laptop.~~ **CLOSED 2026-08-26** —
+  a **GPU is required**, and there is **no quality gating: 30fps with everything always on**
+  (`UI-DESIGN.md` §16).
 
 ### M17 — Package & ship (itch)
 - **Goal:** A double-click game.
