@@ -1379,3 +1379,31 @@ a second combat game layered on top of a player already learning 25 conditions.
 
 **Force remains the holy element**, shared by the angels, the Choir, the Seraph-Wardens and the
 Penitent (`WORLD.md` §7).
+
+### 21.5 Class kits: four signature skills, drafted up **[DECIDED 2026-08-27]**
+
+**Four signature skills per class is the identity.** You start with one or two ("start lean", §4) and
+draft the rest, plus upgrades, plus universal perks — ending a run with roughly **six to eight**.
+
+**Why four and not more:** divergence comes from **the shared pool and the upgrades**, not from a
+bigger class library. Two Enforcers diverge because they drafted different shared perks and upgraded
+different skills — which means **20 signature skills to author across five classes rather than 40 or
+60**, and every one of those 20 can be distinctive instead of filler.
+
+**Max level 20** (§19.5) gives roughly that many draft picks, so the numbers line up without further
+tuning — though the exact XP curve is still balance work.
+
+### 21.6 The codex explains mechanics, never the world **[DECIDED 2026-08-27]**
+
+| In the codex | Never in the codex |
+|---|---|
+| Conditions, skills, items, stats | Lore, world history, what the Void is |
+| The bestiary (fills as you meet things — already built) | **Karma, in any form** |
+
+**The split is the point.** The mechanics are a system to *master*, and a game with 25 conditions and
+a tempo gauge owes the player clarity about them. **The world is something to piece together** — and
+a codex entry explaining the Void would destroy the game's central secret in a menu.
+
+`WORLD.md` §12c already requires that *"the player should be able to finish the game without ever
+being told, and finish it a second time understanding what happened."* A lore codex is precisely how
+that gets broken by accident.

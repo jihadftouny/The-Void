@@ -51,9 +51,9 @@ Nothing gets built until this is worked through.
 | B5 | ~~The 24 enemy families~~ | **All rewritten against the world**, not just the nine broken ones. ⚠ **Must land before art batch 3** — 32 sprites prompt from these | #9 #13 | `DONE` | `GAME-DESIGN.md` §21.3 |
 | B6 | ~~The conditions~~ | **25, and the six stat pairs stay** — learnable by pattern, and what makes stats matter in a fight. `exposed` is the 25th: **fix the doc, not the code** | #1 #6 | `DONE` | `GAME-DESIGN.md` §21.1 |
 | B7 | ~~Elements & resistances~~ | **Resistances only, no combos.** Depth lives in conditions, tempo and builds | #2 #9 | `DONE` | `GAME-DESIGN.md` §21.4 |
-| B8 | **Class kits in detail** | Four skills each — final? The signature twists, two of which are no-ops. What each class *plays* like | #9 #13 | `QUEUED` | GAME-DESIGN |
-| B9 | **The Neuromancer's knowledge** | Flagged in WORLD §0b as "live dramatic material" — how much does a *given* Neuromancer know about what their own order does? | #13 | `QUEUED` | WORLD |
-| B10 | **The codex & tooltips** | What the codex actually contains; how much it explains; what stays unexplained on purpose | #8 #13 | `QUEUED` | UI-DESIGN |
+| B8 | ~~Class kits~~ | **Four signature skills = identity**; start with 1–2, draft to ~6–8 from the shared pool. Twist-wiring **sequencing deferred to the milestone pass** | #9 #13 | `DONE` | `GAME-DESIGN.md` §21.5 |
+| B9 | ~~The Neuromancer's knowledge~~ | **A junior — they do not know yet.** The order is the perpetrator; the playable one discovers it alongside the player. **Corrects an over-strong line in WORLD §0c** | #13 | `DONE` | `WORLD.md` §0c |
+| B10 | ~~The codex~~ | **Mechanics fully; the world never.** A lore codex would destroy the central secret in a menu | #8 #13 | `DONE` | `GAME-DESIGN.md` §21.6 |
 | B11 | **Audio, floor by floor** | What each floor *sounds* like; what the score is doing; where silence sits | #15 | `QUEUED` | ART-BIBLE |
 
 ## Phase C — presentation & release
@@ -89,6 +89,7 @@ _Newest first. Every round that has been asked and written down._
 
 | Date | Round | Outcome |
 |---|---|---|
+| 2026-08-27 | **B8–B10** — kits, the Neuromancer, the codex | Four signature skills drafted up to ~6–8; **the playable Neuromancer is a JUNIOR who does not know** (corrects WORLD §0c); the codex explains mechanics and never the world. Twist-wiring order deferred to the milestone pass |
 | 2026-08-27 | **B5–B7** — conditions, enemies, elements | 25 conditions with the six stat pairs kept (learnable by pattern); `exposed` is the 25th and the **doc** was wrong; **all 24 enemy families rewritten against the world — must precede art batch 3**; elements gate resistances only. `GAME-DESIGN.md` §21 |
 | 2026-08-27 | **B4 + B4b** — bosses & talking | Kingpins hold domains; the Reflection speaks as you; the Sin accuses; the Hollow Self is calm and right. **New feature: you can TALK to bosses in free text**, free of turn cost, and it can change the fight through engine-defined outcomes. `WORLD.md` §15 / `GAME-DESIGN.md` §20 |
 | 2026-08-27 | **A4b + B1–B3** — levelling & the ascent's end | Stats leave the draft (per-level allowance, **max level 20**); Absolution is stratified by height but only **glimpsed**, since the ascent ends at the Undercity threshold; **extraction happens in the Rift**, closing R1/R2 and the old body-location question; the Memorians **do not fight**. `WORLD.md` §14 / `GAME-DESIGN.md` §19.5 |

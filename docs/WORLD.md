@@ -117,10 +117,13 @@ and that is the Hollow, and that is the voice narrating your game (§0).
 - **The Hollowed are the extracted.** Floor 5's "former fallen descenders" are other people the
   Memorians harvested. **Your Hollow Self is you, without your life in you.** The Echoes of You are
   what is left loose after the chip comes out.
-- **The Neuromancer is the perpetrator.** A Memorian's craft — mind-reading, extraction — **is the
-  weapon that makes the Void.** The player can choose to be one. A Neuromancer descending has been
-  done to by their own order, using their own skill, and may or may not understand that. This is the
-  most loaded fact in the game and it sits inside a selectable class.
+- **The Neuromancer's ORDER is the perpetrator — but the playable one is a junior who does not yet
+  know.** **[REFINED 2026-08-27]** A Memorian's craft — mind-reading, extraction — is the weapon that
+  makes the Void. But a *playable* Neuromancer is **junior: they have never performed an extraction
+  and do not know what the order does.** So the descent is done to them **by their own order, using
+  their own order's craft, without their knowing it** — and the truth is something they can piece
+  together on the way down, alongside the player. That preserves the reveal instead of spending it at
+  character select, and it keeps the class sympathetic rather than complicit.
 - **Floor 1 is real because you still have your chip.** The moment of extraction is the moment the
   world stops being solid. That is exactly where the design already put the boundary.
 
