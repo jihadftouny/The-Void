@@ -163,11 +163,16 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 
 ### M11 — LLM layer to spec
 - **Goal:** Bring the working narrator up to the full design.
-- **Done when:** the narrator writes prose **and grammar-constrained choices** per beat over the
-  mechanics; **per-floor voices**; an **engine-as-toolbox tool registry** (dice/combat/condition/item/
-  rest/shop/progression/karma); **boss-agent infrastructure** (own prompt + run-memory); everything
-  headlessly testable against a **fake model**, karma- and floor-context-aware. (Folds v2 N2/N4/N5/N6.)
-- **Key decisions:** tool-registry surface; how karma state colors tone without ever exposing a meter.
+- **Done when:** the narrator writes **prose only** — **per-floor voices**; **beat significance** (which
+  beats deserve prose at all); **karma reaching the prompt**; **boss-agent infrastructure** (own prompt
+  + run-memory, and the boss **selects its own actions** from an engine-computed legal set,
+  `GAME-DESIGN.md` §17.3); **talking to bosses** in free text (§20); everything headlessly testable
+  against a **fake model**.
+- **DROPPED 2026-08-26 — M11 shrank:** ~~grammar-constrained choices~~ and ~~the engine-as-toolbox tool
+  registry~~. **The engine writes the choices** (§16). *(The tool registry also listed "shop", which no
+  longer exists.)*
+- **Key decisions:** how karma colors tone without ever exposing a meter — still open, and the reason
+  karma must reach the prompt at all.
 
 ### M12 — Bosses: five unique encounters as agents
 - **Goal:** Memorable capstones per floor.
@@ -184,11 +189,14 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 
 ### M14 — Karma payoff: the blended-spectrum endings
 - **Goal:** Pay off the whole run.
-- **Done when:** the ending system reads the multi-axis Nature into an **analog, LLM-rendered** ending;
-  the **floor-4 grace vs. cast-down** resolution is in place; distinct karma paths produce genuinely
-  different endings.
-- **Key decisions:** ending registers/anchors the narrator interpolates between; how deterministic
-  vs. generative the ending text is.
+- **Done when:** the **floor-4 gate stays binary** (grace vs cast-down) and the ending **within each
+  path blends** by where all four karma axes landed (`GAME-DESIGN.md` §17.1); distinct karma paths
+  produce genuinely different endings.
+- **SETTLED 2026-08-26/27:** the text is **authored anchors + narrated specifics** (§14.10) — you write
+  what grace and damnation *are*, word for word; the narrator fills in what happened on this run.
+  *"Made whole" is the thesis and must be the author's words.*
+- **Also in scope now:** the **Hollow ascent** has its own ending at the Undercity threshold
+  (`WORLD.md` §13–14).
 
 ### M15 — Balance pass (tough but fair), simulation-verified
 - **Goal:** Winnable at the intended difficulty.
