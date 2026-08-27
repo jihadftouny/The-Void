@@ -31,10 +31,11 @@ Nothing gets built until this is worked through.
 |---|---|---|---|---|---|
 | A1 | ~~The rest & recovery loop~~ | rest heals HP **and charges**, and is the build-management point; chests = consumables/gear + rare unique; **healing becomes scarce** | #2 #6 | `DONE` | `GAME-DESIGN.md` §18 |
 | A2 | ~~The spare mechanic~~ | **sparing costs the loot and the XP** — mercy against greed in one press | #2 #6 | `DONE` | `GAME-DESIGN.md` §18.3 |
-| A3 | **Death, revive & permadeath** | The Halo Fragment grants "revive once per run" — how that squares with permadeath; what the death screen offers; whether a run can ever be continued | #1 #6 | `QUEUED` | GAME-DESIGN |
-| A4 | **The level-up draft** | Draft pool weighting; how many skills a class ends a run with; whether stat bumps compete with skills; how the tempo gauge changes DEX's draft value | #2 | `QUEUED` | GAME-DESIGN |
-| A5 | **Save slots & the seed** | How many slots; whether the seed is shown, stored and enterable (currently wall-clock and invisible — no seeded runs, and **testers cannot report reproducible bugs**) | #1 #8 | `QUEUED` | UI-DESIGN |
-| A6 | **Confirmations & destructive actions** | "Abandon the descent" is one click, third in the hub menu, and destroys a 45–90 min run; what else needs a confirm | #8 | `QUEUED` | UI-DESIGN |
+| A3 | ~~Death, revive & permadeath~~ | **the revive stays — you bought it with yourself.** Permadeath holds: you cannot reload, only pre-pay | #1 #6 | `DONE` | `GAME-DESIGN.md` §19.1 |
+| A4 | ~~XP comes from the enemy~~ | **fixed an inherited defect** — enemy XP was rolled at random from the *player's* XP. Now derived from the enemy's own strength + a base | #2 | `DONE` | `GAME-DESIGN.md` §19.2 |
+| **A4b** | **The level-up draft pool** — *re-queued* | Draft weighting was not answered (A4 redirected to XP). How the 1-of-3 pool weights new skills vs upgrades vs perks vs stat bumps, now that a DEX point buys turns via the tempo gauge | #2 | `QUEUED` | GAME-DESIGN |
+| A5 | ~~The seed~~ | **shown, stored and enterable.** Unlocks reproducible bug reports, which the playtest plan had no way to get | #1 #8 | `DONE` | `GAME-DESIGN.md` §19.3 |
+| A6 | ~~Confirmations~~ | **confirm on abandon + slot overwrite, and MOVE Abandon** out of the top group — the adjacency is the actual cause | #8 | `DONE` | `GAME-DESIGN.md` §19.4 |
 
 ## Phase B — content design
 
@@ -87,6 +88,7 @@ _Newest first. Every round that has been asked and written down._
 
 | Date | Round | Outcome |
 |---|---|---|
+| 2026-08-27 | **A3–A6** — death, XP, seeds, confirms | Revive stays (bought with yourself); **enemy XP now derives from the ENEMY, fixing a feedback loop where it was rolled from the player's own XP**; the seed is shown/stored/enterable; Abandon gets a confirm and moves. `GAME-DESIGN.md` §19. **A4b re-queued.** |
 | 2026-08-27 | **A1 + A2** — recovery & sparing | Rest restores HP **and charges** and is the build-management point; chests carry consumables/gear + a rare unique; **sparing costs loot and XP**; **healing becomes scarce** (potion fold-in flagged for confirmation). `GAME-DESIGN.md` §18 |
 | 2026-08-27 | Hollow ascent | It **rises** 5→1 to reach the Memorians; the Warden shows mercy instead of judgement; same floors reversed; built bidirectionally. **Opened R1–R5.** `WORLD.md` §13 |
 | 2026-08-27 | Endings · Sins · boss agents · unlock feats | Blended within a binary gate; seven distinct Sin behaviours; the model chooses boss actions under five hard constraints; feats designed to teach. `GAME-DESIGN.md` §17 |

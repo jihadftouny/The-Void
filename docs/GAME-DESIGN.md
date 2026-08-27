@@ -1144,3 +1144,82 @@ already written** genuinely relevant instead of sitting beside a free, better, u
 
 **Balance consequence:** this is a significant nerf and it interacts with §18.1's charge restore and
 floor 3's dampening. All three must be measured together in the balance re-run, not assumed.
+
+---
+
+## 19. Death, XP, seeds and confirmations **[DECIDED 2026-08-27]**
+
+### 19.1 The revive stays — because you bought it
+
+The Halo Fragment's *"revive once per run"* is kept, and it does **not** break permadeath.
+
+**Relics are deal-only** (§14.1), so the only revive in the game is one you **traded a piece of
+yourself for** at the altar. That is the sacrifice economy working exactly as designed: **you cannot
+reload, you can only pre-pay.** One per run, consumed on use.
+
+It also makes a single altar visit potentially run-defining, and **the narrator should absolutely
+notice it happening** — dying and not dying is the most narratable moment available.
+
+### 19.2 XP comes from the ENEMY, not from you **[fixes an inherited defect]**
+
+**The current model is wrong, and worse than merely missing.** `enemy.ts`:
+
+```ts
+// 1. Enemy xp: 1 + randInt in [0, floor(playerXp/4) + 1].
+const xp = 1 + randInt(rng, Math.floor(playerXp / 4) + 2);
+```
+
+An enemy's XP value is **rolled at random from the player's own XP total.** It has nothing to do with
+the enemy. Two consequences nobody chose:
+
+1. **A feedback loop.** The more XP you have, the more each kill grants — so levelling accelerates
+   itself. It is also why the same enemy is worth wildly different amounts at different times.
+2. **Killing something hard is worth no more than killing something trivial.** The single most
+   intuitive reward relationship in an RPG is simply absent.
+
+**Decided: XP is a property of the enemy, derived from its actual strength, plus a base.**
+
+```
+enemyXp = XP_BASE + f(the enemy's own strength)
+```
+
+Where strength should be derived from what genuinely makes an enemy dangerous — **max HP, damage
+output, its skill kit, its affix, and boss status** — not from the player and **not at random**.
+
+**Consequences to handle in the same unit:**
+- **Act advancement is XP-gated** (`ACT_XP_THRESHOLDS`, itself inherited from the Java port), so
+  changing how XP accrues **changes how long every floor is.** This must land together with the
+  run-length measurement in §14.11 — they are the same tuning problem.
+- **Sparing grants no XP** (§18.3), so mercy now costs a *known, visible* amount rather than a random
+  one. That makes the choice legible in a way it currently cannot be.
+- **RNG draw count changes** — the current model spends a draw on this. Removing or replacing it
+  moves the draw order, so the determinism locks must be re-baselined deliberately and the change
+  attributed, not absorbed.
+
+**[OPEN — the exact formula]** is a balance question, not a design one, and belongs to the balance
+re-run.
+
+### 19.3 The seed is shown, stored and enterable
+
+Display the run's seed in-run and on the death summary, **save it**, and allow starting a run **from
+a given seed**.
+
+The engine is already fully deterministic — this is a UI and persistence change only. It unlocks
+three things that were silently ruled out by the seed being a wall-clock number nobody ever sees:
+
+- **Testers can report reproducible bugs.** The playtest plan (`ART-BIBLE.md` §14) currently has no
+  way to get one, which would have made external testing far less useful than intended.
+- **Seeded and shared runs** become possible.
+- **A daily challenge** exists as a later option without needing new engine work.
+
+### 19.4 Confirmations, and moving Abandon
+
+**"Abandon the descent" gets a confirmation, and moves out of the top menu group.** It currently sits
+**third, directly under "Continue the descent"**, and one click permanently destroys a 45–90 minute
+permadeath run. There is no `confirm` anywhere in the render layer.
+
+- **Confirm on:** abandoning a run, overwriting a save slot.
+- **Never confirm:** ordinary combat actions. A confirmation on every attack would destroy the turn
+  feel that the beat-by-beat design exists to create.
+- **Also move it**, because the adjacency is what causes the misclick — a confirmation alone treats
+  the symptom.
