@@ -219,7 +219,7 @@ insanity, push, aired. Activate the dormant 13:
   - ~~**Scarcity: meaningful but not scarce**~~ **REVERSED §18.4 — healing IS scarce**, and potions
     fold into the consumable system. Acquired via drops + chests (§14.8).
 - **Loot comes from drops + chests + sacrifice-deals** **[DECIDED — corrected 2026-08-25]**: enemies
-  drop loot, floors hide chests/caches, and an altar/stranger offers **deals paid for with a part of
+  drop loot, floors hide chests/caches, and an **altar or shrine** offers **deals paid for with a part of
   yourself**. **There are no shops and no currency** — an earlier draft of this line said "shops sell
   curated stock", which §11 of this same document overruled the same day (*"No currency. No coin.
   Anywhere. Ever."*) and which the code implemented. `src/game/shop.ts` is deleted.
@@ -526,7 +526,7 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 - **No currency. No coin. Anywhere. Ever.** Gold is **removed** from the game. Every gain is paid for
   with *a part of yourself*. The world was always predatory — even the Undercity takes, it just never
   called it money.
-- **You pay with body, self, and morality.** The Void's strangers/altars offer power for: **HP**,
+- **You pay with body, self, and morality.** The **altars and shrines** offer power for: **HP**,
   **max-HP**, a **stat point**, **skill charges**, a **relic**, or a **karma-shifting act** (desecrate
   something for a reward). The morality-cost deals feed the Nature pillar directly (§7) — the tempting
   cursed loot of floor 4 is exactly this.
@@ -534,10 +534,21 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
   no self-cost) and half from *sacrifice-deals* — so bleeding yourself is always a **choice**, never
   the only path to keep up. This is the load-bearing balance lever that keeps a pure-sacrifice economy
   **tough but fair** (§2).
-- **Offers are karma-flavored:** the Void reads your Nature and tempts accordingly (the greedy see more
-  cursed riches; the reverent are offered grace; desecrators get dark power *cheaply* — a trap).
+- **Offers are karma-flavored:** the **engine weights the deal pool by your Nature** (the greedy meet
+  more cursed riches; the reverent meet grace; desecrators meet dark power *cheaply* — a trap).
+  > ⚠ **Reworded 2026-08-28.** This read *"the Void **reads** your Nature and **tempts** accordingly"*,
+  > which gives the Void plans. `WORLD.md` §8 `[LOCKED]` is explicit: the narrator/Void is **"not a
+  > character, not an entity with plans"**, and §0 adds *"it has no motive either way."* The
+  > **mechanic is unchanged** — only the agency attributed to the Void.
 - The old "mysterious stranger" one-offer shop and the "shop via Character Info" quirk are **replaced**
-  by a proper **sacrifice-deal encounter** (altar/stranger).
+  by a proper **sacrifice-deal encounter** at an **altar or shrine**.
+  > ⚠ **"Stranger" struck 2026-08-28** (here, §11's opening, and the §5 summary). `WORLD.md` §8
+  > `[LOCKED]`: *"There is **no second voice available. No guide, no companion, no exterior.**"* A
+  > shrouded stranger on floors 2–5 is an exterior character with a voice, on floors §12d says are
+  > *"your own content, being taken apart."* `ART-BIBLE.md` §4b already resolved the asset side this
+  > way — it budgets **altar + shrine** and no stranger — and the shipped player-facing string is
+  > already altar-only. Two code comments (`deal.ts`, `game.ts`) still say "stranger" and are listed
+  > in the §21.3 content pass.
 - **Consequences to build around (flagged for M1/M7/M15):**
   - **Gold removal touches state, victory rewards, and shop code.** Victory rewards become **XP +
     loot** (no gold); the `gold` field is retired or repurposed. Save migration handles old shape.

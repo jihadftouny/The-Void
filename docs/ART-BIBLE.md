@@ -175,10 +175,16 @@ Same for the ash-wraith, where take 02 was also the chosen read.
 
 ### Class portraits — 5
 - **Aspect `1:1`.**
-- Waist-up or three-quarter length, **turned slightly off-axis per §2b — never square to the
-  viewer**, on pure flat black. *(This line said "facing the viewer" until 2026-08-28 — the exact
-  phrase §3 uses for **enemy** sprites, which would have made the player read as a target. §2b is
-  dated `[LOCKED 2026-08-25]` and wins: "the angle is the visual difference between 'you' and 'it'".)*
+- **Full body, head and feet both inside the frame, ~10% margin**, **turned slightly off-axis per
+  §2b — never square to the viewer**, on pure flat black.
+  > *(Two corrections, both 2026-08-28. **Pose:** this said "facing the viewer" — the exact phrase §3
+  > uses for **enemy** sprites, which would have made the player read as a target; §2b
+  > `[LOCKED 2026-08-25]` wins — "the angle is the visual difference between 'you' and 'it'".
+  > **Framing:** it also said "waist-up", which was left standing when the boss row was moved to
+  > full body earlier the same day — a half-applied fix. Both of that row's reasons apply here
+  > identically: the author's recorded direction is **"full body shots always"**, and §6 needs all
+  > five recursion assets legibly related. Leaving these waist-up would have made the class portraits
+  > the odd crop in a set of five full-body mirrors they are required to resemble.)*
 - These are the player's self-image; they must relate visibly to the mirror-enemies (§6).
 
 ### Boss portraits — 5
@@ -212,7 +218,7 @@ and dies out completely as you descend:
 | 2 | Entrance to the Void | **Near zero** | *"Blinding white, red reflections, distortion."* Mirrors, doubles, static, signal. **FRACTURE** — the mind coming apart into pieces that argue (`WORLD.md` §6; *not* "onset of madness", which is the retired vocabulary) |
 | 3 | The Ash City | **Zero** | *"Endless grey city, falling ash, silence."* Emotions made flesh; the Seven Sins |
 | 4 | The Angelic Underground | **Zero** | *"Luminous, sacred, beautiful."* Angels, choirs, the judged. The moral crucible |
-| 5 | The True Void | **Zero** | *"Black, dark, hellish."* Demons, void-horrors, what you may become |
+| 5 | The True Void | **Zero** | *"Black, dark, ~~hellish~~."* ⚠ **ABSENCE, not destruction** — render as **negative space and things missing**, never gore, ruin or violence (rule 3 below, `[LOCKED 2026-08-25]`; `WORLD.md` §6). "Hellish" and "demons" are the retired vocabulary, exactly as "onset of madness" was in row 2 — **and this row feeds the floor-5 backdrop prompt.** Void-horrors, what you may become |
 
 ### The tech level — **techno-occult** **[LOCKED 2026-08-25]**
 
@@ -509,8 +515,26 @@ them persisting).
 
 Every deviation from §1 or §2 gets a line here, with the reason. An undocumented change is a bug.
 
+> **⚠ This log went four days without an entry while §1 and §2 both changed** — found and backfilled
+> 2026-08-28. That is this section's own rule being broken by the file that states it, and it matters
+> more here than elsewhere: §0 says this document exists so *"a run six months from now produces art
+> indistinguishable from today's"*, and §10 tells future runs to record generated-audio ids **into
+> this log**. A log nobody maintains cannot do either job.
+
 - **2026-08-24** — Bible created. Model, resolution, style string, framing rules and the three
   failure gates locked from probe 01 (9/9 generated, ~$1.21).
+- **2026-08-25** — **§2 style string replaced**: painterly realism → **"32-bit era, but 2D"** pixel
+  art, probed and adopted. The painterly string is kept below, struck, as history.
+- **2026-08-25** — **§1 cost basis changed** to `batchGenerateContent` (50% of interactive), and the
+  per-asset variation count locked at 3. Probes stay interactive.
+- **2026-08-26** — **Typeface decided and bundled**: JetBrains Mono, SIL OFL (§11).
+- **2026-08-28** — **§2 negative narrowed** from *"no text, no lettering, no logo"* to overlay-chrome
+  only, because the old wording contradicted three `[LOCKED]` §4 specs requiring insignia, graffiti
+  and signage — and probe 03 was recorded as the success case *because of* the insignia it forbade.
+- **2026-08-28** — **§3 framing corrected**: class **and** boss portraits are now full-body,
+  per the author's *"full body shots always"* and §6's recursion-legibility requirement.
+- **2026-08-28** — **§5 corner-pixel gate scoped** to the flat-black asset classes; floor backdrops
+  are exempt (their grounds are per-floor white by §4) and get a bottom-third gate instead.
 - **Watch item, open:** the full-bleed floor backdrops are the one asset class that might want 2K on
   a large desktop window. If a 1K backdrop looks soft in review, **raise only the backdrops** to 2K —
   not the whole batch. Same price either way.

@@ -609,8 +609,6 @@ A consequence worth stating plainly, because it governs how every enemy is writt
   house, and nothing in it requires them. The contested-histories line (§3) still works without
   them. **Do not invent them to fill a gap** — they are left free for a sequel or later content, and
   inventing them now would constrain that.
-- **The Kingpins as people.** Now known to be Grandmore's collaborators (§4), but not who they are,
-  how many, or what the rest of their plan was beyond disposing of you.
 - ~~Absolution above ground.~~ **CLOSED 2026-08-25 — deliberately parked.** The game is a descent
   and never goes up; the surface appears in perhaps three sentences total. Leave it a rumour rather
   than over-building a city nobody visits.

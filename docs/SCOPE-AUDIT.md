@@ -235,7 +235,9 @@ plus four Sin identities at `boss.ts:87-93` (`The Desecration`, `The Cruelty`, `
 An angelic Seraph-Warden and a mirror of the player both draw from tables written for a Java prototype's street thugs.
 
 ### 2.9 The opening intro contradicts the world's own ending
-`src/data/story.json:5-12` is the only substantive authored prose in the game. It is *good* and now consistent with `WORLD.md` (it names the Memorians and the brainchips). But note it is the **only** authored block: 8 lines, out of an entire five-floor narrative game.
+`src/data/story.json:5-12` is the only substantive authored prose in the game. It is *good* and consistent with `WORLD.md` on the Memorians and the brainchips. But note it is the **only** authored block: 8 lines, out of an entire five-floor narrative game.
+
+> **⚠ CORRECTION 2026-08-28 — this block is NOT fully consistent with `WORLD.md`.** Line 10 sends you *"to delve into **the Rift**"*, but `WORLD.md` §4 `[LOCKED]` puts the errand in the **Undercity** and §13 makes the Rift a separate stratum below it. That breaks the betrayal scene, which turns on the Kingpin waiting at the Rift's entrance as *"the last place you could still have turned around"* — if entering the Rift **was** the order, the line means nothing. Tracked as `FINDINGS.md` **C3**. *(This audit is a frozen snapshot; the correction is noted rather than rewritten.)*
 
 ---
 
