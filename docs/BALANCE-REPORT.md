@@ -3,6 +3,22 @@
 > **Generated** by `scripts/balance-report.ts` (`npx vite-node scripts/balance-report.ts`).
 > Regenerate after any balance change; the numbers below are the harness's real output.
 
+> # ⚠ INVALIDATED 2026-08-28 — read this before trusting any number below
+>
+> **The "lower bound" framing in this report is wrong** (`FINDINGS.md` **G11**). This report repeats,
+> four times, that the sim fights with starting gear *because the sim has no equip action*, and
+> therefore that **"real play equips found loot, so it is easier than these figures."**
+>
+> **Real play does not equip found loot either.** `equipment.ts` resolves items by catalog id only,
+> while every generated drop carries a synthetic `gen:*` id that matches no catalog — measured at
+> **>100 drops across 300 seeds, zero equippable**. So loot is un-equippable *in principle*, not
+> merely unmodelled by the harness.
+>
+> **Consequence:** these numbers are **not a floor — they are what the game actually does today.**
+> Real play is *not* easier than 32.9%. Every "lower bound" and "easier still" claim below is void.
+>
+> **Regenerate this report after `PLAN.md` #0 lands**, then re-tune. The re-run in #2 is mandatory.
+
 ## Difficulty TARGET — SET (M15) and MET
 
 **Target (author, M15):** a careful baseline run wins about **1 in 3** — overall baseline

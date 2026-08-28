@@ -48,6 +48,35 @@ do nothing at all.**
    make `snapshotUnlocks` actually read `store.relics`/`.skills`. *(Also task #9.)*
 6. **G16 — `dealQualityTwist`** is a third dead stat twist still labelled "no-op until M7"; M7 shipped.
 
+**Round 6A added six more, all verified by running the engine:**
+
+7. **G17 — the entire resistance subsystem is inert.** `Math.floor(res / 100)` is zero for every
+   value the game can produce, *and* `effectiveResistances` has no production callers. Dead as a
+   result: 7 elements, 5 family themes, the `blessed` affix, the `bonusResist` effect, 2 conditions.
+8. **G18 — the player never sees a damage number, die, hit, miss or crit.** `render/format.ts` is
+   imported by nothing but its own test, so the whole M-UI2 roll-detail pipeline is computed every
+   attack and consumed by nobody — while the narration persona is *forbidden* from mentioning numbers.
+9. **G19 — resuming a save forfeits meta-progression.** ⭐ **This is the root cause of G1**, which
+   was previously logged as having no fix. `persist.ts` stores only `{state, memory}`.
+10. **G20 — a sacrifice-deal can drive `maxHp` and `hp` negative.** `canAfford` guards the `hp` cost
+    and not the `maxHp` cost, and the subtraction has no floor.
+11. **G21 — every Act transition renders a blank screen.** 47 + 47 measured over 20 runs. Distinct
+    root cause from G13: the cases exist but discard `e.header`, and all ten bodies are `""`.
+12. **G22 — three smaller verified defects:** no `maxHp` clamp on condition HP ticks; the enemy skill
+    gate is `> 0` while the cost can be 2, so charges go negative; enemies never restore charges.
+
+> **⚠ THIS IS NOW TOO BIG FOR ONE PIPELINE UNIT.** Proposed decomposition — three units on
+> near-disjoint territory (`agentic-engineering` §1b: never parallelize units whose plans touch the
+> same source file, so **#0a and #0c must not run concurrently** — both may touch `game.ts`):
+>
+> | Unit | Covers | Principal files |
+> |---|---|---|
+> | **#0a `combat-core-fixes`** | G11, G11b, G12, G17, G20, G22 | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts` |
+> | **#0b `narration-coverage`** | G13, G21 | `llm/narrate.ts`, `data/story.json` |
+> | **#0c `persistence-and-reach`** | G1/G19, G18, G14 | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `loot.ts`, `unlockStore.ts` |
+>
+> **#0b is the light unit** and can run alongside either heavy one (~2 heavy + 1 light ceiling).
+
 > **⚠ G15 is deliberately NOT in this unit — it needs an author decision first.** Half the karma
 > model never fires, and the axis the final reckoning weights most heavily (`reverenceDesecration`,
 > weight 3) can only ever move toward CAST-DOWN, never toward GRACE. Whether to wire the missing
@@ -166,7 +195,9 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 
 **What is left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), and eight **bugs** — **six with fixes specified; G1 and G2 have none yet.**
+one **parked** (localisation), and **twenty bugs** (G1–G22, recounted 2026-08-28 after passes 5B and
+6A) — **eighteen with fixes specified. `G2` still has none, and `G15` needs an AUTHOR RULING, not a
+fix.** *(This line said "eight bugs, six specified" until the audit tripled the count.)*
 
 ### Newer work items not in the dependency graph above
 

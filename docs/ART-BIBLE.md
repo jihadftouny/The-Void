@@ -166,11 +166,15 @@ Same for the ash-wraith, where take 02 was also the chosen read.
 
 ### Class portraits — 5
 - **Aspect `1:1`.**
-- Waist-up or three-quarter, facing the viewer, on pure flat black.
+- Waist-up or three-quarter length, **turned slightly off-axis per §2b — never square to the
+  viewer**, on pure flat black. *(This line said "facing the viewer" until 2026-08-28 — the exact
+  phrase §3 uses for **enemy** sprites, which would have made the player read as a target. §2b is
+  dated `[LOCKED 2026-08-25]` and wins: "the angle is the visual difference between 'you' and 'it'".)*
 - These are the player's self-image; they must relate visibly to the mirror-enemies (§6).
 
 ### Boss portraits — 5
-- **Aspect `1:1`.** Same treatment as class portraits but larger presence and more detail budget.
+- **Aspect `1:1`.** Same framing and treatment as class portraits, but **front-facing per §2b** —
+  bosses are enemies, and every enemy squares to the viewer. Larger presence and more detail budget.
 
 ---
 
@@ -188,7 +192,7 @@ and dies out completely as you descend:
 | Floor | Name | Tech level | Imagery |
 |---|---|---|---|
 | 1 | The Undercity | **High** | **Flooded industrial** — standing water with a green chemical sheen, corroded pipe galleries, low metallic fog. Drones, augmetics, riot gear, gangs, fixers. *The last "real" place.* **(§4: the green is in the water and the air, NOT on signage — this is not neon rain)** |
-| 2 | Entrance to the Void | **Near zero** | *"Blinding white, red reflections, distortion."* Mirrors, doubles, static, signal. Onset of madness |
+| 2 | Entrance to the Void | **Near zero** | *"Blinding white, red reflections, distortion."* Mirrors, doubles, static, signal. **FRACTURE** — the mind coming apart into pieces that argue (`WORLD.md` §6; *not* "onset of madness", which is the retired vocabulary) |
 | 3 | The Ash City | **Zero** | *"Endless grey city, falling ash, silence."* Emotions made flesh; the Seven Sins |
 | 4 | The Angelic Underground | **Zero** | *"Luminous, sacred, beautiful."* Angels, choirs, the judged. The moral crucible |
 | 5 | The True Void | **Zero** | *"Black, dark, hellish."* Demons, void-horrors, what you may become |
@@ -350,9 +354,16 @@ not exist in the game. Resolution: keep **both**, as distinct enemies.
 
 - **Ash-Wraith** — the existing family, corrected to match its own design. *Incorporeal*: a human
   outline suspended in drifting ash, edges unravelling into the air, no solid mass, cold pale grey,
-  **no embers and no orange**. This fits its role as *"endless weak filler"* and its name table
-  (Drifting, Smouldering, Faint, Pale / Cinder, Ember-Shade), and it contrasts properly against the
+  **no embers and no orange**. This fits its role as *"endless weak filler"* and the usable half of its
+  name table (Drifting, Faint, Pale / Ash-Wraith, Ash), and it contrasts properly against the
   solid Nightmares (Grief, Rage, Dread) that share the floor.
+  > ⚠ **The name table contradicts this ruling.** `src/data/enemyNames.json` also holds
+  > `Smouldering`, `Cinder` and `Ember-Shade` — three of its eight components — so it generates
+  > enemies literally called *"Smouldering Ember-Shade"* and *"Smouldering Cinder"*. That collides
+  > with the no-ember rule here **and** with the floor-3 colour lock in §4 (*"purely white, grey and
+  > black — the fire has settled already"*). **These three must be removed in the §21.3 family
+  > rewrite, BEFORE art batch 3**, which prompts 30 enemy sprites from exactly these names.
+  > *(Until 2026-08-28 this passage cited the ember words as evidence the design fits.)*
 - **Ash-Wretch** — a **new** enemy: the solid cracked-cinder humanoid from probe 01. Heavier and
   more physically present than the wraith.
 
@@ -395,7 +406,10 @@ are four combat bosses, not five. Art does not run ahead of the engine.
 Learned from probe 01. **Every one of these must be enforced by the generation script, not by hope.**
 
 1. **White backgrounds — observed 1 in 3.** The prompt said "pure flat black background" twice and
-   one image still came back on white. At batch scale that is ~8 unusable images.
+   one image still came back on white. **At the current batch scale (§4b — 150 images) that is
+   roughly 50 unusable images, ~30 in the enemy-sprite group alone.** *(This said "~8" until
+   2026-08-28 — inherited from the retired 24-asset, one-image-per-family budget, understating the
+   gate's value by about 6×.)*
    **Gate: sample the four corner pixels; reject and regenerate anything whose corners are not
    near-black.** Cheap, deterministic, catches it every time.
 2. **Framing drift.** One take was full-body with margin, another cropped at mid-thigh and much
@@ -596,11 +610,13 @@ bundled font and the interface renders differently on Windows, macOS and Linux, 
 every spacing decision is only true on the machine it was made on.
 
 - **One face, monospace, open licence permitting redistribution.** Roughly 200–400 KB.
-- Candidates worth auditioning: **JetBrains Mono** (sharp, technical, very legible), **IBM Plex Mono**
-  (institutional, slightly warmer — arguably the most on-theme, since the interface *is* an
-  institution's record). Berkeley Mono suits the tone best and is **paid**, so it needs a purchase
-  decision before it can be considered.
-- **Verify the licence permits bundling in a distributed desktop app** before committing.
+- **THE FACE IS `JetBrains Mono`** — chosen 2026-08-26 for legibility at small sizes (11px condition
+  chips, dense combat logs). **SIL Open Font Licence, verified free to bundle** (`SHIPPING.md`).
+  **Rejected:** *IBM Plex Mono* (warmer, more institutional — arguably more on-theme, since the
+  interface *is* an institution's record, but less legible small); *Berkeley Mono* (best tonal fit,
+  but **paid**, so it would need a purchase decision).
+  *(This bullet listed all three as "candidates worth auditioning" until 2026-08-28. Since this file
+  wins on anything visual, that wording could have legitimately reopened a settled decision.)*
 - The type scale in `src/render/tokens.ts` was built against a system default and **will need
   re-checking** once a real face is in place.
 

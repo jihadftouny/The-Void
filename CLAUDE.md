@@ -10,7 +10,9 @@ status conditions, skills, sacrifice-deals/rest, XP across five Acts, bosses). S
 > authoritative in **`docs/WORLD.md`**; anything written before it is wrong where it disagrees.
 > **`docs/README.md` indexes every document and states which one wins when two conflict.** Read
 > both before writing prose, art prompts, or design. Systems live in `docs/GAME-DESIGN.md`, the
-> milestone plan in `docs/ROADMAP.md` (v3), and every known gap in `docs/SCOPE-AUDIT.md`.
+> milestone plan in `docs/ROADMAP.md` (v3), **every open item in the live register
+> `docs/FINDINGS.md`**, **the work order in `docs/PLAN.md`**, and the frozen audit evidence in
+> `docs/SCOPE-AUDIT.md`.
 
 The engine is a from-scratch port of the original Java implementation (`.legacy/The-Void/`) on
 TypeScript + **Vite** + **Vitest**. **Kaplay is a dependency that nothing imports yet** — reserved

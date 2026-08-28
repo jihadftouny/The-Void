@@ -39,6 +39,7 @@ blocks only #2 and #6, so #1, #3 and #4 are genuinely unblocked.)*
 | **A4b** | ~~The level-up draft pool~~ | **Stats LEAVE the draft** — a per-level allowance you spread yourself, D&D-style. The draft is skills + upgrades. **Max level 20** | #2 | `DONE` | `GAME-DESIGN.md` §19.5 |
 | A5 | ~~The seed~~ | **shown, stored and enterable.** Unlocks reproducible bug reports, which the playtest plan had no way to get | #1 #8 | `DONE` | `GAME-DESIGN.md` §19.3 |
 | A6 | ~~Confirmations~~ | **confirm on abandon + slot overwrite, and MOVE Abandon** out of the top group — the adjacency is the actual cause | #8 | `DONE` | `GAME-DESIGN.md` §19.4 |
+| **A7** | **Karma inputs & verdict weighting** ⭐ **NEW, QUEUED 2026-08-28** | **Half the karma model never fires.** Of 8 declared actions only 4 exist in code; `leaveOffering`, `honorDead`, `embraceWhisper` and `seeThroughIllusion` appear nowhere. So `reverenceDesecration` — the axis the final reckoning weights **most heavily** (weight 3) — can only ever move toward **CAST-DOWN**, never toward GRACE; `clarityDelusion` is permanently 0, so "The Delusion" can never be the act-3 boss; and the grace deal pool is unreachable. **The question:** wire the four missing positive actions to real inputs, or re-weight onto the axes that can actually move and record the deferral? | **#0 #2 #14** | `OPEN` — **needs the author** | `GAME-DESIGN.md` §7 + `FINDINGS.md` G15 |
 
 ## Phase B — content design
 
@@ -81,7 +82,8 @@ work — see `docs/FINDINGS.md` and `docs/PLAN.md`.
 | `jsdom` vs `node` test environment (B7) | **Technical** — decide inside #1. Now listed explicitly as change 8 in `PLAN.md` #1, so it cannot be missed |
 | Grace/cast-down thresholds (B12), enemy scaling (B14) | **Balance numbers** — belong to the re-run in #2 |
 | Localisation (N8) | **Parked** — English-only, stated on the store page |
-| G3–G8 | **Bugs** — fixes specified in FINDINGS §4. ⚠ **G1 and G2 have NO fix specified yet** |
+| G1, G3–G8, G11–G14, G16–G22 | **Bugs** — fixes specified in FINDINGS §4 (18 of 20). ⚠ **G2 has no fix specified yet** |
+| **G15** | ⚠ **NOT a bug — an AUTHOR DESIGN RULING.** Half the karma model never fires, and `reverenceDesecration` (the heaviest verdict axis, weight 3) can only ever move toward CAST-DOWN. **See Phase A row A7 below** |
 | R4 second prose pass, R5 direction-aware hook | **Build work** — #13 and #1 |
 
 ---

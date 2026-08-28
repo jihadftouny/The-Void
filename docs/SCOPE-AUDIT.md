@@ -448,7 +448,7 @@ Also note **the persona string is duplicated** in two processes (`narrate.ts:8` 
 | `ART-BIBLE.md:359` | "Asset count rises 52 → **53**." |
 | `ART-BIBLE.md:307-314` generation-order table | 7 + 5 + 32 + 9 = **53** |
 | `PROGRESS.md:96` | "Batch: 39 → **53** assets (~$21)" |
-| `UI-DESIGN.md:224` | "**Total** | **39**" |
+| `UI-DESIGN.md:224` | "**Total ... 39**" |
 
 The §4b table itself omits the Ash-Wretch that §4 added. Four numbers in circulation.
 

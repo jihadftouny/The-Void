@@ -422,9 +422,15 @@ And per §0: **the condition is the Hollow.** Descending is being hollowed.
 
 ### There is no way back up **[LOCKED]**
 
-The route closes behind you, every floor. You cannot climb out. **The only exit is the floor-4
-verdict** — which is why nobody simply turns around, why the Warden is a literal door, and why floor
-5 is what lies past the door you failed. Down is the only direction that leads out.
+**For a descender**, the route closes behind you, every floor. You cannot climb out. **The only exit
+is the floor-4 verdict** — which is why nobody simply turns around, why the Warden is a literal door,
+and why floor 5 is what lies past the door you failed. Down is the only direction that leads out.
+
+> **The Hollow's ascent (§13/§14) is the sole exception**, and only because a Hollow is *made at the
+> bottom* (§0c) — there is no descent behind it to close. Its exit is the Undercity threshold into
+> Absolution, not the floor-4 verdict, and the Warden shows it mercy rather than judging it.
+> *(Before 2026-08-28 this rule was stated as an unqualified absolute, which §13 and §14 falsify in
+> every clause. Those are the later `[LOCKED]` sections, so they win.)*
 
 ### The stages **[LOCKED]**
 
@@ -778,7 +784,8 @@ Floor 2 is **fracture**: the mind coming apart into pieces that argue with each 
 Reflection is one of those pieces**, wearing your face, using your kit — and **speaking in your
 voice**, saying things you would recognise.
 
-It is **the first of the five mirror-encounters** (§6: Mirror-Self → The Reflection → Echo of You →
+It is **the first of the five mirror-encounters** (`ART-BIBLE.md` §6, *not* this file's §6:
+Mirror-Self → The Reflection → Echo of You →
 The Hollowed → Hollow Self), and the first time the game turns you on yourself. **It should know
 things only you know.**
 
@@ -790,8 +797,8 @@ The Cruelty, The Avarice, The Delusion.**
 **It confronts you with what you did and holds you responsible.** It names specific choices,
 accurately, and you cannot deny any of it.
 
-> **This is the only place karma can be spoken aloud without ever being metered.** §13 forbids a
-> meter or a number anywhere — but an enemy that *accuses you of specific acts* tells you exactly
+> **This is the only place karma can be spoken aloud without ever being metered.** `GAME-DESIGN.md`
+> §13 forbids a meter or a number anywhere (*not* this file's §13, which is the Hollow's campaign) — but an enemy that *accuses you of specific acts* tells you exactly
 > where your Nature has gone, in the only register the design permits. Four identities means four
 > different accusations.
 

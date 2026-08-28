@@ -11,10 +11,14 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 10 of 18 complete · 3 partial · 5 not started · 1029 tests** `[###########---------]`
+**v3 overall: 8 of 18 complete · 5 partial · 5 not started · 1029 tests** `[#########-----------]`
 
-*Counted from the table below: ✅ M0 M1 M2 M3 M4 M6 M7 M8 M13 M15 (10) · 🔶 M5 M9 M12 (3) ·
+*Counted from the table below: ✅ M0 M1 M2 M3 M4 M6 M7 M8 (8) · 🔶 M5 M9 M12 M13 M15 (5) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI**, which is merged but sits outside the M0–M17 numbering.*
+*(**Recounted 2026-08-28**: M13 and M15 were demoted from ✅ to 🔶. M13 does not meet its own
+`ROADMAP.md` "done when" — 3 of the 5 things it must grant are written to disk and never read into a
+run. M15's balance report is invalidated by `FINDINGS.md` G11. Neither is a regression; both were
+counted complete against claims that did not hold.)*
 *(An earlier headline said "12/18" — it counted partials as complete.)*
 
 **2026-08-24 — THE BIG MERGE IS DONE.** The entire stacked chain from the autonomous run
@@ -39,7 +43,9 @@ per-class refinement also remains (Scavver strong / ranged classes weak — play
 **The karma pillar has its first real EFFECT** — the floor-4 gate routes grace (ascension, ends at
 act 4) vs cast-down (→ Hollow-Self → damnation) by your hidden Nature.
 
-**Next up: the engine foundations, then everything else.** Two full project audits
+**Next up: `#0 critical-engine-bugs`** (`PLAN.md` #0) — **not** the engine foundations. #0 now
+precedes #1, because #1's equip-as-input and slot-migration changes both build on the equip
+resolution path that G11 shows is broken. Then everything else. Two full project audits
 (`docs/SCOPE-AUDIT.md`, `docs/SCOPE-AUDIT-2.md`) and **22** scope-interview rounds have since
 reshaped the plan. **The live list of what is open is `docs/FINDINGS.md`; the live work plan is
 `docs/PLAN.md`.**
@@ -52,10 +58,15 @@ full accessibility including a screen-reader pass; licence, free itch release an
 (`docs/SHIPPING.md`). **The engine writes the choices — the LLM-authored-choices plan is dropped**,
 which shrinks M11 substantially. **Min spec now requires a GPU.**
 
-**Next up (NOT started — both branches are empty; only plans exist):** `engine-foundations` (equip as a `step` input · description/flavour fields · the
-floor-mechanic hook · floor-4 verdict weighting · condition rename · Quick/Slow redefined) and
-`art-pipeline` (batch mode · corner-pixel gate · reference conditioning · alpha keying), planning in
-parallel on disjoint territory.
+**Next up (NOT started — no branch exists yet):** **`#0 critical-engine-bugs`** — the equip
+resolution fix (G11) + its non-circular test (G11b) · the five missing narration cases (G13) · the
+advantage latch (G12) · catalog items reachable (G14) · `dealQualityTwist` (G16). **This blocks #1.**
+
+**Then, and only then** (both branches exist but are **empty** — only plans): `engine-foundations`
+(equip as a `step` input · description/flavour fields · the floor-mechanic hook · floor-4 verdict
+weighting · condition rename · Quick/Slow redefined · the level-up rework · enemy XP · the **9→7 slot
+migration**) and `art-pipeline` (batch mode · corner-pixel gate · reference conditioning · alpha
+keying), planning in parallel on disjoint territory.
 
 **⚠️ Known and unfixed:** three bugs silently destroy player data — quitting mid-run voids all
 unlock progress, winning leaves a resumable save, and a corrupt unlock store wipes everything with
@@ -79,9 +90,9 @@ no warning. **Only G3 has a specified fix — G1 and G2 still need one designed*
 | M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ needs your PROSE |
 | M11 — LLM layer to spec (**narrate ONLY** — floor voices, beat significance, karma-in-prompt, boss agents, boss talk) | ⬜ **shrank 2026-08-25** — grammar-constrained choices + the tool registry are DROPPED; the engine writes the choices |
 | M12 — Bosses: five unique encounters as agents | 🔶 **4 of 5** merged (894 tests) — `boss.ts` has **four** combat bosses; the **floor-4 executioner fight does not exist** (`PLAN.md` #11). Karma verdict gate + two endings done. **No boss is an agent yet.** Boss prose still yours |
-| M13 — Meta-progression: unlocks & mastery feats | ✅ **merged to `main`** (943 tests); persistent unlock store, feats wired to bosses/endings/spare, gradual bestiary reveal |
+| M13 — Meta-progression: unlocks & mastery feats | 🔶 **merged, but does NOT meet its own "done when"** (943 tests). Shipped: persistent unlock store, feats wired to bosses/endings/spare, gradual bestiary reveal. **But `ROADMAP.md` requires it to grant classes/skills/items/relics/enemies, and `snapshotUnlocks` returns only `{families, affixes}`** — skills and relics are written to disk and **never read into a run**. 3 of 5 unmet (`FINDINGS.md` G14) |
 | M14 — Karma payoff: blended-spectrum endings | ⬜ (two endings exist via M12's gate; the blended spectrum + prose remain) |
-| M15 — Balance pass (tough but fair), sim-verified | ✅ **merged to `main`** (960 tests); sim harness + report + tuned constants; **32.9% baseline win**; per-class refinement pending |
+| M15 — Balance pass (tough but fair), sim-verified | 🔶 **merged, but the report is INVALIDATED** (960 tests). Shipped: sim harness + report + tuned constants; **32.9% baseline win**. **But G11 voids the "no-equipment lower bound" framing** — loot is un-equippable in principle, so those figures are what real play *does*, not a floor beneath it. **Re-run mandatory after `PLAN.md` #0** |
 | M16 — Polish & game-feel | ⬜ |
 | M17 — Package & ship (itch) | ⬜ |
 

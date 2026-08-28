@@ -79,7 +79,9 @@ here** — that's our later art-direction session; this pass is about *functiona
 - **M15 balance — ✅ FIXED (the game is now winnable, proven by the simulator).** Target locked at "tough
   but fair ~1 in 3". After tuning: baseline win **32.9%** / merciful **40.0%** (1000 grace endings), Act-1
   deaths **98%→19%**, deaths now spread across all acts (modal = Act 3). Numbers in `docs/BALANCE-REPORT.md`.
-  Remaining balance items for YOUR play-test (the sim is a no-equipment *lower bound* — real play is easier):
+  Remaining balance items for YOUR play-test (⚠ **the "lower bound — real play is easier" claim was
+  WRONG**, `FINDINGS.md` G11: found loot cannot be equipped at all, so 32.9% is what play actually
+  does. **Do not expect the game to feel easier than the figures.**):
   - [ ] **Feel check** — does a careful run feel "tough but fair"? If too soft with equipment, the biggest
         knob is **`STARTING_POTS = 6`** (generous; trim toward 3–4). All tuned numbers are single-sourced.
   - [ ] **Per-class spread** — Scavver over-performs (~76% sim win) while the two **1d4-starting-gun** classes
