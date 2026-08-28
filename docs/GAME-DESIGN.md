@@ -517,7 +517,7 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 - Current `src/llm/narrate.ts` is a pure prompt-builder stub. Still to build: real model integration,
   streaming, per-floor prompts, beat significance, karma-in-the-prompt, and boss agents.
   **~~grammar-constrained choices~~ and ~~the engine tool-registry~~ are DROPPED** — the engine writes
-  the choices (§16), which shrinks M11 substantially.
+  the choices (**§10, this section**), which shrinks M11 substantially.
 
 ---
 

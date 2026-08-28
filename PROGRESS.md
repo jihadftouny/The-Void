@@ -14,8 +14,9 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 **v3 overall: 10 of 18 complete · 3 partial · 5 not started · 1029 tests** `[###########---------]`
 
 *Counted from the table below: ✅ M0 M1 M2 M3 M4 M6 M7 M8 M13 M15 (10) · 🔶 M5 M9 M12 (3) ·
-⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI**, which is merged but sits outside the M0–M17 numbering.
+⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI**, which is merged but sits outside the M0–M17 numbering.*
 *(An earlier headline said "12/18" — it counted partials as complete.)*
+
 **2026-08-24 — THE BIG MERGE IS DONE.** The entire stacked chain from the autonomous run
 (2026-08-10→11) is now merged into **`main`** in one gated merge, zero conflicts. Post-merge
 verification on the trunk: `npm run typecheck` clean, **960/960 tests pass**, `npm run build` OK.

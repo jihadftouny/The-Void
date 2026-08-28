@@ -8,8 +8,8 @@ _Authoritative record of the UI scope decided in the 2026-08-24 scope interview.
 
 ## 0. Why this exists
 
-The engine is **partly** built: M0–M8, M13 and M15 are merged; **M5, M9 and M12 are partial** and
-M10, M11 and M14 have not started (`PROGRESS.md`). **`PLAN.md` #1 and #2 come before anything in this
+The engine is **partly** built: M0–M4, M6–M8, M13 and M15 are merged; **M5, M9 and M12 are partial**;
+M10, M11, M14, M16 and M17 have not started (`PROGRESS.md`). **`PLAN.md` #1 and #2 come before anything in this
 document** — equip-as-input, the floor-mechanic hook, the tempo gauge, the level-up rework and the
 XP fix — and **`#6 battle-screen` must not start until #2 lands.** This document is the render layer
 only. Today the battle screen is a

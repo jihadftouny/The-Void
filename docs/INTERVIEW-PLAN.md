@@ -98,7 +98,7 @@ _Newest first. Every round that has been asked and written down._
 | 2026-08-27 | **A1 + A2** — recovery & sparing | Rest restores HP **and charges** and is the build-management point; chests carry consumables/gear + a rare unique; **sparing costs loot and XP**; **healing becomes scarce** (potion fold-in flagged for confirmation). `GAME-DESIGN.md` §18 |
 | 2026-08-27 | Hollow ascent | It **rises** 5→1 to reach the Memorians; the Warden shows mercy instead of judgement; same floors reversed; built bidirectionally. **Opened R1–R5.** `WORLD.md` §13 |
 | 2026-08-27 | Endings · Sins · boss agents · unlock feats | Blended within a binary gate; seven distinct Sin behaviours; the model chooses boss actions under five hard constraints; feats designed to teach. `GAME-DESIGN.md` §17 |
-| 2026-08-26 | Tempo & equipping | The **tempo gauge** (DEX-driven, visible); equipping is hub-only. `GAME-DESIGN.md` §16 |
+| 2026-08-26 | Tempo & equipping | The **tempo gauge** (DEX-driven, visible); equipping is hub-only. `GAME-DESIGN.md` §16.1 |
 | 2026-08-26 | Performance · UI art · run length | 30fps everything-on; the **art-vs-interface rule**; run length measured in the balance re-run |
 | 2026-08-26 | A11y · endings · icons · playtesting | Full accessibility incl. screen reader; authored anchors; bespoke item icons; a small trusted group |
 | 2026-08-26 | Legal · release · fleeing · death | Proprietary + third-party notices; free on itch; **bosses cannot be fled**; a narrator-written run summary |

@@ -81,7 +81,7 @@ confirm. That is the worst failure mode of this system — a question that looks
 | A1b | **The potion fold-in** | `OPEN` | #2 | §18.4 says outright: *"⚠ Interpretation flagged for the author… if the intent was to keep the separate potion resource and merely reduce it, say so and this section changes."* It also gates the balance re-run |
 | B4c | **The boss-talk concession cap** | `OPEN` | #6 #11 #12 | §20 says: *"Flagged, with a proposed fix the author may overrule."* Free talk + earnable concessions is an exploit; the proposed cap is one concession per fight |
 
-### 2d. Tracked as build work (not author questions)
+## 2d. Tracked as build work (not author questions)
 
 *These two were briefly logged in §2c by mistake — they need building, not deciding.*
 

@@ -51,9 +51,9 @@ disagree. Keep this index current: a document not listed here will be missed by 
    first and has already been corrected by it once (the Ash City accent).
 4. **`GAME-DESIGN.md`** wins on systems and numbers, except where `BALANCE-REPORT.md` supersedes a
    specific constant.
-4b. **`SHIPPING.md`** wins on release, licensing and store-facing questions; **`CONTENT-WARNING.md`**
+5. **`SHIPPING.md`** wins on release, licensing and store-facing questions; **`CONTENT-WARNING.md`**
    wins on the warning's placement and policy.
-5. A **`[LOCKED]`** tag with a date beats an untagged statement. A later date beats an earlier one.
+6. A **`[LOCKED]`** tag with a date beats an untagged statement. A later date beats an earlier one.
 
 **Corrections already on record**, so nobody re-derives from a stale line:
 - `UI-DESIGN.md` §5 originally said the Ash City accent was *ash-orange*. **Overruled** — the fire is
