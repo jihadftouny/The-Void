@@ -8,9 +8,11 @@ _Authoritative record of the UI scope decided in the 2026-08-24 scope interview.
 
 ## 0. Why this exists
 
-The **v2** engine is merged (M1–M15). **The v3 engine work is NOT** — `PLAN.md` #1 and #2 (floor
-mechanics, equip-as-input, the tempo gauge, the XP fix) come *before* anything in this document, and
-`#6 battle-screen` must not start until #2 lands. **This document is the render layer only.** Today the battle screen is a
+The engine is **partly** built: M0–M8, M13 and M15 are merged; **M5, M9 and M12 are partial** and
+M10, M11 and M14 have not started (`PROGRESS.md`). **`PLAN.md` #1 and #2 come before anything in this
+document** — equip-as-input, the floor-mechanic hook, the tempo gauge, the level-up rework and the
+XP fix — and **`#6 battle-screen` must not start until #2 lands.** This document is the render layer
+only. Today the battle screen is a
 220-pixel sidebar of plain text lines plus a flat row of buttons: you press **Fight**, a line of
 narration replaces the last one, and two numbers change in the corner. It does not read as a fight,
 and it hides almost everything the engine actually computes — 25 status conditions, dice rolls,
@@ -401,7 +403,7 @@ particles) and text size. See `FINDINGS.md`.
 
 There was no settings screen anywhere in the design, and it is not new scope — it is **the bill for
 scope already taken on.** Audio went in at full ambition with no volume control; accessibility
-commitments have nowhere to live; the model tier needs an override on slow machines.
+commitments have nowhere to live; and narration needs an on/off switch.
 
 | Group | Controls |
 |---|---|

@@ -71,7 +71,7 @@ on the grounds that the game is a descent and never goes up. `docs/WORLD.md` §1
 | R4 | ~~Second prose pass, all five floors~~ | `DECIDED` | — | **Authoring work, not a decision** — folded into #13. The inverted register roughly doubles floor *content* work |
 | R5 | ~~Floor hook must be direction-aware~~ | `DECIDED` | — | **Build work, not a decision.** Specified in `PLAN.md` #1.3 and locked in `GAME-DESIGN.md` §17.5 ("built bidirectionally"). *It was wrongly listed as blocking #1, contradicting `PLAN.md`.* |
 
-## 2c. Logged as settled, but actually still needs the author (found 2026-08-27)
+## 2c. Still needs the author (found 2026-08-27)
 
 Both were marked `DONE` in the interview plan while the design document itself says the author must
 confirm. That is the worst failure mode of this system — a question that looks answered.
@@ -80,8 +80,15 @@ confirm. That is the worst failure mode of this system — a question that looks
 |---|---|---|---|---|
 | A1b | **The potion fold-in** | `OPEN` | #2 | §18.4 says outright: *"⚠ Interpretation flagged for the author… if the intent was to keep the separate potion resource and merely reduce it, say so and this section changes."* It also gates the balance re-run |
 | B4c | **The boss-talk concession cap** | `OPEN` | #6 #11 #12 | §20 says: *"Flagged, with a proposed fix the author may overrule."* Free talk + earnable concessions is an exploit; the proposed cap is one concession per fight |
-| B17 | **The draft reversal is in no work plan** | `OPEN` → build | #1 #2 #9 | Stats left the draft, per-level allowance, **max level 20** (§19.5) — but `draft.ts` still has `CATEGORY_WEIGHTS.stat` and **no level cap exists in `src/`**. M9 shipped ✅ with the mechanic this reversed |
-| B18 | **`#6 battle-screen` has two unrecorded requirements** | `OPEN` → build | #6 | **Audio hooks on every beat** (`ART-BIBLE.md` §10, marked BLOCKING) and **a free-text input** for boss talk (§20). Neither reaches `PLAN.md` |
+
+### 2d. Tracked as build work (not author questions)
+
+*These two were briefly logged in §2c by mistake — they need building, not deciding.*
+
+| # | Item | Status | Blocks | Notes |
+|---|---|---|---|---|
+| B17 | ~~The draft reversal is in no work plan~~ | `TRACKED` — build work | #1 | **Now `PLAN.md` #1.7.** Stats left the draft, per-level allowance, **max level 20** (§19.5) — `draft.ts` still has `CATEGORY_WEIGHTS.stat` and **no level cap exists in `src/`**. M9 demoted to 🔶 |
+| B18 | ~~`#6` has two unrecorded requirements~~ | `TRACKED` — build work | #6 | **Now recorded under `PLAN.md` #6.** Audio hooks on every beat (`ART-BIBLE.md` §10, BLOCKING) and a free-text input for boss talk (§20) |
 
 ## 3. Product areas never discussed
 
@@ -120,7 +127,7 @@ confirm. That is the worst failure mode of this system — a question that looks
 | D3 | Three dead `[PROPOSAL]` tags to retag or delete (P2, P3, P5) | `OPEN` |
 | D4 | ~~`.env.example` says "bundled"~~ | `FIXED` 2026-08-26 |
 | D5 | `PROGRESS.md` still describes the shell as "mobile-first, portrait 540×1080" | `OPEN` |
-| D6 | `HUMAN-CHECKS.md` stale since 2026-08-14; 5 un-ticked author rulings incl. flee 25% vs 35% | `OPEN` |
+| D6 | `HUMAN-CHECKS.md` — run instructions **FIXED 2026-08-27**; still carries **5 un-ticked author rulings** incl. flee 25% vs 35% | `PARTLY FIXED` |
 | D7 | **20** stale worktrees on disk (`PROGRESS.md` says 16; both were wrong) | `OPEN` |
 | D8 | `WHAT-WE-BUILT.md` + `itch-description.html` describe a game with gold and a shop | `OPEN` |
 

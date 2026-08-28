@@ -1,7 +1,7 @@
 # The Void
 
 A **mechanics-first roguelike RPG with a local-LLM narrator** — a deep D&D-style game the engine
-owns completely, with a language model narrating over the top. Inspired by lived experience of psychosis. A **local model** (3–4B, no cloud, no keys, no per-turn cost) narrates and
+owns completely, with a language model narrating over the top. Inspired by lived experience of psychosis. A **local model** (**4B** — the only tier shipped, no cloud, no keys, no per-turn cost) narrates and
 adapts to the player's choices; the deterministic engine owns every rule and number (dice combat,
 status conditions, skills, sacrifice-deals/rest, XP across five Acts, bosses). Shipped as a
 **packaged desktop game** (itch.io).
@@ -66,7 +66,7 @@ core (breaks reproducibility), and class instances/functions in saved state (bre
 ## Stack & targets
 
 - Node.js 18+, TypeScript 5 (strict), Vite 6, Vitest 2, Kaplay (atmosphere layer), DOM for
-  narrative text. Desktop packaging: **Electron + node-llama-cpp** (GGUF 3–4B model,
+  narrative text. Desktop packaging: **Electron + node-llama-cpp** (GGUF **4B** model,
   grammar-constrained output). Electron is settled — N1 validated it; Tauri is not in play.
   **The model is downloaded once on first run, by design** (decided 2026-08-25): a small installer,
   a one-time ~2.5 GB fetch, then fully offline forever. Keeps the itch upload small and lets the

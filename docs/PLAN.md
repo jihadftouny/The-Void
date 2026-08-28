@@ -27,7 +27,7 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 1 — engine, before any UI
 
-**#1 `engine-foundations`** — one pipeline unit, **six** changes, all cheap now and expensive later:
+**#1 `engine-foundations`** — one pipeline unit, **nine** changes, all cheap now and expensive later:
 1. **Equip/unequip become `step` inputs.** Restores reproducibility from `seed + inputs`.
 2. **`description` + `flavour` on every content schema.** Blocks *all* content authoring today.
 3. **The floor-mechanic hook** — fire the existing relic trigger pipeline with a per-floor effect
@@ -39,6 +39,9 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
    **per-level stat allowance**, and add a **level cap of 20** (none exists in `src/` today).
 8. **Decide `jsdom` vs `node`** as the test environment — once, here, or three UI units each invent
    their own override.
+9. **Enemy XP derives from the ENEMY** (§19.2) — `enemy.ts:117` still rolls it from `playerXp`, which
+   is a feedback loop *and* makes a hard kill worth no more than a trivial one. **This was decided and
+   appeared in no work plan until now.**
 
 **#2 `floor-mechanics` + balance re-run** — all five floors per `GAME-DESIGN.md` §8. Floor 2's
 illusions matter most: they are the **only trigger for the clarity↔delusion karma axis**, which
@@ -104,7 +107,9 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 
 ## Interview status
 
-**✅ ALL TWENTY ROUNDS ARE DONE** (2026-08-25 → 27). The queue and the full record are in
+**22 rounds asked; 20 fully done, 2 partial** (2026-08-25 → 27). **A1** (potion fold-in) and **B4b**
+(boss-talk concession cap) are `DONE (partial)` — the design doc explicitly flags both for the author.
+See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 **`docs/INTERVIEW-PLAN.md`**; every answer is written into an authoritative document.
 
 | Area | State |
@@ -119,7 +124,7 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 
 **What is left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), and eight **bugs** whose fixes are already specified.
+one **parked** (localisation), and eight **bugs** — **six with fixes specified; G1 and G2 have none yet.**
 
 ### Newer work items not in the dependency graph above
 
@@ -132,4 +137,5 @@ one **parked** (localisation), and eight **bugs** whose fixes are already specif
 
 > **Still true and worth repeating:** three bugs **silently destroy player data** (quitting mid-run
 > voids all unlock progress; winning leaves a resumable save; a corrupt unlock store wipes
-> everything). Fixes are specified in `FINDINGS.md` §4. **The code has not changed yet.**
+> everything). **Only the third has a specified fix — G1 and G2 still need one designed.** The code
+> has not changed at all.

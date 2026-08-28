@@ -21,7 +21,9 @@ disagree. Keep this index current: a document not listed here will be missed by 
 | 10 | **[SCOPE-AUDIT.md](SCOPE-AUDIT.md)** | *Every hole, part 1.* Content, systems and document contradictions (2026-08-25), ranked by retrofit cost | committing to any new unit — check whether it sits on an unbuilt foundation |
 | 11 | **[SCOPE-AUDIT-2.md](SCOPE-AUDIT-2.md)** | *Every hole, part 2.* Open decisions, **product areas nobody discussed** (accessibility, settings, legal, content warning, updates, QA), and **decisions already made by accident in code** — including three that silently destroy player data | before claiming anything is fully scoped, and before starting any UI unit |
 | 12 | **[BALANCE-REPORT.md](BALANCE-REPORT.md)** | *Whether it is winnable.* Generated from the sim — do not hand-edit. **Caveat: measured with no equipment**, because equip is not yet an engine input | touching any balance constant |
-| 13 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
+| 13 | **[SHIPPING.md](SHIPPING.md)** | *How it ships.* Licence and third-party notices, free-on-itch release, no telemetry, the store page, first-run flow, and the playtest brief | packaging, release, or writing anything public-facing |
+| 14 | **[CONTENT-WARNING.md](CONTENT-WARNING.md)** | *The warning, and where it appears.* Shown at the start of **every** fresh run, plus the store page and README. **The words are the author's to write** | building the first-run flow or the store page |
+| 15 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
 
 **Stale, kept for history — do NOT build from these:**
 
@@ -49,6 +51,8 @@ disagree. Keep this index current: a document not listed here will be missed by 
    first and has already been corrected by it once (the Ash City accent).
 4. **`GAME-DESIGN.md`** wins on systems and numbers, except where `BALANCE-REPORT.md` supersedes a
    specific constant.
+4b. **`SHIPPING.md`** wins on release, licensing and store-facing questions; **`CONTENT-WARNING.md`**
+   wins on the warning's placement and policy.
 5. A **`[LOCKED]`** tag with a date beats an untagged statement. A later date beats an earlier one.
 
 **Corrections already on record**, so nobody re-derives from a stale line:

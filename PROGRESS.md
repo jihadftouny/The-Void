@@ -33,7 +33,7 @@ per-class refinement remains (Scavver strong / ranged classes weak — play-test
 act 4) vs cast-down (→ Hollow-Self → damnation) by your hidden Nature.
 
 **Next up: the engine foundations, then everything else.** Two full project audits
-(`docs/SCOPE-AUDIT.md`, `docs/SCOPE-AUDIT-2.md`) and seven scope-interview rounds have since
+(`docs/SCOPE-AUDIT.md`, `docs/SCOPE-AUDIT-2.md`) and **22** scope-interview rounds have since
 reshaped the plan. **The live list of what is open is `docs/FINDINGS.md`; the live work plan is
 `docs/PLAN.md`.**
 
@@ -52,7 +52,7 @@ parallel on disjoint territory.
 
 **⚠️ Known and unfixed:** three bugs silently destroy player data — quitting mid-run voids all
 unlock progress, winning leaves a resumable save, and a corrupt unlock store wipes everything with
-no warning. Fixes are specified in `docs/FINDINGS.md` §4; the code has not changed yet.
+no warning. **Only G3 has a specified fix — G1 and G2 still need one designed** (`docs/FINDINGS.md` §4); no code has changed.
 
 **Play-test checklist + balance: `HUMAN-CHECKS.md` / `docs/BALANCE-REPORT.md`.**
 

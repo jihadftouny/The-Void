@@ -79,7 +79,7 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 4. **Serializable plain-data state.** Game state (incl. **inventory** and **multi-axis karma**)
    round-trips through JSON. No class instances/functions/canvas objects in state; save/load migrates.
 5. **Engine-authoritative LLM.** The narrator narrates; **the ENGINE writes every player choice**
-   (reversed 2026-08-25 — `CLAUDE.md` §5, `GAME-DESIGN.md` §16); the engine owns all
+   (reversed 2026-08-25 — `CLAUDE.md` §5, `GAME-DESIGN.md` **§10**); the engine owns all
    numbers and **all karma changes** (never the LLM). LLM output is grammar/JSON-constrained. The LLM
    layer (`src/llm`) is pure and testable against a fake model.
 6. **Desktop-first, responsive.** Target desktop; keep layouts responsive for a later mobile path.
@@ -181,7 +181,7 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
   `GAME-DESIGN.md` §17.3); **talking to bosses** in free text (§20); everything headlessly testable
   against a **fake model**.
 - **DROPPED 2026-08-26 — M11 shrank:** ~~grammar-constrained choices~~ and ~~the engine-as-toolbox tool
-  registry~~. **The engine writes the choices** (§16). *(The tool registry also listed "shop", which no
+  registry~~. **The engine writes the choices** (**§10**). *(The tool registry also listed "shop", which no
   longer exists.)*
 - **Key decisions:** how karma colors tone without ever exposing a meter — still open, and the reason
   karma must reach the prompt at all.

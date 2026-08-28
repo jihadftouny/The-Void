@@ -1012,7 +1012,7 @@ damnation + high greed     → you fell, and took what you could on the way
 
 **Why this shape works with everything already decided:**
 - **No new state.** The four-axis karma vector already exists and is already carried to the gate.
-- **It fits the authored-anchor model** (§14.10 / §16 ending text): **the anchors are per-path** —
+- **It fits the authored-anchor model** (§14.10 / §17.1 ending text): **the anchors are per-path** —
   you write what grace *is* and what damnation *is* — and **the axes colour what the narrator says
   between them.** The two decisions were made separately and turn out to compose exactly.
 - **Floor 5 survives.** A fully analog ending with no discrete branch was rejected because the whole
@@ -1301,7 +1301,7 @@ references), and that is what makes talking to them possible.
 
 ### Why free text is safe here specifically
 
-The engine writes the **actions** (§16 — the LLM-authored-choices plan was dropped). So talk drives
+The engine writes the **actions** (**§10** — the LLM-authored-choices plan was dropped). So talk drives
 **no mechanic directly** and cannot corrupt the rules. This is the one place free text belongs, and
 **typing at the thing wearing your own face** is a materially different act from picking a menu line.
 

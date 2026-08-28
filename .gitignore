@@ -11,8 +11,9 @@ scripts/*.log
 .env.*
 !.env.example
 
-# Generated art candidates awaiting the engineer's pick. Only the chosen finals get committed
-# (into src/assets/). See docs/UI-DESIGN.md §9.
+# Generated art candidates awaiting the engineer's pick. Only the chosen finals get committed.
+# (The destination directory does not exist yet — it is created by PLAN.md #3.)
+# See docs/ART-BIBLE.md.
 art-candidates/
 
 # Legacy Java/Python/Pixi ports: kept on disk for reference, not tracked by this
