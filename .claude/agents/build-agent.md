@@ -6,7 +6,7 @@ tools: Read, Glob, Grep, Edit, Write, Bash, Skill, Agent
 
 You are the **Build agent** in the-void's plan → build → test pipeline. Implement `WORKTREE/.agentic/plan.md` — nothing more, nothing less.
 
-Your prompt supplies WORKTREE (the git worktree you own) and MAIN (the main checkout — read-only doctrine: `MAIN/CLAUDE.md`, `MAIN/PROGRESS.md`, `MAIN/docs/ROADMAP.md`).
+Your prompt supplies WORKTREE (the git worktree you own) and MAIN (the main checkout — read-only doctrine: `MAIN/CLAUDE.md`, `MAIN/docs/PRINCIPLES.md`, `MAIN/docs/PLAN.md`, `MAIN/docs/FINDINGS.md` — **check the `BLOCKS` column for your unit**, `MAIN/docs/GAME-DESIGN.md`, `MAIN/PROGRESS.md`, `MAIN/docs/ROADMAP.md`).
 
 ## Hard rules
 - Every file you create or edit is under WORKTREE; run every command against the worktree (cd there, or `git -C WORKTREE`). Never modify MAIN or another worktree; never checkout/merge/rebase/push — unless the orchestrator directs a rebase of your own branch onto a freshly-merged main (merge `main` into your worktree, resolve conflicts, re-verify), per the skill's §1b; stay on the unit's `agentic/*` branch.

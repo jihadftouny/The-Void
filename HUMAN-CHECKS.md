@@ -64,12 +64,12 @@ here** — that's our later art-direction session; this pass is about *functiona
 
 ---
 
-## 🧱 Autonomous mechanical-milestone run (M1–M9 + UI + enemy-kits + M12/M13/M15 built+verified, pending merge)
+## 🧱 Autonomous mechanical-milestone run (M1–M9 + UI + enemy-kits + M12/M13/M15 — **MERGED to `main` 2026-08-24**; the play-checks below are still outstanding)
 
 **Later additions (2026-08-14), stacked further on the chain — all loop-verified:**
 - **enemy-kits** — fixes "all enemies do pyroBall": 24 families now cast distinct themed skills + drop
   themed loot. (Play-test: confirm a mutant-stray poisons, a distortion drives insanity, a ganger bleeds.)
-- **M12 bosses** — 5 distinct boss mechanics + the **karma verdict gate** (grace ends at act 4 / cast-down
+- **M12 bosses** — **4 of 5** boss mechanics (⚠ **the floor-4 executioner fight does not exist** — `PLAN.md` #11; `boss.ts` has four combat bosses) + the **karma verdict gate** (grace ends at act 4 / cast-down
   → Hollow-Self → damnation), routed by your hidden karma. Boss *dialogue* + floor/ending *prose* still
   need your voice (M10/M11/M12/M14). (Play-test: reach a floor boss; a virtuous run → grace, an aggressive
   run → cast-down to the Hollow.)
@@ -92,7 +92,8 @@ here** — that's our later art-direction session; this pass is about *functiona
 
 ## 🧱 Autonomous mechanical-milestone run (M1–M9 built+verified, pending your merge)
 
-I built these through the loop while you were hands-off, **stacked and unmerged** (your merge gate).
+I built these through the loop while you were hands-off. **They were merged to `main` on 2026-08-24**
+(all 19 unit branches are ancestors of `main`); only the hand-checks below remain.
 All are headless-verified (typecheck + full tests + build + adversarial checks); the items below are
 the **play-feel / UI things only you can judge**, once the chain is merged and running.
 

@@ -29,7 +29,7 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 **#0 `critical-engine-bugs`** — **eighteen defects** found by discrepancy passes 5B, 6A and 7A.
 **Every one verified by running the real engine, and every one passing 1029 tests and a clean
 typecheck.** Full evidence in `FINDINGS.md` §4
-(G11–G16). This unit exists because these are not polish; **three of them mean whole shipped systems
+(**G11–G28**). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
 1. **G11 — no found item can ever be equipped.** `equipment.ts` resolves by `defId` only, so every
@@ -87,20 +87,27 @@ do nothing at all.**
     `innerHTML`; `balance-report.ts` mixes live numbers with hard-coded claims that a retune will
     falsify; `clarity-draught` can never be used; an unguarded `resolveSkill` crashes the sheet.
 
-> **⚠ THE THREE UNITS CAN NO LONGER RUN IN PARALLEL.** G26 touches `narrate.ts` (**#0b**'s file) and
-> `desktop/game.ts` (**#0c**'s), and G27 touches `game.ts`'s rest path alongside **#0a**'s condition
-> work. Under `SKILL.md` §1b — *never parallelize units whose plans touch the same source file* —
-> **#0a → #0b → #0c must now run SERIALLY**, each rebasing onto the previous. The decomposition is
-> still worth keeping: it bounds each unit's review size and keeps a failure contained. It just no
-> longer buys wall-clock.
-
-> **⚠ THIS IS NOW TOO BIG FOR ONE PIPELINE UNIT.** Proposed decomposition — three units on
-> near-disjoint territory (`agentic-engineering` §1b: never parallelize units whose plans touch the
-> same source file, so **#0a and #0c must not run concurrently** — both may touch `game.ts`):
+> **⚠ TOO BIG FOR ONE PIPELINE UNIT.** Decomposition into three units, with **one** scheduling rule:
+>
+> ### **`#0a` runs independently. `#0b` and `#0c` must run SERIALLY.**
+>
+> The only genuine cross-unit overlap is **G26**, whose fix spans `src/llm/narrate.ts`
+> (`buildNarrationPrompt` — **#0b**'s file) and `src/desktop/game.ts:202` (**#0c**'s). Under
+> `SKILL.md` §1b — *never parallelize units whose plans touch the same source file* — that one pairing
+> is barred. **#0a shares no file with either** and can run alongside whichever of them is active.
+>
+> > **⚠ Correction, 2026-08-28.** This block previously said all three must serialise, and gave two
+> > reasons, one of which was **false**: *"G27 touches `game.ts`'s rest path alongside #0a's condition
+> > work."* G27's target is `resolveRestDecision` in **`src/game/game.ts`** — which is **#0a's own
+> > file**. #0c's is the *different* **`src/desktop/game.ts`**. Conflating the two invented a conflict
+> > that does not exist, and the same block simultaneously claimed "#0a and #0c must not run
+> > concurrently" **and** "#0b can run alongside either heavy one" — three mutually incompatible
+> > statements in 25 lines. The corrected rule bars exactly one pairing, and it is **#0b–#0c**, the
+> > one the old text said was safe.
 >
 > | Unit | Covers | Principal files |
 > |---|---|---|
-> | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, **G23**, **G24**, **G25**, **G27** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `game.ts` (rest path) |
+> | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, **G28(d)** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
 > | **#0b `narration-coverage`** | G13, G21 | `llm/narrate.ts`, `data/story.json` |
 > | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, **G26**, **G28** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
@@ -109,7 +116,9 @@ do nothing at all.**
 > envelope) and should be folded in **once a fix is designed**; until then its `BLOCKS` cell is `—`,
 > because a bug nobody is fixing cannot block the unit that is not fixing it.
 >
-> **#0b is the light unit** and can run alongside either heavy one (~2 heavy + 1 light ceiling).
+> **Scheduling, restated once so there is a single source:** `#0a` is independent. `#0b` and `#0c`
+> are the barred pairing (G26 spans their files). So run **`#0a` + `#0b`**, then `#0c`; or `#0a` +
+> `#0c`, then `#0b`. Never `#0b` + `#0c` together.
 
 > **⚠ G15 is deliberately NOT in this unit — it needs an author decision first.** Half the karma
 > model never fires, and the axis the final reckoning weights most heavily (`reverenceDesecration`,
@@ -202,11 +211,15 @@ the prompt, boss agents. Note the persona string is **duplicated** in `src/llm/n
 left. Joke weapon names that are the shipped starting gear, every drop named "Legendary mainHand", a
 lore file reading *"this is a lore this is a lore"*, ten empty prose bodies on the live path, two
 one-sentence endings, placeholder boss names, and no descriptions anywhere. **Only the author can do
-this.** Blocked on #1.
+this.** **Blocked on #1 AND on author round A8** (the endings' voice and whether the player has a
+name — you cannot write the endings before that is settled). **Also carries C1–C4**: the two reserved
+words used casually in shipped strings, the class picker giving away the concealed fact, the intro
+sending you to the wrong place, and the narrator never being told which floor it is on.
 
 **#14 package and ship** — `electron-builder.json` is an N1 stub; the first-run model download needs
 a real failure path; **licensing is entirely absent and blocks any public release**; app icon,
 splash and installer art are on no list; `itch-description.html` is wrong about nearly everything.
+**Blocked on author rounds A7 and A8** — both land in text that ships.
 
 ---
 
@@ -219,19 +232,34 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 
 | Area | State |
 |---|---|
-| Lore / world | ✅ Six rounds + the Hollow ascent. `WORLD.md` |
+| Lore / world | ⚠ Six rounds + the Hollow ascent (`WORLD.md`), **but A8 is OPEN** — the endings' voice and the player's name |
 | Scope / Tier 1 | ✅ All seven decided |
 | Floor mechanics | ✅ All five, and **bidirectional** |
 | Visual & audio | ✅ Art direction, typeface, ship assets, and the **thinning score** |
-| Design / Tier 2 | ✅ Loot, karma, progression, conditions, elements, class kits |
+| Design / Tier 2 | ⚠ Loot, progression, conditions, elements, class kits — **but A7 is OPEN** on karma inputs and verdict weighting |
 | Bosses & talk | ✅ Identities, boss agents, and **talking to bosses** in free text |
 | Release | ✅ Licence, free on itch, no telemetry, store page, first run, playtest |
 
-**What is left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
+**⚠ TWO AUTHOR ROUNDS ARE STILL OPEN** — this heading read *"What is left is NOT interviews"* until
+2026-08-28, which was false the moment A7 and A8 were queued:
+
+| | Question | Blocks |
+|---|---|---|
+| **A7** | **Karma inputs & verdict weighting** — half the model never fires, and the heaviest verdict axis can only move toward CAST-DOWN | **#2 #14** |
+| **A8** | **The endings' voice, and whether the player has a name** — the locked rule is second-person-only; the shipped anchors are third person and name you | **#13 #14** |
+| **A1b** | The potion fold-in | #2 |
+| **B4c** | The boss-talk concession cap | #6 #11 #12 |
+
+**A8 blocks #13 and #14, and neither of those items mentions it** — #13 still lists its only blocker
+as "#1". *(A8 appeared in `FINDINGS.md` and `INTERVIEW-PLAN.md` and **nowhere else** — the same
+"looks handled" failure this register exists to catch, for the second time in three days.)*
+
+**Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), and **twenty bugs** (G1–G22, recounted 2026-08-28 after passes 5B and
-6A) — **eighteen with fixes specified. `G2` still has none, and `G15` needs an AUTHOR RULING, not a
-fix.** *(This line said "eight bugs, six specified" until the audit tripled the count.)*
+one **parked** (localisation), and **thirty-two bugs** (G1–G34, counted by script 2026-08-28 after
+passes 5B, 6A, 7A and 8A) — **twenty-nine with fixes specified. `G2` has none, `G15` needs an AUTHOR
+RULING, and `G32` needs a DECISION** (wire `proficiency` and re-sim, or delete it). *(This line has
+been wrong four times. **Recount before quoting it.**)*
 
 ### Newer work items not in the dependency graph above
 

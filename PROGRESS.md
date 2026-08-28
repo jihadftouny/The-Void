@@ -11,25 +11,30 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 6 of 18 complete · 7 partial · 5 not started · 1029 tests** `[#######-------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1029 tests** `[####----------------]`
 
-*Counted from the table below: ✅ M0 M1 M3 M4 M7 M8 (6) · 🔶 M2 M5 M6 M9 M12 M13 M15 (7) ·
-⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI**, which is merged but sits outside the M0–M17 numbering.*
+*Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
+⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
+the M0–M17 numbering.*
 
-> **⚠ Recounted 2026-08-28 — FOUR milestones demoted from ✅ to 🔶.** Each was marked complete
+> **⚠ Recounted 2026-08-28 — SIX milestones demoted from ✅ to 🔶.** Each was marked complete
 > against a claim that does not hold, checked against its own `ROADMAP.md` "done when":
 >
 > | | Why it is not complete |
 > |---|---|
 > | **M2** | *"elements/resistances affect skill damage"* — **they do not affect it at all** (G17). And the condition layer is worse than unfinished: **re-applying a damage-over-time deals zero damage forever** (G23) |
 > | **M6** | build-defining relics and usable consumables — **none can ever enter a backpack** (G14) |
+> | **M7** | *"real sinks (gear/consumables/rerolls/services)"* — **three of the four do not exist**: consumables cannot be generated, the reroll flag is discarded, services have no representation (G14) |
+> | **M8** | *"karma-weighted families shift Nature **axes**"* — **all nine share one pair; only `mercyCruelty` moves.** The code says so itself (G15) |
 > | **M13** | must grant classes/skills/items/relics/enemies — **3 of 5 are written to disk and never read into a run** (G14) |
-> | **M15** | balance report **invalidated** by G11 (loot is un-equippable in principle) |
+> | **M15** | balance report **invalidated** by G11, and separately **tuned against the wrong to-hit baseline** — `proficiency` is dead state, so the player has been rolling ~10 percentage points below the intended model all along (G32) |
 >
 > **None of these is a regression.** Nothing broke; the tests were always green. Each shipped
-> alongside a subsystem that turned out to do nothing, and the milestone was ticked on the code
-> existing rather than on the behaviour being reachable. *(An earlier recount today caught only M13
-> and M15 — the same standard applied to the rest found two more.)*
+> alongside a subsystem that turned out to do nothing, and the milestone was ticked on **the code
+> existing rather than the behaviour being reachable.** *(This recount has now run three times today
+> — 10 complete, then 8, then 6. Each pass applied the same standard to milestones the previous pass
+> had not checked. **Do not assume the remaining four are safe** until each is checked against its own
+> "done when" clause the same way.)*
 *(An earlier headline said "12/18" — it counted partials as complete.)*
 
 **2026-08-24 — THE BIG MERGE IS DONE.** The entire stacked chain from the autonomous run
@@ -102,10 +107,11 @@ no warning. **G1's fix landed with G19 and G3's is decided — only G2 still nee
 | M4 — Combat overhaul: defense matters (enemies roll to-hit) | ✅ **merged to `main`** (526 tests) |
 | M5 — Inventory & equipment (Tibia-style) ★ | 🔶 ENGINE **merged to `main`** (561 tests); **Tibia visual UI deferred to a collab pass w/ you** |
 | M6 — Items content: relics, uniques, consumables | 🔶 **merged, but fails its own "done when"** (625 tests). Shipped: 15 relics + 4 uniques + 19 consumables + effect/trigger system + rarity gen. **But `ROADMAP.md` requires build-defining relics that "change how a build plays" and consumables "usable in and out of combat" — and no relic or consumable can ever enter a backpack** (`FINDINGS.md` G14: `loot.ts` only ever calls `generateItem`). 2 of 4 clauses unmet; flavor co-write & in-UI display also pending |
-| M7 — Loot sourcing & thematic economy | ✅ **merged to `main`** (649 tests); **gold removed**, pure sacrifice-deals + loot drops + chests; karma-shift deals feed the pillar |
-| M8 — Enemies: families, affixes, karma-weighting | ✅ **merged to `main`** (691 tests); 24 families + 5 affixes + spare action (9 ⚖ families feed karma) + family-themed kits; complex behaviors/flavor → M10 |
+| M7 — Loot sourcing & thematic economy | 🔶 **merged, but fails its own "done when"** (649 tests). Shipped: **gold removed**, pure sacrifice-deals + loot drops + chests. **But `ROADMAP.md` requires "real sinks (gear/consumables/rerolls/services)" and three of the four do not exist in a real run** — `kindForSlot` can never return `usable` so no consumable can be generated; the `reroll` flag is returned and never read by its only caller; and no service exists in `DealReward`. Same root cause as M6/M13 (`FINDINGS.md` G14) |
+| M8 — Enemies: families, affixes, karma-weighting | 🔶 **merged, but fails its own "done when"** (691 tests). Shipped: 24 families + 5 affixes + spare action + family-themed kits. **But `ROADMAP.md` requires karma-weighted families to "shift Nature *axes*" — all nine ⚖ families declare the same pair and only `mercyCruelty` ever moves.** `enemyFamily.ts:17` says so itself: *"uniformly set to the mercy↔cruelty pair now. M10 differentiates the axes."* One axis, not axes (`FINDINGS.md` G15) |
 | M9 — In-run progression (frequent level-up picks) | 🔶 **merged, then partly reversed by design** (726 tests). Shipped: XP-frequent leveling + draft-1-of-3 + lean start + auto-HP. **But §19.5 removed `stat` from the draft** (per-level allowance instead) **and set a level cap of 20** — neither is in `src/` yet |
 | M-UI — Functional UI (surfaces the whole engine, hand-testable) | ✅ **merged to `main`** (753 tests); plain/utilitarian — the turn-based battle screen is the NEXT unit |
+| M-UI2 — Visual restyle (5 units) | 🔶 **unit 1 of 5 (`ui-foundation`) merged to `main`** (1026 tests): design tokens, shared components, second front-end retired, combat events widened. **Units 2–5 are `PLAN.md` #6–#8.** *(Added 2026-08-28 — this had no tracker row at all despite being merged, so a five-unit restyle with 273 tests behind it was invisible to the milestone table.)* |
 | M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ needs your PROSE |
 | M11 — LLM layer to spec (**narrate ONLY** — floor voices, beat significance, karma-in-prompt, boss agents, boss talk) | ⬜ **shrank 2026-08-25** — grammar-constrained choices + the tool registry are DROPPED; the engine writes the choices |
 | M12 — Bosses: five unique encounters as agents | 🔶 **4 of 5** merged (894 tests) — `boss.ts` has **four** combat bosses; the **floor-4 executioner fight does not exist** (`PLAN.md` #11). Karma verdict gate + two endings done. **No boss is an agent yet.** Boss prose still yours |

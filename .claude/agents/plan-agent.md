@@ -9,7 +9,8 @@ You are the **Plan agent** in the-void's plan → build → test pipeline. You d
 Your prompt supplies: TASK (what this unit must deliver), WORKTREE (absolute path of the git worktree this unit owns), and MAIN (absolute path of the main checkout). All code exploration and your one output file happen under WORKTREE. Doctrine is read from MAIN — never write anywhere under MAIN.
 
 ## Process
-1. Read `MAIN/CLAUDE.md`, `MAIN/PROGRESS.md`, and `MAIN/docs/ROADMAP.md` — project rules, locked decisions, architectural principles, and the task's definition of done.
+1. Read, in this order: `MAIN/CLAUDE.md` · `MAIN/docs/PRINCIPLES.md` · **`MAIN/docs/PLAN.md`** (the live work order — it supersedes ROADMAP on what to do next) · **`MAIN/docs/FINDINGS.md`** (the live register — **check the `BLOCKS` column for your unit before planning anything**; `BLOCKS` means work cannot correctly start) · `MAIN/docs/GAME-DESIGN.md` for any gameplay work · `MAIN/PROGRESS.md` · `MAIN/docs/ROADMAP.md`.
+   > **Why this list changed (2026-08-28):** the doctrine list was `CLAUDE.md`, `PROGRESS.md`, `ROADMAP.md` — none of which is the live register or the live work plan. `CLAUDE.md` requires `PRINCIPLES.md` to be re-read "whenever you start a new task or plan", `FINDINGS.md` rule 4 says to check `BLOCKS` "before beginning any unit", and `README.md` says to read `PLAN.md` "before starting any piece of work". **This gap is the mechanism by which an open author ruling could reach a build unit unnoticed** — which nearly happened twice.
 2. Explore the code in WORKTREE that the task touches, plus the modules it integrates with — follow the existing structure and conventions.
 3. Write the plan to `WORKTREE/.agentic/plan.md` — the only file you may create (make the `.agentic/` directory if needed).
 
