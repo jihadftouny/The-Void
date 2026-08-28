@@ -11,15 +11,51 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 ## Dependency order
 
 ```
-  #1 engine-foundations ─┬─> #2 floor-mechanics ─┬─> #6 battle-screen ─┬─> #7 canvas-layer
-                         │   (+ balance re-run)  │                     └─> #8 screens-restyle
-                         └─> #13 content authoring
+  #0 critical-engine-bugs ─> #1 engine-foundations ─┬─> #2 floor-mechanics ─┬─> #6 battle-screen ─┬─> #7 canvas-layer
+                                                    │   (+ balance re-run)  │                     └─> #8 screens-restyle
+                                                    └─> #13 content authoring
   #3 art-pipeline ───────┬─> #5 art batches (5, gated) ──> #7 canvas-layer
   #4 probe 04 + approve ─┘
   #9 #10 #11 #12 #14 — independent, sequenced by judgement
 ```
 
-**Unblocked right now: #1, #3, #4.**
+**Unblocked right now: #0, #3, #4.** *(#1 was unblocked until 2026-08-28; **#0 now precedes it**, because
+#0 fixes the equip resolution path that #1's change 1 and change 10 both build on top of.)*
+
+---
+
+### Tier 0 — the engine is broken in ways the test suite does not see
+
+**#0 `critical-engine-bugs`** — found by discrepancy pass 5B, **all five verified by running the real
+engine**, all five passing 1029 tests and a clean typecheck. Full evidence in `FINDINGS.md` §4
+(G11–G16). This unit exists because these are not polish; **three of them mean whole shipped systems
+do nothing at all.**
+
+1. **G11 — no found item can ever be equipped.** `equipment.ts` resolves by `defId` only, so every
+   `gen:*` item from `rarityGen` fails to resolve. Measured: **>100 drops across 300 seeds, zero
+   equippable.** The player fights the entire game in starting gear, and the UI shows an Equip button
+   that does nothing. **Fix:** `resolveInstanceDef` in `canEquip` + instance-aware slot inference.
+2. **G11b — add the test that would have caught it.** Two existing tests *look* like coverage and are
+   circular: one never calls `equip()`, the other writes into `inventory.slots` directly. **The new
+   test must call `equip()` on a real `generateItem` output** (`PRINCIPLES.md` §A3).
+3. **G13 — four major beats render blank narration.** Boss reveals, the act-4 karma reckoning, the
+   whole mercy path and every level-up pick emit events `describeEvent` has no case for. **Fix:** add
+   the five cases **and** replace `default: return ''` with an exhaustiveness check, so the next new
+   event kind fails the build instead of going silent.
+4. **G12 — `advantageDisadvantage` is a write-only latch.** Every boss is fought at ±5 to-hit
+   depending on unrelated leftover state. **Fix:** compute it per round rather than storing it.
+5. **G14 — 37 of 38 authored items are unobtainable.** Add a catalog branch to the drop tables and
+   make `snapshotUnlocks` actually read `store.relics`/`.skills`. *(Also task #9.)*
+6. **G16 — `dealQualityTwist`** is a third dead stat twist still labelled "no-op until M7"; M7 shipped.
+
+> **⚠ G15 is deliberately NOT in this unit — it needs an author decision first.** Half the karma
+> model never fires, and the axis the final reckoning weights most heavily (`reverenceDesecration`,
+> weight 3) can only ever move toward CAST-DOWN, never toward GRACE. Whether to wire the missing
+> positive actions or re-weight onto the axes that work is a **design call**, not a bug fix.
+
+> **⚠ This unit invalidates the M15 balance report.** The sim's scope note assumed loot was merely
+> *unequipped by policy*; G11 means it was *un-equippable in principle*, so the "lower bound" framing
+> is wrong. **The balance re-run in #2 is now mandatory, not optional.**
 
 ---
 
@@ -27,7 +63,7 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 1 — engine, before any UI
 
-**#1 `engine-foundations`** — one pipeline unit, **nine** changes, all cheap now and expensive later:
+**#1 `engine-foundations`** — one pipeline unit, **ten** changes, all cheap now and expensive later:
 1. **Equip/unequip become `step` inputs.** Restores reproducibility from `seed + inputs`.
 2. **`description` + `flavour` on every content schema.** Blocks *all* content authoring today.
 3. **The floor-mechanic hook** — fire the existing relic trigger pipeline with a per-floor effect
@@ -42,6 +78,12 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 9. **Enemy XP derives from the ENEMY** (§19.2) — `enemy.ts:117` still rolls it from `playerXp`, which
    is a feedback loop *and* makes a hard kill worth no more than a trivial one. **This was decided and
    appeared in no work plan until now.**
+10. **Migrate `EQUIP_SLOTS` 9 → 7** (`item.ts:49`) — to head, body, hand ×2, feet, **trinket ×2**
+    (§14.7). Drop `amulet`, `legs`, `ring`, `ammo`; **add the `trinket` slot kind**, without which the
+    decided "relics occupy the two trinket slots" rule is *unimplementable*. Needs a `SAVE_VERSION`
+    bump — **share the migration with change 5.** **This was decided, flagged in `ROADMAP.md` and
+    `HUMAN-CHECKS.md` as needing a migration, and appeared in no work plan until now.** It silently
+    blocks **#6** and **#8**, which both draw a paperdoll against this slot list.
 
 **#2 `floor-mechanics` + balance re-run** — all five floors per `GAME-DESIGN.md` §8. Floor 2's
 illusions matter most: they are the **only trigger for the clarity↔delusion karma axis**, which

@@ -28,8 +28,14 @@ M13 `unlock-store` → `balance-sim` → M15 `balance-tune`. Safety tag on the p
 
 **✅ THE GAME IS WINNABLE — proven by simulation:** baseline win **32.9%** / merciful **40.0%**,
 Act-1 deaths **98%→19%**, deaths spread across all acts (modal = Act 3). The long-standing
-"unwinnable" blocker is RESOLVED. The sim is a no-equipment LOWER bound, so real play is easier; a
-per-class refinement remains (Scavver strong / ranged classes weak — play-test + weapons follow-up).
+"unwinnable" blocker is RESOLVED. ~~The sim is a no-equipment LOWER bound, so real play is easier~~ —
+**⚠ THIS FRAMING IS WRONG, found 2026-08-28 (`FINDINGS.md` G11).** The sim was a no-equipment run
+because loot is **un-equippable in principle**, not because the sim policy declined to equip it:
+`equipment.ts` resolves by `defId` only and every generated drop fails to resolve (**>100 drops
+across 300 seeds, zero equippable**). So the sim is not a lower bound — **it is exactly what real
+play does today**, and these numbers describe a game where found gear contributes nothing.
+**The balance re-run in `PLAN.md` #2 is now mandatory**, after `#0 critical-engine-bugs` lands. A
+per-class refinement also remains (Scavver strong / ranged classes weak — play-test + weapons).
 **The karma pillar has its first real EFFECT** — the floor-4 gate routes grace (ascension, ends at
 act 4) vs cast-down (→ Hollow-Self → damnation) by your hidden Nature.
 

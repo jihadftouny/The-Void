@@ -4,7 +4,7 @@ _Distilled from this repo's working docs and its accumulated build/retro history
 most general level they hold at. **Part A is domain-neutral** — it applies to any project, technical or
 not (a product, a research effort, a renovation, a book, an event). **Part B** is the software-specific
 instantiation. The project-specific detail (this game's design, milestones, names) stays in the other
-docs; the multi-agent build pipeline is in `AGENTIC-WORKFLOW-TEMPLATE.md`._
+docs; the multi-agent build pipeline is in `.claude/skills/agentic-engineering/SKILL.md`._
 
 ---
 

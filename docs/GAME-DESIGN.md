@@ -81,7 +81,7 @@ Each is a different way of confronting the descent. Signature twist in **bold**.
 | **Neuromancer** *(unlock: easy/early)* | INT·WIS, d6 | **Detonate** — stack mental conditions, then blow them up for scaling damage | Mind Spike, Unravel, Lull, Synapse | Psychic/Cryo/Electro; insanity, sleep, freeze, debuffs | clarity↔delusion |
 | **Scavver** *(unlock: easy/early)* | DEX, d8 | **Tempo/Evasion** — dodge instead of tank; build Exposure for crits/DoTs | Backstab, Venom Coat, Slip, Scavenge | Poison/Physical; poison, bleed, evasion | restraint↔greed |
 | **Penitent** *(unlock: floor-4 grace)* | WIS·CHA, d8–d10 | **Devotion/Martyr** — self-sustain; spend HP for smites/heals/wards | Smite, Mend, Consecrate, Martyr | Force (holy), Psychic (will); regeneration, cleanse | reverence |
-| **Hollow / Voidtouched** *(unlock: floor-5 / desecration)* | CON·CHA, d6–d8 | **Corruption** — spend HP/max-HP for outsized power, offset by lifesteal; stronger the darker you go | Siphon, Corrupt, Sacrifice, Unmake | Poison/Psychic; curse, insanity, lifesteal | desecration / cruelty |
+| **Hollow** *(unlock: floor-5 / desecration)* | CON·CHA, d6–d8 | **Corruption** — spend HP/max-HP for outsized power, offset by lifesteal; stronger the darker you go | Siphon, Corrupt, Sacrifice, Unmake | Poison/Psychic; curse, insanity, lifesteal | desecration / cruelty |
 
 ### The in-run level-up loop **[DECIDED 2026-08-05 — the roguelike snowball, M9]**
 - **XP-driven and frequent:** every kill grants XP; you level up **several times per floor** (retune
@@ -394,7 +394,7 @@ resolution rather than modifying a number. Note that floor 5 is only reached by 
 
 | # | Floor | Tone / imagery | Enemies | Signature mechanic | Boss |
 |---|---|---|---|---|---|
-| 1 | **The Undercity** | **flooded industrial** — standing water with a green chemical sheen, corroded pipework, low metallic fog. *(§21.3: NOT the "rain, neon, grime" this cell used to say)* — the last "real" place | Gangers, Security Drones (Mech), Mutant Strays (Beast), Cyber-Enforcers | *The world is still solid.* No distortion; teaches the base rules and takes your **first karma readings** | **Undercity Kingpin** — the mission's literal target; the last purely human enemy. His end pulls you into the Void |
+| 1 | **The Undercity** | **flooded industrial** — standing water with a green chemical sheen, corroded pipework, low metallic fog. *(§21.3: NOT the "rain, neon, grime" this cell used to say)* — the last "real" place | Gangers, Security Drones (Mech), Mutant Strays (Beast), Cyber-Enforcers | *The world is still solid.* No distortion; teaches the base rules and takes your **first karma readings** | **Undercity Kingpin** — the mission's literal target; the last purely human enemy. **Defeating him** pulls you into the Void — you win, and he takes you anyway; he does **not** die (`WORLD.md` §4) |
 | 2 | **Entrance to the Void** | blinding white, red reflections, distortion — onset of madness | Reflections, Mirror-Selves, Distortions, Static-wraiths | *You can't trust what you see.* Illusory enemies (striking them wastes a turn); **WIS checks** to tell real from false; Mirror-Selves copy your kit. The **clarity↔delusion** floor | **The Reflection** — a mirror of you that fights with your own class's abilities |
 | 3 | **The Ash City** | endless grey city, falling ash, silence — emptiness of madness | **Feelings** (Grief, Rage, Dread, Numbness) and the **Seven Sins** as named elites — all **karma-weighted** | *The ash drains you.* Dampened healing, bleeding resources, an **endless** city until you find the way down — attrition mirroring emptiness | **Your most-indulged Sin/Feeling made flesh** — chosen by your karma, so it's a different, personal fight each run |
 | 4 | **The Angelic Underground** | luminous, sacred, beautiful — the moral crucible | Angels, Choir, Guardians (Ancestral), the Judged — fighting them can *be* desecration | *The reckoning.* Every irreversible choice is tracked and **amplified by carried karma** (§7); the floor tempts you with loot you can only take by desecrating | **The Warden/Judge** — an angel whose verdict is grace or cast-down, decided by carried karma × your floor-4 choices |
@@ -1040,8 +1040,10 @@ work, and each must be checked against the existing **25**-condition vocabulary 
 | **Lust** | Compels — forces a wasted action |
 
 **Why it matters more than variety:** the floor-3 boss is *"your most-indulged sin made flesh,
-personal to each run"*. If all seven play identically, **the most personal fight in the game plays
-the same no matter what you indulged** — which defeats the mechanic. Seven sprites are already
+personal to each run"*. If the seven Sin **elites** all play identically, **the most personal fight in
+the game plays the same no matter what you indulged** — which defeats the mechanic. *(The floor-3
+**boss** is one of the four karma identities in `WORLD.md` §15 — The Desecration, The Cruelty, The
+Avarice, The Delusion — not one of these seven elites.)* Seven sprites are already
 budgeted in the art list, so the art side is unaffected.
 
 **Note:** Pride's "cannot be spared" is the sharpest of these — it is the only enemy in the game that
@@ -1107,7 +1109,8 @@ of prose**, which is where the inversion lives.
 | **Floor 4** | **No Warden fight.** A dialogue encounter; the Warden lets the Hollow pass |
 | **Other bosses** | Unchanged — they still fight |
 | **Karma** | Same four axes, same triggers. What it *resolves into* at the end differs |
-| **The end** | Reaching **the Memorians** — **NOT a fight** (`WORLD.md` §14). A dialogue/terminal encounter, mirroring the ascent Warden. No descent counterpart |
+| **The reckoning** | **The Memorians — *before* floor 1, not after.** You surface in their facility in the Rift. **NOT a fight** (`WORLD.md` §14). A dialogue/terminal encounter, mirroring the ascent Warden. No descent counterpart |
+| **The end** | The **Undercity exit into Absolution** — a threshold, not a scene in the city. *(This row previously placed the Memorians at the end, following §13's table; §14 is later and explicitly reconciles the two, so it wins.)* |
 
 **BUILT BIDIRECTIONALLY FROM THE START.** The author's ruling: floor mechanics are designed for both
 directions rather than retrofitted. This **grows the floor-mechanics unit (#2)** — it must take a
@@ -1117,8 +1120,13 @@ exist yet) was the thing to avoid.
 
 **New work this creates, stated plainly so it is not discovered later:**
 
-1. **Absolution above ground and house Grandmore must be designed.** Both were *deliberately parked*
-   because the descent never goes up. **The ascent ends there.** This is a genuine reopening.
+1. ~~**Absolution above ground and house Grandmore must be designed.**~~ **CLOSED by `WORLD.md` §14,
+   the same day it was opened.** The ascent ends *at the Undercity threshold* and **never enters the
+   city**, so Absolution above ground needs only enough to be **glimpsed** at the moment of arrival —
+   not designed. And the extraction happens **inside the Rift**, so **house Grandmore never exists as
+   a place** at all. *(This item briefly reopened two parked scope items; leaving it standing would
+   have commissioned worldbuilding and art the fiction has ruled out — on the largest scope item in
+   the project.)*
 2. **A final encounter with the Memorians** — **not a boss fight** (`WORLD.md` §14: they do not fight,
    because to them it is not a person). A dialogue/terminal encounter. New prose; **no new combat
    balance, and no boss sprite** — `ART-BIBLE.md` §4b deliberately does not budget one.
@@ -1420,7 +1428,8 @@ comes from conditions, the tempo gauge and build assembly** — an elemental rea
 a second combat game layered on top of a player already learning 25 conditions.
 
 **Force remains the holy element**, shared by the angels, the Choir, the Seraph-Wardens and the
-Penitent (`WORLD.md` §7).
+Penitent (element list: `WORLD.md` §2; the holy-Force ruling: `ART-BIBLE.md` §4 — **not** §7, which is
+the class table and says nothing about elements).
 
 ### 21.5 Class kits: four signature skills, drafted up **[DECIDED 2026-08-27]**
 

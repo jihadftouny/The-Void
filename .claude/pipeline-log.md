@@ -19,7 +19,7 @@ Format per entry:
 
 ---
 
-## 2026-08-25 — ui-foundation (M-UI2 unit 1 of 5: tokens, shared components, retire 2nd front-end, widen combat events) [branch `agentic/ui-foundation`, unmerged]
+## 2026-08-25 — ui-foundation (M-UI2 unit 1 of 5: tokens, shared components, retire 2nd front-end, widen combat events) [branch `agentic/ui-foundation`, merged to `main`]
 - Verdict: **PASS**, then **PASS again after 1 fix round**. 960 → 1014 → **1026 tests**.
 - **First run where build-agent had the `Agent` tool** (doctrine change this session: fan out
   Explore sub-agents for READING, but the build agent remains the ONLY writer — parallel writers in
@@ -146,7 +146,7 @@ Format per entry:
   renders them.
 - Manual engineer fixes: none yet (no code defect — the escape is in the handoff, not the build)
 
-## 2026-08-14 — balance-tune (M15 part 2: tuning to the ~1-in-3 target) [stacked on balance-sim, unmerged]
+## 2026-08-14 — balance-tune (M15 part 2: tuning to the ~1-in-3 target) [stacked on balance-sim, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0 (but the FIRST build launch was interrupted mid-search with uncommitted partial work +
   scratch scripts → orchestrator DISCARDED the partial and re-ran fresh; restart succeeded clean).
@@ -174,7 +174,7 @@ Format per entry:
   out of territory).
 - Manual engineer fixes: none yet
 
-## 2026-08-14 — balance-sim (M15 part 1: sim harness + winnability report) [stacked on unlock-store, unmerged]
+## 2026-08-14 — balance-sim (M15 part 1: sim harness + winnability report) [stacked on unlock-store, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Scope: harness + MEASUREMENT only — NO balance tuning (target is author's feel-call; tuning would churn
@@ -195,7 +195,7 @@ Format per entry:
 - NEEDS-HUMAN (blocks the tuning follow-up): author must set the difficulty TARGET (win-rate + feel).
 - Manual engineer fixes: none yet
 
-## 2026-08-14 — unlock-store (M13: meta-progression unlocks/feats) [stacked on boss-mechanics, unmerged]
+## 2026-08-14 — unlock-store (M13: meta-progression unlocks/feats) [stacked on boss-mechanics, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Build-agent deviations: reach-act-1..5 not 2..5 (acceptance criteria authoritative — floor-1 long-tail
@@ -216,7 +216,7 @@ Format per entry:
   unlock pacing/feel + final feat list + family/affix partition (M15); real desktop boot smoke.
 - Manual engineer fixes: none yet
 
-## 2026-08-14 — boss-mechanics (M12: 5 boss mechanics + karma verdict gate) [stacked on enemy-kits, unmerged]
+## 2026-08-14 — boss-mechanics (M12: 5 boss mechanics + karma verdict gate) [stacked on enemy-kits, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Build-agent deviations: `bossPostRound` takes no rng param (it's rng-free; noUnusedParameters); stages 1+2
@@ -237,7 +237,7 @@ Format per entry:
   grace/damnation ending prose (M14); in-UI boss/verdict/ending presentation.
 - Manual engineer fixes: none yet
 
-## 2026-08-14 — enemy-kits (family-themed enemy skills + tag loot) [stacked on functional-ui, unmerged]
+## 2026-08-14 — enemy-kits (family-themed enemy skills + tag loot) [stacked on functional-ui, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Trigger: AUTHOR FEEDBACK during play-test — "enemies all do pyroBall." Root cause: M8 gave families
@@ -255,7 +255,7 @@ Format per entry:
 - NEEDS-HUMAN banked: enemy variety play-test; M15 balance tuning; in-UI enemy-skill-name display.
 - Manual engineer fixes: none yet
 
-## 2026-08-11 — functional-ui (surface M2–M9 engine in the desktop UI) [stacked on M9, unmerged]
+## 2026-08-11 — functional-ui (surface M2–M9 engine in the desktop UI) [stacked on M9, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Not a numbered milestone — a cross-cutting UI pass to make the invisible engine hand-testable
@@ -278,7 +278,7 @@ Format per entry:
   equip/unequip, deal screen no-pool-leak, character sheet no-karma, draft cards, chest reveal).
 - Manual engineer fixes: none yet
 
-## 2026-08-11 — levelup-loop (M9: frequent draft-based level-up) [stacked on M8, unmerged]
+## 2026-08-11 — levelup-loop (M9: frequent draft-based level-up) [stacked on M8, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Build-agent deviations: **caught the plan's own levelForXp example table being internally inconsistent**
@@ -298,7 +298,7 @@ Format per entry:
 - NEEDS-HUMAN banked: draft-picker rendering/polish; level-up feel/snowball pacing; curve/perk balance (M15).
 - Manual engineer fixes: none yet
 
-## 2026-08-10 — enemy-roster (M8: 24 families, affixes, spare + karma-weighting) [stacked on M7, unmerged]
+## 2026-08-10 — enemy-roster (M8: 24 families, affixes, spare + karma-weighting) [stacked on M7, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Build-agent deviations: game.ts karma wiring landed in step-6 commit not step-7 (adding 'spared' to
@@ -317,7 +317,7 @@ Format per entry:
   button + enemy/family/affix display; family name-table flavor (editorial pass).
 - Manual engineer fixes: none yet
 
-## 2026-08-10 — sacrifice-economy (M7: pure sacrifice economy, gold removed) [stacked on M6, unmerged]
+## 2026-08-10 — sacrifice-economy (M7: pure sacrifice economy, gold removed) [stacked on M6, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Build-agent deviations: loot draw-order omits a separate trinket stat-pick draw (dropped ring/amulet
@@ -336,7 +336,7 @@ Format per entry:
 - NEEDS-HUMAN banked: economy balance/feel (~50/50 split, M15); in-UI deal-altar/loot/chest presentation.
 - Manual engineer fixes: none yet
 
-## 2026-08-10 — items-content (M6: relics, uniques, consumables + effect system) [stacked on M5, unmerged]
+## 2026-08-10 — items-content (M6: relics, uniques, consumables + effect system) [stacked on M5, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Build-agent deviations: data files in `src/data/` not `src/game/data/` (repo convention; plan path was
@@ -356,7 +356,7 @@ Format per entry:
   call; item balance/feel (M15); consumable-turn-cost pacing (M15).
 - Manual engineer fixes: none yet
 
-## 2026-08-10 — equip-engine (M5: equipment engine, Tibia UI deferred) [stacked on M4, unmerged]
+## 2026-08-10 — equip-engine (M5: equipment engine, Tibia UI deferred) [stacked on M4, merged to `main`]
 - Verdict: PASS (engine) — test-agent returned FAIL but ONLY for a doc deliverable the orchestrator owns
   (see reconciliation); all code checks passed. Orchestrator reconciled → treated as PASS.
 - Fix rounds: 0 (the FAIL needed no code change).
@@ -382,7 +382,7 @@ Format per entry:
 - NEEDS-HUMAN banked: Tibia visual paperdoll UI (deferred collaboration); equip/inventory UX feel.
 - Manual engineer fixes: none yet
 
-## 2026-08-10 — combat-defense (M4: enemies roll to-hit, armor/shield/dodge) [stacked on M3, unmerged]
+## 2026-08-10 — combat-defense (M4: enemies roll to-hit, armor/shield/dodge) [stacked on M3, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Build-agent deviations: (1) added 2 test-only cases to `save.test.ts` (not in declared MODIFY list) —
@@ -400,7 +400,7 @@ Format per entry:
 - NEEDS-HUMAN banked: combat feel with enemies missing / defense mattering.
 - Manual engineer fixes: none yet
 
-## 2026-08-10 — class-kits (M3: five classes + signature kits) [stacked on M2, unmerged]
+## 2026-08-10 — class-kits (M3: five classes + signature kits) [stacked on M2, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Build-agent deviations: (1) `src/render/format.ts` exhaustive `formatEvent` switch needed 4 new twist
@@ -417,7 +417,7 @@ Format per entry:
 - NEEDS-HUMAN banked: class balance/feel (M15); in-UI class-select for 5 + twist visualization.
 - Manual engineer fixes: none yet
 
-## 2026-08-10 — skills-conditions (M2: player skills + 24-condition layer) [stacked on M1, unmerged]
+## 2026-08-10 — skills-conditions (M2: player skills + 25-condition layer) [stacked on M1, merged to `main`]
 - Verdict: PASS
 - Fix rounds: 0
 - Build-agent deviations: (1) touched `src/render/format.ts` + `format.test.ts` (outside src/game) —

@@ -22,7 +22,7 @@ Three distinct failures of the claim:
 1. **24 open decisions survive in the authoritative docs**, including **five live `[PROPOSAL]` tags**
    (the design doc's own definition of "not final"). At least five of them **block UI units #6–#8**,
    which `PLAN.md` listed as ready to build.
-2. **Twelve whole product areas were never discussed at all.** Only two — localisation and telemetry
+2. **Fourteen whole product areas were never discussed at all.** Only two — localisation and telemetry
    — are safe defaults. **Four block shipping outright:** legal/licensing, the content warning,
    the update mechanism, and accessibility.
 3. **Eleven decisions have already been made by accident in code.** Three of them **silently destroy

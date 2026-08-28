@@ -62,4 +62,7 @@ After the handoff, append one run record to `MAIN/.claude/pipeline-log.md` (crea
 ## 5. After manual review / when a merge lands
 When the engineer's play-test surfaces a bug the test-agent passed — a feel/visual/UX issue, or any headless blind spot — **fix it through the same fix-round mechanism** (§3.4: resume that unit's build-agent via SendMessage with the specific finding, then re-verify with the test-agent) before the merge, on the same branch. Then record it in that run's **Manual engineer fixes** line: what was wrong, what fixed it, and which agent should have caught it. These are **pipeline escapes** and the highest-value signal for `pipeline-retro` — always log them.
 
-When the engineer merges, update `PROGRESS.md` per its maintenance rule.
+When the engineer merges, update `PROGRESS.md` per its maintenance rule **and clear the `unmerged`
+tag on that run's `.claude/pipeline-log.md` entry** (replace it with `merged to \`main\``). Without
+this second step every run stays stamped "unmerged" forever, and `pipeline-retro` mines a log that
+says nothing ever shipped — which is exactly what happened to the first 15 runs.

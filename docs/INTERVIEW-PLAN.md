@@ -25,7 +25,10 @@ Nothing gets built until this is worked through.
 
 ## Phase A — blocks building
 
-*These gate pipeline units. Nothing in `docs/PLAN.md` should start until Phase A is `DONE`.*
+*These gate pipeline units — **per item, not as a block**. No unit starts while a Phase-A row that
+**blocks it** is still open; check the `BLOCKS` column here and in `FINDINGS.md`. (This used to read
+"nothing starts until Phase A is `DONE`", which contradicted `PLAN.md` — A1 is `DONE (partial)` and
+blocks only #2 and #6, so #1, #3 and #4 are genuinely unblocked.)*
 
 | # | Round | Covers | Blocks | Status | Lands in |
 |---|---|---|---|---|---|

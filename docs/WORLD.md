@@ -42,7 +42,8 @@ Everything else is that one thing at a different angle:
 - The narrator can never describe the Void from outside, because it *is* the Void.
 - The narrator cannot be trusted and cannot be caught lying — it has no motive either way.
 - There is no second voice available. No guide, no companion, no exterior. Second person, inside, only.
-- Never use "hollow" casually anywhere in the game's text. It is the load-bearing word. Reserve it.
+- Never use "hollow" casually anywhere in the game's text. It is the load-bearing word — see the
+  consequence stated just below.
 
 The good ending does not say *made well*. It says **made whole**. That is not decoration; it is the
 win condition of the entire game stated in one word. Whole is what hollow is not.
@@ -323,8 +324,8 @@ that no archive explains.
 Grandmore ordered you down to kill them and bring back their brainchips. Floor 1 is the last real
 place and this is a real errand with a real target.
 
-**After floor 1 there is no mission.** You kill the Kingpin, someone throws you into the Rift, and
-from that moment the game is **escape and survival**. Not a new quest — the *absence* of one. Nobody
+**After floor 1 there is no mission.** You beat the Kingpin, **he** takes you and puts you into the
+Rift, and from that moment the game is **escape and survival**. Not a new quest — the *absence* of one. Nobody
 is waiting for a report. Nothing you do down there serves anyone above.
 
 ### The betrayal — the Kingpin works *with* Grandmore **[LOCKED 2026-08-25]**
@@ -363,8 +364,12 @@ combat resolution.
 This reframes floor 1 entirely:
 - **Your target and your handler are on the same side**, and you are the only party who does not
   know it. The "convoluted plan of the Kingpins" was, at least in part, *you*.
-- **You still kill him** — that part is real. The betrayal is not that the fight was fake; it is
-  that winning it was the point, and what came after was arranged.
+- **You still beat him, and you leave him alive** — the *victory* is what is real. The betrayal is
+  not that the fight was fake; it is that winning it was the point, and what came after was arranged.
+  *(This bullet read "you still kill him" until 2026-08-28 — it contradicted the `[LOCKED 2026-08-25]`
+  ruling twenty lines above, which says outright "you beat him — and you do not kill him". Resolved
+  by the dated-lock precedence rule in `README.md`. **Author: if the intent was that he dies, the
+  LOCKED ruling is what needs changing, not this line.**)*
 - **The Arch-Mage knew exactly what he was ordering** (§5) is no longer merely institutional
   callousness. It is a specific, personal, domestic betrayal — you were given up by the house you
   are *sworn to*, in a world where the oath was not refusable (§7).
@@ -673,7 +678,7 @@ carried by the prose.
 | 3 Ash City | grief — the ash is what you lost | **the ash is what you are walking back through** |
 | 2 Entrance | fracture — coming apart | reassembling, or trying to |
 | 1 Undercity | the last real place, before | **the last floor.** Where it was done to you |
-| — | — | **and then out, to the Memorians** |
+| — | — | **surfacing in the facility, the Memorians, then out to Absolution** |
 
 **For prose:** the Hollowed stop being *what you may become* and are simply *what you are*. That
 single shift reframes floor 5's entire family without changing one line of code.
@@ -753,7 +758,10 @@ karma has been reading every choice for two campaigns.
 ## 15. The bosses as characters **[LOCKED 2026-08-27]**
 
 Mechanics existed; identities did not. Names remain **the author's to write** — every name in
-`boss.ts` is a placeholder, and the final boss currently ships as `'Jorginho Matagal'`.
+`src/game/boss.ts` is a placeholder, and the final boss currently ships as **`'Hollow Self'`**. The
+Java-era joke name `'Jorginho Matagal'` survives only as the unused `FINAL_BOSS_NAME` constant in
+`src/game/progression.ts`; it has no production callers, is referenced by tests alone, and should be
+retired.
 
 ### The Kingpins — territorial powers of the Undercity
 

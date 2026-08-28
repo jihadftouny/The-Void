@@ -377,10 +377,10 @@ are four combat bosses, not five. Art does not run ahead of the engine.
 | Group | Count | Notes |
 |---|---|---|
 | Enemy family sprites | 23 | The 24 families **minus** `sevenSins`, which is itemised below |
-| **Seven Sins** | **7** | Pride, Envy, Wrath, Sloth, Greed, Gluttony, Lust — *named elites*, each fighting like its sin (§17.2 of GAME-DESIGN). One becomes your Floor 3 boss |
+| **Seven Sins** | **7** | Pride, Envy, Wrath, Sloth, Greed, Gluttony, Lust — *named elites*, each fighting like its sin (§17.2 of GAME-DESIGN). ⚠ **Enemy elites ONLY — none of these is the Floor 3 boss.** That boss is a separate **karma-selected** identity, one of four — see the Sin-boss row below and `WORLD.md` §15 |
 | Floor backdrops | 5 | 16:9, deep-shadow foreground |
 | Class portraits | 5 | Enforcer, Neuromancer, Scavver, Penitent, Hollow |
-| Boss portraits | 5 | Kingpin, The Reflection, The Indulged, The Warden (judge), Hollow Self |
+| Boss portraits | 5 | Kingpin, The Reflection, **The Desecration** (the floor-3 boss's default identity — `boss.ts` names the base row `'The Indulged'`), The Warden (judge), Hollow Self |
 | **Sin-boss identities** | **+3** | The Cruelty, The Avarice, The Delusion (The Desecration = the base boss portrait) |
 | **Altar / shrine** | **+2** | The sacrifice economy's vendor, plus the shrine that `desecrateShrine` / `leaveOffering` / `honorDead` act on |
 | **BUILDABLE NOW** | **50** | **150 images ≈ $10.05 batched** |
@@ -426,8 +426,8 @@ Generate these *after* the class portraits, conditioned on them.
 ## 7. Reference-image conditioning **[LOCKED as method]**
 
 The strongest consistency lever available. The API accepts image input, so **once one asset is
-approved it is passed as a style-and-framing reference for the rest of its class.** Use it for all 24
-enemies and for the recursion set in §6.
+approved it is passed as a style-and-framing reference for the rest of its class.** Use it for all
+**30** enemy sprites (23 families + the 7 Sins, per §3 and §4b) and for the recursion set in §6.
 
 ### Probe 03 results — the pixel-art test **[2026-08-25, 9/9 generated, ~$1.21]**
 
@@ -526,8 +526,8 @@ The design record was genuinely silent on these. Guessing produced the medieval-
    different enemies (§4). The wraith is incorporeal and cold; the wretch is the solid cinder
    humanoid from probe 01. **Still requires a new enemy family in `src/data/enemyFamilies.json`,
    through the pipeline** — tracked in `docs/SCOPE-AUDIT.md`.
-5. ~~Karma's world-objects have no art.~~ **CLOSED** — altar and shrine are in the asset list (§4b)
-   (§4b), which superseded the 39.
+5. ~~Karma's world-objects have no art.~~ **CLOSED** — altar and shrine are in the asset list (§4b),
+   which superseded the earlier 39-asset total.
 6. ~~The five affixes have no visual treatment.~~ **CLOSED** — code effects, zero new art (§9
    settled list above).
 7. **Reference approval.** Nothing has been approved as the style anchor yet, because probe 03's

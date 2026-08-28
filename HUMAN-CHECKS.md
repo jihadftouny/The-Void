@@ -166,14 +166,19 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
   - [ ] **Snowball feel & pacing (M15)** — do level-ups fire at a satisfying rate (several/floor) and feel
         like compounding growth? XP curve, HP-per-level, perk/upgrade magnitudes are all placeholders.
 
-_Note: the "unwinnable balance" item below predates this run; the dedicated balance pass is **M15**,
-where I'll sim-verify winnability against your difficulty-feel input._
-
 ---
 
-## ⚠️ Top decision — the game is currently unwinnable (balance)
+## ~~⚠️ Top decision — the game is unwinnable (balance)~~ — **RESOLVED by M15**
 
-This is the most important thing to know, and it is a **design decision for you, not a bug**.
+> **✅ THIS IS FIXED. The game is winnable, proven by simulation.** Baseline win rate **32.9%**,
+> merciful **40.0%** — the "tough but fair, roughly 1 in 3" target, locked. See the M15 entry earlier
+> in this file and `PROGRESS.md`.
+>
+> **The section below is kept as history only** — it describes the pre-M15 state. Nothing in it is
+> an outstanding request. It used to head this file as "the most important thing to know", which
+> meant a tester read a *legitimate* loss and a *real failure* as the same expected outcome.
+
+**The historical problem, for the record:**
 
 - **What:** A full, honest playthrough cannot currently reach the final act. Automated simulation
   found **0 wins across 20,000 runs**; the best run reached 13 of the 240 experience points needed
@@ -186,9 +191,10 @@ This is the most important thing to know, and it is a **design decision for you,
   *numbers* need a tuning pass.
 - **Your levers:** enemy health (`src/game/enemy.ts`), weapon dice (`src/data/weapons.json`),
   player starting health / hit die (`src/game/player.ts`).
-- [ ] **Tell me the difficulty feel you want** (e.g. "Act 1 enemies take ~3–4 hits; a careful run
-      wins maybe 1 in 3") and I'll run a balance pass that tunes the numbers **and proves by
-      simulation the game is winnable** before handing it back.
+- [x] ~~**Tell me the difficulty feel you want**~~ — **ANSWERED and DELIVERED.** The target was set at
+      "tough but fair, roughly 1 in 3", M15 tuned to it, and the simulator proved winnability:
+      **32.9% baseline / 40.0% merciful**, with deaths spread across the Acts rather than piled at
+      the Act-1 wall.
 
 ---
 
@@ -199,9 +205,10 @@ Run it (see "How to run" above), then do these in order — most-likely-to-be-wr
 - [ ] **1. Boots.** The window opens to the title; the status line reads
       `the Void is listening — GPU (<device>)` (see the GPU check below for which device).
 - [ ] **2. A full run works.** New Game → enter a name → pick a class → accept/reroll stats →
-      descend into a battle → rest → shop → level-up → keep going until an ending or death.
-      (You'll lose to the balance issue above — expected for now.) Wrong: any dead button, a blank
-      panel, or the run can't advance.
+      descend into a battle → rest → level-up → keep going until an ending or death.
+      (**There is no shop** — gold and shops were removed in M7. Sacrifice-deal altars replace them.)
+      **A loss is normal — the tuned baseline win rate is ~33%, so most runs end in death.**
+      Wrong: any dead button, a blank panel, or the run can't advance.
 - [ ] **3. HP ticks down in combat.** As you take hits, the health on the left character sheet drops
       turn by turn. Wrong: HP frozen at full during a fight.
 - [ ] **4. Narration shows only the current moment.** Each beat replaces the last — the story panel
@@ -249,12 +256,12 @@ Each follows the original Java (or cleans up an obvious gap); all are one-line t
       stronger). Keep or revert?
 - [ ] **Flee chance ~25%** — the original's *code* is ~25% though its *comment* says 35%. I used the
       code. Which did you intend?
-- [ ] **Enemies always hit** — faithful (the original never rolled enemy attacks to hit). Add a miss
-      chance later if fights feel punishing?
-- [ ] **Every enemy is a "Beast"** — the only name-type the original ever spawned. Want distinct
-      enemy families per act later?
-- [ ] **Shop reached via the menu's "Character Info"** — faithful quirk. Keep, or make the shop its
-      own choice / random encounter?
+- [x] ~~**Enemies always hit**~~ — **ANSWERED by M4**, which shipped enemy to-hit rolls plus
+      armor/shield/dodge. Nothing to decide.
+- [x] ~~**Every enemy is a "Beast"**~~ — **ANSWERED by M8**, which shipped 24 enemy families with
+      affixes and karma-weighting. Nothing to decide.
+- [x] ~~**Shop reached via the menu's "Character Info"**~~ — **ANSWERED by M7**, which deleted the
+      shop and gold entirely. Sacrifice-deal altars replace them. Nothing to decide.
 - [ ] **Level-up raises max health but doesn't heal** — faithful. Keep?
 - [ ] **Final boss gets no automatic advantage** — faithful. Keep?
 - [ ] **Dying in the final battle shows the death screen, not the ending** — a clean-up. Keep?
