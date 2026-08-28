@@ -11,14 +11,25 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 8 of 18 complete · 5 partial · 5 not started · 1029 tests** `[#########-----------]`
+**v3 overall: 6 of 18 complete · 7 partial · 5 not started · 1029 tests** `[#######-------------]`
 
-*Counted from the table below: ✅ M0 M1 M2 M3 M4 M6 M7 M8 (8) · 🔶 M5 M9 M12 M13 M15 (5) ·
+*Counted from the table below: ✅ M0 M1 M3 M4 M7 M8 (6) · 🔶 M2 M5 M6 M9 M12 M13 M15 (7) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI**, which is merged but sits outside the M0–M17 numbering.*
-*(**Recounted 2026-08-28**: M13 and M15 were demoted from ✅ to 🔶. M13 does not meet its own
-`ROADMAP.md` "done when" — 3 of the 5 things it must grant are written to disk and never read into a
-run. M15's balance report is invalidated by `FINDINGS.md` G11. Neither is a regression; both were
-counted complete against claims that did not hold.)*
+
+> **⚠ Recounted 2026-08-28 — FOUR milestones demoted from ✅ to 🔶.** Each was marked complete
+> against a claim that does not hold, checked against its own `ROADMAP.md` "done when":
+>
+> | | Why it is not complete |
+> |---|---|
+> | **M2** | *"elements/resistances affect skill damage"* — **they do not affect it at all** (G17) |
+> | **M6** | build-defining relics and usable consumables — **none can ever enter a backpack** (G14) |
+> | **M13** | must grant classes/skills/items/relics/enemies — **3 of 5 are written to disk and never read into a run** (G14) |
+> | **M15** | balance report **invalidated** by G11 (loot is un-equippable in principle) |
+>
+> **None of these is a regression.** Nothing broke; the tests were always green. Each shipped
+> alongside a subsystem that turned out to do nothing, and the milestone was ticked on the code
+> existing rather than on the behaviour being reachable. *(An earlier recount today caught only M13
+> and M15 — the same standard applied to the rest found two more.)*
 *(An earlier headline said "12/18" — it counted partials as complete.)*
 
 **2026-08-24 — THE BIG MERGE IS DONE.** The entire stacked chain from the autonomous run
@@ -58,9 +69,16 @@ full accessibility including a screen-reader pass; licence, free itch release an
 (`docs/SHIPPING.md`). **The engine writes the choices — the LLM-authored-choices plan is dropped**,
 which shrinks M11 substantially. **Min spec now requires a GPU.**
 
-**Next up (NOT started — no branch exists yet):** **`#0 critical-engine-bugs`** — the equip
-resolution fix (G11) + its non-circular test (G11b) · the five missing narration cases (G13) · the
-advantage latch (G12) · catalog items reachable (G14) · `dealQualityTwist` (G16). **This blocks #1.**
+**Next up (NOT started — no branch exists yet):** **`#0 critical-engine-bugs`, now THREE units** —
+twelve defects (G11–G22), too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
+
+| Unit | Covers |
+|---|---|
+| **#0a `combat-core-fixes`** | G11 equip resolution · G11b its non-circular test · G12 advantage latch · G16 `dealQualityTwist` · **G17 the whole resistance subsystem is inert** · G20 deals can drive HP negative · G22 (three smaller) |
+| **#0b `narration-coverage`** *(light — can run alongside either heavy unit)* | G13 five missing narration cases · G21 blank act transitions (47 + 47 measured) |
+| **#0c `persistence-and-reach`** | G1/G19 resume forfeits all unlocks · **G18 the player never sees a damage number** · G14 catalog items reachable |
+
+**#0a and #0c must NOT run concurrently** — both may touch `game.ts` (`SKILL.md` §1b).
 
 **Then, and only then** (both branches exist but are **empty** — only plans): `engine-foundations`
 (equip as a `step` input · description/flavour fields · the floor-mechanic hook · floor-4 verdict
@@ -70,7 +88,7 @@ keying), planning in parallel on disjoint territory.
 
 **⚠️ Known and unfixed:** three bugs silently destroy player data — quitting mid-run voids all
 unlock progress, winning leaves a resumable save, and a corrupt unlock store wipes everything with
-no warning. **Only G3 has a specified fix — G1 and G2 still need one designed** (`docs/FINDINGS.md` §4); no code has changed.
+no warning. **G1's fix landed with G19 and G3's is decided — only G2 still needs one designed** (`docs/FINDINGS.md` §4); no code has changed.
 
 **Play-test checklist + balance: `HUMAN-CHECKS.md` / `docs/BALANCE-REPORT.md`.**
 
@@ -78,11 +96,11 @@ no warning. **Only G3 has a specified fix — G1 and G2 still need one designed*
 |---|---|
 | M0 — Consolidate base & reconcile to mechanics-first | ✅ merged to `main` (378 tests) |
 | M1 — Foundational state models (karma + item schema + inventory) | ✅ **merged to `main`** (411 tests) |
-| M2 — Player skills + full 25-condition system | ✅ **merged to `main`** (456 tests) |
+| M2 — Player skills + full 25-condition system | 🔶 **merged, but fails its own "done when"** (456 tests). `ROADMAP.md` requires *"elements/resistances affect skill damage"* — **they do not affect it at all** (`FINDINGS.md` G17: the formula is zero below 100 resistance and nothing produces more than 10, and the function layering gear/WIS has no callers). Skills and conditions themselves are fine |
 | M3 — Classes & signature kits | ✅ **merged to `main`** (494 tests) |
 | M4 — Combat overhaul: defense matters (enemies roll to-hit) | ✅ **merged to `main`** (526 tests) |
 | M5 — Inventory & equipment (Tibia-style) ★ | 🔶 ENGINE **merged to `main`** (561 tests); **Tibia visual UI deferred to a collab pass w/ you** |
-| M6 — Items content: relics, uniques, consumables | ✅ **merged to `main`** (625 tests); 15 relics + 4 uniques + 19 consumables + effect/trigger system + rarity gen; flavor co-write & in-UI display pending |
+| M6 — Items content: relics, uniques, consumables | 🔶 **merged, but fails its own "done when"** (625 tests). Shipped: 15 relics + 4 uniques + 19 consumables + effect/trigger system + rarity gen. **But `ROADMAP.md` requires build-defining relics that "change how a build plays" and consumables "usable in and out of combat" — and no relic or consumable can ever enter a backpack** (`FINDINGS.md` G14: `loot.ts` only ever calls `generateItem`). 2 of 4 clauses unmet; flavor co-write & in-UI display also pending |
 | M7 — Loot sourcing & thematic economy | ✅ **merged to `main`** (649 tests); **gold removed**, pure sacrifice-deals + loot drops + chests; karma-shift deals feed the pillar |
 | M8 — Enemies: families, affixes, karma-weighting | ✅ **merged to `main`** (691 tests); 24 families + 5 affixes + spare action (9 ⚖ families feed karma) + family-themed kits; complex behaviors/flavor → M10 |
 | M9 — In-run progression (frequent level-up picks) | 🔶 **merged, then partly reversed by design** (726 tests). Shipped: XP-frequent leveling + draft-1-of-3 + lean start + auto-HP. **But §19.5 removed `stat` from the draft** (per-level allowance instead) **and set a level cap of 20** — neither is in `src/` yet |

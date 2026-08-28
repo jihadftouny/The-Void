@@ -633,7 +633,7 @@ locked above:
 - ✅ Karma (four axes, weighted-sum gate, per-run reset + flavor memory, world-and-tone mid-run)
 - ✅ Enemies (24-family roster, spare/release action, light affixes)
 - ✅ Economy (pure sacrifice, gold removed, ~50/50 with found loot)
-- ✅ Status effects (activate all 24; "mix" model; "mix per condition" stacking)
+- ✅ Status effects (activate all 25 (§21.2); "mix" model; "mix per condition" stacking)
 - ✅ Stat-mod formula (standard D&D), relics (big floor-themed pool), unlocks (path + mastery mix)
 
 **Remaining items are milestone-time DETAIL/CONTENT, not open vision** — decided within each
@@ -1370,12 +1370,21 @@ deliberate and it is kept.
 
 | Stat | Buff / debuff |
 |---|---|
-| STR | strong / weak |
-| DEX | **quick / slow** |
-| CON | healthy / sick |
-| INT | smart / dumb |
-| WIS | wise / fool |
-| CHA | charming / repulsive |
+| STR | **Strong / Weak** |
+| DEX | **Quick / Slow** |
+| CON | **Hardy / Frail** |
+| INT | **Sharp / Dull** |
+| WIS | **Lucid / Clouded** |
+| CHA | **Emboldened / Cowed** |
+
+> **⚠ Restated in the design vocabulary 2026-08-28.** This table previously listed
+> `healthy/sick`, `smart/dumb`, `wise/fool`, `charming/repulsive` — which are the **code ids**
+> (`src/game/condition.ts`), not design names. That silently reversed **§14.4**, the ruling that
+> governs this: *"Align the code to the design… the design vocabulary is the one authored prose will
+> use."* These strings land in condition chips, the combat log, tooltips and authored prose, so the
+> divergence was load-bearing. `engine-foundations` (#1.5) renames the code to match. **The names
+> above are canonical for all prose.** *(Note the register too: "wise/fool" and "charming/repulsive"
+> read as judgements of a person; the §5 set reads as states, which is the intended voice.)*
 
 Plus the thirteen distinctive ones: bleed, burn, freeze, poison, electrify, stun, fracture, sleep,
 insanity, regeneration, push, aired, **exposed**.

@@ -12,7 +12,7 @@ status conditions, skills, sacrifice-deals/rest, XP across five Acts, bosses). S
 > both before writing prose, art prompts, or design. Systems live in `docs/GAME-DESIGN.md`, the
 > milestone plan in `docs/ROADMAP.md` (v3), **every open item in the live register
 > `docs/FINDINGS.md`**, **the work order in `docs/PLAN.md`**, and the frozen audit evidence in
-> `docs/SCOPE-AUDIT.md`.
+> `docs/SCOPE-AUDIT.md` and `docs/SCOPE-AUDIT-2.md`.
 
 The engine is a from-scratch port of the original Java implementation (`.legacy/The-Void/`) on
 TypeScript + **Vite** + **Vitest**. **Kaplay is a dependency that nothing imports yet** — reserved

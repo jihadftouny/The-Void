@@ -78,9 +78,18 @@ Fallout, early PlayStation. Rendered from 3D and flattened into a 2D sprite: chu
 forms, visible dithering instead of smooth gradients, a limited muted palette, hard crisp edges,
 deliberately coarse resolution. Dark, grim, murky, heavy shadow. Low fidelity that hides detail
 rather than showing it. NOT photorealistic, NOT smooth modern rendering, NOT soft or blurry, NOT
-cel-shaded, NOT anime. No text, no lettering, no watermark, no logo, no border, no
+cel-shaded, NOT anime. No caption text, no watermark, no signature, no logo overlay, no border, no
 user-interface elements.
 ```
+
+> **⚠ The negative was NARROWED 2026-08-28.** It previously read *"No text, no lettering, no
+> watermark, no logo…"* — and since this string is appended **verbatim to every prompt**, it
+> contradicted three `[LOCKED 2026-08-25]` asset specs in §4: the Enforcer's *"corporate insignia
+> half ground off"*, the Undercity's *"graffiti"*, and the Ash City's *"signage frames with nothing
+> lit on them"*. Probe 03 was recorded as the success case **because** of that insignia (*"This is
+> the look"*), so the prompt was fighting its own brief — and on a stricter model the negative wins.
+> **The rule, per §15:** in-world lettering — graffiti, insignia, signage — is a **depicted object**
+> and is permitted. Overlaid text and interface chrome are not.
 
 **Why this beat the painterly style, on the evidence:**
 - **It pairs with the interface instead of fighting it.** The design direction is an austere
@@ -173,8 +182,16 @@ Same for the ash-wraith, where take 02 was also the chosen read.
 - These are the player's self-image; they must relate visibly to the mirror-enemies (§6).
 
 ### Boss portraits — 5
-- **Aspect `1:1`.** Same framing and treatment as class portraits, but **front-facing per §2b** —
-  bosses are enemies, and every enemy squares to the viewer. Larger presence and more detail budget.
+- **Aspect `1:1`.** **Framing per the ENEMY SPRITE rule above** — full body, head and feet both inside
+  the frame, ~10% margin, pure flat black, the §3 append sentence — and **front-facing per §2b**,
+  because bosses are enemies and every enemy squares to the viewer. Larger presence and more detail
+  budget than a family sprite.
+  > *(Until 2026-08-28 this row said "same framing as class portraits", which are **waist-up**. That
+  > took the pose from the enemy rule and the framing from the player rule, shipping exactly the
+  > per-enemy zoom §3 calls "the single most damaging inconsistency available" — bosses render in the
+  > same combat frame as families. It also broke §6, which needs all five recursion assets legibly
+  > related: three would have been full-body and two waist-up. The author's recorded direction is
+  > **"full body shots always."**)*
 
 ---
 
@@ -412,6 +429,14 @@ Learned from probe 01. **Every one of these must be enforced by the generation s
    gate's value by about 6×.)*
    **Gate: sample the four corner pixels; reject and regenerate anything whose corners are not
    near-black.** Cheap, deterministic, catches it every time.
+   > **⚠ SCOPE — this gate does NOT apply to floor backdrops.** It covers the flat-black classes only:
+   > enemy sprites, class and boss portraits, item icons, and the altar/shrine. **Floor backdrops are
+   > exempt**, because §4's `[LOCKED]` colour ramp makes floor 2 *"blinding white + red flecks"* and
+   > floor 4 *"bone white, warm, luminous"* — a literal corner test would reject and regenerate both
+   > on **every** attempt: an unbounded loop that burns batch money and never terminates. Worse,
+   > generation order puts environments **first, as stage 1**, so it is the first thing the gate would
+   > touch. **Backdrops get their own gate: the bottom third must be near-black** (§3 asks for a
+   > deep-shadow foreground there, not a black surround).
 2. **Framing drift.** One take was full-body with margin, another cropped at mid-thigh and much
    closer. **Gate: the explicit framing sentence in §3, plus reference-image conditioning (§7).**
 3. **No transparency is possible.** The model returns `image/jpeg` only. A prompt explicitly

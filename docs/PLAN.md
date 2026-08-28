@@ -26,8 +26,8 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
-**#0 `critical-engine-bugs`** — found by discrepancy pass 5B, **all five verified by running the real
-engine**, all five passing 1029 tests and a clean typecheck. Full evidence in `FINDINGS.md` §4
+**#0 `critical-engine-bugs`** — found by discrepancy pass 5B, **all six verified by running the real
+engine**, all six passing 1029 tests and a clean typecheck. Full evidence in `FINDINGS.md` §4
 (G11–G16). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
@@ -71,9 +71,14 @@ do nothing at all.**
 >
 > | Unit | Covers | Principal files |
 > |---|---|---|
-> | **#0a `combat-core-fixes`** | G11, G11b, G12, G17, G20, G22 | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts` |
+> | **#0a `combat-core-fixes`** | G11, G11b, G12, **G4**, **G16**, G17, G20, G22 | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts` |
 > | **#0b `narration-coverage`** | G13, G21 | `llm/narrate.ts`, `data/story.json` |
-> | **#0c `persistence-and-reach`** | G1/G19, G18, G14 | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `loot.ts`, `unlockStore.ts` |
+> | **#0c `persistence-and-reach`** | G1/G19, **G3**, G18, G14 | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `loot.ts`, `unlockStore.ts` |
+
+> **`G2` is deliberately in no unit** — *"winning leaves a resumable save"* still has **no fix
+> specified**, so it cannot be scheduled yet. It sits in the same territory as #0c (the save
+> envelope) and should be folded in **once a fix is designed**; until then its `BLOCKS` cell is `—`,
+> because a bug nobody is fixing cannot block the unit that is not fixing it.
 >
 > **#0b is the light unit** and can run alongside either heavy one (~2 heavy + 1 light ceiling).
 
@@ -210,5 +215,6 @@ fix.** *(This line said "eight bugs, six specified" until the audit tripled the 
 
 > **Still true and worth repeating:** three bugs **silently destroy player data** (quitting mid-run
 > voids all unlock progress; winning leaves a resumable save; a corrupt unlock store wipes
-> everything). **Only the third has a specified fix — G1 and G2 still need one designed.** The code
+> everything). **G1's fix landed with G19 (pass 6A found the root cause) and G3's is decided — only
+> G2 still needs one designed.** The code
 > has not changed at all.

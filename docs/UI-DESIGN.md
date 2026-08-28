@@ -65,6 +65,15 @@ whole point of putting a creature on screen.
 hit, a skill firing, near-death, the kill or the sparing) and at the end. Ordinary rounds resolve
 instantly as mechanical log lines with no model call at all.
 
+> **⚠ EXCEPTION — BOSSES (added 2026-08-28).** A boss **selects its own action every turn through
+> the model**, grammar-constrained to an engine-computed legal set (`GAME-DESIGN.md` §17.3), and the
+> player can **talk to bosses in free text** (§20). Both of those sections name *this* rule as the
+> thing they override, and this section was never given the reciprocal note. **So boss rounds carry
+> per-turn inference and are deliberately slower than ordinary fights.** Bookends govern **ordinary
+> encounters only.** `#6 battle-screen` must size its sequencing loop to tolerate a per-round model
+> round-trip on the five boss fights — and must include a **free-text input** that this section's
+> design does not otherwise imply.
+
 **Why, and the measurement behind it:** a smoke test on the dev laptop after the merge gave **89
 tokens/sec with 181ms to first token** on the RTX 5060 — so a short beat costs roughly a second.
 That is fast, and it means this decision is *not* a workaround for a slow model. It is about turn

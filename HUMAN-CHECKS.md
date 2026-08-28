@@ -228,7 +228,7 @@ Run it (see "How to run" above), then do these in order — most-likely-to-be-wr
 The game now probes each GPU in a short-lived child process (so it can actually read per-device
 memory), scores them by name + memory-vs-system-RAM, and pins the discrete one **before** the model
 starts (no vendor/model hardcoded). This replaces the earlier `gpu-select` heuristic that kept
-landing on the Intel iGPU. Verified by 378 headless tests; the real-hardware confirmation is yours:
+landing on the Intel iGPU. Verified by headless tests (**378 at the time; 1029 today**); the real-hardware confirmation is yours:
 - [x] **On your 5060 laptop:** ✅ **CONFIRMED WORKING (2026-08-11)** — the GPU fix correctly selects the
       NVIDIA RTX 5060 on real hardware.
 - [ ] **No second window flashes** during boot (the probe runs as plain Node, not a 2nd Electron
@@ -238,11 +238,16 @@ landing on the Intel iGPU. Verified by 378 headless tests; the real-hardware con
 
 ---
 
-## Model download location — download once, shared (branch `agentic/model-cache`)
+## Model download location — download once, shared
+
+> **⚠ SUPERSEDED heading, 2026-08-28.** This section was titled *"branch `agentic/model-cache`"*.
+> **That branch no longer exists** — it was merged and deleted on 2026-08-10 (`PROGRESS.md`), and the
+> checkout has been on `main` ever since. The behaviour below is on `main` now; only the branch
+> reference was stale. The three boxes are still worth ticking on your next run.
 
 The model lives in one per-user folder (`%APPDATA%\the-void\models` by default; override with the
 `VOID_MODELS_DIR` env var), so it downloads once and every run / worktree / the shipped app reuses it.
-- [ ] After merging to root, run `npm run desktop` from the **root** the first time — the log should
+- [ ] ~~After merging to root~~ **(already merged)** — run `npm run desktop` from the **root** the first time — the log should
       show a `model migrated` line MOVING your existing root `models\*.gguf` into the per-user folder
       (instant, same drive), with **no 2.5 GB re-download**.
 - [ ] Run again from anywhere — no download, fast start; the log `models dir` points at the per-user
@@ -277,18 +282,35 @@ Each follows the original Java (or cleans up an obvious gap); all are one-line t
 
 ## Review & merge (your gate — I never merge without your explicit OK)
 
-The work stacks, each branch built on the one before, all through plan → build → test:
+> # ⚠ THIS WHOLE SECTION IS SUPERSEDED — do not run the commands below
+>
+> It describes a merge that **completed on 2026-08-10**. All four branches it names —
+> `agentic/gpu-fix`, `ui-combat-fixes`, `gpu-select`, `model-cache` — **were deleted after merging**
+> and no longer exist; `git merge --no-ff agentic/gpu-fix` will simply fail. The checkout is on
+> **`main`**, not `spike/n1-local-llm`.
+>
+> **The merge gate today:** everything listed here is already on `main`. Future units merge **one at
+> a time**, each gated on your explicit OK, per `.claude/skills/agentic-engineering/SKILL.md` §4 —
+> review with `git diff main...agentic/<slug>`, then `git merge --no-ff agentic/<slug>` from the main
+> checkout. **The next thing to merge is `#0a`/`#0b`/`#0c`** (`docs/PLAN.md` #0), none of which has
+> a branch yet.
+>
+> *Kept below as history — every other stale block in this file got a banner like this one; these two
+> were missed, and unlike the others they invite you to execute commands.*
 
-`spike/n1-local-llm` → `ui-combat-fixes` → `gpu-select` → `model-cache` → `gpu-fix` *(verified tip)*
+~~The work stacks, each branch built on the one before, all through plan → build → test:~~
 
-The **tip contains everything below it**, so **one merge brings it all**. From the main checkout
-(currently on `spike/n1-local-llm`), merge the newest verified tip:
+~~`spike/n1-local-llm` → `ui-combat-fixes` → `gpu-select` → `model-cache` → `gpu-fix` *(verified tip)*~~
+
+~~The **tip contains everything below it**, so **one merge brings it all**. From the main checkout
+(currently on `spike/n1-local-llm`), merge the newest verified tip:~~
 
 ```powershell
-git merge --no-ff agentic/gpu-fix          # engine + all five units, at once
-npm run desktop                            # first root run migrates your model copy, no re-download
+# SUPERSEDED — these branches no longer exist:
+# git merge --no-ff agentic/gpu-fix
+# npm run desktop
 ```
-Then delete the merged worktrees + branches:
+~~Then delete the merged worktrees + branches:~~
 ```powershell
 git worktree remove worktrees/<name> && git branch -d agentic/<name>
 ```

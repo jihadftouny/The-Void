@@ -80,7 +80,8 @@ confirm. That is the worst failure mode of this system — a question that looks
 |---|---|---|---|---|
 | A1b | **The potion fold-in** | `OPEN` | #2 | §18.4 says outright: *"⚠ Interpretation flagged for the author… if the intent was to keep the separate potion resource and merely reduce it, say so and this section changes."* It also gates the balance re-run |
 | B4c | **The boss-talk concession cap** | `OPEN` | #6 #11 #12 | §20 says: *"Flagged, with a proposed fix the author may overrule."* Free talk + earnable concessions is an exploit; the proposed cap is one concession per fight |
-| **G15** | **Karma inputs & verdict weighting** ⭐ added 2026-08-28 | `OPEN` | **#0 #2 #14** | Half the karma model never fires; `reverenceDesecration` (heaviest verdict axis, weight 3) can only move toward CAST-DOWN; `clarityDelusion` is permanently 0; the grace deal pool is unreachable. **Wire the four missing positive actions, or re-weight onto axes that move?** Queued as `INTERVIEW-PLAN.md` **A7**. *It sat in §4 as a "bug" and in no author queue — exactly the failure this section exists to catch* |
+| **A8** | **The endings' voice, and whether the player has a name** ⭐ added 2026-08-28 | `OPEN` | **#13 #14** | `WORLD.md` §8 `[LOCKED]` says *"second person, inside, only"* — but `story.json`'s ending anchors are **third person and name you** (*"{playerName} is judged worthy…"*). WORLD renders the same endings correctly in second person, so the data is the defect — **unless** the archive filing you from outside is a deliberate exception, which is thematically strong and is **nowhere on paper**. Separately, **no document states the player has a name at all**, while the UI mockup shows one and the engine interpolates `{playerName}`. Queued as `INTERVIEW-PLAN.md` **A8** |
+| **G15** | **Karma inputs & verdict weighting** ⭐ added 2026-08-28 | `OPEN` | **#2 #14** | Half the karma model never fires; `reverenceDesecration` (heaviest verdict axis, weight 3) can only move toward CAST-DOWN; `clarityDelusion` is permanently 0; the grace deal pool is unreachable. **Wire the four missing positive actions, or re-weight onto axes that move?** Queued as `INTERVIEW-PLAN.md` **A7**. *It sat in §4 as a "bug" and in no author queue — exactly the failure this section exists to catch* |
 
 ## 2d. Tracked as build work (not author questions)
 
@@ -106,13 +107,19 @@ confirm. That is the worst failure mode of this system — a question that looks
 
 ## 4. Bugs — fix, don't decide
 
-> **Twenty bugs (G1–G22), eighteen with fixes specified.** `G2` has none. **`G15` is not a bug at
-> all** — it is an author design ruling, now queued as `INTERVIEW-PLAN.md` **A7** and listed in §2c.
+> **Twenty rows carry `BUG` status** (of 23 rows — G7, G9 and G10 are `DECIDED`). **Eighteen have a
+> fix specified. `G2` has none. `G15` is not a bug at all** — it is an author design ruling, now
+> queued as `INTERVIEW-PLAN.md` **A7** and listed in §2c, and it does **NOT** block `#0`
+> (`PLAN.md` carves it out explicitly).
+>
+> *(Counted by hand 2026-08-28. An earlier note claimed eighteen while `G16` had no fix text either;
+> G16 has since been given one, so eighteen is now correct for a different reason than it was
+> asserted for.)*
 
 | # | Item | Status | Severity | Blocks | Notes |
 |---|---|---|---|---|---|
 | G1 | **Quitting mid-run voids all unlock progress** | `BUG` — **fix NOW specified, see G19** | ⛔ severe |  #0c  | Resume never rebuilds `runSummary`/`runSeed`. Earn an unlock, quit, return, win — you get nothing. **The whole meta-progression pillar.** ⭐ **Pass 6A found the root cause and the fix** (2026-08-28): `persist.ts` stores only `{state, memory}`, so persist `runSummary` + `runSeed` in the envelope and restore on resume. **See G19 for the measured reproduction** |
-| G2 | **Winning leaves a resumable save** | `BUG` — ⚠ **no fix specified yet** | ⛔ |  #0c  | `ending` maps to `continue`, not `game-over`. Relaunch after victory: *"A descent lies unfinished."* |
+| G2 | **Winning leaves a resumable save** | `BUG` — ⚠ **no fix specified yet** | ⛔ | — *(unschedulable until a fix exists; belongs with #0c)* | `ending` maps to `continue`, not `game-over`. Relaunch after victory: *"A descent lies unfinished."* |
 | G3 | **Corrupt unlock store wipes everything silently** | `BUG` — **fix decided** | ⛔ |  #0c  | Keep a **backup copy** and restore from it; if that fails, say exactly what was lost. Also moves to a real file with the saves (N3) |
 | G4 | **You can flee the floor-4 Warden** | `BUG` — **fix decided** | ⛔ |  #0a  | **Bosses cannot be fled at all**; Smoke Vial explicitly fails against them. UI must explain why, not just hide the button. `GAME-DESIGN.md` §14.9 |
 | G5 | **"Abandon the descent" — one click, no confirmation** | `BUG` — **fix decided** | high |  #8  | **Confirm on abandon + slot overwrite, and MOVE it out of the top group** (`GAME-DESIGN.md` §19.4). Never confirm ordinary combat actions |
@@ -136,9 +143,9 @@ confirm. That is the worst failure mode of this system — a question that looks
 | G13 | **Four of the game's biggest beats render BLANK narration** | `BUG` — **fix specified** | ⛔ |  #0b  | `narrate.ts:23` `describeEvent` ends `default: return ''`, so a missing case is silent instead of a type error. No case exists for `boss-encounter`, `verdict`, `spared`, `draft-picked`, `draft-offer` — so `buildNarrationPrompt` returns `null` and `desktop/game.ts:174` leaves the pane empty. Silent today: **every act's boss reveal**, **the act-4 karma reckoning** (the single payoff of the whole karma system), **the entire mercy/sparing path**, and every level-up pick. **Fix:** add the five cases and replace `default` with an exhaustiveness check (`const _never: never = e`) so the next new event kind fails the build instead of going quiet |
 | G14 | **37 of 38 authored relics/uniques/consumables have no acquisition path** | `BUG` — **fix specified** | ⛔ |  #0c #9  | Traced every `ItemInstance` construction site: generated `gen:*` ids, one hard-coded `mirror-shard` in `deals.json`, starting gear, save migration. **Nothing else.** So `consumableOptions` (`view-model.ts:96`) always returns `[]` — the "Use item" picker never renders and `useConsumable`/`consumable.ts` are unreachable in real play. Every relic effect in `relicEffects.ts` is dead (relics only work equipped; no relic ever enters inventory). The two mastery feats that "grant" relics write `UnlockStore.relics`/`.skills`, and **`snapshotUnlocks` reads neither**. **Fix:** add a weighted catalog branch to `rollLootDrop`/`rollChestLoot`, and read `store.relics`/`.skills` in `snapshotUnlocks`. *(Tracked as task #9.)* |
 | G15 | **Half the karma model is inert; the heaviest verdict axis can only move one way** | `BUG` — **needs a design call** | ⛔ |  — *(moved to §2c)*  | Of 8 declared karma actions only 4 fire. `leaveOffering`, `honorDead`, `embraceWhisper`, `seeThroughIllusion` appear **nowhere outside `karma.ts`**. Consequences: `reverenceDesecration` is touched only by `desecrateShrine: -2`, so it starts at 0 and can **only ever be ≤ 0** — yet it carries `GATE_WEIGHTS = 3`, the **heaviest** axis in `computeVerdict`, so the axis the reckoning weights most can only push toward CAST-DOWN, never GRACE. `clarityDelusion` is **permanently 0** (a fully dead axis), so "The Delusion" can never be the act-3 boss. `selectPool`'s grace branch needs `reverence >= 3` — **unreachable**, making the entire `grace` deal pool dead content *and* `mirror-shard` unobtainable. The four-axis verdict reduces to `mercyCruelty + restraintGreed >= 1`. **⚠ Fix needs the author** — wire the positive actions to real inputs, or re-weight onto axes that can move and record the deferral |
-| G16 | **A third dead stat twist, mislabelled** | `BUG` | low |  #0a  | `statEffects.ts:198` `dealQualityTwist` is a no-op still commented *"no-op until M7"* — but **M7 shipped**. Same family as the two already tracked (`initiativeOrderTwist`, `illusionSightTwist`) |
+| G16 | **A third dead stat twist, mislabelled** | `BUG` — **fix specified 2026-08-28** | low |  #0a  | `statEffects.ts:198` `dealQualityTwist` is a no-op still commented *"no-op until M7"* — but **M7 shipped**. Same family as the two already tracked (`initiativeOrderTwist`, `illusionSightTwist`). **Fix:** either implement it (CHA shifting deal quality, per §16) or **delete the function and its call sites** — nothing depends on it, so deletion is the default. What is not acceptable is leaving a no-op behind a comment claiming it is pending a milestone that shipped |
 
-### Found 2026-08-28 by discrepancy pass 6A — all five verified by running the real engine
+### Found 2026-08-28 by discrepancy pass 6A — all six verified by running the real engine
 
 | # | Item | Status | Severity | Blocks | Notes |
 |---|---|---|---|---|---|

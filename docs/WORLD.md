@@ -684,7 +684,8 @@ carried by the prose.
 | 3 Ash City | grief — the ash is what you lost | **the ash is what you are walking back through** |
 | 2 Entrance | fracture — coming apart | reassembling, or trying to |
 | 1 Undercity | the last real place, before | **the last floor.** Where it was done to you |
-| — | — | **surfacing in the facility, the Memorians, then out to Absolution** |
+| — | — | **surfacing in the Memorian facility in the Rift; the reckoning (§14)** — *before* floor 1 |
+| — | — | **out — the threshold into Absolution.** The Hollow never enters the city |
 
 **For prose:** the Hollowed stop being *what you may become* and are simply *what you are*. That
 single shift reframes floor 5's entire family without changing one line of code.
