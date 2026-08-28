@@ -367,7 +367,7 @@ Deliberately out of scope here, tracked elsewhere:
   restyle in `screens-restyle` is a restyle of the current functional screen, not that redesign.
 - **Per-class balance** — Scavver strong, ranged classes weak (`docs/BALANCE-REPORT.md`). A play-test
   and weapons follow-up, not a UI concern.
-- ~~**Audio.** Never discussed.~~ **CLOSED** — in scope at full ambition (`ART-BIBLE.md` §10) with a thinning score (§16). *Original note:* — a turn-based battle screen with beat-by-beat
+- ~~**Audio.** Never discussed.~~ **CLOSED** — in scope at full ambition (`ART-BIBLE.md` §10) with a thinning score (`ART-BIBLE.md` §16 — **not** this file’s §16, which is the 30fps target). *Original note:* — a turn-based battle screen with beat-by-beat
   sequencing is the natural place for hit and impact sound, and it will feel oddly silent without it.
 
 ---

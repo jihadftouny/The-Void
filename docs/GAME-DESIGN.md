@@ -596,7 +596,9 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 ## 14. What exists vs. what to build (scope map)
 
 > **⚠ §14.1–§14.11 are NOT subsections of this section.** They live under **§16b** (the 2026-08-26
-> interview) and cover loot, karma, equipment, floors and the model tier. Search for `### 14.1`.
+> interview) and cover loot, karma, progression, equipment, the verdict weighting and the model tier.
+> *(Floor mechanics are §8 and §16b’s §14.x rulings on floors 2–5 — not a §14.x topic of their own.)*
+> Search for the exact anchor, e.g. `### 14.7`.
 
 | System | Today | Target | Gap size |
 |---|---|---|---|
