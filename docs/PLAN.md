@@ -26,8 +26,9 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
-**#0 `critical-engine-bugs`** — found by discrepancy pass 5B, **all six verified by running the real
-engine**, all six passing 1029 tests and a clean typecheck. Full evidence in `FINDINGS.md` §4
+**#0 `critical-engine-bugs`** — **eighteen defects** found by discrepancy passes 5B, 6A and 7A.
+**Every one verified by running the real engine, and every one passing 1029 tests and a clean
+typecheck.** Full evidence in `FINDINGS.md` §4
 (G11–G16). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
@@ -65,15 +66,43 @@ do nothing at all.**
 12. **G22 — three smaller verified defects:** no `maxHp` clamp on condition HP ticks; the enemy skill
     gate is `> 0` while the cost can be 2, so charges go negative; enemies never restore charges.
 
+**Round 7A added six more, all verified by running the engine:**
+
+13. **G23 — re-applying a damage-over-time condition resets it to ONSET, so it deals ZERO damage
+    forever.** Measured: spamming `ember` for 20 rounds deals **0** total burn damage, while casting
+    it **once** deals 1 — the dominant player action is strictly worse than acting once. Affects
+    every bleed/burn/poison on both sides, and means a refreshed freeze/stun **never rolls its
+    saving throw.** *This is the most damaging single defect found in the entire audit.*
+14. **G24 — the failed-escape counter-attack bypasses the whole defensive pipeline.** Shield not
+    consulted, first-hit reduction skipped and still banked, `onTakeDamage` never fires, and **the
+    once-per-battle revive relic does not save you** — at the death players most often walk into.
+15. **G25 — `player.shield` is never cleared at battle end.** Measured 5 → 10 → 15 → 20 → 25 over
+    five fights, climbing all run and surviving the save file.
+16. **G26 — when the model fails, the fallback prints the PREVIOUS beats, not what just happened.**
+    A GPU is the stated min spec and this is the *designed* degraded path.
+17. **G27 — fracture is effectively permanent.** Rest never clears conditions despite the duration
+    being tuned on the assumption it does, and the only cure is unobtainable. One floor-1 enemy skill
+    puts you on attack disadvantage **for the rest of the run**, verified over 99 rounds.
+18. **G28 — five smaller:** the HUD shows **no condition chips at all**; the player name goes into
+    `innerHTML`; `balance-report.ts` mixes live numbers with hard-coded claims that a retune will
+    falsify; `clarity-draught` can never be used; an unguarded `resolveSkill` crashes the sheet.
+
+> **⚠ THE THREE UNITS CAN NO LONGER RUN IN PARALLEL.** G26 touches `narrate.ts` (**#0b**'s file) and
+> `desktop/game.ts` (**#0c**'s), and G27 touches `game.ts`'s rest path alongside **#0a**'s condition
+> work. Under `SKILL.md` §1b — *never parallelize units whose plans touch the same source file* —
+> **#0a → #0b → #0c must now run SERIALLY**, each rebasing onto the previous. The decomposition is
+> still worth keeping: it bounds each unit's review size and keeps a failure contained. It just no
+> longer buys wall-clock.
+
 > **⚠ THIS IS NOW TOO BIG FOR ONE PIPELINE UNIT.** Proposed decomposition — three units on
 > near-disjoint territory (`agentic-engineering` §1b: never parallelize units whose plans touch the
 > same source file, so **#0a and #0c must not run concurrently** — both may touch `game.ts`):
 >
 > | Unit | Covers | Principal files |
 > |---|---|---|
-> | **#0a `combat-core-fixes`** | G11, G11b, G12, **G4**, **G16**, G17, G20, G22 | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts` |
+> | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, **G23**, **G24**, **G25**, **G27** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `game.ts` (rest path) |
 > | **#0b `narration-coverage`** | G13, G21 | `llm/narrate.ts`, `data/story.json` |
-> | **#0c `persistence-and-reach`** | G1/G19, **G3**, G18, G14 | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `loot.ts`, `unlockStore.ts` |
+> | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, **G26**, **G28** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
 > **`G2` is deliberately in no unit** — *"winning leaves a resumable save"* still has **no fix
 > specified**, so it cannot be scheduled yet. It sits in the same territory as #0c (the save

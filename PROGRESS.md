@@ -21,7 +21,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 >
 > | | Why it is not complete |
 > |---|---|
-> | **M2** | *"elements/resistances affect skill damage"* — **they do not affect it at all** (G17) |
+> | **M2** | *"elements/resistances affect skill damage"* — **they do not affect it at all** (G17). And the condition layer is worse than unfinished: **re-applying a damage-over-time deals zero damage forever** (G23) |
 > | **M6** | build-defining relics and usable consumables — **none can ever enter a backpack** (G14) |
 > | **M13** | must grant classes/skills/items/relics/enemies — **3 of 5 are written to disk and never read into a run** (G14) |
 > | **M15** | balance report **invalidated** by G11 (loot is un-equippable in principle) |
@@ -70,15 +70,16 @@ full accessibility including a screen-reader pass; licence, free itch release an
 which shrinks M11 substantially. **Min spec now requires a GPU.**
 
 **Next up (NOT started — no branch exists yet):** **`#0 critical-engine-bugs`, now THREE units** —
-twelve defects (G11–G22), too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
+**eighteen** defects (G11–G28), far too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
 
 | Unit | Covers |
 |---|---|
-| **#0a `combat-core-fixes`** | G11 equip resolution · G11b its non-circular test · G12 advantage latch · G16 `dealQualityTwist` · **G17 the whole resistance subsystem is inert** · G20 deals can drive HP negative · G22 (three smaller) |
-| **#0b `narration-coverage`** *(light — can run alongside either heavy unit)* | G13 five missing narration cases · G21 blank act transitions (47 + 47 measured) |
-| **#0c `persistence-and-reach`** | G1/G19 resume forfeits all unlocks · **G18 the player never sees a damage number** · G14 catalog items reachable |
+| **#0a `combat-core-fixes`** | **G23 re-applied damage-over-time deals ZERO forever** · **G24 failed escape bypasses shield + revive** · **G25 shield accumulates 5→10→15→20→25 all run** · **G27 fracture is permanent** · G11 equip resolution · G11b its non-circular test · G12 advantage latch · **G17 the whole resistance subsystem is inert** · G20 deals can drive HP negative · G4, G16, G22 |
+| **#0b `narration-coverage`** | G13 five missing narration cases · G21 blank act transitions (47 + 47 measured) |
+| **#0c `persistence-and-reach`** | G1/G19 resume forfeits all unlocks · **G18 the player never sees a damage number** · **G26 the model-failure fallback prints the wrong beats** · G14 catalog items reachable · G3, G28 |
 
-**#0a and #0c must NOT run concurrently** — both may touch `game.ts` (`SKILL.md` §1b).
+**All three must now run SERIALLY** — G26 and G27 made their file sets overlap (`SKILL.md` §1b).
+The split still bounds review size and contains a failure; it no longer buys wall-clock.
 
 **Then, and only then** (both branches exist but are **empty** — only plans): `engine-foundations`
 (equip as a `step` input · description/flavour fields · the floor-mechanic hook · floor-4 verdict
