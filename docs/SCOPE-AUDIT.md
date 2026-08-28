@@ -28,6 +28,18 @@ the art batches, specifically to avoid building things that would have to be tor
 
 > **⚠ This is a FROZEN EVIDENCE SNAPSHOT (2026-08-25).** The live list of what is still open is
 > **`docs/FINDINGS.md`** — go there first. This file is kept for its file-and-line evidence.
+>
+> **⚠ READ THIS BEFORE FOLLOWING ANY LINE NUMBER BELOW (added 2026-08-28).**
+> - **Every `docs/*.md:NNN` reference in this file is pinned to 2026-08-25 and NO LONGER RESOLVES.**
+>   The documents have grown substantially since. **Cite by `§` instead** — ten were spot-checked and
+>   none landed on its quoted text.
+> - **`src/` references remain valid in principle** — `git diff` since this snapshot shows exactly
+>   **one changed line, in `package.json`** — but **nine were transcribed 1–3 lines off** when the
+>   file was written, several landing on a blank line or a closing brace. They are corrected in place
+>   below where they appear.
+> - **Being frozen excuses stale "X is still open" claims. It does NOT excuse errors in the
+>   file-and-line evidence**, which this banner names as the file's sole remaining purpose. The
+>   corrections below were wrong on the day they were written, not drift.
 
 **How to use this file:** it is a snapshot, not a living document. Work items out of it into
 `docs/GAME-DESIGN.md`, `docs/WORLD.md`, `docs/ART-BIBLE.md` or `docs/ROADMAP.md` as they are
@@ -63,9 +75,9 @@ Audited: all of `docs/`, root `*.md`, `.claude/`, `src/`, `electron/`, `scripts/
 
 `docs/ROADMAP.md:158-159` repeats it as M10's done-when. But the code:
 ```
-src/game/boss.ts:141  export function computeVerdict(karma: KarmaState): 'grace' | 'cast-down' {
-src/game/boss.ts:143    for (const axis of SIN_AXIS_PRIORITY) sum += GATE_WEIGHTS[axis] * karma[axis];
-src/game/boss.ts:145    return sum >= GATE_THRESHOLD ? 'grace' : 'cast-down';
+src/game/boss.ts:138  export function computeVerdict(karma: KarmaState): 'grace' | 'cast-down' {
+src/game/boss.ts:141    for (const axis of SIN_AXIS_PRIORITY) sum += GATE_WEIGHTS[axis] * karma[axis];
+src/game/boss.ts:143    return sum >= GATE_THRESHOLD ? 'grace' : 'cast-down';
 ```
 It takes **only** the carried vector. There is no floor-4 choice set, no floor-4 encounter type, no multiplier term. The signature of `computeVerdict` has no slot for one.
 
@@ -156,10 +168,10 @@ Imported by `src/game/weapon.ts:12` and `src/game/armor.ts:11`; consumed by `def
 ### 2.2 Every dropped item is named `"Legendary mainHand"` ⛔ BLOCKS
 This is worse than 2.1 because it is the *primary* loot the player earns:
 ```
-src/game/rarityGen.ts:118    defId: `gen:${req.rarity}:${req.slot}`,
-src/game/rarityGen.ts:120    name: `${req.rarity} ${req.slot}`,
+src/game/rarityGen.ts:116    defId: `gen:${req.rarity}:${req.slot}`,
+src/game/rarityGen.ts:118    name: `${req.rarity} ${req.slot}`,
 ```
-Every victory drop, every chest item, and every deal `itemRoll` produces one of **21 possible strings** — the cartesian product of 3 rarities × 7 slots — reading literally `"Common armor"`, `"Rare ring"`, `"Legendary mainHand"`. `mainHand` and `offHand` are not even display-cased. Confirmed live: `loot.ts:50` → `rollLootDrop`/`rollChestLoot` → `generateItem`; `deal.ts:112` → `generateItem`.
+Every victory drop, every chest item, and every deal `itemRoll` produces one of **27 possible strings** — the cartesian product of 3 rarities × **9** slots *(corrected 2026-08-28: `EquipSlot` declares nine — `helmet, amulet, mainHand, offHand, armor, legs, boots, ring, ammo` — and `dropTables.json` weights all nine. `GAME-DESIGN.md` §14.7 locked **seven**, but this section counts generated output, where nine is live; the migration in `PLAN.md` #1.10 therefore touches 27 names, not 21)* — reading literally `"Common armor"`, `"Rare ring"`, `"Legendary mainHand"`. `mainHand` and `offHand` are not even display-cased. Confirmed live: `loot.ts:50` → `rollLootDrop`/`rollChestLoot` → `generateItem`; `deal.ts:112` → `generateItem`.
 
 **Retrofit cost: LOW-MEDIUM.** A name generator needs prefix/suffix/base tables per slot and rarity — new data files plus (probably) seeded draws, which shifts the RNG draw order and therefore breaks determinism tests. Cheaper to define the draw order now.
 
@@ -183,17 +195,17 @@ Two additional holes inside it:
 ```
 `src/game/story.ts:9-10` states the reason: *"Act intro/outro bodies are empty strings because the Java prints only a header plus blank lines (M8 fills the prose)."* M8 is ✅ merged; they were never filled.
 
-They flow to the player: `game.ts:379-381` and `game.ts:484-487` emit `act-intro`/`act-outro` events carrying `body: ""`. `narrate.ts:87-89` maps them to `e.body`, and `eventsToFacts` (`narrate.ts:100`) filters empty strings — so **every floor transition narrates nothing at all.** The five floor transitions are the game's structural beats and they are silent.
+They flow to the player: `game.ts:379-381` and `game.ts:484-487` emit `act-intro`/`act-outro` events carrying `body: ""`. `narrate.ts:87-89` maps them to `e.body`, and `eventsToFacts` (`narrate.ts:103`) filters empty strings — so **every floor transition narrates nothing at all.** The five floor transitions are the game's structural beats and they are silent.
 
 ### 2.5 The two endings are one sentence each
 ```
 story.json:36   "body": "{playerName} is judged worthy and rises from the Void, made whole."
 story.json:40   "body": "{playerName} is cast down, and the Void claims its own."
 ```
-`src/game/story.ts:29` — "(placeholder prose; real text is M14)". The legacy `ending.body` is literally `"{playerName}"` (`story.json:31`). ROADMAP M14 wants a "blended spectrum" the narrator interpolates; two fixed sentences is the whole ending system.
+`src/game/story.ts:27` — "(placeholder prose; real text is M14)". The legacy `ending.body` is literally `"{playerName}"` (`story.json:31`). ROADMAP M14 wants a "blended spectrum" the narrator interpolates; two fixed sentences is the whole ending system.
 
 ### 2.6 There is no field anywhere for item, skill, condition or perk description text ⛔ BLOCKS
-I grepped every data file for `description` / `flavor` / `desc` / `blurb`. Result: **zero hits in all 15 data files except `lore.json`.** The schemas do not have the slot.
+I grepped every data file for `description` / `flavor` / `desc` / `blurb`. Result: **zero hits in all 15 data files.** The schemas do not have the slot. *(Corrected 2026-08-28: this said "except `lore.json`" — there is no exception. `lore.json`'s entries carry only `title` and `text`. The stated exception implied one schema already had the slot, and `PLAN.md` #1.2 cites this very section as its evidence.)*
 
 | Content | Count | Has description? | Evidence |
 |---|---|---|---|
@@ -206,7 +218,7 @@ I grepped every data file for `description` / `flavor` / `desc` / `blurb`. Resul
 | Skills | 73 defs | ✗ | `src/game/skill.ts:189` `SKILLS` — no description field on `SkillDef` |
 | Conditions | 25 types | ✗ | `src/game/condition.ts:90` `CONDITION_DATA` carries `maxTurns`, `displayName`, `stacking` only |
 | Perks | 3 | mechanical label only | `src/game/perks.ts:32-34` — `label: '+1 damage'` |
-| Enemy families | 24 | `behaviorNote` is `null` on all 24 | `src/data/enemyFamilies.json` |
+| Enemy families | 24 | ~~`behaviorNote` is `null` on all 24~~ — **WRONG (corrected 2026-08-28): `theme.behaviorNote` is populated on 24 of 24.** It is a one-line *mechanical* note, not player-facing flavour (e.g. `"swarm tactics; scaling with numbers"`). This row claimed a missing field that is fully present, and contradicted §2.6 of this same file, which quotes those strings | `src/data/enemyFamilies.json` |
 | Classes | 5 | ✗ (a one-word `twist` string) | `src/game/classKit.ts:126` `twist: 'Corruption'` |
 
 **Retrofit cost: MEDIUM.** Adding a `description` field is a data-schema change that touches `item.ts` validation, `save.ts` validators (`save.ts:438` validates inventory shape), the view-model, and every test that constructs an item literal. Adding it *now*, before three UI units render items, is dramatically cheaper than adding it after.
@@ -222,7 +234,12 @@ hollow:     { name: 'Hollow Self', ... },
 ```
 plus four Sin identities at `boss.ts:87-93` (`The Desecration`, `The Cruelty`, `The Avarice`, and a fourth for clarity). `boss.ts:21`: *"Boss dialogue/voice, floor/ending prose, and in-UI presentation are all deferred."* **There is no boss dialogue anywhere in the repo.** Five bosses, zero lines.
 
-### 2.8 Nine enemy families are named from the legacy Java joke tables
+### 2.8 **Eleven** enemy families are named from the legacy Java joke tables
+
+> *(Corrected 2026-08-28: the heading said "Nine" while the paragraph below it correctly said eleven,
+> and the table listed nine — omitting **`securityDrones`** and **`mutantStrays`**, both floor 1. The
+> eleven are: `gangers, securityDrones, mutantStrays, cyberEnforcers, fixers, reflections,
+> mirrorSelves, distortions, staticWraiths, guardians, seraphWardens`.)*
 `src/data/enemyNames.json` has bespoke `byFamily` tables for only 13 of 24 families. The other 11 fall through to the act's broad-tag table (`enemyName.ts:102-111`). Consequence:
 
 | Family | Floor | Draws names like |
@@ -234,7 +251,12 @@ plus four Sin identities at `boss.ts:87-93` (`The Desecration`, `The Cruelty`, `
 
 An angelic Seraph-Warden and a mirror of the player both draw from tables written for a Java prototype's street thugs.
 
-### 2.9 The opening intro contradicts the world's own ending
+### 2.9 The opening intro is the only substantive authored prose in the game
+
+> *(Retitled 2026-08-28. The old heading — "The opening intro **contradicts** the world's own ending"
+> — asserted the opposite of its own paragraph, which says the block is *good* and consistent on the
+> Memorians and brainchips. Headings are what get skimmed. **A real contradiction does exist in that
+> block, but it is a different one** — see the correction note below.)*
 `src/data/story.json:5-12` is the only substantive authored prose in the game. It is *good* and consistent with `WORLD.md` on the Memorians and the brainchips. But note it is the **only** authored block: 8 lines, out of an entire five-floor narrative game.
 
 > **⚠ CORRECTION 2026-08-28 — this block is NOT fully consistent with `WORLD.md`.** Line 10 sends you *"to delve into **the Rift**"*, but `WORLD.md` §4 `[LOCKED]` puts the errand in the **Undercity** and §13 makes the Rift a separate stratum below it. That breaks the betrayal scene, which turns on the Kingpin waiting at the Rift's entrance as *"the last place you could still have turned around"* — if entering the Rift **was** the order, the line means nothing. Tracked as `FINDINGS.md` **C3**. *(This audit is a frozen snapshot; the correction is noted rather than rewritten.)*
@@ -310,7 +332,7 @@ Design (`GAME-DESIGN.md:173-174`): *"**Acquisition: all sources** **[DECIDED]** 
 export interface RunUnlocks { families: string[]; affixes: string[]; }
 export function snapshotUnlocks(store) { return { families: [...], affixes: [...] }; }
 ```
-`store.relics` and `store.skills` are written by feats (`unlockStore.ts:404-405`) and **never enter the run**. Two feats grant relics (`overclock-chip`, `scrap-plating`) into a set nothing consults. `grants.skills` is never populated by any feat.
+`store.relics` and `store.skills` are written by feats (`unlockStore.ts:402-403`) and **never enter the run**. Two feats grant relics (`overclock-chip`, `scrap-plating`) into a set nothing consults. `grants.skills` is never populated by any feat.
 
 ### 3.8 The feat list is a seed, not the designed list
 `unlockStore.ts:310-348` — 11 feats. Design `GAME-DESIGN.md:432-436` asks for:
@@ -485,7 +507,7 @@ Plus a new tooling dependency (`sharp` or equivalent, `ART-BIBLE.md:474-476`).
 ### 7.1 The model is NOT bundled — the "offline" game requires a 2.5 GB download on first run ⛔ BLOCKS
 ```
 electron/llm.mjs:16  const MODEL_URI = 'hf:unsloth/Qwen3-4B-Instruct-2507-GGUF/Qwen3-4B-Instruct-2507-Q4_K_M.gguf';
-electron/llm.mjs:32  const modelPath = await resolveModelFile(MODEL_URI, modelsDir);
+electron/llm.mjs:33  const modelPath = await resolveModelFile(MODEL_URI, modelsDir);
 ```
 `models/` is **empty** and gitignored. `electron-builder.json` `"files": ["dist/**", "electron/**", "package.json"]` — the model is not in the package.
 
@@ -682,5 +704,20 @@ This is what a customer would read.
 19. All packaging: icons, installers, signing, licensing, itch page. Mechanical, well-understood, late-stage.
 20. Documentation reconciliation (Area 9) — **but note this is Tier 3 in *effort* and Tier 1 in *urgency*.** `CLAUDE.md` has top precedence and is wrong in five places; every hour it stays wrong is an hour an agent may build from it. It is the cheapest high-value fix on this entire list.
 
-### The one thing I would flag above all others
+### ~~The one thing I would flag above all others~~ — **RESOLVED 2026-08-25, struck 2026-08-28**
+
+> **⚠ This entire recommendation is DEAD, and so is every row of §9.2 beneath it.** `CLAUDE.md` was
+> corrected the same day this audit was written and now opens *"A **mechanics-first roguelike RPG
+> with a local-LLM narrator**"*. Every supporting claim is likewise false today: it contains no
+> mention of a shop (it says "sacrifice-deals/rest"), none of `src/scenes`, states *"4B — the only
+> tier shipped"* and *"downloaded once on first run, by design"*, and says outright *"Electron is
+> settled… Tauri is not in play."*
+>
+> **Also inverted, in §7.2:** *"The 1.7B low-end tier was recommended and never built"* is filed as a
+> **gap**. It is a **decision** — `CLAUDE.md` records the 1.7B fallback as **rejected**, with a GPU
+> now required as min spec.
+>
+> This mattered enough to correct despite the frozen banner because `docs/README.md` still sends
+> readers here *"before committing to any new unit"*, and this is the section headed "above all
+> others" — the one a reader in a hurry acts on.
 `docs/README.md` establishes a precedence order in which **`CLAUDE.md` beats `WORLD.md`**. `CLAUDE.md` still opens "An **LLM-driven narrative RPG** about a descent through five floors of the Void" — a sentence that is wrong about the genre, wrong about the Void being a place, wrong about the model being bundled, wrong about the shop, and pointing at a superseded roadmap version. It was flagged for correction on 2026-08-05 (`GAME-DESIGN.md:517-520`) and deliberately left alone because it is the engineer's file. **The scope-definition pass should start there**, because every other document defers to it.

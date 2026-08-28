@@ -243,7 +243,13 @@ echoed into a log or a commit message.
 | Boss portraits | 5 | 15 |
 | Floor backdrops | 5 | 15 |
 | Class portraits | 5 | 15 |
-| **Total** | **39** | **117** |
+| ~~**Total**~~ | ~~**39**~~ | ~~**117**~~ |
+| ⚠ **SUPERSEDED** | **50 buildable / 52 eventual** | **150 / 156 images** |
+
+> **The 39 above is the last survivor of the four asset totals that were once in circulation**
+> (struck 2026-08-28). `ART-BIBLE.md` §4b is the authority: **50 assets / 150 images buildable now**,
+> 52 / 156 once Ash-Wretch and the Warden executioner exist in code, **plus ~68 item icons / 204
+> images** (§13). This whole section is inside the superseded §9 — see its banner.
 
 Item icons are deliberately **excluded from batch one**. There are 15 relics, 4 uniques, 19
 consumables plus weapons and armour — too many to review in one sitting, and the right unit for them
