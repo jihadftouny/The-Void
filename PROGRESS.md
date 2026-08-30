@@ -75,12 +75,12 @@ full accessibility including a screen-reader pass; licence, free itch release an
 which shrinks M11 substantially. **Min spec now requires a GPU.**
 
 **Next up (NOT started — no branch exists yet):** **`#0 critical-engine-bugs`, now THREE units** —
-**twenty-eight** defects (G11–G40; there is no G38), far too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
+**twenty-nine** defects (G11–G42; there is no G38), far too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
 
 | Unit | Covers |
 |---|---|
 | **#0a `combat-core-fixes`** | **G23 re-applied damage-over-time deals ZERO forever** · **G29 Kingpin minion damage bypasses shield + revive (the death that happens most)** · **G24 failed escape does the same** · **G25 shield accumulates 5→10→15→20→25 all run** · **G34 momentum leaks the same way** · **G27 fracture is permanent** · **G30 fracture on the ENEMY is inert** · **G31 rest never restores skill charges** · **G32 wire `proficiency`** (author-ruled) · G11 equip resolution · G11b its non-circular test · G12 advantage latch · **G17 the whole resistance subsystem is inert** · G20 deals can drive HP negative · **G35 the "cheaper" upgrade reaches ZERO cost — free casts forever (274/300 seeds)** · **G36 rejected button presses still advance the boss** · **G39 a flee item escapes any boss and soft-locks Act 5** · G4, G16, G22, G28(d) |
-| **#0b `narration-coverage`** | G13 five missing narration cases · G21 blank act transitions (47 + 47 measured) |
+| **#0b `narration-coverage`** | G13 five missing narration cases · G21 blank act transitions (47 + 47 measured) · **G42 the ENDING is erased by the click after it — a finished run's last screen is blank** |
 | **#0c `persistence-and-reach`** | G1/G19 resume forfeits all unlocks · **G18 the player never sees a damage number** · **G26 the model-failure fallback prints the wrong beats** · **G33 charge-discount relics do nothing through the UI** · G14 catalog items reachable · **G40 the debug overlay eats keys typed into your name** · G3, G28, C7 |
 
 **`#0a` runs independently; `#0b` and `#0c` are the barred pairing** (G26's fix spans their two

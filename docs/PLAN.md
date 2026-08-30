@@ -26,10 +26,10 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
-**#0 `critical-engine-bugs`** — **twenty-eight defects** found by discrepancy passes 5B, 6A, 7A, 8A **and 9A**.
+**#0 `critical-engine-bugs`** — **twenty-nine defects** found by discrepancy passes 5B, 6A, 7A, 8A, 9A **and 11B**.
 **Every one verified by running the real engine, and every one passing 1029 tests and a clean
 typecheck.** Full evidence in `FINDINGS.md` §4
-(**G11–G40; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
+(**G11–G42; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
 1. **G11 — no found item can ever be equipped.** `equipment.ts` resolves by `defId` only, so every
@@ -122,6 +122,11 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
     never advances. Goes live the moment G14 is fixed.
 28. **G40 — the debug overlay's key handler has no `ev.target` check**, so a backtick typed into your
     character name is eaten and opens a panel over half the screen.
+29. **G42 — the ending prose is erased by the click that follows it.** `narrate()` clears the pane
+    *before* checking whether a prompt exists, so a completed run's **last screen is blank**. Third
+    instance of the same clear-before-check mechanism as G13 and G21, at a beat neither covers —
+    **fix all three together.** *(Surfaced by round 11B's player-sequence traversal, which found it
+    below the bar for its own territory because it is not a document contradiction.)*
 
 > **Not in this unit: G41** — dev tooling (`scripts/desktop-dev.mjs`), blocks nothing, and cannot
 > affect a packaged build. **Fix it early anyway:** it orphans the Vite server on quit, so every
@@ -137,10 +142,11 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 >
 > ### **`#0a` runs independently. `#0b` and `#0c` must run SERIALLY.**
 >
-> The only genuine cross-unit overlap is **G26**, whose fix spans `src/llm/narrate.ts`
-> (`buildNarrationPrompt` — **#0b**'s file) and `src/desktop/game.ts:202` (**#0c**'s). Under
-> `SKILL.md` §1b — *never parallelize units whose plans touch the same source file* — that one pairing
-> is barred. **#0a shares no file with either** and can run alongside whichever of them is active.
+> The cross-unit overlap is **`src/desktop/game.ts`**, which **#0b** and **#0c** both need: **G26**'s
+> fix spans `llm/narrate.ts` (#0b) and `desktop/game.ts:202` (#0c), and **G42**'s fix is in
+> `narrate()` in that same file. Under `SKILL.md` §1b — *never parallelize units whose plans touch the
+> same source file* — that one pairing is barred. **#0a shares no file with either** and can run
+> alongside whichever of them is active.
 >
 > > **⚠ Correction, 2026-08-28.** This block previously said all three must serialise, and gave two
 > > reasons, one of which was **false**: *"G27 touches `game.ts`'s rest path alongside #0a's condition
@@ -154,7 +160,7 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 > | Unit | Covers | Principal files |
 > |---|---|---|
 > | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), G29, G30, G31, G32, G34, **G35**, **G36**, **G39** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
-> | **#0b `narration-coverage`** | G13, G21 | `llm/narrate.ts`, `data/story.json` |
+> | **#0b `narration-coverage`** | G13, G21, **G42** | `llm/narrate.ts`, `data/story.json`, `desktop/game.ts` (the `narrate()` clear-before-check) |
 > | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, G33, G40, **C7** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
 > **`G2` is deliberately in no unit** — *"winning leaves a resumable save"* still has **no fix
@@ -327,8 +333,8 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), **thirty-eight bugs** (G1–G41; **there is no G38**; counted by script)
-— **thirty-six with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight
+one **parked** (localisation), **thirty-nine bugs** (G1–G42; **there is no G38**; counted by script)
+— **thirty-seven with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight
 content defects** (C1–C8) for #13. **`G32` was ruled on 2026-08-30 —
 wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
 before quoting it.**)*
