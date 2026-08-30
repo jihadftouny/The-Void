@@ -85,8 +85,16 @@ load-bearing word. Reserve it.
 - **The folklore is not a lie the houses tell.** It is what the world sincerely believes, and the
   Memorians simply never correct it. Charms are sold against a hole that does not exist.
 
-**For prose:** every character the player meets believes the folklore. The narrator — which *is* the
-condition (§0) — is the only voice that could know better, and it will never say so plainly.
+**For prose:** every character the player meets believes the folklore — **except the Undercity
+Kingpin, who is fully informed and bought** (§4). The narrator — which *is* the condition (§0) — is
+the only voice that could know better **and has no stake in saying so**, and it will never say so
+plainly. The Kingpin **could** explain it and chooses not to; that difference is the point.
+
+> *(Corrected 2026-08-30. This read "every character the player meets believes the folklore" and
+> "the narrator is **the only** voice that could know better", against §4's "**He is the only
+> character in the game who could explain the truth to you.**" Two mutually exclusive "only"s, and
+> the player meets him. **This is a half-applied fix:** the 2026-08-30 pass corrected the "Who knows"
+> table row two sections up and left this prose line standing.)*
 
 ## 0c. THE MECHANISM — extraction leaves the hollow **[LOCKED 2026-08-25]**
 
@@ -199,7 +207,13 @@ whatever persists on a stripped chip, running in flesh that belonged to someone 
   a literal description. **The clothes are not theirs. The body is not theirs.** It is wearing
   someone else's life, badly, because there is no life in it to wear anything well.
 - **The meta-progression stops being a menu.** You are cast down, you become a Hollow, and on the
-  next descent you can **play** as one. The unlock is not a reward — it is **what happened to you.**
+  **next run** you can **play** as one. The unlock is not a reward — it is **what happened to you.**
+  > *(Corrected 2026-08-30: this said "on the next **descent**". Playing as the Hollow **is** the
+  > ascent campaign, and §13 `[LOCKED 2026-08-27]` exists to deny exactly that word — *"The Hollow
+  > does not descend. It rises. Floor 5 to floor 1, and then out… it has no descent to make because
+  > it is already there."* Later LOCKED date wins, so this §0c line was the stale one. Same pattern
+  > §6 was corrected for, and this block never got the pass. Every other reference in every document
+  > already had it right.)*
 - **And it is why the Hollow is "what is left of a retainer with no house"** (§7). No house, no
   body, no life. Only the hardware, still running.
 
