@@ -134,8 +134,13 @@ confirm. That is the worst failure mode of this system — a question that looks
 >
 > ⚠ **There is no `G38`.** The id was never used — pass 9A produced five new defects (G35, G36, G37,
 > G39, G40), and the G6 *escalation* was miscounted as a sixth. **Do not create a G38 to fill the
-> gap** — leave it unused so this note stays legible, and remember that **the row count is one higher
-> than the highest id.**
+> gap** — leave it unused so this note stays legible.
+>
+> **Do not derive the row count from the highest id.** Two offsets cancel: `G38` is missing (−1) and
+> `G11b` is a lettered row with no number of its own (+1), so today the count happens to **equal** the
+> highest id. That equality is a coincidence of the current data, not a rule — **count the rows.**
+> *(An earlier version of this clause asserted "one higher than the highest id", which was already
+> false on the day it was written: it accounted for the missing G38 and never mentioned G11b.)*
 > - **`G2`** — no fix designed yet.
 > - **`G15`** — **not a bug at all**; an author design ruling, queued as `INTERVIEW-PLAN.md` **A7**
 >   and listed in §2c. It does **NOT** block `#0`.
