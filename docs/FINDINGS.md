@@ -133,17 +133,20 @@ confirm. That is the worst failure mode of this system — a question that looks
 > have a fix specified** — G32's landed with the author's 2026-08-30 ruling. Two do not:
 >
 > ⚠ **There is no `G38`.** The id was never used — pass 9A produced five new defects (G35, G36, G37,
-> G39, G40), and the G6 *escalation* was miscounted as a sixth. `40 − 3 = 37` is the correct sum;
-> "of 41" was arithmetic built on the phantom row. **Do not create a G38 to fill the gap** — leave it
-> unused so this note stays legible.
+> G39, G40), and the G6 *escalation* was miscounted as a sixth. **Do not create a G38 to fill the
+> gap** — leave it unused so this note stays legible, and remember that **the row count is one higher
+> than the highest id.**
 > - **`G2`** — no fix designed yet.
 > - **`G15`** — **not a bug at all**; an author design ruling, queued as `INTERVIEW-PLAN.md` **A7**
 >   and listed in §2c. It does **NOT** block `#0`.
 >
 > **`G32` was ruled on by the author 2026-08-30 — WIRE `proficiency`, then re-run the balance sim.**
 >
-> *(**Counted by script**, 2026-08-28. This line has been wrong four times — "eight", then "twenty,
-> eighteen specified", then "twenty-six", now thirty-two. **Recount rather than quote it.**)*
+> *(**Counted by script**, 2026-08-30. This line has been wrong five times — "eight", "twenty /
+> eighteen specified", "twenty-six", "thirty-two", and once when a correction updated the headline
+> and left the explanatory note beneath it condemning the new, correct figure as a miscount.
+> **Recount rather than quote it — and when you recount, update every clause in this block, not just
+> the number.**)*
 
 | # | Item | Status | Severity | Blocks | Notes |
 |---|---|---|---|---|---|
