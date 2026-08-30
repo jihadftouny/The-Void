@@ -584,11 +584,23 @@ generations, and never found it necessary to call it anything but what it is.
 
 Flagged here because they cross into other documents and will otherwise be missed.
 
-- **`ART-BIBLE.md` — the socket.** Chips are physical and sit in the head; the Neuromancer's locked
-  costume already has *"sockets at the temple"*. If a chip can be taken out, **an emptied socket is
-  a visible wound**, and it is the single most on-theme visual detail available. Applies to the
-  Hollow class, the Hollowed, the Echoes, and the Hollow Self. **[CLOSED — `ART-BIBLE.md` §9 wins on visual: NO hardware in any art]** whether every class
+- **`ART-BIBLE.md` — the socket.** Chips are physical and sit in the head, but **the hardware is
+  never drawn.** `ART-BIBLE.md` §9.3 `[CLOSED 2026-08-25]`: *"no temple sockets, no leads, no visible
+  chip ports, on anyone"*, and the Neuromancer's locked costume now reads *"No visible hardware."*
+  The Hollow class, the Hollowed, the Echoes and the Hollow Self are rendered as **wrongness of
+  occupancy, not as hardware**. **[CLOSED — `ART-BIBLE.md` §9 wins on visual: NO hardware in any art]** whether every class
   portrait shows a socket, and whether post-extraction assets show it empty.
+  > *(**Corrected 2026-08-30 — this was a half-applied fix, and a dangerous one.** It read *"the
+  > Neuromancer's locked costume already has 'sockets at the temple'"* — **text that has not existed
+  > in `ART-BIBLE.md` since 2026-08-25** — and then instructed that *"an emptied socket is a visible
+  > wound, the single most on-theme visual detail available"* for exactly the four assets §9.3 says
+  > to render **without** hardware. `SCOPE-AUDIT.md` logged this as a **three-way** conflict; two legs
+  > were fixed that day and this one had only its `[OPEN]` tag flipped to `[CLOSED]`, leaving the
+  > contradicting premise standing above it. **Why it mattered:** `WORLD.md` normally outranks
+  > `ART-BIBLE.md`, so a generation run reading down the precedence chain would have drawn the
+  > sockets. It does not outrank it here — the bullet itself cites §9 as binding on visual, §9.3 is a
+  > dated ruling while §12c carries no status tag, and `CLAUDE.md` scopes the visual domain to
+  > `ART-BIBLE.md`.)*
 - **`GAME-DESIGN.md` — the Ash City.** Floor 3's ash is now *literally the player's extracted life*
   (§0c). The Feelings and Sins that live there are being mourned because they are **yours**.
 - **`UI-DESIGN.md` — the interface is the file.** The austere typographic interface is the
