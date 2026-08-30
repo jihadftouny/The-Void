@@ -26,10 +26,10 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
-**#0 `critical-engine-bugs`** — **thirty defects** found by discrepancy passes 5B, 6A, 7A, 8A, 9A, 11A **and 11B**.
+**#0 `critical-engine-bugs`** — **thirty-one defects** found by discrepancy passes 5B, 6A, 7A, 8A, 9A, 11A, 11B **and 12A**.
 **Every one verified by running the real engine, and every one passing 1029 tests and a clean
 typecheck.** Full evidence in `FINDINGS.md` §4
-(**G11–G43; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
+(**G11–G45; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
 1. **G11 — no found item can ever be equipped.** `equipment.ts` resolves by `defId` only, so every
@@ -128,7 +128,12 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
     states at act 5. **21% of the enemy roster can never be met**, and the `reach-act-5` feat grants
     families that unlock nothing playable. **Fix:** gate the Hollow behind a floor-5 XP threshold like
     acts 1–3, instead of firing it on entry. ⚠ **The threshold is a balance number → feeds #2.**
-30. **G42 — the ending prose is erased by the click that follows it.** `narrate()` clears the pane
+30. **G45 — `step` throws on a non-integer `draft-pick` index**, breaking its own documented totality
+    contract. `1.5`/`0.5`/`2.5`/`NaN` all pass the bounds guard and dereference `undefined`. No
+    current caller produces it, so it is a contract violation through the API, not a live bug — but
+    the sibling consumable path is already safe against the identical inputs. **Fix:** add
+    `Number.isInteger`.
+31. **G42 — the ending prose is erased by the click that follows it.** `narrate()` clears the pane
     *before* checking whether a prompt exists, so a completed run's **last screen is blank**. Third
     instance of the same clear-before-check mechanism as G13 and G21, at a beat neither covers —
     **fix all three together.** *(Surfaced by round 11B's player-sequence traversal, which found it
@@ -165,7 +170,7 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 >
 > | Unit | Covers | Principal files |
 > |---|---|---|
-> | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), G29, G30, G31, G32, G34, G35, G36, G39, **G43** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
+> | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), G29, G30, G31, G32, G34, G35, G36, G39, G43, **G45** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
 > | **#0b `narration-coverage`** | G13, G21, **G42** | `llm/narrate.ts`, `data/story.json`, `desktop/game.ts` (the `narrate()` clear-before-check) |
 > | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, G33, G40, **C7** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
@@ -289,7 +294,13 @@ a real failure path; **licensing is entirely absent and blocks any public releas
 splash and installer art are on no list; `itch-description.html` is wrong about nearly everything.
 **Blocked on author rounds A7 and A8** — both land in text that ships.
 
-> **⚠ #14 also carries TWO severe packaging defects that no other unit covers:**
+> **⚠ #14 carries THREE severe packaging defects that no other unit covers — and one of them means
+> the ship command has never run:**
+> - **G44 — `npm run desktop:pack` HAS NEVER SUCCEEDED.** A `$comment` key on line 2 of
+>   `electron-builder.json` is rejected by the schema (`additionalProperties: false`, only `$schema`
+>   allowed), and validation runs *before* any packaging work. The file has one commit and the key is
+>   in it, so **every pack since the file was created has failed.** One-line fix — but **verify
+>   end-to-end**, because `directories.output` collides with Vite's `dist`.
 > - **G37 — first run starts TWO concurrent 2.5 GB model downloads.** `ensureNarrator` assigns only
 >   after its await, so boot and the first generate both see `null`. Measured: 2 calls where 1 is
 >   expected. Two writers race into the same file, plus a second `loadModel` (VRAM OOM on min spec).
@@ -339,8 +350,8 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), **forty bugs** (G1–G43; **there is no G38**; counted by script)
-— **thirty-eight with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight
+one **parked** (localisation), **forty-two bugs** (G1–G45; **there is no G38**; counted by script)
+— **forty with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight
 content defects** (C1–C8) for #13. **`G32` was ruled on 2026-08-30 —
 wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
 before quoting it.**)*
