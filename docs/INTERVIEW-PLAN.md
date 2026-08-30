@@ -84,7 +84,7 @@ work — see `docs/FINDINGS.md` and `docs/PLAN.md`.
 | `jsdom` vs `node` test environment (B7) | **Technical** — decide inside #1. Now listed explicitly as change 8 in `PLAN.md` #1, so it cannot be missed |
 | Grace/cast-down thresholds (B12), enemy scaling (B14) | **Balance numbers** — belong to the re-run in #2 |
 | Localisation (N8) | **Parked** — English-only, stated on the store page |
-| G1, G3–G8, G11–G14, G16–G37, G39–G45 | **Bugs** — fixes specified in FINDINGS §4 (**40 of 42**, counted by script; **there is no G38**). ⚠ **`G2` has no fix yet, and `G15` is an author ruling not a bug.** `G32` was **ruled on 2026-08-30 — wire `proficiency`, then re-run the balance sim** |
+| G1, G3–G6, G8, G11–G14, G16–G37, G39–G45 | **Bugs** — fixes specified in FINDINGS §4 (**40 of 42**, counted by script; **there is no G38**). ⚠ **`G2` has no fix yet, and `G15` is an author ruling not a bug.** `G32` was **ruled on 2026-08-30 — wire `proficiency`, then re-run the balance sim** |
 | **G15** | ⚠ **NOT a bug — an AUTHOR DESIGN RULING.** Half the karma model never fires, and `reverenceDesecration` (the heaviest verdict axis, weight 3) can only ever move toward CAST-DOWN. **See Phase A row A7 above** |
 | R4 second prose pass, R5 direction-aware hook | **Build work** — #13 and #1 |
 

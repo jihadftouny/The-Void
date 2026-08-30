@@ -144,8 +144,12 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 > `npm run desktop` after the first silently serves **stale code from the previous session**. Any
 > play-test that follows a quit is testing the wrong build, and the terminal error looks unrelated.
 >
-> **Not in this unit: G37 and the escalated G6** — both are **packaging** defects and belong to
-> **#14**. G37: `ensureNarrator` is not promise-memoized, so first run starts **two concurrent 2.5 GB
+> **Not in this unit: G44, G37 and the escalated G6** — all three are **packaging** defects and
+> belong to **#14**. **G44 is the register's only `⛔⛔ blocks shipping` row: `npm run desktop:pack`
+> has never once succeeded** — see #14 below. *(This note said "both" and omitted G44 until
+> 2026-08-30, which left #0's exclusion ledger short by one: 35 ids exist in the G11–G45 range, the
+> numbered list holds 31, and three of the four excluded ids had an explicit note while the most
+> severe one had none.)* G37: `ensureNarrator` is not promise-memoized, so first run starts **two concurrent 2.5 GB
 > downloads**. G6: the log directory resolves **inside the asar**, so every log call in a shipped
 > build is a silent no-op and the game ships with **no crash diagnostics at all**.
 

@@ -524,6 +524,15 @@ There is **no first-run download UX** either — `llm.mjs` calls `resolveModelFi
 `docs/N1-SPIKE.md` verdict: *"**Model plan (recommended): ship both, auto-select by hardware.** … **Qwen3-1.7B = no-GPU / low-end floor.** … Runtime: detect GPU/RAM → 4B if capable, else 1.7B."* Code: `electron/llm.mjs:15` — *"**4B only** (the N1 decision)."* `CLAUDE.md:65` sets "**Min spec: typical laptop, no GPU**", where the spike measured the 4B at **7.6 tok/s and ~5 s to first token** — i.e. the min-spec experience is the one that was rejected.
 
 ### 7.3 Packaging config is an N1 stub, by its own admission
+
+> **⚠ CORRECTED 2026-08-30 (`FINDINGS.md` G44). The key quoted below is not inert — it is what
+> breaks the build.** `$comment` is rejected by `app-builder-lib`'s schema (`additionalProperties:
+> false`, `$schema` the only permitted `$`-key), and validation runs *before* any packaging work, so
+> **`npm run desktop:pack` has never once succeeded** — the file has a single commit and the key is
+> in it. Everything listed below as "missing" is missing from a config **that does not validate at
+> all**, which this section reads as working. *(This audit is a frozen snapshot; the correction is
+> noted rather than rewritten.)*
+
 `electron-builder.json:2`:
 > `"$comment": "N1 packaging config. **Full installers + first-run model handling are N10.**"`
 
