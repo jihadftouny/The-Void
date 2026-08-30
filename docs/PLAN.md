@@ -256,10 +256,10 @@ as "#1". *(A8 appeared in `FINDINGS.md` and `INTERVIEW-PLAN.md` and **nowhere el
 
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), and **thirty-two bugs** (G1–G34, counted by script 2026-08-28 after
-passes 5B, 6A, 7A and 8A) — **twenty-nine with fixes specified. `G2` has none, `G15` needs an AUTHOR
-RULING, and `G32` needs a DECISION** (wire `proficiency` and re-sim, or delete it). *(This line has
-been wrong four times. **Recount before quoting it.**)*
+one **parked** (localisation), and **thirty-two bugs** (G1–G34, counted by script) — **thirty with
+fixes specified. `G2` has none; `G15` needs an AUTHOR RULING.** **`G32` was ruled on 2026-08-30 —
+wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
+before quoting it.**)*
 
 ### Newer work items not in the dependency graph above
 
