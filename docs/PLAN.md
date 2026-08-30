@@ -123,6 +123,11 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 28. **G40 — the debug overlay's key handler has no `ev.target` check**, so a backtick typed into your
     character name is eaten and opens a panel over half the screen.
 
+> **Not in this unit: G41** — dev tooling (`scripts/desktop-dev.mjs`), blocks nothing, and cannot
+> affect a packaged build. **Fix it early anyway:** it orphans the Vite server on quit, so every
+> `npm run desktop` after the first silently serves **stale code from the previous session**. Any
+> play-test that follows a quit is testing the wrong build, and the terminal error looks unrelated.
+>
 > **Not in this unit: G37 and the escalated G6** — both are **packaging** defects and belong to
 > **#14**. G37: `ensureNarrator` is not promise-memoized, so first run starts **two concurrent 2.5 GB
 > downloads**. G6: the log directory resolves **inside the asar**, so every log call in a shipped
@@ -322,9 +327,9 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), **thirty-seven bugs** (G1–G40, counted by script) — **thirty-five with
-fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight content defects**
-(C1–C8) for #13. **`G32` was ruled on 2026-08-30 —
+one **parked** (localisation), **thirty-eight bugs** (G1–G41; **there is no G38**; counted by script)
+— **thirty-six with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight
+content defects** (C1–C8) for #13. **`G32` was ruled on 2026-08-30 —
 wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
 before quoting it.**)*
 
