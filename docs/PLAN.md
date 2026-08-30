@@ -26,10 +26,10 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
-**#0 `critical-engine-bugs`** — **twenty-nine defects** found by discrepancy passes 5B, 6A, 7A, 8A, 9A **and 11B**.
+**#0 `critical-engine-bugs`** — **thirty defects** found by discrepancy passes 5B, 6A, 7A, 8A, 9A, 11A **and 11B**.
 **Every one verified by running the real engine, and every one passing 1029 tests and a clean
 typecheck.** Full evidence in `FINDINGS.md` §4
-(**G11–G42; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
+(**G11–G43; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
 1. **G11 — no found item can ever be equipped.** `equipment.ts` resolves by `defId` only, so every
@@ -122,7 +122,13 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
     never advances. Goes live the moment G14 is fixed.
 28. **G40 — the debug overlay's key handler has no `ev.target` check**, so a backtick typed into your
     character name is eaten and opens a panel over half the screen.
-29. **G42 — the ending prose is erased by the click that follows it.** `narrate()` clears the pane
+29. **G43 — FLOOR 5'S ENTIRE ENCOUNTER LAYER IS UNREACHABLE.** `act-intro` hard-wires the Hollow to
+    floor *entry*, and the hub is the only caller of the encounter/chest/rest/lore builders — so the
+    True Void has **only the boss**. Measured over ~17.7 million probed transitions: **zero** hub
+    states at act 5. **21% of the enemy roster can never be met**, and the `reach-act-5` feat grants
+    families that unlock nothing playable. **Fix:** gate the Hollow behind a floor-5 XP threshold like
+    acts 1–3, instead of firing it on entry. ⚠ **The threshold is a balance number → feeds #2.**
+30. **G42 — the ending prose is erased by the click that follows it.** `narrate()` clears the pane
     *before* checking whether a prompt exists, so a completed run's **last screen is blank**. Third
     instance of the same clear-before-check mechanism as G13 and G21, at a beat neither covers —
     **fix all three together.** *(Surfaced by round 11B's player-sequence traversal, which found it
@@ -159,7 +165,7 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 >
 > | Unit | Covers | Principal files |
 > |---|---|---|
-> | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), G29, G30, G31, G32, G34, **G35**, **G36**, **G39** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
+> | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), G29, G30, G31, G32, G34, G35, G36, G39, **G43** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
 > | **#0b `narration-coverage`** | G13, G21, **G42** | `llm/narrate.ts`, `data/story.json`, `desktop/game.ts` (the `narrate()` clear-before-check) |
 > | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, G33, G40, **C7** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
@@ -333,8 +339,8 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), **thirty-nine bugs** (G1–G42; **there is no G38**; counted by script)
-— **thirty-seven with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight
+one **parked** (localisation), **forty bugs** (G1–G43; **there is no G38**; counted by script)
+— **thirty-eight with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight
 content defects** (C1–C8) for #13. **`G32` was ruled on 2026-08-30 —
 wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
 before quoting it.**)*

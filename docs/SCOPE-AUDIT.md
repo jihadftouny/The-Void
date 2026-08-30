@@ -185,7 +185,7 @@ Live: `src/game/lore.ts:13` imports it; `encounter.ts:98-104` `selectLore` picks
 
 Two additional holes inside it:
 - **3 of the 12 entries are unreachable.** Acts 2, 3 and 4 have `"selectableCount": 2` with 3 entries; `encounter.ts:101` clamps to `selectableCount`, so `entries[2]` never draws. This is the Java off-by-one, still flagged open at `HUMAN-CHECKS.md:250-251`.
-- **Act 5 has no lore at all.** `lore.json` has keys `1,2,3,4` only. `lore.ts:31` returns `undefined`; `encounter.ts:100` returns `undefined`. **Resting in the True Void produces no fragment, ever.**
+- **Act 5 has no lore at all.** `lore.json` has keys `1,2,3,4` only. `lore.ts:31` returns `undefined`; `encounter.ts:100` returns `undefined`. **Resting in the True Void produces no fragment, ever.** ⚠ **Understated, corrected 2026-08-30 (`FINDINGS.md` G43): you can never rest in the True Void at all.** Act 5 goes straight from `act-intro` to the Hollow and **never returns to the hub**, which is the only phase that offers rest, chests, deals or random encounters. The missing act-5 lore is real, but it is downstream of a floor that has no encounter layer to read it in.
 
 ### 2.4 Ten empty prose bodies ship on the live path ⛔ BLOCKS
 `src/data/story.json:15-28` — all five act intros and all five act outros:
