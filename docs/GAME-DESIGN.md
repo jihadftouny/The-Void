@@ -1418,7 +1418,7 @@ generalising it would dilute the only thing that currently makes the class mecha
 
 ### 21.3 The 24 enemy families get rewritten against the world
 
-**All of them, not just the broken ones.** Nine still carry names inherited from the Java joke tables,
+**All of them, not just the broken ones.** **Eleven** still carry names inherited from the Java joke tables *(corrected 2026-08-30: `SCOPE-AUDIT.md` §2.8 re-counted this one day after §21.3 was decided — 24 families minus 13 `byFamily` tables = 11; the two missed were `securityDrones` and `mutantStrays`)*,
 and **the rest were written before `docs/WORLD.md` existed at all**, so most will contradict it
 somewhere.
 
@@ -1430,6 +1430,15 @@ What each family must now be checked against:
   §0c), so the Feelings and Sins are not monsters, they are losses.
 - **Floor 5's are people the Memorians harvested** — the Hollowed are literally previous subjects
   (`WORLD.md` §0c), not metaphors.
+- **Floor 2's enemies are YOUR OWN PIECES, disagreeing** (`WORLD.md` §6 — FRACTURE). ⚠ **Added
+  2026-08-30 — this checklist skipped floors 2 and 4, which is where the damage is worst.** The
+  four floor-2 families currently generate `Elder Beholder`, `Eldritch Djinn`, `Deathwhispering
+  Horror` and `Maddened Psycho Aspect`. **A Djinn is not one of your pieces.**
+- **Floor 4's angels are REAL, solid, and never ironic** (`WORLD.md` §6; `ART-BIBLE.md` §4 rule 4 —
+  *"if the angels read as hallucination, the art has broken the game's one hopeful fact"*). ⚠ Both
+  floor-4 families share the act-4 `Ancestral` pool, whose `first`/`middle` lists are **empty**, so
+  the generated names **are** `The Knight`, `The Counselor`, `Gaea`, `Sif`, `Death`. **The game's
+  one hopeful floor currently ships Seraph-Wardens named after a Norse goddess.**
 - **The cyberpunk gradient** (`ART-BIBLE.md` §4): high on floor 1, zero by floor 3.
 
 > **This is not cosmetic and it is not deferrable.** **Art batch 3 generates 30 enemy sprites from

@@ -26,10 +26,10 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
-**#0 `critical-engine-bugs`** — **eighteen defects** found by discrepancy passes 5B, 6A and 7A.
+**#0 `critical-engine-bugs`** — **twenty-four defects** found by discrepancy passes 5B, 6A, 7A **and 8A**.
 **Every one verified by running the real engine, and every one passing 1029 tests and a clean
 typecheck.** Full evidence in `FINDINGS.md` §4
-(**G11–G28**). This unit exists because these are not polish; **three of them mean whole shipped systems
+(**G11–G34**). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
 1. **G11 — no found item can ever be equipped.** `equipment.ts` resolves by `defId` only, so every
@@ -87,6 +87,26 @@ do nothing at all.**
     `innerHTML`; `balance-report.ts` mixes live numbers with hard-coded claims that a retune will
     falsify; `clarity-draught` can never be used; an unguarded `resolveSkill` crashes the sheet.
 
+**Round 8A added six more, all reproduced by running the engine.** *(These carried `BLOCKS` tags in
+`FINDINGS.md` from 2026-08-28 but were missing from this list and from both unit-coverage cells until
+2026-08-30 — so a unit planned from this file would have shipped without six known blockers,
+including the ⛔⛔ one. Found by round 9C.)*
+
+19. **G29 — a THIRD unguarded damage site**, and the most reachable one: Kingpin minion damage
+    bypasses shield, the revive gate and every `onTakeDamage` relic. The Act-1 Kingpin is the biggest
+    Act-1 killer, so **this is the death that happens most.** A fourth site exists in
+    `resolveUseConsumable`. Fix all four with one shared helper.
+20. **G30 — fracture on the ENEMY is inert.** `advDisOverride` is read for the player and never for
+    the enemy, and `heavyStrike` — the Enforcer's core skill — inflicts it. It emits no event either.
+21. **G31 — the player's skill charges are never restored.** Contradicts a *decided* rule quoted
+    verbatim in the register: §18.1, *"a rest restores HP **and skill charges**."*
+22. **G32 — `proficiency` is dead state.** ✅ **Author ruled 2026-08-30: WIRE IT**, then re-run the
+    balance sim.
+23. **G33 — the Cast picker ignores `chargeDiscount`**, so charge-reduction relics do nothing through
+    the real UI at exactly the margin where they matter. *(→ #0c, not #0a — it is a view-model fix.)*
+24. **G34 — `momentum` is the fourth carry-over leak**, after `shield`, `activeConditions` and the
+    advantage latch. Close all four in `createBattle`, the single funnel every battle passes through.
+
 > **⚠ TOO BIG FOR ONE PIPELINE UNIT.** Decomposition into three units, with **one** scheduling rule:
 >
 > ### **`#0a` runs independently. `#0b` and `#0c` must run SERIALLY.**
@@ -107,9 +127,9 @@ do nothing at all.**
 >
 > | Unit | Covers | Principal files |
 > |---|---|---|
-> | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, **G28(d)** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
+> | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), **G29**, **G30**, **G31**, **G32**, **G34** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
 > | **#0b `narration-coverage`** | G13, G21 | `llm/narrate.ts`, `data/story.json` |
-> | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, **G26**, **G28** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
+> | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, **G33** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
 > **`G2` is deliberately in no unit** — *"winning leaves a resumable save"* still has **no fix
 > specified**, so it cannot be scheduled yet. It sits in the same territory as #0c (the save
@@ -128,6 +148,11 @@ do nothing at all.**
 > **⚠ This unit invalidates the M15 balance report.** The sim's scope note assumed loot was merely
 > *unequipped by policy*; G11 means it was *un-equippable in principle*, so the "lower bound" framing
 > is wrong. **The balance re-run in #2 is now mandatory, not optional.**
+>
+> **⚠ And a SECOND, independent reason — G32.** `proficiency` was dead state, so the whole balance
+> pass was tuned against a to-hit baseline ~10 percentage points below the intended model. **The
+> author ruled 2026-08-30 to wire it**, which changes the difficulty again. #2 must re-sim for both
+> reasons, and neither one alone is sufficient.
 
 ---
 

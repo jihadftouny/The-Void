@@ -20,7 +20,13 @@ Format per entry:
 ---
 
 ## 2026-08-25 — ui-foundation (M-UI2 unit 1 of 5: tokens, shared components, retire 2nd front-end, widen combat events) [branch `agentic/ui-foundation`, merged to `main`]
-- Verdict: **PASS**, then **PASS again after 1 fix round**. 960 → 1014 → **1026 tests**.
+- Verdict: **PASS** (final, `782fe4f`). 960 → 1014 → 1026 → **1029 tests**.
+- Fix rounds: **3** — round 1 = engineer visual sign-off (SKILL §5), round 2 = test-agent returned
+  FAIL on re-verification, round 3 = the fix went deeper than the finding.
+  > *(Corrected 2026-08-30: the header said "PASS again after 1 fix round … 1026 tests", contradicting
+  > its own body — which records rounds 2 and 3 and a final 1029 — and omitted the mandatory
+  > `Fix rounds` field every other entry carries. This is the log `pipeline-retro` mines and weighs by
+  > run count, so **the project's most eventful run was reading as its quietest.**)*
 - **First run where build-agent had the `Agent` tool** (doctrine change this session: fan out
   Explore sub-agents for READING, but the build agent remains the ONLY writer — parallel writers in
   one worktree reintroduce exactly the clash worktrees exist to prevent, with no git isolation to

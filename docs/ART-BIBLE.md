@@ -381,6 +381,12 @@ not exist in the game. Resolution: keep **both**, as distinct enemies.
   name table (Drifting, Faint, Pale / Ash-Wraith, Ash), and it contrasts properly against the
   solid Nightmares (Grief, Rage, Dread) that share the floor.
   > ⚠ **The name table contradicts this ruling.** `src/data/enemyNames.json` also holds
+  > **⚠ The same reading applies to the `demons` family (added 2026-08-30).** `enemyFamilies.json`
+  > ships a floor-5 family literally called `demons`, with a 16-combination name table
+  > (`Infernal/Charred/Horned/Screaming` × `Demon/Fiend/Devil/Imp`) — and §4's floor-5 row retires
+  > *"hellish"* and *"demons"* as vocabulary, because **floor 5 is ABSENCE, not destruction**. It is a
+  > whole family plus one of the 23 sprites §4b budgets. **Remove it in the §21.3 rewrite too.**
+  >
   > `Smouldering`, `Cinder` and `Ember-Shade` — three of its eight components — so it generates
   > enemies literally called *"Smouldering Ember-Shade"* and *"Smouldering Cinder"*. That collides
   > with the no-ember rule here **and** with the floor-3 colour lock in §4 (*"purely white, grey and
@@ -502,9 +508,17 @@ Author's direction from probe 01, recorded verbatim:
 > "ash wretch 01 is the best but i liked the creative aspect in 03, feel free to do variations
 > around it, but full body shots always."
 
-**Interpretation:** take **01's full-body framing and clarity**, combine it with **03's rendering
-quality and drama** (03 was the more painterly, more atmospheric take), always on black. 01's actual
+**Interpretation:** take **01's full-body framing and clarity**, always on black. 01's actual
 background was the white failure, so its *framing* is the reference, never its ground.
+**The RENDER read is governed by §2c `[LOCKED]` — flat planar geometry — not by these probes.**
+
+> **⚠ Corrected 2026-08-30.** This said to *"combine it with 03's rendering quality and drama (03 was
+> the more painterly, more atmospheric take)"* — pointing the next run at **painterly**, which §2c
+> `[LOCKED 2026-08-25]` explicitly rejects: *"Not wanted: a detailed pixel painting — hand-illustrated,
+> dense, painterly despite the pixel grid. **Push the prompt toward geometry and flat planar shading,
+> away from illustration and detail density.**"* Compounding it, the imagery this cites was generated
+> under the **painterly-realism style string that was superseded the same day**. §2c is LOCKED; this
+> block is `[PENDING]`; §2c wins.
 
 Probe images are kept at `art-candidates/probe-01/` (gitignored — regenerate rather than rely on
 them persisting).

@@ -61,7 +61,7 @@ load-bearing word. Reserve it.
 |---|---|
 | **What everyone believes** | The Void is a **place**. A real hole beneath the last city. Criminals are sent down into it and do not come back. This is folklore, universal, and it is *wrong* |
 | **What is actually true** | The Void is **a place within your mind** — a condition (§6) |
-| **Who knows** | **Only the Memorians.** Not the city, not the Undercity, not other houses, not the retainers who serve beside them |
+| **Who knows** | **Only the Memorians — and the Undercity Kingpins they bought** (see the Kingpins row below). Not the city at large, not other houses, not the retainers who serve beside them. *(Corrected 2026-08-30: this read "not the Undercity", contradicting the Kingpins row two lines down and §4's "fully informed, fully bought". Both halves are load-bearing — "only the Memorians know" is what makes the folklore hold; "the Kingpins know exactly" is what makes the floor-1 villain the cleanest villain in the game.)* |
 | **And the part that damns them** | **The Memorians can *cause* it.** They do not merely study the condition. They induce it |
 | **The Kingpins** | **Accomplices.** The Undercity Kingpins are in on it — they are how it gets done to people (§4) |
 

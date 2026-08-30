@@ -108,7 +108,10 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 ### M2 — Player skills + the full 25-condition system
 - **Goal:** Players can finally act tactically; status play becomes real.
 - **Done when:** a `cast` action exists in the battle loop; a first skill set applies conditions; **all
-  25 conditions** (poison + 6 augments + 6 deprivations + `exposed`) tick correctly with hand-derived
+  25 conditions** (**12 core** + `exposed` + 6 augments + 6 deprivations — *corrected 2026-08-30; the
+  old breakdown read "poison + 6 + 6 + `exposed`", which sums to **14** and silently omitted eleven,
+  including `fracture`, `burn` and `stun` — precisely the ones G23/G27 prove do not tick correctly*)
+  tick correctly with hand-derived
   tests; elements/resistances affect skill damage; enemies use the same framework.
 - **Key decisions:** augment/deprivation names + effects (`GAME-DESIGN §5`); charge/cost model.
 

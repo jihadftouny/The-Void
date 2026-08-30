@@ -75,16 +75,18 @@ full accessibility including a screen-reader pass; licence, free itch release an
 which shrinks M11 substantially. **Min spec now requires a GPU.**
 
 **Next up (NOT started — no branch exists yet):** **`#0 critical-engine-bugs`, now THREE units** —
-**eighteen** defects (G11–G28), far too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
+**twenty-four** defects (G11–G34), far too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
 
 | Unit | Covers |
 |---|---|
-| **#0a `combat-core-fixes`** | **G23 re-applied damage-over-time deals ZERO forever** · **G24 failed escape bypasses shield + revive** · **G25 shield accumulates 5→10→15→20→25 all run** · **G27 fracture is permanent** · G11 equip resolution · G11b its non-circular test · G12 advantage latch · **G17 the whole resistance subsystem is inert** · G20 deals can drive HP negative · G4, G16, G22 |
+| **#0a `combat-core-fixes`** | **G23 re-applied damage-over-time deals ZERO forever** · **G29 Kingpin minion damage bypasses shield + revive (the death that happens most)** · **G24 failed escape does the same** · **G25 shield accumulates 5→10→15→20→25 all run** · **G34 momentum leaks the same way** · **G27 fracture is permanent** · **G30 fracture on the ENEMY is inert** · **G31 rest never restores skill charges** · **G32 wire `proficiency`** (author-ruled) · G11 equip resolution · G11b its non-circular test · G12 advantage latch · **G17 the whole resistance subsystem is inert** · G20 deals can drive HP negative · G4, G16, G22, G28(d) |
 | **#0b `narration-coverage`** | G13 five missing narration cases · G21 blank act transitions (47 + 47 measured) |
-| **#0c `persistence-and-reach`** | G1/G19 resume forfeits all unlocks · **G18 the player never sees a damage number** · **G26 the model-failure fallback prints the wrong beats** · G14 catalog items reachable · G3, G28 |
+| **#0c `persistence-and-reach`** | G1/G19 resume forfeits all unlocks · **G18 the player never sees a damage number** · **G26 the model-failure fallback prints the wrong beats** · **G33 charge-discount relics do nothing through the UI** · G14 catalog items reachable · G3, G28 |
 
-**All three must now run SERIALLY** — G26 and G27 made their file sets overlap (`SKILL.md` §1b).
-The split still bounds review size and contains a failure; it no longer buys wall-clock.
+**`#0a` runs independently; `#0b` and `#0c` are the barred pairing** (G26's fix spans their two
+files). See `PLAN.md` #0 — that is the single source for this rule. *(This block previously said all
+three must serialise, repeating a reason `PLAN.md` has since retracted as false; leaving it would
+have needlessly blocked `#0a`, the largest unit, behind `#0b`.)*
 
 **Then, and only then** (both branches exist but are **empty** — only plans): `engine-foundations`
 (equip as a `step` input · description/flavour fields · the floor-mechanic hook · floor-4 verdict

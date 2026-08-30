@@ -17,7 +17,14 @@
 > **Consequence:** these numbers are **not a floor — they are what the game actually does today.**
 > Real play is *not* easier than 32.9%. Every "lower bound" and "easier still" claim below is void.
 >
-> **Regenerate this report after `PLAN.md` #0 lands**, then re-tune. The re-run in #2 is mandatory.
+> **A SECOND, INDEPENDENT REASON (G32, ruled 2026-08-30).** `Player.proficiency` was set on every
+> character and **read by no combat path** — verified over 200 rounds at proficiency 2 vs 99 with
+> zero differences. So every number here was tuned against a to-hit baseline roughly **10 percentage
+> points below** the intended model. **The author ruled to wire it**, which makes the player
+> meaningfully more accurate and changes the difficulty again.
+>
+> **Regenerate this report after `PLAN.md` #0 lands**, then re-tune. The re-run in #2 is mandatory
+> for both reasons independently.
 
 ## Difficulty TARGET — SET (M15) and MET
 

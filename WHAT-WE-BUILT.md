@@ -1,5 +1,23 @@
 # The Void — What We Built (plain-language overview)
 
+> # ⚠ SUPERSEDED — last true on 2026-08-10. Do not act on anything below.
+>
+> This is the only plain-language onboarding document in the repo, so it is what a new reader opens
+> first — and it is wrong about **seven** things, four of which are decisions taken *after* it:
+>
+> | It says | Actually |
+> |---|---|
+> | *"not yet merged into the main copy — merging is your decision"* (its closing line) | **Everything was merged to `main` on 2026-08-24.** All 19 unit branches are ancestors of `main` |
+> | *"comfortably fast on a GPU, **usable without one**"* | **A GPU is REQUIRED** — min spec, decided 2026-08-26 |
+> | *"a double-click installer **with the model bundled in**"* | The model is **downloaded once on first run** — decided 2026-08-25, deliberately not bundled |
+> | *"**Let the AI write the choices**, not just the narration"* | **The ENGINE writes all player choices** — decided 2026-08-25; the model-authored-choices plan is **dropped** |
+> | gold, a shop, and a Void that is a place | All three removed — sacrifice-deal altars, no currency; the Void is a *condition* |
+> | `index.html` + `src/scenes/` exist | Both **deleted** — the standalone Kaplay shell is gone |
+> | *"319 automated tests"* · *"the game is intentionally **unwinnable**"* | **1029 tests**; the game is winnable (~33% baseline) |
+>
+> **For current truth:** `PROGRESS.md` (state) · `docs/PLAN.md` (what to do next) ·
+> `docs/FINDINGS.md` (what is open) · `docs/WORLD.md` (the fiction).
+
 This document explains, in simple terms, everything that exists in this project and how the pieces
 fit together. No prior knowledge assumed; any unavoidable technical word is explained in the same
 sentence.
