@@ -26,10 +26,10 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
-**#0 `critical-engine-bugs`** — **twenty-four defects** found by discrepancy passes 5B, 6A, 7A **and 8A**.
+**#0 `critical-engine-bugs`** — **twenty-eight defects** found by discrepancy passes 5B, 6A, 7A, 8A **and 9A**.
 **Every one verified by running the real engine, and every one passing 1029 tests and a clean
 typecheck.** Full evidence in `FINDINGS.md` §4
-(**G11–G34**). This unit exists because these are not polish; **three of them mean whole shipped systems
+(**G11–G40; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
 1. **G11 — no found item can ever be equipped.** `equipment.ts` resolves by `defId` only, so every
@@ -107,6 +107,27 @@ including the ⛔⛔ one. Found by round 9C.)*
 24. **G34 — `momentum` is the fourth carry-over leak**, after `shield`, `activeConditions` and the
     advantage latch. Close all four in `createBattle`, the single funnel every battle passes through.
 
+**Round 9A added four more.** *(Round 9A's ids reached the coverage cells on 2026-08-30 but not this
+list — the mirror image of the round-8A failure recorded above, and the reason the prose a planner
+reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Found by round 10C.)*
+
+25. **G35 — taking the "cheaper" upgrade twice reaches ZERO charge cost**, and the cast guard
+    `charges < cost` is false at `0 < 0`, so the skill casts free every round forever. **274 of 300
+    seeds** reached it. Resolve `templateApplies` against the player's skill, not the base.
+26. **G36 — rejected actions still fire `bossPostRound`.** Nine rejected "Run" presses cost 11 HP to
+    Kingpin minions, and three *rejected* casts burn the Reflection's once-per-battle adapt. Add
+    `resolved: boolean` to `RoundResult` and gate on it.
+27. **G39 — a flee consumable ignores `canFlee`**, escaping any boss — and escaping the Act-5 Hollow
+    **permanently soft-locks the run**, because the Hollow is built only at `act-intro(5)` and act 5
+    never advances. Goes live the moment G14 is fixed.
+28. **G40 — the debug overlay's key handler has no `ev.target` check**, so a backtick typed into your
+    character name is eaten and opens a panel over half the screen.
+
+> **Not in this unit: G37 and the escalated G6** — both are **packaging** defects and belong to
+> **#14**. G37: `ensureNarrator` is not promise-memoized, so first run starts **two concurrent 2.5 GB
+> downloads**. G6: the log directory resolves **inside the asar**, so every log call in a shipped
+> build is a silent no-op and the game ships with **no crash diagnostics at all**.
+
 > **⚠ TOO BIG FOR ONE PIPELINE UNIT.** Decomposition into three units, with **one** scheduling rule:
 >
 > ### **`#0a` runs independently. `#0b` and `#0c` must run SERIALLY.**
@@ -129,7 +150,7 @@ including the ⛔⛔ one. Found by round 9C.)*
 > |---|---|---|
 > | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), G29, G30, G31, G32, G34, **G35**, **G36**, **G39** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
 > | **#0b `narration-coverage`** | G13, G21 | `llm/narrate.ts`, `data/story.json` |
-> | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, G33, **G40** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
+> | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, G33, G40, **C7** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
 > **`G2` is deliberately in no unit** — *"winning leaves a resumable save"* still has **no fix
 > specified**, so it cannot be scheduled yet. It sits in the same territory as #0c (the save
@@ -236,15 +257,29 @@ the prompt, boss agents. Note the persona string is **duplicated** in `src/llm/n
 left. Joke weapon names that are the shipped starting gear, every drop named "Legendary mainHand", a
 lore file reading *"this is a lore this is a lore"*, ten empty prose bodies on the live path, two
 one-sentence endings, placeholder boss names, and no descriptions anywhere. **Only the author can do
-this.** **Blocked on #1 AND on author round A8** (the endings' voice and whether the player has a
-name — you cannot write the endings before that is settled). **Also carries C1–C4**: the two reserved
-words used casually in shipped strings, the class picker giving away the concealed fact, the intro
-sending you to the wrong place, and the narrator never being told which floor it is on.
+this.** **Blocked on #1 and on author rounds A8 AND A9** — A8 settles the endings' voice and whether
+the player has a name (you cannot write the endings before that); A9 settles whether `insanity` can
+be named at all, which decides a condition name, a skill name and an item name.
+**Also carries all EIGHT content defects, C1–C8:** the two reserved words used casually in shipped
+strings · the class picker giving away the concealed fact · the intro sending you to the wrong place ·
+the narrator never being told which floor it is on · **the line that makes the floor-4 angels a
+hallucination** · two different items both named "Clarity Draught" · the combat log printing raw
+condition ids · and four smaller text defects (a typo, one string filling 43% of the insanity table,
+and "The Husk Husk" as a reachable generated name).
 
 **#14 package and ship** — `electron-builder.json` is an N1 stub; the first-run model download needs
 a real failure path; **licensing is entirely absent and blocks any public release**; app icon,
 splash and installer art are on no list; `itch-description.html` is wrong about nearly everything.
 **Blocked on author rounds A7 and A8** — both land in text that ships.
+
+> **⚠ #14 also carries TWO severe packaging defects that no other unit covers:**
+> - **G37 — first run starts TWO concurrent 2.5 GB model downloads.** `ensureNarrator` assigns only
+>   after its await, so boot and the first generate both see `null`. Measured: 2 calls where 1 is
+>   expected. Two writers race into the same file, plus a second `loadModel` (VRAM OOM on min spec).
+> - **G6 (escalated) — the shipped game has NO crash diagnostics.** The log dir resolves inside the
+>   asar, `mkdirSync` throws, the stream nulls, and every log call becomes a **silent no-op** — while
+>   the app still prints "logging to &lt;path&gt;". It works in dev only because `__dirname` is the real
+>   repo folder, which is why it survived nine audit rounds.
 
 ---
 
@@ -265,24 +300,31 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 | Bosses & talk | ✅ Identities, boss agents, and **talking to bosses** in free text |
 | Release | ✅ Licence, free on itch, no telemetry, store page, first run, playtest |
 
-**⚠ TWO AUTHOR ROUNDS ARE STILL OPEN** — this heading read *"What is left is NOT interviews"* until
+**⚠ THREE AUTHOR ROUNDS ARE STILL OPEN** — this heading read *"What is left is NOT interviews"* until
 2026-08-28, which was false the moment A7 and A8 were queued:
 
 | | Question | Blocks |
 |---|---|---|
 | **A7** | **Karma inputs & verdict weighting** — half the model never fires, and the heaviest verdict axis can only move toward CAST-DOWN | **#2 #14** |
 | **A8** | **The endings' voice, and whether the player has a name** — the locked rule is second-person-only; the shipped anchors are third person and name you | **#13 #14** |
+| **A9** | **Is a nameable sanity mechanic allowed?** — §13 says the player must be *"unable to point at the sanity mechanic, because there isn't one"*; §21.1, the later ruling, canonises `insanity`, and the game ships a chip, a skill called Maddening Gaze, and a draught that cures it. **Two `DECIDED` rulings that cannot both hold** | **#1 #13** |
 | **A1b** | The potion fold-in | #2 |
 | **B4c** | The boss-talk concession cap | #6 #11 #12 |
 
-**A8 blocks #13 and #14, and neither of those items mentions it** — #13 still lists its only blocker
-as "#1". *(A8 appeared in `FINDINGS.md` and `INTERVIEW-PLAN.md` and **nowhere else** — the same
-"looks handled" failure this register exists to catch, for the second time in three days.)*
+> **⚠ This "looks handled" failure has now happened THREE times in four days** — A8 (2026-08-28) and
+> A9 (2026-08-30) were each queued in `FINDINGS.md` and `INTERVIEW-PLAN.md` and **nowhere else**, so
+> the work plan a builder reads did not know they existed. **When a new author row is queued, add it
+> to this table and to every item it blocks, in the same turn.**
+>
+> *A9's `BLOCKS` was also initially written as `#0a`, which would have deadlocked the next unit. It is
+> `#1 #13`: the ruling changes a condition **name**, which is `#1`'s rename change and `#13`'s prose —
+> not `#0a`, which fixes mechanics and touches no display strings.*
 
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), and **thirty-two bugs** (G1–G34, counted by script) — **thirty with
-fixes specified. `G2` has none; `G15` needs an AUTHOR RULING.** **`G32` was ruled on 2026-08-30 —
+one **parked** (localisation), **thirty-seven bugs** (G1–G40, counted by script) — **thirty-five with
+fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight content defects**
+(C1–C8) for #13. **`G32` was ruled on 2026-08-30 —
 wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
 before quoting it.**)*
 

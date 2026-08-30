@@ -80,7 +80,7 @@ confirm. That is the worst failure mode of this system — a question that looks
 |---|---|---|---|---|
 | A1b | **The potion fold-in** | `OPEN` | #2 | §18.4 says outright: *"⚠ Interpretation flagged for the author… if the intent was to keep the separate potion resource and merely reduce it, say so and this section changes."* It also gates the balance re-run |
 | B4c | **The boss-talk concession cap** | `OPEN` | #6 #11 #12 | §20 says: *"Flagged, with a proposed fix the author may overrule."* Free talk + earnable concessions is an exploit; the proposed cap is one concession per fight |
-| **A9** | **Is a nameable sanity mechanic allowed? Two DECIDED rulings conflict** ⭐ added 2026-08-30 | `OPEN` | **#13 #0a** | **§13 `[DECIDED]`:** *"The psychosis theme is **subtle and ambiguous — never named, never metered**… the player should feel it and **be unable to point at the 'sanity mechanic', because there isn't one.**"* `ART-BIBLE.md`: *"**Never signpost mental illness.**"* **But §21.1 `[DECIDED 2026-08-27]`, the later ruling,** canonises `insanity` in its restated condition list — and the game ships a status chip named **"Insanity"**, a skill called **"Maddening Gaze"**, and a **"Clarity Draught"** whose entire function is to cure it. That is a pointable sanity mechanic with a cure item. **This is not code drifting from design — it is two design rulings that cannot both hold.** If §13 wins, `insanity` needs renaming (the same treatment §21.1 gave `wise/fool` → `Lucid/Clouded`) and the code follows. If §21.1 wins, §13 needs an explicit carve-out — otherwise every future writer hits this again |
+| **A9** | **Is a nameable sanity mechanic allowed? Two DECIDED rulings conflict** ⭐ added 2026-08-30 | `OPEN` | **#1 #13** | **§13 `[DECIDED]`:** *"The psychosis theme is **subtle and ambiguous — never named, never metered**… the player should feel it and **be unable to point at the 'sanity mechanic', because there isn't one.**"* `ART-BIBLE.md`: *"**Never signpost mental illness.**"* **But §21.1 `[DECIDED 2026-08-27]`, the later ruling,** canonises `insanity` in its restated condition list — and the game ships a status chip named **"Insanity"**, a skill called **"Maddening Gaze"**, and a **"Clarity Draught"** whose entire function is to cure it. That is a pointable sanity mechanic with a cure item. **This is not code drifting from design — it is two design rulings that cannot both hold.** If §13 wins, `insanity` needs renaming (the same treatment §21.1 gave `wise/fool` → `Lucid/Clouded`) and the code follows. If §21.1 wins, §13 needs an explicit carve-out — otherwise every future writer hits this again |
 | **A8** | **The endings' voice, and whether the player has a name** ⭐ added 2026-08-28 | `OPEN` | **#13 #14** | `WORLD.md` §8 `[LOCKED]` says *"second person, inside, only"* — but `story.json`'s ending anchors are **third person and name you** (*"{playerName} is judged worthy…"*). WORLD renders the same endings correctly in second person, so the data is the defect — **unless** the archive filing you from outside is a deliberate exception, which is thematically strong and is **nowhere on paper**. Separately, **no document states the player has a name at all**, while the UI mockup shows one and the engine interpolates `{playerName}`. Queued as `INTERVIEW-PLAN.md` **A8** |
 | **G15** | **Karma inputs & verdict weighting** ⭐ added 2026-08-28 | `OPEN` | **#2 #14** | Half the karma model never fires; `reverenceDesecration` (heaviest verdict axis, weight 3) can only move toward CAST-DOWN; `clarityDelusion` is permanently 0; the grace deal pool is unreachable. **Wire the four missing positive actions, or re-weight onto axes that move?** Queued as `INTERVIEW-PLAN.md` **A7**. *It sat in §4 as a "bug" and in no author queue — exactly the failure this section exists to catch* |
 
@@ -108,8 +108,13 @@ confirm. That is the worst failure mode of this system — a question that looks
 
 ## 4. Bugs — fix, don't decide
 
-> **Thirty-two rows carry `BUG` status** (of 35 — G7, G9 and G10 are `DECIDED`). **Thirty have a fix
-> specified** — G32's landed with the author's 2026-08-30 ruling. Two do not:
+> **Thirty-seven rows carry `BUG` status** (of **40** — G7, G9 and G10 are `DECIDED`). **Thirty-five
+> have a fix specified** — G32's landed with the author's 2026-08-30 ruling. Two do not:
+>
+> ⚠ **There is no `G38`.** The id was never used — pass 9A produced five new defects (G35, G36, G37,
+> G39, G40), and the G6 *escalation* was miscounted as a sixth. `40 − 3 = 37` is the correct sum;
+> "of 41" was arithmetic built on the phantom row. **Do not create a G38 to fill the gap** — leave it
+> unused so this note stays legible.
 > - **`G2`** — no fix designed yet.
 > - **`G15`** — **not a bug at all**; an author design ruling, queued as `INTERVIEW-PLAN.md` **A7**
 >   and listed in §2c. It does **NOT** block `#0`.
@@ -148,7 +153,10 @@ confirm. That is the worst failure mode of this system — a question that looks
 | G15 | **Half the karma model is inert; the heaviest verdict axis can only move one way** | `BUG` — **needs a design call** | ⛔ |  — *(moved to §2c)*  | Of 8 declared karma actions only 4 fire. `leaveOffering`, `honorDead`, `embraceWhisper`, `seeThroughIllusion` appear **nowhere outside `karma.ts`**. Consequences: `reverenceDesecration` is touched only by `desecrateShrine: -2`, so it starts at 0 and can **only ever be ≤ 0** — yet it carries `GATE_WEIGHTS = 3`, the **heaviest** axis in `computeVerdict`, so the axis the reckoning weights most can only push toward CAST-DOWN, never GRACE. `clarityDelusion` is **permanently 0** (a fully dead axis), so "The Delusion" can never be the act-3 boss. `selectPool`'s grace branch needs `reverence >= 3` — **unreachable**, making the entire `grace` deal pool dead content *and* `mirror-shard` unobtainable. The four-axis verdict reduces to `mercyCruelty + restraintGreed >= 1`. **⚠ Fix needs the author** — wire the positive actions to real inputs, or re-weight onto axes that can move and record the deferral |
 | G16 | **A third dead stat twist, mislabelled** | `BUG` — **fix specified 2026-08-28** | low |  #0a  | `statEffects.ts:198` `dealQualityTwist` is a no-op still commented *"no-op until M7"* — but **M7 shipped**. Same family as the two already tracked (`initiativeOrderTwist`, `illusionSightTwist`). **Fix:** either implement it (CHA shifting deal quality, per §16) or **delete the function and its call sites** — nothing depends on it, so deletion is the default. What is not acceptable is leaving a no-op behind a comment claiming it is pending a milestone that shipped |
 
-### Found 2026-08-30 by discrepancy pass 9A — all six reproduced by running the real engine
+### Found 2026-08-30 by discrepancy pass 9A — all **five** reproduced by running the real engine
+
+*(G35, G36, G37, G39, G40. **No G38** — the sixth item that round was the **escalation of G6**, not a
+new defect, and it was briefly miscounted as one.)*
 
 | # | Item | Status | Severity | Blocks | Notes |
 |---|---|---|---|---|---|
@@ -172,7 +180,8 @@ confirm. That is the worst failure mode of this system — a question that looks
 ### Found 2026-08-28 by discrepancy pass 8B — SHIPPED STRINGS that contradict the locked fiction
 
 > **These are content/data defects, not engine bugs.** They belong to the **§21.3 content pass /
-> `PLAN.md` #13**, not to `#0`. Listed here because the register is where open items live, and
+> `PLAN.md` #13** — **except `C7`**, which rides with G18 in `#0c`, because it is a `render/format.ts`
+> change that only becomes visible once G18 makes that file reachable. Listed here because the register is where open items live, and
 > because two of them are visible to the player in the first minute of a run.
 
 | # | Item | Status | Severity | Blocks | Notes |
@@ -219,7 +228,7 @@ confirm. That is the worst failure mode of this system — a question that looks
 | D5 | ~~`PROGRESS.md` still describes the shell as "mobile-first, portrait 540×1080"~~ | **`CLOSED` 2026-08-30 — the quoted text does not exist.** `grep "mobile-first" PROGRESS.md` returns nothing. The only `540` is inside a dated 2026-08-01 session-log entry that says **"responsive"** — the *current* doctrine, not the superseded one — about a Kaplay shell that has since been deleted. The session log is append-only history by its own convention, so there is nothing to action |
 | D6 | `HUMAN-CHECKS.md` — run instructions **FIXED 2026-08-27**; carries **10** un-ticked author rulings (not 5 — that figure was copied from the frozen `SCOPE-AUDIT-2.md` snapshot), of which **3 were already answered by merged milestones** (enemies-always-hit → M4; Beast-only → M8; shop-under-Character-Info → M7 deleted the shop). **Those 3 struck 2026-08-28; 7 genuinely remain**, incl. flee 25% vs 35% | `PARTLY FIXED` |
 | D7 | **20** stale worktrees on disk (`PROGRESS.md` says 16; both were wrong) | `OPEN` |
-| D8 | `WHAT-WE-BUILT.md` + `itch-description.html` are stale. **Widened 2026-08-30 — `WHAT-WE-BUILT.md` is wrong about SEVEN things, not three**, and four are decisions taken *after* it: gold/shop/Void-as-place, **a no-GPU min spec, a bundled model, LLM-authored choices, and a closing line saying the whole project is unmerged.** A dated superseded banner now heads the file. *(`itch-description.html` never mentions gold — that part of this row was wrong.)* **`HUMAN-CHECKS.md` did too** — its play-check scripted "rest → shop → level-up" (**fixed 2026-08-28**); it is the one a human actually follows, so it mattered most | `PARTLY FIXED` |
+| D8 | `WHAT-WE-BUILT.md` + `itch-description.html` are stale. **Widened 2026-08-30 — `WHAT-WE-BUILT.md` is wrong about SEVEN things, not three.** Four of the seven are decisions taken *after* it — gold/shop/Void-as-place, **a no-GPU min spec, a bundled model, LLM-authored choices, and a closing line saying the whole project is unmerged.** A dated superseded banner now heads the file. *(`itch-description.html` never mentions gold — that part of this row was wrong.)* **`HUMAN-CHECKS.md` did too** — its play-check scripted "rest → shop → level-up" (**fixed 2026-08-28**); it is the one a human actually follows, so it mattered most | `PARTLY FIXED` |
 
 ---
 
