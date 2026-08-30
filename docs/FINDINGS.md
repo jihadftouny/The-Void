@@ -12,6 +12,27 @@
 3. **New findings get added here**, not into a new audit file. The two audits are frozen evidence
    snapshots; this is the register.
 4. **`BLOCKS` means work cannot correctly start** — check this column before beginning any unit.
+5. **⚠ PROPAGATE IN THE SAME TURN. A row added here is not done until it exists in the work plan.**
+   This register is not what a builder reads — `docs/PLAN.md` is. **This failure has happened four
+   times in four days**, in both directions, and each time the next unit would have shipped without a
+   known blocker:
+   - *2026-08-28* — G29–G34 got `BLOCKS` tags here and reached **no unit** in `PLAN.md`.
+   - *2026-08-28* — **A8** was queued here and in `INTERVIEW-PLAN.md` and **nowhere else**.
+   - *2026-08-30* — G35–G40 reached the **coverage cells only**; the numbered list and the counts a
+     planner reads still described the previous batch.
+   - *2026-08-30* — **A9** repeated A8's failure exactly, two days later, *and* carried a `BLOCKS`
+     value that would have deadlocked the next unit.
+
+   **The checklist, every time a row is added or a `BLOCKS` value changes:**
+   1. Add the id to the **covering unit's `Covers` cell** in `PLAN.md`.
+   2. Add it to that unit's **numbered prose list** — the cells and the prose drift apart otherwise,
+     and it has happened in both directions.
+   3. Update the **counts and id ranges** in `PLAN.md` *and* `PROGRESS.md`. **Count by script, never
+     by hand** — this count has been wrong five separate times.
+   4. If it is an **author question**, add it to `PLAN.md`'s open-rounds table **and to every item it
+     blocks**, and sanity-check the `BLOCKS` value points at the unit that would actually action it.
+   5. If the row's principal file is not in the unit's **principal-files list**, add it — that list is
+     the unit's territory declaration for parallel-safety.
 
 **Status:** `OPEN` needs a decision · `DECIDED` settled, link to where · `BUG` needs fixing not
 deciding · `FIXED` done · `PARKED` deliberately deferred, with a reason.
