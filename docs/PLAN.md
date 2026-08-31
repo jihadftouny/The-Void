@@ -26,10 +26,10 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
-**#0 `critical-engine-bugs`** — **thirty-one defects** found by discrepancy passes 5B, 6A, 7A, 8A, 9A, 11A, 11B **and 12A**.
+**#0 `critical-engine-bugs`** — **thirty-two defects** found by discrepancy passes 5B, 6A, 7A, 8A, 9A, 11A, 11B **and 12A**.
 **Every one verified by running the real engine, and every one passing 1029 tests and a clean
 typecheck.** Full evidence in `FINDINGS.md` §4
-(**G11–G45; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
+(**G11–G46; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
 1. **G11 — no found item can ever be equipped.** `equipment.ts` resolves by `defId` only, so every
@@ -39,10 +39,17 @@ do nothing at all.**
 2. **G11b — add the test that would have caught it.** Two existing tests *look* like coverage and are
    circular: one never calls `equip()`, the other writes into `inventory.slots` directly. **The new
    test must call `equip()` on a real `generateItem` output** (`PRINCIPLES.md` §A3).
-3. **G13 — four major beats render blank narration.** Boss reveals, the act-4 karma reckoning, the
-   whole mercy path and every level-up pick emit events `describeEvent` has no case for. **Fix:** add
-   the five cases **and** replace `default: return ''` with an exhaustiveness check, so the next new
-   event kind fails the build instead of going silent.
+3. **G13 — ELEVEN event kinds have no `describeEvent` case, including the player's own skill casts.**
+   ⚠ **Corrected 2026-08-31 (pass 15A): this said "four major beats… the five cases", and both the
+   count and the headline symptom were wrong.** Blank narration is the *minority* case. Measured over
+   400 runs / 170,491 steps: **5,727 steps contain a player `skill-cast`, and 100% reach the model
+   with no fact that the player acted** — only 512 go blank, while **5,215 produce narration that
+   misattributes the beat**, and in **1,395** the only skill named is the **enemy's** identically-named
+   one. Also uncased: `boss-minion-damage` (346 steps where the player loses HP and nothing says so),
+   `lifesteal`, `self-sacrifice`, `boss-summon`, `boss-adapt`, plus the original five
+   (`boss-encounter`, `verdict`, `spared`, `draft-picked`, `draft-offer`). **Fix:** add every case
+   **and** land the `const _never: never = e` exhaustiveness check — that check is what stops this
+   enumeration going stale a third time.
 4. **G12 — `advantageDisadvantage` is a write-only latch.** Every boss is fought at ±5 to-hit
    depending on unrelated leftover state. **Fix:** compute it per round rather than storing it.
 5. **G14 — 37 of 38 authored items are unobtainable.** Add a catalog branch to the drop tables and
@@ -176,7 +183,7 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 > |---|---|---|
 > | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), G29, G30, G31, G32, G34, G35, G36, G39, G43, **G45** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
 > | **#0b `narration-coverage`** | G13, G21, **G42** | `llm/narrate.ts`, `data/story.json`, `desktop/game.ts` (the `narrate()` clear-before-check) |
-> | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, G33, G40, **C7** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
+> | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, G33, G40, C7, **G46** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
 > **`G2` is deliberately in no unit** — *"winning leaves a resumable save"* still has **no fix
 > specified**, so it cannot be scheduled yet. It sits in the same territory as #0c (the save
@@ -398,8 +405,8 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), **forty-two bugs** (G1–G45; **there is no G38**; counted by script)
-— **forty with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eleven
+one **parked** (localisation), **forty-three bugs** (G1–G46; **there is no G38**; counted by script)
+— **forty-one with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eleven
 content defects** (C1–C11) for #13. **`G32` was ruled on 2026-08-30 —
 wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
 before quoting it.**)*
