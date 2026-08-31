@@ -277,6 +277,14 @@ store accumulates things the run never reads; the feat list is a seed.
 bends the world, never reaches the LLM prompt, is never clamped, and its cross-run memory is written
 and never read.
 
+> **⚠ THE CROSS-RUN MEMORY HALF IS BLOCKED ON AUTHOR ROUND A10 — do not build it yet.**
+> `WORLD.md` §12 `[LOCKED]` says *"**the narration never acknowledges a previous one** … do not
+> invent a diegetic justification for it later."* `GAME-DESIGN.md` §7 says the memory *"lets the
+> narrator faintly reference who you were before."* **Wiring this item as written would break a
+> locked fiction rule** — the only reason it is not already broken is that the wiring is unfinished.
+> The rest of #10 (karma bending the world, reaching the prompt, being clamped) is unaffected and
+> can proceed. See `FINDINGS.md` **A10**.
+
 **#11 finish M12** — there are **four** combat bosses, not five (floor 4's executioner does not
 exist), and **no boss is an agent**, which was M12's entire premise.
 
@@ -299,8 +307,11 @@ be named at all, which decides a condition name, a skill name and an item name.
 strings · the class picker giving away the concealed fact · the intro sending you to the wrong place ·
 the narrator never being told which floor it is on · **the line that makes the floor-4 angels a
 hallucination** · two different items both named "Clarity Draught" · the combat log printing raw
-condition ids · and four smaller text defects (a typo, one string filling 43% of the insanity table,
-and "The Husk Husk" as a reachable generated name).
+condition ids · **the Inventory screen printing raw enum identifiers (`On onHit: dealDamage`) on 41%
+of all loot** · **`"You suffer(s) 1 bleed damage."` and buffs described as afflictions in the LIVE
+narration facts** · **neither player-facing projector having a single test** · and four smaller text
+defects (a typo, one string filling 43% of the insanity table, and "The Husk Husk" as a reachable
+generated name).
 
 **#14 package and ship** — `electron-builder.json` is an N1 stub; the first-run model download needs
 a real failure path; **licensing is entirely absent and blocks any public release**; app icon,
@@ -364,13 +375,14 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 | Bosses & talk | ✅ Identities, boss agents, and **talking to bosses** in free text |
 | Release | ✅ Licence, free on itch, no telemetry, store page, first run, playtest |
 
-**⚠ THREE AUTHOR ROUNDS ARE STILL OPEN** — this heading read *"What is left is NOT interviews"* until
+**⚠ FOUR AUTHOR ROUNDS ARE STILL OPEN** — this heading read *"What is left is NOT interviews"* until
 2026-08-28, which was false the moment A7 and A8 were queued:
 
 | | Question | Blocks |
 |---|---|---|
 | **A7** | **Karma inputs & verdict weighting** — half the model never fires, and the heaviest verdict axis can only move toward CAST-DOWN | **#2 #14** |
 | **A8** | **The endings' voice, and whether the player has a name** — the locked rule is second-person-only; the shipped anchors are third person and name you | **#13 #14** |
+| **A10** | **May the narrator reference a PREVIOUS RUN?** — `WORLD.md` §12 `[LOCKED]` forbids it (*"the narration never acknowledges a previous one"*) while `GAME-DESIGN.md` §7 and **`PLAN.md` #10** require it. State already ships; only the unfinished wiring keeps the locked rule intact | **#10 #12** |
 | **A9** | **Is a nameable sanity mechanic allowed?** — §13 says the player must be *"unable to point at the sanity mechanic, because there isn't one"*; §21.1, the later ruling, canonises `insanity`, and the game ships a chip, a skill called Maddening Gaze, and a draught that cures it. **Two `DECIDED` rulings that cannot both hold** | **#1 #13** |
 | **A1b** | The potion fold-in | #2 |
 | **B4c** | The boss-talk concession cap | #6 #11 #12 |
