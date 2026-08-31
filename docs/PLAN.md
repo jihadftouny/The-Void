@@ -27,6 +27,12 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
 
 ---
 
+> **⭐ Shipping order, added 2026-08-31 — `SHIP-SCOPE.md`.** The work below is the *full* plan.
+> **`SHIP-SCOPE.md` selects the ≤60 h subset that ships as v1** and cuts the rest to post-launch:
+> **in** — #0a/#0b/#0c (24 h), #9 (8 h), #10a (4 h), #13-lite (16 h), #14 (12 h) = **64 h against a
+> 60 h cap**; **out** — #2, #3–#8, #10, #11, #12, #15–#18. Read it before picking up any item here,
+> so you do not build something the ship scope already cut.
+
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
 **#0 `critical-engine-bugs`** — **thirty-three defects** found by discrepancy passes 5B through 15A

@@ -137,6 +137,29 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-08-31 — The shipping scope: The Void becomes Game #1, on a 60-hour budget 🎯
+
+- **`docs/SHIP-SCOPE.md` written** — the deliverable for milestone `b1` of the personal Ftouny Plan
+  v3 (due Sep 14). **The Void is Game #1; the three.js game is parked in writing.** Rationale: The
+  Void is ~80% built and 0% shipped, and the plan's scoring event is *shipping*, not building.
+- **The ≤60 h first-playable scope, and what it cuts.** In: `PLAN.md` **#0a/#0b/#0c** (24 h), **#9**
+  (8 h), **#10a** (4 h), **#13-lite** (16 h), **#14** (12 h). Out: #2, #3–#8, #10, #11, #12, #15–#18.
+  **The estimate is 64 h against a 60 h cap — stated, not hidden** — with a five-rung cut ladder
+  armed in advance (the `Static` rename goes first).
+- **Two conflicts between this project and the plan's rules, neither previously written down.**
+  (1) The plan says *web-first*; The Void is a **2.5 GB, GPU-required Electron download** — a much
+  narrower itch funnel. Desktop-only recommended for v1, **decide by Oct 19**. (2) The plan forbids
+  **all game spending until ~Apr 2028**, so the ~$10.05 art budget is **not fundable** — The Void
+  ships with **no generated art**, and `b2`'s required "page art" must be typographic, at $0.
+- **Ship gates** (lane V on the board): `v1` Sep 14 → `v4` **FIRST PLAYABLE** Oct 19 (52 h) → `v5`
+  ship candidate Nov 2 → `v7` **itch page + jam** Dec 14, seventeen days before `b2`'s deadline.
+- **`docs/plan-dashboard.html` rebuilt and published** as an artifact: a fourth lane for The Void, a
+  60-hour budget meter, rolling week cards, and the scope/cut list on the board. **Three silent
+  defects fixed:** state was written to a `window.storage` API that never existed (so nothing ever
+  saved), and both the webfonts and the markdown parser were CDN-loaded, which the artifact CSP
+  blocks — the fonts fell back silently and the entire reference section rendered as raw markdown.
+- No game code changed. **#0a–#0c remain the next build**, and are now the first ship gate.
+
 ### 2026-08-28 → 31 — The great discrepancy hunt + the validation round ✅
 
 - **Fifteen audit rounds** (three parallel agents each: code / fiction / process), every finding

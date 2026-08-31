@@ -18,12 +18,13 @@ disagree. Keep this index current: a document not listed here will be missed by 
 | 7 | **[INTERVIEW-PLAN.md](INTERVIEW-PLAN.md)** | ⭐ **The queue of everything still to ask the author**, and the record of what has been asked. Adaptive — answers may add, drop or reorder rounds. **No unit starts while a Phase-A row that blocks *it* is open** — per item, via the `BLOCKS` column, not as a blanket gate | before asking anything, and update it in the same turn as any answer |
 | 8 | **[FINDINGS.md](FINDINGS.md)** | ⭐ **The living register of everything still open.** Updated continuously — decisions, gaps, bugs and doc hygiene, with a `BLOCKS` column. **New findings go here, not into a new audit file** | starting any work, and whenever anything is decided or discovered |
 | 9 | **[PLAN.md](PLAN.md)** | *What to do next.* The work plan with dependencies — what blocks what, and what is unblocked | starting any piece of work |
-| 10 | **[SCOPE-AUDIT.md](SCOPE-AUDIT.md)** | *Every hole, part 1.* Content, systems and document contradictions (2026-08-25), ranked by retrofit cost | committing to any new unit — check whether it sits on an unbuilt foundation |
-| 11 | **[SCOPE-AUDIT-2.md](SCOPE-AUDIT-2.md)** | *Every hole, part 2.* Open decisions, **product areas nobody discussed** (accessibility, settings, legal, content warning, updates, QA), and **decisions already made by accident in code** — including three that silently destroy player data | before claiming anything is fully scoped, and before starting any UI unit |
-| 12 | **[BALANCE-REPORT.md](BALANCE-REPORT.md)** | *Whether it is winnable.* Generated from the sim — do not hand-edit. ⚠ **INVALIDATED — for TWO independent reasons.** (1) `FINDINGS.md` **G11**: it calls itself a no-equipment *lower bound*, but loot is un-equippable **in principle**, so those figures are what real play does, not a floor beneath it. (2) **G32**: `proficiency` was dead state, so the whole run was tuned against a to-hit baseline ~10 points below the intended one — and the author ruled 2026-08-30 to **wire it**, which changes the difficulty again. **Regenerate after `PLAN.md` #0** | touching any balance constant |
-| 13 | **[SHIPPING.md](SHIPPING.md)** | *How it ships.* Licence and third-party notices, free-on-itch release, no telemetry, the store page, first-run flow, and the playtest brief | packaging, release, or writing anything public-facing |
-| 14 | **[CONTENT-WARNING.md](CONTENT-WARNING.md)** | *The warning, and where it appears.* Shown at the start of **every** fresh run, plus the store page and README. **The words are the author's to write** | building the first-run flow or the store page |
-| 15 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
+| 10 | **[SHIP-SCOPE.md](SHIP-SCOPE.md)** | ⭐ *What actually ships first, and what is cut to get there.* The **≤60 h first-playable scope**, the cut list, the pre-armed cut ladder, and the **two conflicts with the Ftouny Plan v3 rules** (web-first vs. a 2.5 GB desktop download; $0 spending vs. the art budget). Selects from `PLAN.md`; does not replace it | committing to any work item — check whether it is in v1 or cut |
+| 11 | **[SCOPE-AUDIT.md](SCOPE-AUDIT.md)** | *Every hole, part 1.* Content, systems and document contradictions (2026-08-25), ranked by retrofit cost | committing to any new unit — check whether it sits on an unbuilt foundation |
+| 12 | **[SCOPE-AUDIT-2.md](SCOPE-AUDIT-2.md)** | *Every hole, part 2.* Open decisions, **product areas nobody discussed** (accessibility, settings, legal, content warning, updates, QA), and **decisions already made by accident in code** — including three that silently destroy player data | before claiming anything is fully scoped, and before starting any UI unit |
+| 13 | **[BALANCE-REPORT.md](BALANCE-REPORT.md)** | *Whether it is winnable.* Generated from the sim — do not hand-edit. ⚠ **INVALIDATED — for TWO independent reasons.** (1) `FINDINGS.md` **G11**: it calls itself a no-equipment *lower bound*, but loot is un-equippable **in principle**, so those figures are what real play does, not a floor beneath it. (2) **G32**: `proficiency` was dead state, so the whole run was tuned against a to-hit baseline ~10 points below the intended one — and the author ruled 2026-08-30 to **wire it**, which changes the difficulty again. **Regenerate after `PLAN.md` #0** | touching any balance constant |
+| 14 | **[SHIPPING.md](SHIPPING.md)** | *How it ships.* Licence and third-party notices, free-on-itch release, no telemetry, the store page, first-run flow, and the playtest brief | packaging, release, or writing anything public-facing |
+| 15 | **[CONTENT-WARNING.md](CONTENT-WARNING.md)** | *The warning, and where it appears.* Shown at the start of **every** fresh run, plus the store page and README. **The words are the author's to write** | building the first-run flow or the store page |
+| 16 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
 
 **Stale, kept for history — do NOT build from these:**
 
@@ -53,7 +54,9 @@ disagree. Keep this index current: a document not listed here will be missed by 
    specific constant.
 5. **`SHIPPING.md`** wins on release, licensing and store-facing questions; **`CONTENT-WARNING.md`**
    wins on the warning's placement and policy.
-6. A **`[LOCKED]`** tag with a date beats an untagged statement. A later date beats an earlier one.
+6. **`SHIP-SCOPE.md`** wins on **what ships first and in what order**. `PLAN.md` still wins on *what
+   a task is*; `SHIP-SCOPE.md` only decides which tasks are in v1 and which wait.
+7. A **`[LOCKED]`** tag with a date beats an untagged statement. A later date beats an earlier one.
 
 **Corrections already on record**, so nobody re-derives from a stale line:
 - `UI-DESIGN.md` §5 originally said the Ash City accent was *ash-orange*. **Overruled** — the fire is
