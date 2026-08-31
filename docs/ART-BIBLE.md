@@ -45,7 +45,7 @@ staging it.
 |---|---|---|
 | Per image | $0.134 | **$0.067** |
 | The 52-asset run, 156 images | $20.90 | **~$10.45** |
-| *(item icons are separate — 68 assets, 204 images)* | *$27.34* | ***~$13.67*** |
+| ~~*(item icons — 68 assets, 204 images)*~~ | ~~*$27.34*~~ | ~~***~$13.67***~~ **— CANCELLED 2026-08-31 (§13)** |
 | Turnaround | seconds | usually minutes, up to 24h |
 
 The only real cost of batching is latency, and asynchronous turnaround is a poor fit for a *probe*
@@ -55,7 +55,7 @@ review in a sitting anyway. **Use interactive for probes, batch for groups.**
 
 
 **Cost at these settings:** $0.134 per image interactive, **$0.067 batched** (§1b).
-**The live asset count is in §4b (50 buildable / 52 eventual) plus the item icons in §13 (~68)** — the "39" figure that used to
+**The live asset count is in §4b: 50 buildable / 52 eventual — and that is the WHOLE batch.** (Item icons were cancelled 2026-08-31, §13.) The "39" figure that used to
 sit here is superseded and was never updated when the batch grew.
 Image generation is **not available on the free tier at all** (`limit: 0`) — billing must be enabled
 on the project or every request returns HTTP 429.
@@ -428,7 +428,9 @@ are four combat bosses, not five. Art does not run ahead of the engine.
 | *Warden — executioner* | *+1* | ⏸ **Deferred** — the floor-4 executioner fight does not exist in code |
 | **Total once the engine catches up** | **52** | **156 images ≈ $10.45 batched** |
 
-**Item icons are additional** — see §13 (**~68** more assets, **204 images ≈ $13.67** batched).
+~~**Item icons are additional** — see §13 (~68 more assets, 204 images ≈ $13.67 batched).~~
+**⚠ CANCELLED 2026-08-31 (`GAME-DESIGN.md` §22.8) — no item icons ship.** The 50 assets above are
+the whole art batch, and **~$10.05 is the whole art budget.**
 
 ## 5. Known failure modes and their gates **[LOCKED]**
 
@@ -707,7 +709,24 @@ None of these were on any list, and a product cannot ship without the first thre
 
 ---
 
-## 13. Item icons — bespoke, one per item **[DECIDED 2026-08-26]**
+## 13. ~~Item icons — bespoke, one per item~~ — **CANCELLED [DECIDED 2026-08-31]**
+
+> # ⚠ NO ITEM ICONS SHIP. This section is kept only so the reversal is traceable.
+>
+> **Overruled by `GAME-DESIGN.md` §22.8 (2026-08-31).** The author dropped the Tibia-style
+> equipment paperdoll and inventory grid for **text lists** (§22.9), which removes the reason icons
+> existed. **Cancelled: ~68 assets, 204 images, ~$13.67.** The equipment-paperdoll art goes with
+> them.
+>
+> **Everything world-facing still ships** — 30 enemy sprites, 5 floor backdrops, 5 class portraits,
+> 5 boss portraits, altar and shrine. Total art budget falls from **~$23.72 to ~$10.05**.
+>
+> **The money was not the point.** This section's own caveat called bespoke icons *"a permanent
+> commitment: every new item needs art forever"* — and that obligation is what made the item count
+> an art-budget question. With it gone, the game ships **more** weapons and armour, not fewer.
+>
+> *Nothing below this banner is live.*
+
 
 The deadlock is broken: icons were waiting on an inventory design that was waiting on a collaborative
 pass, and **the slot set is now decided** (`GAME-DESIGN.md` §14.7 — seven slots, two trinkets). So

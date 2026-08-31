@@ -1487,3 +1487,141 @@ a codex entry explaining the Void would destroy the game's central secret in a m
 `WORLD.md` §12c already requires that *"the player should be able to finish the game without ever
 being told, and finish it a second time understanding what happened."* A lore codex is precisely how
 that gets broken by accident.
+
+---
+
+## 22. Decisions from the 2026-08-31 validation round **[DECIDED 2026-08-31]**
+
+Twelve questions put to the author after fifteen discrepancy-hunt rounds, to validate what the
+documents already claimed rather than to add scope. **Four closed long-standing author rounds
+(A7–A10), two closed partial ones (A1b, B4c), and one reversed a `[DECIDED]` ruling** — the item
+icons. Recorded here as the index; each is propagated into its own authoritative section.
+
+### 22.1 The endings speak in SECOND PERSON, and never by name (A8a)
+
+`WORLD.md` §8's rule is absolute and wins: *"Second person, because it is inside you, not beside
+you."* The shipped anchors — *"{playerName} is judged worthy and rises from the Void, made whole"* —
+are the defect, not the rule. **`WORLD.md` already renders both endings correctly** (*"you come back,
+and you are changed"* / *"You failed the only door out"*), so the fix is to `story.json`, not to the
+fiction.
+
+**Rejected:** the reading that the archive filing you from outside is a deliberate exception. It was
+thematically defensible — being filed is what §0b's archive does — but it would have required a
+carve-out written into §8, and one voice start-to-finish won.
+
+### 22.2 The player DOES have a name — typed, and never spoken by the narrator (A8b)
+
+The name-entry screen stays. **But 22.1 governs the narration**, so the two answers together mean:
+the name is a *player-facing label* — character sheet, save slots, the interface — and the narrator
+**never uses it.** These are not in tension; they divide cleanly by surface.
+
+> **For whoever authors text:** if you are writing something the Void says, you may not use the
+> player's name. If you are writing an interface label, you may.
+
+### 22.3 `insanity` gets renamed — §13 wins over §21.1 (A9)
+
+The psychosis theme stays **unpointable**. §13's ruling — *"never named, never metered… the player
+should be unable to point at the 'sanity mechanic', because there isn't one"* — beats §21.1's later
+canonisation of the id.
+
+**Follows:** rename the condition the way §21.1 already renamed `wise/fool` → `Lucid/Clouded` — a
+name for the *state*, not a diagnosis of the player. The skill **"Maddening Gaze"** and the
+**"Clarity Draught"** (whose whole function is curing it) follow the same rule.
+
+**Rejected:** keeping the id and carving out §13. Cheaper, but it would have made the game's most
+careful design choice negotiable.
+
+### 22.4 The narrator NEVER references a previous run — §12 wins (A10)
+
+`WORLD.md` §12 stands as written: *"the narration never acknowledges a previous one… do not invent a
+diegetic justification for it later."* **Strike the narrator clause from §7** — *"lets the narrator
+faintly reference who you were before"*.
+
+`karmaMemory` / `RunMemory` **stay**, as a *silent* record feeding unlocks only. Restart remains pure
+game convention with no in-fiction explanation.
+
+**Consequences to apply:** drop *"its cross-run memory must be read"* from §14.2; remove that half of
+`PLAN.md` #10; correct the `unlockStore.ts` comment *"(the M11 narrator reads it)"*.
+
+**Rejected:** the haunting. It was a good idea, and it lost to a locked rule that is load-bearing —
+the unexplained restart is *deliberate*, and §12 says so twice.
+
+### 22.5 Wire the four missing karma actions (A7 / G15)
+
+`leaveOffering`, `honorDead`, `embraceWhisper` and `seeThroughIllusion` get **real inputs**. The
+four-axis design ships as designed.
+
+**Why this mattered:** `reverenceDesecration` is touched only by desecration, so it starts at 0 and
+can only ever go **negative** — while carrying the *heaviest* weight in the final verdict. The axis
+the reckoning weights most could only push toward cast-down. And `clarityDelusion` was permanently 0,
+so "The Delusion" could never be the act-3 boss.
+
+**Rejected:** re-weighting onto the two axes that work. It was much less work and would have quietly
+turned a four-axis judgement into a two-axis one.
+
+> **Sequencing note:** floor 2's illusions are the natural trigger for `seeThroughIllusion` and do
+> not exist yet, so that one lands with the floor-mechanics work.
+
+### 22.6 Potions FOLD INTO consumables (A1b)
+
+§18.4's interpretation was right. **No separate potion resource.** Healing comes from found
+consumables like everything else, so a heal competes with every other item for backpack space —
+scarcity becomes an inventory decision rather than a counter ticking down.
+
+**Rejected:** keeping the dedicated resource and merely reducing it. Simpler and already balanced
+against, but it makes healing a number rather than a choice.
+
+⚠ **This changes the balance surface**, so it lands with the #2 re-run.
+
+### 22.7 Boss talk: ONE concession per fight (B4c)
+
+§20's proposed cap is adopted. Talk as much as you like; the boss yields **at most once** per
+encounter. Keeps talking free and expressive while making the farming exploit impossible.
+
+**Rejected:** no cap (it would become the dominant strategy and hollow out the combat), and a
+per-boss budget (a nice characterisation tool, but per-boss authoring for a problem one rule solves).
+
+### 22.8 ⚠ ITEM ICONS ARE CANCELLED — this REVERSES a `[DECIDED]` ruling
+
+**`ART-BIBLE.md` §13 (*"bespoke, one per item"*, `[DECIDED 2026-08-26]`) is OVERRULED.** No item
+icons ship. The equipment paperdoll art goes with them.
+
+| | Before | After |
+|---|---|---|
+| Item-icon assets | ~68 (204 images, ~$13.67) | **0** |
+| Game art | 50 assets (150 images, ~$10.05) | **unchanged** |
+| **Total art budget** | ~$23.72 | **~$10.05** |
+
+**Everything world-facing still ships:** 30 enemy sprites, 5 floor backdrops, 5 class portraits,
+5 boss portraits, altar and shrine.
+
+**The bigger win is not the money.** §13's own caveat called bespoke icons *"a permanent commitment:
+every new item needs art forever."* That obligation is now gone, which is what makes 22.9 affordable.
+
+### 22.9 The inventory goes TEXT-BASED — the Tibia-style UI is dropped
+
+The equipment paperdoll and the inventory grid are replaced by **text lists**. This is the direct
+enabler for 22.8 and for shipping **more** weapons and armour: with no icon per item, item count
+stops being an art-budget question.
+
+**Weapons and armour: MORE than the current 12 + 12.** Exact counts land with the content pass.
+
+### 22.10 The seven-slot equipment set STILL migrates (unchanged by 22.9)
+
+The slot set is a **mechanics** decision, not a UI one. Relics need the two trinket slots, and fewer
+slots make each choice matter more. A text list renders seven as readily as nine. **`PLAN.md` #1.10
+stands.**
+
+### 22.11 The CODEX is CUT — tooltips only (D10)
+
+Dropped entirely. Tooltips at the point of use carry the load. Removes a screen, a net-new persistent
+store, and an ongoing authoring obligation.
+
+**Accepted cost:** the player cannot look up a thing they met two floors ago. `UI-DESIGN.md` §14 and
+`GAME-DESIGN.md` §21.6 are superseded on this point.
+
+### 22.12 `G44` fixed immediately (not deferred with the backlog)
+
+The `$comment` key that made `npm run desktop:pack` fail every time since the file was created is
+deleted. One line, config (pipeline-exempt), and it unblocks producing a build to look at. Verified:
+the config now validates and reaches real packaging concerns.

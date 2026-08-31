@@ -524,6 +524,19 @@ with plans. The hollowing, speaking.
 
 This settles how it must be written:
 - **Second person**, because it is inside you, not beside you.
+
+> **✅ CONFIRMED 2026-08-31 — this rule governs the ENDINGS too** (`GAME-DESIGN.md` §22.1).
+> The shipped anchors in `story.json` are third person and name the player
+> (*"{playerName} is judged worthy and rises from the Void, made whole"*) — **they are the defect.**
+> This file already renders both endings correctly, and that rendering wins.
+>
+> **The player DOES have a name** (§22.2) — typed at the start. It is a **player-facing label**:
+> character sheet, save slots, interface. **The narrator never uses it.** The two rules divide by
+> surface, not by exception: if the Void is speaking, no name; if it is a label, a name is fine.
+>
+> *Rejected: reading the third person as deliberate — the archive filing you from outside. It was
+> defensible (being filed is what §0b's archive does) but would have needed a carve-out written
+> into this section, and one voice start-to-finish won.*
 - **It never answers questions**, because there is nobody there to answer them.
 - **It is unreliable without ever intending to deceive** — it is not lying to you or telling you the
   truth, it is what it sounds like in there.

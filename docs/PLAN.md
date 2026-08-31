@@ -14,7 +14,7 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
   #0 critical-engine-bugs ─> #1 engine-foundations ─┬─> #2 floor-mechanics ─┬─> #6 battle-screen ─┬─> #7 canvas-layer
                                                     │   (+ balance re-run)  │                     └─> #8 screens-restyle
                                                     └─> #13 content authoring
-  #3 art-pipeline ───────┬─> #5 art batches (5, gated) ──> #7 canvas-layer
+  #3 art-pipeline ───────┬─> #5 art batches (4, gated) ──> #7 canvas-layer
   #4 probe 04 + approve ─┘
   #9 #10 #11 #12 #14 — independent, sequenced by judgement
 ```
@@ -250,10 +250,13 @@ never in the game bundle, never touched by a test.
 **#4 probe 04 + approve references** — probe 03 predates `WORLD.md` and is partly wrong. Re-probe
 against the finished world, approve one image as the style anchor. **Also rotate the API key.**
 
-**#5 five gated batches** — environments (7) → characters (5) → enemies (**30**) → bosses (8) →
-**item icons (~68, `ART-BIBLE.md` §13)**.
+**#5 FOUR gated batches** — environments (7) → characters (5) → enemies (**30**) → bosses (8).
+*(Was five. The fifth was ~~item icons~~ — **CANCELLED 2026-08-31**, `GAME-DESIGN.md` §22.8: the
+inventory is text-based, so no item art is generated at all.)*
 **Game assets:** 50 buildable now (150 images ≈ $10.05 batched); 52 once Ash-Wretch and the Warden
-executioner exist in code. **Item icons:** ~68 more (204 images ≈ $13.67). **Total ≈ 118 assets /
+executioner exist in code. ~~**Item icons:** ~68 more (204 images ≈ $13.67).~~ **⚠ ICONS CANCELLED
+2026-08-31** (`GAME-DESIGN.md` §22.8) — the inventory is text-based, so the 50/52 game assets are the
+whole batch. ~~**Total ≈ 118 assets /
 354 images / ~$23.72 batched.** **No interface batch** — the austere typographic UI is
 the Memorians' file on you.
 
@@ -265,8 +268,14 @@ marked BLOCKING; free now, a rewrite after) and **a free-text input** for talkin
 #6 must not start before #2: building on a battle loop with no floor-modifier hook is the most
 expensive mistake available.
 
-> **⚠ #8 also carries the CODEX, which was `[DECIDED]` twice and named in no work item until
-> 2026-08-31.** `UI-DESIGN.md` §14 commits to *"tooltips on everything **+ a codex that fills in as
+> **⚠ THE CODEX IS CUT — `[DECIDED 2026-08-31]`, `GAME-DESIGN.md` §22.11.** Tooltips at the point of
+> use carry the load instead. This removes a screen, a net-new persistent store, and an ongoing
+> authoring obligation. **Accepted cost:** the player cannot look up a thing they met two floors ago.
+> `UI-DESIGN.md` §14 and `GAME-DESIGN.md` §21.6 are superseded on this point. *(Historical note: it
+> was `[DECIDED]` twice and named in no work item until 2026-08-31.)*
+>
+> ~~**⚠ #8 also carries the CODEX, which was `[DECIDED]` twice and named in no work item until
+> 2026-08-31.**~~ `UI-DESIGN.md` §14 commits to *"tooltips on everything **+ a codex that fills in as
 > you go**"* and flags it as **"⚠ net-new state, not a reuse"**; `GAME-DESIGN.md` §21.6 decides its
 > content split. But `grep -i codex docs/PLAN.md` returned **zero** — unlike the settings screen and
 > the content warning, neither section routed itself into a unit. **Net-new persistent state plus a
