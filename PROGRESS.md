@@ -8,7 +8,8 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > psyche-descent, die-and-restart with **unlocks-only** meta-progression, a **hidden multi-axis karma
 > ("Nature")** that bends world + mechanics and resolves into a **blended ending** (floor 4 is the
 > karma reckoning). Full-depth systems: classes + signature skills, **25** conditions, 24 enemy families +
-> affixes, 5 boss agents, Tibia-style inventory, relics + uniques + rich consumables, thematic economy.
+> affixes, 5 boss agents, multi-slot inventory (~~Tibia-style~~ **text lists** since 2026-08-31, §22.9),
+> relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
 **v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1029 tests** `[####----------------]`
