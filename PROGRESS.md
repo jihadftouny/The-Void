@@ -158,6 +158,16 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
   defects fixed:** state was written to a `window.storage` API that never existed (so nothing ever
   saved), and both the webfonts and the markdown parser were CDN-loaded, which the artifact CSP
   blocks — the fonts fell back silently and the entire reference section rendered as raw markdown.
+- **Reframed the same day, on the author's clarification:** these milestones are **a gate against
+  scope creep**, not a schedule. Three additions make the gate actually work — a **v1 test**
+  (`SHIP-SCOPE.md` §2.1: does its absence make the game *lie*, make a run *unfinishable*, or make it
+  *not a product*? plus $0, plus **name what it displaces**), a **protocol for ideas arriving
+  mid-build** (§2.2), and **a version against every cut row** (§4) feeding an **increment ladder**
+  (§9: v1.1 narrator → v1.2 floors+balance → v1.3 free visuals/audio → v2.0 everything needing
+  money, ⛔ gated on `f5`, not on effort). *A cut list where everything is vaguely "later" is a pile,
+  and a pile is how cut scope comes back.*
+- **`v1.2` IS milestone `b3`** ("game #2 **or #1 expanded** · ≥100 plays") — expanding The Void
+  satisfies it without starting a second game.
 - No game code changed. **#0a–#0c remain the next build**, and are now the first ship gate.
 
 ### 2026-08-28 → 31 — The great discrepancy hunt + the validation round ✅

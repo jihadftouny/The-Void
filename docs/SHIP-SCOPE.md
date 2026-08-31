@@ -8,6 +8,20 @@ This document answers one question and nothing else: **what is the smallest comp
 Void that can be shipped to itch.io, and what gets cut to get there.** It does not replace
 `ROADMAP.md` (the full 18-milestone plan) or `PLAN.md` (the work order). It selects from them.
 
+> **Why it exists — read this before the rest.** These milestones are **not a schedule with a cut
+> list attached. They are a gate against scope creep.** The mechanism has three parts, and it only
+> works if all three are used:
+>
+> 1. **A test, not an inventory** (§2.1) — three questions that decide whether *anything*, including
+>    something nobody has thought of yet, belongs in v1.
+> 2. **A fixed budget** (§3) — 64 h. Anything admitted must displace something named.
+> 3. **A destination for everything cut** (§4 + §9) — every cut item names the version it returns at,
+>    so "later" is a decision rather than a deferral.
+>
+> The failure mode this is built against is specific and it is the normal one: v1 grows one
+> reasonable-sounding feature at a time, each individually cheap, until the ship date is gone. Every
+> item in §4 would make the game better. That was never the question.
+
 > **Precedence.** Where this document and `PLAN.md` disagree about *order*, this one wins — it is
 > the shipping schedule. Where they disagree about *what a task is*, `PLAN.md` wins — it is the work
 > order. Nothing here overrides `CLAUDE.md` or `WORLD.md`.
@@ -45,6 +59,46 @@ A player who has never seen the project can:
 
 That is the bar. Not "all five floors have unique mechanics", not "it looks good".
 
+### 2.1 The v1 test — the three questions
+
+**This is the point of the whole document.** The milestone list is not a schedule that happens to
+have a cut list attached; it is a **gate**, and this is the gate. A list of what is out only works
+until something new arrives that is not on the list — so what follows is a test, not an inventory.
+
+A feature belongs in v1 **only if it answers YES to at least one of these:**
+
+1. **Does its absence make the game lie?** The game claims something it does not do. *An Equip button
+   that cannot equip. Two advertised endings, one of them mathematically unreachable. A "narrator"
+   that credits the wrong actor for the player's own action.*
+2. **Does its absence make a run impossible to finish?** *No healing item can be obtained. Floor 5
+   has no encounters.*
+3. **Does its absence mean it is not a product?** *It cannot be packaged and installed. Placeholder
+   text stands where the game's own words should be.*
+
+**And YES to both constraints:**
+
+- **It costs $0** (plan rule 2 — no game spending until ~Apr 2028).
+- **You can name what it displaces.** The budget is 64 h and fixed. Adding something means removing
+  something specific, named at the time. If nothing can leave, it is not v1.
+
+> **The line that does the work: *"it would be better with X" is never a v1 argument.*** Every cut
+> item in §4 would make the game better. That is not in dispute and never was. It is why they were
+> cut rather than never considered — and why each one has a version to come back at (§9), instead of
+> a vague "later" that turns into "now" the moment it is raised again.
+
+### 2.2 What to do when a new idea arrives mid-build
+
+It will. The protocol is three steps and takes two minutes:
+
+1. **Write it into the ladder (§9) at the version it belongs to.** Do not evaluate whether it is good
+   — it probably is. Just place it.
+2. **Run the three questions.** All three "no" → it is not v1, and the decision is already made.
+3. **Only if a question is YES:** name what it displaces and cut that in the same sitting, or it does
+   not go in. Record the swap here so the 64 h number stays true.
+
+**Never** add a rung to the ladder and to v1 at the same time. **Never** let a new item in without a
+matching cut. The hours are the constraint that makes the list mean anything.
+
 ---
 
 ## 3. The budget — five blocks, 64 h against a 60 h cap
@@ -72,18 +126,24 @@ ending is not shippable; this is the cheapest possible fix for it.
 
 Each of these stays fully specified in `ROADMAP.md`/`PLAN.md`. Cut means *not in v1*, not *dropped*.
 
-| Cut | `PLAN.md` | Why it can wait |
-|---|---|---|
-| **All generated art** | #3 #4 #5 #17 | Also **forbidden by plan rule 2** — see §5. Ships with a typographic interface instead |
-| **The Kaplay canvas/atmosphere layer** | #7 | Kaplay is a dependency nothing imports; it stays that way. Pure atmosphere, zero mechanics |
-| **Battle-screen and screens restyle** | #6 #8 | The current screens are functional. A restyle is not a shipping blocker |
-| **Audio** | #15 | Silence is a defensible aesthetic for this game; a bad audio layer is not |
-| **Bundled typeface** | #16 | System fonts ship fine |
-| **The floor-4 executioner + boss agents** | #11 | Ships with **4 bosses, not 5**. The verdict gate still fires |
-| **The narrator-to-spec rewrite** | #12 | Per-floor voices, zone prompt files, beat significance, karma-in-prompt. The narrator *works*; this makes it better |
-| **Karma bending the world mid-run** | #10 | Karma still decides the ending. It just doesn't change the world on the way down |
-| **Floor-specific mechanics + balance re-run** | #2 | Ships with a **sanity check**, not a simulated re-tune. `BALANCE-REPORT.md` stays invalidated and says so |
-| **The Hollow ascent campaign** | #18 | An entire second campaign. Post-ship, if ever |
+**Every row names the version it comes back at.** That column is load-bearing: a cut list where
+everything is vaguely "later" is a pile, and a pile is how cut scope returns — whatever is loudest
+on the day wins. A cut item with a version already has its answer.
+
+| Cut | `PLAN.md` | Back in | Why it can wait |
+|---|---|---|---|
+| **Floor-specific mechanics + balance re-run** | #2 | **v1.2** | Ships with a **sanity check**, not a simulated re-tune. `BALANCE-REPORT.md` stays invalidated and says so |
+| **All generated art** | #3 #4 #5 | **v2.0** | **Forbidden by plan rule 2 until ~Apr 2028** — see §5.2. Not an effort question; a money one |
+| **Battle-screen redesign** | #6 | **v1.3** | The current screen is functional. A restyle is not a shipping blocker |
+| **The Kaplay canvas/atmosphere layer** | #7 | **v2.0** | Kaplay is a dependency nothing imports; it stays that way. Wants the art to sit on top of |
+| **Screens restyle** | #8 | **v1.3** | Typography and CSS only, so it is affordable — just not essential |
+| **Karma bending the world mid-run** | #10 | **v2.0** | Karma still decides the ending. It just doesn't change the world on the way down |
+| **The floor-4 executioner + boss agents** | #11 | **v2.0** | Ships with **4 bosses, not 5**. The verdict gate still fires |
+| **The narrator-to-spec rewrite** | #12 | **v1.1** | Per-floor voices, beat significance, karma-in-prompt. The narrator *works*; this makes it better — and it is the cheapest large quality gain, which is why it is first back |
+| **Audio** | #15 | **v1.3** | Silence is a defensible aesthetic for this game; a bad audio layer is not. Only with CC0/free assets that clear `SHIPPING.md` |
+| **Bundled typeface** | #16 | **v1.3** | System fonts ship fine |
+| **Ship assets** (title, store, cursors) | #17 | **v2.0** | The **icon alone is in v1** — a package needs one. The rest is art, so it waits for money |
+| **The Hollow ascent campaign** | #18 | **parked** | An entire second campaign. Only if The Void earns it (`b7`/`b8`) |
 
 ---
 
@@ -167,6 +227,73 @@ milestone, and the kill/park rule fires on two consecutive misses.
 - **The itch funnel is narrow by construction** (§5.1) — expect low play counts. `b3` asks for ≥100
   plays; a desktop download with a 2.5 GB first run may not reach it, and that is a `b3` problem to
   solve with a web demo, not a reason to widen v1.
+
+---
+
+## 9. After v1 — the increment ladder
+
+**The other half of the anti-creep device.** v1 is small because everything else has somewhere to
+go. Each release below has a **theme**, a **trigger**, and a **rough size** — no dates beyond v1.2,
+because estimating 2028 work today would be false precision dressed as a plan.
+
+The ordering principle is not "what would be nicest next". It is: **what raises quality most per
+hour, subject to what the money rules allow.** That is why every art-dependent item collapses into
+one release — they share a single gate, and it is not effort.
+
+### v1.1 — "It reads right" · ~16 h · trigger: v1 playtest feedback in hand
+
+- Whichever rungs of the cut ladder (§6) actually fired — **the `Static` rename first**.
+- **#12-lite**: per-floor narrator voices, beat significance, karma in the prompt.
+- The condition-chip and combat-log polish left over from #0.
+
+*Why first: the narrator is the thing that makes The Void not-a-roguelike-like-the-others, and this
+is the largest perceived-quality gain available for $0 and no art.*
+
+### v1.2 — "It has a floor to stand on" · ~24 h · trigger: v1.1 shipped
+
+- **#2** — the five floors get mechanics of their own, plus the real balance re-run that finally
+  retires the invalidated `BALANCE-REPORT.md`.
+- Floor 2's illusions, which also unlock **`seeThroughIllusion`** — the fourth karma action, the one
+  §3 could not wire in v1.
+
+> ⭐ **This release *is* milestone `b3`** (Mar 2027: *"Game #2 **or #1 expanded** · ≥100 plays"*).
+> Expanding The Void satisfies it without starting a second game — which is the whole point of an
+> increment ladder. Worth knowing before you start building a game #2 you may not need.
+
+### v1.3 — "It looks and sounds like something" · ~24 h · trigger: v1.2 shipped
+
+- **#8** screens restyle, **#16** typeface, **#6** battle screen — typography and CSS, all $0.
+- **#15** audio, *only* with CC0/free assets that clear the licence check in `SHIPPING.md`.
+
+*Why these three together: they are the entire set of visual/audio work that does not need money.*
+
+### v2.0 — "The full descent" · ⛔ gated on `f5`, not on effort · ~Apr 2028+
+
+**The first release that is allowed to cost anything.** Milestone `f5` (on the Plan v3 board) is what
+unlocks it, per plan rule 2 — so this release cannot be pulled forward by working harder.
+
+- **#3 #4 #5** — the art pipeline and the four generation batches (~$10.05, the first spendable
+  moment in the whole plan).
+- **#7** — the Kaplay canvas atmosphere layer. Kaplay finally gets imported, four years after being
+  added as a dependency.
+- **#17** — title, store and cursor art (the icon already shipped in v1).
+- **#11** — the floor-4 executioner and the boss agents that were M12's original premise.
+- **#10** — karma bending the world mid-run.
+
+### Parked indefinitely
+
+- **#18** the Hollow ascent campaign. An entire second campaign, and it only becomes a real question
+  if The Void earns it at `b7`/`b8`.
+
+---
+
+## 10. How to use this document
+
+- **Before starting any work item:** check §4. If it is cut, it is cut — the version is already
+  decided, and re-litigating it is the scope creep this document exists to prevent.
+- **When a new idea arrives:** §2.2, three steps, two minutes.
+- **When the hours run out:** §6, in order, top rung first.
+- **When v1 ships:** §9 becomes the plan, and this document's job is done.
 
 ---
 
