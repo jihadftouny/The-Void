@@ -273,8 +273,12 @@ insanity, push, aired. Activate the dormant 13:
   the player's only compass.
 - **Karma resets each run; the Void remembers in *flavor only*.** **[DECIDED]** The four-axis vector is
   fresh every run (fits unlocks-only + tough-but-fair balance and keeps runs self-contained). A
-  **light, non-mechanical** cross-run memory lets the narrator faintly reference who you were before —
-  haunting, never a power source. *(Persisted separately from the run save; see §12 store.)*
+  **light, non-mechanical** cross-run memory is persisted separately from the run save (see §12
+  store). ~~lets the narrator faintly reference who you were before — haunting~~
+  > **⚠ STRUCK 2026-08-31 (§22.4).** The narrator half is **overruled by `WORLD.md` §12
+  > `[LOCKED]`** — *"the narration **never** acknowledges a previous one… do not invent a diegetic
+  > justification for it later."* **`karmaMemory` stays, as a SILENT record feeding unlocks only.**
+  > It is never read by the narrator and never surfaces in prose.
 - **Karma is live from floor 1 — floor 4 is the reckoning.** **[DECIDED]** The nature state
   accumulates across the *whole* run (every floor, every act), quietly shaping mid-run effects the
   entire time. **Floor 4 (the Angelic Underground) is where that accumulated karma becomes decisive.**
@@ -741,8 +745,10 @@ keeps it unmeterable and un-gameable, and needs no new combat maths, so balance 
 > the Void is corrupting your kit anyway (§8), and there is no longer anything to hide.
 
 Also fixed here: karma must be **clamped**, must **reach the LLM prompt** (today `buildNarrationPrompt`
-reads only act and place), and its **cross-run memory must be read** — it is currently written and
-never consumed.
+reads only act and place). ~~and its **cross-run memory must be read**~~
+> **⚠ STRUCK 2026-08-31 (§22.4).** The cross-run memory must **NOT** be read by the narrator —
+> `WORLD.md` §12 `[LOCKED]` forbids it. It stays written-and-unconsumed **on purpose**, feeding
+> unlocks only. Clamping karma and getting it into the prompt are unaffected and still required.
 
 ### 14.3 Finish the three half-wired progression systems
 
@@ -1191,7 +1197,13 @@ choice that genuinely costs something — which is only meaningful because the c
 **Healing is scarce.** The current model — six potions at start, each a *full* heal, freely usable in
 battle — is too generous, and M15's own report already flagged the starting count as such.
 
-> **⚠ Interpretation flagged for the author.** The instruction was *"but make them scarcer"* without
+> **✅ CONFIRMED BY THE AUTHOR 2026-08-31 (§22.6) — the interpretation below was RIGHT.**
+> **Potions fold into consumables; there is no separate potion resource.** Healing competes for
+> backpack space, so scarcity is an inventory decision rather than a counter ticking down.
+> *Rejected: keeping the dedicated resource and merely reducing it.* ⚠ This changes the balance
+> surface, so it lands with the #2 re-run.
+>
+> ~~**⚠ Interpretation flagged for the author.**~~ The instruction was *"but make them scarcer"* without
 > picking between two options. Recorded as: **potions fold into the consumable system** — healing
 > becomes an item you find and carry, not a separate counter with its own button — **and healing is
 > scarce overall.** If the intent was instead to *keep* the separate potion resource and merely
@@ -1473,7 +1485,13 @@ different skills — which means **20 signature skills to author across five cla
 **Max level 20** (§19.5) gives roughly that many draft picks, so the numbers line up without further
 tuning — though the exact XP curve is still balance work.
 
-### 21.6 The codex explains mechanics, never the world **[DECIDED 2026-08-27]**
+### 21.6 ~~The codex explains mechanics, never the world~~ — **CODEX CUT [DECIDED 2026-08-31]**
+
+> **⚠ THERE IS NO CODEX.** Superseded by §22.11: tooltips at the point of use carry the load.
+> Removes a screen, a net-new persistent store and an ongoing authoring obligation.
+> **Accepted cost:** the player cannot look up a thing they met two floors ago.
+> **The rule below still governs TOOLTIPS** — they explain mechanics, never the world, and karma
+> stays exempt and unreadable (§13). Only the codex screen is gone.
 
 | In the codex | Never in the codex |
 |---|---|

@@ -221,6 +221,10 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
    list from data. **Must be DIRECTION-AWARE** (the Hollow ascent runs 5→1).
 4. **Floor-4 karma counts double** in the verdict. No new state.
 5. **Rename conditions** to the design vocabulary (§14.4). Needs a `SAVE_VERSION` bump + migration.
+   ⚠ **This is TWO renames, not one** (added 2026-08-31): §14.4 aligns the six stat pairs
+   (`healthy/sick` → `Hardy/Frail` etc.), **and §22.3 separately renames `insanity`** so the
+   psychosis theme stays unpointable. **A builder doing only §14.4 leaves `insanity` shipping.**
+   The skill **"Maddening Gaze"** and the **"Clarity Draught"** follow the same ruling (→ #13).
 6. **Redefine Quick/Slow** as the **tempo gauge** (§16.1) — `initiativeOrderTwist` is a dead no-op.
 7. **Rework the level-up draft** (§19.5) — remove `stat` from `draft.ts` `CATEGORY_WEIGHTS`, add the
    **per-level stat allowance**, and add a **level cap of 20** (none exists in `src/` today).
@@ -293,7 +297,15 @@ store accumulates things the run never reads; the feat list is a seed.
 bends the world, never reaches the LLM prompt, is never clamped, and its cross-run memory is written
 and never read.
 
-> **⚠ THE CROSS-RUN MEMORY HALF IS BLOCKED ON AUTHOR ROUND A10 — do not build it yet.**
+> **✅ RULED 2026-08-31 (A10, `GAME-DESIGN.md` §22.4) — DO NOT BUILD THE CROSS-RUN HALF AT ALL.**
+> `WORLD.md` §12 `[LOCKED]` wins: **the narrator never references a previous run.** `karmaMemory`
+> stays written-and-unconsumed **on purpose**, feeding unlocks only. **The rest of #10 — karma
+> bending the world, reaching the prompt, being clamped — is unaffected and should proceed.**
+>
+> *(Was "BLOCKED ON AUTHOR ROUND A10 — do not build it yet." The round is answered; the answer is
+> not "wait", it is "never".)*
+>
+> ~~⚠ THE CROSS-RUN MEMORY HALF IS BLOCKED ON AUTHOR ROUND A10.~~
 > `WORLD.md` §12 `[LOCKED]` says *"**the narration never acknowledges a previous one** … do not
 > invent a diegetic justification for it later."* `GAME-DESIGN.md` §7 says the memory *"lets the
 > narrator faintly reference who you were before."* **Wiring this item as written would break a
@@ -319,7 +331,7 @@ one-sentence endings, placeholder boss names, and no descriptions anywhere. **On
 this.** **Blocked on #1 and on author rounds A8 AND A9** — A8 settles the endings' voice and whether
 the player has a name (you cannot write the endings before that); A9 settles whether `insanity` can
 be named at all, which decides a condition name, a skill name and an item name.
-**Also carries all ELEVEN content defects, C1–C11:** the two reserved words used casually in shipped
+**Also carries all TWELVE content defects, C1–C12:** the two reserved words used casually in shipped
 strings · the class picker giving away the concealed fact · the intro sending you to the wrong place ·
 the narrator never being told which floor it is on · **the line that makes the floor-4 angels a
 hallucination** · two different items both named "Clarity Draught" · the combat log printing raw
@@ -415,8 +427,8 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
 one **parked** (localisation), **forty-three bugs** (G1–G46; **there is no G38**; counted by script)
-— **forty-one with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eleven
-content defects** (C1–C11) for #13. **`G32` was ruled on 2026-08-30 —
+— **forty-one with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **twelve
+content defects** (C1–C12) for #13. **`G32` was ruled on 2026-08-30 —
 wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
 before quoting it.**)*
 

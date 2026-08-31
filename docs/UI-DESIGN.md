@@ -458,7 +458,11 @@ afterwards** — the same argument already made and accepted for audio hooks (`A
 
 ### Onboarding — teach in place, never with a scripted tutorial
 
-**Tooltips on everything + a codex that fills in as you go.** No forced tutorial sequence.
+**Tooltips on everything.** ~~+ a codex that fills in as you go~~ No forced tutorial sequence.
+
+> **⚠ THE CODEX IS CUT — `[DECIDED 2026-08-31]`, `GAME-DESIGN.md` §22.11.** Tooltips at the point
+> of use carry the load. Removes a screen, a net-new persistent store and an ongoing authoring
+> obligation. **Accepted cost:** the player cannot look up a thing they met two floors ago.
 
 - **Tooltips:** every condition chip, skill, item, stat and perk explains itself on hover or click.
   This is what makes 25 conditions learnable without a manual. **Depends on the `description` fields
