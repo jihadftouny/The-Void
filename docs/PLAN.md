@@ -309,7 +309,24 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 
 > **⚠ #14 carries THREE severe packaging defects that no other unit covers — and one of them means
 > the ship command has never run:**
-> **✅ What pass 13A VERIFIED works, so #14 does not need to re-establish it:**
+>
+> - **G44 — `npm run desktop:pack` HAS NEVER SUCCEEDED.** A `$comment` key on line 2 of
+>   `electron-builder.json` is rejected by the schema (`additionalProperties: false`, only `$schema`
+>   allowed), and validation runs *before* any packaging work. The file has one commit and the key is
+>   in it, so **every pack since the file was created has failed.** One-line fix — but **verify
+>   end-to-end**, because `directories.output` collides with Vite's `dist`.
+> - **G37 — first run starts TWO concurrent 2.5 GB model downloads.** `ensureNarrator` assigns only
+>   after its await, so boot and the first generate both see `null`. Measured: 2 calls where 1 is
+>   expected. Two writers race into the same file, plus a second `loadModel` (VRAM OOM on min spec).
+> - **G6 (escalated) — the shipped game has NO crash diagnostics.** The log dir resolves inside the
+>   asar, `mkdirSync` throws, the stream nulls, and every log call becomes a **silent no-op** — while
+>   the app still prints "logging to &lt;path&gt;". It works in dev only because `__dirname` is the real
+>   repo folder, which is why it survived nine audit rounds.
+>
+> **✅ What pass 13A VERIFIED works, so #14 does not need to re-establish it.** ⚠ **Read the
+> qualifier first: the pack was run from a SCRATCH COPY with the G44 fix applied. The repo as it
+> stands still cannot pack at all.** What follows is what will work *once G44 is fixed* — not a
+> description of today.
 > - **The production build runs under `file://`** — a real Electron `loadFile('dist/desktop.html')`
 >   with the real preload. No CSP or module-loading breakage, CSS applied, `window.void` present,
 >   renderer booted. **This path was never exercised before** (`desktop` uses the dev server and
@@ -327,19 +344,6 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 > scratch directory. The same files at 250 characters load fine, and a real install lands near 175.
 > **Not a shipping issue.** Discriminator if it resurfaces: measure the length of the path to
 > `@node-llama-cpp/win-x64-vulkan/bins/win-x64-vulkan/ggml-cpu-sapphirerapids.dll`.
->
-> - **G44 — `npm run desktop:pack` HAS NEVER SUCCEEDED.** A `$comment` key on line 2 of
->   `electron-builder.json` is rejected by the schema (`additionalProperties: false`, only `$schema`
->   allowed), and validation runs *before* any packaging work. The file has one commit and the key is
->   in it, so **every pack since the file was created has failed.** One-line fix — but **verify
->   end-to-end**, because `directories.output` collides with Vite's `dist`.
-> - **G37 — first run starts TWO concurrent 2.5 GB model downloads.** `ensureNarrator` assigns only
->   after its await, so boot and the first generate both see `null`. Measured: 2 calls where 1 is
->   expected. Two writers race into the same file, plus a second `loadModel` (VRAM OOM on min spec).
-> - **G6 (escalated) — the shipped game has NO crash diagnostics.** The log dir resolves inside the
->   asar, `mkdirSync` throws, the stream nulls, and every log call becomes a **silent no-op** — while
->   the app still prints "logging to &lt;path&gt;". It works in dev only because `__dirname` is the real
->   repo folder, which is why it survived nine audit rounds.
 
 ---
 
