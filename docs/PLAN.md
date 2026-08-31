@@ -258,6 +258,15 @@ marked BLOCKING; free now, a rewrite after) and **a free-text input** for talkin
 #6 must not start before #2: building on a battle loop with no floor-modifier hook is the most
 expensive mistake available.
 
+> **⚠ #8 also carries the CODEX, which was `[DECIDED]` twice and named in no work item until
+> 2026-08-31.** `UI-DESIGN.md` §14 commits to *"tooltips on everything **+ a codex that fills in as
+> you go**"* and flags it as **"⚠ net-new state, not a reuse"**; `GAME-DESIGN.md` §21.6 decides its
+> content split. But `grep -i codex docs/PLAN.md` returned **zero** — unlike the settings screen and
+> the content warning, neither section routed itself into a unit. **Net-new persistent state plus a
+> screen is not a footnote to a restyle**; scope it explicitly or split it out. *(Found by round 14B,
+> which correctly declined to file it as a fiction finding — it is a propagation failure, the sixth
+> of that kind, and exactly what `FINDINGS.md` rule 5 exists to prevent.)*
+
 ### Tier 2 — systems that exist but do nothing
 
 **#9 content reachability** — 19 consumables, 4 uniques and 14 of 15 relics have **no acquisition
