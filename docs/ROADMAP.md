@@ -129,7 +129,7 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
 
 ### M5 — Inventory & equipment ~~(Tibia-style)~~ **(text-based — `GAME-DESIGN.md` §22.9)**  ★ first big new interactive system
 - **Goal:** A real inventory game on screen.
-- **Done when:** a paperdoll of **seven slots — head, body, hand ×2, feet, trinket ×2**
+- **Done when:** a ~~paperdoll~~ **text list (§22.9)** of **seven slots — head, body, hand ×2, feet, trinket ×2**
   (`GAME-DESIGN.md` §14.7; amulet/ring/legs/back are **cut**) + backpack.
   ⚠ **The shipped engine has 9 slots — a migration is needed.** Original line: (helmet, amulet, two hands, armor, legs, boots, ring, ammo) + backpack
   container; equip/unequip across slots; item comparison; **equipped effects apply** to stats/combat;

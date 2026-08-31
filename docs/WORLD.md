@@ -527,7 +527,9 @@ This settles how it must be written:
 
 > **✅ CONFIRMED 2026-08-31 — this rule governs the ENDINGS too** (`GAME-DESIGN.md` §22.1).
 > The shipped anchors in `story.json` are third person and name the player
-> (*"{playerName} is judged worthy and rises from the Void, made whole"*) — **they are the defect.**
+> (*"{playerName} is judged worthy and rises from the Void, made whole"*) — **they are the defect,
+> and so is one ENGINE line**: `src/llm/narrate.ts:28` speaks the name inside the narration facts
+> (*"You are {name}, a {class}…"*), which content authoring can never fix (`FINDINGS.md` G47).
 > This file already renders both endings correctly, and that rendering wins.
 >
 > **The player DOES have a name** (§22.2) — typed at the start. It is a **player-facing label**:

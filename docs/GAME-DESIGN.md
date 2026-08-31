@@ -278,7 +278,9 @@ insanity, push, aired. Activate the dormant 13:
   store). ~~lets the narrator faintly reference who you were before — haunting~~
   > **⚠ STRUCK 2026-08-31 (§22.4).** The narrator half is **overruled by `WORLD.md` §12
   > `[LOCKED]`** — *"the narration **never** acknowledges a previous one… do not invent a diegetic
-  > justification for it later."* **`karmaMemory` stays, as a SILENT record feeding unlocks only.**
+  > justification for it later."* **`karmaMemory` stays, as a SILENT record — ⚠ with NO consumer
+> today: the unlock path reads `RunSummary`, never `karmaMemory` (`unlockStore.ts:396-406`). Kept
+> pending a future non-narrated use, or deletion.**
   > It is never read by the narrator and never surfaces in prose.
 - **Karma is live from floor 1 — floor 4 is the reckoning.** **[DECIDED]** The nature state
   accumulates across the *whole* run (every floor, every act), quietly shaping mid-run effects the
@@ -446,7 +448,7 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
   — are absorbed as broad tags). Each has a genuinely different behavior hook. **[DECIDED 2026-08-05]**
 - **A spare / release action** in combat for karma-weighted enemies — a real moral/tactical choice
   (sometimes riskier or costlier than killing) that moves the Nature axes. **[DECIDED]** *(New battle
-  action alongside fight/cast/potion/run — see §5.)*
+  action alongside fight/cast/item/run — see §5; ~~potion~~ folded into items, §18.4/§22.6.)*
 - **Light elite-affix layer:** a handful of modifiers create elite variants of any family — e.g.
   *Ravenous* (+damage), *Warped* (+illusion/insanity), *Ancient* (+stats), *Blessed/Cursed*
   (karma-reactive). **[DECIDED]** Data-driven; the original's unbuilt name-affixes, realized.
@@ -800,7 +802,7 @@ balance surface** — it must be re-measured in the balance re-run, not assumed.
 conflict also needs a clear UI state so the player understands *why* the off-hand is unavailable.
 
 **Backpack: a fixed slot count, no weight.** The bag holds N items; full is full. Readable at a
-glance, draws as a grid, and the interesting decision is **what to drop** when something better falls
+glance, draws as a **text list** (§22.9 — ~~a grid~~), and the interesting decision is **what to drop** when something better falls
 late in a run. Weight systems add arithmetic the player has to do in their head without adding much
 choice. The exact N (12? 16?) is a balance number.
 
@@ -1202,7 +1204,9 @@ battle — is too generous, and M15's own report already flagged the starting co
 > **Potions fold into consumables; there is no separate potion resource.** Healing competes for
 > backpack space, so scarcity is an inventory decision rather than a counter ticking down.
 > *Rejected: keeping the dedicated resource and merely reducing it.* ⚠ This changes the balance
-> surface, so it lands with the #2 re-run.
+> surface, so it lands with the #2 re-run. ⛔ **And #9 is a hard prerequisite** — the consumable
+> path that replaces potions is unreachable until #9 fixes catalog-item resolution; landing this
+> with #2 alone ships a game with no in-battle healing (§22.6).
 >
 > ~~**⚠ Interpretation flagged for the author.**~~ The instruction was *"but make them scarcer"* without
 > picking between two options. Recorded as: **potions fold into the consumable system** — healing
@@ -1354,7 +1358,13 @@ engine-owned; consequence stays real.**
 
 ### ⚠ Free talk + earnable outcomes is an exploit, and needs a cap
 
-**Flagged, with a proposed fix the author may overrule.** If talking is free *and* can earn a
+> **✅ ADOPTED 2026-08-31 (§22.7) — with the parts made explicit.** Part **1** (one concession per
+> fight) is the ruling. Part **2** (judge the conversation whole) and part **4** (rate-limit the
+> calls) stand as engineering guidance under it. Part **3** (a boss growing less willing) is
+> **rejected** — §22.7 turned down per-boss willingness budgets as authoring cost for a problem
+> part 1 already solves. Talking itself stays free and uncapped.
+
+~~**Flagged, with a proposed fix the author may overrule.**~~ If talking is free *and* can earn a
 mechanical concession, the optimal play is to **talk repeatedly until the model grants one.** That is
 not a hypothetical — it is simply the dominant strategy, and it would also mean a model call per
 line with no bound.
@@ -1499,10 +1509,10 @@ tuning — though the exact XP curve is still balance work.
 > **The rule below still governs TOOLTIPS** — they explain mechanics, never the world, and karma
 > stays exempt and unreadable (§13). Only the codex screen is gone.
 
-| In the codex | Never in the codex |
+| In a tooltip | Never in a tooltip |
 |---|---|
 | Conditions, skills, items, stats | Lore, world history, what the Void is |
-| The bestiary (fills as you meet things — **net-new state**, see `UI-DESIGN.md` §14) | **Karma, in any form** |
+| ~~The bestiary (fills as you meet things — net-new state)~~ **cut with the codex — it IS the net-new store §22.11 removed** | **Karma, in any form** |
 
 **The split is the point.** The mechanics are a system to *master*, and a game with 25 conditions and
 a tempo gauge owes the player clarity about them. **The world is something to piece together** — and
@@ -1537,7 +1547,8 @@ carve-out written into §8, and one voice start-to-finish won.
 >
 > **This is an ENGINE change, not a content change.** `src/llm/narrate.ts:28` already speaks the
 > name in narration: `` `You are ${e.name}, a ${e.classId}, at the threshold of the descent.` `` —
-> a fact line that flows into **every prompt the model receives** and into the persisted story
+> a fact line that flows into **the opening prompt and the next five beats** (it then rolls out of
+> the 5-beat memory window, `MAX_REMEMBERED_BEATS`) and into the persisted story
 > memory. It is fed by `GameEvent.player-created.name`, stamped in `game.ts:291`. **#13 (content
 > authoring) will never catch it, because it is not authored text.**
 >
@@ -1547,15 +1558,16 @@ carve-out written into §8, and one voice start-to-finish won.
 > |---|---|
 > | `narrate.ts:28` (via `game.ts:291`) | *"You are {name}, a {class}…"* — **engine**, in every prompt |
 > | `story.json:10` (via `game.ts:299`) | the **intro**: *"{playerName}, to delve into…"* |
-> | `story.json:31` (via `game.ts:341`) | the legacy `END.` anchor — a bare `"{playerName}"` |
-> | `story.json:36` and `:40` (via `game.ts:444`) | the two ending anchors — the ones §22.1 quoted |
+> | `story.json:36` (via `game.ts:444`) | the **grace** ending anchor |
+> | `story.json:40` (via `game.ts:341`) | the **damnation** ending anchor |
+> | `story.json:31` — **no live call site** | the legacy `END.` anchor; only `getEnding()` reads it, and only tests call that |
 >
-> **Permitted labels, unaffected:** `desktop/game.ts:157` (the HUD) and `view-model.ts:320` →
-> `rowModel('Name', …)` (the character sheet). The surface division in §22.2 is the right rule; it
+> **Permitted labels, unaffected:** `desktop/game.ts:157` (the HUD) and `view-model.ts:320` (the sheet's `name` field) rendered by
+> `rowModel('Name', …)` at `desktop/game.ts:313`. The surface division in §22.2 is the right rule; it
 > was simply not a description of the current code.
 >
-> ⚠ **Three tests assert the token IS present and will fail on the fix:** `story.test.ts:24`, `:66`,
-> `:72`. Update them with the change, not after.
+> ⚠ **Three test blocks (four assertions) require the token and will fail on the fix:**
+> `story.test.ts:24`, `:66`, and `:72-73`. Update them with the change, not after.
 
 ### 22.2 The player DOES have a name — typed, and never spoken by the narrator (A8b)
 
@@ -1585,7 +1597,7 @@ careful design choice negotiable.
 > diagnosis — the §21.1 set (`Lucid`, `Clouded`, `Hardy`, `Frail`) is the register to match.
 >
 > ⚠ **The cited precedent has not actually happened in code.** This section said §21.1 *"already
-> renamed `wise/fool` → `Lucid/Clouded`"* — it renamed them **in the document**; `condition.ts:60,68`
+> renamed `wise/fool` → `Lucid/Clouded`"* — it renamed them **in the document**; `condition.ts:61,68`
 > still declare `wise` and `fool`. That rename is #1.5's unbuilt work, which is why both renames sit
 > in the same item.
 >
@@ -1594,7 +1606,7 @@ careful design choice negotiable.
 > and **14 player-facing `INSANITY_STRINGS`**); `classKit.ts:136` (`MENTAL_CONDITIONS`, the
 > Neuromancer's Detonate); **six skills, not one** — `mindSpike`, `corrupt`, `warpMind`,
 > `sinfulWhisper`, `maddeningGaze`, `echoedHex`; three data files; and ~12 tests.
-> **One thing works in our favour:** `component-model.ts:123` types `CONDITION_TONE` as
+> **One thing works in our favour:** `component-model.ts:116` types `CONDITION_TONE` as
 > `Record<ConditionType, …>`, so a missed rename **breaks the build** rather than shipping quietly.
 
 ### 22.4 The narrator NEVER references a previous run — §12 wins (A10)
@@ -1603,7 +1615,9 @@ careful design choice negotiable.
 diegetic justification for it later."* **Strike the narrator clause from §7** — *"lets the narrator
 faintly reference who you were before"*.
 
-`karmaMemory` / `RunMemory` **stay**, as a *silent* record feeding unlocks only. Restart remains pure
+`karmaMemory` / `RunMemory` **stay**, as a *silent* record — ⚠ *corrected 2026-08-31: "feeding
+unlocks only" was false; **it feeds nothing** — the unlock path reads `RunSummary`, never
+`karmaMemory`. Write-only data, kept pending a future non-narrated use or deletion.* Restart remains pure
 game convention with no in-fiction explanation.
 
 **Consequences to apply:** drop *"its cross-run memory must be read"* from §14.2; remove that half of
@@ -1628,8 +1642,10 @@ turned a four-axis judgement into a two-axis one.
 > ⚠ **A THIRD consequence, which this section originally dropped.** `deal.ts:82,100` gates the
 > **grace sacrifice-deal pool** on `reverenceDesecration >= 3`. With only `desecrateShrine: -2`
 > wired, reverence is always ≤ 0 — so **the entire grace deal pool is dead content**, and with it
-> **`mirror-shard`, the only hard-coded catalog item in the game** and therefore the only
-> non-generated item a player could ever hold. Wiring the positive actions revives all of it.
+> **`mirror-shard`, the only hard-coded item on any ACQUISITION path** — the class starting weapon
+> and armour (`classKit.ts:73-125`) are the only other non-generated items, and they are equipped
+> at creation, never acquired. *(Corrected 2026-08-31: this claimed mirror-shard was "the only
+> hard-coded catalog item in the game", which the starting gear falsifies.)* Wiring the positive actions revives all of it.
 
 > **Sequencing note:** floor 2's illusions are the natural trigger for `seeThroughIllusion` and do
 > not exist yet, so that one lands with the floor-mechanics work.
@@ -1649,7 +1665,9 @@ against, but it makes healing a number rather than a choice.
 >
 > **Folding potions into consumables removes the only reachable in-battle heal.** The consumable
 > path that is supposed to replace it **does not work today**: `consumableOptions` only lists an item
-> whose `defId` resolves in a catalog, and the sole `ItemInstance` producer stamps `gen:*` ids that
+> whose `defId` resolves in a catalog, and the sole `ItemInstance` producer **on the loot path**
+> (`rarityGen.ts:116`) stamps `gen:*` ids that *(the one other producer — the `mirror-shard` deal —
+> is dead per §22.5, and it is a relic with no `use` array anyway)*
 > never resolve. The picker is **always empty** (that is `FINDINGS.md` **G14**, fixed by **#9**).
 >
 > **`PLAN.md` currently puts #9 in the "independent, sequenced by judgement" bucket — NOT before
@@ -1681,7 +1699,7 @@ icons ship. The equipment paperdoll art goes with them.
 |---|---|---|
 | Item-icon assets | ~68 (204 images, ~$13.67) | **0** |
 | Game art | 50 assets (150 images, ~$10.05) | **unchanged** |
-| **Total art budget** | ~$23.72 | **~$10.05** |
+| **Total art budget** | ~$23.72 | **~$10.05 now; ~$10.45 for all 52** |
 
 **Everything world-facing still ships** — all **50**: 30 enemy sprites, 5 floor backdrops,
 5 class portraits, 5 boss portraits, **3 Sin-boss identities** (The Cruelty, The Avarice,
@@ -1690,8 +1708,9 @@ icons ship. The equipment paperdoll art goes with them.
 Sin-boss identities, including The Delusion, the very boss §22.5 exists to make reachable. A
 reassurance that nothing was lost should not itself lose three assets.)*
 
-**The bigger win is not the money.** §13's own caveat called bespoke icons *"a permanent commitment:
-every new item needs art forever."* That obligation is now gone, which is what makes 22.9 affordable.
+**The bigger win is not the money.** §13's own caveat: *"This is a permanent commitment, not a one-off cost. Bespoke icons mean every
+item added to the game from now on needs art before it can ship."* That obligation is now gone,
+which is what makes 22.9 affordable.
 
 ### 22.9 The inventory goes TEXT-BASED — the Tibia-style UI is dropped
 

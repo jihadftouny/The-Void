@@ -117,7 +117,7 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
   - [ ] **Combat feel** — does it read tough-but-fair? Enemies missing sometimes, heavier armor/shield/
         meeting str-req/playing Scavver each *visibly* making you harder to hit. Wrong = trivially easy,
         or defense choices produce no felt difference. (All constants are **M15 placeholders**.)
-- **M5 (equipment engine — Tibia UI DEFERRED)** — the inventory paperdoll is now the authoritative
+- **M5 (equipment engine — ~~Tibia UI DEFERRED~~ visual UI DROPPED 2026-08-31, §22.9)** — the inventory (text) is now the authoritative
   equipment system (equip/unequip/swap across 9 slots + backpack — ⚠ **the design is now SEVEN slots**
   (`GAME-DESIGN.md` §14.7); the shipped engine still has 9 and needs a migration; combat & AC read from the slots; save
   migrated v2→v3). **The bespoke Tibia-style visual UI was deliberately NOT built** — it needs your
@@ -125,15 +125,17 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
   - [x] ~~**The Tibia visual paperdoll UI is a dedicated collaboration pass with you**~~ **— DROPPED
         2026-08-31** (`GAME-DESIGN.md` §22.9): the inventory is **text lists**, so there is no
         paperdoll to design. ~~(drag-drop slots,
-        backpack container, item tooltips/comparison). The engine underneath is done & tested — tell me
+        backpack container, item tooltips/comparison).~~ The engine underneath is done & tested — the
+        UI ships as **text lists**, so there is nothing left to co-design here.
         when you want to design the UI together.
   - [ ] **Equip/inventory UX feel** — checkable once that UI exists (equip/unequip/swap, the shop's
-        "your current gear" display).
+        "your current gear" display). ⚠ *2026-08-31: there is no shop (M7 deleted it) and no separate
+        visual UI — check this against the **text inventory** instead.*
 - **M6 (items content — relics, uniques, consumables)** — 15 relics, 4 named uniques, 19 consumables, a
   triggered-effect system (6 combat trigger points), and a seeded rarity generator. All engine + tested;
   no in-UI display yet:
   - [ ] **In-UI item/relic/consumable display** — names, effects, and a *use-consumable* control are NOT
-        surfaced in the UI yet (render follow-up, pairs with the Tibia UI pass). Confirm it's genuinely
+        surfaced in the UI yet (render follow-up — pairs with the **text-inventory** pass, ~~Tibia UI~~). Confirm it's genuinely
         absent (logic exists & tested), not half-wired.
   - [ ] **Void Pact heal-scope (design call)** — the "cannot heal" relic currently blocks potion/consumable/
         relic heals but NOT the regeneration condition or class lifesteal (those systems can't see your
@@ -248,7 +250,8 @@ landing on the Intel iGPU. Verified by headless tests (**378 at the time; 1029 t
       is fixed: `electron-builder` extracts `winCodeSign`, which contains symbolic links, and
       Windows refuses with *"Cannot create symbolic link: A required privilege is not held."*
       This is a machine privilege, not a repo problem.
-      > **Context:** the pack command has **never once succeeded** (`FINDINGS.md` **G44**) because of
+      > **Context:** the pack command **had never once succeeded** until 2026-08-31 (`FINDINGS.md`
+      > **G44**, now **FIXED** — the config validates). The historical cause:
       > a one-line config defect. A verification run with that defect fixed got all the way through
       > app packaging — producing a **correct** `app.asar`, with the GPU probe and the model loader
       > both working from inside it — and then hit this privilege wall. So the one-line fix is

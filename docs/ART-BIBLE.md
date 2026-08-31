@@ -341,7 +341,7 @@ principle is **what constrains what** — never generate a thing before the thin
 | **2** | **Characters** — 5 class portraits | Must read against the environments. They also anchor the recursion set, so they cannot come after the enemies that mirror them | 5 |
 | **3** | **Enemies** — 23 families + 7 Sins | Conditioned on both. The five mirror-enemies are versions of the *characters*, which must exist first. *(Ash-Wretch deferred — §4b)* | **30** |
 | **4** | **Bosses** — 5 portraits + 3 Sin identities | The most specific and most authored assets; they inherit everything above. *(Warden executioner deferred — §4b)* | **8** |
-| **5** | **Interface furniture** — if any | Designed *against* finished art, never before it. See the open question below | ? |
+| **5** | **Interface furniture** — **0, none** (§15: no generated interface art) | Designed *against* finished art, never before it. See the open question below | ? |
 
 **Why interface furniture is last and not first**, against the author's initial instinct: menus and
 buttons are the one group whose job is to *not* compete with the art. Designing them before the art
@@ -447,7 +447,7 @@ Learned from probe 01. **Every one of these must be enforced by the generation s
    **Gate: sample the four corner pixels; reject and regenerate anything whose corners are not
    near-black.** Cheap, deterministic, catches it every time.
    > **⚠ SCOPE — this gate does NOT apply to floor backdrops.** It covers the flat-black classes only:
-   > enemy sprites, class and boss portraits, item icons, and the altar/shrine. **Floor backdrops are
+   > enemy sprites, class and boss portraits, and the altar/shrine *(~~item icons~~ — cancelled §22.8)*. **Floor backdrops are
    > exempt**, because §4's `[LOCKED]` colour ramp makes floor 2 *"blinding white + red flecks"* and
    > floor 4 *"bone white, warm, luminous"* — a literal corner test would reject and regenerate both
    > on **every** attempt: an unbounded loop that burns batch money and never terminates. Worse,
@@ -577,8 +577,9 @@ The design record was genuinely silent on these. Guessing produced the medieval-
   black particles. **24 families × 5 affixes = 120 combinations for zero extra assets**, consistent
   with the one-sprite-plus-effects rule, and instantly readable — which matters, because an elite
   that looks identical to a trash mob is a real legibility problem when it hits much harder.
-- ~~**Item icons — deferred again, deliberately.**~~ **SUPERSEDED §13 (2026-08-26): bespoke, one icon
-  per item, as a fifth batch.** The deadlock broke when the slot set landed. *(Original note:)* M5's Tibia-style inventory is still an unbuilt
+- ~~**Item icons — deferred again, deliberately.**~~ ~~**SUPERSEDED §13 (2026-08-26): bespoke, one icon
+  per item, as a fifth batch~~ — **CANCELLED 2026-08-31: no item icons ship at all** (§13 banner;
+   `GAME-DESIGN.md` §22.8)**.** ~~The deadlock broke when the slot set landed.~~ *(Original note:)* M5's Tibia-style inventory is still an unbuilt
   collaborative pass. Icons designed before that screen exists risk being the wrong size, shape or
   density. **Revisit only after the inventory has a real design**, then fit icons to it. Not in any
   batch until then.
@@ -726,9 +727,9 @@ None of these were on any list, and a product cannot ship without the first thre
 > Total art budget falls from **~$23.72 to ~$10.05** buildable now (**~$10.45** for all 52 once
 > Ash-Wretch and the Warden executioner exist in code).
 >
-> **The money was not the point.** This section's own caveat called bespoke icons *"a permanent
-> commitment: every new item needs art forever"* — and that obligation is what made the item count
-> an art-budget question. With it gone, the game ships **more** weapons and armour, not fewer.
+> **The money was not the point.** This section's own caveat — *"a permanent commitment, not a one-off cost… every item added to the
+> game from now on needs art before it can ship"* — is what made the item count an art-budget
+> question. With it gone, the game ships **more** weapons and armour, not fewer.
 >
 > *Nothing below this banner is live.*
 
@@ -796,9 +797,9 @@ saying explicitly, because it governs every future asset question.
 |---|---|
 | Enemy sprites | Panel borders and frames |
 | Floor backdrops | Buttons and their states |
-| Class and boss portraits | The inventory grid's cells and rules |
+| Class and boss portraits | The panels and rules that frame them *(~~the inventory grid~~ — text lists, §22.9)* |
 | The altar and shrine | Dividers, headers, scrollbars |
-| **Item icons** — a relic is a *thing*, like a creature | Ornament of any kind |
+| ~~**Item icons** — a relic is a *thing*, like a creature~~ *(cancelled §22.8 — no item art)* | Ornament of any kind |
 
 An item icon is a **picture of an object in the world**, exactly as an enemy sprite is a picture of a
 creature. A panel border is **chrome around it**. So the inventory is a **flat ruled grid** — no

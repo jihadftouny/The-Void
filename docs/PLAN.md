@@ -14,22 +14,26 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
   #0 critical-engine-bugs ─> #1 engine-foundations ─┬─> #2 floor-mechanics ─┬─> #6 battle-screen ─┬─> #7 canvas-layer
                                                     │   (+ balance re-run)  │                     └─> #8 screens-restyle
                                                     └─> #13 content authoring
+  #9 content-reachability ─> #2  (⛔ hard prerequisite — §22.6: potions fold into consumables,
+                                  and the consumable path is dead until #9 fixes it)
   #3 art-pipeline ───────┬─> #5 art batches (4, gated) ──> #7 canvas-layer
   #4 probe 04 + approve ─┘
-  #9 #10 #11 #12 #14 — independent, sequenced by judgement
+  #10 #10a #11 #12 #14 — independent, sequenced by judgement
 ```
 
-**Unblocked right now: #0, #3, #4.** *(#1 was unblocked until 2026-08-28; **#0 now precedes it**, because
+**Unblocked right now: #0, #3, #4, and three-quarters of #10a** (every karma action except
+`seeThroughIllusion`, which needs floor-2 illusions and lands inside #2). *(#1 was unblocked until 2026-08-28; **#0 now precedes it**, because
 #0 fixes the equip resolution path that #1's change 1 and change 10 both build on top of.)*
 
 ---
 
 ### Tier 0 — the engine is broken in ways the test suite does not see
 
-**#0 `critical-engine-bugs`** — **thirty-two defects** found by discrepancy passes 5B, 6A, 7A, 8A, 9A, 11A, 11B **and 12A**.
+**#0 `critical-engine-bugs`** — **thirty-three defects** found by discrepancy passes 5B through 15A
+and the 2026-08-31 validation audit.
 **Every one verified by running the real engine, and every one passing 1029 tests and a clean
 typecheck.** Full evidence in `FINDINGS.md` §4
-(**G11–G46; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
+(**G11–G47; there is no G38**). This unit exists because these are not polish; **three of them mean whole shipped systems
 do nothing at all.**
 
 1. **G11 — no found item can ever be equipped.** `equipment.ts` resolves by `defId` only, so every
@@ -145,6 +149,15 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
     instance of the same clear-before-check mechanism as G13 and G21, at a beat neither covers —
     **fix all three together.** *(Surfaced by round 11B's player-sequence traversal, which found it
     below the bar for its own territory because it is not a document contradiction.)*
+32. **G46 — the engine stamps second-person text on ENEMY events.** The enemy's bleed onset reads
+    *"Your skin is ruptured!"* — `condition.ts` pushes subject-agnostic second-person `text` and
+    `format.ts` prefers it over its own correct subject-aware template. Latent behind G18. *(→ #0c.
+    Reached the coverage cells 2026-08-30 and this list only on 2026-08-31 — the fourth
+    cells-vs-prose drift.)*
+33. **G47 — the narrator speaks the player's NAME.** `narrate.ts:28` ships *"You are ${e.name}…"*
+    into the opening prompt and the first five story beats — an **engine-side** break of §22.1's
+    voice ruling that #13 can never fix, because it is not authored text. *(→ #0b. Three tests
+    assert the token exists and change with the fix.)*
 
 > **Not in this unit: G41** — dev tooling (`scripts/desktop-dev.mjs`), blocks nothing, and cannot
 > affect a packaged build. **Fix it early anyway:** it orphans the Vite server on quit, so every
@@ -152,7 +165,7 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 > play-test that follows a quit is testing the wrong build, and the terminal error looks unrelated.
 >
 > **Not in this unit: G44, G37 and the escalated G6** — all three are **packaging** defects and
-> belong to **#14**. **G44 is the register's only `⛔⛔ blocks shipping` row: `npm run desktop:pack`
+> belong to **#14**. **G44 was the register's only `⛔⛔ blocks shipping` row: `npm run desktop:pack`
 > ~~has never once succeeded~~ — **✅ FIXED 2026-08-31 (§22.12); the config now validates.** See
 > #14 below. *(This note said "both" and omitted G44 until
 > 2026-08-30, which left #0's exclusion ledger short by one: 35 ids exist in the G11–G45 range, the
@@ -183,7 +196,7 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 > | Unit | Covers | Principal files |
 > |---|---|---|
 > | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), G29, G30, G31, G32, G34, G35, G36, G39, G43, **G45** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
-> | **#0b `narration-coverage`** | G13, G21, **G42** | `llm/narrate.ts`, `data/story.json`, `desktop/game.ts` (the `narrate()` clear-before-check) |
+> | **#0b `narration-coverage`** | G13, G21, G42, **G47** | `llm/narrate.ts`, `data/story.json`, `desktop/game.ts` (the `narrate()` clear-before-check) |
 > | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, G33, G40, C7, **G46** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
 > **`G2` is deliberately in no unit** — *"winning leaves a resumable save"* still has **no fix
@@ -197,10 +210,11 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 
 > **✅ G15 was RULED on 2026-08-31 (§22.5): WIRE the four missing karma actions.** It is still not
 > in *this* unit — it is now **build work in its own right** (see #10a below), not a bug fix.
-> ~~⚠ G15 is deliberately NOT in this unit — it needs an author decision first.~~ Half the karma
+> ~~⚠ G15 is deliberately NOT in this unit — it needs an author decision first. Half the karma
 > model never fires, and the axis the final reckoning weights most heavily (`reverenceDesecration`,
 > weight 3) can only ever move toward CAST-DOWN, never toward GRACE. Whether to wire the missing
-> positive actions or re-weight onto the axes that work is a **design call**, not a bug fix.
+> positive actions or re-weight onto the axes that work is a design call, not a bug fix.~~
+> *(The whole question above is answered — §22.5 chose WIRE, rejecting re-weighting.)*
 
 > **⚠ This unit invalidates the M15 balance report.** The sim's scope note assumed loot was merely
 > *unequipped by policy*; G11 means it was *un-equippable in principle*, so the "lower bound" framing
@@ -217,13 +231,18 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 
 ### Tier 1 — engine, before any UI
 
-**#1 `engine-foundations`** — one pipeline unit, **ten** changes, all cheap now and expensive later:
+**#1 `engine-foundations`** — one pipeline unit, **eleven** changes, all cheap now and expensive later:
 1. **Equip/unequip become `step` inputs.** Restores reproducibility from `seed + inputs`.
 2. **`description` + `flavour` on every content schema.** Blocks *all* content authoring today.
 3. **The floor-mechanic hook** — fire the existing relic trigger pipeline with a per-floor effect
    list from data. **Must be DIRECTION-AWARE** (the Hollow ascent runs 5→1).
 4. **Floor-4 karma counts double** in the verdict. No new state.
 5. **Rename conditions** to the design vocabulary (§14.4). Needs a `SAVE_VERSION` bump + migration.
+   ⚠ **The §22.3 half (renaming `insanity`) CANNOT START: the replacement name is still
+   undecided.** Blast radius when it does: ~60 occurrences — the id, `CONDITION_DATA`,
+   `CONTROL_CONDITIONS`, the tick switch, **14 player-facing `INSANITY_STRINGS`**, **six skills**
+   (`mindSpike`, `corrupt`, `warpMind`, `sinfulWhisper`, `maddeningGaze`, `echoedHex`),
+   `classKit.ts` `MENTAL_CONDITIONS`, three data files, ~12 tests. The §14.4 half can proceed.
    ⚠ **This is TWO renames, not one** (added 2026-08-31): §14.4 aligns the six stat pairs
    (`healthy/sick` → `Hardy/Frail` etc.), **and §22.3 separately renames `insanity`** so the
    psychosis theme stays unpointable. **A builder doing only §14.4 leaves `insanity` shipping.**
@@ -241,13 +260,18 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
     decided "relics occupy the two trinket slots" rule is *unimplementable*. Needs a `SAVE_VERSION`
     bump — **share the migration with change 5.** **This was decided, flagged in `ROADMAP.md` and
     `HUMAN-CHECKS.md` as needing a migration, and appeared in no work plan until now.** It silently
-    blocks **#6** and **#8**, which both draw a paperdoll against this slot list.
+    blocks **#6** and **#8**, which both render this slot list (as **text**, §22.9 — ~~a paperdoll~~).
+11. **Persist and surface the run SEED** (G8, §19.3 — *"shown, stored and enterable"*). The seed
+    is wall-clock today, never stored, never shown; storing it is engine work and belongs here;
+    the display half rides with #8. *(G8 carried `BLOCKS #1` while #1 contained no seed work —
+    added 2026-08-31, making #1 **eleven** changes.)*
 
 **#2 `floor-mechanics` + balance re-run** — ⛔ **#9 IS NOW A HARD PREREQUISITE.** §22.6 folds potions
 into consumables, and the consumable picker is **unreachable** until #9 fixes catalog-item
 resolution (G14). **If #2 lands first, the game ships with no in-battle healing at all.** #9 is
-listed in the "sequenced by judgement" bucket above — it is not, for this purpose.
- — all five floors per `GAME-DESIGN.md` §8. Floor 2's
+~~listed in the "sequenced by judgement" bucket above~~ *(the diagram now shows the #9 → #2 edge)*.
+
+**#2 covers** all five floors per `GAME-DESIGN.md` §8. Floor 2's
 illusions matter most: they are the **only trigger for the clarity↔delusion karma axis**, which
 currently can never move. Then re-run the sim, because `BALANCE-REPORT.md`'s 32.9% is measured on a
 character that never equips found loot.
@@ -267,11 +291,12 @@ inventory is text-based, so no item art is generated at all.)*
 **Game assets:** 50 buildable now (150 images ≈ $10.05 batched); 52 once Ash-Wretch and the Warden
 executioner exist in code. ~~**Item icons:** ~68 more (204 images ≈ $13.67).~~ **⚠ ICONS CANCELLED
 2026-08-31** (`GAME-DESIGN.md` §22.8) — the inventory is text-based, so the 50/52 game assets are the
-whole batch. **The live total is 50 assets / 150 images / ~$10.05.**
-*(Superseded, and struck properly this time — the previous strike marker was never closed, so
-the cancelled figures rendered as live text:)* ~~**Total ~118 assets /
-354 images / ~$23.72 batched.** **No interface batch** — the austere typographic UI is
-the Memorians' file on you.
+whole batch. **The live total: 50 assets / 150 images / ~$10.05 buildable now; 52 / 156 / ~$10.45
+once Ash-Wretch and the Warden executioner exist in code.**
+*(Cancelled, struck — and this strike is now actually closed; two prior attempts left the marker
+unterminated, so the dead figures rendered live twice:)* ~~Total ~118 assets / 354 images /
+~$23.72 batched.~~
+**No interface batch** — the austere typographic UI is the Memorians' file on you.
 
 ### UI
 
@@ -287,14 +312,13 @@ expensive mistake available.
 > `UI-DESIGN.md` §14 and `GAME-DESIGN.md` §21.6 are superseded on this point. *(Historical note: it
 > was `[DECIDED]` twice and named in no work item until 2026-08-31.)*
 >
-> ~~**⚠ #8 also carries the CODEX, which was `[DECIDED]` twice and named in no work item until
-> 2026-08-31.**~~ `UI-DESIGN.md` §14 commits to *"tooltips on everything **+ a codex that fills in as
-> you go**"* and flags it as **"⚠ net-new state, not a reuse"**; `GAME-DESIGN.md` §21.6 decides its
-> content split. But `grep -i codex docs/PLAN.md` returned **zero** — unlike the settings screen and
-> the content warning, neither section routed itself into a unit. **Net-new persistent state plus a
-> screen is not a footnote to a restyle**; scope it explicitly or split it out. *(Found by round 14B,
-> which correctly declined to file it as a fiction finding — it is a propagation failure, the sixth
-> of that kind, and exactly what `FINDINGS.md` rule 5 exists to prevent.)*
+> ~~⚠ #8 also carries the CODEX, which was `[DECIDED]` twice and named in no work item until
+> 2026-08-31. `UI-DESIGN.md` §14 commits to "tooltips on everything + a codex that fills in as
+> you go" and flags it as "net-new state, not a reuse"; `GAME-DESIGN.md` §21.6 decides its
+> content split. Net-new persistent state plus a screen is not a footnote to a restyle; scope it
+> explicitly or split it out.~~
+> *(The scoping question above is mooted — the codex is cut. Kept struck for the history: it was
+> the sixth propagation failure of its kind, surfaced by round 14B.)*
 
 ### Tier 2 — systems that exist but do nothing
 
@@ -337,7 +361,9 @@ exist), and **no boss is an agent**, which was M12's entire premise.
 **#12 narrator to spec (reduced M11)** — grammar-constrained choices, the tool registry and
 free-text mapping are **dropped**. What remains: the persona rewrite (the narrator *is* the
 condition, caused by extraction), per-floor voices, zone prompt files, beat significance, karma in
-the prompt, boss agents. Note the persona string is **duplicated** in `src/llm/narrate.ts` and
+the prompt, boss agents. **Also #12's:** correct the stale comment at `src/game/unlockStore.ts:32`
+— *"(the M11 narrator reads it)"* — the narrator must **never** read `karmaMemory` (§22.4), and the
+comment is the last place instructing otherwise. Note the persona string is **duplicated** in `src/llm/narrate.ts` and
 `electron/llm.mjs`, and the latter has no test.
 
 ### Tier 3 — authoring and shipping
@@ -349,9 +375,9 @@ one-sentence endings, placeholder boss names, and no descriptions anywhere. **On
 this.** **Blocked on #1.** ~~and on author rounds A8 AND A9~~ **✅ Both were answered 2026-08-31**
 (§22.1–22.3) — the rulings are inputs to this item now, not blockers on it. ⚠ **A9 is not yet
 executable: the replacement name for `insanity` is still undecided** (§22.3).
-*(Original blocker note:)* A8 settled the endings' voice and whether the player has a name — A8 settles the endings' voice and whether
-the player has a name (you cannot write the endings before that); A9 settles whether `insanity` can
-be named at all, which decides a condition name, a skill name and an item name.
+*(Original blocker note:)* A8 settled the endings' voice and whether the player has a name (you
+cannot write the endings before that); A9 settled whether `insanity` can be named at all, which
+decides a condition name, a skill name and an item name.
 **Also carries all TWELVE content defects, C1–C12:** the two reserved words used casually in shipped
 strings · the class picker giving away the concealed fact · the intro sending you to the wrong place ·
 the narrator never being told which floor it is on · **the line that makes the floor-4 angels a
@@ -360,21 +386,22 @@ condition ids · **the Inventory screen printing raw enum identifiers (`On onHit
 of all loot** · **`"You suffer(s) 1 bleed damage."` and buffs described as afflictions in the LIVE
 narration facts** · **neither player-facing projector having a single test** · and four smaller text
 defects (a typo, one string filling 43% of the insanity table, and "The Husk Husk" as a reachable
-generated name).
+generated name). **And per §22.9: author MORE weapons and armour than the current 12 + 12** — the
+icon obligation is gone, so item count is no longer an art-budget question; exact counts land here.
 
 **#14 package and ship** — `electron-builder.json` is an N1 stub; the first-run model download needs
 a real failure path; **licensing is entirely absent and blocks any public release**; app icon,
 splash and installer art are on no list; `itch-description.html` is wrong about nearly everything.
-**Blocked on author rounds A7 and A8** — both land in text that ships.
+~~Blocked on author rounds A7 and A8~~ **Both answered 2026-08-31** (§22.5, §22.1–22.2) — their
+rulings are now *inputs* to the store copy and ending text, not blockers.
 
-> **⚠ #14 carries THREE severe packaging defects that no other unit covers — and one of them means
-> the ship command has never run:**
+> **⚠ #14 carries TWO severe packaging defects that no other unit covers** *(was three — G44 is
+> fixed)*:
 >
-> - **G44 — `npm run desktop:pack` HAS NEVER SUCCEEDED.** A `$comment` key on line 2 of
->   `electron-builder.json` is rejected by the schema (`additionalProperties: false`, only `$schema`
->   allowed), and validation runs *before* any packaging work. The file has one commit and the key is
->   in it, so **every pack since the file was created has failed.** One-line fix — but **verify
->   end-to-end**, because `directories.output` collides with Vite's `dist`.
+> - ~~G44 — `npm run desktop:pack` HAS NEVER SUCCEEDED.~~ **✅ FIXED 2026-08-31 (§22.12)** — the
+>   `$comment` key is deleted and the config validates through to real packaging concerns. **Still
+>   owed to #14:** verify a pack **end-to-end** (`directories.output` collides with Vite's `dist`),
+>   and the machine needs **Windows Developer Mode** for `winCodeSign` (`HUMAN-CHECKS.md`).
 > - **G37 — first run starts TWO concurrent 2.5 GB model downloads.** `ensureNarrator` assigns only
 >   after its await, so boot and the first generate both see `null`. Measured: 2 calls where 1 is
 >   expected. Two writers race into the same file, plus a second `loadModel` (VRAM OOM on min spec).
@@ -383,12 +410,10 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 >   the app still prints "logging to &lt;path&gt;". It works in dev only because `__dirname` is the real
 >   repo folder, which is why it survived nine audit rounds.
 >
-> **✅ What pass 13A VERIFIED works, so #14 does not need to re-establish it.** ⚠ **Read the
-> qualifier first: the pack was run from a SCRATCH COPY with the G44 fix applied. The repo as it
-> stands still cannot pack at all.**
-> **✅ NO LONGER TRUE — G44 was fixed 2026-08-31.** The repo packs to the point of the Windows
-> privilege wall (see `HUMAN-CHECKS.md`). What follows is what works *now* — not a
-> description of today.
+> **✅ What pass 13A VERIFIED works, so #14 does not need to re-establish it.** *(13A ran from a
+> scratch copy with the G44 fix applied; since 2026-08-31 that fix is in the repo itself, so
+> everything below now holds for the real tree — up to the Windows Developer-Mode privilege wall
+> at `winCodeSign`, see `HUMAN-CHECKS.md`.)*
 > - **The production build runs under `file://`** — a real Electron `loadFile('dist/desktop.html')`
 >   with the real preload. No CSP or module-loading breakage, CSS applied, `window.void` present,
 >   renderer booted. **This path was never exercised before** (`desktop` uses the dev server and
@@ -411,18 +436,18 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 
 ## Interview status
 
-**22 rounds asked; 20 fully done, 2 partial** (2026-08-25 → 27). **A1** (potion fold-in) and **B4b**
-(boss-talk concession cap) are `DONE (partial)` — the design doc explicitly flags both for the author.
-See `FINDINGS.md` A1b and B4c. The queue and the full record are in
+**All author rounds are answered** (2026-08-25 → **31**; the final six closed by the 2026-08-31
+validation round — `GAME-DESIGN.md` §22). ~~20 fully done, 2 partial — A1 and B4b flagged for the
+author~~ *(A1b and B4c were both ruled §22.6/§22.7)*. The queue and the full record are in
 **`docs/INTERVIEW-PLAN.md`**; every answer is written into an authoritative document.
 
 | Area | State |
 |---|---|
-| Lore / world | ⚠ Six rounds + the Hollow ascent (`WORLD.md`), **but A8 is OPEN** — the endings' voice and the player's name |
+| Lore / world | ✅ Six rounds + the Hollow ascent (`WORLD.md`); **A8 answered §22.1–22.2** |
 | Scope / Tier 1 | ✅ All seven decided |
 | Floor mechanics | ✅ All five, and **bidirectional** |
 | Visual & audio | ✅ Art direction, typeface, ship assets, and the **thinning score** |
-| Design / Tier 2 | ⚠ Loot, progression, conditions, elements, class kits — **but A7 is OPEN** on karma inputs and verdict weighting |
+| Design / Tier 2 | ✅ Loot, progression, conditions, elements, class kits; **A7 answered §22.5** |
 | Bosses & talk | ✅ Identities, boss agents, and **talking to bosses** in free text |
 | Release | ✅ Licence, free on itch, no telemetry, store page, first run, playtest |
 
@@ -454,11 +479,11 @@ alternative and why, in `GAME-DESIGN.md` **§22**.
 
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), **forty-three bugs** (G1–G46; **there is no G38**; counted by script)
-— **forty-two with fixes specified; only `G2` has none.** *(`G15` was ruled on 2026-08-31, §22.5.)* — and **twelve
-content defects** (C1–C12) for #13. **`G32` was ruled on 2026-08-30 —
-wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
-before quoting it.**)*
+one **parked** (localisation), **41 live bugs** (register: G1–G47, no G38; **40 with fixes
+specified — only `G2` lacks one**), **2 author-ruled build items** (G15 → #10a; G32 → #0a), **1
+fixed** (G44), and **twelve content defects** (C1–C12) for #13. *(This count has been wrong
+repeatedly — **recount by script before quoting it**; the derivation lives in `FINDINGS.md` §4's
+banner.)*
 
 ### Newer work items not in the dependency graph above
 

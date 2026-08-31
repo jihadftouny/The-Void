@@ -379,8 +379,9 @@ sequence: enable billing → run the probe and the batch → **rotate the key** 
 Deliberately out of scope here, tracked elsewhere:
 
 - **Prose** — floor, boss and ending text (M10 / M12 / M14) is the engineer's voice to write.
-- **The Tibia-style equipment UI** (M5's ★ deferral) — still a collaborative pass; the inventory
-  restyle in `screens-restyle` is a restyle of the current functional screen, not that redesign.
+- ~~**The Tibia-style equipment UI** (M5's ★ deferral) — still a collaborative pass~~ **DROPPED
+  2026-08-31 (`GAME-DESIGN.md` §22.9): the inventory is TEXT LISTS.** The restyle in
+  `screens-restyle` is now the whole design; there is no separate redesign owed.
 - **Per-class balance** — Scavver strong, ranged classes weak (`docs/BALANCE-REPORT.md`). A play-test
   and weapons follow-up, not a UI concern.
 - ~~**Audio.** Never discussed.~~ **CLOSED** — in scope at full ambition (`ART-BIBLE.md` §10) with a thinning score (`ART-BIBLE.md` §16 — **not** this file’s §16, which is the 30fps target). *Original note:* — a turn-based battle screen with beat-by-beat
