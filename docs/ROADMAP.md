@@ -29,7 +29,7 @@ intent and this file is reconciled to it.
 - **Engine-authoritative LLM.** Narrator writes **prose only** — the engine writes every choice; engine owns dice/damage/loot/state;
   all game-feeding LLM output is grammar/JSON-constrained.
 - **Tough but fair.** Real challenge, meaningful death, mastery-driven.
-- Full item detail (Tibia-style paperdoll, relics, uniques + rarity, rich consumables), enemy detail
+- Full item detail (~~Tibia-style paperdoll~~ **text lists, §22.9**, relics, uniques + rarity, rich consumables), enemy detail
   (~24 families + affixes, 5 boss agents), and floor identities are in `GAME-DESIGN.md`.
 
 ### Stack & targets (from `CLAUDE.md`)
@@ -127,7 +127,7 @@ From `CLAUDE.md` / `docs/PRINCIPLES.md` — these are cheap now, a rewrite if re
   AC/defense; shields/off-hand supported; tests assert the to-hit math both ways.
 - **Key decisions:** whether all attacks roll or only specials (default: all); AC formula w/ armor.
 
-### M5 — Inventory & equipment (Tibia-style)  ★ first big new interactive system
+### M5 — Inventory & equipment ~~(Tibia-style)~~ **(text-based — `GAME-DESIGN.md` §22.9)**  ★ first big new interactive system
 - **Goal:** A real inventory game on screen.
 - **Done when:** a paperdoll of **seven slots — head, body, hand ×2, feet, trinket ×2**
   (`GAME-DESIGN.md` §14.7; amulet/ring/legs/back are **cut**) + backpack.

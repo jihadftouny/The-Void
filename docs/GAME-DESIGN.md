@@ -164,7 +164,8 @@ insanity, push, aired. Activate the dormant 13:
 ## 6. Items & inventory
 
 ### Decided
-- **Full multi-slot inventory, Tibia-style** **[DECIDED]**: an equipment paperdoll plus a backpack
+- **Full multi-slot inventory** **[DECIDED]** — ⚠ **SUPERSEDED 2026-08-31** — **the Tibia-style paperdoll and grid are
+  dropped for TEXT LISTS** (§22.9). The slot *set* is unaffected (§22.10). ~~Tibia-style~~: an equipment paperdoll plus a backpack
   container.
   - ~~**[PROPOSAL] Slot set**~~ **CLOSED §14.7 — seven slots** (head, body, hand x2, feet, trinket x2). Superseded list follows: helmet, amulet/neck, two hands (weapon + shield or
     off-hand/second weapon), armor (torso), legs, boots, ring, ammo/hip, + backpack container.
@@ -624,7 +625,7 @@ Each boss is an **LLM agent with run-memory** (M12), with a unique mechanic (not
 | Status conditions | 11 of 25 worked at v2 | **all 25** as a tactical layer (§21.1) | medium |
 | Enemy variety | only "Beast" spawns | ~24 families + affixes | **large** |
 | Bosses | 1 plain scaled enemy | 5 unique bosses, each an LLM agent | **large** |
-| Inventory | swap 1 weapon + 1 armor | full Tibia-style paperdoll + backpack | **large** |
+| Inventory | swap 1 weapon + 1 armor | full multi-slot equipment + backpack, rendered as **text lists** (§22.9 — ~~Tibia-style paperdoll~~) | **large** |
 | Trinkets/relics | none | build-defining relic layer | **large** |
 | Unique items | rarity cosmetic | authored uniques + rarity-scaling | **large** |
 | Consumables | potion counter | rich consumable layer | medium |
@@ -1163,7 +1164,7 @@ barely touches the floor *engine* work.
 ### 18.1 Rest
 
 A rest restores **HP *and* skill charges**, and is **the safe place to manage your build** — open the
-inventory, swap gear, read the codex.
+inventory, swap gear. ~~read the codex~~ *(the codex was cut — §22.11)*.
 
 - Pairs with **hub-only equipping** (§16.2): rest is where equipment decisions actually happen.
 - **Floor 3 dampens the healing** (§8), so attrition bites hardest exactly where the design says it
@@ -1409,6 +1410,11 @@ deliberate and it is kept.
 > above are canonical for all prose.** *(Note the register too: "wise/fool" and "charming/repulsive"
 > read as judgements of a person; the §5 set reads as states, which is the intended voice.)*
 
+> **⚠ PARTLY SUPERSEDED 2026-08-31 by §22.3.** This list canonises **`insanity`**, and §13 beats it:
+> the psychosis theme stays **unpointable**, so that one is being renamed. Everything else in this
+> section still stands, including "the names above are canonical for all prose" — the new name will
+> simply replace `insanity` in it. ⚠ **The replacement name is not yet decided** (§22.3).
+
 Plus the thirteen distinctive ones: bleed, burn, freeze, poison, electrify, stun, fracture, sleep,
 insanity, regeneration, push, aired, **exposed**.
 
@@ -1527,6 +1533,30 @@ fiction.
 thematically defensible — being filed is what §0b's archive does — but it would have required a
 carve-out written into §8, and one voice start-to-finish won.
 
+> # ⚠ CORRECTED 2026-08-31 — "the fix is to `story.json`, not to the fiction" WAS WRONG.
+>
+> **This is an ENGINE change, not a content change.** `src/llm/narrate.ts:28` already speaks the
+> name in narration: `` `You are ${e.name}, a ${e.classId}, at the threshold of the descent.` `` —
+> a fact line that flows into **every prompt the model receives** and into the persisted story
+> memory. It is fed by `GameEvent.player-created.name`, stamped in `game.ts:291`. **#13 (content
+> authoring) will never catch it, because it is not authored text.**
+>
+> **There are FOUR name interpolations in narration, and this section originally named two:**
+>
+> | Site | What it is |
+> |---|---|
+> | `narrate.ts:28` (via `game.ts:291`) | *"You are {name}, a {class}…"* — **engine**, in every prompt |
+> | `story.json:10` (via `game.ts:299`) | the **intro**: *"{playerName}, to delve into…"* |
+> | `story.json:31` (via `game.ts:341`) | the legacy `END.` anchor — a bare `"{playerName}"` |
+> | `story.json:36` and `:40` (via `game.ts:444`) | the two ending anchors — the ones §22.1 quoted |
+>
+> **Permitted labels, unaffected:** `desktop/game.ts:157` (the HUD) and `view-model.ts:320` →
+> `rowModel('Name', …)` (the character sheet). The surface division in §22.2 is the right rule; it
+> was simply not a description of the current code.
+>
+> ⚠ **Three tests assert the token IS present and will fail on the fix:** `story.test.ts:24`, `:66`,
+> `:72`. Update them with the change, not after.
+
 ### 22.2 The player DOES have a name — typed, and never spoken by the narrator (A8b)
 
 The name-entry screen stays. **But 22.1 governs the narration**, so the two answers together mean:
@@ -1548,6 +1578,24 @@ name for the *state*, not a diagnosis of the player. The skill **"Maddening Gaze
 
 **Rejected:** keeping the id and carving out §13. Cheaper, but it would have made the game's most
 careful design choice negotiable.
+
+> ⚠ **NOT YET EXECUTABLE — the new name is undecided.** Neither this section, nor `PLAN.md` #1.5,
+> nor `FINDINGS.md` A9 says **what `insanity` becomes.** §21.1 named its targets explicitly; this
+> ruling did not. **A builder handed #1.5 cannot do this half.** Pick a name for the *state*, not a
+> diagnosis — the §21.1 set (`Lucid`, `Clouded`, `Hardy`, `Frail`) is the register to match.
+>
+> ⚠ **The cited precedent has not actually happened in code.** This section said §21.1 *"already
+> renamed `wise/fool` → `Lucid/Clouded`"* — it renamed them **in the document**; `condition.ts:60,68`
+> still declare `wise` and `fool`. That rename is #1.5's unbuilt work, which is why both renames sit
+> in the same item.
+>
+> ⚠ **The blast radius is far larger than the three things named above — ~60 occurrences.**
+> `condition.ts` (the id, `CONDITION_DATA`, `CONTROL_CONDITIONS`, the ordered list, the tick switch,
+> and **14 player-facing `INSANITY_STRINGS`**); `classKit.ts:136` (`MENTAL_CONDITIONS`, the
+> Neuromancer's Detonate); **six skills, not one** — `mindSpike`, `corrupt`, `warpMind`,
+> `sinfulWhisper`, `maddeningGaze`, `echoedHex`; three data files; and ~12 tests.
+> **One thing works in our favour:** `component-model.ts:123` types `CONDITION_TONE` as
+> `Record<ConditionType, …>`, so a missed rename **breaks the build** rather than shipping quietly.
 
 ### 22.4 The narrator NEVER references a previous run — §12 wins (A10)
 
@@ -1577,6 +1625,12 @@ so "The Delusion" could never be the act-3 boss.
 **Rejected:** re-weighting onto the two axes that work. It was much less work and would have quietly
 turned a four-axis judgement into a two-axis one.
 
+> ⚠ **A THIRD consequence, which this section originally dropped.** `deal.ts:82,100` gates the
+> **grace sacrifice-deal pool** on `reverenceDesecration >= 3`. With only `desecrateShrine: -2`
+> wired, reverence is always ≤ 0 — so **the entire grace deal pool is dead content**, and with it
+> **`mirror-shard`, the only hard-coded catalog item in the game** and therefore the only
+> non-generated item a player could ever hold. Wiring the positive actions revives all of it.
+
 > **Sequencing note:** floor 2's illusions are the natural trigger for `seeThroughIllusion` and do
 > not exist yet, so that one lands with the floor-mechanics work.
 
@@ -1590,6 +1644,25 @@ scarcity becomes an inventory decision rather than a counter ticking down.
 against, but it makes healing a number rather than a choice.
 
 ⚠ **This changes the balance surface**, so it lands with the #2 re-run.
+
+> # ⛔ ORDERING DEPENDENCY — #22.6 MUST NOT LAND BEFORE `PLAN.md` #9.
+>
+> **Folding potions into consumables removes the only reachable in-battle heal.** The consumable
+> path that is supposed to replace it **does not work today**: `consumableOptions` only lists an item
+> whose `defId` resolves in a catalog, and the sole `ItemInstance` producer stamps `gen:*` ids that
+> never resolve. The picker is **always empty** (that is `FINDINGS.md` **G14**, fixed by **#9**).
+>
+> **`PLAN.md` currently puts #9 in the "independent, sequenced by judgement" bucket — NOT before
+> #2.** So on the current ordering, #2 lands, potions are removed, the replacement is unreachable,
+> and **the game ships with no in-battle healing at all.**
+>
+> **#9 is now a hard prerequisite of this decision.** Do not treat the fold-in as a balance tweak.
+>
+> **Change surface, for whoever builds it:** `player.ts:47,107,151` (`pots`, `STARTING_POTS`);
+> `battle.ts:531-552` (`resolvePotion`); three event kinds in `combatEvent.ts:147`; `sim.ts:146,173`;
+> `desktop/game.ts:162` (the HUD counter) and `:526` (the Potion button); `render/format.ts:99`;
+> `llm/narrate.ts:52`; and roughly fifteen tests. `save.ts` does **not** validate `pots`, so no
+> save-guard change is needed.
 
 ### 22.7 Boss talk: ONE concession per fight (B4c)
 
@@ -1610,8 +1683,12 @@ icons ship. The equipment paperdoll art goes with them.
 | Game art | 50 assets (150 images, ~$10.05) | **unchanged** |
 | **Total art budget** | ~$23.72 | **~$10.05** |
 
-**Everything world-facing still ships:** 30 enemy sprites, 5 floor backdrops, 5 class portraits,
-5 boss portraits, altar and shrine.
+**Everything world-facing still ships** — all **50**: 30 enemy sprites, 5 floor backdrops,
+5 class portraits, 5 boss portraits, **3 Sin-boss identities** (The Cruelty, The Avarice,
+**The Delusion**), altar and shrine.
+*(Corrected 2026-08-31: the first version of this list summed to **47** — it dropped the three
+Sin-boss identities, including The Delusion, the very boss §22.5 exists to make reachable. A
+reassurance that nothing was lost should not itself lose three assets.)*
 
 **The bigger win is not the money.** §13's own caveat called bespoke icons *"a permanent commitment:
 every new item needs art forever."* That obligation is now gone, which is what makes 22.9 affordable.

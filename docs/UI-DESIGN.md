@@ -467,7 +467,8 @@ afterwards** — the same argument already made and accepted for audio hooks (`A
 - **Tooltips:** every condition chip, skill, item, stat and perk explains itself on hover or click.
   This is what makes 25 conditions learnable without a manual. **Depends on the `description` fields
   from `engine-foundations` (#1)** — there is currently nowhere to put the text.
-- **Codex:** fills in as you encounter things — where you look up the thing you met two floors ago.
+- ~~**Codex:** fills in as you encounter things — where you look up the thing you met two floors ago.~~
+  **⚠ **SUPERSEDED 2026-08-31** — CUT** (`GAME-DESIGN.md` §22.11). Tooltips only.
   ⚠ **Net-new state, not a reuse.** The existing "gradual bestiary reveal" (`unlockStore.ts`) is a
   **spawn-table gate** driven by cross-run feats: it decides which families may be *drawn* and records
   nothing about what the player has *seen*.

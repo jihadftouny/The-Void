@@ -153,7 +153,8 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 >
 > **Not in this unit: G44, G37 and the escalated G6** — all three are **packaging** defects and
 > belong to **#14**. **G44 is the register's only `⛔⛔ blocks shipping` row: `npm run desktop:pack`
-> has never once succeeded** — see #14 below. *(This note said "both" and omitted G44 until
+> ~~has never once succeeded~~ — **✅ FIXED 2026-08-31 (§22.12); the config now validates.** See
+> #14 below. *(This note said "both" and omitted G44 until
 > 2026-08-30, which left #0's exclusion ledger short by one: 35 ids exist in the G11–G45 range, the
 > numbered list holds 31, and three of the four excluded ids had an explicit note while the most
 > severe one had none.)* G37: `ensureNarrator` is not promise-memoized, so first run starts **two concurrent 2.5 GB
@@ -194,7 +195,9 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 > are the barred pairing (G26 spans their files). So run **`#0a` + `#0b`**, then `#0c`; or `#0a` +
 > `#0c`, then `#0b`. Never `#0b` + `#0c` together.
 
-> **⚠ G15 is deliberately NOT in this unit — it needs an author decision first.** Half the karma
+> **✅ G15 was RULED on 2026-08-31 (§22.5): WIRE the four missing karma actions.** It is still not
+> in *this* unit — it is now **build work in its own right** (see #10a below), not a bug fix.
+> ~~⚠ G15 is deliberately NOT in this unit — it needs an author decision first.~~ Half the karma
 > model never fires, and the axis the final reckoning weights most heavily (`reverenceDesecration`,
 > weight 3) can only ever move toward CAST-DOWN, never toward GRACE. Whether to wire the missing
 > positive actions or re-weight onto the axes that work is a **design call**, not a bug fix.
@@ -240,7 +243,11 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
     `HUMAN-CHECKS.md` as needing a migration, and appeared in no work plan until now.** It silently
     blocks **#6** and **#8**, which both draw a paperdoll against this slot list.
 
-**#2 `floor-mechanics` + balance re-run** — all five floors per `GAME-DESIGN.md` §8. Floor 2's
+**#2 `floor-mechanics` + balance re-run** — ⛔ **#9 IS NOW A HARD PREREQUISITE.** §22.6 folds potions
+into consumables, and the consumable picker is **unreachable** until #9 fixes catalog-item
+resolution (G14). **If #2 lands first, the game ships with no in-battle healing at all.** #9 is
+listed in the "sequenced by judgement" bucket above — it is not, for this purpose.
+ — all five floors per `GAME-DESIGN.md` §8. Floor 2's
 illusions matter most: they are the **only trigger for the clarity↔delusion karma axis**, which
 currently can never move. Then re-run the sim, because `BALANCE-REPORT.md`'s 32.9% is measured on a
 character that never equips found loot.
@@ -260,7 +267,9 @@ inventory is text-based, so no item art is generated at all.)*
 **Game assets:** 50 buildable now (150 images ≈ $10.05 batched); 52 once Ash-Wretch and the Warden
 executioner exist in code. ~~**Item icons:** ~68 more (204 images ≈ $13.67).~~ **⚠ ICONS CANCELLED
 2026-08-31** (`GAME-DESIGN.md` §22.8) — the inventory is text-based, so the 50/52 game assets are the
-whole batch. ~~**Total ≈ 118 assets /
+whole batch. **The live total is 50 assets / 150 images / ~$10.05.**
+*(Superseded, and struck properly this time — the previous strike marker was never closed, so
+the cancelled figures rendered as live text:)* ~~**Total ~118 assets /
 354 images / ~$23.72 batched.** **No interface batch** — the austere typographic UI is
 the Memorians' file on you.
 
@@ -313,6 +322,15 @@ and never read.
 > The rest of #10 (karma bending the world, reaching the prompt, being clamped) is unaffected and
 > can proceed. See `FINDINGS.md` **A10**.
 
+**#10a wire the four missing karma actions** — ✅ **ruled 2026-08-31 (§22.5)**, and previously in no
+work item at all. `leaveOffering`, `honorDead`, `embraceWhisper` and `seeThroughIllusion` are
+declared in `karma.ts` and called from nowhere. Until they are wired: **`reverenceDesecration` can
+only ever go negative** while carrying the heaviest weight in the verdict, **`clarityDelusion` is
+permanently 0** so "The Delusion" can never be the act-3 boss, and **the entire grace deal pool is
+dead** — taking `mirror-shard`, the only hard-coded catalog item in the game, with it.
+⚠ **`seeThroughIllusion` needs floor 2’s illusions, which do not exist yet** — it lands with #2.
+The other three can be wired independently.
+
 **#11 finish M12** — there are **four** combat bosses, not five (floor 4's executioner does not
 exist), and **no boss is an agent**, which was M12's entire premise.
 
@@ -328,7 +346,10 @@ the prompt, boss agents. Note the persona string is **duplicated** in `src/llm/n
 left. Joke weapon names that are the shipped starting gear, every drop named "Legendary mainHand", a
 lore file reading *"this is a lore this is a lore"*, ten empty prose bodies on the live path, two
 one-sentence endings, placeholder boss names, and no descriptions anywhere. **Only the author can do
-this.** **Blocked on #1 and on author rounds A8 AND A9** — A8 settles the endings' voice and whether
+this.** **Blocked on #1.** ~~and on author rounds A8 AND A9~~ **✅ Both were answered 2026-08-31**
+(§22.1–22.3) — the rulings are inputs to this item now, not blockers on it. ⚠ **A9 is not yet
+executable: the replacement name for `insanity` is still undecided** (§22.3).
+*(Original blocker note:)* A8 settled the endings' voice and whether the player has a name — A8 settles the endings' voice and whether
 the player has a name (you cannot write the endings before that); A9 settles whether `insanity` can
 be named at all, which decides a condition name, a skill name and an item name.
 **Also carries all TWELVE content defects, C1–C12:** the two reserved words used casually in shipped
@@ -364,7 +385,9 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 >
 > **✅ What pass 13A VERIFIED works, so #14 does not need to re-establish it.** ⚠ **Read the
 > qualifier first: the pack was run from a SCRATCH COPY with the G44 fix applied. The repo as it
-> stands still cannot pack at all.** What follows is what will work *once G44 is fixed* — not a
+> stands still cannot pack at all.**
+> **✅ NO LONGER TRUE — G44 was fixed 2026-08-31.** The repo packs to the point of the Windows
+> privilege wall (see `HUMAN-CHECKS.md`). What follows is what works *now* — not a
 > description of today.
 > - **The production build runs under `file://`** — a real Electron `loadFile('dist/desktop.html')`
 >   with the real preload. No CSP or module-loading breakage, CSS applied, `window.void` present,
@@ -403,17 +426,22 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 | Bosses & talk | ✅ Identities, boss agents, and **talking to bosses** in free text |
 | Release | ✅ Licence, free on itch, no telemetry, store page, first run, playtest |
 
-**⚠ FOUR AUTHOR ROUNDS ARE STILL OPEN** — this heading read *"What is left is NOT interviews"* until
-2026-08-28, which was false the moment A7 and A8 were queued:
+**✅ ALL SIX AUTHOR ROUNDS ARE ANSWERED — 2026-08-31.** Full record, with every rejected
+alternative and why, in `GAME-DESIGN.md` **§22**.
 
-| | Question | Blocks |
-|---|---|---|
-| **A7** | **Karma inputs & verdict weighting** — half the model never fires, and the heaviest verdict axis can only move toward CAST-DOWN | **#2 #14** |
-| **A8** | **The endings' voice, and whether the player has a name** — the locked rule is second-person-only; the shipped anchors are third person and name you | **#13 #14** |
-| **A10** | **May the narrator reference a PREVIOUS RUN?** — `WORLD.md` §12 `[LOCKED]` forbids it (*"the narration never acknowledges a previous one"*) while `GAME-DESIGN.md` §7 and **`PLAN.md` #10** require it. State already ships; only the unfinished wiring keeps the locked rule intact | **#10 #12** |
-| **A9** | **Is a nameable sanity mechanic allowed?** — §13 says the player must be *"unable to point at the sanity mechanic, because there isn't one"*; §21.1, the later ruling, canonises `insanity`, and the game ships a chip, a skill called Maddening Gaze, and a draught that cures it. **Two `DECIDED` rulings that cannot both hold** | **#1 #13** |
-| **A1b** | The potion fold-in | #2 |
-| **B4c** | The boss-talk concession cap | #6 #11 #12 |
+| | Question | Ruling | Now blocks |
+|---|---|---|---|
+| **A7** | Karma inputs & verdict weighting | **WIRE the four missing actions** (§22.5) | → build work, see below |
+| **A8** | The endings’ voice, and the player’s name | **Second person, never by name; the name is a LABEL only** (§22.1–22.2) | → **C12**, and an ENGINE fix |
+| **A9** | Is a nameable sanity mechanic allowed? | **No — rename `insanity`** (§22.3) | → #1.5 (⚠ new name still undecided) |
+| **A10** | May the narrator reference a previous run? | **No, never** (§22.4) | → #10, cross-run half CUT |
+| **A1b** | The potion fold-in | **Fold into consumables** (§22.6) | → #2, ⚠ **after #9** |
+| **B4c** | The boss-talk concession cap | **One per fight** (§22.7) | → #6 #11 #12 |
+
+> **⚠ This table was left asserting all six were OPEN for one commit after they were answered** —
+> the seventh instance of the propagation failure documented immediately below, in the very section
+> that documents it. The lesson is not "try harder": **closing a round means editing this table in
+> the same turn, not the register alone.**
 
 > **⚠ This "looks handled" failure has now happened THREE times in four days** — A8 (2026-08-28) and
 > A9 (2026-08-30) were each queued in `FINDINGS.md` and `INTERVIEW-PLAN.md` and **nowhere else**, so
@@ -427,7 +455,7 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
 one **parked** (localisation), **forty-three bugs** (G1–G46; **there is no G38**; counted by script)
-— **forty-one with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **twelve
+— **forty-two with fixes specified; only `G2` has none.** *(`G15` was ruled on 2026-08-31, §22.5.)* — and **twelve
 content defects** (C1–C12) for #13. **`G32` was ruled on 2026-08-30 —
 wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
 before quoting it.**)*

@@ -430,7 +430,10 @@ are four combat bosses, not five. Art does not run ahead of the engine.
 
 ~~**Item icons are additional** — see §13 (~68 more assets, 204 images ≈ $13.67 batched).~~
 **⚠ CANCELLED 2026-08-31 (`GAME-DESIGN.md` §22.8) — no item icons ship.** The 50 assets above are
-the whole art batch, and **~$10.05 is the whole art budget.**
+the whole art batch **buildable now**, at **~$10.05** — rising to **~$10.45** for all 52 once
+Ash-Wretch and the Warden executioner exist in code. **There is no second batch beyond that.**
+*(Corrected 2026-08-31: this read "~$10.05 is the whole art budget", which contradicted the
+52-asset ~$10.45 total two lines above it.)*
 
 ## 5. Known failure modes and their gates **[LOCKED]**
 
@@ -718,8 +721,10 @@ None of these were on any list, and a product cannot ship without the first thre
 > existed. **Cancelled: ~68 assets, 204 images, ~$13.67.** The equipment-paperdoll art goes with
 > them.
 >
-> **Everything world-facing still ships** — 30 enemy sprites, 5 floor backdrops, 5 class portraits,
-> 5 boss portraits, altar and shrine. Total art budget falls from **~$23.72 to ~$10.05**.
+> **Everything world-facing still ships** — all **50**: 30 enemy sprites, 5 floor backdrops,
+> 5 class portraits, 5 boss portraits, **3 Sin-boss identities**, altar and shrine.
+> Total art budget falls from **~$23.72 to ~$10.05** buildable now (**~$10.45** for all 52 once
+> Ash-Wretch and the Warden executioner exist in code).
 >
 > **The money was not the point.** This section's own caveat called bespoke icons *"a permanent
 > commitment: every new item needs art forever"* — and that obligation is what made the item count

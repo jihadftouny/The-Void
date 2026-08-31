@@ -122,7 +122,9 @@ the **play-feel / UI things only you can judge**, once the chain is merged and r
   (`GAME-DESIGN.md` §14.7); the shipped engine still has 9 and needs a migration; combat & AC read from the slots; save
   migrated v2→v3). **The bespoke Tibia-style visual UI was deliberately NOT built** — it needs your
   art-direction and can't be verified headlessly:
-  - [ ] **The Tibia visual paperdoll UI is a dedicated collaboration pass with you** (drag-drop slots,
+  - [x] ~~**The Tibia visual paperdoll UI is a dedicated collaboration pass with you**~~ **— DROPPED
+        2026-08-31** (`GAME-DESIGN.md` §22.9): the inventory is **text lists**, so there is no
+        paperdoll to design. ~~(drag-drop slots,
         backpack container, item tooltips/comparison). The engine underneath is done & tested — tell me
         when you want to design the UI together.
   - [ ] **Equip/inventory UX feel** — checkable once that UI exists (equip/unequip/swap, the shop's
