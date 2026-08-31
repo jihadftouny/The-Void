@@ -197,12 +197,12 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 > |---|---|---|
 > | **#0a `combat-core-fixes`** | G4, G11, G11b, G12, G16, G17, G20, G22, G23, G24, G25, G27, G28(d), G29, G30, G31, G32, G34, G35, G36, G39, G43, **G45** | `equipment.ts`, `skill.ts`, `statEffects.ts`, `relicEffects.ts`, `deal.ts`, `battle.ts`, `combat.ts`, `encounter.ts`, `condition.ts`, `src/game/game.ts` (rest path), `data/items.json` |
 > | **#0b `narration-coverage`** | G13, G21, G42, **G47** | `llm/narrate.ts`, `data/story.json`, `desktop/game.ts` (the `narrate()` clear-before-check) |
-> | **#0c `persistence-and-reach`** | G1/G19, G3, G14, G18, G26, G28, G33, G40, C7, **G46** | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
+> | **#0c `persistence-and-reach`** | G1/G19, **G2**, G3, G14, G18, G26, G28, G33, G40, C7, G46 | `persist.ts`, `desktop/game.ts`, `desktop.html`, `render/format.ts`, `render/components.ts`, `loot.ts`, `unlockStore.ts`, `view-model.ts`, `scripts/balance-report.ts` |
 
-> **`G2` is deliberately in no unit** — *"winning leaves a resumable save"* still has **no fix
-> specified**, so it cannot be scheduled yet. It sits in the same territory as #0c (the save
-> envelope) and should be folded in **once a fix is designed**; until then its `BLOCKS` cell is `—`,
-> because a bug nobody is fixing cannot block the unit that is not fixing it.
+> ~~`G2` is deliberately in no unit — no fix specified~~ **✅ Fix designed 2026-08-31 (§22.15) and
+> G2 now rides in #0c**: every terminal state — grace, damnation, death — clears the run save, and
+> G10's narrator-written run summary extends to victories. A finished run's record is its summary,
+> not a reloadable state.
 >
 > **Scheduling, restated once so there is a single source:** `#0a` is independent. `#0b` and `#0c`
 > are the barred pairing (G26 spans their files). So run **`#0a` + `#0b`**, then `#0c`; or `#0a` +
@@ -238,8 +238,8 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
    list from data. **Must be DIRECTION-AWARE** (the Hollow ascent runs 5→1).
 4. **Floor-4 karma counts double** in the verdict. No new state.
 5. **Rename conditions** to the design vocabulary (§14.4). Needs a `SAVE_VERSION` bump + migration.
-   ⚠ **The §22.3 half (renaming `insanity`) CANNOT START: the replacement name is still
-   undecided.** Blast radius when it does: ~60 occurrences — the id, `CONDITION_DATA`,
+   ~~⚠ The §22.3 half (renaming `insanity`) CANNOT START: the replacement name is still
+   undecided.~~ **✅ DECIDED (second sitting, §22.13): `insanity` becomes `Static`.** Blast radius: ~60 occurrences — the id, `CONDITION_DATA`,
    `CONTROL_CONDITIONS`, the tick switch, **14 player-facing `INSANITY_STRINGS`**, **six skills**
    (`mindSpike`, `corrupt`, `warpMind`, `sinfulWhisper`, `maddeningGaze`, `echoedHex`),
    `classKit.ts` `MENTAL_CONDITIONS`, three data files, ~12 tests. The §14.4 half can proceed.
@@ -250,8 +250,10 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 6. **Redefine Quick/Slow** as the **tempo gauge** (§16.1) — `initiativeOrderTwist` is a dead no-op.
 7. **Rework the level-up draft** (§19.5) — remove `stat` from `draft.ts` `CATEGORY_WEIGHTS`, add the
    **per-level stat allowance**, and add a **level cap of 20** (none exists in `src/` today).
-8. **Decide `jsdom` vs `node`** as the test environment — once, here, or three UI units each invent
-   their own override.
+8. ~~Decide~~ **✅ DECIDED (§22.18): `node` default, per-file `jsdom` opt-in.** The suite stays in
+   `node` — fastest, and it proves the no-DOM-in-`src/game` rule by construction; #6/#7/#8 opt
+   into `jsdom` per test file with a one-line directive. Write the directive convention down here
+   so three UI units inherit one decision instead of inventing overrides.
 9. **Enemy XP derives from the ENEMY** (§19.2) — `enemy.ts:117` still rolls it from `playerXp`, which
    is a feedback loop *and* makes a hard kill worth no more than a trivial one. **This was decided and
    appeared in no work plan until now.**
@@ -271,7 +273,9 @@ into consumables, and the consumable picker is **unreachable** until #9 fixes ca
 resolution (G14). **If #2 lands first, the game ships with no in-battle healing at all.** #9 is
 ~~listed in the "sequenced by judgement" bucket above~~ *(the diagram now shows the #9 → #2 edge)*.
 
-**#2 covers** all five floors per `GAME-DESIGN.md` §8. Floor 2's
+**#2 covers** all five floors per `GAME-DESIGN.md` §8, **and the verdict re-tune now has its
+stance (§22.16): grace is GENEROUS — any net-positive weighted ledger earns it.** Backpack **N =
+12** is the starting value (§22.17). Floor 2's
 illusions matter most: they are the **only trigger for the clarity↔delusion karma axis**, which
 currently can never move. Then re-run the sim, because `BALANCE-REPORT.md`'s 32.9% is measured on a
 character that never equips found loot.
@@ -329,10 +333,15 @@ store accumulates things the run never reads; the feat list is a seed.
 **#10 karma mid-run** — karma is written, carried, and read **once**, at the floor-4 gate. It never
 bends the world, never reaches the LLM prompt, is never clamped, and its cross-run memory is written
 and never read.
+**Also #10's: DELETE `karmaMemory`/`RunMemory` (§22.14, second sitting)** — the field, the per-run
+write, and its store space; it feeds nothing and its only named consumer is forbidden. The stale
+`unlockStore.ts` comment dies with the field, which also closes #12's comment-fix bullet.
 
 > **✅ RULED 2026-08-31 (A10, `GAME-DESIGN.md` §22.4) — DO NOT BUILD THE CROSS-RUN HALF AT ALL.**
-> `WORLD.md` §12 `[LOCKED]` wins: **the narrator never references a previous run.** `karmaMemory`
-> stays written-and-unconsumed **on purpose**, feeding unlocks only. **The rest of #10 — karma
+> `WORLD.md` §12 `[LOCKED]` wins: **the narrator never references a previous run.** ~~`karmaMemory`
+> stays written-and-unconsumed on purpose, feeding unlocks only~~ *(superseded twice: it feeds
+> **nothing** — the unlock path reads `RunSummary` — and the second sitting ruled it **DELETED**,
+> §22.14)*. **The rest of #10 — karma
 > bending the world, reaching the prompt, being clamped — is unaffected and should proceed.**
 >
 > *(Was "BLOCKED ON AUTHOR ROUND A10 — do not build it yet." The round is answered; the answer is
@@ -351,7 +360,7 @@ work item at all. `leaveOffering`, `honorDead`, `embraceWhisper` and `seeThrough
 declared in `karma.ts` and called from nowhere. Until they are wired: **`reverenceDesecration` can
 only ever go negative** while carrying the heaviest weight in the verdict, **`clarityDelusion` is
 permanently 0** so "The Delusion" can never be the act-3 boss, and **the entire grace deal pool is
-dead** — taking `mirror-shard`, the only hard-coded catalog item in the game, with it.
+dead** — taking `mirror-shard`, the only hard-coded item on any *acquisition* path, with it.
 ⚠ **`seeThroughIllusion` needs floor 2’s illusions, which do not exist yet** — it lands with #2.
 The other three can be wired independently.
 
@@ -361,9 +370,9 @@ exist), and **no boss is an agent**, which was M12's entire premise.
 **#12 narrator to spec (reduced M11)** — grammar-constrained choices, the tool registry and
 free-text mapping are **dropped**. What remains: the persona rewrite (the narrator *is* the
 condition, caused by extraction), per-floor voices, zone prompt files, beat significance, karma in
-the prompt, boss agents. **Also #12's:** correct the stale comment at `src/game/unlockStore.ts:32`
-— *"(the M11 narrator reads it)"* — the narrator must **never** read `karmaMemory` (§22.4), and the
-comment is the last place instructing otherwise. Note the persona string is **duplicated** in `src/llm/narrate.ts` and
+the prompt, boss agents. ~~**Also #12's:** correct the stale comment at `src/game/unlockStore.ts:32`~~
+**absorbed by #10 (§22.14): `karmaMemory` is deleted outright, and the stale comment —
+*"(the M11 narrator reads it)"* — dies with the field.** Note the persona string is **duplicated** in `src/llm/narrate.ts` and
 `electron/llm.mjs`, and the latter has no test.
 
 ### Tier 3 — authoring and shipping
@@ -373,8 +382,10 @@ left. Joke weapon names that are the shipped starting gear, every drop named "Le
 lore file reading *"this is a lore this is a lore"*, ten empty prose bodies on the live path, two
 one-sentence endings, placeholder boss names, and no descriptions anywhere. **Only the author can do
 this.** **Blocked on #1.** ~~and on author rounds A8 AND A9~~ **✅ Both were answered 2026-08-31**
-(§22.1–22.3) — the rulings are inputs to this item now, not blockers on it. ⚠ **A9 is not yet
-executable: the replacement name for `insanity` is still undecided** (§22.3).
+(§22.1–22.3) — the rulings are inputs to this item now, not blockers on it. ~~⚠ A9 is not yet
+executable: the replacement name for `insanity` is still undecided~~ **✅ the name is `Static`
+(§22.13)** — and #13 owes the **"Maddening Gaze" rename** under the same ruling (candidates: *Null
+Gaze*, *White-Noise Gaze*).
 *(Original blocker note:)* A8 settled the endings' voice and whether the player has a name (you
 cannot write the endings before that); A9 settled whether `insanity` can be named at all, which
 decides a condition name, a skill name and an item name.
@@ -458,7 +469,7 @@ alternative and why, in `GAME-DESIGN.md` **§22**.
 |---|---|---|---|
 | **A7** | Karma inputs & verdict weighting | **WIRE the four missing actions** (§22.5) | → build work, see below |
 | **A8** | The endings’ voice, and the player’s name | **Second person, never by name; the name is a LABEL only** (§22.1–22.2) | → **C12**, and an ENGINE fix |
-| **A9** | Is a nameable sanity mechanic allowed? | **No — rename `insanity`** (§22.3) | → #1.5 (⚠ new name still undecided) |
+| **A9** | Is a nameable sanity mechanic allowed? | **No — rename `insanity`** (§22.3; the name is **`Static`**, §22.13) | → #1.5 |
 | **A10** | May the narrator reference a previous run? | **No, never** (§22.4) | → #10, cross-run half CUT |
 | **A1b** | The potion fold-in | **Fold into consumables** (§22.6) | → #2, ⚠ **after #9** |
 | **B4c** | The boss-talk concession cap | **One per fight** (§22.7) | → #6 #11 #12 |
@@ -479,8 +490,8 @@ alternative and why, in `GAME-DESIGN.md` **§22**.
 
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
-one **parked** (localisation), **41 live bugs** (register: G1–G47, no G38; **40 with fixes
-specified — only `G2` lacks one**), **2 author-ruled build items** (G15 → #10a; G32 → #0a), **1
+one **parked** (localisation), **41 live bugs** (register: G1–G47, no G38; **all 41 with fixes
+specified** — `G2`'s landed at the second sitting, §22.15), **2 author-ruled build items** (G15 → #10a; G32 → #0a), **1
 fixed** (G44), and **twelve content defects** (C1–C12) for #13. *(This count has been wrong
 repeatedly — **recount by script before quoting it**; the derivation lives in `FINDINGS.md` §4's
 banner.)*

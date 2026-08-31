@@ -278,9 +278,9 @@ insanity, push, aired. Activate the dormant 13:
   store). ~~lets the narrator faintly reference who you were before — haunting~~
   > **⚠ STRUCK 2026-08-31 (§22.4).** The narrator half is **overruled by `WORLD.md` §12
   > `[LOCKED]`** — *"the narration **never** acknowledges a previous one… do not invent a diegetic
-  > justification for it later."* **`karmaMemory` stays, as a SILENT record — ⚠ with NO consumer
-> today: the unlock path reads `RunSummary`, never `karmaMemory` (`unlockStore.ts:396-406`). Kept
-> pending a future non-narrated use, or deletion.**
+  > justification for it later."* **`karmaMemory` ~~stays~~ was kept as a SILENT record — ⚠ with NO
+> consumer today: the unlock path reads `RunSummary`, never `karmaMemory` (`unlockStore.ts:396-406`).
+> ~~Kept pending a future non-narrated use, or deletion~~ — **ruled §22.14 (second sitting): DELETED.**
   > It is never read by the narrator and never surfaces in prose.
 - **Karma is live from floor 1 — floor 4 is the reckoning.** **[DECIDED]** The nature state
   accumulates across the *whole* run (every floor, every act), quietly shaping mid-run effects the
@@ -804,7 +804,8 @@ conflict also needs a clear UI state so the player understands *why* the off-han
 **Backpack: a fixed slot count, no weight.** The bag holds N items; full is full. Readable at a
 glance, draws as a **text list** (§22.9 — ~~a grid~~), and the interesting decision is **what to drop** when something better falls
 late in a run. Weight systems add arithmetic the player has to do in their head without adding much
-choice. The exact N (12? 16?) is a balance number.
+choice. **N = 12** (§22.17) — the starting value for the #2 re-run; with potions folded into
+consumables (§22.6), N is effectively the healing budget.
 
 > **~~STILL OPEN — the equipment slot set.~~ CLOSED — see §14.7 immediately below: seven slots.**
 > *(Original note kept for history:)* The author's direction is to **trim the Tibia list to a
@@ -1421,9 +1422,11 @@ deliberate and it is kept.
 > read as judgements of a person; the §5 set reads as states, which is the intended voice.)*
 
 > **⚠ PARTLY SUPERSEDED 2026-08-31 by §22.3.** This list canonises **`insanity`**, and §13 beats it:
-> the psychosis theme stays **unpointable**, so that one is being renamed. Everything else in this
-> section still stands, including "the names above are canonical for all prose" — the new name will
-> simply replace `insanity` in it. ⚠ **The replacement name is not yet decided** (§22.3).
+> the psychosis theme stays **unpointable**, so that one is renamed — **to `Static`** (§22.13).
+> Everything else in this
+> section still stands, including "the names above are canonical for all prose" — **`Static`**
+> replaces `insanity` in it. ~~⚠ The replacement name is not yet decided (§22.3).~~ *(Decided
+> §22.13, second sitting.)*
 
 Plus the thirteen distinctive ones: bleed, burn, freeze, poison, electrify, stun, fracture, sleep,
 insanity, regeneration, push, aired, **exposed**.
@@ -1591,10 +1594,11 @@ name for the *state*, not a diagnosis of the player. The skill **"Maddening Gaze
 **Rejected:** keeping the id and carving out §13. Cheaper, but it would have made the game's most
 careful design choice negotiable.
 
-> ⚠ **NOT YET EXECUTABLE — the new name is undecided.** Neither this section, nor `PLAN.md` #1.5,
-> nor `FINDINGS.md` A9 says **what `insanity` becomes.** §21.1 named its targets explicitly; this
-> ruling did not. **A builder handed #1.5 cannot do this half.** Pick a name for the *state*, not a
-> diagnosis — the §21.1 set (`Lucid`, `Clouded`, `Hardy`, `Frail`) is the register to match.
+> ~~⚠ NOT YET EXECUTABLE — the new name is undecided.~~ **✅ DECIDED (second sitting, §22.13):
+> the name is `Static`.** *(The warning stood because neither this section, nor `PLAN.md` #1.5, nor
+> `FINDINGS.md` A9 said what `insanity` becomes — §22.13 now does, and #1.5 is executable. `Static`
+> matches the register asked for here: a name for the state, not a diagnosis, beside `Lucid`,
+> `Clouded`, `Hardy`, `Frail`.)*
 >
 > ⚠ **The cited precedent has not actually happened in code.** This section said §21.1 *"already
 > renamed `wise/fool` → `Lucid/Clouded`"* — it renamed them **in the document**; `condition.ts:61,68`
@@ -1617,7 +1621,7 @@ faintly reference who you were before"*.
 
 `karmaMemory` / `RunMemory` **stay**, as a *silent* record — ⚠ *corrected 2026-08-31: "feeding
 unlocks only" was false; **it feeds nothing** — the unlock path reads `RunSummary`, never
-`karmaMemory`. Write-only data, kept pending a future non-narrated use or deletion.* Restart remains pure
+`karmaMemory`. Write-only data — **ruled §22.14: deleted.*** Restart remains pure
 game convention with no in-fiction explanation.
 
 **Consequences to apply:** drop *"its cross-run memory must be read"* from §14.2; remove that half of
@@ -1739,3 +1743,54 @@ store, and an ongoing authoring obligation.
 The `$comment` key that made `npm run desktop:pack` fail every time since the file was created is
 deleted. One line, config (pipeline-exempt), and it unblocks producing a build to look at. Verified:
 the config now validates and reaches real packaging concerns.
+
+### 22.13 `insanity` becomes **STATIC** *(second sitting, 2026-08-31)*
+
+The A9 rename is now executable. **The condition is `Static`** — your signal degraded into noise: a
+state, not a diagnosis. It matches floor 2's locked imagery (*"mirrors, doubles, static, signal"*),
+the cyberpunk register, and resonates deliberately with the static-wraiths — the floor-2 family that
+*is* the state embodied. **"Clarity Draught" stays** (curing Static diagnoses nothing); the skill
+**"Maddening Gaze" is renamed in the content pass** (candidates: *Null Gaze*, *White-Noise Gaze*).
+**Rejected:** *Unmoored* (quieter, no collisions) and *Dissonance* (musical register, but collides
+with the floor-4 Choir's `dissonantHymn`). Unblocks the §22.3 half of `PLAN.md` #1.5.
+
+### 22.14 `karmaMemory` is DELETED
+
+It fed nothing — the unlock path reads `RunSummary`, and its only named consumer (the narrator) is
+forbidden by §22.4. **Remove the field, the per-run write, and its store space**; git history keeps
+it recoverable. This also retires the stale `unlockStore.ts:32` comment with the field itself.
+**Rejected:** repurposing it as a run-history screen (a real consumer, but a new unscoped screen)
+and keeping it dormant (dead limbs are what every audit here kept tripping over).
+
+### 22.15 G2's fix: ANY terminal state clears the run save; the summary is the record
+
+Grace, damnation and death all clear the run save — a finished run is finished. The narrator-written
+**run summary already decided for death (G10) extends to victories**, so the record of a completed
+run is its summary, not a reloadable state. Fits permadeath and the archive fiction. **Rejected:**
+a terminal save that re-shows the ending (extra state + a re-entry screen), and the minimal
+delete-only patch (fixes the bug but gives wins no record).
+
+### 22.16 The verdict: GRACE IS GENEROUS — any net-positive ledger earns it
+
+**Author's call, against the recommendation.** At the floor-4 verdict, a weighted karma sum above
+zero resolves to grace; zero or below is cast down. Mercy is rewarded strongly and immediately.
+**Accepted cost, stated plainly:** grace ends the run at act 4, so act 5 — the final boss and the
+hardest content — becomes something many merciful runs never see; and neutral play sits one good
+deed from grace, so the gate is gentle at the game's climax. *(Recommended-and-rejected: neutral →
+cast-down with grace earned by a consistent throughline.)* Lands in #2's re-run as the threshold
+stance: `GATE_THRESHOLD` ≈ "strictly positive", tuned there.
+
+### 22.17 Backpack N = 12
+
+Twelve slots, the document's own first guess, as the **starting value for the #2 re-run to tune**.
+Now load-bearing beyond inventory: with potions folded into consumables (§22.6), **N is effectively
+the healing budget** — roughly 3–4 heals plus 2–3 spare gear plus utility before it bites.
+**Rejected:** 8 (strongest scarcity, likeliest to frustrate before tuning) and 16 (capacity nearly
+never binds, so scarcity would ride on drop rates alone).
+
+### 22.18 Test environment: `node` default, per-file `jsdom` opt-in
+
+The suite stays in `node` — fastest, and it **proves the architecture**: any DOM dependency leaking
+into `src/game` fails by construction. UI units (#6/#7/#8) opt into `jsdom` per test file with a
+one-line directive. Written into #1 change 8 so all three units inherit one decision.
+**Rejected:** `jsdom` everywhere (uniform but slower, and the DOM-leak tripwire disappears).

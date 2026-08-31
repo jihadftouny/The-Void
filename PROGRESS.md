@@ -154,6 +154,10 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 - **`electron-builder.json` fixed** (`d8eb952`) — the `$comment` key that made every
   `npm run desktop:pack` fail since the file was created is gone; the config validates. First real
   pack still needs **Windows Developer Mode** (`HUMAN-CHECKS.md`).
+- **Second sitting (same day):** the six last open items closed — `insanity` → **`Static`**;
+  `karmaMemory` **deleted**; G2's fix designed (terminal states clear the save; the summary is the
+  record); the verdict **grace-generous** (author's call, cost recorded); **backpack N = 12**;
+  tests `node` + per-file `jsdom`. **The author queue is EMPTY for the first time.**
 - **Final consolidated sweep** (two agents over all spec/planning files) found and fixed **51**
   propagation defects from the round itself — the dominant failure of the whole hunt: **the newest
   edit, not the old documents.** No code changed beyond the config fix; #0a–#0c remain the next build.

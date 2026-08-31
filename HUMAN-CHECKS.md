@@ -68,7 +68,8 @@ here** — that's our later art-direction session; this pass is about *functiona
 
 **Later additions (2026-08-14), stacked further on the chain — all loop-verified:**
 - **enemy-kits** — fixes "all enemies do pyroBall": 24 families now cast distinct themed skills + drop
-  themed loot. (Play-test: confirm a mutant-stray poisons, a distortion drives insanity, a ganger bleeds.)
+  themed loot. (Play-test: confirm a mutant-stray poisons, a distortion drives insanity — renamed
+  **`Static`** once `PLAN.md` #1.5 lands, `GAME-DESIGN.md` §22.13 — and a ganger bleeds.)
 - **M12 bosses** — **4 of 5** boss mechanics (⚠ **the floor-4 executioner fight does not exist** — `PLAN.md` #11; `boss.ts` has four combat bosses) + the **karma verdict gate** (grace ends at act 4 / cast-down
   → Hollow-Self → damnation), routed by your hidden karma. Boss *dialogue* + floor/ending *prose* still
   need your voice (M10/M11/M12/M14). (Play-test: reach a floor boss; a virtuous run → grace, an aggressive
