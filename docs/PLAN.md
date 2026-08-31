@@ -295,7 +295,7 @@ one-sentence endings, placeholder boss names, and no descriptions anywhere. **On
 this.** **Blocked on #1 and on author rounds A8 AND A9** — A8 settles the endings' voice and whether
 the player has a name (you cannot write the endings before that); A9 settles whether `insanity` can
 be named at all, which decides a condition name, a skill name and an item name.
-**Also carries all EIGHT content defects, C1–C8:** the two reserved words used casually in shipped
+**Also carries all ELEVEN content defects, C1–C11:** the two reserved words used casually in shipped
 strings · the class picker giving away the concealed fact · the intro sending you to the wrong place ·
 the narrator never being told which floor it is on · **the line that makes the floor-4 angels a
 hallucination** · two different items both named "Clarity Draught" · the combat log printing raw
@@ -387,8 +387,8 @@ See `FINDINGS.md` A1b and B4c. The queue and the full record are in
 **Everything else left is NOT interviews.** Per `docs/FINDINGS.md`: three **verifications** (the
 generated-asset licence is the one that can block release), two **balance numbers** for the re-run,
 one **parked** (localisation), **forty-two bugs** (G1–G45; **there is no G38**; counted by script)
-— **forty with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eight
-content defects** (C1–C8) for #13. **`G32` was ruled on 2026-08-30 —
+— **forty with fixes specified; `G2` has none and `G15` needs an AUTHOR RULING** — and **eleven
+content defects** (C1–C11) for #13. **`G32` was ruled on 2026-08-30 —
 wire `proficiency`, then re-run the balance sim.** *(This line has been wrong four times. **Recount
 before quoting it.**)*
 
