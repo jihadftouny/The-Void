@@ -300,6 +300,25 @@ splash and installer art are on no list; `itch-description.html` is wrong about 
 
 > **⚠ #14 carries THREE severe packaging defects that no other unit covers — and one of them means
 > the ship command has never run:**
+> **✅ What pass 13A VERIFIED works, so #14 does not need to re-establish it:**
+> - **The production build runs under `file://`** — a real Electron `loadFile('dist/desktop.html')`
+>   with the real preload. No CSP or module-loading breakage, CSS applied, `window.void` present,
+>   renderer booted. **This path was never exercised before** (`desktop` uses the dev server and
+>   `desktop:smoke` skips window creation), so it was pure risk until now.
+> - **The packaged `app.asar` is correct** — `files` delivers exactly what is needed, and
+>   `asarUnpack` correctly externalises `node-llama-cpp` and all five Windows binary variants.
+> - **GPU probe and `getLlama` both work from inside the packaged asar** (`gpu=vulkan`, both devices
+>   enumerated). Discrete-GPU pinning survives packaging.
+> - **`npm ci --omit=dev` is sound** — the lockfile agrees with `package.json`, and a production
+>   install only *removes* dev packages.
+>
+> ⚠ **DO NOT RE-CHASE:** 13A hit a convincing "the packaged build cannot use the GPU" failure
+> (`NoBinaryFoundError`, `gpu=false`, every `ggml-cpu-*.dll` failing with an empty error) and
+> **disproved it** — the cause was Windows `MAX_PATH`, with those DLLs at 274–287 characters in a
+> scratch directory. The same files at 250 characters load fine, and a real install lands near 175.
+> **Not a shipping issue.** Discriminator if it resurfaces: measure the length of the path to
+> `@node-llama-cpp/win-x64-vulkan/bins/win-x64-vulkan/ggml-cpu-sapphirerapids.dll`.
+>
 > - **G44 — `npm run desktop:pack` HAS NEVER SUCCEEDED.** A `$comment` key on line 2 of
 >   `electron-builder.json` is rejected by the schema (`additionalProperties: false`, only `$schema`
 >   allowed), and validation runs *before* any packaging work. The file has one commit and the key is

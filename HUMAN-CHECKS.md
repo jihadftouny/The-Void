@@ -239,6 +239,19 @@ landing on the Intel iGPU. Verified by headless tests (**378 at the time; 1029 t
 
 ---
 
+## ⚙️ Machine setting you will need before the first real package (found 2026-08-30)
+
+- [ ] **Enable Windows Developer Mode** (Settings → System → For developers), or run the pack from an
+      elevated shell. **Without it, `npm run desktop:pack` cannot finish** even once the code defect
+      is fixed: `electron-builder` extracts `winCodeSign`, which contains symbolic links, and
+      Windows refuses with *"Cannot create symbolic link: A required privilege is not held."*
+      This is a machine privilege, not a repo problem.
+      > **Context:** the pack command has **never once succeeded** (`FINDINGS.md` **G44**) because of
+      > a one-line config defect. A verification run with that defect fixed got all the way through
+      > app packaging — producing a **correct** `app.asar`, with the GPU probe and the model loader
+      > both working from inside it — and then hit this privilege wall. So the one-line fix is
+      > necessary but **not sufficient on this machine.**
+
 ## Model download location — download once, shared
 
 > **⚠ SUPERSEDED heading, 2026-08-28.** This section was titled *"branch `agentic/model-cache`"*.
