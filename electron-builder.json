@@ -1,5 +1,4 @@
 {
-  "$comment": "N1 packaging config. Full installers + first-run model handling are N10. node-llama-cpp must NOT be bundled/asar'd — keep it unpacked so its prebuilt binaries load.",
   "appId": "com.jihanger.thevoid",
   "productName": "The Void",
   "files": ["dist/**", "electron/**", "package.json"],
