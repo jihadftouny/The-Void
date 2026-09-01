@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as statEffects from './statEffects.ts';
 import {
   AUGMENT_DEPRIVATION,
   RESIST_PER_WIS_MOD,
@@ -11,7 +15,6 @@ import {
   effectiveResistances,
   initiativeOrderTwist,
   illusionSightTwist,
-  dealQualityTwist,
   type Conditioned,
 } from './statEffects.ts';
 import { makeCondition, type ActiveCondition, type ConditionType } from './condition.ts';
@@ -184,7 +187,41 @@ describe('deferred-twist no-op hooks are wired and currently inert', () => {
     expect(initiativeOrderTwist(withCond('slow'))).toBe(0);
     expect(illusionSightTwist(withCond('wise'))).toBe(0);
     expect(illusionSightTwist(withCond('fool'))).toBe(0);
-    expect(dealQualityTwist(withCond('charming'))).toBe(0);
-    expect(dealQualityTwist(withCond('repulsive'))).toBe(0);
+    // G16: the two `dealQualityTwist` lines that used to sit here are GONE with the function.
+    // It was a no-op commented "no-op until M7" — and M7 shipped. Its siblings stay because
+    // each has a named future owner; this one only had a stale promise.
+  });
+});
+
+// ------- G16 — the third dead stat twist is DELETED, not re-labelled --------------------------
+
+describe('G16 — dealQualityTwist is gone from the shipping code', () => {
+  it('is no longer exported by statEffects', () => {
+    // It was a no-op behind a comment claiming it was "pending M7" — and M7 shipped: the
+    // sacrifice-deal economy exists in `deal.ts`. A no-op guarded by a promise about a
+    // milestone that has already landed reads as scheduled work and is worse than an absence.
+    expect('dealQualityTwist' in statEffects).toBe(false);
+  });
+
+  it('no SHIPPING source file mentions it any more', () => {
+    // A source scan rather than a module check, because a stray call site elsewhere would not
+    // show up above. It deliberately skips `*.test.ts` — the name appears in this very file —
+    // so the guard is aimed at the code that ships.
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const roots = [dir, join(dir, '..', 'render'), join(dir, '..', 'llm'), join(dir, '..', 'desktop')];
+    const hits: string[] = [];
+    for (const root of roots) {
+      if (!existsSync(root)) continue;
+      for (const name of readdirSync(root)) {
+        if (!name.endsWith('.ts') || name.endsWith('.test.ts')) continue;
+        if (readFileSync(join(root, name), 'utf8').includes('dealQualityTwist')) hits.push(name);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('its two SIBLINGS stay — each has a named future owner, which is what it lacked', () => {
+    expect(typeof statEffects.initiativeOrderTwist).toBe('function'); // PLAN.md #1.6
+    expect(typeof statEffects.illusionSightTwist).toBe('function'); // PLAN.md #2
   });
 });

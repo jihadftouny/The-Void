@@ -29,6 +29,7 @@
     "kind": "usable",
     "slot": null,
     "rarity": "Common",
-    "effects": [{ "type": "heal", "params": { "amount": 8 } }]
+    "effects": [{ "type": "heal", "params": { "amount": 8 } }],
+    "use": [{ "kind": "healSelf", "params": { "amount": 8 } }]
   }
 ]

@@ -23,6 +23,7 @@ import { type Stats } from './character.ts';
 import { createKarma, type KarmaState } from './karma.ts';
 import { hasControlCondition, makeCondition } from './condition.ts';
 import { resolveSkill, type SkillId } from './skill.ts';
+import { generateDraft } from './draft.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- Fixtures ------------------------------------------------------------
@@ -602,7 +603,7 @@ describe('entering Act 5', () => {
   });
 
   it('below the gate, the act-5 hub yields ORDINARY encounters — never the Hollow', () => {
-    expect(HOLLOW_GATE_XP).toBe(600); // the premise, restated
+    expect(HOLLOW_GATE_XP).toBe(500); // the premise, restated
     let sawBattle = false;
     let sawRest = false;
     let sawChest = false;
@@ -1476,5 +1477,48 @@ describe('M13 off-equivalence: an all-unlocked snapshot never perturbs the run',
     const b = runPlaythrough(4242, snap);
     expect(JSON.stringify(b.events)).toBe(JSON.stringify(a.events));
     expect(JSON.stringify(b.final)).toBe(JSON.stringify(a.final));
+  });
+});
+
+// ------- G45 — `step` is total, including for a type-legal non-integer index -------------------
+
+describe('G45 — a non-integer draft-pick index is a no-op, not a crash', () => {
+  it('1.5, 0.5, 2.5 and NaN return the state unchanged with no events', () => {
+    // `step` documents itself as TOTAL, but the draft-pick guard checked only the two bounds.
+    // `offers[1.5]` is `undefined`, the `!` assertion hid it, and `applyDraftOption` then
+    // dereferenced `option.kind`. Reproduced by the register: 0 / -1 / 3 / Infinity / 1e21
+    // were clean; 1.5, 0.5, 2.5 and NaN threw a TypeError. NaN is its own case — every
+    // comparison with NaN is false, so it defeats a bounds test on its own.
+    const player = makePlayer();
+    const base = menuState(player, 11);
+    const draft = step(
+      { ...base, phase: { kind: 'level-up-draft', offers: generateDraft(player, mulberry32(3)) } },
+      { kind: 'continue' }, // wrong input: a no-op that leaves the draft phase in place
+    ).state;
+    if (draft.phase.kind !== 'level-up-draft') throw new Error('expected a draft phase');
+    expect(draft.phase.offers).toHaveLength(3);
+
+    for (const index of [1.5, 0.5, 2.5, NaN, -0.5, 2.0000001]) {
+      const r = step(draft, { kind: 'draft-pick', index });
+      expect(r.state, `index ${index}`).toBe(draft); // same reference: untouched
+      expect(r.events, `index ${index}`).toEqual([]);
+      expect(r.awaiting, `index ${index}`).toBe('draft-pick');
+    }
+  });
+
+  it('the integer indices it always accepted or rejected still behave identically', () => {
+    const player = makePlayer();
+    const base = menuState(player, 11);
+    const offers = generateDraft(player, mulberry32(3));
+    const draft: GameState = { ...base, phase: { kind: 'level-up-draft', offers } };
+    // Out of range -> no-op (unchanged behaviour).
+    for (const index of [-1, 3, Infinity, 1e21]) {
+      const r = step(draft, { kind: 'draft-pick', index });
+      expect(r.state, `index ${index}`).toBe(draft);
+    }
+    // In range -> the pick applies (unchanged behaviour).
+    const ok = step(draft, { kind: 'draft-pick', index: 0 });
+    expect(ok.state.phase.kind).toBe('level-up-result');
+    expect(ok.events.some((e) => e.kind === 'draft-picked')).toBe(true);
   });
 });

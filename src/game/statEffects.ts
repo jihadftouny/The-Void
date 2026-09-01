@@ -190,11 +190,13 @@ export function illusionSightTwist(_char: Conditioned): 0 {
   return 0; // no-op until M10
 }
 
-/**
- * Emboldened/Cowed DEAL-QUALITY (sacrifice economy, M7). Emboldened should improve
- * shop/deal terms, Cowed worsen them. No deal economy exists yet, so this is a no-op:
- * the ± CHA portion (mods) is already live via `effectiveMods`.
- */
-export function dealQualityTwist(_char: Conditioned): 0 {
-  return 0; // no-op until M7
-}
+// G16: the third twist hook — Emboldened/Cowed DEAL-QUALITY — USED TO LIVE HERE and is
+// DELETED, not re-labelled. It was a no-op behind a comment claiming it was "pending M7", and
+// M7 shipped: the sacrifice-deal economy exists (`deal.ts`). A no-op guarded by a promise about
+// a milestone that has already landed is worse than an absence, because it reads as scheduled
+// work. Nothing depended on it (its only references were its own two test lines), so deletion
+// is the honest option; the ±CHA portion of Emboldened/Cowed is already live through
+// `effectiveMods`. Its two siblings above STAY — each has a named future owner (`PLAN.md` #1.6
+// for the initiative reorder, #2 for illusion-sight), which is exactly what this one lacked.
+// Its old name is deliberately NOT written here: a source scan in `statEffects.test.ts` asserts
+// the identifier appears in no shipping file, and a tombstone would defeat it.

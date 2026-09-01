@@ -234,3 +234,74 @@ describe('applyDeal — karma-shifting costs flow through the real recordKarma',
     expect(r.karma).toEqual(NEUTRAL);
   });
 });
+
+// ------- G20 — a sacrifice deal cannot drive the player below a living body -------------------
+
+describe('G20 — no deal leaves maxHp, hp or a stat below 1', () => {
+  const dealWith = (cost: SacrificeDeal['cost']): SacrificeDeal => ({
+    pool: 'tempting',
+    cost,
+    reward: { kind: 'skillCharge', amount: 1 },
+  });
+
+  it('a maxHp cost that would not leave a living body is UNAFFORDABLE', () => {
+    // The register's exact reproduction: `deals.json`'s `tempting` pool carries a `maxHp: 6`
+    // cost, and `canAfford` used to fall through to `return true` for it, so a player at
+    // `maxHp: 5, hp: 5` could take it and came out at `maxHp: -1, hp: -1` — walking to the hub
+    // dead, refused potions, and revived only to 1.
+    const player = makePlayer({ maxHp: 5, hp: 5 });
+    expect(canAfford(player, { kind: 'maxHp', amount: 6 })).toBe(false);
+    expect(canAfford(player, { kind: 'maxHp', amount: 5 })).toBe(false); // must LEAVE something
+    expect(canAfford(player, { kind: 'maxHp', amount: 4 })).toBe(true);
+
+    const result = applyDeal(player, createKarma(), dealWith({ kind: 'maxHp', amount: 6 }));
+    expect(result.outcome).toBe('unaffordable');
+    expect(result.player).toBe(player); // nothing changed at all
+  });
+
+  it('an affordable maxHp cost still leaves maxHp and hp at 1 or more', () => {
+    const player = makePlayer({ maxHp: 5, hp: 5 });
+    const result = applyDeal(player, createKarma(), dealWith({ kind: 'maxHp', amount: 4 }));
+    expect(result.outcome).toBe('taken');
+    expect(result.player.maxHp).toBe(1);
+    expect(result.player.hp).toBe(1); // clamped down to the new max, floored at 1
+  });
+
+  it('no sequence of stat costs can walk an attribute to zero or below', () => {
+    // The `statPoint` cost was unbounded in exactly the same way, and it is clamped in the
+    // same edit: a stat at 0 or below would invert its modifier (and, for CON, every number
+    // derived from it).
+    let player = makePlayer();
+    const start = player.stats.STR;
+    for (let i = 0; i < start + 10; i++) {
+      const r = applyDeal(player, createKarma(), dealWith({ kind: 'statPoint', stat: 'STR' }));
+      expect(r.outcome).toBe('taken');
+      player = r.player;
+      expect(player.stats.STR).toBeGreaterThanOrEqual(1);
+    }
+    expect(player.stats.STR).toBe(1);
+    // …and the derived mod table was recomputed from the clamped value, not the raw one.
+    expect(player.mods.STR).toBe(computeStatMod(1));
+  });
+
+  it('an accepted deal never leaves the player unable to act, for any shipped cost kind', () => {
+    // A sweep across every cost kind at the tightest legal player, asserting the invariant
+    // rather than one branch: nothing an accepted deal does may produce a dead body.
+    const costs: SacrificeDeal['cost'][] = [
+      { kind: 'hp', amount: 1 },
+      { kind: 'maxHp', amount: 1 },
+      { kind: 'statPoint', stat: 'CON' },
+      { kind: 'skillCharge', amount: 99 },
+      { kind: 'desecrate' },
+      { kind: 'greed' },
+    ];
+    for (const cost of costs) {
+      const player = makePlayer({ maxHp: 2, hp: 2 });
+      if (!canAfford(player, cost)) continue;
+      const r = applyDeal(player, createKarma(), dealWith(cost));
+      expect(r.player.maxHp, `${cost.kind}: maxHp`).toBeGreaterThanOrEqual(1);
+      expect(r.player.hp, `${cost.kind}: hp`).toBeGreaterThanOrEqual(1);
+      expect(r.player.skillCharges, `${cost.kind}: charges`).toBeGreaterThanOrEqual(0);
+    }
+  });
+});

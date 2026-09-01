@@ -98,6 +98,21 @@
 //         |     | deaths are now on act 5 (previously 0, because act 5 was boss-only).
 //         |     | ⚠ FLAGGED FOR #2: 600 is a derived placeholder, and floor 5 is now the
 //         |     | deadliest stretch of the descent.
+//  step 8 | G35 | `cheaper` resolves against the PLAYER, so a skill can no longer be driven to
+//         |     | 0 charge cost and cast free forever (274 of 300 seeds reached that).
+//         | G20 | a deal cannot drive maxHp / hp / a stat below 1.
+//         | G45 | a non-integer `draft-pick` index is a no-op instead of a TypeError.
+//         | G16 | the dead deal-quality twist is deleted.  | G28d | clarity-draught is usable.
+//         |     | EXPECTED: the player gets WEAKER — G35 removes an exploit the heuristic
+//         |     | policy was reaching (it prefers `upgrade` offers), and the other four are
+//         |     | guards on unreachable-or-rare paths. OBSERVED: both act-5 Enforcer deaths
+//         |     | now happen a level earlier (20 -> 16 and 18 -> 16); the three act-1/act-4
+//         |     | rows are BYTE-IDENTICAL, another useful control (those runs never level far
+//         |     | enough to be offered a second `cheaper`).
+//         | ⚠   | The 500-run `balance.test.ts` win rate fell to EXACTLY 0.120, which does not
+//         |     | clear its `> 0.12` floor. Per this unit's own rule the CONSTANT was lowered,
+//         |     | not the guard: `HOLLOW_GATE_XP` 600 -> 500, one step down the same derived
+//         |     | curve (k = 6 kills, 240·e^(0.75) ~ 508). That measures 0.132.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -138,8 +153,10 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 
 /** The frozen run records. MEASURED, not derived — see the file header. */
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 20, floorsCleared: 4, steps: 507, cause: 'The Unraveled Unbeing', rngState: 3601606521 },
-  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 18, floorsCleared: 4, steps: 523, cause: 'Mirrored Reflection', rngState: 3556148722 },
+  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 444, cause: 'The Husk Remnant', rngState: 841227953 },
+  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 531, cause: 'The Spent Remnant', rngState: 291816878 },
+  // The three rows below are BYTE-IDENTICAL to their step-7 values: these runs end before the
+  // second `cheaper` offer G35 removed could ever reach them. A useful control on step 8.
   { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 21, cause: 'Armored Psycho', rngState: 560318176 },
   { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 380, cause: 'The Knight', rngState: 2887346257 },
   { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 92, cause: 'Undercity Kingpin', rngState: 2809167167 },
@@ -174,13 +191,13 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
       damnation: 0,
       deaths: 6,
       winRate: 0 / 6,
-      avgLevel: 55 / 6,
+      avgLevel: 49 / 6,
       avgFloorsCleared: 11 / 6,
       deathByAct: { 1: 3, 2: 0, 3: 0, 4: 1, 5: 2 },
       perClass: {
         Enforcer: {
           runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 39 / 3, avgFloorsCleared: 8 / 3,
+          winRate: 0 / 3, avgLevel: 33 / 3, avgFloorsCleared: 8 / 3,
           deathByAct: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 2 },
         },
         Hollow: {

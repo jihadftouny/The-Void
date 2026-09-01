@@ -145,13 +145,31 @@ function firstRelicIndex(player: Player): number {
 }
 
 /**
+ * The floor every stat is held at. A stat cost is otherwise unbounded — nothing stops a run of
+ * `statPoint` deals walking an attribute to 0 and below, which would invert its modifier and,
+ * for CON, its derived numbers. 1 mirrors the D&D floor and the `Math.max(..., 1)` that
+ * `classKit.ts` already applies to max HP. M15 balance placeholder.
+ */
+const MIN_STAT = 1;
+
+/**
  * Can the player pay `cost`? — PURE. An HP cost must leave the player alive (`amount < hp`); a
- * relic cost needs a relic in the backpack; every other cost is always affordable.
+ * MAX-HP cost must leave a living body behind (`amount < maxHp`); a relic cost needs a relic in
+ * the backpack; every other cost is always affordable.
+ *
+ * G20: the `maxHp` case used to fall through to `return true`, and `applyDeal` subtracted with
+ * NO floor — unlike every other max-HP sink in the engine. Verified: `deals.json`'s `tempting`
+ * pool carries a `maxHp: 6` cost, so a player at `maxHp: 5, hp: 5` could afford it and came out
+ * at `maxHp: -1, hp: -1`. They then walked to the hub at -1 HP and died on round 1 without
+ * acting, with potions refused (`hp < cap` but the heal caps at a negative max) and a revive
+ * healing to 1.
  */
 export function canAfford(player: Player, cost: DealCost): boolean {
   switch (cost.kind) {
     case 'hp':
       return cost.amount < player.hp;
+    case 'maxHp':
+      return cost.amount < player.maxHp;
     case 'relic':
       return firstRelicIndex(player) >= 0;
     default:
@@ -159,9 +177,13 @@ export function canAfford(player: Player, cost: DealCost): boolean {
   }
 }
 
-/** Recompute the derived stat mods after a stat change (maxHp/AC deliberately NOT re-derived). */
+/**
+ * Recompute the derived stat mods after a stat change (maxHp/AC deliberately NOT re-derived).
+ * G20: the stat is floored at `MIN_STAT`, so the unbounded `statPoint` cost cannot walk an
+ * attribute to zero or below.
+ */
 function withStat(player: Player, stat: StatKey, delta: number): Player {
-  const stats = { ...player.stats, [stat]: player.stats[stat] + delta };
+  const stats = { ...player.stats, [stat]: Math.max(player.stats[stat] + delta, MIN_STAT) };
   return { ...player, stats, mods: computeStatMods(stats) };
 }
 
@@ -194,8 +216,10 @@ export function applyDeal(
       next = { ...next, hp: next.hp - deal.cost.amount };
       break;
     case 'maxHp': {
-      const maxHp = next.maxHp - deal.cost.amount;
-      next = { ...next, maxHp, hp: Math.min(next.hp, maxHp) };
+      // G20: floored at 1, matching `classKit.ts`'s `maxHpCost` sink, with `hp` clamped to the
+      // new max and likewise floored — a deal must never leave a body that cannot act.
+      const maxHp = Math.max(next.maxHp - deal.cost.amount, 1);
+      next = { ...next, maxHp, hp: Math.max(Math.min(next.hp, maxHp), 1) };
       break;
     }
     case 'statPoint':

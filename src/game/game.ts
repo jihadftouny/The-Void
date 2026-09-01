@@ -393,7 +393,15 @@ export function step(state: GameState, input: GameInput): StepResult {
     case 'level-up-draft': {
       if (input.kind !== 'draft-pick') return noop;
       const index = input.index;
-      if (index < 0 || index >= phase.offers.length) return noop; // out-of-range: no-op
+      // G45: `step` documents itself as TOTAL ("the reducer is total", above), and this guard
+      // checked only the two bounds. A type-legal non-integer slipped through — `offers[1.5]`
+      // is `undefined`, the `!` assertion hid it, and `applyDraftOption` then dereferenced
+      // `option.kind`. Reproduced: 0 / -1 / 3 / Infinity / 1e21 were all clean, while 1.5,
+      // 0.5, 2.5 and NaN threw a TypeError. (NaN also defeats the bounds test on its own,
+      // since every comparison with NaN is false.) The sibling consumable path was already
+      // safe against the identical inputs. No shipped caller produces this — the renderer
+      // builds indices from a loop — so it is a contract violation through the engine API.
+      if (!Number.isInteger(index) || index < 0 || index >= phase.offers.length) return noop;
       const player = requirePlayer(state);
       const picked = applyDraftOption(player, phase.offers[index]!);
       return finish(

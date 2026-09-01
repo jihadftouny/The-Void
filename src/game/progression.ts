@@ -63,11 +63,19 @@ export function shouldAdvance(act: number, xp: number): boolean {
  *
  * ⚠ M15/#2 BALANCE PLACEHOLDER — this number decides how long floor 5 is, and no author has
  * set it. DERIVATION, so it is not arbitrary: enemy xp is `1 + randInt(0, floor(playerXp/4)+2)`,
- * mean ~ playerXp/8, so dX/dkill ~ X/8 and X(k) = 240·e^(k/8) from the act-5 entry threshold of
- * 240. Floors 3 and 4 each take ~8–11 kills; 240·e^(7.5/8) ~ 610. So 600 is ~7–8 kills on floor
- * 5, and it continues the existing multiplicative shape of 10 / 30 / 90 / 240 (x2.5).
+ * mean ~ playerXp/8, so dX/dkill ~ X/8 and, from the act-5 entry threshold of 240,
+ * X(k) = 240·e^(k/8) for k kills of floor 5:
+ *     k = 4 -> 396      k = 5 -> 448      k = 6 -> 508      k = 7.5 -> 610
+ *
+ * The first choice was 600 (k ~ 7.5, matching the ~8–11 kills floors 3 and 4 each take). It is
+ * LOWERED to 500 (k = 6) for a measured reason, not a taste: at 600 the heuristic-policy win
+ * rate over `balance.test.ts`'s 500-run sample lands on EXACTLY 0.120, which does not clear
+ * that file's `> 0.12` floor. The unit's own rule for this case is to lower the CONSTANT and
+ * show the re-derivation rather than weaken the guard, so this moves one step down the same
+ * curve — k = 6 kills, 240·e^(0.75) ~ 508 -> 500 — which measures 0.132. `PLAN.md` #2's
+ * re-run owns the final value; floor 5 is now the deadliest stretch of the descent.
  */
-export const HOLLOW_GATE_XP = 600;
+export const HOLLOW_GATE_XP = 500;
 
 /** Whether floor 5's boss gate has opened for a player at `xp` — PURE. */
 export function hollowGateOpen(xp: number): boolean {
