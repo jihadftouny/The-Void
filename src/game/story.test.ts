@@ -10,8 +10,36 @@ import {
 } from './story.ts';
 
 // Hand-derived from Java `Story.java`. Intro opens "The capital of Absolution,
-// 2100 . . ." and inlines the player name (our {playerName} token). Act headers
-// are ACT I..V; the ending header is "END." and prints the player name.
+// 2100 . . ."; act headers are ACT I..V; the legacy ending header is "END.".
+//
+// CHANGED for G47 (2026-09-01): the Java original inlined the player's name into the
+// intro and both endings. GAME-DESIGN.md §22.1 / WORLD.md §8 [LOCKED] rule that the
+// narrator NEVER speaks the player's name, and these three bodies flow into the model's
+// prompt via `describeEvent`. The `{playerName}` token is therefore GONE from every LIVE
+// story string, and the assertions below now check its ABSENCE. The name survives on the
+// label surfaces §22.2 preserves (HUD, character sheet, save slot).
+
+describe('the {playerName} token is gone from every LIVE story string (G47)', () => {
+  // The regression guard for the whole rule, in one place: whatever else changes in
+  // story.json, no string the engine substitutes into a narration event may carry the
+  // token again. `getEnding()` is deliberately excluded — see the `ending` block below.
+  it('no live story text carries the token', () => {
+    const live = [
+      ...getIntro().lines,
+      getGraceEnding().body,
+      getGraceEnding().header,
+      getDamnationEnding().body,
+      getDamnationEnding().header,
+      ...[1, 2, 3, 4, 5].flatMap((a) => [
+        getActIntro(a)!.header,
+        getActIntro(a)!.body,
+        getActOutro(a)!.header,
+        getActOutro(a)!.body,
+      ]),
+    ];
+    for (const s of live) expect(s).not.toContain('{playerName}');
+  });
+});
 
 describe('intro', () => {
   it('contains the opening capital-of-Absolution line', () => {
@@ -19,9 +47,15 @@ describe('intro', () => {
     expect(joined).toContain('The capital of Absolution, 2100');
   });
 
-  it('carries the {playerName} substitution token', () => {
+  // CHANGED for G47 (was: "carries the {playerName} substitution token"). The intro lines
+  // go straight into the `intro` event and from there into the model's prompt, so the
+  // narrator would read the player's name aloud — the exact break §22.1 ruled against.
+  // The name is dropped along with the comma that set off the appositive, so the sentence
+  // still reads "…has ordered you to delve into the Rift…".
+  it('does NOT carry the {playerName} token, and still reads as one sentence', () => {
     const joined = getIntro().lines.join('\n');
-    expect(joined).toContain('{playerName}');
+    expect(joined).not.toContain('{playerName}');
+    expect(getIntro().lines.join(' ')).toContain('has ordered you to delve into the Rift');
   });
 
   it('has header STORY', () => {
@@ -61,6 +95,12 @@ describe('act intros / outros', () => {
 });
 
 describe('ending', () => {
+  // DEAD ANCHOR — the ONE legitimate {playerName} in the repo. This legacy "END." body has
+  // no live call site: only `getEnding()` reads it and only this test calls that (the two
+  // shipped endings are grace/damnation below). It is kept verbatim as the Java-parity
+  // record, so G47's rule does not reach it. Anywhere the Void actually SPEAKS, the token
+  // is forbidden — see the G47 block at the top of this file. Do not read this exception
+  // as a sanctioned use; if this anchor ever gains a call site, it must lose the token.
   it('has header END. and carries the {playerName} token', () => {
     expect(getEnding().header).toBe('END.');
     expect(getEnding().body).toContain('{playerName}');
@@ -68,9 +108,16 @@ describe('ending', () => {
 });
 
 describe('M12 two endings (grace / damnation)', () => {
-  it('grace and damnation each carry the {playerName} token', () => {
-    expect(getGraceEnding().body).toContain('{playerName}');
-    expect(getDamnationEnding().body).toContain('{playerName}');
+  // CHANGED for G47 (was: "grace and damnation each carry the {playerName} token"). Both
+  // bodies reach the model as facts via the `ending` event, and they are the LAST words of
+  // a completed run — the one moment §22.1's voice rule matters most. Recast in second
+  // person by a subject swap only (Appendix A.1): every word was already shipped or is
+  // WORLD.md §9's own [LOCKED] phrasing. C12 stays open for #13 to replace them outright.
+  it('speak in second person and never name the player', () => {
+    expect(getGraceEnding().body).not.toContain('{playerName}');
+    expect(getDamnationEnding().body).not.toContain('{playerName}');
+    expect(getGraceEnding().body.startsWith('You ')).toBe(true);
+    expect(getDamnationEnding().body.startsWith('You ')).toBe(true);
   });
 
   it('are DISTINCT from each other (distinct header + body)', () => {

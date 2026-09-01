@@ -25,7 +25,11 @@ export function describeEvent(e: GameEvent): string {
     case 'intro':
       return e.lines.join(' ');
     case 'player-created':
-      return `You are ${e.name}, a ${e.classId}, at the threshold of the descent.`;
+      // G47 — the narrator NEVER speaks the player's name (GAME-DESIGN.md §22.1,
+      // WORLD.md §8 [LOCKED]). `e.name` is a LABEL surface only (the HUD, the character
+      // sheet, the save slot); it must never enter a prompt, because a fact line is also
+      // written into `StoryMemory.beats` and would then leak into the next five prompts.
+      return `You are a ${e.classId}, at the threshold of the descent.`;
     case 'encounter-start':
       return `A ${e.enemyName} emerges to bar your way.`;
     case 'enemy-skill-used':

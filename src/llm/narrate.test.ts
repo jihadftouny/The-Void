@@ -33,8 +33,27 @@ describe('describeEvent', () => {
     };
     expect(describeEvent(e)).toContain('devastating');
   });
+  // `cast-unavailable` is a REJECTED INPUT — the player asked for a cast they could not
+  // make, so nothing happened and there is nothing to narrate. Since G13 it is a explicit
+  // `case` in the deliberate-silence block rather than an accident of the old `default`,
+  // so this test now documents a decision instead of an omission.
   it('returns empty string for events that need no narration', () => {
     expect(describeEvent({ kind: 'cast-unavailable' } as GameEvent)).toBe('');
+  });
+
+  // G47 — the narrator never speaks the player's name (GAME-DESIGN.md §22.1, WORLD.md §8).
+  // The class IS narratable (it is what the player chose to be); the name is a label.
+  it('names the class but never the player at character creation', () => {
+    const e: GameEvent = {
+      kind: 'player-created',
+      name: 'Zzyzx-Qwph',
+      classId: 'Neuromancer',
+      maxHp: 12,
+      armorClass: 11,
+    };
+    const s = describeEvent(e);
+    expect(s).toContain('Neuromancer');
+    expect(s).not.toContain('Zzyzx-Qwph');
   });
 });
 

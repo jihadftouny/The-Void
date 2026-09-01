@@ -114,7 +114,14 @@ describe('character creation transitions', () => {
     expect(r.state.phase.kind).toBe('main-menu');
     expect(r.awaiting).toBe('main-menu');
     expect(r.state.player?.name).toBe('Zara');
-    // player-created + intro emitted; intro has the name substituted (no token left).
+    // player-created + intro emitted; the intro carries no unsubstituted token.
+    // CHANGED for G47 (2026-09-01) — this block also asserted `toContain('Zara')`. The
+    // intro lines feed `describeEvent` and therefore the narrator's prompt, and
+    // GAME-DESIGN.md §22.1 / WORLD.md §8 [LOCKED] rule that the narrator never speaks the
+    // player's name, so `story.json` no longer carries a `{playerName}` token to
+    // substitute. `substituteName` is unchanged and still runs over every intro line; the
+    // name itself is proved to survive on its LABEL surface by the `player.name` check
+    // above (line 116) and by `story.test.ts`'s G47 block.
     const created = r.events.find((e) => e.kind === 'player-created');
     expect(created).toBeDefined();
     const intro = r.events.find((e) => e.kind === 'intro');
@@ -122,7 +129,7 @@ describe('character creation transitions', () => {
     if (intro && intro.kind === 'intro') {
       const joined = intro.lines.join('\n');
       expect(joined).not.toContain('{playerName}');
-      expect(joined).toContain('Zara');
+      expect(joined).not.toContain('Zara');
     }
   });
 
