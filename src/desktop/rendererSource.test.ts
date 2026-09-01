@@ -255,6 +255,34 @@ describe('the boot resume path restores the meta-progression, not just the state
 });
 
 // =========================================================================================
+// G3 — the unlock-store recovery notice actually reaches the screen.
+//
+// `unlockStorage.ts` now REPORTS what it found, and `unlockStorage.test.ts` proves the
+// ladder. But a report nobody renders is the same silence it replaced.
+// =========================================================================================
+
+describe('the boot path shows the unlock-recovery notice', () => {
+  it('reads the load RESULT, not just the store', () => {
+    // `let unlockStore = loadUnlockStore();` — the old shape — would be a type error now, but
+    // `loadUnlockStore().store` would compile and silently drop the report.
+    expect(SOURCE).toMatch(/loadUnlockStore\s*\(\s*\)/);
+    expect(SOURCE, 'the boot path discards the load result and cannot report a loss').not.toMatch(
+      /loadUnlockStore\s*\(\s*\)\s*\.\s*store/,
+    );
+  });
+
+  it('puts the message on screen as TEXT when there is one', () => {
+    expect(SOURCE, 'nothing reads the `lost` message').toMatch(/\blost\b/);
+    expect(SOURCE, 'the notice element is never written').toMatch(
+      /noticeEl\s*\.\s*textContent\s*=/,
+    );
+    // It must not become markup on the way — the message is authored by us today, but the
+    // element is the obvious place for a future "you unlocked X" line carrying a name.
+    expect(SOURCE).not.toMatch(/noticeEl\s*\.\s*innerHTML\s*=/);
+  });
+});
+
+// =========================================================================================
 // G19 — `saveRun`'s third argument. The TYPE makes omission impossible, but only if every
 // call site really passes the live bookkeeping rather than a fresh empty one.
 // =========================================================================================

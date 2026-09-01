@@ -65,6 +65,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
 };
 const titleEl = $('title');
 const statusEl = $('status');
+const noticeEl = $('notice');
 const narrationEl = $('narration');
 const logEl = $('log');
 const choicesEl = $('choices');
@@ -93,7 +94,20 @@ window.addEventListener('unhandledrejection', (ev) =>
 
 // M13 meta-progression: the persistent cross-run unlock store, loaded once at boot. Read at
 // class-select (gating) and run start (snapshot); grown at run end (applyRunSummary + persist).
-let unlockStore = loadUnlockStore();
+//
+// G3: the load now REPORTS what it found. This is the only copy of everything the player has
+// ever earned, and one unparseable byte used to replace all of it with an empty store —
+// silently, with the class select simply back to Enforcer-only and no explanation. When the
+// store was recovered from its backup, or could not be recovered at all, say so where the
+// player will actually see it. `textContent`, never markup.
+const unlockLoad = loadUnlockStore();
+let unlockStore = unlockLoad.store;
+if (unlockLoad.lost !== undefined) {
+  noticeEl.textContent = unlockLoad.lost;
+  log.warn('unlocks', 'unlock store did not load cleanly', { source: unlockLoad.source });
+} else {
+  log.info('unlocks', 'unlock store loaded', { source: unlockLoad.source });
+}
 let runSeed = Date.now() >>> 0;
 let state: GameState = createGame(runSeed, snapshotUnlocks(unlockStore));
 let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
