@@ -31,9 +31,22 @@
 //    measured from the output and pasted back.
 
 import { describe, it, expect } from 'vitest';
-import { describeEvent, eventsToFacts } from './narrate.ts';
+import {
+  describeEvent,
+  eventsToFacts,
+  buildNarrationPrompt,
+  createStoryMemory,
+  rememberBeat,
+} from './narrate.ts';
 import type { GameEvent, GameEventKind } from '../game/gameEvent.ts';
 import type { Stats } from '../game/character.ts';
+import { createGame, step, awaitingFor } from '../game/game.ts';
+import type { GameState, StepResult } from '../game/game.ts';
+import { createPlayer } from '../game/player.ts';
+import type { PlayerClass } from '../game/player.ts';
+import { createKarma } from '../game/karma.ts';
+import { ALL_CLASSES, heuristicPolicy, mercifulPolicy } from '../game/sim.ts';
+import type { SimPolicy } from '../game/sim.ts';
 
 // ---------------------------------------------------------------------------------------
 // The two compile-time-exhaustive maps
@@ -456,3 +469,368 @@ describe("the reserved words are not spent on engine facts (WORLD.md §0)", () =
   });
 });
 
+
+// =========================================================================================
+// RUN-SCALE INVARIANTS — the real engine, real seeds, no fixtures
+//
+// A fixture proves `describeEvent` says the right thing when handed an event. It cannot
+// prove the event ever REACHES it during a real run, which is precisely how 34 kinds went
+// unnoticed. These sections play whole runs through the real `step` under the shipped
+// policies and measure what the model would actually have been handed, mirroring exactly
+// what `src/desktop/game.ts`'s `dispatch` does: step, then narrate against the new state,
+// then remember the beat.
+//
+// No model is involved, fake or real. `buildNarrationPrompt(...).user` IS the string handed
+// to the Electron IPC, so measuring it measures what the model sees.
+// =========================================================================================
+
+/** The seeds the batch runs. 24 x 5 classes x 2 policies = 240 runs. */
+const SEEDS: readonly number[] = Array.from({ length: 24 }, (_, i) => i + 1);
+
+/**
+ * The name every run is driven with — deliberately unlike any word the game contains, so a
+ * single leak anywhere in any prompt is unambiguous. (PRINCIPLES.md §A11: name the
+ * non-negotiable line, then build an actual check for it.)
+ */
+const PROBE_NAME = 'Zzyzx-Qwph';
+
+/** Wrap a shipped policy so the real `{kind:'name'}` input carries the probe name. */
+function withProbeName(policy: SimPolicy): SimPolicy {
+  return (res) => {
+    const input = policy(res);
+    return input.kind === 'name' ? { kind: 'name', name: PROBE_NAME } : input;
+  };
+}
+
+/** Everything the invariants below need, folded in one pass so no run is held in memory. */
+interface Metrics {
+  runs: number;
+  steps: number;
+  observedKinds: Set<GameEventKind>;
+  /** R1 — steps containing a player `skill-cast`, and those whose prompt attributes it. */
+  castSteps: number;
+  castAttributed: number;
+  /** The Enforcer/Heavy-Strike collision: a cast AND an enemy skill in the same step. */
+  collisionSteps: number;
+  collisionWellFormed: number;
+  /** R2 — steps containing `boss-minion-damage`, and those whose facts report the damage. */
+  minionSteps: number;
+  minionNarrated: number;
+  /** R3 — eventful steps that produced no fact, and any kind not on the silence list. */
+  eventfulSilentSteps: number;
+  undocumentedSilence: Set<GameEventKind>;
+  /** R4 — act transitions, null prompts among them, and headers that failed to appear. */
+  actSteps: number;
+  actNullPrompts: number;
+  actHeaderMissing: number;
+  actsSeen: Set<number>;
+  /** R5 — prompts or facts carrying the probe name. */
+  nameLeaks: number;
+  /** The `draft-offer` fact says "three paths"; this proves the engine really offers 3. */
+  draftOffers: number;
+  draftOffersNotThree: number;
+  /** Denominator sanity for the beats that used to render blank. */
+  endingSteps: number;
+  verdictSteps: number;
+  sparedSteps: number;
+  bossEncounterSteps: number;
+  draftPickedSteps: number;
+}
+
+function emptyMetrics(): Metrics {
+  return {
+    runs: 0,
+    steps: 0,
+    observedKinds: new Set(),
+    castSteps: 0,
+    castAttributed: 0,
+    collisionSteps: 0,
+    collisionWellFormed: 0,
+    minionSteps: 0,
+    minionNarrated: 0,
+    eventfulSilentSteps: 0,
+    undocumentedSilence: new Set(),
+    actSteps: 0,
+    actNullPrompts: 0,
+    actHeaderMissing: 0,
+    actsSeen: new Set(),
+    nameLeaks: 0,
+    draftOffers: 0,
+    draftOffersNotThree: 0,
+    endingSteps: 0,
+    verdictSteps: 0,
+    sparedSteps: 0,
+    bossEncounterSteps: 0,
+    draftPickedSteps: 0,
+  };
+}
+
+/**
+ * The act headers, read from the SPEC (Java `Story.java` — the same table story.test.ts
+ * uses) and NOT from story.json, so this disagrees with the data if the data goes wrong.
+ */
+const ACT_HEADERS: readonly string[] = ['ACT I', 'ACT II', 'ACT III', 'ACT IV', 'ACT V'];
+
+/** Play one run to its terminal state, folding every step into `m`. No RNG of its own. */
+function foldRun(
+  m: Metrics,
+  seed: number,
+  classId: PlayerClass,
+  basePolicy: (c: PlayerClass) => SimPolicy,
+): void {
+  const policy = withProbeName(basePolicy(classId));
+  const initial = createGame(seed);
+  let res: StepResult = { state: initial, events: [], awaiting: awaitingFor(initial.phase) };
+  let memory = createStoryMemory();
+  let guard = 0;
+  m.runs++;
+
+  while (res.awaiting !== 'game-over' && guard < 50_000) {
+    res = step(res.state, policy(res));
+    guard++;
+    m.steps++;
+    const events = res.events;
+    // Mirrors src/desktop/game.ts `dispatch`: the prompt is built against the NEW state and
+    // the memory as it stood BEFORE this beat; the beat is remembered afterwards.
+    const facts = eventsToFacts(events);
+    const prompt = buildNarrationPrompt(events, res.state, memory);
+
+    for (const e of events) m.observedKinds.add(e.kind);
+
+    // ---- R5: the name must never reach the model, at any step of any run.
+    if (facts.some((f) => f.includes(PROBE_NAME))) m.nameLeaks++;
+    else if (prompt && prompt.user.includes(PROBE_NAME)) m.nameLeaks++;
+
+    // ---- R1 + the collision case.
+    const cast = events.find((e) => e.kind === 'skill-cast');
+    if (cast && cast.kind === 'skill-cast') {
+      m.castSteps++;
+      // The fact must be SECOND PERSON and must name the cast — that is what makes it
+      // distinguishable from the enemy's identically-named skill in the same prompt.
+      const mine = facts.filter((f) => /^You\b/.test(f) && f.includes(cast.name));
+      if (mine.length > 0 && prompt && mine.every((f) => prompt.user.includes(f))) {
+        m.castAttributed++;
+      }
+      const enemySkill = events.find((e) => e.kind === 'enemy-skill-used');
+      if (enemySkill && enemySkill.kind === 'enemy-skill-used') {
+        m.collisionSteps++;
+        const theirs = facts.filter(
+          (f) => f.startsWith('The enemy') && f.includes(enemySkill.name),
+        );
+        if (mine.length >= 1 && theirs.length >= 1) {
+          // Two DISTINCT lines, exactly one of them second person about the player's cast.
+          const distinct = new Set([...mine, ...theirs]);
+          if (distinct.size >= 2) m.collisionWellFormed++;
+        }
+      }
+    }
+
+    // ---- R2.
+    const minion = events.find((e) => e.kind === 'boss-minion-damage');
+    if (minion && minion.kind === 'boss-minion-damage') {
+      m.minionSteps++;
+      if (facts.some((f) => /\byou\b/i.test(f) && f.includes(String(minion.amount)))) {
+        m.minionNarrated++;
+      }
+    }
+
+    // ---- R3: an eventful step with no fact at all is allowed only if EVERY one of its
+    // kinds is on the documented silence list. This is the guard on the G42 stale-screen
+    // trap — it is what stops a future "silence" decision quietly blanking a real beat.
+    if (events.length > 0 && facts.length === 0) {
+      m.eventfulSilentSteps++;
+      for (const e of events) {
+        if (!DELIBERATELY_SILENT.has(e.kind)) m.undocumentedSilence.add(e.kind);
+      }
+    }
+
+    // ---- R4: every act transition must produce a non-null prompt carrying its header.
+    for (const e of events) {
+      if (e.kind !== 'act-intro' && e.kind !== 'act-outro') continue;
+      m.actSteps++;
+      m.actsSeen.add(e.act);
+      if (!prompt) {
+        m.actNullPrompts++;
+        continue;
+      }
+      const header = ACT_HEADERS[e.act - 1] ?? '<no such act>';
+      // Exact, so 'ACT I' cannot be satisfied by an 'ACT III' header. Tolerates a body
+      // arriving later from #13, which would make the fact "ACT II — <body>".
+      const ok = facts.some((f) => f === header || f.startsWith(header + ' — '));
+      if (!ok || !prompt.user.includes(header)) m.actHeaderMissing++;
+    }
+
+    // ---- denominators + the draft arity the "three paths" fact depends on.
+    for (const e of events) {
+      if (e.kind === 'draft-offer') {
+        m.draftOffers++;
+        if (e.options.length !== 3) m.draftOffersNotThree++;
+      } else if (e.kind === 'ending') m.endingSteps++;
+      else if (e.kind === 'verdict') m.verdictSteps++;
+      else if (e.kind === 'spared') m.sparedSteps++;
+      else if (e.kind === 'boss-encounter') m.bossEncounterSteps++;
+      else if (e.kind === 'draft-picked') m.draftPickedSteps++;
+    }
+
+    memory = rememberBeat(memory, events);
+  }
+}
+
+/** The whole batch, folded once and shared by every invariant below. */
+const BATCH: Metrics = (() => {
+  const m = emptyMetrics();
+  for (const basePolicy of [heuristicPolicy, mercifulPolicy]) {
+    for (const classId of ALL_CLASSES) {
+      for (const seed of SEEDS) foldRun(m, seed, classId, basePolicy);
+    }
+  }
+  return m;
+})();
+
+describe('run-scale: the batch really exercises the beats being asserted', () => {
+  it('plays 240 runs across all five classes under both shipped policies', () => {
+    expect(BATCH.runs).toBe(SEEDS.length * ALL_CLASSES.length * 2);
+    expect(BATCH.runs).toBeGreaterThanOrEqual(200);
+    expect(BATCH.steps).toBeGreaterThan(10_000);
+  });
+
+  it('reaches 43 of the 63 kinds — and the 20 it cannot reach are known', () => {
+    // HONESTY ABOUT COVERAGE. The run-scale sections can only assert about kinds the
+    // SHIPPED policies actually produce, and `sim.ts`'s policies never seek a deal (they
+    // always pick `menu: 'continue'`), never decline a rest, fight the whole way with
+    // starting gear (so no relic ever triggers, and there is no shield or revive), and only
+    // ever dispatch a LEGAL action (so no input is ever rejected). Twenty kinds are
+    // therefore unreachable here, and their coverage is the fixture map above, not this
+    // batch. Written as a floor, not an equality, so improving the policies can only make
+    // this pass more easily — but a REGRESSION that stops the engine emitting something
+    // still shows up.
+    expect(BATCH.observedKinds.size).toBeGreaterThanOrEqual(43);
+    // Every kind the run-scale invariants below depend on must be in the reachable set.
+    for (const kind of [
+      'skill-cast',
+      'enemy-skill-used',
+      'boss-minion-damage',
+      'act-intro',
+      'act-outro',
+      'ending',
+      'verdict',
+      'spared',
+      'boss-encounter',
+      'draft-offer',
+      'draft-picked',
+      'player-created',
+      'intro',
+    ] as const) {
+      expect(BATCH.observedKinds.has(kind), `${kind} never occurred in the batch`).toBe(true);
+    }
+  });
+
+  it('reaches every beat G13 said was silent, so no invariant below is vacuous', () => {
+    // If any of these were 0, the matching invariant would pass by having nothing to check.
+    expect(BATCH.castSteps).toBeGreaterThan(0);
+    expect(BATCH.collisionSteps).toBeGreaterThan(0);
+    expect(BATCH.minionSteps).toBeGreaterThan(0);
+    expect(BATCH.actSteps).toBeGreaterThan(0);
+    expect(BATCH.eventfulSilentSteps).toBeGreaterThan(0);
+    expect(BATCH.endingSteps).toBeGreaterThan(0);
+    expect(BATCH.verdictSteps).toBeGreaterThan(0);
+    expect(BATCH.sparedSteps).toBeGreaterThan(0);
+    expect(BATCH.bossEncounterSteps).toBeGreaterThan(0);
+    expect(BATCH.draftPickedSteps).toBeGreaterThan(0);
+    expect(BATCH.draftOffers).toBeGreaterThan(0);
+  });
+});
+
+describe('R1 — the model is never left without the fact that the PLAYER acted (G13)', () => {
+  it('every player skill-cast reaches the prompt, in second person, naming the cast', () => {
+    // Baseline before this unit: 0%. Measured over 400 runs / 170,491 steps: 5,727 cast
+    // steps, ALL of them unattributed. In player terms: the Void never again fails to
+    // notice that you were the one who acted.
+    expect(BATCH.castAttributed).toBe(BATCH.castSteps);
+  });
+
+  it('a cast colliding with an identically-named enemy skill yields two distinct lines', () => {
+    // The register's Enforcer / seed 1 / step 139 case, at run scale. Baseline: 1,395 steps
+    // where the only named skill in the prompt was the ENEMY's, so the model credited the
+    // player's biggest hit to the foe.
+    expect(BATCH.collisionWellFormed).toBe(BATCH.collisionSteps);
+  });
+});
+
+describe('R2 — losing HP to the boss crew is never silent (G13)', () => {
+  it('every boss-minion-damage step reports the damage to the player', () => {
+    // Baseline: 2,499 such steps, 346 of them with no damage fact at all — the player lost
+    // HP and nothing in the prompt said so.
+    expect(BATCH.minionNarrated).toBe(BATCH.minionSteps);
+  });
+});
+
+describe('R3 — nothing is silent by accident (G13 + G42)', () => {
+  it('every eventful step with no fact has ALL its kinds on the documented silence list', () => {
+    expect([...BATCH.undocumentedSilence].sort()).toEqual([]);
+  });
+});
+
+describe('R4 — act transitions are never blank again (G21)', () => {
+  it('no act transition produces a null prompt', () => {
+    // Baseline: 47 act-intro + 47 act-outro blank screens over 20 runs — one on every floor
+    // change, so the five-Act descent was never announced anywhere in the UI.
+    expect(BATCH.actNullPrompts).toBe(0);
+  });
+
+  it('every act transition carries its own header from the independent spec table', () => {
+    expect(BATCH.actHeaderMissing).toBe(0);
+  });
+
+  it('the batch descends through more than one act', () => {
+    // Otherwise "every act transition carries its header" could hold on a single act.
+    expect(BATCH.actsSeen.size).toBeGreaterThan(1);
+  });
+});
+
+describe('R5 — the Void never says your name (G47)', () => {
+  it('no prompt and no fact contains the player name, at any step of any run', () => {
+    // GAME-DESIGN.md §22.1 / WORLD.md §8 [LOCKED]. Before this unit the name leaked at the
+    // `player-created` beat, through the next five prompts via StoryMemory, at the intro,
+    // and at BOTH endings — the last screen of every completed run.
+    expect(BATCH.nameLeaks).toBe(0);
+  });
+});
+
+describe('the "three paths" fact is true of the real engine', () => {
+  it('every draft offer the engine emits carries exactly three options', () => {
+    // `draft-offer`'s fact literal says "three paths". `generateDraft` returns a 3-tuple and
+    // `enterLevelUp` is its only emit site, so the claim holds by construction — this is
+    // the run-scale proof, and what goes red if the draft width ever changes.
+    expect(BATCH.draftOffersNotThree).toBe(0);
+  });
+});
+
+describe('R6 — the terminal step gives the renderer nothing to draw (G42)', () => {
+  it('continuing past an ending emits no events, so the prompt is null', () => {
+    // This is the whole mechanism of G42. `game.ts` deliberately emits nothing on the
+    // terminal step "so the run's final event stays the `ending` event", so the ONLY thing
+    // standing between the player and a blank last screen is whether the renderer clears
+    // the pane before or after it discovers the prompt is null.
+    const state: GameState = {
+      version: 8,
+      rngState: 12_345,
+      player: createPlayer({ name: PROBE_NAME, classId: 'Enforcer', stats: STATS }),
+      act: 4,
+      place: 3,
+      karma: createKarma(),
+      phase: { kind: 'ending', endingType: 'grace' },
+    };
+    const r = step(state, { kind: 'continue' });
+    expect(r.events).toEqual([]);
+    expect(r.awaiting).toBe('game-over');
+
+    // Even with a full story memory behind it there is nothing new to narrate: memory
+    // supplies context, never facts, so it cannot rescue an empty event list.
+    const memory = rememberBeat(createStoryMemory(), [
+      { kind: 'ending', endingType: 'grace', header: 'ASCENSION', body: 'You are judged worthy.' },
+    ]);
+    expect(memory.beats.length).toBeGreaterThan(0);
+    expect(buildNarrationPrompt(r.events, r.state, memory)).toBeNull();
+  });
+});
