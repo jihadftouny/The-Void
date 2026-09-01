@@ -26,7 +26,7 @@ import { type CombatEvent, type DamageSource, withDamageSource } from './combatE
 import { hasControlCondition, tickConditions, type ConditionType } from './condition.ts';
 import { combineAdvDis, resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
 import { resolveSkill, type SkillDef, type SkillId } from './skill.ts';
-import { castSkill, grantMomentum, usesMomentum } from './classKit.ts';
+import { castSkill, clampMomentum, grantMomentum, usesMomentum } from './classKit.ts';
 import { perkModifiers } from './perks.ts';
 import { effectiveMaxHp } from './statEffects.ts';
 import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
@@ -63,6 +63,17 @@ export interface BattleState {
    * is imported as a TYPE only (erased at build), so no runtime import cycle with `boss.ts`.
    */
   boss?: import('./boss.ts').BossState;
+  /**
+   * G12, OPTIONAL: the player's STANDING advantage/disadvantage for THIS battle — the ambush
+   * bonus a random encounter opens with (+1), or a boss's adaptation (-1). Battle-scoped by
+   * construction: it lives on the battle, not the player, so it cannot leak into the next one.
+   *
+   * ABSENT means 0 (no standing modifier), so a battle with none is byte-identical in JSON to
+   * a pre-G12 battle and needs no `SAVE_VERSION` bump. Per-round it is COMBINED with whatever
+   * the player's condition tick produced (`combineAdvDis`), which is what makes advantage a
+   * per-round computation instead of the write-only latch it used to be.
+   */
+  playerAdvantage?: -1 | 0 | 1;
 }
 
 /**
@@ -89,9 +100,91 @@ export interface RoundResult {
   status: RoundStatus;
 }
 
-/** Build a fresh battle. `canFlee` is false only in the final act (act 5). */
-export function createBattle(player: Player, enemy: Enemy, act: number): BattleState {
-  return { player, enemy, act, canFlee: act !== 5 };
+/**
+ * Momentum carried across a battle boundary, as a fraction of what was banked (Enforcer).
+ *
+ * ⚠ M15/#2 BALANCE PLACEHOLDER — this rate is a number nobody has measured. The AUTHOR ruled
+ * (2026-09-01, `FINDINGS.md` G34 / `GAME-DESIGN.md` §22.19) that momentum CARRIES BETWEEN
+ * BATTLES WITH DECAY rather than resetting: `floor(momentum * MOMENTUM_CARRY)`. Halving is the
+ * stated starting value only — it keeps a good streak worth something while draining most of
+ * it, which is the feel target. "Reward a streak, mostly drain" is a feel target, not a
+ * measured one; `PLAN.md` #2's balance re-run owns tuning it. Deterministic: no rng, no clock.
+ */
+export const MOMENTUM_CARRY = 0.5;
+
+/** Options for `createBattle`: the boss riding on the battle, and its opening advantage. */
+export interface CreateBattleOptions {
+  /** M12 boss mechanic. Its presence is ALSO what makes the battle unfleeable (G4). */
+  boss?: import('./boss.ts').BossState;
+  /** Standing advantage the battle opens with (a random encounter's ambush is +1). */
+  openingAdvantage?: -1 | 0 | 1;
+}
+
+/**
+ * Strip the TRANSIENT combat state a battle must not inherit from the last one — PURE,
+ * RNG-FREE. Exported so the reset is testable on its own and has exactly one definition.
+ *
+ * `game.ts` writes `battle.player` back to `state.player` on every outcome, so anything a
+ * battle leaves on the player rides into the next fight. Three fields were leaking:
+ *   - `shield`  (G25) — documented as a "transient combat shield", but only ever written as
+ *     `+= amt` at battle open and `-= absorbed` on a hit. Measured with Grace-Forged Aegis
+ *     over five battles: shield at start 5, 10, 15, 20, 25 — climbing all run and surviving
+ *     the save file, until the player was immune to chip damage.
+ *   - `advantageDisadvantage` (G12) — see below.
+ *   - `momentum` (G34) — now DECAYED rather than zeroed; see `MOMENTUM_CARRY`.
+ *
+ * ⚠ `activeConditions` is DELIBERATELY NOT CLEARED HERE, against `PLAN.md` #0 item 24's
+ * "close all four leaks in `createBattle`". Clearing it would break G27: `fracture` carries
+ * `maxTurns: 100` with the comment "needs a rest", and G27's fix is to cure conditions AT THE
+ * REST NODE. If a battle boundary cured them, fracture would expire on its own and the reason
+ * G27 exists would be gone. Three leaks are closed here; the fourth is closed at the rest.
+ * (G34's own row is correct — only the #0 prose summary overreaches.)
+ */
+export function resetTransientCombatState(player: Player): Player {
+  const next: Player = { ...player, advantageDisadvantage: 0 };
+  // Only touch the optional fields that are actually present, so a player who has never held
+  // a shield keeps the exact JSON shape it had before (off-equivalence for a normal run).
+  if (next.shield !== undefined) next.shield = 0;
+  if (next.momentum !== undefined) {
+    next.momentum = clampMomentum(Math.floor(next.momentum * MOMENTUM_CARRY));
+  }
+  return next;
+}
+
+/**
+ * Build a fresh battle — the SINGLE FUNNEL every battle passes through, and therefore the one
+ * place the per-battle rules are enforced rather than left to call-site convention.
+ *
+ *  - **G4.** `canFlee` is false in the final act OR whenever a boss rides on the battle. Both
+ *    boss call sites used to stamp `canFlee: false` by hand after the fact, which is a
+ *    convention a future call site can silently forget; now it is structural.
+ *  - **G12/G25/G34.** The player's transient combat state is reset here
+ *    (`resetTransientCombatState`), so nothing a battle banks can leak into the next one.
+ *  - **G12.** A standing advantage is battle-scoped state (`playerAdvantage`), not a latch
+ *    written onto the player. `encounter.ts` used to stamp `advantageDisadvantage: 1` on the
+ *    player for its ambush bonus and `game.ts` persisted it to the hub — so EVERY floor boss
+ *    and the final Hollow was fought at advantage, and a fracture stuck it at -1 in the other
+ *    direction. Boss difficulty swung ±5 to-hit on leftover state.
+ *
+ * `playerAdvantage` is written only when non-zero, so a battle with no standing modifier is
+ * byte-identical in JSON to a pre-G12 one.
+ */
+export function createBattle(
+  player: Player,
+  enemy: Enemy,
+  act: number,
+  opts?: CreateBattleOptions,
+): BattleState {
+  const state: BattleState = {
+    player: resetTransientCombatState(player),
+    enemy,
+    act,
+    canFlee: act !== 5 && !opts?.boss,
+  };
+  if (opts?.boss) state.boss = opts.boss;
+  const opening = opts?.openingAdvantage ?? 0;
+  if (opening !== 0) state.playerAdvantage = opening;
+  return state;
 }
 
 /**
@@ -276,10 +369,15 @@ function resolvePlayerTurn(
     ...tickedPlayer,
     hp: ptc.hpDelta > 0 ? Math.min(rawPlayerHp, effectiveMaxHp(tickedPlayer)) : rawPlayerHp,
   };
-  if (ptc.advDisOverride !== 0) {
-    player = { ...player, advantageDisadvantage: ptc.advDisOverride };
-  }
+  // G12: the condition's adv/dis is NO LONGER written onto the player. That write was the
+  // whole defect — it fired only when non-zero, so nothing ever restored it to 0, and
+  // `game.ts` persisted it to the hub player. It is now combined per-round, below, with the
+  // battle's own standing modifier and thrown away at the end of the round.
   events.push(...ptc.events);
+  // The player's advantage for THIS round: the battle's standing modifier (an encounter's
+  // ambush, a boss's adaptation) combined with whatever this tick's conditions imposed.
+  // Advantage and disadvantage cancel — see `combineAdvDis`.
+  const playerAdvDis = combineAdvDis(state.playerAdvantage ?? 0, ptc.advDisOverride);
 
   // Empty Vessel: restore charge(s) at the player's turn (capped at max). No-op at 0.
   if (mods.chargePerTurn > 0) {
@@ -316,6 +414,11 @@ function resolvePlayerTurn(
       mods.flatDamage,
       rng,
       perkModifiers(player.perks).flatDamage,
+      // G12: the round's adv/dis is INJECTED, mirroring how the enemy's is already computed
+      // here and injected. `Attacker.advantageDisadvantage` survives as the standing default
+      // for callers that pass nothing, so no save field is removed and no test call site
+      // changes shape.
+      playerAdvDis,
     );
     playerDamage = pa.damage;
     didHit = pa.outcome === 'hit' || pa.outcome === 'crit';

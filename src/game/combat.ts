@@ -176,8 +176,14 @@ export function resolvePlayerAttack(
   equipDamageBonus: number,
   rng: Rng,
   perkDamageBonus = 0,
+  advDisOverride?: -1 | 0 | 1,
 ): PlayerAttackResult {
-  const advDis = normalizeAdvDis(player.advantageDisadvantage);
+  // G12: `advDisOverride` is the round's COMBINED advantage, computed by battle.ts from the
+  // battle's standing modifier plus this tick's conditions — exactly mirroring how the
+  // enemy's `enemyAdvDis` is already computed by the caller and injected. When it is omitted
+  // the stored `player.advantageDisadvantage` is used, so every existing call site (and the
+  // save field) keeps working unchanged.
+  const advDis = advDisOverride ?? normalizeAdvDis(player.advantageDisadvantage);
   const { natural, faces } = rollD20WithAdvantage(advDis, rng);
   // To-hit uses the EFFECTIVE mods (Strong/Weak on STR, Quick/Slow on DEX cascade in);
   // the defender AC is the enemy's EFFECTIVE AC (Hardy/Frail + Quick/Slow). Both are

@@ -227,7 +227,10 @@ describe('main-menu: continue -> encounter', () => {
     if (r.state.phase.kind === 'battle') {
       expect(r.state.phase.started).toBe(false);
       expect(r.state.phase.final).toBe(false);
-      expect(r.state.phase.battle.player.advantageDisadvantage).toBe(1);
+      // CHANGED by G12: the ambush bonus lives on the BATTLE now, not on the player, so it
+      // cannot ride into the next fight via the hub write-back. Same +1, battle-scoped.
+      expect(r.state.phase.battle.playerAdvantage).toBe(1);
+      expect(r.state.phase.battle.player.advantageDisadvantage).toBe(0);
       const enemyName = r.state.phase.battle.enemy.fullName;
       expect(r.events).toContainEqual({ kind: 'encounter-start', enemyName });
     }
@@ -916,7 +919,10 @@ describe('M12 Reflection adaptation drives a disadvantaged player attack', () =>
     }
     expect(adaptRound).toBe(2); // the 3rd fight (0-indexed)
     if (r.state.phase.kind === 'battle') {
-      expect(r.state.phase.battle.player.advantageDisadvantage).toBe(-1);
+      // CHANGED by G12: the adaptation is battle-scoped, so it is read off the battle. Written
+      // onto the player it outlived the fight and disadvantaged the whole run.
+      expect(r.state.phase.battle.playerAdvantage).toBe(-1);
+      expect(r.state.phase.battle.player.advantageDisadvantage).toBe(0);
     }
     // The very next attack rolls at disadvantage (the two-draw-take-min path in combat.ts).
     const next = step(r.state, { kind: 'battle-action', action: 'fight' });

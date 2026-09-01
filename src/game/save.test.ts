@@ -450,7 +450,12 @@ describe('M3 classes + resources: save validation & round-trip', () => {
       ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(SEED)),
       activeConditions: [{ type: 'exposed', remainingTurns: 2, maxTurns: 2, intensity: 3 } as ActiveCondition],
     };
-    const battle = createBattle(player, enemy, 1);
+    // The resources are set on the battle player AFTER `createBattle`, because the funnel now
+    // decays carried momentum at a battle boundary (G34/§22.19). This test is about the SAVE
+    // ROUND-TRIP of a mid-battle state, not about that boundary rule, so it pins mid-battle
+    // values directly. (Nothing else here moved: no SAVE_VERSION bump, no field removed.)
+    const opened = createBattle(player, enemy, 1);
+    const battle = { ...opened, player: { ...opened.player, momentum: 3, corruption: 2 } };
     const state: GameState = { ...base, player, phase: { kind: 'battle', battle, started: true, final: false } };
 
     const restored = decodeSave(encodeSave(state));

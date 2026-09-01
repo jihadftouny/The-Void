@@ -45,6 +45,19 @@
 //         |     | skills used to be one-shot per run. OBSERVED, and it is a BIG swing that #2's
 //         |     | balance re-run must know about: wins 2/6 -> 5/6, avg level 64/6 -> 85/6,
 //         |     | floors cleared 15/6 -> 21/6, and the single remaining death moves to act 2.
+//  step 4 | G12 | the encounter's +1 ambush bonus is battle-scoped, so it no longer leaks onto
+//         |     | the player and into EVERY later fight; a condition's adv/dis is combined
+//         |     | per-round instead of latched. This changes the DRAW COUNT directly: a roll
+//         |     | at ±1 draws two d20s, at 0 one.
+//         | G25 | shield is zeroed at the battle boundary (it used to accumulate 5,10,15,…).
+//         | G34 | momentum decays across the boundary instead of carrying at the cap.
+//         | G4  | `canFlee` is derived from the boss, so a boss fight can never be fled.
+//         |     | EXPECTED: player notably WEAKER — the biggest single item is that every
+//         |     | floor boss and the final Hollow used to be fought at a +1 to hit nobody
+//         |     | granted. OBSERVED, and it is the mirror of step 3: wins 5/6 -> 1/6, avg
+//         |     | level 85/6 -> 71/6, floors cleared 21/6 -> 17/6, and deaths bunch at acts
+//         |     | 3-4 (the boss floors) rather than early. `balance.test.ts`'s win-rate and
+//         |     | act-1-share guards still pass unweakened.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -85,12 +98,12 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 
 /** The frozen run records. MEASURED, not derived — see the file header. */
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 430, cause: 'unmade the Hollow (damnation)', rngState: 3567970524 },
-  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 514, cause: 'unmade the Hollow (damnation)', rngState: 3394630331 },
-  { seed: 3, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 462, cause: 'unmade the Hollow (damnation)', rngState: 3872523911 },
-  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 17, floorsCleared: 4, steps: 473, cause: 'unmade the Hollow (damnation)', rngState: 1649734614 },
-  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 643, cause: 'unmade the Hollow (damnation)', rngState: 3100984043 },
-  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 2, finalAct: 2, finalLevel: 4, floorsCleared: 1, steps: 128, cause: 'Warped Eldritch Beholder', rngState: 1722166819 },
+  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 401, cause: 'unmade the Hollow (damnation)', rngState: 2582792872 },
+  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 14, floorsCleared: 3, steps: 389, cause: 'Sif', rngState: 3951617707 },
+  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 7, floorsCleared: 2, steps: 265, cause: 'Drifting Ash', rngState: 3812828217 },
+  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 10, floorsCleared: 3, steps: 326, cause: 'Golden Chorus', rngState: 3974346606 },
+  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 15, floorsCleared: 3, steps: 708, cause: 'The Counselor', rngState: 3085831443 },
+  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 277, cause: 'Lust', rngState: 1669132719 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -116,24 +129,24 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(report).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 5,
+      wins: 1,
       grace: 0,
-      damnation: 5,
-      deaths: 1,
-      winRate: 5 / 6,
-      avgLevel: 85 / 6,
-      avgFloorsCleared: 21 / 6,
-      deathByAct: { 1: 0, 2: 1, 3: 0, 4: 0, 5: 0 },
+      damnation: 1,
+      deaths: 5,
+      winRate: 1 / 6,
+      avgLevel: 71 / 6,
+      avgFloorsCleared: 17 / 6,
+      deathByAct: { 1: 0, 2: 0, 3: 2, 4: 3, 5: 0 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 3, grace: 0, damnation: 3, deaths: 0,
-          winRate: 3 / 3, avgLevel: 48 / 3, avgFloorsCleared: 12 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
+          winRate: 1 / 3, avgLevel: 37 / 3, avgFloorsCleared: 9 / 3,
+          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 1, 5: 0 },
         },
         Hollow: {
-          runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,
-          winRate: 2 / 3, avgLevel: 37 / 3, avgFloorsCleared: 9 / 3,
-          deathByAct: { 1: 0, 2: 1, 3: 0, 4: 0, 5: 0 },
+          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
+          winRate: 0 / 3, avgLevel: 34 / 3, avgFloorsCleared: 8 / 3,
+          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 2, 5: 0 },
         },
       },
     });

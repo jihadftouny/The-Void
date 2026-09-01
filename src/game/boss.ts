@@ -280,8 +280,8 @@ export interface BossRoundResult {
  *    (`boss-summon`); then the whole crew deals `minions × KINGPIN_MINION_DAMAGE` extra damage
  *    (`boss-minion-damage`), clamped at 0 hp. Player to 0 ⇒ `player-died` (+ `defeat`).
  *  - reflection: tally the action; the first time any tally reaches `REFLECTION_ADAPT_THRESHOLD`
- *    (and not yet adapted) the boss adapts — the player's next attack rolls at DISADVANTAGE
- *    (`advantageDisadvantage = -1`) and a `boss-adapt` fires.
+ *    (and not yet adapted) the boss adapts — the player rolls at DISADVANTAGE for the rest of
+ *    THIS battle (`battle.playerAdvantage = -1`, G12) and a `boss-adapt` fires.
  *  - sin / hollow: no per-round mechanic (theirs is entirely at generation); only `round++`
  *    for save-visibility, no events.
  */
@@ -319,13 +319,18 @@ export function bossPostRound(battle: BattleState, action: BattleAction): BossRo
       const key = actionKey(action);
       tally[key] = (tally[key] ?? 0) + 1;
       nextBoss.actionTally = tally;
-      let player = battle.player;
+      const next: BattleState = { ...battle, boss: nextBoss };
       if (!nextBoss.adapted && tally[key]! >= REFLECTION_ADAPT_THRESHOLD) {
         nextBoss.adapted = true;
-        player = { ...player, advantageDisadvantage: -1 };
+        // G12: the adaptation is a STANDING, BATTLE-SCOPED penalty, so it is written to
+        // `battle.playerAdvantage` instead of onto the player. Written onto the player it
+        // survived the fight — `game.ts` persists `battle.player` to the hub — so a single
+        // Reflection adapt disadvantaged the player for the REST OF THE RUN. Same meaning,
+        // now cleared by the next `createBattle`.
+        next.playerAdvantage = -1;
         events.push({ kind: 'boss-adapt' });
       }
-      return { battle: { ...battle, boss: nextBoss, player }, events, status: 'ongoing' };
+      return { battle: next, events, status: 'ongoing' };
     }
     case 'sin':
     case 'hollow':

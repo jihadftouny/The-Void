@@ -124,14 +124,20 @@ describe('buildRandomBattle', () => {
     5: ['demons', 'voidHorrors', 'theUnmade', 'echoesOfYou', 'theHollowed'],
   };
 
-  it('grants advantage and produces a valid BattleState', () => {
+  it('opens at advantage and produces a valid BattleState', () => {
     const player = createPlayer({ name: 'H', classId: 'Enforcer', stats: stats() });
     const battle = buildRandomBattle(player, 1, mulberry32(123));
-    expect(battle.player.advantageDisadvantage).toBe(1);
+    // CHANGED by G12: the ambush bonus is BATTLE-scoped now. It used to be stamped onto the
+    // player as `advantageDisadvantage: 1`, which `game.ts` then persisted to the hub — so
+    // every later fight, including every floor boss, inherited a +1 to hit. The bonus itself
+    // is unchanged in size and still applies for the whole battle; only its home moved, so
+    // that it dies with the battle.
+    expect(battle.playerAdvantage).toBe(1);
+    expect(battle.player.advantageDisadvantage).toBe(0); // nothing latched onto the player
     expect(battle.enemy.hp).toBeGreaterThan(0);
     expect(battle.enemy.hp).toBe(battle.enemy.maxHp);
     expect(battle.act).toBe(1);
-    expect(battle.canFlee).toBe(true); // not Act 5
+    expect(battle.canFlee).toBe(true); // not Act 5, no boss
     // Purity: the source player is not mutated.
     expect(player.advantageDisadvantage).toBe(0);
   });

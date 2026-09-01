@@ -59,9 +59,9 @@ export function buildChestLoot(rng: Rng): ItemInstance[] {
 }
 
 /**
- * Build a random battle for the given Act — PURE. Grants the player advantage
- * (Java `randomBattle` sets `advantageDisadvantage = 1`), then, in this fixed DRAW
- * ORDER (for reproducibility):
+ * Build a random battle for the given Act — PURE. Opens the battle at advantage (Java
+ * `randomBattle` sets `advantageDisadvantage = 1`; G12 makes it battle-scoped rather than a
+ * write onto the player), then, in this fixed DRAW ORDER (for reproducibility):
  *   1. `pick` a family from `availableFamiliesForAct(act, available)` — 1 draw. The
  *      optional `available` id set is the M13 gradual-unlock seam (omitted = all of
  *      the act's families).
@@ -81,12 +81,15 @@ export function buildRandomBattle(
   available?: ReadonlySet<string>,
   availableAffixes?: ReadonlySet<string>,
 ): BattleState {
-  const readiedPlayer: Player = { ...player, advantageDisadvantage: 1 };
   const family = pick(rng, availableFamiliesForAct(act, available));
   let enemy = generateEnemy({ act, family, playerXp: player.xp }, rng);
   const affix = rollAffix(rng, availableAffixes);
   if (affix) enemy = applyAffix(enemy, affix);
-  return createBattle(readiedPlayer, enemy, act);
+  // G12: the ambush bonus is BATTLE-scoped, passed as an opening advantage, instead of being
+  // stamped onto the player as `advantageDisadvantage: 1`. That stamp was persisted to the hub
+  // player by `game.ts`, so every later fight — including every floor boss and the final
+  // Hollow — inherited a +1 to hit it was never meant to have.
+  return createBattle(player, enemy, act, { openingAdvantage: 1 });
 }
 
 /**

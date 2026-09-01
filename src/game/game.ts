@@ -419,7 +419,10 @@ export function step(state: GameState, input: GameInput): StepResult {
           karma: state.karma,
           rng,
         });
-        const battle: BattleState = { ...createBattle(player, enemy, 5), boss, canFlee: false };
+        // G4: `canFlee` is derived from the boss by `createBattle` itself — the manual
+        // `canFlee: false` this call site used to append is gone, because a convention every
+        // call site must remember is exactly the kind of rule that gets forgotten.
+        const battle: BattleState = createBattle(player, enemy, 5, { boss });
         return finish(
           { kind: 'battle', battle, started: false, final: true },
           [{ kind: 'final-battle-begins', enemyName: enemy.fullName }],
@@ -537,7 +540,8 @@ function continueJourney(
       karma: state.karma,
       rng,
     });
-    const battle: BattleState = { ...createBattle(player, enemy, state.act), boss, canFlee: false };
+    // G4: `createBattle` derives `canFlee: false` from the boss (see the act-5 site above).
+    const battle: BattleState = createBattle(player, enemy, state.act, { boss });
     return finish({ kind: 'battle', battle, started: false, final: false }, [
       { kind: 'boss-encounter', bossId, enemyName: enemy.fullName },
     ]);

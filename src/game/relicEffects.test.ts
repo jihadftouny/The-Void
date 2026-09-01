@@ -533,10 +533,14 @@ describe('post-hoc damage modifiers are folded back into the event', () => {
     // its own `shield-absorbed` event. Folding it into the attack would double-count, and
     // would also hide that the blow landed at full force. The pair must reconcile:
     // hp lost = attack.damage - absorbed = 2 - 1 = 1.
-    const player = makePlayer({}, { shield: 1 });
-    const r = resolveRound(
-      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(20), d20(1)]),
-    );
+    // The shield is applied AFTER `createBattle`, because the funnel now strips transient
+    // combat state (G25 — `shield` used to accumulate across battles without bound: 5, 10,
+    // 15, 20, 25 over five fights). Mid-battle shield is exactly what this test is about, so
+    // it is set on the battle's player rather than smuggled in from the previous fight.
+    const player = makePlayer({}, {});
+    const opened = createBattle(player, makeEnemy(), 1);
+    const battle = { ...opened, player: { ...opened.player, shield: 1 } };
+    const r = resolveRound(battle, 'fight', seqRng([d20(20), d20(1)]));
     const attack = r.events.find((e) => e.kind === 'attack' && e.subject === 'enemy');
     const absorbed = r.events.find((e) => e.kind === 'shield-absorbed');
     if (attack?.kind !== 'attack') throw new Error('no enemy attack event');
