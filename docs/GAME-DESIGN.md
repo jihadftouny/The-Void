@@ -1812,3 +1812,11 @@ Fixing G11 makes found gear equippable for the first time — but the item schem
 **The ruling: ship it.** #0a lands the equip fix as specified; the schema unification that would carry native dice and AC is **`PLAN.md` #1 `engine-foundations`**' scope by right, and #1 is the next unit after #0, so the gap is one unit wide. It ships honestly with a `HUMAN-CHECKS.md` line rather than being hidden by a balance fudge.
 
 **Rejected:** pulling the schema work into #0a (takes scope from #1 into a unit already carrying 23 defects, and the v1 budget is zero-sum) and suppressing weapon/armour drops until #1 (guts the loot table and crosses a unit boundary).
+
+### 22.21 `HOLLOW_GATE_XP` = **500**, not 600 *(2026-09-01)*
+
+This number decides how long floor 5 runs before the Hollow is offered. §22 had accepted **600** as a default; the #0a build shipped **500** and the author **accepted 500 on review**.
+
+**Why it moved:** at 600 the simulated win rate measures *exactly* 0.120 against a `> 0.12` floor — it fails by nothing. The build moved one step down the same derived curve (6 kills, `240·e^0.75 ≈ 508` → 500) rather than to the nearest passing value, which would have been 576. Choosing a *larger* change than the test demanded is the opposite of tuning-until-green, and the test-agent verified the sweep independently: 396→0.154, 448→0.142, **500→0.132**, 541→0.128, 576→0.122, 600→0.120.
+
+⚠ **The accepted cost:** 0.132 against a 0.12 floor is **six wins in 500**, and `HOLLOW_GATE_XP` is now effectively pinned by a test threshold — a coupling that did not exist before. **Flagged for #2's balance re-run**, and floor-5 length is a NEEDS-HUMAN play-check regardless of what the simulation says.

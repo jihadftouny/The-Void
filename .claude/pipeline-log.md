@@ -19,6 +19,18 @@ Format per entry:
 
 ---
 
+## 2026-09-01 — narration-coverage (#0b of the #0 split: G13, G21, G42, G47) [branch `agentic/narration-coverage`, **unmerged**]
+- Verdict: **PASS** (first pass, no fix round). 1029 → **1072 tests**. 8 commits, each typechecking individually.
+- Fix rounds: **0**.
+- **Ran concurrently with #0a and did not collide.** The doctrine's `#0a + #0b` pairing held: declared file lists were disjoint, and the one shared file (`src/game/game.test.ts`, one flipped assertion) **auto-merged with no conflict** on a trial merge. The clash the plan feared — G13's exhaustiveness check needing the event-kind union — evaporated once the plan-agent located the union in `combatEvent.ts`/`gameEvent.ts`, neither of which #0a touches.
+- **The lesson worth keeping: a guard proven red only in the shape you happened to test is not proven.** The build agent's first G42 guard matched the literal string `narrationEl.innerHTML = ''`; re-inserting the bug with **double quotes sailed straight past a green test**. It caught this itself, rewrote the guard to match `innerHTML`/`textContent` assignment or `replaceChildren()` regardless of quoting, and the test-agent then re-broke it in **six** shapes (four quotings, null-check deleted, clear removed) — all red. This is the same failure family as #0a's FAIL, found one layer earlier.
+- Build-agent deviations: **4 beyond the plan's 7.** (8) `game.test.ts:125` breaks and had to be flipped to `.not.toContain` — the one file outside declared territory. (9) the `{playerName}` token was an **appositive**, so deleting it alone left *"...ordered you , to delve..."*; the trailing comma went too. (10) the reserved-word guard was **widened from the 17 new fact kinds to all 46**, with exactly two pinned exemptions and `expect(EXEMPT.size).toBe(2)` so it cannot quietly grow. (11) **the seeded batch reaches only 43 of 63 kinds** — now logged as **G48**.
+- Test failures before fixes: none.
+- **Verification quality:** 29 independent mutations, 29 red, including a temporary 64th event kind proving `tsc` fails (and the useful discovery that **Vitest stays green** with a 64th kind — the gate is `tsc`/`build` only). The test-agent also authored a fake act body to simulate #13 and confirmed #13's prose will not break the new invariants.
+- **New defects found: G48** (the sim harness cannot reach 20 of 63 event kinds — undermines every "measured over N runs" claim in the register) and **G49** (`story.ts` doc comments now assert a `{playerName}` token that was removed; routed to #0c).
+- Plan open-questions: **3** — 1 to the author (recast the two ending anchors → **minimal subject swap**, `GAME-DESIGN.md` §22.1 satisfied, `FINDINGS.md` C12 left open for #13), 2 settled by the orchestrator (feed the draft option string through with a commented fallback; leave the dead `END.` anchor but **require a comment** saying why its `{playerName}` is legitimate there and nowhere else).
+- Manual engineer fixes: none yet
+
 ## 2026-09-01 — combat-core (#0a of the #0 critical-engine-bugs split: 23 combat defects) [branch `agentic/combat-core`, **unmerged**]
 - Verdict: **PASS** (after 1 fix round). 1029 → 1102 → **1112 tests**. 12 commits.
 - Fix rounds: **1** — test-agent returned FAIL on round 1 for a single unguarded line.
@@ -38,7 +50,7 @@ Format per entry:
 - ⚠ **Departure from a binding author answer:** Appendix A.4 accepted `HOLLOW_GATE_XP = 600`; the unit
   shipped **500**. Reason is sound (at 600 the win rate measures exactly 0.120 against a `> 0.12`
   floor) and the move was to the next *integer kill count* on the derived curve rather than the
-  nearest passing value — the opposite of tuning-to-green. Surfaced to the author at handoff.
+  nearest passing value — the opposite of tuning-to-green. Surfaced to the author at handoff and **ACCEPTED 2026-09-01: 500 stands** (`GAME-DESIGN.md` §22.21).
 - Test failures before fixes: 1 blocking (above) + 3 non-blocking secondary findings, 2 of which the
   build agent declined with reasons the test-agent agreed with (AC-20's literal grep is a
   self-defeating acceptance criterion — making it return 0 means deleting the guard; `applyCondition`'s
