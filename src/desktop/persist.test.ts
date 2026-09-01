@@ -81,10 +81,23 @@ describe('persist (desktop save/load)', () => {
 // =========================================================================================
 
 /**
- * A REAL v1 envelope. Not hand-built: this file was produced by running the SHIPPED v1
- * `saveRun` over a real 60-step `heuristicPolicy('Scavver')` run of seed 4242 and dumping
- * what it wrote to localStorage, before this unit changed a line of `persist.ts`. That is the
- * point — the thing being proved is that a save made by the game as it shipped still opens.
+ * A REAL v1 envelope, and not a hand-built one. It was produced by checking the WHOLE of
+ * `src/` back out at this unit's base commit `497d35b` — the game exactly as it shipped —
+ * playing a real 60-step `heuristicPolicy('Scavver')` run of seed 4242 through the real
+ * `step`, and dumping what the two-argument `saveRun` wrote to localStorage. That is the
+ * point: the thing being proved is that a save made by the shipped game still opens.
+ *
+ * ⚠ AN EARLIER VERSION OF THIS FIXTURE WAS WRONG, and the comment above it asserted this same
+ * claim untruthfully. It was generated after this unit's own G14 loot commit had landed, so
+ * its backpack contained `void-draught`, `suture-kit` and `antidote` — catalog consumables
+ * that the shipped game could not put in a backpack by any means, which is the entire premise
+ * of G14. The envelope was v1-SHAPED but not v1-PROVENANCED. Caught by an adversarial read of
+ * the diff, not by any test, because no test can check where a fixture came from.
+ *
+ * What CAN be checked is the tell, so it is checked below: every backpack entry in a genuine
+ * pre-G14 save must be a generated `gen:*` id. If a future edit regenerates this file against
+ * the current tree, that assertion goes red and the provenance claim above stops being a
+ * promise nobody can audit.
  */
 const V1_ENVELOPE = readFileSync(
   fileURLToPath(new URL('./fixtures/v1-run-envelope.json', import.meta.url)),
@@ -106,6 +119,30 @@ describe('the envelope migration, v1 -> v2', () => {
     expect(raw.memory).toBeDefined();
     expect(raw.runSummary).toBeUndefined();
     expect(raw.runSeed).toBeUndefined();
+  });
+
+  it('...and was really written by the PRE-G14 game, not merely shaped like it', () => {
+    // The provenance tell. Before G14 the only thing any loot path could produce was
+    // rarity-GENERATED gear carrying a synthetic `gen:*` id — no backpack entry could ever
+    // hold a catalog `defId`, which is the whole defect. So a genuine pre-G14 save has an
+    // all-`gen:*` backpack, and a fixture regenerated against the CURRENT tree would not.
+    //
+    // This exists because the first version of this fixture failed exactly that test: it was
+    // generated after G14 landed and carried `void-draught` and `suture-kit`, while the
+    // comment above claimed it came from the shipped game. A claim about where a file came
+    // from is unfalsifiable unless something in the file betrays it — this is that something.
+    const raw = JSON.parse(V1_ENVELOPE) as {
+      state: { player: { inventory: { backpack: { defId: string }[] } } };
+    };
+    const backpack = raw.state.player.inventory.backpack;
+    expect(backpack.length, 'the fixture run never picked anything up — no tell to check').toBeGreaterThan(0);
+    for (const item of backpack) {
+      expect(
+        item.defId,
+        `"${item.defId}" cannot be in a pre-G14 backpack — this fixture was regenerated ` +
+          'against the current tree, and the provenance comment above is now false',
+      ).toMatch(/^gen:/);
+    }
   });
 
   it('opens a real v1 save, keeps its state and memory, and reports meta: null', () => {

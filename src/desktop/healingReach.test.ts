@@ -115,6 +115,12 @@ describe('G14 end-to-end — healing is reachable in an ordinary run', () => {
   });
 
   it('and in at least half of them it offers something that HEALS', () => {
+    // Where 0.5 comes from — the same place as the 0.8 above, and stated because a floor with
+    // no derivation is indistinguishable from one slipped under an observed value. It is the
+    // plan's AC-23 threshold, and the plan derives it from the drop weights: the `heal` pool
+    // carries weight 5 of the 9 available at act 1 (`unique` is empty there), so slightly over
+    // half of all catalog drops should be a heal. "Half the runs" is the deliberately loose
+    // floor under that, chosen to survive an RNG reshuffle. Baseline: 0%, always.
     expect(RESULT.runsOfferingAHeal / RESULT.runs).toBeGreaterThanOrEqual(0.5);
   });
 

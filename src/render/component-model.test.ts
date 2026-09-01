@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   hpFraction,
   barModel,
@@ -254,5 +256,56 @@ describe('buttonModel', () => {
 
   it('omits the hint key entirely when there is no hint', () => {
     expect('hint' in buttonModel('Rest')).toBe(false);
+  });
+});
+
+// =========================================================================================
+// The VIEW half of `buttonModel.disabled` — added by `#0c persistence-and-reach`.
+//
+// `disabled: true` is only worth having if the view makes the button INERT, not merely grey.
+// The Potion button is why this matters now: it used to be unconditional, and pressing it at
+// 0 potions dispatched a whole engine step that resolved nothing. `potionControl` decides the
+// flag (tested in `view-model.test.ts`), but the flag means nothing unless `actionButton`
+// honours it — and `components.ts` is DOM code the repo deliberately does not unit-test
+// (recorded deviation in its own header: Vitest runs `environment: 'node'`).
+//
+// So the contract is asserted on the SOURCE. This closes the one gap between "the model says
+// disabled" and "a stray click cannot dispatch".
+// =========================================================================================
+
+describe('actionButton makes a disabled button inert, not just grey', () => {
+  const source = readFileSync(fileURLToPath(new URL('./components.ts', import.meta.url)), 'utf8');
+  // Comments stripped: the prose in that file describes the behaviour in words that would
+  // otherwise satisfy these patterns on their own.
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const start = code.indexOf('export function actionButton(');
+  const body = code.slice(start, code.indexOf('\n}', start));
+
+  it('has an actionButton to guard (the anchor exists)', () => {
+    expect(start, 'actionButton is gone — this guard has gone stale').toBeGreaterThan(-1);
+    expect(body).toMatch(/model\.disabled/);
+  });
+
+  it('attaches the click listener ONLY on the enabled branch', () => {
+    // There must be exactly one `addEventListener`, and it must sit after the `else` — i.e.
+    // inside the branch taken when the model is NOT disabled. A handler attached before the
+    // check, or in both branches, means a disabled button still dispatches.
+    const listeners = body.match(/addEventListener\s*\(/g) ?? [];
+    expect(listeners, 'actionButton no longer attaches exactly one click listener').toHaveLength(1);
+    const elseAt = body.search(/\}\s*else\s*\{/);
+    const listenAt = body.search(/addEventListener\s*\(/);
+    expect(elseAt, 'the disabled/enabled branch is gone').toBeGreaterThan(-1);
+    expect(
+      listenAt,
+      'the click handler is attached outside the enabled branch — a disabled button would ' +
+        'still dispatch, and the Potion button at 0 potions is exactly that bug',
+    ).toBeGreaterThan(elseAt);
+  });
+
+  it('and still marks it disabled to the browser as well as to the eye', () => {
+    // `el.disabled = true` is what stops keyboard activation and removes it from the tab
+    // order; the class is only paint. Both are required.
+    expect(body).toMatch(/\.\s*disabled\s*=\s*true/);
+    expect(body).toMatch(/is-disabled/);
   });
 });

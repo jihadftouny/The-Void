@@ -184,8 +184,16 @@ describe('rollChestLoot — guaranteed, seeded (no drop gate)', () => {
 });
 
 // =========================================================================================
-// G14 — the authored catalog branch. 37 of the 38 authored items used to be unobtainable,
-// which is why the game had no healing at all.
+// G14 — the authored catalog branch.
+//
+// TWO NUMBERS, and they measure different things — stated together because quoting one
+// without the other is how the register's "37 of 38" reads as though this unit fixed all of
+// it. Counted from the catalogs: 19 consumables + 4 uniques + 15 relics = 38 authored items.
+//   · **37 of 38** were unobtainable by ANY means. `deals.json` authors exactly one relic
+//     reward (`mirror-shard`), so that single item was the whole reachable set.
+//   · **23 of 38** — every consumable and every unique — are what THIS unit makes reachable.
+//     The other 14 are relics, which stay deal-only by §14.1 and are #9's to widen.
+// The 23 are why the game had no healing at all: every healing item is a consumable.
 // =========================================================================================
 
 describe('rollLootDrop — the authored-catalog branch (G14)', () => {

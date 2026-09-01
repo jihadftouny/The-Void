@@ -163,8 +163,12 @@ const SLOT_ORDER: readonly EquipSlot[] = [
  * encounters at all; #0a's G43 fix made floor 5 playable, so the authored curve is now
  * silently unused. One character. Flagged to PLAN.md #2 as a balance delta.
  */
+export function clampAct(act: number): number {
+  return Math.min(Math.max(act, 1), 5);
+}
+
 export function getDropTable(act: number): DropTable {
-  const key = String(Math.min(Math.max(act, 1), 5));
+  const key = String(clampAct(act));
   const table = TABLES.perAct[key];
   if (!table) throw new Error(`getDropTable: no drop table for act ${act}`);
   return table;
@@ -292,11 +296,18 @@ function rollOneItem(
   if (!rarity) throw new Error(`${where}: empty rarity table`);
   const slot = weightedPick(rng, slotEntries(table.slotWeights, bias));
   if (!slot) throw new Error(`${where}: empty slot table`);
-  // (4) The catalog gate. `catalogEntries` is RNG-free and short-circuits the `&&`, so a
-  // table with no `catalog` block — or one whose pools are all empty at this act — takes
+  // (4) The catalog gate. Both operands before the `rng()` are RNG-FREE and short-circuit it,
+  // so a table with no `catalog` block — or one whose pools are all empty at this act — takes
   // ZERO extra draws and is byte-identical to the pre-G14 roll.
-  const entries = catalogEntries(table.catalog, act);
-  if (entries.length > 0 && rng() < (table.catalog as CatalogDrops).chance) {
+  //
+  // The `catalog !== undefined` test is redundant with `entries.length > 0` (an absent block
+  // yields no entries), and is written out anyway rather than casting: a cast hands back the
+  // compiler's guarantee, and if `catalogEntries` ever gained a path that returned entries
+  // without a block, `rng() < undefined` is `false` — silently the gear branch, with a draw
+  // already spent. The narrowing costs nothing and cannot go stale.
+  const catalog = table.catalog;
+  const entries = catalogEntries(catalog, act);
+  if (catalog !== undefined && entries.length > 0 && rng() < catalog.chance) {
     return drawCatalogItem(entries, rng);
   }
   return generateItem(rng, { slot, rarity });
@@ -334,7 +345,14 @@ export function rollDropFromTable(
  */
 export function rollLootDrop(act: number, rng: Rng, tag?: string): ItemInstance | null {
   const bias = tag ? TABLES.byTag[tag] : undefined;
-  return rollDropFromTable(getDropTable(act), act, rng, bias);
+  // The SAME clamped act reaches the table and the unique pool. `getDropTable` clamps
+  // internally, so passing the raw `act` on would pair (say) act 7's table — clamped to 5 —
+  // with a unique pool computed for act 7. Identical in effect today (every unique is floor
+  // <= 5, and act 0's pool is as empty as act 1's), and identical in DRAW COUNT either way,
+  // but the module header promises the roll is a function of "(the table, the act)" and that
+  // is only true if both read the same number.
+  const clamped = clampAct(act);
+  return rollDropFromTable(getDropTable(clamped), clamped, rng, bias);
 }
 
 /**
