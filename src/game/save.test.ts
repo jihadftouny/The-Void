@@ -861,3 +861,58 @@ describe('M12 mid-boss / post-gate save round-trip', () => {
     expect(restored).toEqual(state);
   });
 });
+
+// ------- #0a — the two NEW optional fields are additive, so no SAVE_VERSION bump -------------
+
+describe('#0a legacy-save guard: a save written before this unit still loads and behaves', () => {
+  // The unit adds exactly two optional fields — `ActiveCondition.onsetDone` (G23) and
+  // `BattleState.playerAdvantage` (G12) — and each has a fallback that reproduces the OLD
+  // behaviour when absent. That is the whole basis for not bumping `SAVE_VERSION`, so it is
+  // asserted rather than assumed: a save with neither key must decode and tick as before.
+
+  it('SAVE_VERSION is unchanged by this unit', () => {
+    expect(SAVE_VERSION).toBe(8);
+  });
+
+  it('a battle saved with NO playerAdvantage decodes, and reads as "no standing modifier"', () => {
+    const base = midRunState(SEED);
+    const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(SEED));
+    const battle = createBattle(base.player!, enemy, 1); // no opts -> the key is absent
+    expect('playerAdvantage' in battle).toBe(false);
+    const state: GameState = {
+      ...base,
+      phase: { kind: 'battle', battle, started: true, final: false },
+    };
+    const encoded = encodeSave(state);
+    expect(encoded).not.toContain('playerAdvantage'); // it is not even written
+    const restored = decodeSave(encoded);
+    expect(restored).toEqual(state);
+    if (restored!.phase.kind === 'battle') {
+      expect(restored!.phase.battle.playerAdvantage).toBeUndefined();
+    }
+  });
+
+  it('a condition saved with NO onsetDone decodes and ticks exactly as it did before', () => {
+    // Hand-built in the PRE-flag shape (three fields only) at its mid-life point. The fallback
+    // is the old inference `remainingTurns < maxTurns`, so this must take its ACTIVE tick and
+    // deal its 1 damage — the behaviour the shipped engine had.
+    const base = midRunState(SEED);
+    const legacy = { type: 'bleed', remainingTurns: 1, maxTurns: 2 } as ActiveCondition;
+    const player = { ...base.player!, activeConditions: [legacy], hp: 20, maxHp: 20 };
+    const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(SEED));
+    const state: GameState = { ...base, player };
+
+    const encoded = encodeSave(state);
+    expect(encoded).not.toContain('onsetDone');
+    const restored = decodeSave(encoded);
+    expect(restored).toEqual(state);
+
+    const revived = restored!.player!.activeConditions[0]!;
+    expect('onsetDone' in revived).toBe(false);
+    const ticked = tickConditions({ ...player, activeConditions: [revived] }, enemy, () => 0.5);
+    expect(ticked.hpDelta).toBe(-1);
+    expect(ticked.events).toEqual([
+      { kind: 'condition-damage', subject: 'player', conditionType: 'bleed', amount: 1 },
+    ]);
+  });
+});

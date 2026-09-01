@@ -19,9 +19,42 @@
 // which rule changed and why the new numbers are correct.
 //
 // ---------------------------------------------------------------------------------------------
-// #0a `combat-core` RULE LEDGER — why these numbers moved (see the final table in step 9's commit).
-// Each row is a DELIBERATE rules change from `docs/PLAN.md` #0 / `docs/FINDINGS.md` §4, with the
-// direction it was expected to push the runs, WRITTEN DOWN BEFORE MEASURING so a surprise shows.
+// #0a `combat-core` RULE LEDGER — WHY EVERY NUMBER IN THIS FILE MOVED.
+//
+// Twenty-three engine defects were fixed on the `agentic/combat-core` branch, seventeen of which
+// legitimately change measured behaviour. Each row below is a DELIBERATE rules change from
+// `docs/PLAN.md` #0 / `docs/FINDINGS.md` §4, recorded with the direction it was expected to push
+// the runs — WRITTEN DOWN BEFORE MEASURING, so that a surprise is visible as a surprise. The
+// per-step detail follows; this is the one-line summary of the whole unit:
+//
+//   RULE CHANGED                                        FIX   STEP  DIRECTION ON THESE RUNS
+//   a re-applied DoT/control no longer resets to onset  G23    2    both sides stronger
+//   fracture on the ENEMY feeds its to-hit roll         G30    2    enemy stronger (+1 draw)
+//   a healing tick is capped at effective max HP        G22a   2    both sides slightly weaker
+//   a rest cures conditions                             G27    3    PLAYER MUCH STRONGER
+//   a rest refills skill charges                        G31    3    PLAYER MUCH STRONGER
+//   the ambush +1 is battle-scoped, not latched         G12    4    PLAYER MUCH WEAKER
+//   shield is cleared at the battle boundary            G25    4    player weaker
+//   momentum decays across the boundary                 G34    4    player weaker
+//   `canFlee` is derived from the boss                  G4     4    neutral here
+//   one guarded damage path, four sites                 G24/29 5    NO MOVEMENT (RNG-free)
+//   a rejected press resolves nothing                   G36    5    NO MOVEMENT (unreachable)
+//   a flee consumable respects `canFlee`                G39    5    NO MOVEMENT (unreachable)
+//   proficiency enters the to-hit total                 G32    6    player stronger (+2 to hit)
+//   resistances actually mitigate                       G17    6    enemy stronger on balance
+//   the enemy cannot cast what it cannot afford         G22b   6    enemy slightly weaker
+//   an enemy that did not cast regains a charge         G22c   6    ENEMY MUCH STRONGER
+//   floor 5 becomes a real floor behind an XP gate      G43    7    RUNS LONGER, act-5 deaths
+//   `cheaper` cannot reach a 0-cost skill               G35    8    player weaker
+//   a deal cannot drive maxHp/hp/a stat below 1         G20    8    neutral here
+//   a non-integer draft index is a no-op                G45    8    neutral (unreachable)
+//   the dead deal-quality twist is deleted              G16    8    neutral
+//   clarity-draught is usable                           G28d   8    neutral here
+//
+// NET on this 6-seed sample: 2 wins -> 0, avg level 61/6 -> 49/6, floors cleared 13/6 -> 11/6,
+// deaths redistributed out of act 1 and into acts 4-5. The REAL winnability guard is
+// `balance.test.ts`'s 500-run heuristic sample, which still passes at 0.132 — see step 8 for the
+// one place a constant had to move to keep it passing without touching the guard.
 //
 //  step 2 | G23 | a re-applied DoT/control no longer rewinds to its onset turn, so bleed/burn/
 //         |     | poison finally deal damage on BOTH sides, and a refreshed freeze/stun finally
@@ -121,6 +154,9 @@
 // call anywhere in the run moves it), and a whole `simulateBatch` aggregate.
 
 import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createGame, step, awaitingFor } from './game.ts';
 import type { GameState, GameInput } from './game.ts';
 import type { GameEvent } from './gameEvent.ts';
@@ -207,5 +243,38 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
         },
       },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The DETERMINISM guard this whole file rests on. Every golden number above is meaningless if a
+// run can consult the wall clock or an unseeded generator, so the rule is asserted directly on
+// the shipping source rather than trusted to review: `CLAUDE.md` load-bearing principle 2, "never
+// call Math.random() or Date.now() inside src/game".
+// ---------------------------------------------------------------------------------------------
+
+describe('the logic core contains no unseeded randomness and no clock', () => {
+  it('no shipping file under src/game CALLS Math.random or Date.now', () => {
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const offenders: string[] = [];
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.ts') || name.endsWith('.test.ts')) continue;
+      const lines = readFileSync(join(dir, name), 'utf8').split('\n');
+      lines.forEach((line, i) => {
+        // Skip comment lines — several modules DOCUMENT the prohibition by naming it.
+        const trimmed = line.trim();
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+        if (/\bMath\s*\.\s*random\s*\(/.test(line) || /\bDate\s*\.\s*now\s*\(/.test(line)) {
+          offenders.push(`${name}:${i + 1}`);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('scans a non-trivial number of files (so an empty sweep cannot pass vacuously)', () => {
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const shipping = readdirSync(dir).filter((n) => n.endsWith('.ts') && !n.endsWith('.test.ts'));
+    expect(shipping.length).toBeGreaterThan(30);
   });
 });
