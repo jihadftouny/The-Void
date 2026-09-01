@@ -140,3 +140,29 @@ describe('unavailable + potion off-equivalence', () => {
     expect(r.state.player.pots).toBe(1);
   });
 });
+
+// ------- G28(d) — clarity-draught can finally be used -----------------------------------------
+
+describe('G28(d) — the Clarity Draught does what it advertises', () => {
+  it('heals 8 and is consumed, instead of being permanently unusable', () => {
+    // `items.json`'s `clarity-draught` was `kind: "usable"` with NO `use` array, so
+    // `applyConsumable` bailed with `consumable-unavailable` on every attempt — while the item
+    // still advertised "Heal 8 HP" through its `effects` entry. It now carries the matching
+    // `use: [{ healSelf, amount: 8 }]`.
+    const player = makePlayer({ hp: 5, maxHp: 30 }, [{ defId: 'clarity-draught' }]);
+    const battle = createBattle(player, makeEnemy(), 1);
+    const r = resolveRound(battle, { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
+    expect(r.status).toBe('ongoing');
+    expect(r.state.player.hp).toBe(13); // 5 + 8, well under the 30 cap
+    expect(r.state.player.inventory.backpack).toEqual([]); // consumed
+    expect(r.events).toContainEqual({ kind: 'consumable-used', itemId: 'clarity-draught' });
+    expect(r.events.some((e) => e.kind === 'consumable-unavailable')).toBe(false);
+  });
+
+  it('its heal is still capped at effective max HP', () => {
+    const player = makePlayer({ hp: 9, maxHp: 10 }, [{ defId: 'clarity-draught' }]);
+    const battle = createBattle(player, makeEnemy(), 1);
+    const r = resolveRound(battle, { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
+    expect(r.state.player.hp).toBe(10);
+  });
+});

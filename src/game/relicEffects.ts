@@ -23,7 +23,8 @@ import { type Enemy } from './enemy.ts';
 import { computeEquipModifiers } from './equipEffects.ts';
 import { applyCondition, cureCondition } from './condition.ts';
 import { computeStatMods } from './character.ts';
-import { effectiveMaxHp } from './statEffects.ts';
+import { effectiveMaxHp, effectiveResistances } from './statEffects.ts';
+import { mitigate } from './skill.ts';
 import { type CombatEvent } from './combatEvent.ts';
 import { type EffectAction, type TriggerType } from './item.ts';
 
@@ -71,8 +72,12 @@ export function applyEffectAction(
         amt += action.params.perEnemyCondition * e.activeConditions.length;
       }
       if (action.element !== undefined) {
-        const res = e.resistances[action.element] ?? 0;
-        amt = amt - Math.floor(res / 100) * amt; // same coarse mitigation as skill damage
+        // G17: the SAME `mitigate` the skill path uses, against the target's EFFECTIVE
+        // resistances. This line used to duplicate the old `base - floor(res/100) * base`
+        // formula inline — which was zero mitigation for every resistance below 100, and
+        // nothing in the game reaches 100. Two copies of a broken formula are now one copy
+        // of the real one.
+        amt = mitigate(amt, effectiveResistances(e)[action.element] ?? 0);
       }
       amt = Math.max(amt, 0);
       if (amt > 0) e = { ...e, hp: Math.max(e.hp - amt, 0) };

@@ -156,3 +156,69 @@ describe('new-skill draft pick: a previously un-castable kit skill becomes casta
     });
   });
 });
+
+// ------- G35 — the "cheaper" upgrade can no longer reach a zero-cost skill -------------------
+
+describe('G35 — taking "cheaper" cannot drive a skill to 0 charge cost', () => {
+  it('over 300 seeded level-up sequences, no resolved skill ever costs 0', () => {
+    // The register's own policy and measurement: "take cheaper whenever offered" reached a
+    // 0-cost skill on 274 OF 300 SEEDS, and the cast guard is `charges < effectiveCost` — so
+    // `0 < 0` is false and `useSkill` spends 0, i.e. a damage-plus-momentum skill every round
+    // forever, free, on every class with a cost-2 skill.
+    //
+    // The defect was scope: `templateApplies` tested the BASE skill, and the `taken` exclusion
+    // only spans one draft, so `cheaper` came back on a later level-up and `chargeDelta`
+    // summed to -2. Resolving against the PLAYER makes it self-limiting: after one `cheaper`
+    // the resolved cost is 1, so the template no longer applies.
+    let zeroCostSeeds = 0;
+    let doubleOfferSeeds = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      let player = enforcer();
+      const rng = mulberry32(seed);
+      const cheaperTakenFor = new Set<string>();
+      for (let level = 0; level < 20; level++) {
+        const offers = generateDraft(player, rng);
+        const cheaper = offers.find(
+          (o): o is Extract<DraftOption, { kind: 'upgrade' }> =>
+            o.kind === 'upgrade' && o.upgrade.chargeDelta === -1,
+        );
+        const picked = cheaper ?? offers[0]!;
+        if (cheaper) {
+          if (cheaperTakenFor.has(cheaper.skillId)) doubleOfferSeeds++;
+          cheaperTakenFor.add(cheaper.skillId);
+        }
+        player = applyDraftOption(player, picked).player;
+        for (const id of player.skillPool) {
+          const def = resolveSkill(player, id as never);
+          if (def && def.chargeCost <= 0) zeroCostSeeds++;
+        }
+      }
+    }
+    expect(zeroCostSeeds).toBe(0);
+    expect(doubleOfferSeeds).toBe(0);
+  });
+
+  it('"cheaper" is offered for a cost-2 skill and NOT once the player has already taken it', () => {
+    // Direct, seed-free statement of the rule. `heavyStrike` costs 2, `brace` costs 1.
+    const fresh = enforcer();
+    const hasCheaperFor = (p: Player, skillId: string): boolean => {
+      // Scan every draft the generator can produce for this player over many seeds.
+      for (let seed = 0; seed < 300; seed++) {
+        const offers = generateDraft(p, mulberry32(seed));
+        if (offers.some((o) => o.kind === 'upgrade' && o.skillId === skillId && o.upgrade.chargeDelta === -1)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    expect(resolveSkill(fresh, 'heavyStrike').chargeCost).toBe(2);
+    expect(hasCheaperFor(fresh, 'heavyStrike')).toBe(true);
+    expect(hasCheaperFor(fresh, 'brace')).toBe(false); // already cost 1
+
+    const discounted = applyDraftOption(fresh, {
+      kind: 'upgrade', skillId: 'heavyStrike', upgrade: { chargeDelta: -1 },
+    }).player;
+    expect(resolveSkill(discounted, 'heavyStrike').chargeCost).toBe(1);
+    expect(hasCheaperFor(discounted, 'heavyStrike')).toBe(false); // never offered again
+  });
+});

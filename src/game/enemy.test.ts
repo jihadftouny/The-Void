@@ -121,7 +121,11 @@ describe('generateEnemy family path', () => {
   it('folds the family stat-bias, tags familyId/karmaWeighted, and seeds the resist slot', () => {
     // mutantStrays: tag Beast, NOT ⚖, statBias {DEX:+1}, resist Poison 2. At playerXp=0
     // every base stat pins to 13 (statSpread 1 -> randInt=0), so DEX = 13 + 1 = 14 and the
-    // other five stay 13. Poison is element index 4 -> resistances[4] = 2.
+    // other five stay 13. Poison is element index 4 -> resistances[4] = 25.
+    // (CHANGED by G17's data rescale: family `resistAmount` 2 -> 25. On the old formula
+    // `floor(res/100) * base`, a value of 2 mitigated exactly nothing; 25 means 25%.
+    // ⚠ M15/#2 balance placeholder — the number only became meaningful once G17 made the
+    // formula real.)
     const family = getFamily('mutantStrays')!;
     const enemy = generateEnemy({ act: 1, family, playerXp: 0 }, mulberry32(11));
     expect(enemy.familyId).toBe('mutantStrays');
@@ -131,9 +135,9 @@ describe('generateEnemy family path', () => {
       if (key !== 'DEX') expect(enemy.stats[key]).toBe(13);
     }
     const poison = getElement('Poison')!;
-    expect(enemy.resistances[poison]).toBe(2);
+    expect(enemy.resistances[poison]).toBe(25);
     // Only that one slot is non-zero.
-    expect(enemy.resistances.reduce((a, b) => a + b, 0)).toBe(2);
+    expect(enemy.resistances.reduce((a, b) => a + b, 0)).toBe(25);
     // The enemy fights with mutantStrays' declared themed pool (enemyFamilies.json),
     // NOT the legacy placeholder Pyro Ball.
     expect(enemy.skillPool).toEqual(['poisonBite', 'rabidClaw']);
@@ -157,7 +161,7 @@ describe('generateEnemy family path', () => {
     const b = generateEnemy({ act: 5, family, playerXp: 40 }, mulberry32(2024));
     expect(a).toEqual(b);
     expect(JSON.parse(JSON.stringify(a))).toEqual(a);
-    // demons resist Pyro (index 2) by 2.
-    expect(a.resistances[getElement('Pyro')!]).toBe(2);
+    // demons resist Pyro (index 2) by 25 (G17 rescale).
+    expect(a.resistances[getElement('Pyro')!]).toBe(25);
   });
 });

@@ -10,8 +10,8 @@
 //  - Data-driven content: durations/display names live in CONDITION_DATA (ported from
 //    Condition.java), so adding a condition never edits the tick chain's structure.
 //  - Serializable plain-data state: `ActiveCondition` is a flat record; the max-turns
-//    are stored on the instance so onset (`remaining === maxTurns`) and expiry are
-//    self-contained and round-trip through JSON.
+//    and the explicit `onsetDone` phase flag are stored on the instance so onset and
+//    expiry are self-contained and round-trip through JSON.
 //
 // Ported from `Condition.java` (`tickConditions`). Recorded DEVIATIONS from Java:
 //  - The chain runs in a FIXED canonical order (below) rather than ArrayList
@@ -120,8 +120,8 @@ export const CONDITION_DATA: Record<ConditionType, ConditionData> = {
 
 /**
  * A live status condition on a character, as plain serializable data. `maxTurns` is
- * copied onto the instance so the onset check (`remainingTurns === maxTurns`) and the
- * per-turn/expiry phases are self-contained and JSON-round-trippable.
+ * copied onto the instance so the per-turn/expiry phases are self-contained and
+ * JSON-round-trippable.
  */
 export interface ActiveCondition {
   type: ConditionType;
@@ -134,6 +134,20 @@ export interface ActiveCondition {
    * It only materializes when a DoT is applied a second time (see `applyCondition`).
    */
   intensity?: number;
+  /**
+   * G23: THE EXPLICIT PHASE FLAG. `true` once this instance has taken its onset tick.
+   *
+   * The phase used to be INFERRED from `remainingTurns === maxTurns` — but `applyCondition`'s
+   * refresh/stack branches write exactly that value, so every re-application silently rewound a
+   * live condition to its no-effect onset turn. Measured: spamming `ember` for 20 rounds dealt
+   * a total of ZERO burn damage, while casting it once dealt 1 — the dominant action was
+   * strictly worse than acting once, on both sides of every fight.
+   *
+   * OPTIONAL and additive, exactly like `intensity`: absent ⇒ read as
+   * `remainingTurns < maxTurns`, which is precisely the old inference, so a condition saved
+   * before this flag existed ticks byte-identically and no `SAVE_VERSION` bump is needed.
+   */
+  onsetDone?: boolean;
 }
 
 /** Control conditions — those that make a character skip its turn. */
@@ -274,9 +288,13 @@ export interface TickResult {
 /**
  * Tick a character's active conditions for one turn — PURE. Processes each active
  * condition in the fixed CHAIN_ORDER, faithfully reproducing Java's three phases:
- *   onset  (remainingTurns === maxTurns): first-turn flavor, no damage yet;
- *   effect (remainingTurns > 0)        : the per-turn effect (damage/heal/skip/save);
- *   expiry (remainingTurns <= 0)       : remove the condition (aired deals fall damage).
+ *   onset  (`!onsetDone`)                : first-turn flavor, no damage yet;
+ *   effect (onsetDone, remaining > 0)    : the per-turn effect (damage/heal/skip/save);
+ *   expiry (onsetDone, remaining <= 0)   : remove the condition (aired deals fall damage).
+ * G23: the phase is the EXPLICIT `onsetDone` flag (defaulting to the legacy
+ * `remainingTurns < maxTurns` inference), NOT `remainingTurns === maxTurns` — a duration
+ * refresh writes exactly that value, so the old inference let every re-application rewind a
+ * live condition into its no-effect onset turn and deal nothing, forever.
  * Damage/heal accumulate into `hpDelta` (the caller applies it to hp); control
  * conditions set `skipTurn`; fracture sets `advDisOverride = -1`. Saving throws for
  * burn/freeze/electrify roll `d20 + target STR mod` vs `opponent.stats.INT`.
@@ -301,9 +319,17 @@ export function tickConditions(
     const cond = active.find((c) => c.type === type);
     if (!cond) continue;
 
-    const isOnset = cond.remainingTurns === cond.maxTurns;
-    const isActive = !isOnset && cond.remainingTurns > 0;
-    // Otherwise (remainingTurns <= 0 and not the onset turn) the condition expires.
+    // G23: the phase is read from the EXPLICIT flag, falling back to the old
+    // `remainingTurns < maxTurns` inference for a legacy instance that predates it (so a
+    // saved mid-condition instance keeps ticking exactly as it did). A re-application only
+    // resets `remainingTurns`; it can no longer rewind the phase, because the flag survives.
+    const onsetDone = cond.onsetDone ?? cond.remainingTurns < cond.maxTurns;
+    const isOnset = !onsetDone;
+    const isActive = onsetDone && cond.remainingTurns > 0;
+    // Otherwise (past onset, remainingTurns <= 0) the condition expires.
+    // Stamp the flag as the onset tick happens, on the per-tick CLONE — so it rides the
+    // survivor forward and a later refresh reads a condition that has already onset.
+    if (isOnset) cond.onsetDone = true;
 
     switch (type) {
       case 'burn': {
@@ -472,6 +498,19 @@ export function tickConditions(
         if (isOnset) {
           skipTurn = true;
           events.push({ kind: 'condition-onset', subject, conditionType: type });
+          events.push({ kind: 'condition-skip', subject, conditionType: type });
+          cond.remainingTurns--;
+          survivors.push(cond);
+        } else if (isActive) {
+          // G23 COMPANION FIX. `push` was the one condition whose effect fired ONLY on the
+          // onset branch, because with the old inference a maxTurns-1 condition could never
+          // be anything else. With the explicit flag a RE-PUSHED character reaches this
+          // branch, and without it the second push would EXPIRE the condition instead of
+          // pushing — i.e. re-applying the control would cancel it. Give it the same
+          // skip-decrement-survive shape its five control siblings already have. A push that
+          // is never refreshed never reaches here (rem hits 0 on onset), so its behaviour is
+          // unchanged.
+          skipTurn = true;
           events.push({ kind: 'condition-skip', subject, conditionType: type });
           cond.remainingTurns--;
           survivors.push(cond);

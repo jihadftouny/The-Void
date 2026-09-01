@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { createBattle, resolveRound, rollFlee, spareAvailable } from './battle.ts';
+import {
+  MOMENTUM_CARRY,
+  applyDamageToBattlePlayer,
+  createBattle,
+  openBattle,
+  resetTransientCombatState,
+  resolveRound,
+  rollFlee,
+  spareAvailable,
+  type RoundResult,
+} from './battle.ts';
+import { MOMENTUM_CAP } from './classKit.ts';
+import { type BossState } from './boss.ts';
 import { createPlayer, type Player } from './player.ts';
 import { type Enemy } from './enemy.ts';
 import { makeCondition } from './condition.ts';
+import { type CombatEvent } from './combatEvent.ts';
 import { type Rng } from './rng.ts';
 
 function scriptedRng(values: number[]): Rng {
@@ -16,7 +29,8 @@ function scriptedRng(values: number[]): Rng {
 }
 const face = (f: number, sides: number): number => (f - 0.5) / sides;
 
-// Enforcer with STR 18 -> STR mod 4 (floor((18-10)/2) = 4), equipped Jaaj Sword 1
+// Enforcer with STR 18 -> STR mod 4 (floor((18-10)/2) = 4) and PROFICIENCY 2 (the real
+// `createPlayer` value), so its to-hit modifier is 4 + 2 = 6 (G32). Equipped Jaaj Sword 1
 // (Melee, 1d6). hp/maxHp forced to 20 for clean arithmetic; rests 1, pots 2 (M7: no gold).
 function makePlayer(overrides: Partial<Player> = {}): Player {
   const base = createPlayer({
@@ -100,7 +114,8 @@ describe('resolveRound Fight — exact HP deltas + exact event list', () => {
   //  2) enemy to-hit d20 face 15 + 1 = 16 >= AC 13 -> hit; skill-pick randInt(_,1)=0 ->
   //     Pyro Ball, res 0 -> damage 2, charge 2->1.
   //  3) player tick draws nothing.
-  //  4) player d20 face 15 + STR mod 4 = 19 >= enemy AC 10 -> hit; damage 1d6 face 4 -> 4.
+  //  4) player d20 face 15 + STR mod 4 + proficiency 2 = 21 >= enemy AC 10 -> hit; damage
+  //     1d6 face 4 -> 4.
   //  Results: player.hp 20-2=18 ; enemy.hp 30-4=26 ; ongoing.
   it('produces the hand-derived HP and event stream and leaves the input unmutated', () => {
     const state = createBattle(makePlayer(), makeEnemy({ hp: 30 }), 1);
@@ -123,7 +138,10 @@ describe('resolveRound Fight — exact HP deltas + exact event list', () => {
       {
         kind: 'attack', subject: 'player', outcome: 'hit', damage: 4,
         // natural 15 + 4 (player STR mod) = 19 >= enemy AC 10.
-        roll: { natural: 15, faces: [15], advDis: 0, modifier: 4, total: 19, targetAc: 10 },
+        // CHANGED by G32: `modifier` is now weaponModifier(4) + proficiency(2) = 6, folded
+        // into the one field the log prints as `natural + modifier = total`. The outcome is
+        // unchanged (19 and 21 both clear AC 10) — only the reported sum moved.
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 6, total: 21, targetAc: 10 },
         damageSources: [{ kind: 'weapon-dice', amount: 4, label: '1d6' }],
       },
     ]);
@@ -373,8 +391,9 @@ describe('resolveRound Fight — conditionless round, exact draw order (M4)', ()
   // A conditionless round draws exactly four (M4 adds the enemy to-hit d20 ahead of the
   // skill-pick). Independent hand-derivation (enemy hp 10, player AC 13, enemy +1 to hit):
   //   enemy tick: 0 draws. enemy to-hit face 15 + 1 = 16 >= AC 13 -> hit; skill-pick 0.5 ->
-  //   Pyro Ball dmg 2, charge 2->1. player tick: 0 draws. player d20 face 12 + STR mod 4 =
-  //   16 >= enemy AC 10 -> hit; dmg 1d6 face 5 -> 5. player 20-2=18, enemy 10-5=5, ongoing.
+  //   Pyro Ball dmg 2, charge 2->1. player tick: 0 draws. player d20 face 12 + STR mod 4 +
+  //   proficiency 2 = 18 >= enemy AC 10 -> hit; dmg 1d6 face 5 -> 5. player 20-2=18,
+  //   enemy 10-5=5, ongoing.
   it('produces the hand-derived state + event list and consumes exactly 4 draws', () => {
     const state = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 10 }), 1);
     const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(12, 20), face(5, 6)]));
@@ -393,7 +412,7 @@ describe('resolveRound Fight — conditionless round, exact draw order (M4)', ()
       {
         kind: 'attack', subject: 'player', outcome: 'hit', damage: 5,
         // natural 12 + 4 (player STR mod) = 16 >= enemy AC 10.
-        roll: { natural: 12, faces: [12], advDis: 0, modifier: 4, total: 16, targetAc: 10 },
+        roll: { natural: 12, faces: [12], advDis: 0, modifier: 6, total: 18, targetAc: 10 }, // G32: 4 + 2
         damageSources: [{ kind: 'weapon-dice', amount: 5, label: '1d6' }],
       },
     ]);
@@ -404,8 +423,8 @@ describe('resolveRound Fight — enemy misses (M4 defense matters)', () => {
   // The enemy rolls a LOW natural: face 5 + 1 = 6 < AC 13 -> MISS. It deals 0, draws no
   // skill-pick, and applies no condition; the player still fights. Draws [enemyToHit,
   // playerD20, playerDamage] (only three — a skill-pick on a miss would exhaust the rng).
-  //   player d20 face 15 + STR 4 = 19 >= enemy AC 10 -> hit; dmg 1d6 face 4 -> 4.
-  //   player 20-0=20, enemy 30-4=26, ongoing.
+  //   player d20 face 15 + STR 4 + proficiency 2 = 21 >= enemy AC 10 -> hit; dmg 1d6 face
+  //   4 -> 4. player 20-0=20, enemy 30-4=26, ongoing.
   it('a whiffed enemy attack deals 0 and emits attack/miss with no enemy-skill-used', () => {
     const state = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1);
     const r = resolveRound(state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
@@ -423,7 +442,7 @@ describe('resolveRound Fight — enemy misses (M4 defense matters)', () => {
       {
         kind: 'attack', subject: 'player', outcome: 'hit', damage: 4,
         // natural 15 + 4 (player STR mod) = 19 >= enemy AC 10.
-        roll: { natural: 15, faces: [15], advDis: 0, modifier: 4, total: 19, targetAc: 10 },
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 6, total: 21, targetAc: 10 }, // G32: 4 + 2
         damageSources: [{ kind: 'weapon-dice', amount: 4, label: '1d6' }],
       },
     ]);
@@ -449,11 +468,16 @@ describe('resolveRound — M3 class twists in a full round', () => {
   // 7) +1 (took 2 from pyroBall) = 2. charge 5 -> 3 (cost 2). Applies fracture. Draw order:
   // enemy tick 0 -> skillPick 0.5 -> player tick 0 -> cast (no draw).
   it('Enforcer Heavy Strike spends momentum for burst, then the hooks re-bank +2', () => {
-    const state = createBattle(
-      makePlayer({ hp: 20, momentum: 4, skillCharges: 5, skillPool: ['heavyStrike'] }),
+    // Momentum is set on the battle player AFTER `createBattle`, because the funnel now
+    // DECAYS carried momentum at a battle boundary (G34/§22.19, covered by its own test
+    // below). This test is about the SPEND mechanic mid-fight, so it pins momentum 4 in the
+    // fight rather than smuggling it in from a previous one — the arithmetic is unchanged.
+    const opened = createBattle(
+      makePlayer({ hp: 20, skillCharges: 5, skillPool: ['heavyStrike'] }),
       makeEnemy({ hp: 30 }),
       1,
     );
+    const state = { ...opened, player: { ...opened.player, momentum: 4 } };
     const r = resolveRound(state, { kind: 'cast', skillId: 'heavyStrike' }, scriptedRng([face(15, 20), 0.5]));
     expect(r.state.enemy.hp).toBe(23); // 30 - 7
     expect(r.state.player.hp).toBe(18); // 20 - 2
@@ -527,6 +551,463 @@ describe('resolveRound — M3 class twists in a full round', () => {
       },
       { kind: 'condition-applied', subject: 'enemy', conditionType: 'bleed' },
     ]);
+  });
+});
+
+// ------- G30 / G22(a) ------------------------------------------------------------------------
+
+/** The enemy's `attack` event, narrowed so its roll detail can be read. */
+function enemyAttackEvent(events: readonly CombatEvent[]): Extract<CombatEvent, { kind: 'attack' }> {
+  const found = events.find((e) => e.kind === 'attack' && e.subject === 'enemy');
+  if (!found || found.kind !== 'attack') throw new Error('no enemy attack event was emitted');
+  return found;
+}
+
+describe('G30 — fracture inflicted on the ENEMY finally bites', () => {
+  // Step 3 always read the player's `advDisOverride`; step 2 never read the enemy's, so the
+  // enemy half of fracture — applied by `heavyStrike`, the Enforcer's CORE skill — had no
+  // consumer: the register measured byte-identical attacks at seeds 3/9/21/44.
+  //
+  // Independently derived from the dice rules, not measured:
+  //   clean    — advDis 0  -> ONE d20. face 15 + enemy STR mod 1 = 16 >= player AC 13 -> hit,
+  //              a skill-pick draw, Pyro Ball for 2. Player 20 - 2 = 18.
+  //   fractured— advDis -1 -> TWO d20s, take the MIN. faces 15 and 3 -> natural 3; 3 + 1 = 4
+  //              < AC 13 -> MISS, so 0 damage and NO skill-pick draw. Player stays at 20.
+  //   both     — player d20 face 15 + STR mod 4 + proficiency 2 = 21 >= AC 10 -> hit, 1d6(4).
+  it('rolls two dice at disadvantage where a clean enemy rolls one, and the log says so', () => {
+    const clean = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1);
+    const rClean = resolveRound(
+      clean,
+      'fight',
+      scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)]),
+    );
+    const cleanAttack = enemyAttackEvent(rClean.events);
+    expect(cleanAttack.roll!.faces).toEqual([15]);
+    expect(cleanAttack.roll!.advDis).toBe(0);
+    expect(cleanAttack.outcome).toBe('hit');
+    expect(rClean.state.player.hp).toBe(18);
+
+    const fractured = createBattle(
+      makePlayer({ hp: 20 }),
+      makeEnemy({ hp: 30, activeConditions: [makeCondition('fracture')] }),
+      1,
+    );
+    const rFrac = resolveRound(
+      fractured,
+      'fight',
+      // Exactly four draws: two for the disadvantaged enemy roll, then the player's two.
+      // A fifth (the skill-pick) would exhaust the script, proving the miss short-circuits.
+      scriptedRng([face(15, 20), face(3, 20), face(15, 20), face(4, 6)]),
+    );
+    const fracAttack = enemyAttackEvent(rFrac.events);
+    expect(fracAttack.roll!.faces).toEqual([15, 3]);
+    expect(fracAttack.roll!.advDis).toBe(-1);
+    expect(fracAttack.roll!.natural).toBe(3); // disadvantage takes the LOWER face
+    expect(fracAttack.outcome).toBe('miss');
+    expect(rFrac.state.player.hp).toBe(20); // the fractured enemy whiffed
+
+    // The existing `disadvantage` event carries it into the log — no new event kind.
+    expect(rFrac.events).toContainEqual({ kind: 'disadvantage', subject: 'enemy' });
+    expect(rClean.events.some((e) => e.kind === 'disadvantage')).toBe(false);
+  });
+
+  it('a Scavver-imposed disadvantage and an enemy fracture CANCEL to a straight roll', () => {
+    // The 5e cancellation rule, applied to the enemy half. A Scavver forces the enemy to
+    // disadvantage (-1); an enemy fracture is another -1 — but adv/dis is a state, not a
+    // stack, so two of the same still mean ONE disadvantage (two dice, take the lower).
+    // Against a Scavver whose fracture instead granted the enemy advantage, the faces would
+    // still be two but `advDis` would read +1 — so this pins the direction, not just the count.
+    const state = createBattle(
+      makePlayer({ hp: 20, classId: 'Scavver' }),
+      makeEnemy({ hp: 30, activeConditions: [makeCondition('fracture')] }),
+      1,
+    );
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), face(3, 20), face(15, 20), face(4, 8)]));
+    const attack = enemyAttackEvent(r.events);
+    expect(attack.roll!.advDis).toBe(-1);
+    expect(attack.roll!.faces).toEqual([15, 3]);
+  });
+});
+
+describe('G22(a) — a healing condition tick can never exceed effective max HP', () => {
+  // Enemy rolls face 5 + STR mod 1 = 6 < player AC 13 -> MISS (0 damage, no skill-pick draw),
+  // so the heal is isolated from the exchange. Regeneration's ONSET tick heals +2.
+  it('a player at full HP with regeneration stays at maxHp instead of overhealing to 22', () => {
+    const state = createBattle(
+      makePlayer({ hp: 20, maxHp: 20, activeConditions: [makeCondition('regeneration')] }),
+      makeEnemy({ hp: 30 }),
+      1,
+    );
+    const r = resolveRound(state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
+    expect(r.state.player.hp).toBe(20); // pre-fix: 20 + 2 = 22
+    expect(r.events).toContainEqual({
+      kind: 'condition-heal', subject: 'player', conditionType: 'regeneration', amount: 2,
+    });
+  });
+
+  it('the ENEMY side has the same cap (the mirror hole, closed in the same edit)', () => {
+    const state = createBattle(
+      makePlayer({ hp: 20 }),
+      makeEnemy({ hp: 30, maxHp: 30, activeConditions: [makeCondition('regeneration')] }),
+      1,
+    );
+    const r = resolveRound(state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
+    // Capped at 30 by the tick, then the player's 1d6 face 4 lands: 30 - 4 = 26.
+    // Pre-fix: 30 + 2 = 32, then - 4 = 28.
+    expect(r.state.enemy.hp).toBe(26);
+  });
+
+  it('a HEALING tick below the cap still heals in full (the clamp is not a cap-to-current)', () => {
+    const state = createBattle(
+      makePlayer({ hp: 10, maxHp: 20, activeConditions: [makeCondition('regeneration')] }),
+      makeEnemy({ hp: 30 }),
+      1,
+    );
+    const r = resolveRound(state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
+    expect(r.state.player.hp).toBe(12); // 10 + 2, well under the cap
+  });
+});
+
+// ------- G4 / G12 / G25 / G34 — createBattle as the transient funnel ------------------------
+
+/** The player's `attack` event, narrowed so its roll detail can be read. */
+function playerAttackEvent(events: readonly CombatEvent[]): Extract<CombatEvent, { kind: 'attack' }> {
+  const found = events.find((e) => e.kind === 'attack' && e.subject === 'player');
+  if (!found || found.kind !== 'attack') throw new Error('no player attack event was emitted');
+  return found;
+}
+
+describe('G25 — a transient shield does not accumulate across battles', () => {
+  it('opens at 5 in five consecutive battles, not 5, 10, 15, 20, 25', () => {
+    // The register's measurement, replayed: Grace-Forged Aegis grants a 5-point shield at
+    // battle start, `game.ts` writes the battle player back to the hub, and `openBattle`
+    // re-fires the trigger against the carried-forward player. Nothing ever cleared it, so
+    // by mid-descent the player was immune to chip damage — and it survived the save file.
+    const base = makePlayer();
+    let player: Player = {
+      ...base,
+      inventory: {
+        ...base.inventory,
+        slots: { ...base.inventory.slots, amulet: { defId: 'grace-forged-aegis' } },
+      },
+    };
+    const opens: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const opened = openBattle(createBattle(player, makeEnemy(), 1));
+      opens.push(opened.battle.player.shield ?? 0);
+      // Thread the player forward exactly as game.ts does on any battle outcome.
+      player = opened.battle.player;
+    }
+    expect(opens).toEqual([5, 5, 5, 5, 5]);
+  });
+});
+
+describe('G34 — momentum CARRIES between battles, with decay (author ruling, §22.19)', () => {
+  it('halves and floors at the boundary, capped', () => {
+    // The rule, stated as arithmetic rather than measured: floor(m * 0.5).
+    expect(MOMENTUM_CARRY).toBe(0.5);
+    const carry = (m: number) =>
+      resetTransientCombatState(makePlayer({ momentum: m })).momentum;
+    expect(carry(0)).toBe(0);
+    expect(carry(1)).toBe(0); // floor(0.5)
+    expect(carry(2)).toBe(1);
+    expect(carry(3)).toBe(1); // floor(1.5)
+    expect(carry(4)).toBe(2);
+    expect(carry(5)).toBe(2); // floor(2.5) — the cap halves to 2
+    // A hand-edited/legacy value above the cap is still clamped into range.
+    expect(carry(MOMENTUM_CAP * 4)).toBeLessThanOrEqual(MOMENTUM_CAP);
+  });
+
+  it('a seeded two-battle run banks the cap, then opens the next fight on exactly 2', () => {
+    // Battle 1, three rounds, every draw scripted. An Enforcer banks +1 for dealing damage
+    // and +1 for taking it, capped at MOMENTUM_CAP = 5.
+    //   r1: enemy to-hit face 15 + STR 1 = 16 >= player AC 13 -> hit; skill-pick 0.5 -> Pyro
+    //       Ball 2 (charge 2->1). Player d20 face 15 + STR 4 = 19 >= AC 10 -> hit, 1d6(4).
+    //       Dealt AND took -> momentum 0 + 2 = 2.
+    //   r2: identical -> momentum 4 (enemy charge 1->0).
+    //   r3: the enemy is out of charges, so it deals the plain 1 and draws NO skill-pick.
+    //       Dealt AND took -> 4 + 2 = 6, clamped to the cap 5.
+    let battle = createBattle(
+      makePlayer({ hp: 20, skillPool: ['heavyStrike'], skillCharges: 5 }),
+      makeEnemy({ hp: 30 }),
+      1,
+    );
+    expect(battle.player.momentum).toBe(0);
+
+    battle = resolveRound(battle, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)])).state;
+    expect(battle.player.momentum).toBe(2);
+    battle = resolveRound(battle, 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)])).state;
+    expect(battle.player.momentum).toBe(4);
+    battle = resolveRound(battle, 'fight', scriptedRng([face(15, 20), face(15, 20), face(4, 6)])).state;
+    expect(battle.player.momentum).toBe(MOMENTUM_CAP); // 6 clamped to 5
+
+    // Battle 2 opens on floor(5 * 0.5) = 2 — not 5 (an uncapped carry) and not 0 (a reset).
+    const next = createBattle(battle.player, makeEnemy({ hp: 30 }), 1);
+    expect(next.player.momentum).toBe(2);
+
+    // And the consequence in damage: Heavy Strike is base 3 + 1 per momentum spent, so the
+    // opening cast deals 3 + 2 = 5. A full reset would deal 3; an unchecked carry, 8.
+    const r = resolveRound(next, { kind: 'cast', skillId: 'heavyStrike' }, scriptedRng([face(15, 20), 0.5]));
+    expect(r.state.enemy.hp).toBe(25); // 30 - 5
+  });
+});
+
+describe('G12 — advantage is per-round battle state, never a latch on the player', () => {
+  it('a fractured player rolls at -1 that round and straight the round after it expires', () => {
+    // fracture is hand-built past its onset with one turn left, so the next two ticks are its
+    // active tick and its expiry — exactly the two rounds this test needs.
+    //   round A: active -> advDis -1 -> TWO d20s, take the MIN. faces 15 and 3 -> natural 3;
+    //            3 + STR mod 4 + proficiency 2 = 9 < enemy AC 10 -> MISS, so no damage draw.
+    //   round B: expired -> advDis 0 -> ONE d20. face 15 + 4 + 2 = 21 >= 10 -> hit, 1d6(4).
+    // The enemy misses in both (face 5 + STR mod 1 = 6 < player AC 13), which also proves no
+    // skill-pick draw is taken.
+    const start = createBattle(
+      makePlayer({
+        hp: 20,
+        activeConditions: [{ type: 'fracture', remainingTurns: 1, maxTurns: 100, onsetDone: true }],
+      }),
+      makeEnemy({ hp: 30 }),
+      1,
+    );
+
+    const a = resolveRound(start, 'fight', scriptedRng([face(5, 20), face(15, 20), face(3, 20)]));
+    const attackA = playerAttackEvent(a.events);
+    expect(attackA.roll!.advDis).toBe(-1);
+    expect(attackA.roll!.faces).toEqual([15, 3]);
+    expect(attackA.outcome).toBe('miss');
+    // THE POINT OF G12: nothing was latched onto the player, so nothing can ride to the hub.
+    expect(a.state.player.advantageDisadvantage).toBe(0);
+    expect(a.state.player.activeConditions.some((c) => c.type === 'fracture')).toBe(true);
+
+    const b = resolveRound(a.state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
+    const attackB = playerAttackEvent(b.events);
+    expect(attackB.roll!.advDis).toBe(0);
+    expect(attackB.roll!.faces).toEqual([15]);
+    expect(attackB.outcome).toBe('hit');
+    expect(b.state.player.advantageDisadvantage).toBe(0);
+    expect(b.state.player.activeConditions.some((c) => c.type === 'fracture')).toBe(false);
+  });
+
+  it("an encounter's +1 and a fracture's -1 CANCEL, so the round is rolled straight", () => {
+    // The 5e rule the engine now follows (open question 4, default taken). Under "the
+    // condition wins" or "advantage wins" this would roll TWO dice and the scripted stream
+    // would land differently, so this pins the rule and not merely the arithmetic.
+    const start = createBattle(
+      makePlayer({
+        hp: 20,
+        activeConditions: [{ type: 'fracture', remainingTurns: 1, maxTurns: 100, onsetDone: true }],
+      }),
+      makeEnemy({ hp: 30 }),
+      1,
+      { openingAdvantage: 1 },
+    );
+    expect(start.playerAdvantage).toBe(1);
+    const r = resolveRound(start, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
+    const attack = playerAttackEvent(r.events);
+    expect(attack.roll!.advDis).toBe(0);
+    expect(attack.roll!.faces).toEqual([15]);
+    expect(r.events.some((e) => e.kind === 'advantage' || e.kind === 'disadvantage')).toBe(false);
+  });
+
+  it('the standing advantage does not survive into the next battle', () => {
+    const first = createBattle(makePlayer(), makeEnemy(), 1, { openingAdvantage: 1 });
+    const second = createBattle(first.player, makeEnemy(), 2);
+    expect(second.playerAdvantage).toBeUndefined();
+    expect(second.player.advantageDisadvantage).toBe(0);
+  });
+});
+
+describe('G4 — a boss battle can never be fled, derived rather than remembered', () => {
+  it('createBattle sets canFlee false for a boss in every act, with no call-site help', () => {
+    const bosses: BossState[] = [
+      { bossId: 'kingpin', round: 0, minions: 0 },
+      { bossId: 'reflection', round: 0, adapted: false, actionTally: {} },
+      { bossId: 'sin', round: 0 },
+      { bossId: 'hollow', round: 0 },
+    ];
+    for (const [i, boss] of bosses.entries()) {
+      const act = [1, 2, 3, 5][i]!;
+      const battle = createBattle(makePlayer(), makeEnemy(), act, { boss });
+      expect(battle.canFlee, `${boss.bossId} must not be fleeable`).toBe(false);
+      expect(battle.boss).toBe(boss);
+    }
+    // The two non-boss rules are unchanged: act 5 trash is unfleeable, acts 1-4 are not.
+    expect(createBattle(makePlayer(), makeEnemy(), 5).canFlee).toBe(false);
+    expect(createBattle(makePlayer(), makeEnemy(), 4).canFlee).toBe(true);
+  });
+});
+
+// ------- G24 / G29 / G39 — ONE guarded damage path -------------------------------------------
+
+/** An Enforcer wearing the Halo Fragment (once-per-battle revive on lethal damage). */
+function haloPlayer(overrides: Partial<Player> = {}): Player {
+  const base = makePlayer(overrides);
+  return {
+    ...base,
+    inventory: {
+      ...base.inventory,
+      slots: { ...base.inventory.slots, amulet: { defId: 'halo-fragment' } },
+    },
+  };
+}
+
+/** Put `shield` on the battle's player (mid-battle state, after the transient funnel). */
+function withShield(state: ReturnType<typeof createBattle>, shield: number) {
+  return { ...state, player: { ...state.player, shield } };
+}
+
+describe('G24 — the failed-escape counter-attack runs every defensive guard', () => {
+  // Draw order for a failed run: flee roll (0.9 > 0.25 -> fails), then the counter-attack's
+  // to-hit d20 (face 15 + enemy STR mod 1 = 16 >= player AC 13 -> hit) and its skill-pick
+  // (0.5 -> the only pool entry, Pyro Ball, base 2 vs 0 resistance).
+  const failedRun = [0.9, face(15, 20), 0.5];
+
+  it('a shield absorbs the counter-attack, exactly as it does in an ordinary round', () => {
+    const state = withShield(createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1), 20);
+    const r = resolveRound(state, 'run', scriptedRng(failedRun));
+    expect(r.status).toBe('ongoing');
+    expect(r.state.player.hp).toBe(20); // pre-fix: 18, the shield was not consulted at all
+    expect(r.state.player.shield).toBe(18); // 20 - 2 absorbed
+    expect(r.events).toContainEqual({ kind: 'shield-absorbed', amount: 2 });
+    // `escape-failed` reports the HP actually lost, so it reconciles with the absorb beside it.
+    expect(r.events).toContainEqual({ kind: 'escape-failed', damage: 0 });
+  });
+
+  it('the once-per-battle revive intercepts a lethal counter-attack', () => {
+    // maxHp 20, Halo Fragment heals to 25% -> max(floor(20 * 25/100), 1) = 5.
+    const state = createBattle(haloPlayer({ hp: 1, maxHp: 20 }), makeEnemy({ hp: 30 }), 1);
+    const r = resolveRound(state, 'run', scriptedRng(failedRun));
+    expect(r.status).toBe('ongoing'); // pre-fix: 'player-died' — the relic simply did not fire
+    expect(r.state.player.hp).toBe(5);
+    expect(r.state.reviveUsed).toBe(true);
+    expect(r.events).toContainEqual({ kind: 'revive', healedTo: 5 });
+  });
+
+  it('FOUR-SITE PARITY: the same 2 damage produces the same player state on every path', () => {
+    // The claim is "one pipeline", not "four lookalikes", so the sites are compared directly.
+    const loadout = () => withShield(createBattle(haloPlayer({ hp: 20, maxHp: 20 }), makeEnemy({ hp: 30 }), 1), 20);
+
+    // Site 1: the ordinary round (enemy to-hit face 15 -> hit, skill-pick -> Pyro Ball 2;
+    // then the player's own d20 + damage, which touch nothing on the defensive side).
+    const ordinary = resolveRound(loadout(), 'fight', scriptedRng([face(15, 20), 0.5, face(1, 20)]));
+    // Site 2: the failed-escape counter-attack.
+    const counter = resolveRound(loadout(), 'run', scriptedRng(failedRun));
+    // Site 3: the boss/minion path, driven through the exported helper with the same 2.
+    const bossEvents: CombatEvent[] = [];
+    const boss = applyDamageToBattlePlayer(loadout(), 2, bossEvents);
+
+    for (const [name, player] of [
+      ['ordinary round', ordinary.state.player],
+      ['failed escape', counter.state.player],
+      ['boss minions', boss.state.player],
+    ] as const) {
+      expect(player.hp, `${name}: hp`).toBe(20);
+      expect(player.shield, `${name}: shield`).toBe(18);
+    }
+    for (const [name, events] of [
+      ['ordinary round', ordinary.events],
+      ['failed escape', counter.events],
+      ['boss minions', bossEvents],
+    ] as const) {
+      expect(events, `${name}: shield-absorbed`).toContainEqual({ kind: 'shield-absorbed', amount: 2 });
+    }
+  });
+});
+
+describe('G29 — the boss damage path is the same guarded path', () => {
+  it('shield 20 versus a 5-damage minion tick: hp unchanged, shield 15, absorb announced', () => {
+    const state = withShield(createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1), 20);
+    const events: CombatEvent[] = [];
+    const r = applyDamageToBattlePlayer(state, 5, events);
+    expect(r.died).toBe(false);
+    expect(r.state.player.hp).toBe(20); // pre-fix: 15, written straight through
+    expect(r.state.player.shield).toBe(15);
+    expect(events).toEqual([{ kind: 'shield-absorbed', amount: 5 }]);
+  });
+
+  it('lethal minion damage is intercepted by the revive, once', () => {
+    const state = createBattle(haloPlayer({ hp: 1, maxHp: 20 }), makeEnemy({ hp: 30 }), 1);
+    const first: CombatEvent[] = [];
+    const a = applyDamageToBattlePlayer(state, 5, first);
+    expect(a.died).toBe(false);
+    expect(a.state.player.hp).toBe(5); // floor(20 * 25/100)
+    expect(first).toContainEqual({ kind: 'revive', healedTo: 5 });
+    expect(a.state.reviveUsed).toBe(true);
+
+    // Spent: the next lethal tick in the SAME battle kills.
+    const second: CombatEvent[] = [];
+    const b = applyDamageToBattlePlayer(a.state, 99, second);
+    expect(b.died).toBe(true);
+    expect(b.state.player.hp).toBe(0);
+    expect(second.some((e) => e.kind === 'revive')).toBe(false);
+  });
+});
+
+describe('G39 — a flee consumable cannot escape a battle that forbids fleeing', () => {
+  it('is CONSUMED, emits escape-impossible, and leaves the battle ongoing', () => {
+    // A boss battle sets `canFlee: false` (G4). `resolveUseConsumable` used to return
+    // `status: 'fled'` without consulting it — measured: a Smoke Vial in the act-5 Hollow
+    // fight dropped the player back at the act-5 hub with NO path to any ending.
+    const base = createBattle(
+      makePlayer({ hp: 20 }),
+      makeEnemy({ hp: 30 }),
+      5,
+      { boss: { bossId: 'hollow', round: 0 } },
+    );
+    expect(base.canFlee).toBe(false);
+    const state = {
+      ...base,
+      player: {
+        ...base.player,
+        inventory: { ...base.player.inventory, backpack: [{ defId: 'smoke-vial' }] },
+      },
+    };
+    const r = resolveRound(state, { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]));
+    expect(r.status).toBe('ongoing');
+    expect(r.events).toContainEqual({ kind: 'escape-impossible' });
+    // The turn WAS spent — the item is gone, and the round counts for the boss mechanic.
+    expect(r.state.player.inventory.backpack).toEqual([]);
+    expect(r.resolved).toBe(true);
+  });
+
+  it('still works where fleeing IS allowed', () => {
+    const base = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1);
+    expect(base.canFlee).toBe(true);
+    const state = {
+      ...base,
+      player: {
+        ...base.player,
+        inventory: { ...base.player.inventory, backpack: [{ defId: 'smoke-vial' }] },
+      },
+    };
+    const r = resolveRound(state, { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]));
+    expect(r.status).toBe('fled');
+    expect(r.events.some((e) => e.kind === 'escape-impossible')).toBe(false);
+  });
+});
+
+describe('G36 — a rejected press resolves nothing', () => {
+  it('marks each of the six no-op rejections unresolved, and every real round resolved', () => {
+    const enemy = makeEnemy({ hp: 30 });
+    const rejections: [string, RoundResult][] = [
+      ['escape-impossible', resolveRound(createBattle(makePlayer(), enemy, 5), 'run', scriptedRng([]))],
+      ['potion-unavailable', resolveRound(createBattle(makePlayer({ pots: 0, hp: 1 }), enemy, 1), 'potion', scriptedRng([]))],
+      ['potion-blocked', resolveRound(createBattle(makePlayer({ hp: 1, activeConditions: [makeCondition('stun')] }), enemy, 1), 'potion', scriptedRng([]))],
+      ['cast-unavailable', resolveRound(createBattle(makePlayer({ skillPool: [] }), enemy, 1), { kind: 'cast', skillId: 'ember' }, scriptedRng([]))],
+      ['consumable-unavailable', resolveRound(createBattle(makePlayer(), enemy, 1), { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]))],
+      ['spare-unavailable', resolveRound(createBattle(makePlayer(), makeEnemy({ karmaWeighted: false }), 1), 'spare', scriptedRng([]))],
+    ];
+    for (const [name, r] of rejections) {
+      expect(r.status, `${name}: still ongoing`).toBe('ongoing');
+      expect(r.resolved, `${name}: must NOT be resolved`).toBe(false);
+      expect(r.events.map((e) => e.kind), `${name}: emits only its rejection`).toEqual([name]);
+    }
+
+    // And the real actions ARE resolved.
+    expect(resolveRound(createBattle(makePlayer(), enemy, 1), 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)])).resolved).toBe(true);
+    expect(resolveRound(createBattle(makePlayer({ hp: 1 }), enemy, 1), 'potion', scriptedRng([])).resolved).toBe(true);
+    expect(resolveRound(createBattle(makePlayer(), enemy, 1), 'run', scriptedRng([0.1])).resolved).toBe(true);
+    expect(resolveRound(createBattle(makePlayer(), makeEnemy({ karmaWeighted: true }), 1), 'spare', scriptedRng([])).resolved).toBe(true);
   });
 });
 

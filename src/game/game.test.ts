@@ -12,16 +12,18 @@ import { generateEnemy } from './enemy.ts';
 import { getFamily, FAMILIES } from './enemyFamily.ts';
 import { AFFIXES } from './enemyAffix.ts';
 import { createUnlockStore, snapshotUnlocks, type RunUnlocks } from './unlockStore.ts';
-import { type BattleState } from './battle.ts';
+import { createBattle, type BattleState } from './battle.ts';
 import { selectEncounter } from './encounter.ts';
 import { buildDeal, selectPool } from './deal.ts';
-import { FINAL_BOSS_NAME, FINAL_BOSS_XP } from './progression.ts';
-import { BOSSES } from './boss.ts';
+import { FINAL_BOSS_NAME, FINAL_BOSS_XP, HOLLOW_GATE_XP } from './progression.ts';
+import { BOSSES, KINGPIN_MINION_DAMAGE, type BossState } from './boss.ts';
 import { getGraceEnding, getDamnationEnding } from './story.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
 import { createKarma, type KarmaState } from './karma.ts';
-import { makeCondition } from './condition.ts';
+import { hasControlCondition, makeCondition } from './condition.ts';
+import { resolveSkill, type SkillId } from './skill.ts';
+import { generateDraft } from './draft.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- Fixtures ------------------------------------------------------------
@@ -227,7 +229,10 @@ describe('main-menu: continue -> encounter', () => {
     if (r.state.phase.kind === 'battle') {
       expect(r.state.phase.started).toBe(false);
       expect(r.state.phase.final).toBe(false);
-      expect(r.state.phase.battle.player.advantageDisadvantage).toBe(1);
+      // CHANGED by G12: the ambush bonus lives on the BATTLE now, not on the player, so it
+      // cannot ride into the next fight via the hub write-back. Same +1, battle-scoped.
+      expect(r.state.phase.battle.playerAdvantage).toBe(1);
+      expect(r.state.phase.battle.player.advantageDisadvantage).toBe(0);
       const enemyName = r.state.phase.battle.enemy.fullName;
       expect(r.events).toContainEqual({ kind: 'encounter-start', enemyName });
     }
@@ -281,8 +286,13 @@ describe('rest resolution', () => {
     expect(r.state.phase.kind).toBe('main-menu');
   });
 
-  it('accepting at full HP heals nothing and spends no rest', () => {
+  it('accepting with NOTHING to gain heals nothing and spends no rest', () => {
+    // Full HP, full charges, no conditions — the only case where a rest can do nothing.
+    // (Narrowed from "at full HP" by G27/G31: full HP alone is no longer enough, because a
+    // rest is now also the cure for fracture and the only refill for skill charges.)
     const player = makePlayer({ xp: 40, hp: 50, maxHp: 50, restsLeft: 1 });
+    expect(player.skillCharges).toBe(player.maxSkillCharges);
+    expect(player.activeConditions).toEqual([]);
     const state: GameState = {
       ...menuState(player, 99),
       phase: { kind: 'rest', restOffered: true },
@@ -291,6 +301,67 @@ describe('rest resolution', () => {
     expect(r.events).toContainEqual({ kind: 'rest-full' });
     expect(r.state.player?.restsLeft).toBe(1); // unchanged
     expect(r.state.player?.hp).toBe(50);
+  });
+
+  // ------- G27 / G31 — a rest cures and refills, not just heals ---------------
+
+  it('G27/G31 — an accepted rest clears every condition AND refills skill charges', () => {
+    // The register's reproduction: rest at hp 3 / charges 0 gave hp 12 / charges 0, and a
+    // floor-1 Ganger's fracture was still active 99 rounds later.
+    const player = makePlayer({
+      xp: 40, hp: 5, maxHp: 50, restsLeft: 1,
+      skillCharges: 0,
+      activeConditions: [makeCondition('fracture'), makeCondition('poison')],
+    });
+    const state: GameState = {
+      ...menuState(player, 99),
+      phase: { kind: 'rest', restOffered: true },
+    };
+    const r = step(state, { kind: 'rest-decision', accept: true });
+    expect(r.state.player?.activeConditions).toEqual([]);
+    expect(r.state.player?.skillCharges).toBe(player.maxSkillCharges);
+    expect(r.state.player?.restsLeft).toBe(0); // it was paid for
+    expect(r.events.some((e) => e.kind === 'rest-taken')).toBe(true);
+  });
+
+  it('G27 — a rest at FULL HP still cures, and costs a rest for doing it', () => {
+    // The exploit the register's literal wording ("restore charges including the rest-full
+    // branch") would have opened, closed: a rest that does something is always paid for.
+    const player = makePlayer({
+      xp: 40, hp: 50, maxHp: 50, restsLeft: 1,
+      activeConditions: [makeCondition('fracture')],
+    });
+    const state: GameState = {
+      ...menuState(player, 99),
+      phase: { kind: 'rest', restOffered: true },
+    };
+    const r = step(state, { kind: 'rest-decision', accept: true });
+    expect(r.state.player?.activeConditions).toEqual([]);
+    expect(r.state.player?.hp).toBe(50); // already full; the heal is capped
+    expect(r.state.player?.restsLeft).toBe(0); // NOT free
+    expect(r.events.some((e) => e.kind === 'rest-full')).toBe(false);
+  });
+
+  it('G31 — a rest at FULL HP still refills charges, and costs a rest for doing it', () => {
+    const player = makePlayer({ xp: 40, hp: 50, maxHp: 50, restsLeft: 1, skillCharges: 1 });
+    const state: GameState = {
+      ...menuState(player, 99),
+      phase: { kind: 'rest', restOffered: true },
+    };
+    const r = step(state, { kind: 'rest-decision', accept: true });
+    expect(r.state.player?.skillCharges).toBe(player.maxSkillCharges);
+    expect(r.state.player?.restsLeft).toBe(0);
+    expect(r.events.some((e) => e.kind === 'rest-full')).toBe(false);
+  });
+
+  it('a rest with no rests left is never offered, so the decision path cannot go negative', () => {
+    // `continueJourney` only sets `restOffered: true` when `restsLeft >= 1`, which is what
+    // keeps the `restsLeft - 1` above from ever producing a negative count. Pinned here
+    // because G27/G31 made the "take it" branch reachable in strictly more situations.
+    const player = makePlayer({ xp: 0, restsLeft: 0, hp: 1, maxHp: 50, skillCharges: 0 });
+    const r = step(menuState(player, findEncounterSeeds().rest), { kind: 'menu', choice: 'continue' });
+    expect(r.state.phase).toEqual({ kind: 'rest', restOffered: false });
+    expect(r.awaiting).toBe('continue');
   });
 
   it('declining changes nothing but returns to the menu', () => {
@@ -501,23 +572,75 @@ describe('frequent level-up draft on battle victory', () => {
 // ------- Act 5 triggers the HOLLOW final battle (M12) -------------------------
 
 describe('entering Act 5', () => {
-  it('act-intro{5} continue builds the HOLLOW SELF (replacing Jorginho)', () => {
-    const player = makePlayer({ skillPool: ['heavyStrike', 'brace'] });
-    const state: GameState = {
+  /** A hub state on floor 5 at the given XP. */
+  function act5Hub(xp: number, rngState = 314): GameState {
+    return {
       version: 8,
-      rngState: 314,
-      player,
+      rngState,
+      player: makePlayer({ skillPool: ['heavyStrike', 'brace'], xp }),
       act: 5,
       place: 4,
       karma: createKarma(),
-      phase: { kind: 'act-intro', newAct: 5 },
+      phase: { kind: 'main-menu' },
     };
+  }
+
+  // ⚠ CHANGED by G43, and this is the defect, not a preference. This case used to assert
+  // "act-intro{5} continue builds the HOLLOW SELF" — i.e. it asserted the bug: the Hollow was
+  // hard-wired to floor ENTRY. `main-menu` is the only phase that calls `continueJourney`,
+  // which is the only caller of `buildRandomBattle`, `buildChestLoot` and `selectLore`, so
+  // going straight from the act intro into the boss meant floor 5 had NO random battles, NO
+  // chests, NO rests, NO sacrifice-deals and NO lore. Measured: an exhaustive input-space walk
+  // over 418 act-5 entries (~17.7 M probed transitions) produced ZERO act-5 hub states, and a
+  // 150-run campaign met 0 of 5 act-5 families while the unlock store had granted all of them.
+  // The Hollow is now the END of floor 5, gated like every other floor's boss.
+  it('act-intro{5} continue returns to the HUB, exactly like every other act intro', () => {
+    const state: GameState = { ...act5Hub(0), phase: { kind: 'act-intro', newAct: 5 } };
     const r = step(state, { kind: 'continue' });
+    expect(r.state.phase).toEqual({ kind: 'main-menu' });
+    expect(r.awaiting).toBe('main-menu');
+    expect(r.events.some((e) => e.kind === 'final-battle-begins')).toBe(false);
+  });
+
+  it('below the gate, the act-5 hub yields ORDINARY encounters — never the Hollow', () => {
+    expect(HOLLOW_GATE_XP).toBe(500); // the premise, restated
+    let sawBattle = false;
+    let sawRest = false;
+    let sawChest = false;
+    const families = new Set<string>();
+    for (let seed = 0; seed < 200; seed++) {
+      const r = step(act5Hub(HOLLOW_GATE_XP - 1, seed), { kind: 'menu', choice: 'continue' });
+      expect(r.events.some((e) => e.kind === 'final-battle-begins')).toBe(false);
+      if (r.state.phase.kind === 'battle') {
+        expect(r.state.phase.final).toBe(false);
+        expect(r.state.phase.battle.boss).toBeUndefined();
+        // §14.9 "there is nowhere to go": act-5 trash still cannot be fled. That rule was
+        // dead code until now, because act 5 had no random encounters at all.
+        expect(r.state.phase.battle.canFlee).toBe(false);
+        families.add(r.state.phase.battle.enemy.familyId);
+        sawBattle = true;
+      } else if (r.state.phase.kind === 'rest') sawRest = true;
+      else if (r.state.phase.kind === 'chest') sawChest = true;
+    }
+    // All three encounter kinds are reachable on floor 5…
+    expect(sawBattle).toBe(true);
+    expect(sawRest).toBe(true);
+    expect(sawChest).toBe(true);
+    // …and every one of the five act-5 families can finally be met (previously 0 of 5).
+    const act5Families = FAMILIES.filter((f) => f.floor === 5).map((f) => f.id);
+    expect(act5Families).toHaveLength(5);
+    for (const id of act5Families) expect(families).toContain(id);
+  });
+
+  it('at the gate, the act-5 hub builds the HOLLOW SELF (replacing Jorginho)', () => {
+    const state = act5Hub(HOLLOW_GATE_XP);
+    const player = state.player!;
+    const r = step(state, { kind: 'menu', choice: 'continue' });
     expect(r.state.phase.kind).toBe('battle');
     if (r.state.phase.kind === 'battle') {
       expect(r.state.phase.final).toBe(true);
       expect(r.state.phase.started).toBe(false);
-      expect(r.state.phase.battle.canFlee).toBe(false); // Act 5: no escape
+      expect(r.state.phase.battle.canFlee).toBe(false); // Act 5 + a boss: no escape
       expect(r.state.phase.battle.boss?.bossId).toBe('hollow');
       // The Hollow's identity is the placeholder Hollow-Self, NOT the retired Jorginho.
       expect(r.state.phase.battle.enemy.type).toBe(BOSSES.hollow.name);
@@ -528,6 +651,20 @@ describe('entering Act 5', () => {
         kind: 'final-battle-begins',
         enemyName: r.state.phase.battle.enemy.fullName,
       });
+    }
+  });
+
+  it('the Hollow is re-fightable once the gate is open (G39 soft-lock is gone)', () => {
+    // Fleeing the Hollow used to strand the run forever, because the boss was constructed
+    // ONLY at floor entry. Now the gate re-opens it from the hub on the next continue.
+    const first = step(act5Hub(HOLLOW_GATE_XP, 7), { kind: 'menu', choice: 'continue' });
+    expect(first.state.phase.kind).toBe('battle');
+    const backAtHub: GameState = { ...first.state, phase: { kind: 'main-menu' } };
+    const second = step(backAtHub, { kind: 'menu', choice: 'continue' });
+    expect(second.state.phase.kind).toBe('battle');
+    if (second.state.phase.kind === 'battle') {
+      expect(second.state.phase.final).toBe(true);
+      expect(second.state.phase.battle.boss?.bossId).toBe('hollow');
     }
   });
 });
@@ -744,7 +881,14 @@ describe('M12 act-4 verdict gate routes the two fates', () => {
     expect(r.state.act).toBe(5);
     r = step(r.state, { kind: 'continue' }); // act-outro → act-intro(5)
     expect(r.state.phase.kind).toBe('act-intro');
-    r = step(r.state, { kind: 'continue' }); // act-intro(5) → the Hollow battle
+    // CHANGED by G43: act-intro(5) now returns to the HUB like every other act intro, and the
+    // Hollow waits behind floor 5's own XP gate. The routing this case is really about — a
+    // cast-down verdict falls to act 5 — is unchanged; what changed is that the player now
+    // gets to PLAY floor 5 first. This fixture's player is at xp 1000, well past
+    // HOLLOW_GATE_XP, so one more continue from the hub reaches the Hollow.
+    r = step(r.state, { kind: 'continue' }); // act-intro(5) → the act-5 hub
+    expect(r.state.phase).toEqual({ kind: 'main-menu' });
+    r = step(r.state, { kind: 'menu', choice: 'continue' }); // hub → the Hollow (gate open)
     expect(r.state.phase.kind).toBe('battle');
     if (r.state.phase.kind === 'battle') {
       expect(r.state.phase.final).toBe(true);
@@ -811,6 +955,182 @@ describe('M12 off-equivalence: a normal battle invokes no boss hook', () => {
   });
 });
 
+// ------- G36 — a rejected press must not advance the boss -----------------------------------
+
+/** A started boss battle sitting at `battle-action`, ready to be pressed at. */
+function bossBattleState(
+  boss: BossState,
+  act: number,
+  player: Player,
+  rngState = 3,
+  /** Mid-battle patch applied AFTER the transient funnel (e.g. a live shield). */
+  patchPlayer: Partial<Player> = {},
+): StepResult {
+  const enemy = generateEnemy(
+    { act, type: BOSSES[boss.bossId].name, playerXp: 0 },
+    mulberry32(1),
+  );
+  const built = createBattle(player, enemy, act, { boss });
+  const battle: BattleState = { ...built, player: { ...built.player, ...patchPlayer } };
+  return {
+    state: {
+      version: 8,
+      rngState,
+      player,
+      act,
+      place: act - 1,
+      karma: createKarma(),
+      phase: { kind: 'battle', battle, started: true, final: false },
+    },
+    events: [],
+    awaiting: 'battle-action',
+  };
+}
+
+describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded', () => {
+  // The unit's named G29 tests drive the `applyDamageToBattlePlayer` helper directly, and the
+  // G36 tests assert minion damage is ZERO. Neither proves the SHIPPING WIRING in `game.ts`
+  // actually applies it — that was caught only by `offEquivalence.test.ts`'s byte-identity
+  // replay, and that file is re-baselined by design whenever behaviour moves, so the guard
+  // would evaporate at the next re-baseline. These are the positive end-to-end assertions.
+  //
+  // Every case uses `potion` as the action, which is the one action that RESOLVES a round
+  // (so the boss mechanic runs) while granting the enemy NO turn — so the player's HP after
+  // the step is the potion heal minus the minion damage and nothing else. It also draws no
+  // rng, and `bossPostRound` is RNG-free, so these are deterministic whatever the seed.
+  //
+  // The Kingpin's cadence summons on round 3, so each fixture starts with `minions: 2`
+  // already on the field: round 1 then does `2 x KINGPIN_MINION_DAMAGE` = 2 damage with no
+  // summon (1 % 3 !== 0), which isolates the damage from the summon.
+  const kingpinWithCrew = (): BossState => ({ bossId: 'kingpin', round: 0, minions: 2 });
+
+  it('the damage lands on HP: potion heals 10 -> 20, then the crew takes it to 18', () => {
+    expect(KINGPIN_MINION_DAMAGE).toBe(1); // the constant behind the "2", restated
+    const player = makePlayer({ hp: 10, maxHp: 20, pots: 1 });
+    const r = step(
+      bossBattleState(kingpinWithCrew(), 1, player).state,
+      { kind: 'battle-action', action: 'potion' },
+    );
+    expect(r.events).toContainEqual({ kind: 'potion-drunk', healedTo: 20 });
+    expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 });
+    expect(r.state.phase.kind).toBe('battle');
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.player.hp).toBe(18); // 20 healed - 2 minions
+      expect(r.state.phase.battle.player.pots).toBe(0);
+      expect(r.state.phase.battle.boss?.minions).toBe(2); // no summon on round 1
+    }
+  });
+
+  it('it goes through the GUARDED path — a shield absorbs it, exactly as in a normal round', () => {
+    // This is the actual content of G29: `boss.ts` used to write `player.hp` directly, so a
+    // 20-point shield absorbed NOTHING at the death `BALANCE-REPORT.md` says happens most.
+    const player = makePlayer({ hp: 10, maxHp: 20, pots: 1 });
+    const r = step(
+      bossBattleState(kingpinWithCrew(), 1, player, 3, { shield: 5 }).state,
+      { kind: 'battle-action', action: 'potion' },
+    );
+    expect(r.events).toContainEqual({ kind: 'shield-absorbed', amount: 2 });
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.player.hp).toBe(20); // the shield ate all of it
+      expect(r.state.phase.battle.player.shield).toBe(3); // 5 - 2
+    }
+  });
+
+  it('and the once-per-battle revive intercepts a LETHAL crew tick', () => {
+    // maxHp 2 so the potion tops out at 2 and the crew's 2 is lethal. Halo Fragment heals to
+    // max(floor(2 * 25/100), 1) = max(0, 1) = 1 — the documented floor.
+    const base = makePlayer({ hp: 1, maxHp: 2, pots: 1 });
+    const haloed: Player = {
+      ...base,
+      inventory: {
+        ...base.inventory,
+        slots: { ...base.inventory.slots, amulet: { defId: 'halo-fragment' } },
+      },
+    };
+    const r = step(
+      bossBattleState(kingpinWithCrew(), 1, haloed).state,
+      { kind: 'battle-action', action: 'potion' },
+    );
+    expect(r.events).toContainEqual({ kind: 'revive', healedTo: 1 });
+    expect(r.state.phase.kind).toBe('battle'); // survived
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.player.hp).toBe(1);
+      expect(r.state.phase.battle.reviveUsed).toBe(true);
+    }
+  });
+
+  it('without a revive the same lethal tick ends the run — game.ts owns the death now', () => {
+    // `bossPostRound` no longer decides this; it returns a number and `game.ts` resolves it.
+    const player = makePlayer({ hp: 1, maxHp: 2, pots: 1 });
+    const r = step(
+      bossBattleState(kingpinWithCrew(), 1, player).state,
+      { kind: 'battle-action', action: 'potion' },
+    );
+    expect(r.events).toContainEqual({ kind: 'defeat' });
+    expect(r.state.phase.kind).toBe('game-over');
+    expect(r.awaiting).toBe('game-over');
+    expect(r.events.some((e) => e.kind === 'game-over')).toBe(true);
+  });
+});
+
+describe('G36 — pressing a button the engine refuses costs nothing', () => {
+  it('nine rejected Run presses against the Kingpin cost 0 HP and summon 0 minions', () => {
+    // The register's measurement: the Run button is rendered in EVERY battle and a boss sets
+    // `canFlee: false`, so nine refused presses cost the player 11 HP to minions that the
+    // Kingpin's per-round mechanic had no business summoning. The refusal is now `resolved:
+    // false`, so `game.ts` skips `bossPostRound` entirely.
+    const player = makePlayer({ hp: 20, maxHp: 20 });
+    let r = bossBattleState({ bossId: 'kingpin', round: 0, minions: 0 }, 1, player);
+    for (let i = 0; i < 9; i++) {
+      r = step(r.state, { kind: 'battle-action', action: 'run' });
+      expect(r.events).toEqual([{ kind: 'escape-impossible' }]);
+    }
+    expect(r.state.phase.kind).toBe('battle');
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.player.hp).toBe(20); // pre-fix: 9 (11 HP of minion damage)
+      expect(r.state.phase.battle.boss?.minions).toBe(0);
+      expect(r.state.phase.battle.boss?.round).toBe(0); // the boss never even advanced a round
+    }
+  });
+
+  it("three rejected casts leave the Reflection's once-per-battle adaptation unused", () => {
+    // Worse than HP: three REJECTED casts used to burn the adapt, permanently disadvantaging
+    // the player for pressing a button the engine had just told them did nothing.
+    const player = makePlayer({ hp: 200, maxHp: 200, skillPool: [] }); // owns nothing to cast
+    let r = bossBattleState(
+      { bossId: 'reflection', round: 0, adapted: false, actionTally: {} },
+      2,
+      player,
+    );
+    for (let i = 0; i < 3; i++) {
+      r = step(r.state, { kind: 'battle-action', action: { kind: 'cast', skillId: 'heavyStrike' } });
+      expect(r.events).toEqual([{ kind: 'cast-unavailable' }]);
+    }
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.boss?.adapted).toBe(false);
+      expect(r.state.phase.battle.boss?.actionTally).toEqual({});
+      expect(r.state.phase.battle.playerAdvantage).toBeUndefined();
+    }
+    expect(r.events.some((e) => e.kind === 'boss-adapt')).toBe(false);
+  });
+
+  it('a REAL round against the same boss still advances its mechanic', () => {
+    // The guard must not have turned the boss off: three real fights DO reach the threshold.
+    const player = makePlayer({ hp: 9999, maxHp: 9999 });
+    let r = bossBattleState(
+      { bossId: 'reflection', round: 0, adapted: false, actionTally: {} },
+      2,
+      player,
+    );
+    let adapted = false;
+    for (let i = 0; i < 3; i++) {
+      r = step(r.state, { kind: 'battle-action', action: 'fight' });
+      if (r.events.some((e) => e.kind === 'boss-adapt')) adapted = true;
+    }
+    expect(adapted).toBe(true);
+  });
+});
+
 describe('M12 Reflection adaptation drives a disadvantaged player attack', () => {
   it('after REFLECTION_ADAPT_THRESHOLD fights, boss-adapt fires and the next attack is at disadvantage', () => {
     const player = makePlayer({ name: 'Zara', hp: 9999, maxHp: 9999 });
@@ -850,7 +1170,10 @@ describe('M12 Reflection adaptation drives a disadvantaged player attack', () =>
     }
     expect(adaptRound).toBe(2); // the 3rd fight (0-indexed)
     if (r.state.phase.kind === 'battle') {
-      expect(r.state.phase.battle.player.advantageDisadvantage).toBe(-1);
+      // CHANGED by G12: the adaptation is battle-scoped, so it is read off the battle. Written
+      // onto the player it outlived the fight and disadvantaged the whole run.
+      expect(r.state.phase.battle.playerAdvantage).toBe(-1);
+      expect(r.state.phase.battle.player.advantageDisadvantage).toBe(0);
     }
     // The very next attack rolls at disadvantage (the two-draw-take-min path in combat.ts).
     const next = step(r.state, { kind: 'battle-action', action: 'fight' });
@@ -1067,8 +1390,33 @@ function decide(res: StepResult): GameInput {
       const p = state.phase;
       if (p.kind === 'battle') {
         const pl = p.battle.player;
-        if (pl.pots > 0 && pl.hp <= pl.maxHp * 0.4) {
-          return { kind: 'battle-action', action: 'potion' };
+        // Under a control condition a potion is REJECTED (`potion-blocked`) and the rejection
+        // advances nothing — no round resolves, so the condition never ticks down. A policy
+        // that keeps choosing `potion` therefore spins in place forever. That is a
+        // pre-existing property of the engine, deliberately so (G36: "a rejected press costs
+        // nothing"), and `sim.ts`'s `chooseBattleAction` carries exactly this guard with
+        // exactly this reasoning. This scripted policy lacked it; it only never hit the trap
+        // because it drove a single seed. Fight instead — the swing is skipped, but the round
+        // runs and the control wears off.
+        if (!hasControlCondition(pl)) {
+          if (pl.pots > 0 && pl.hp <= pl.maxHp * 0.4) {
+            return { kind: 'battle-action', action: 'potion' };
+          }
+          // G43: this driver used to fight and drink and NOTHING else. With floor 5 turned
+          // from a single boss into a real floor behind an XP gate, a driver that never uses
+          // its class skills cannot finish the descent at all — measured over 120 seeds it
+          // wins 0 and tops out at 494 xp against a 600 gate, dying on floor 5. That is not a
+          // regression, it is `GAME-DESIGN.md` §18.1 in action ("classes stop playing like
+          // themselves" without their charges); the fix is for the driver to PLAY, not for
+          // the guard to be lowered. It now casts an affordable damage skill when it has one,
+          // which is the same shape as `sim.ts`'s heuristic.
+          for (const raw of pl.skillPool) {
+            const id = raw as SkillId;
+            const def = resolveSkill(pl, id);
+            if (def && def.baseDamage >= 2 && pl.skillCharges >= def.chargeCost) {
+              return { kind: 'battle-action', action: { kind: 'cast', skillId: id } };
+            }
+          }
         }
       }
       return { kind: 'battle-action', action: 'fight' };
@@ -1114,13 +1462,34 @@ describe('full scripted playthrough', () => {
     // The machine actually ran combat: at least one fight happened.
     expect(a.events.some((e) => e.kind === 'attack')).toBe(true);
 
-    // M15 REBALANCE: with the tuned constants a real seed can now survive the descent and
-    // reach an ENDING (a win) — previously (frozen M4/M5 balance) every real seed died. The
-    // terminal signal for a win is the `ending` event, and no `game-over` death event fires
-    // (the death path emits `game-over`; the win path ends on the ending, then goes terminal
-    // with no further event — see the ending→game-over transition test above).
-    expect(a.events.some((e) => e.kind === 'ending')).toBe(true);
-    expect(a.events.some((e) => e.kind === 'game-over')).toBe(false);
+  });
+
+  // M15 REBALANCE guard: a real scripted run can survive the descent and reach an ENDING (a
+  // win) — previously (frozen M4/M5 balance) EVERY real seed died. The terminal signal for a
+  // win is the `ending` event; the death path instead emits `game-over`.
+  //
+  // ⚠ CHANGED by #0a (G27/G31), deliberately, and this is why. This assertion used to ride on
+  // the single seed 12345 above. That made it a one-seed coin flip on a property that is
+  // statistical: seed 12345 happens no longer to win, because a rest that ONLY refills skill
+  // charges now costs a rest — and this scripted policy never casts, so for IT the refill is
+  // pure loss. That is a policy artifact, not an engine regression (`balance.test.ts`'s
+  // 500-run win-rate guard is unmoved, and the seeds below still win). Re-pinning it to
+  // whichever single seed happens to win today would be exactly the "edit the number until it
+  // is green" move this repo forbids, so the guard is instead stated at the level it was
+  // always about: SOME real seed wins. Against the pre-M15 world (0% win over every seed) it
+  // is still red, and it no longer moves every time a rule shifts one seed's dice.
+  it('a real scripted run can still WIN the descent (not every seed dies)', () => {
+    const seeds = Array.from({ length: 20 }, (_, i) => 12340 + i);
+    const outcomes = seeds.map((s) => {
+      const run = runPlaythrough(s);
+      // Every seed must terminate cleanly, whatever its outcome.
+      expect(run.final.phase.kind).toBe('game-over');
+      const won = run.events.some((e) => e.kind === 'ending');
+      // The two terminal signals are mutually exclusive: a win never emits `game-over`.
+      expect(run.events.some((e) => e.kind === 'game-over')).toBe(!won);
+      return won;
+    });
+    expect(outcomes.filter(Boolean).length).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -1202,5 +1571,48 @@ describe('M13 off-equivalence: an all-unlocked snapshot never perturbs the run',
     const b = runPlaythrough(4242, snap);
     expect(JSON.stringify(b.events)).toBe(JSON.stringify(a.events));
     expect(JSON.stringify(b.final)).toBe(JSON.stringify(a.final));
+  });
+});
+
+// ------- G45 — `step` is total, including for a type-legal non-integer index -------------------
+
+describe('G45 — a non-integer draft-pick index is a no-op, not a crash', () => {
+  it('1.5, 0.5, 2.5 and NaN return the state unchanged with no events', () => {
+    // `step` documents itself as TOTAL, but the draft-pick guard checked only the two bounds.
+    // `offers[1.5]` is `undefined`, the `!` assertion hid it, and `applyDraftOption` then
+    // dereferenced `option.kind`. Reproduced by the register: 0 / -1 / 3 / Infinity / 1e21
+    // were clean; 1.5, 0.5, 2.5 and NaN threw a TypeError. NaN is its own case — every
+    // comparison with NaN is false, so it defeats a bounds test on its own.
+    const player = makePlayer();
+    const base = menuState(player, 11);
+    const draft = step(
+      { ...base, phase: { kind: 'level-up-draft', offers: generateDraft(player, mulberry32(3)) } },
+      { kind: 'continue' }, // wrong input: a no-op that leaves the draft phase in place
+    ).state;
+    if (draft.phase.kind !== 'level-up-draft') throw new Error('expected a draft phase');
+    expect(draft.phase.offers).toHaveLength(3);
+
+    for (const index of [1.5, 0.5, 2.5, NaN, -0.5, 2.0000001]) {
+      const r = step(draft, { kind: 'draft-pick', index });
+      expect(r.state, `index ${index}`).toBe(draft); // same reference: untouched
+      expect(r.events, `index ${index}`).toEqual([]);
+      expect(r.awaiting, `index ${index}`).toBe('draft-pick');
+    }
+  });
+
+  it('the integer indices it always accepted or rejected still behave identically', () => {
+    const player = makePlayer();
+    const base = menuState(player, 11);
+    const offers = generateDraft(player, mulberry32(3));
+    const draft: GameState = { ...base, phase: { kind: 'level-up-draft', offers } };
+    // Out of range -> no-op (unchanged behaviour).
+    for (const index of [-1, 3, Infinity, 1e21]) {
+      const r = step(draft, { kind: 'draft-pick', index });
+      expect(r.state, `index ${index}`).toBe(draft);
+    }
+    // In range -> the pick applies (unchanged behaviour).
+    const ok = step(draft, { kind: 'draft-pick', index: 0 });
+    expect(ok.state.phase.kind).toBe('level-up-result');
+    expect(ok.events.some((e) => e.kind === 'draft-picked')).toBe(true);
   });
 });

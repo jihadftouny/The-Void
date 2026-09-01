@@ -21,7 +21,7 @@
     "karmaWeighted": false,
     "theme": {
       "resistElement": "Physical",
-      "resistAmount": 2,
+      "resistAmount": 25,
       "statBias": { "DEX": 1 },
       "skills": ["taserShot", "suppressiveFire"],
       "behaviorNote": "ranged, lightly armored"
@@ -35,7 +35,7 @@
     "karmaWeighted": false,
     "theme": {
       "resistElement": "Poison",
-      "resistAmount": 2,
+      "resistAmount": 25,
       "statBias": { "DEX": 1 },
       "skills": ["poisonBite", "rabidClaw"],
       "behaviorNote": "fast, poison-tinged"
@@ -109,7 +109,7 @@
     "karmaWeighted": false,
     "theme": {
       "resistElement": "Electro",
-      "resistAmount": 2,
+      "resistAmount": 25,
       "statBias": { "DEX": 1 },
       "skills": ["staticArc", "overload"],
       "behaviorNote": "evasive, Electro-charged"
@@ -213,7 +213,7 @@
     "karmaWeighted": false,
     "theme": {
       "resistElement": "Physical",
-      "resistAmount": 2,
+      "resistAmount": 25,
       "statBias": { "CON": 2 },
       "skills": ["wardingStrike", "immovableSlam"],
       "behaviorNote": "blocks loot / passage — provisional, M10 floor hooks"
@@ -252,7 +252,7 @@
     "karmaWeighted": false,
     "theme": {
       "resistElement": "Pyro",
-      "resistAmount": 2,
+      "resistAmount": 25,
       "statBias": { "STR": 1 },
       "skills": ["hellfire", "corruptClaw"],
       "behaviorNote": "Pyro / corruption"

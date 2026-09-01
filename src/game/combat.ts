@@ -50,6 +50,19 @@ export interface Attacker extends Character {
   advantageDisadvantage: number;
   /** Active status conditions — read for the augment/deprivation stat cascade (M2). */
   activeConditions: ActiveCondition[];
+  /**
+   * G32: the attacker's proficiency bonus, added to every to-hit total.
+   *
+   * REQUIRED, not optional, on purpose. `Player.proficiency` has existed since M3, is set at
+   * creation (2), and is validated by the save guard — and was read by NO combat path at all:
+   * `resolvePlayerAttack` built its to-hit from `weaponModifier` alone. Measured: 200 rounds at
+   * `proficiency: 2` versus `99`, same seeds, gave 0/200 different outcomes. So the player rolled
+   * at a flat -2 against the intended model — about ten percentage points of hit rate — for the
+   * whole game, AND M15 tuned enemy HP and damage against that unintended baseline. Making the
+   * field required means no future call site can silently drop it again, which is exactly how it
+   * went missing.
+   */
+  proficiency: number;
 }
 
 /** An enemy able to cast from a skill pool (the Enemy). */
@@ -176,14 +189,23 @@ export function resolvePlayerAttack(
   equipDamageBonus: number,
   rng: Rng,
   perkDamageBonus = 0,
+  advDisOverride?: -1 | 0 | 1,
 ): PlayerAttackResult {
-  const advDis = normalizeAdvDis(player.advantageDisadvantage);
+  // G12: `advDisOverride` is the round's COMBINED advantage, computed by battle.ts from the
+  // battle's standing modifier plus this tick's conditions — exactly mirroring how the
+  // enemy's `enemyAdvDis` is already computed by the caller and injected. When it is omitted
+  // the stored `player.advantageDisadvantage` is used, so every existing call site (and the
+  // save field) keeps working unchanged.
+  const advDis = advDisOverride ?? normalizeAdvDis(player.advantageDisadvantage);
   const { natural, faces } = rollD20WithAdvantage(advDis, rng);
   // To-hit uses the EFFECTIVE mods (Strong/Weak on STR, Quick/Slow on DEX cascade in);
   // the defender AC is the enemy's EFFECTIVE AC (Hardy/Frail + Quick/Slow). Both are
   // off-equivalent: with no augment active they equal the stored mods / stored AC.
   const em = effectiveMods(player);
-  const modifier = weaponModifier({ ...player, mods: em }, weapon);
+  // G32: proficiency is FOLDED INTO `modifier` rather than added as a separate field, because
+  // `AttackRollDetail` documents `total === natural + modifier` and the combat log prints
+  // exactly that equation. A separate field would make the log print a wrong sum.
+  const modifier = weaponModifier({ ...player, mods: em }, weapon) + player.proficiency;
   const total = natural + modifier;
   const targetAc = effectiveArmorClass(enemy);
   const outcome = resolveAttackOutcome(natural, total, targetAc);
@@ -307,14 +329,25 @@ export function resolveEnemyAttack<E extends SkillUser, T extends SkillTarget>(
     events.push({
       kind: 'attack', subject: 'enemy', outcome, damage: 0, roll, damageSources: [],
     });
-    return { enemy, target: player, damage: 0, events };
+    return { enemy: restoreEnemyCharge(enemy), target: player, damage: 0, events };
   }
 
   // Hit / crit: cast a skill if able, else deal the plain 1. Crit doubles the dealt damage.
   const critMultiplier = outcome === 'crit' ? 2 : 1;
-  if (enemy.skillCharges > 0 && enemy.skillPool.length > 0) {
-    const index = randInt(rng, enemy.skillPool.length);
-    const skillId = enemy.skillPool[index] as SkillId;
+  // G22(b): pick from the AFFORDABLE subset. The gate used to be `skillCharges > 0` while
+  // `useSkill` subtracts the full `chargeCost`, so an enemy with 1 charge could cast a cost-2
+  // skill and end the round at -1 (reproduced for wrathSmash, riotSlam, overload,
+  // immovableSlam, smiteWicked). DOCUMENTED DRAW CHANGE: the `randInt` now indexes the
+  // affordable list, and when nothing is affordable it draws NOTHING at all — where the old
+  // code drew, picked an unaffordable skill, and went negative. For a pool whose skills are
+  // all affordable (the common case) the draw and the index are byte-identical.
+  const affordable = enemy.skillPool.filter((id) => {
+    const def = SKILLS[id as SkillId];
+    return def !== undefined && def.chargeCost <= enemy.skillCharges;
+  });
+  if (affordable.length > 0) {
+    const index = randInt(rng, affordable.length);
+    const skillId = affordable[index] as SkillId;
     const skill = SKILLS[skillId];
     if (skill) {
       const used = useSkill(enemy, player, skill);
@@ -335,7 +368,33 @@ export function resolveEnemyAttack<E extends SkillUser, T extends SkillTarget>(
   if (critMultiplier === 2) damageSources.push({ kind: 'crit-multiplier', amount: 1 });
   const damage = totalWithClamp(damageSources);
   events.push({ kind: 'attack', subject: 'enemy', outcome, damage, roll, damageSources });
-  return { enemy, target: player, damage, events };
+  return { enemy: restoreEnemyCharge(enemy), target: player, damage, events };
+}
+
+/**
+ * Skill charges an enemy regains on a turn in which it cast NOTHING.
+ *
+ * ⚠ M15/#2 BALANCE PLACEHOLDER. G22(c) states the defect — enemies start on 2 charges with no
+ * restore path at all, so a family's themed skill pool only ever mattered for its first two
+ * landed hits and every later hit was the flat `{kind:'base', amount:1}` — but specifies NO
+ * fix, so this rule is proposed here rather than quoted. It is deliberately the minimal one:
+ * no new state, no new rng draw, and self-limiting (a cost-1 themed skill lands about every
+ * other turn, a cost-2 about every third). Belongs beside `ENEMY_MAX_SKILL_CHARGES`
+ * (`enemy.ts`), which is a private const there; kept here so this unit stays inside its
+ * declared file list. Tuning it is `PLAN.md` #2's.
+ */
+export const ENEMY_CHARGE_RESTORE_PER_TURN = 1;
+
+/**
+ * Give back one charge to an enemy that did not cast this turn, capped at its maximum — PURE,
+ * RNG-FREE, and a no-op at full charges (so it never rewrites an untouched enemy).
+ */
+function restoreEnemyCharge<E extends SkillUser>(enemy: E): E {
+  if (enemy.skillCharges >= enemy.maxSkillCharges) return enemy;
+  return {
+    ...enemy,
+    skillCharges: Math.min(enemy.skillCharges + ENEMY_CHARGE_RESTORE_PER_TURN, enemy.maxSkillCharges),
+  };
 }
 
 /** Coerce any stored adv/dis integer to the -1|0|1 the roller expects. */
@@ -343,4 +402,23 @@ function normalizeAdvDis(value: number): -1 | 0 | 1 {
   if (value > 0) return 1;
   if (value < 0) return -1;
   return 0;
+}
+
+/**
+ * Combine two independent advantage/disadvantage sources into the single −1|0|1 the roller
+ * takes — PURE, RNG-free.
+ *
+ * RULE: they CANCEL (D&D 5e). One source of advantage and one of disadvantage means you roll
+ * straight; two sources of advantage are still just advantage. This is the least surprising
+ * rule for an explicitly D&D-style engine, and it is the reason the sum is clamped rather
+ * than added. Recorded as a DECISION, not an accident: the alternative ("the condition always
+ * wins") would make a fracture override the random-encounter ambush bonus.
+ *
+ * Used for both halves of the round: the player's standing battle advantage combined with a
+ * condition's per-round override, and the enemy's class-imposed disadvantage (Scavver evasion)
+ * combined with a fracture ticking on the ENEMY — the consumer G30 says the enemy half of
+ * fracture never had.
+ */
+export function combineAdvDis(a: number, b: number): -1 | 0 | 1 {
+  return normalizeAdvDis(normalizeAdvDis(a) + normalizeAdvDis(b));
 }

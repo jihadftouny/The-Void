@@ -25,7 +25,13 @@ import { type Stats } from './character.ts';
 import { createKarma, recordKarma, type KarmaState } from './karma.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
-import { resolveRound, openBattle, type BattleState, type BattleAction } from './battle.ts';
+import {
+  applyDamageToBattlePlayer,
+  resolveRound,
+  openBattle,
+  type BattleState,
+  type BattleAction,
+} from './battle.ts';
 import { createBattle } from './battle.ts';
 import { generateBoss, bossPostRound, computeVerdict, type BossId } from './boss.ts';
 import {
@@ -47,6 +53,7 @@ import { summarizeLoot } from './loot.ts';
 import {
   applyLevelUpHp,
   hasPendingLevelUp,
+  hollowGateOpen,
   shouldAdvance,
 } from './progression.ts';
 import { generateDraft, applyDraftOption, describeDraftOption, type DraftOption } from './draft.ts';
@@ -60,6 +67,7 @@ import {
 import { playerArmorClass } from './defense.ts';
 import { pickUp } from './equipment.ts';
 import { type ItemInstance } from './item.ts';
+import { type CombatEvent } from './combatEvent.ts';
 import { type GameEvent } from './gameEvent.ts';
 import { type RunUnlocks } from './unlockStore.ts';
 
@@ -385,7 +393,15 @@ export function step(state: GameState, input: GameInput): StepResult {
     case 'level-up-draft': {
       if (input.kind !== 'draft-pick') return noop;
       const index = input.index;
-      if (index < 0 || index >= phase.offers.length) return noop; // out-of-range: no-op
+      // G45: `step` documents itself as TOTAL ("the reducer is total", above), and this guard
+      // checked only the two bounds. A type-legal non-integer slipped through — `offers[1.5]`
+      // is `undefined`, the `!` assertion hid it, and `applyDraftOption` then dereferenced
+      // `option.kind`. Reproduced: 0 / -1 / 3 / Infinity / 1e21 were all clean, while 1.5,
+      // 0.5, 2.5 and NaN threw a TypeError. (NaN also defeats the bounds test on its own,
+      // since every comparison with NaN is false.) The sibling consumable path was already
+      // safe against the identical inputs. No shipped caller produces this — the renderer
+      // builds indices from a loop — so it is a contract violation through the engine API.
+      if (!Number.isInteger(index) || index < 0 || index >= phase.offers.length) return noop;
       const player = requirePlayer(state);
       const picked = applyDraftOption(player, phase.offers[index]!);
       return finish(
@@ -407,24 +423,16 @@ export function step(state: GameState, input: GameInput): StepResult {
     }
 
     case 'act-intro': {
+      // G43: EVERY act intro now returns to the hub, act 5 included. Act 5 used to hard-wire
+      // the Hollow to floor ENTRY here — and `main-menu` is the only phase that calls
+      // `continueJourney`, which is the only caller of `buildRandomBattle`, `buildChestLoot`
+      // and `selectLore`. So the True Void had no random battles, no chests, no rests, no
+      // sacrifice-deals and no lore at all: an exhaustive walk of ~17.7 M probed transitions
+      // from 418 act-5 entries produced ZERO act-5 hub states. Five of 24 families, five of
+      // the 13 bespoke name tables and the `reach-act-5` feat were dead as a result. The
+      // Hollow now waits behind a floor gate in `continueJourney`, exactly as the acts 1–3
+      // bosses wait behind `shouldAdvance`.
       if (input.kind !== 'continue') return noop;
-      if (phase.newAct === 5) {
-        // M12: act 5 opens on the HOLLOW SELF (a mirror of the player), replacing the retired
-        // `Jorginho Matagal` final boss. It scales off FINAL_BOSS_XP inside `generateBoss`.
-        const player = requirePlayer(state);
-        const { enemy, boss } = generateBoss({
-          bossId: 'hollow',
-          act: 5,
-          player,
-          karma: state.karma,
-          rng,
-        });
-        const battle: BattleState = { ...createBattle(player, enemy, 5), boss, canFlee: false };
-        return finish(
-          { kind: 'battle', battle, started: false, final: true },
-          [{ kind: 'final-battle-begins', enemyName: enemy.fullName }],
-        );
-      }
       return finish({ kind: 'main-menu' }, []);
     }
 
@@ -512,9 +520,9 @@ const BOSS_BY_ACT: Record<number, BossId> = { 1: 'kingpin', 2: 'reflection', 3: 
  * `continueJourney` (M12): when the XP gate opens (`shouldAdvance`), the FLOOR BOSS — not an
  * auto-advance — ends the floor. Acts 1–3 enter the boss battle for the CURRENT act (the act is
  * not incremented until the boss falls, via `resolvePostVictory`). Act 4 enters the VERDICT
- * gate (no combat). Act 5 never satisfies `shouldAdvance`, so the Hollow keeps firing on
- * `act-intro(5)`. When the gate is not open, run a normal encounter (off-equivalence — the
- * random-encounter/rest/chest/deal flow is untouched).
+ * gate (no combat). Act 5 never satisfies `shouldAdvance` (there is no act 6), so G43 gives it
+ * its OWN gate, `hollowGateOpen`, checked here — the Hollow is now the end of floor 5 rather
+ * than its entrance. When no gate is open, run a normal encounter.
  */
 function continueJourney(
   state: GameState,
@@ -537,9 +545,29 @@ function continueJourney(
       karma: state.karma,
       rng,
     });
-    const battle: BattleState = { ...createBattle(player, enemy, state.act), boss, canFlee: false };
+    // G4: `createBattle` derives `canFlee: false` from the boss (see the act-5 site above).
+    const battle: BattleState = createBattle(player, enemy, state.act, { boss });
     return finish({ kind: 'battle', battle, started: false, final: false }, [
       { kind: 'boss-encounter', bossId, enemyName: enemy.fullName },
+    ]);
+  }
+  // G43: floor 5's own gate. `shouldAdvance` is unconditionally false at act 5 (there is no
+  // act 6 to advance to), so the True Void gets its boss the same way every other floor does —
+  // from the HUB, once the floor has been played — rather than at floor entry. Below the gate
+  // act 5 falls through to the ordinary encounter/rest/chest flow, which is what gives floor 5
+  // an encounter layer for the first time. Emits the SAME `final-battle-begins` event, moved:
+  // no new event kind is introduced.
+  if (state.act === 5 && hollowGateOpen(player.xp)) {
+    const { enemy, boss } = generateBoss({
+      bossId: 'hollow',
+      act: 5,
+      player,
+      karma: state.karma,
+      rng,
+    });
+    const battle: BattleState = createBattle(player, enemy, 5, { boss });
+    return finish({ kind: 'battle', battle, started: false, final: true }, [
+      { kind: 'final-battle-begins', enemyName: enemy.fullName },
     ]);
   }
   const encounter = selectEncounter(rng);
@@ -612,13 +640,33 @@ function resolveBattleRound(
   let battle = round.state;
   let status = round.status;
   // M12: layer the boss mechanic AFTER `resolveRound` — so the non-boss encounter flow stays
-  // byte-identical (a normal battle has no `boss`, so this whole block is skipped). Runs only
-  // on an ONGOING round of a boss battle; it may flip the round to `player-died` (Kingpin adds).
-  if (status === 'ongoing' && battle.boss) {
+  // byte-identical (a normal battle has no `boss`, so this whole block is skipped).
+  //
+  // G36: it also requires `round.resolved`. `resolveRound` returns `'ongoing'` for six NO-OP
+  // REJECTIONS as well as for a real round, and this gate used to read the status alone — so a
+  // press the engine had just refused still advanced the boss. Measured: nine rejected "Run"
+  // presses against the act-1 Kingpin cost 11 HP to summoned minions, and three rejected casts
+  // burned the Reflection's once-per-battle adaptation.
+  //
+  // G29: the Kingpin's minion damage comes back as a NUMBER and is applied here, through the
+  // one guarded damage path in `battle.ts` (shield -> onTakeDamage relics -> revive gate), so
+  // the most common death in the game finally consults the defenses the player paid for.
+  if (status === 'ongoing' && battle.boss && round.resolved) {
     const post = bossPostRound(battle, action);
     battle = post.battle;
     events.push(...post.events);
-    status = post.status;
+    if (post.playerDamage > 0) {
+      // The helper appends its own combat events (shield-absorbed, relic-triggered, revive)
+      // into a CombatEvent list, which is then spread into the GameEvent stream in order.
+      const guardEvents: CombatEvent[] = [];
+      const hit = applyDamageToBattlePlayer(battle, post.playerDamage, guardEvents);
+      battle = hit.state;
+      events.push(...guardEvents);
+      if (hit.died) {
+        events.push({ kind: 'defeat' });
+        status = 'player-died';
+      }
+    }
   }
   const enemy = battle.enemy;
   switch (status) {
@@ -656,6 +704,37 @@ function resolveBattleRound(
   }
 }
 
+/**
+ * Resolve a rest — PURE apart from the single `computeRestHeal` draw.
+ *
+ * G27 + G31: a rest now CURES every active condition and REFILLS skill charges, alongside the
+ * HP heal it always did.
+ *
+ *  - **G27.** `fracture` carries `maxTurns: 100` with the comment *"needs a rest"* — but
+ *    `resolveRestDecision` never touched `activeConditions`, and `game.ts` writes the battle
+ *    player back to the hub, so a floor-1 Ganger's `gangStomp` put the player on attack
+ *    disadvantage for the ENTIRE RUN with no in-game remedy (measured: still active after 99
+ *    rounds; the only data-side cure, `warding-charm`, is battle-only and unobtainable).
+ *  - **G31.** Charges were never restored either, contradicting `GAME-DESIGN.md` §18.1
+ *    (*"A rest restores HP **and** skill charges"*): a 493-step run taking six rests ended on
+ *    ZERO charges, so the whole class-skill system was one-shot per run.
+ *
+ * DEVIATION FROM THE REGISTER, deliberate. G31's literal wording says to restore charges
+ * *"including the `rest-full` early-return branch"* — but that branch consumes NO rest, so a
+ * full-HP player could refill charges at every rest node for free, forever. Worse, G27 makes
+ * resting at full HP genuinely valuable (it is now the only fracture cure), so the branch's
+ * premise is gone. Implemented instead: `rest-full` fires only when there is NOTHING to gain
+ * — full HP **and** full charges **and** no conditions. Otherwise the rest is taken and paid
+ * for. That satisfies both G27 and G31 and closes the exploit.
+ *
+ * Conditions are cleared BEFORE the heal, so the cap is the true `maxHp` rather than a max
+ * depressed by a `sick`/Frail condition the rest is about to remove. ALL conditions go,
+ * buffs included: they are 2-turn combat effects and a rest is a reset. The `rest-taken`
+ * event keeps its existing shape — no new event kind.
+ *
+ * DOCUMENTED DRAW-ORDER CHANGE: a full-HP player who is fractured or short of charges now
+ * takes the rest, and therefore now consumes the `computeRestHeal` draw it used to skip.
+ */
 function resolveRestDecision(
   state: GameState,
   accept: boolean,
@@ -666,13 +745,23 @@ function resolveRestDecision(
   if (!accept) {
     return finish({ kind: 'main-menu' }, [{ kind: 'rest-declined' }]);
   }
-  if (player.hp >= player.maxHp) {
-    // Full HP: no roll, no rest consumed (faithful to Java).
+  const nothingToGain =
+    player.hp >= player.maxHp &&
+    player.skillCharges >= player.maxSkillCharges &&
+    player.activeConditions.length === 0;
+  if (nothingToGain) {
+    // Nothing a rest could do: no roll, no rest consumed (faithful to Java's full-HP case).
     return finish({ kind: 'main-menu' }, [{ kind: 'rest-full' }]);
   }
   const hpRestored = computeRestHeal(player.xp, rng);
   const hp = Math.min(player.hp + hpRestored, player.maxHp);
-  const healed: Player = { ...player, hp, restsLeft: player.restsLeft - 1 };
+  const healed: Player = {
+    ...player,
+    hp,
+    activeConditions: [],
+    skillCharges: player.maxSkillCharges,
+    restsLeft: player.restsLeft - 1,
+  };
   return finish({ kind: 'main-menu' }, [{ kind: 'rest-taken', hpRestored, hp, maxHp: healed.maxHp }], {
     player: healed,
   });

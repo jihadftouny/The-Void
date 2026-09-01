@@ -18,12 +18,146 @@
 // ONLY for a deliberate, documented balance/rules change, and the commit that does so must say
 // which rule changed and why the new numbers are correct.
 //
+// ---------------------------------------------------------------------------------------------
+// #0a `combat-core` RULE LEDGER — WHY EVERY NUMBER IN THIS FILE MOVED.
+//
+// Twenty-three engine defects were fixed on the `agentic/combat-core` branch, seventeen of which
+// legitimately change measured behaviour. Each row below is a DELIBERATE rules change from
+// `docs/PLAN.md` #0 / `docs/FINDINGS.md` §4, recorded with the direction it was expected to push
+// the runs — WRITTEN DOWN BEFORE MEASURING, so that a surprise is visible as a surprise. The
+// per-step detail follows; this is the one-line summary of the whole unit:
+//
+//   RULE CHANGED                                        FIX   STEP  DIRECTION ON THESE RUNS
+//   a re-applied DoT/control no longer resets to onset  G23    2    both sides stronger
+//   fracture on the ENEMY feeds its to-hit roll         G30    2    enemy stronger (+1 draw)
+//   a healing tick is capped at effective max HP        G22a   2    both sides slightly weaker
+//   a rest cures conditions                             G27    3    PLAYER MUCH STRONGER
+//   a rest refills skill charges                        G31    3    PLAYER MUCH STRONGER
+//   the ambush +1 is battle-scoped, not latched         G12    4    PLAYER MUCH WEAKER
+//   shield is cleared at the battle boundary            G25    4    player weaker
+//   momentum decays across the boundary                 G34    4    player weaker
+//   `canFlee` is derived from the boss                  G4     4    neutral here
+//   one guarded damage path, four sites                 G24/29 5    NO MOVEMENT (RNG-free)
+//   a rejected press resolves nothing                   G36    5    NO MOVEMENT (unreachable)
+//   a flee consumable respects `canFlee`                G39    5    NO MOVEMENT (unreachable)
+//   proficiency enters the to-hit total                 G32    6    player stronger (+2 to hit)
+//   resistances actually mitigate                       G17    6    enemy stronger on balance
+//   the enemy cannot cast what it cannot afford         G22b   6    enemy slightly weaker
+//   an enemy that did not cast regains a charge         G22c   6    ENEMY MUCH STRONGER
+//   floor 5 becomes a real floor behind an XP gate      G43    7    RUNS LONGER, act-5 deaths
+//   `cheaper` cannot reach a 0-cost skill               G35    8    player weaker
+//   a deal cannot drive maxHp/hp/a stat below 1         G20    8    neutral here
+//   a non-integer draft index is a no-op                G45    8    neutral (unreachable)
+//   the dead deal-quality twist is deleted              G16    8    neutral
+//   clarity-draught is usable                           G28d   8    neutral here
+//
+// NET on this 6-seed sample: 2 wins -> 0, avg level 61/6 -> 49/6, floors cleared 13/6 -> 11/6,
+// deaths redistributed out of act 1 and into acts 4-5. The REAL winnability guard is
+// `balance.test.ts`'s 500-run heuristic sample, which still passes at 0.132 — see step 8 for the
+// one place a constant had to move to keep it passing without touching the guard.
+//
+//  step 2 | G23 | a re-applied DoT/control no longer rewinds to its onset turn, so bleed/burn/
+//         |     | poison finally deal damage on BOTH sides, and a refreshed freeze/stun finally
+//         |     | rolls its saving throw (a NEW rng draw in exactly that case, so the draw count
+//         |     | of any run containing a refreshed control condition moves).
+//         | G30 | fracture on the ENEMY now feeds the enemy's to-hit roll, so a fractured enemy
+//         |     | rolls TWO d20s instead of one (again, a real draw-count change).
+//         | G22a| a healing tick is capped at effective max HP (RNG-free; no draw change).
+//         |     | EXPECTED: enemy stronger (its DoT bites) and player stronger (theirs does too),
+//         |     | runs longer/deeper on average. OBSERVED: floors cleared 13/6 -> 15/6 and
+//         |     | avg level 61/6 -> 64/6, win rate unchanged at 2/6. Seed 3 / Hollow is
+//         |     | BYTE-IDENTICAL (rngState 3234026647 both before and after) because that run
+//         |     | dies to the Kingpin before any condition is ever re-applied — a useful
+//         |     | control: the change is not a blanket perturbation of the stream.
+//  step 3 | G27 | a rest CURES every condition (fracture was otherwise permanent for the run).
+//         | G31 | a rest REFILLS skill charges (they were never restored at all). Also a
+//         |     | documented draw-order change: a full-HP player who is fractured or short of
+//         |     | charges now TAKES the rest, and so consumes the `computeRestHeal` draw it
+//         |     | used to skip.
+//         |     | EXPECTED: player much stronger — the heuristic policy casts, and its class
+//         |     | skills used to be one-shot per run. OBSERVED, and it is a BIG swing that #2's
+//         |     | balance re-run must know about: wins 2/6 -> 5/6, avg level 64/6 -> 85/6,
+//         |     | floors cleared 15/6 -> 21/6, and the single remaining death moves to act 2.
+//  step 4 | G12 | the encounter's +1 ambush bonus is battle-scoped, so it no longer leaks onto
+//         |     | the player and into EVERY later fight; a condition's adv/dis is combined
+//         |     | per-round instead of latched. This changes the DRAW COUNT directly: a roll
+//         |     | at ±1 draws two d20s, at 0 one.
+//         | G25 | shield is zeroed at the battle boundary (it used to accumulate 5,10,15,…).
+//         | G34 | momentum decays across the boundary instead of carrying at the cap.
+//         | G4  | `canFlee` is derived from the boss, so a boss fight can never be fled.
+//         |     | EXPECTED: player notably WEAKER — the biggest single item is that every
+//         |     | floor boss and the final Hollow used to be fought at a +1 to hit nobody
+//         |     | granted. OBSERVED, and it is the mirror of step 3: wins 5/6 -> 1/6, avg
+//         |     | level 85/6 -> 71/6, floors cleared 21/6 -> 17/6, and deaths bunch at acts
+//         |     | 3-4 (the boss floors) rather than early. `balance.test.ts`'s win-rate and
+//         |     | act-1-share guards still pass unweakened.
+//  step 5 | G24 | the failed-escape counter-attack, the boss-minion tick and the consumable
+//         | G29 | path all run the SAME guarded damage helper as the ordinary round.
+//         | G36 | a rejected press no longer advances the boss's per-round mechanic.
+//         | G39 | a flee consumable cannot escape a battle that forbids fleeing.
+//         |     | EXPECTED: NO MOVEMENT AT ALL in these six runs. Every step of the extracted
+//         |     | helper is RNG-free, the heuristic policy owns no relics or shield (so the
+//         |     | guards are all identity), and `sim.test.ts` already proves the policy never
+//         |     | issues a rejected action. OBSERVED: every golden row unchanged, byte for
+//         |     | byte — which is the strongest evidence available that the four-site
+//         |     | extraction is faithful rather than merely green.
+//  step 6 | G32 | `proficiency` (2 at creation) enters the to-hit total: the player is about
+//         |     | ten percentage points more accurate. PLAYER STRONGER.
+//         | G17 | resistances mitigate for real (`max(0, base - round(base*res/100))`) against
+//         |     | EFFECTIVE resistances, and the family/affix magnitudes were rescaled 2 -> 25
+//         |     | so they can matter at all. Cuts BOTH ways, but there are far more resistant
+//         |     | ENEMIES than resistant players, so on balance: enemy stronger.
+//         | G22b| the enemy skill pick draws over the AFFORDABLE subset (a changed draw VALUE
+//         |     | for mixed-cost pools) and draws NOTHING when nothing is affordable.
+//         | G22c| an enemy that cast nothing regains 1 charge, so themed skills land all
+//         |     | battle instead of only on the first two hits. ENEMY MUCH STRONGER.
+//         |     | EXPECTED: the enemy side dominates — G22c alone converts most later enemy
+//         |     | hits from a flat 1 into a themed skill. OBSERVED: wins 1/6 -> 2/6 (the
+//         |     | Enforcer's accuracy gain shows), but avg level 71/6 -> 49/6 and floors
+//         |     | cleared 17/6 -> 11/6, with deaths moving hard back to act 1 (0 -> 3): two
+//         |     | seeds now die inside ~20 steps to an act-1 elite. `balance.test.ts`'s
+//         |     | win-rate (> 0.12) and act-1-share (< 0.55) guards still pass over their
+//         |     | 500-run sample, but this is the swing #2's re-run most needs to look at.
+//  step 7 | G43 | floor 5 gets an ENCOUNTER LAYER. The Hollow moves from floor ENTRY to a
+//         |     | floor GATE (`HOLLOW_GATE_XP`, set to 600 at this step and lowered to its
+//         |     | SHIPPED value of 500 at step 8 — see there), so act 5 plays like acts 1-4:
+//         |     | random battles, chests, rests, deals and lore, all of which were previously
+//         |     | unreachable (0 act-5 hub states over ~17.7 M probed transitions).
+//         |     | EXPECTED: runs get LONGER at act 5 and some that used to walk straight into
+//         |     | the Hollow now die on the floor before it. OBSERVED exactly that: the two
+//         |     | Enforcer wins become act-5 DEATHS at level 20 and 18 with all four earlier
+//         |     | floors cleared, so this sample drops to 0 wins. The real guard —
+//         |     | `balance.test.ts`'s 500-run heuristic win rate — still passes at 0.126,
+//         |     | though that is uncomfortably close to its 0.12 floor and 47 of its 437
+//         |     | deaths are now on act 5 (previously 0, because act 5 was boss-only).
+//         |     | ⚠ FLAGGED FOR #2: 600 is a derived placeholder, and floor 5 is now the
+//         |     | deadliest stretch of the descent.
+//  step 8 | G35 | `cheaper` resolves against the PLAYER, so a skill can no longer be driven to
+//         |     | 0 charge cost and cast free forever (274 of 300 seeds reached that).
+//         | G20 | a deal cannot drive maxHp / hp / a stat below 1.
+//         | G45 | a non-integer `draft-pick` index is a no-op instead of a TypeError.
+//         | G16 | the dead deal-quality twist is deleted.  | G28d | clarity-draught is usable.
+//         |     | EXPECTED: the player gets WEAKER — G35 removes an exploit the heuristic
+//         |     | policy was reaching (it prefers `upgrade` offers), and the other four are
+//         |     | guards on unreachable-or-rare paths. OBSERVED: both act-5 Enforcer deaths
+//         |     | now happen a level earlier (20 -> 16 and 18 -> 16); the three act-1/act-4
+//         |     | rows are BYTE-IDENTICAL, another useful control (those runs never level far
+//         |     | enough to be offered a second `cheaper`).
+//         | ⚠   | The 500-run `balance.test.ts` win rate fell to EXACTLY 0.120, which does not
+//         |     | clear its `> 0.12` floor. Per this unit's own rule the CONSTANT was lowered,
+//         |     | not the guard: `HOLLOW_GATE_XP` 600 -> 500, one step down the same derived
+//         |     | curve (k = 6 kills, 240·e^(0.75) ~ 508). That measures 0.132.
+// ---------------------------------------------------------------------------------------------
+//
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
 // (outcome, act, level, floors, step count, cause), the FINAL RNG ACCUMULATOR of a full run
 // (the sharpest possible probe of draw count and draw order — one extra or missing `rng()`
 // call anywhere in the run moves it), and a whole `simulateBatch` aggregate.
 
 import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createGame, step, awaitingFor } from './game.ts';
 import type { GameState, GameInput } from './game.ts';
 import type { GameEvent } from './gameEvent.ts';
@@ -56,12 +190,14 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 
 /** The frozen run records. MEASURED, not derived — see the file header. */
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 545, cause: 'unmade the Hollow (damnation)', rngState: 603946562 },
-  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 14, floorsCleared: 3, steps: 544, cause: 'Death', rngState: 2563394770 },
-  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 120, cause: 'Undercity Kingpin', rngState: 1282154740 },
-  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 370, cause: 'Blind Fury', rngState: 1943380902 },
-  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 455, cause: 'unmade the Hollow (damnation)', rngState: 3985253704 },
-  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 136, cause: 'Undercity Kingpin', rngState: 3234026647 },
+  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 444, cause: 'The Husk Remnant', rngState: 841227953 },
+  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 531, cause: 'The Spent Remnant', rngState: 291816878 },
+  // The three rows below are BYTE-IDENTICAL to their step-7 values: these runs end before the
+  // second `cheaper` offer G35 removed could ever reach them. A useful control on step 8.
+  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 21, cause: 'Armored Psycho', rngState: 560318176 },
+  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 380, cause: 'The Knight', rngState: 2887346257 },
+  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 92, cause: 'Undercity Kingpin', rngState: 2809167167 },
+  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 17, cause: 'Armored Psycho', rngState: 1320036240 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -87,26 +223,59 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(report).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 2,
+      wins: 0,
       grace: 0,
-      damnation: 2,
-      deaths: 4,
-      winRate: 2 / 6,
-      avgLevel: 61 / 6,
-      avgFloorsCleared: 13 / 6,
-      deathByAct: { 1: 2, 2: 0, 3: 1, 4: 1, 5: 0 },
+      damnation: 0,
+      deaths: 6,
+      winRate: 0 / 6,
+      avgLevel: 49 / 6,
+      avgFloorsCleared: 11 / 6,
+      deathByAct: { 1: 3, 2: 0, 3: 0, 4: 1, 5: 2 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
-          winRate: 1 / 3, avgLevel: 33 / 3, avgFloorsCleared: 7 / 3,
-          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 0 },
+          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
+          winRate: 0 / 3, avgLevel: 33 / 3, avgFloorsCleared: 8 / 3,
+          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 2 },
         },
         Hollow: {
-          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
-          winRate: 1 / 3, avgLevel: 28 / 3, avgFloorsCleared: 6 / 3,
-          deathByAct: { 1: 1, 2: 0, 3: 1, 4: 0, 5: 0 },
+          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
+          winRate: 0 / 3, avgLevel: 16 / 3, avgFloorsCleared: 3 / 3,
+          deathByAct: { 1: 2, 2: 0, 3: 0, 4: 1, 5: 0 },
         },
       },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The DETERMINISM guard this whole file rests on. Every golden number above is meaningless if a
+// run can consult the wall clock or an unseeded generator, so the rule is asserted directly on
+// the shipping source rather than trusted to review: `CLAUDE.md` load-bearing principle 2, "never
+// call Math.random() or Date.now() inside src/game".
+// ---------------------------------------------------------------------------------------------
+
+describe('the logic core contains no unseeded randomness and no clock', () => {
+  it('no shipping file under src/game CALLS Math.random or Date.now', () => {
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const offenders: string[] = [];
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.ts') || name.endsWith('.test.ts')) continue;
+      const lines = readFileSync(join(dir, name), 'utf8').split('\n');
+      lines.forEach((line, i) => {
+        // Skip comment lines — several modules DOCUMENT the prohibition by naming it.
+        const trimmed = line.trim();
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+        if (/\bMath\s*\.\s*random\s*\(/.test(line) || /\bDate\s*\.\s*now\s*\(/.test(line)) {
+          offenders.push(`${name}:${i + 1}`);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('scans a non-trivial number of files (so an empty sweep cannot pass vacuously)', () => {
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const shipping = readdirSync(dir).filter((n) => n.endsWith('.ts') && !n.endsWith('.test.ts'));
+    expect(shipping.length).toBeGreaterThan(30);
   });
 });

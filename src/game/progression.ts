@@ -51,6 +51,37 @@ export function shouldAdvance(act: number, xp: number): boolean {
   return threshold !== undefined && xp >= threshold;
 }
 
+/**
+ * XP at which floor 5's own boss gate opens — the point at which the True Void stops offering
+ * encounters and offers the Hollow (G43).
+ *
+ * WHY A SEPARATE CONSTANT rather than an `ACT_XP_THRESHOLDS[6]` entry: that table is keyed by
+ * *the act being ENTERED*, and there is no act 6. Overloading `shouldAdvance` to mean "the
+ * floor-5 boss is ready" would make it lie about what it computes. (Recorded deviation: G43's
+ * fix text says "add a floor-5 XP threshold like acts 1–3"; the table it points at cannot
+ * express one.)
+ *
+ * ⚠ M15/#2 BALANCE PLACEHOLDER — this number decides how long floor 5 is, and no author has
+ * set it. DERIVATION, so it is not arbitrary: enemy xp is `1 + randInt(0, floor(playerXp/4)+2)`,
+ * mean ~ playerXp/8, so dX/dkill ~ X/8 and, from the act-5 entry threshold of 240,
+ * X(k) = 240·e^(k/8) for k kills of floor 5:
+ *     k = 4 -> 396      k = 5 -> 448      k = 6 -> 508      k = 7.5 -> 610
+ *
+ * The first choice was 600 (k ~ 7.5, matching the ~8–11 kills floors 3 and 4 each take). It is
+ * LOWERED to 500 (k = 6) for a measured reason, not a taste: at 600 the heuristic-policy win
+ * rate over `balance.test.ts`'s 500-run sample lands on EXACTLY 0.120, which does not clear
+ * that file's `> 0.12` floor. The unit's own rule for this case is to lower the CONSTANT and
+ * show the re-derivation rather than weaken the guard, so this moves one step down the same
+ * curve — k = 6 kills, 240·e^(0.75) ~ 508 -> 500 — which measures 0.132. `PLAN.md` #2's
+ * re-run owns the final value; floor 5 is now the deadliest stretch of the descent.
+ */
+export const HOLLOW_GATE_XP = 500;
+
+/** Whether floor 5's boss gate has opened for a player at `xp` — PURE. */
+export function hollowGateOpen(xp: number): boolean {
+  return xp >= HOLLOW_GATE_XP;
+}
+
 // ------- M9 frequent XP leveling (decoupled from act-entry) -------------------
 //
 // The XP curve below is a deliberate M15 PLACEHOLDER. It is single-sourced here so

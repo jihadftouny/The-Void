@@ -26,6 +26,7 @@ import { STAT_KEYS, computeStatMods, type StatKey } from './character.ts';
 import {
   SKILLS,
   applySkillUpgrade,
+  resolveSkill,
   type SkillDef,
   type SkillId,
   type SkillUpgrade,
@@ -76,17 +77,34 @@ function skillCandidates(player: Player, chosen: readonly Candidate[]): Candidat
     .map((id) => ({ cat: 'skill', skillId: id }));
 }
 
-/** Owned skills × applicable templates, in (skillPool order, template order). */
+/**
+ * Owned skills × applicable templates, in (skillPool order, template order).
+ *
+ * G35 — UNLIMITED FREE CASTS. `templateApplies` was tested against the BASE `SKILLS[skillId]`
+ * rather than the player's already-upgraded skill, and the `taken` exclusion is scoped to a
+ * single draft. So `cheaper` (chargeDelta -1, valid only for a cost > 1 skill) was offered
+ * again on a LATER level-up, `chargeDelta` summed to -2, and `resolveSkill` clamped the cost
+ * to 0. The cast guard is `charges < effectiveCost`, and `0 < 0` is false, while `useSkill`
+ * then spends 0 — so the player cast a damage-plus-momentum skill every round forever, free.
+ * Measured: 274 of 300 seeds reached a 0-cost skill under a "take cheaper when offered"
+ * policy, on every class with a cost-2 skill.
+ *
+ * The fix is to resolve against the PLAYER: once `cheaper` has been taken, the resolved cost
+ * is 1, `templateApplies('cheaper', …)` is false, and it is never offered for that skill
+ * again. (⚠ Register slip: `PLAN.md` #0 item 25 says `draft.ts` "already imports"
+ * `resolveSkill` — it imported `SKILLS`, `applySkillUpgrade` and three types, but not that.
+ * The import is added here.)
+ */
 function upgradeCandidates(player: Player, chosen: readonly Candidate[]): Candidate[] {
   const taken = new Set(
     chosen.filter((c) => c.cat === 'upgrade').map((c) => `${c.skillId}:${c.templateId}`),
   );
   const out: Candidate[] = [];
   for (const skillId of player.skillPool as SkillId[]) {
-    const base = SKILLS[skillId];
-    if (!base) continue;
+    const resolved = resolveSkill(player, skillId);
+    if (!resolved) continue;
     for (const t of UPGRADE_TEMPLATES) {
-      if (!templateApplies(t.id, base)) continue;
+      if (!templateApplies(t.id, resolved)) continue;
       if (taken.has(`${skillId}:${t.id}`)) continue;
       out.push({ cat: 'upgrade', skillId, templateId: t.id });
     }
