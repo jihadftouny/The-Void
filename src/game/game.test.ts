@@ -16,7 +16,7 @@ import { createBattle, type BattleState } from './battle.ts';
 import { selectEncounter } from './encounter.ts';
 import { buildDeal, selectPool } from './deal.ts';
 import { FINAL_BOSS_NAME, FINAL_BOSS_XP, HOLLOW_GATE_XP } from './progression.ts';
-import { BOSSES, type BossState } from './boss.ts';
+import { BOSSES, KINGPIN_MINION_DAMAGE, type BossState } from './boss.ts';
 import { getGraceEnding, getDamnationEnding } from './story.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
@@ -958,12 +958,20 @@ describe('M12 off-equivalence: a normal battle invokes no boss hook', () => {
 // ------- G36 — a rejected press must not advance the boss -----------------------------------
 
 /** A started boss battle sitting at `battle-action`, ready to be pressed at. */
-function bossBattleState(boss: BossState, act: number, player: Player, rngState = 3): StepResult {
+function bossBattleState(
+  boss: BossState,
+  act: number,
+  player: Player,
+  rngState = 3,
+  /** Mid-battle patch applied AFTER the transient funnel (e.g. a live shield). */
+  patchPlayer: Partial<Player> = {},
+): StepResult {
   const enemy = generateEnemy(
     { act, type: BOSSES[boss.bossId].name, playerXp: 0 },
     mulberry32(1),
   );
-  const battle: BattleState = createBattle(player, enemy, act, { boss });
+  const built = createBattle(player, enemy, act, { boss });
+  const battle: BattleState = { ...built, player: { ...built.player, ...patchPlayer } };
   return {
     state: {
       version: 8,
@@ -978,6 +986,92 @@ function bossBattleState(boss: BossState, act: number, player: Player, rngState 
     awaiting: 'battle-action',
   };
 }
+
+describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded', () => {
+  // The unit's named G29 tests drive the `applyDamageToBattlePlayer` helper directly, and the
+  // G36 tests assert minion damage is ZERO. Neither proves the SHIPPING WIRING in `game.ts`
+  // actually applies it — that was caught only by `offEquivalence.test.ts`'s byte-identity
+  // replay, and that file is re-baselined by design whenever behaviour moves, so the guard
+  // would evaporate at the next re-baseline. These are the positive end-to-end assertions.
+  //
+  // Every case uses `potion` as the action, which is the one action that RESOLVES a round
+  // (so the boss mechanic runs) while granting the enemy NO turn — so the player's HP after
+  // the step is the potion heal minus the minion damage and nothing else. It also draws no
+  // rng, and `bossPostRound` is RNG-free, so these are deterministic whatever the seed.
+  //
+  // The Kingpin's cadence summons on round 3, so each fixture starts with `minions: 2`
+  // already on the field: round 1 then does `2 x KINGPIN_MINION_DAMAGE` = 2 damage with no
+  // summon (1 % 3 !== 0), which isolates the damage from the summon.
+  const kingpinWithCrew = (): BossState => ({ bossId: 'kingpin', round: 0, minions: 2 });
+
+  it('the damage lands on HP: potion heals 10 -> 20, then the crew takes it to 18', () => {
+    expect(KINGPIN_MINION_DAMAGE).toBe(1); // the constant behind the "2", restated
+    const player = makePlayer({ hp: 10, maxHp: 20, pots: 1 });
+    const r = step(
+      bossBattleState(kingpinWithCrew(), 1, player).state,
+      { kind: 'battle-action', action: 'potion' },
+    );
+    expect(r.events).toContainEqual({ kind: 'potion-drunk', healedTo: 20 });
+    expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 });
+    expect(r.state.phase.kind).toBe('battle');
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.player.hp).toBe(18); // 20 healed - 2 minions
+      expect(r.state.phase.battle.player.pots).toBe(0);
+      expect(r.state.phase.battle.boss?.minions).toBe(2); // no summon on round 1
+    }
+  });
+
+  it('it goes through the GUARDED path — a shield absorbs it, exactly as in a normal round', () => {
+    // This is the actual content of G29: `boss.ts` used to write `player.hp` directly, so a
+    // 20-point shield absorbed NOTHING at the death `BALANCE-REPORT.md` says happens most.
+    const player = makePlayer({ hp: 10, maxHp: 20, pots: 1 });
+    const r = step(
+      bossBattleState(kingpinWithCrew(), 1, player, 3, { shield: 5 }).state,
+      { kind: 'battle-action', action: 'potion' },
+    );
+    expect(r.events).toContainEqual({ kind: 'shield-absorbed', amount: 2 });
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.player.hp).toBe(20); // the shield ate all of it
+      expect(r.state.phase.battle.player.shield).toBe(3); // 5 - 2
+    }
+  });
+
+  it('and the once-per-battle revive intercepts a LETHAL crew tick', () => {
+    // maxHp 2 so the potion tops out at 2 and the crew's 2 is lethal. Halo Fragment heals to
+    // max(floor(2 * 25/100), 1) = max(0, 1) = 1 — the documented floor.
+    const base = makePlayer({ hp: 1, maxHp: 2, pots: 1 });
+    const haloed: Player = {
+      ...base,
+      inventory: {
+        ...base.inventory,
+        slots: { ...base.inventory.slots, amulet: { defId: 'halo-fragment' } },
+      },
+    };
+    const r = step(
+      bossBattleState(kingpinWithCrew(), 1, haloed).state,
+      { kind: 'battle-action', action: 'potion' },
+    );
+    expect(r.events).toContainEqual({ kind: 'revive', healedTo: 1 });
+    expect(r.state.phase.kind).toBe('battle'); // survived
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.player.hp).toBe(1);
+      expect(r.state.phase.battle.reviveUsed).toBe(true);
+    }
+  });
+
+  it('without a revive the same lethal tick ends the run — game.ts owns the death now', () => {
+    // `bossPostRound` no longer decides this; it returns a number and `game.ts` resolves it.
+    const player = makePlayer({ hp: 1, maxHp: 2, pots: 1 });
+    const r = step(
+      bossBattleState(kingpinWithCrew(), 1, player).state,
+      { kind: 'battle-action', action: 'potion' },
+    );
+    expect(r.events).toContainEqual({ kind: 'defeat' });
+    expect(r.state.phase.kind).toBe('game-over');
+    expect(r.awaiting).toBe('game-over');
+    expect(r.events.some((e) => e.kind === 'game-over')).toBe(true);
+  });
+});
 
 describe('G36 — pressing a button the engine refuses costs nothing', () => {
   it('nine rejected Run presses against the Kingpin cost 0 HP and summon 0 minions', () => {

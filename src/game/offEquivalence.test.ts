@@ -119,7 +119,8 @@
 //         |     | win-rate (> 0.12) and act-1-share (< 0.55) guards still pass over their
 //         |     | 500-run sample, but this is the swing #2's re-run most needs to look at.
 //  step 7 | G43 | floor 5 gets an ENCOUNTER LAYER. The Hollow moves from floor ENTRY to a
-//         |     | floor GATE (`HOLLOW_GATE_XP = 600`), so act 5 now plays like acts 1-4:
+//         |     | floor GATE (`HOLLOW_GATE_XP`, set to 600 at this step and lowered to its
+//         |     | SHIPPED value of 500 at step 8 — see there), so act 5 plays like acts 1-4:
 //         |     | random battles, chests, rests, deals and lore, all of which were previously
 //         |     | unreachable (0 act-5 hub states over ~17.7 M probed transitions).
 //         |     | EXPECTED: runs get LONGER at act 5 and some that used to walk straight into
