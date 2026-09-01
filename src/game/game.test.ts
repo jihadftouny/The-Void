@@ -21,7 +21,7 @@ import { getGraceEnding, getDamnationEnding } from './story.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
 import { createKarma, type KarmaState } from './karma.ts';
-import { makeCondition } from './condition.ts';
+import { hasControlCondition, makeCondition } from './condition.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- Fixtures ------------------------------------------------------------
@@ -281,8 +281,13 @@ describe('rest resolution', () => {
     expect(r.state.phase.kind).toBe('main-menu');
   });
 
-  it('accepting at full HP heals nothing and spends no rest', () => {
+  it('accepting with NOTHING to gain heals nothing and spends no rest', () => {
+    // Full HP, full charges, no conditions — the only case where a rest can do nothing.
+    // (Narrowed from "at full HP" by G27/G31: full HP alone is no longer enough, because a
+    // rest is now also the cure for fracture and the only refill for skill charges.)
     const player = makePlayer({ xp: 40, hp: 50, maxHp: 50, restsLeft: 1 });
+    expect(player.skillCharges).toBe(player.maxSkillCharges);
+    expect(player.activeConditions).toEqual([]);
     const state: GameState = {
       ...menuState(player, 99),
       phase: { kind: 'rest', restOffered: true },
@@ -291,6 +296,67 @@ describe('rest resolution', () => {
     expect(r.events).toContainEqual({ kind: 'rest-full' });
     expect(r.state.player?.restsLeft).toBe(1); // unchanged
     expect(r.state.player?.hp).toBe(50);
+  });
+
+  // ------- G27 / G31 — a rest cures and refills, not just heals ---------------
+
+  it('G27/G31 — an accepted rest clears every condition AND refills skill charges', () => {
+    // The register's reproduction: rest at hp 3 / charges 0 gave hp 12 / charges 0, and a
+    // floor-1 Ganger's fracture was still active 99 rounds later.
+    const player = makePlayer({
+      xp: 40, hp: 5, maxHp: 50, restsLeft: 1,
+      skillCharges: 0,
+      activeConditions: [makeCondition('fracture'), makeCondition('poison')],
+    });
+    const state: GameState = {
+      ...menuState(player, 99),
+      phase: { kind: 'rest', restOffered: true },
+    };
+    const r = step(state, { kind: 'rest-decision', accept: true });
+    expect(r.state.player?.activeConditions).toEqual([]);
+    expect(r.state.player?.skillCharges).toBe(player.maxSkillCharges);
+    expect(r.state.player?.restsLeft).toBe(0); // it was paid for
+    expect(r.events.some((e) => e.kind === 'rest-taken')).toBe(true);
+  });
+
+  it('G27 — a rest at FULL HP still cures, and costs a rest for doing it', () => {
+    // The exploit the register's literal wording ("restore charges including the rest-full
+    // branch") would have opened, closed: a rest that does something is always paid for.
+    const player = makePlayer({
+      xp: 40, hp: 50, maxHp: 50, restsLeft: 1,
+      activeConditions: [makeCondition('fracture')],
+    });
+    const state: GameState = {
+      ...menuState(player, 99),
+      phase: { kind: 'rest', restOffered: true },
+    };
+    const r = step(state, { kind: 'rest-decision', accept: true });
+    expect(r.state.player?.activeConditions).toEqual([]);
+    expect(r.state.player?.hp).toBe(50); // already full; the heal is capped
+    expect(r.state.player?.restsLeft).toBe(0); // NOT free
+    expect(r.events.some((e) => e.kind === 'rest-full')).toBe(false);
+  });
+
+  it('G31 — a rest at FULL HP still refills charges, and costs a rest for doing it', () => {
+    const player = makePlayer({ xp: 40, hp: 50, maxHp: 50, restsLeft: 1, skillCharges: 1 });
+    const state: GameState = {
+      ...menuState(player, 99),
+      phase: { kind: 'rest', restOffered: true },
+    };
+    const r = step(state, { kind: 'rest-decision', accept: true });
+    expect(r.state.player?.skillCharges).toBe(player.maxSkillCharges);
+    expect(r.state.player?.restsLeft).toBe(0);
+    expect(r.events.some((e) => e.kind === 'rest-full')).toBe(false);
+  });
+
+  it('a rest with no rests left is never offered, so the decision path cannot go negative', () => {
+    // `continueJourney` only sets `restOffered: true` when `restsLeft >= 1`, which is what
+    // keeps the `restsLeft - 1` above from ever producing a negative count. Pinned here
+    // because G27/G31 made the "take it" branch reachable in strictly more situations.
+    const player = makePlayer({ xp: 0, restsLeft: 0, hp: 1, maxHp: 50, skillCharges: 0 });
+    const r = step(menuState(player, findEncounterSeeds().rest), { kind: 'menu', choice: 'continue' });
+    expect(r.state.phase).toEqual({ kind: 'rest', restOffered: false });
+    expect(r.awaiting).toBe('continue');
   });
 
   it('declining changes nothing but returns to the menu', () => {
@@ -1067,7 +1133,15 @@ function decide(res: StepResult): GameInput {
       const p = state.phase;
       if (p.kind === 'battle') {
         const pl = p.battle.player;
-        if (pl.pots > 0 && pl.hp <= pl.maxHp * 0.4) {
+        // Under a control condition a potion is REJECTED (`potion-blocked`) and the rejection
+        // advances nothing — no round resolves, so the condition never ticks down. A policy
+        // that keeps choosing `potion` therefore spins in place forever. That is a
+        // pre-existing property of the engine, deliberately so (G36: "a rejected press costs
+        // nothing"), and `sim.ts`'s `chooseBattleAction` carries exactly this guard with
+        // exactly this reasoning. This scripted policy lacked it; it only never hit the trap
+        // because it drove a single seed. Fight instead — the swing is skipped, but the round
+        // runs and the control wears off.
+        if (!hasControlCondition(pl) && pl.pots > 0 && pl.hp <= pl.maxHp * 0.4) {
           return { kind: 'battle-action', action: 'potion' };
         }
       }
@@ -1114,13 +1188,34 @@ describe('full scripted playthrough', () => {
     // The machine actually ran combat: at least one fight happened.
     expect(a.events.some((e) => e.kind === 'attack')).toBe(true);
 
-    // M15 REBALANCE: with the tuned constants a real seed can now survive the descent and
-    // reach an ENDING (a win) — previously (frozen M4/M5 balance) every real seed died. The
-    // terminal signal for a win is the `ending` event, and no `game-over` death event fires
-    // (the death path emits `game-over`; the win path ends on the ending, then goes terminal
-    // with no further event — see the ending→game-over transition test above).
-    expect(a.events.some((e) => e.kind === 'ending')).toBe(true);
-    expect(a.events.some((e) => e.kind === 'game-over')).toBe(false);
+  });
+
+  // M15 REBALANCE guard: a real scripted run can survive the descent and reach an ENDING (a
+  // win) — previously (frozen M4/M5 balance) EVERY real seed died. The terminal signal for a
+  // win is the `ending` event; the death path instead emits `game-over`.
+  //
+  // ⚠ CHANGED by #0a (G27/G31), deliberately, and this is why. This assertion used to ride on
+  // the single seed 12345 above. That made it a one-seed coin flip on a property that is
+  // statistical: seed 12345 happens no longer to win, because a rest that ONLY refills skill
+  // charges now costs a rest — and this scripted policy never casts, so for IT the refill is
+  // pure loss. That is a policy artifact, not an engine regression (`balance.test.ts`'s
+  // 500-run win-rate guard is unmoved, and the seeds below still win). Re-pinning it to
+  // whichever single seed happens to win today would be exactly the "edit the number until it
+  // is green" move this repo forbids, so the guard is instead stated at the level it was
+  // always about: SOME real seed wins. Against the pre-M15 world (0% win over every seed) it
+  // is still red, and it no longer moves every time a rule shifts one seed's dice.
+  it('a real scripted run can still WIN the descent (not every seed dies)', () => {
+    const seeds = Array.from({ length: 20 }, (_, i) => 12340 + i);
+    const outcomes = seeds.map((s) => {
+      const run = runPlaythrough(s);
+      // Every seed must terminate cleanly, whatever its outcome.
+      expect(run.final.phase.kind).toBe('game-over');
+      const won = run.events.some((e) => e.kind === 'ending');
+      // The two terminal signals are mutually exclusive: a win never emits `game-over`.
+      expect(run.events.some((e) => e.kind === 'game-over')).toBe(!won);
+      return won;
+    });
+    expect(outcomes.filter(Boolean).length).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -36,6 +36,15 @@
 //         |     | BYTE-IDENTICAL (rngState 3234026647 both before and after) because that run
 //         |     | dies to the Kingpin before any condition is ever re-applied — a useful
 //         |     | control: the change is not a blanket perturbation of the stream.
+//  step 3 | G27 | a rest CURES every condition (fracture was otherwise permanent for the run).
+//         | G31 | a rest REFILLS skill charges (they were never restored at all). Also a
+//         |     | documented draw-order change: a full-HP player who is fractured or short of
+//         |     | charges now TAKES the rest, and so consumes the `computeRestHeal` draw it
+//         |     | used to skip.
+//         |     | EXPECTED: player much stronger — the heuristic policy casts, and its class
+//         |     | skills used to be one-shot per run. OBSERVED, and it is a BIG swing that #2's
+//         |     | balance re-run must know about: wins 2/6 -> 5/6, avg level 64/6 -> 85/6,
+//         |     | floors cleared 15/6 -> 21/6, and the single remaining death moves to act 2.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -76,14 +85,12 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 
 /** The frozen run records. MEASURED, not derived — see the file header. */
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 13, floorsCleared: 3, steps: 546, cause: 'Cursed The Repentant Supplicant', rngState: 2115806390 },
-  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 566, cause: 'unmade the Hollow (damnation)', rngState: 3244019037 },
-  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 7, floorsCleared: 2, steps: 263, cause: 'Lust', rngState: 973355852 },
-  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 339, cause: 'Greed', rngState: 879109453 },
-  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 414, cause: 'unmade the Hollow (damnation)', rngState: 3176747043 },
-  // Control row: unchanged from the pre-#0a baseline, byte for byte. This run dies to the
-  // Kingpin before any condition is ever re-applied, so no rule in step 2 can touch it.
-  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 136, cause: 'Undercity Kingpin', rngState: 3234026647 },
+  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 430, cause: 'unmade the Hollow (damnation)', rngState: 3567970524 },
+  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 514, cause: 'unmade the Hollow (damnation)', rngState: 3394630331 },
+  { seed: 3, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 462, cause: 'unmade the Hollow (damnation)', rngState: 3872523911 },
+  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 17, floorsCleared: 4, steps: 473, cause: 'unmade the Hollow (damnation)', rngState: 1649734614 },
+  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 643, cause: 'unmade the Hollow (damnation)', rngState: 3100984043 },
+  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 2, finalAct: 2, finalLevel: 4, floorsCleared: 1, steps: 128, cause: 'Warped Eldritch Beholder', rngState: 1722166819 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -109,24 +116,24 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(report).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 2,
+      wins: 5,
       grace: 0,
-      damnation: 2,
-      deaths: 4,
-      winRate: 2 / 6,
-      avgLevel: 64 / 6,
-      avgFloorsCleared: 15 / 6,
-      deathByAct: { 1: 1, 2: 0, 3: 2, 4: 1, 5: 0 },
+      damnation: 5,
+      deaths: 1,
+      winRate: 5 / 6,
+      avgLevel: 85 / 6,
+      avgFloorsCleared: 21 / 6,
+      deathByAct: { 1: 0, 2: 1, 3: 0, 4: 0, 5: 0 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
-          winRate: 1 / 3, avgLevel: 36 / 3, avgFloorsCleared: 9 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 1, 5: 0 },
+          runs: 3, wins: 3, grace: 0, damnation: 3, deaths: 0,
+          winRate: 3 / 3, avgLevel: 48 / 3, avgFloorsCleared: 12 / 3,
+          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
         },
         Hollow: {
-          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
-          winRate: 1 / 3, avgLevel: 28 / 3, avgFloorsCleared: 6 / 3,
-          deathByAct: { 1: 1, 2: 0, 3: 1, 4: 0, 5: 0 },
+          runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,
+          winRate: 2 / 3, avgLevel: 37 / 3, avgFloorsCleared: 9 / 3,
+          deathByAct: { 1: 0, 2: 1, 3: 0, 4: 0, 5: 0 },
         },
       },
     });

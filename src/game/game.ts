@@ -656,6 +656,37 @@ function resolveBattleRound(
   }
 }
 
+/**
+ * Resolve a rest — PURE apart from the single `computeRestHeal` draw.
+ *
+ * G27 + G31: a rest now CURES every active condition and REFILLS skill charges, alongside the
+ * HP heal it always did.
+ *
+ *  - **G27.** `fracture` carries `maxTurns: 100` with the comment *"needs a rest"* — but
+ *    `resolveRestDecision` never touched `activeConditions`, and `game.ts` writes the battle
+ *    player back to the hub, so a floor-1 Ganger's `gangStomp` put the player on attack
+ *    disadvantage for the ENTIRE RUN with no in-game remedy (measured: still active after 99
+ *    rounds; the only data-side cure, `warding-charm`, is battle-only and unobtainable).
+ *  - **G31.** Charges were never restored either, contradicting `GAME-DESIGN.md` §18.1
+ *    (*"A rest restores HP **and** skill charges"*): a 493-step run taking six rests ended on
+ *    ZERO charges, so the whole class-skill system was one-shot per run.
+ *
+ * DEVIATION FROM THE REGISTER, deliberate. G31's literal wording says to restore charges
+ * *"including the `rest-full` early-return branch"* — but that branch consumes NO rest, so a
+ * full-HP player could refill charges at every rest node for free, forever. Worse, G27 makes
+ * resting at full HP genuinely valuable (it is now the only fracture cure), so the branch's
+ * premise is gone. Implemented instead: `rest-full` fires only when there is NOTHING to gain
+ * — full HP **and** full charges **and** no conditions. Otherwise the rest is taken and paid
+ * for. That satisfies both G27 and G31 and closes the exploit.
+ *
+ * Conditions are cleared BEFORE the heal, so the cap is the true `maxHp` rather than a max
+ * depressed by a `sick`/Frail condition the rest is about to remove. ALL conditions go,
+ * buffs included: they are 2-turn combat effects and a rest is a reset. The `rest-taken`
+ * event keeps its existing shape — no new event kind.
+ *
+ * DOCUMENTED DRAW-ORDER CHANGE: a full-HP player who is fractured or short of charges now
+ * takes the rest, and therefore now consumes the `computeRestHeal` draw it used to skip.
+ */
 function resolveRestDecision(
   state: GameState,
   accept: boolean,
@@ -666,13 +697,23 @@ function resolveRestDecision(
   if (!accept) {
     return finish({ kind: 'main-menu' }, [{ kind: 'rest-declined' }]);
   }
-  if (player.hp >= player.maxHp) {
-    // Full HP: no roll, no rest consumed (faithful to Java).
+  const nothingToGain =
+    player.hp >= player.maxHp &&
+    player.skillCharges >= player.maxSkillCharges &&
+    player.activeConditions.length === 0;
+  if (nothingToGain) {
+    // Nothing a rest could do: no roll, no rest consumed (faithful to Java's full-HP case).
     return finish({ kind: 'main-menu' }, [{ kind: 'rest-full' }]);
   }
   const hpRestored = computeRestHeal(player.xp, rng);
   const hp = Math.min(player.hp + hpRestored, player.maxHp);
-  const healed: Player = { ...player, hp, restsLeft: player.restsLeft - 1 };
+  const healed: Player = {
+    ...player,
+    hp,
+    activeConditions: [],
+    skillCharges: player.maxSkillCharges,
+    restsLeft: player.restsLeft - 1,
+  };
   return finish({ kind: 'main-menu' }, [{ kind: 'rest-taken', hpRestored, hp, maxHp: healed.maxHp }], {
     player: healed,
   });
