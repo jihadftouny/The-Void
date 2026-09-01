@@ -7,6 +7,8 @@ import {
   computeRestHeal,
 } from './encounter.ts';
 import { createPlayer } from './player.ts';
+import { resolveInstanceDef } from './equipment.ts';
+import { getAllUniques } from './item.ts';
 import { type Stats } from './character.ts';
 import { mulberry32, type Rng } from './rng.ts';
 
@@ -52,11 +54,28 @@ describe('buildChestLoot', () => {
   it('yields the guaranteed chest items and is deterministic for a fixed seed', () => {
     // chestItemCount is 1 (dropTables.json), so a chest always yields exactly one item;
     // determinism is proved by two independent rolls from the same seed matching.
-    const a = buildChestLoot(mulberry32(31));
-    const b = buildChestLoot(mulberry32(31));
+    //
+    // CHANGED: the signature gained `act` (G14). A chest can now also hold an AUTHORED
+    // catalog item, whose instance is a bare `{ defId }` with no `rolled` overlay — so the
+    // old `expect(a[0]!.rolled).toBeDefined()` no longer describes every legal chest. It is
+    // replaced by the invariant that actually matters and holds for both branches: whatever
+    // the chest yields, it resolves to a real item. Seed 31 / act 1 is not re-picked to keep
+    // the old assertion true; the assertion is the thing that was too narrow.
+    const a = buildChestLoot(mulberry32(31), 1);
+    const b = buildChestLoot(mulberry32(31), 1);
     expect(a).toHaveLength(1);
     expect(a).toEqual(b);
-    expect(a[0]!.rolled).toBeDefined();
+    expect(resolveInstanceDef(a[0]!)).not.toBeNull();
+  });
+
+  it('threads the act through, so a floor-5 unique cannot fall out of a floor-1 cache', () => {
+    // Every authored unique carries `floor` >= 2, so act 1 can yield none of them at all.
+    const uniqueIds = new Set(getAllUniques().map((u) => u.id));
+    for (let seed = 1; seed <= 200; seed += 1) {
+      for (const item of buildChestLoot(mulberry32(seed), 1)) {
+        expect(uniqueIds.has(item.defId)).toBe(false);
+      }
+    }
   });
 });
 
