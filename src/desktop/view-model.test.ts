@@ -13,8 +13,9 @@ import {
   draftCards,
   chestReveal,
 } from './view-model.ts';
-import { createGame } from '../game/game.ts';
+import { createGame, step } from '../game/game.ts';
 import type { GameState } from '../game/game.ts';
+import type { GameEvent } from '../game/gameEvent.ts';
 import { createPlayer } from '../game/player.ts';
 import type { Player } from '../game/player.ts';
 import { buildRandomBattle } from '../game/encounter.ts';
@@ -333,6 +334,110 @@ describe('draftCards', () => {
       { index: 1, label: '+1 DEX' },
       { index: 2, label: 'Learn Intimidate' },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G33 — the charge discount is real through the UI, and the view AGREES with the engine.
+//
+// `overclock-chip` (relics.json) is a ring carrying `skillChargeDiscount: 1`. The Enforcer
+// core pool is heavyStrike (base cost 2) and brace (base cost 1), so with the chip on and
+// ONE charge banked, heavyStrike costs 1 and IS castable. Every number below is read off
+// relics.json / skill.ts, not off the implementation.
+// ---------------------------------------------------------------------------
+
+/** The snapshot with a charge-discount ring on and a single charge banked. */
+const discounted: Player = {
+  ...snapshot,
+  skillCharges: 1,
+  inventory: {
+    slots: { ...snapshot.inventory.slots, ring: { defId: 'overclock-chip' } },
+    backpack: [],
+  },
+};
+/** The same player, same charges, NO ring — the non-vacuity control. */
+const undiscounted: Player = { ...snapshot, skillCharges: 1 };
+
+/** Dispatch one cast through the REAL engine `step` from a started battle. */
+function castThroughStep(player: Player, skillId: 'heavyStrike'): GameEvent[] {
+  const { rng } = createRng(1234);
+  const battle = { ...buildRandomBattle(player, 1, rng), player };
+  const state: GameState = {
+    ...hub(player),
+    phase: { kind: 'battle', battle, started: true, final: false },
+  };
+  return step(state, { kind: 'battle-action', action: { kind: 'cast', skillId } }).events;
+}
+
+describe('castOptions — the equipped charge discount (G33)', () => {
+  it('reports the DISCOUNTED cost, and marks the skill affordable at that cost', () => {
+    const heavy = castOptions(discounted).find((c) => c.skillId === 'heavyStrike');
+    expect(heavy).toEqual({
+      skillId: 'heavyStrike',
+      name: 'Heavy Strike',
+      chargeCost: 1, // base 2, minus the chip's 1
+      affordable: true, // 1 banked charge pays a 1-charge cost
+    });
+    // The floor at 0: brace's base cost is 1, so the same chip takes it to free.
+    expect(castOptions(discounted).find((c) => c.skillId === 'brace')?.chargeCost).toBe(0);
+  });
+
+  it('and the ENGINE agrees — the same cast really resolves', () => {
+    // This is the actual defect: the picker said "unaffordable" about a cast the engine
+    // was happy to run, so through the real UI the relic did nothing.
+    const kinds = castThroughStep(discounted, 'heavyStrike').map((e) => e.kind);
+    expect(kinds).not.toContain('cast-unavailable');
+    expect(kinds).toContain('skill-cast');
+  });
+
+  it('NON-VACUITY: without the ring the same cast at the same charge is refused', () => {
+    // If this were also castable, the assertion above would prove nothing about the chip.
+    expect(castOptions(undiscounted).find((c) => c.skillId === 'heavyStrike')).toEqual({
+      skillId: 'heavyStrike',
+      name: 'Heavy Strike',
+      chargeCost: 2,
+      affordable: false,
+    });
+    const kinds = castThroughStep(undiscounted, 'heavyStrike').map((e) => e.kind);
+    expect(kinds).toContain('cast-unavailable');
+    expect(kinds).not.toContain('skill-cast');
+  });
+
+  it('the SHEET and the PICKER cannot disagree — both read the one engine helper', () => {
+    const sheetCosts = new Map(characterSheet(discounted).skills.map((s) => [s.skillId, s.chargeCost]));
+    for (const opt of castOptions(discounted)) {
+      expect(sheetCosts.get(opt.skillId)).toBe(opt.chargeCost);
+    }
+    // Non-vacuous: the discounted costs really differ from the undiscounted ones.
+    const plainCosts = new Map(castOptions(undiscounted).map((s) => [s.skillId, s.chargeCost]));
+    expect([...sheetCosts.values()]).not.toEqual([...plainCosts.values()]);
+  });
+});
+
+describe('characterSheet — the player name, and an unknown skill (G28)', () => {
+  it('carries the name through verbatim, as a LABEL', () => {
+    // Nobody had ever asserted that the sheet renders the name at all. The probe is
+    // deliberately odd-looking so a "close enough" match cannot pass.
+    const named: Player = { ...snapshot, name: 'Zzyzx-Qwph' };
+    expect(characterSheet(named).name).toBe('Zzyzx-Qwph');
+  });
+
+  it('does not mangle, escape, or strip a name that looks like markup', () => {
+    // The view-model half of G28(b): the value must arrive at the renderer EXACTLY as the
+    // player typed it, so the renderer can set it as textContent. (That the renderer really
+    // does set it as text rather than interpolate it is guarded separately, on the source.)
+    const markup = '<b>&"</b>';
+    expect(characterSheet({ ...snapshot, name: markup }).name).toBe(markup);
+  });
+
+  it('survives an id in skillPool that this build does not know (G28(e))', () => {
+    // `resolveSkill` is typed to return a SkillDef but is `SKILLS[id]` underneath, so an
+    // unknown id handed back `undefined` and reading `.id` off it threw — losing the whole
+    // sheet instead of one row.
+    const broken: Player = { ...snapshot, skillPool: ['heavyStrike', 'no-such-skill', 'brace'] };
+    expect(() => characterSheet(broken)).not.toThrow();
+    const rows = characterSheet(broken).skills.map((s) => s.skillId);
+    expect(rows).toEqual(['heavyStrike', 'brace']); // the good rows survive; the bad one is dropped
   });
 });
 

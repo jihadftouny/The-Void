@@ -25,6 +25,7 @@ import { EQUIP_SLOTS, getCatalogItemById } from '../game/item.ts';
 import { resolveSkill } from '../game/skill.ts';
 import { spareAvailable } from '../game/battle.ts';
 import { resolveInstanceDef, equip, unequip } from '../game/equipment.ts';
+import { effectiveChargeCost } from '../game/equipEffects.ts';
 import { playerArmorClass } from '../game/defense.ts';
 import { describeCost, describeReward } from '../game/deal.ts';
 import { describeDraftOption } from '../game/draft.ts';
@@ -61,17 +62,24 @@ export interface CastOption {
  * player banks at least `chargeCost` charges. The engine re-checks affordability on
  * dispatch, so a stale display is a safe no-op. Unknown ids (not in the skill table)
  * are skipped.
+ *
+ * G33: `chargeCost` is the EFFECTIVE cost — the engine's own `effectiveChargeCost`, which
+ * is also what `battle.ts`'s cast guard consults. It used to report `skill.chargeCost`
+ * raw, so an Overclock Chip / Hollow Heart made no difference to the picker: a 2-cost
+ * skill rendered disabled at 1 charge even though the engine would have cast it. The
+ * relic was real in the rules and invisible through the only UI that ships.
  */
 export function castOptions(player: Player): CastOption[] {
   const out: CastOption[] = [];
   for (const id of player.skillPool) {
     const skill = resolveSkill(player, id as SkillId);
     if (!skill) continue;
+    const chargeCost = effectiveChargeCost(player.inventory, skill.chargeCost);
     out.push({
       skillId: skill.id,
       name: skill.name,
-      chargeCost: skill.chargeCost,
-      affordable: player.skillCharges >= skill.chargeCost,
+      chargeCost,
+      affordable: player.skillCharges >= chargeCost,
     });
   }
   return out;
@@ -312,10 +320,31 @@ export interface CharacterSheet {
 /**
  * Project a player to a full character sheet — PURE. `armorClass` is computed live via the
  * engine's `playerArmorClass` (the gear-derived value, not the stored unarmored score).
- * Skills resolve through `resolveSkill` for name + effective cost. Emits NO karma field.
+ * `name` is carried through verbatim as a plain string, for the view to set as TEXT.
+ * Emits NO karma field.
+ *
+ * Skills resolve through `resolveSkill` for the name, and through `effectiveChargeCost` for
+ * the cost — the SAME helper `castOptions` and `battle.ts` use, so the sheet and the picker
+ * cannot disagree about what a skill costs (G33).
+ *
+ * G28(e): an id in `skillPool` that no longer resolves is SKIPPED, not dereferenced.
+ * `resolveSkill` is typed to return a `SkillDef` but is `SKILLS[skillId]` underneath, so an
+ * id this build does not know (a save from an older content set, a mistyped draft grant)
+ * returned `undefined` and reading `.id` off it threw — taking the whole character sheet
+ * down rather than losing one row.
  */
 export function characterSheet(player: Player): CharacterSheet {
   const classDef = CLASSES[player.classId];
+  const skills: SkillRow[] = [];
+  for (const id of player.skillPool) {
+    const skill = resolveSkill(player, id as SkillId);
+    if (!skill) continue;
+    skills.push({
+      skillId: skill.id,
+      name: skill.name,
+      chargeCost: effectiveChargeCost(player.inventory, skill.chargeCost),
+    });
+  }
   const sheet: CharacterSheet = {
     name: player.name,
     classId: player.classId,
@@ -327,10 +356,7 @@ export function characterSheet(player: Player): CharacterSheet {
     skillCharges: player.skillCharges,
     maxSkillCharges: player.maxSkillCharges,
     stats: STAT_KEYS.map((key) => ({ key, score: player.stats[key], mod: player.mods[key] })),
-    skills: player.skillPool.map((id) => {
-      const skill = resolveSkill(player, id as SkillId);
-      return { skillId: skill.id, name: skill.name, chargeCost: skill.chargeCost };
-    }),
+    skills,
     equipped: EQUIP_SLOTS.map((slot) => {
       const item = player.inventory.slots[slot];
       return { slot, name: item ? displayItem(item).name : null };
