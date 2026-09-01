@@ -66,7 +66,35 @@ function meanHitsToKill(classId: PlayerClass, seeds: number[], proficiency?: num
 }
 
 describe('M15 anchor — a fresh Act-1 enemy takes ~3-4 Fight actions to kill', () => {
-  const seeds = Array.from({ length: 80 }, (_, i) => i + 1);
+  // ⚠ SAMPLE RAISED 80 -> 2000 IN FIX ROUND 1, and the reason is the lower bound below.
+  //
+  // The band had to widen downward for G32 (see the derivation that follows), and a wider band
+  // is a less sensitive one: at 80 seeds a lower bound of 2.5 lets a 10% and even a 20% cut in
+  // `ENEMY_BASE_HP` slip through, where the old [3, 4] caught 10%. The obvious repair — a
+  // tighter floor of 2.75 — does not work at 80 seeds, because THE FLOOR WOULD SIT INSIDE THE
+  // SAMPLING NOISE. Measured over 250 disjoint 80-seed blocks for the binding class (Scavver,
+  // 1d8): mean 2.8335, sd 0.1136, min 2.5250, and 54 OF 250 BLOCKS (21.6%) BELOW 2.75. The
+  // shipped block (seeds 1..80) happens to measure 2.9000, so such a test would pass today and
+  // then fail later for no reason but which seeds it was handed.
+  //
+  // Raising the sample fixes the cause rather than the symptom, since the spread shrinks as
+  // 1/sqrt(n). Measured over 120 disjoint blocks at each size:
+  //     n=80    mean 2.8335  sd 0.1136  min 2.5250  -> 54/250 blocks below 2.75
+  //     n=400   mean 2.8384  sd 0.0519  min 2.7225  ->  4/120 blocks below 2.75
+  //     n=800   mean 2.8298  sd 0.0378  min 2.7400  ->  1/120 blocks below 2.75
+  //     n=2000  mean 2.8313  sd 0.0243  min 2.7720  ->  0/120 blocks below 2.75
+  // At n=2000 the shipped block measures 2.8240, which is 3.0 sd clear of a 2.75 floor, and no
+  // observed block of that size came near it. The cost is ~0.4 s of suite time.
+  //
+  // SENSITIVITY REGAINED — VERIFIED BY MUTATION at this sample and this bound, by editing
+  // `ENEMY_BASE_HP` and re-running (then restoring it):
+  //     10 (shipped)  passes, with the margins above
+  //      9  (-10%)    Scavver 2.6240  -> RED   (this is the case that escaped [2.5] at n=80)
+  //      8  (-20%)    Scavver 2.3505  -> RED
+  //     14  (+40%)    Enforcer/Penitent 4.5175 > 4, Neuromancer 5.9835 > 5 -> RED
+  // So the floor is BOTH tighter than 2.5 and further outside the noise than 2.75-at-80-seeds
+  // would have been — the two properties the widening had traded against each other.
+  const seeds = Array.from({ length: 2000 }, (_, i) => i + 1);
 
   // ⚠ BAND RE-DERIVED BY HAND FOR G32 (#0a, `proficiency` wired). Nothing below is read back
   // from a run; every step is arithmetic over the dice rules, and the conclusion is a FINDING,
@@ -93,17 +121,24 @@ describe('M15 anchor — a fresh Act-1 enemy takes ~3-4 Fight actions to kill', 
   // and the 1d8 Legendary rapier (Scavver) sits just BELOW the author's lower bound of 3. That
   // is not a test to re-centre: it means ENEMY HP WAS TUNED AGAINST THE -2 TO-HIT BASELINE that
   // G32 removed, so `PLAN.md` #2's balance re-run must either raise act-1 enemy HP or accept a
-  // faster act-1 kill. The band below is widened DOWNWARD to the derived 1d8 figure (with a
-  // little margin), NOT to whatever today's measurement happens to be — and it still fails the
+  // faster act-1 kill. The band below is widened DOWNWARD to just under the derived 1d8 figure
+  // of ~3.0, NOT to whatever today's measurement happens to be — and it still fails the
   // pre-M15 30-HP world it was written for, which needed ~9-13 actions.
+  //
+  // A NOTE ON THE DERIVATION'S ACCURACY, now that a large sample exists to check it against.
+  // Step 7's overshoot term `(sides-1)/2` is the mean overshoot of a single uniform die, which
+  // slightly OVERSTATES the overshoot of a renewal process stopping at a small threshold. So
+  // the derived figures (3.53 / 2.98 / 4.57) sit a little above the long-run measurements
+  // (3.398 / 2.831 / 4.466). The derivation is therefore a mild upper estimate, and the 2.75
+  // floor sits below BOTH it and the measurement — which is the direction that matters.
 
   const MELEE_FINESSE: PlayerClass[] = ['Enforcer', 'Scavver', 'Penitent'];
   const RANGED: PlayerClass[] = ['Neuromancer', 'Hollow'];
 
   for (const c of MELEE_FINESSE) {
-    it(`${c} (melee/finesse) kills a fresh Act-1 enemy in the derived [2.5, 4] Fight actions`, () => {
+    it(`${c} (melee/finesse) kills a fresh Act-1 enemy in the derived [2.75, 4] Fight actions`, () => {
       const mean = meanHitsToKill(c, seeds);
-      expect(mean).toBeGreaterThanOrEqual(2.5);
+      expect(mean).toBeGreaterThanOrEqual(2.75);
       expect(mean).toBeLessThanOrEqual(4);
     });
   }
@@ -116,10 +151,10 @@ describe('M15 anchor — a fresh Act-1 enemy takes ~3-4 Fight actions to kill', 
     });
   }
 
-  it('no class is outside the overall derived band [2.5, 5] (catches a gross HP/weapon mis-tune)', () => {
+  it('no class is outside the overall derived band [2.75, 5] (catches a gross HP/weapon mis-tune)', () => {
     for (const c of ALL_CLASSES) {
       const mean = meanHitsToKill(c, seeds);
-      expect(mean).toBeGreaterThanOrEqual(2.5);
+      expect(mean).toBeGreaterThanOrEqual(2.75);
       expect(mean).toBeLessThanOrEqual(5);
     }
   });
