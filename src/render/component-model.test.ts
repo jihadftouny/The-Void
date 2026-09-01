@@ -395,7 +395,7 @@ interface FakeElement {
   disabled: boolean;
   classes: string[];
   classList: { add(name: string): void };
-  listeners: { type: string; handler: () => void }[];
+  listeners: { type: string; handler: () => void; opts?: unknown }[];
   children: FakeElement[];
   addEventListener(type: string, handler: () => void, opts?: unknown): void;
   appendChild(child: FakeElement): FakeElement;
@@ -412,7 +412,12 @@ function fakeElement(tagName: string): FakeElement {
     listeners: [],
     children: [],
     classList: { add: (name: string) => void el.classes.push(name) },
-    addEventListener: (type, handler) => void el.listeners.push({ type, handler }),
+    // Z1: the THIRD argument is recorded, not swallowed. `actionButton`'s doc comment
+    // promises `{ once: true }` — "so a double-click cannot dispatch the same action twice
+    // before the re-render clears it" — and a stand-in that drops the options object makes
+    // that promise untestable. Modelling less than the real API is how a stand-in quietly
+    // stops being a model.
+    addEventListener: (type, handler, opts) => void el.listeners.push({ type, handler, opts }),
     appendChild: (child) => {
       el.children.push(child);
       return child;
@@ -453,6 +458,12 @@ describe('actionButton — a disabled button is INERT, not merely grey', () => {
     // The handler is the one we passed, not some other function.
     el.listeners[0]!.handler();
     expect(clicks).toBe(1);
+    // Z1: and it is registered ONCE-ONLY, which is the documented defence against a
+    // double-click dispatching the same action twice before the re-render clears it.
+    expect(
+      el.listeners[0]!.opts,
+      'the click handler is no longer { once: true } — a double-click dispatches twice',
+    ).toEqual({ once: true });
   });
 
   it('a disabled button carries NO handler at all — a stray press cannot dispatch', () => {

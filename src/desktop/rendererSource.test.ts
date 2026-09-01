@@ -17,6 +17,35 @@
 //
 // A scan is also worthless if its anchor has drifted, so every guard first asserts that the
 // thing it is looking at EXISTS. A regex that matches nothing passes trivially.
+//
+// ---------------------------------------------------------------------------------------
+// COVERAGE LEDGER for `src/desktop/game.ts` — ENUMERATED FROM THE DIFF, not by reading it.
+//
+// Three rounds of sweeping this file by eye missed something each time, so the list below is
+// mechanical: every `if` / `?:` / `&&` / `||` / early `return` the unit ADDED, taken from
+// `git diff main...HEAD -- src/desktop/game.ts` with comment lines excluded, and the guard
+// that pins each one's POLARITY.
+//
+//   1. `if (unlockLoad.lost !== undefined)`       -> 'shows it when there IS one (B1)'
+//   2. `return { runSummary, runSeed };`          -> 'neither does runMeta()'
+//   3. `if (!p) return;`             (renderSheet) -> DECLINED, see below
+//   4. `if (className) el.className = className;`  -> 'applies the class it was given'
+//   5. `if (startsNewBattle(events))`              -> 'resets on the battle OPENING (B2)'
+//   6. `if (isRunOver(r.state.phase))`             -> 'branches on isRunOver POSITIVELY'
+//   7. `if (saved.meta)`                           -> 'restores the meta ... where it EXISTS'
+//
+// Plus one added STATEMENT that carries no branch, and carried no assertion either:
+//   8. `logEl.scrollTop = logEl.scrollHeight;`     -> 'and scrolls to the newest line (B3)'
+//
+// DECLINED — row 3, and `narrate()`'s pre-existing `if (!prompt) return`. The reason is NOT
+// that inverting them is "loud". It is that both sit on the UNCONDITIONAL path: every run
+// reaches them on the first frame, so an inversion blanks the character sheet or the
+// narration pane for every player, immediately, on every run. Loudness alone would never
+// justify leaving a branch unpinned — loudness ON A PATH THAT ALWAYS EXECUTES does. That
+// second clause is exactly what does NOT hold for rows 1 and 5, which fire only on a corrupt
+// unlock store and only on a battle's first step: rare paths, where an inversion is silent
+// for most players for most of a run. That is why those two are pinned and these are not.
+// ---------------------------------------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -157,6 +186,38 @@ describe('dispatch() renders the combat log', () => {
     // The battle boundary: UI-DESIGN.md §3 wants the log to persist for a whole fight and
     // then start over, not grow forever.
     expect(body).toMatch(/startsNewBattle\s*\(/);
+  });
+
+  it('resets on the battle OPENING, not on every other step (B2)', () => {
+    // The assertion above states the contract — "persist for a whole fight and then start
+    // over, not grow forever" — and then fails to enforce it: it matches the call wherever
+    // it sits and whatever its polarity. Inverting `if (startsNewBattle(events))` wipes the
+    // log on every step EXCEPT a battle's first, so it never survives past a single beat and
+    // each new fight opens on top of the previous one's tail. Exactly the opposite of §3, and
+    // green through 1315 tests.
+    const body = bodyOf('function renderLog(');
+    expect(body, 'the log reset no longer branches on the battle opening').toMatch(
+      /if\s*\(\s*startsNewBattle\s*\([^)]*\)\s*\)/,
+    );
+    expect(
+      body,
+      'the log is cleared on every step EXCEPT a new battle — it never persists and each ' +
+        'fight opens on the last one\'s tail',
+    ).not.toMatch(/!\s*startsNewBattle\s*\(/);
+  });
+
+  it('and scrolls to the newest line (B3)', () => {
+    // A brand-new statement with no assertion of any kind: deleting
+    // `logEl.scrollTop = logEl.scrollHeight` was green. AC-5's "it scrolls" clause rested
+    // entirely on a human noticing, which is the wrong place for something this cheap to pin.
+    // Without it the log silently stops following the fight the moment it overflows its cap —
+    // the player sees the FIRST few beats of a battle and never the one that just happened.
+    const body = bodyOf('function renderLog(');
+    expect(
+      body,
+      'the combat log no longer scrolls to the newest line — after it overflows 30vh the ' +
+        'player sees the start of the fight and never the current beat',
+    ).toMatch(/scrollTop\s*=\s*\w+\.scrollHeight/);
   });
 });
 
@@ -347,6 +408,23 @@ describe('the boot path shows the unlock-recovery notice', () => {
     // element is the obvious place for a future "you unlocked X" line carrying a name.
     expect(SOURCE).not.toMatch(/noticeEl\s*\.\s*innerHTML\s*=/);
   });
+
+  it('shows it when there IS one — the polarity, not just the presence (B1)', () => {
+    // The assertion above matches the write wherever it sits, so inverting
+    // `if (unlockLoad.lost !== undefined)` to `=== undefined` left it green — and that
+    // inversion restores G3's headline in full: a store recovered from backup, or lost
+    // entirely, reports NOTHING. There is not even a compensating symptom, because assigning
+    // `undefined` to `textContent` yields the empty string, so the notice is simply blank.
+    expect(
+      SOURCE,
+      'the recovery notice no longer branches on the message EXISTING',
+    ).toMatch(/if\s*\(\s*unlockLoad\.lost\s*!==\s*undefined\s*\)/);
+    expect(
+      SOURCE,
+      'the notice fires when there is NOTHING to say and stays silent when there is — ' +
+        'that is G3, "wipes everything, silently", restored',
+    ).not.toMatch(/if\s*\(\s*unlockLoad\.lost\s*===\s*undefined\s*\)/);
+  });
 });
 
 // =========================================================================================
@@ -363,5 +441,44 @@ describe('every saveRun call site passes the LIVE run meta', () => {
         /emptyRunSummary\s*\(/,
       );
     }
+  });
+
+  it('and neither does runMeta(), which is where the value actually comes from', () => {
+    // FOUND BY THE DIFF ENUMERATION, not reported. The guard above scans `saveRun(...)` call
+    // sites — but all five now pass `runMeta()`, so the summary is fabricated one level down
+    // if it is fabricated at all. Making `runMeta` return `emptyRunSummary()` is green
+    // through 1315 tests and restores G19 COMPLETELY: every save carries an empty tally, so
+    // no resumed run ever earns a feat. Scanning the caller and not the callee is precisely
+    // how a guard ends up watching the wrong door.
+    const body = bodyOf('function runMeta(');
+    expect(body, 'runMeta no longer returns the live bookkeeping').toMatch(
+      /return\s*\{\s*runSummary\s*,\s*runSeed\s*\}/,
+    );
+    expect(
+      body,
+      'runMeta fabricates a summary — every save would carry an empty feat tally, which is ' +
+        'G19 in full',
+    ).not.toMatch(/emptyRunSummary\s*\(|createStoryMemory\s*\(/);
+  });
+});
+
+// =========================================================================================
+// The remaining branch this unit added to `renderSheet` — found by the diff enumeration.
+// =========================================================================================
+
+describe('the HUD line helper applies the class it was given', () => {
+  it('branches on the class BEING present, not on it being absent', () => {
+    // `if (className) el.className = className;` inverted assigns the class only when there
+    // is none — so `el.className = undefined` — and the player's name loses `.who` and the
+    // enemy loses `.foe`. Cosmetic rather than a re-opened defect, which is why it is a
+    // regex here and not worth extracting a function for; but it is a branch this unit
+    // added, so it is pinned rather than left off the ledger.
+    const body = bodyOf('function renderSheet(');
+    expect(body, 'the HUD line helper no longer applies a class at all').toMatch(
+      /if\s*\(\s*className\s*\)/,
+    );
+    expect(body, 'the class is applied only when it is absent').not.toMatch(
+      /if\s*\(\s*!\s*className\s*\)/,
+    );
   });
 });
