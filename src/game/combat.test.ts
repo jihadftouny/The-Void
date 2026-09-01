@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ENEMY_CHARGE_RESTORE_PER_TURN,
   combineAdvDis,
   rollD20WithAdvantage,
   weaponModifier,
@@ -13,8 +14,9 @@ import {
 import { getWeaponByName } from './weapon.ts';
 import { UNARMED } from './equipment.ts';
 import { makeCondition } from './condition.ts';
+import { SKILLS } from './skill.ts';
 import { effectiveMods } from './statEffects.ts';
-import { type Rng } from './rng.ts';
+import { mulberry32, type Rng } from './rng.ts';
 import { sumDamageSources, type CombatEvent } from './combatEvent.ts';
 
 function scriptedRng(values: number[]): Rng {
@@ -34,9 +36,19 @@ const RAPIER = getWeaponByName('Jiij Rapier 1')!; // Finesse 1d8
 
 // Player with STR mod 4, DEX mod 1 (derived by hand: STR 18 -> floor((18-10)/2)=4;
 // DEX 12 -> floor((12-10)/2)=1). Melee uses STR(4), Ranged uses DEX(1), Finesse max(4,1)=4.
+//
+// G32 NOTE — `proficiency` is deliberately 0 in this shared fixture. Every case below picks
+// its natural roll and its target AC to sit exactly on a to-hit boundary (e.g. "the SAME nat
+// 10 misses AC 13 without the augment, 10 + 2 = 12 < 13"), which is what makes them prove the
+// WEAPON/AUGMENT rule they are each about. Baking a +2 into the shared fixture would move
+// every one of those boundaries and turn a suite of hand-derived cases into a re-derivation
+// exercise with nothing gained. Proficiency has its OWN dedicated block at the end of this
+// file, using the real value 2 — and `balance.test.ts` exercises it end to end through
+// `createPlayer`, which sets the real 2.
 function player(overrides: Partial<Attacker> = {}): Attacker {
   return {
     name: 'Hero',
+    proficiency: 0,
     stats: { STR: 18, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 },
     mods: { STR: 4, DEX: 1, CON: 1, INT: 0, WIS: 0, CHA: 0 },
     hp: 20,
@@ -426,7 +438,12 @@ describe('resolveEnemyAttack — enemy rolls to hit (M4)', () => {
     );
     expect(onMiss.damage).toBe(0);
     expect(onMiss.target.activeConditions).toEqual([]); // no freeze on a miss
-    expect(onMiss.enemy.skillCharges).toBe(1); // charge unspent
+    // CHANGED by G22(c): no charge is SPENT on a miss (still the point of this case), and an
+    // enemy that cast nothing this turn now REGAINS one, capped at its max of 2. Enemies used
+    // to start on 2 charges with no restore path at all, so a family's themed skill pool only
+    // ever mattered for its first two landed hits and every later hit was the flat
+    // `{kind:'base', amount:1}`. 1 (unspent) + 1 (restored) = 2.
+    expect(onMiss.enemy.skillCharges).toBe(2);
   });
 });
 
@@ -613,5 +630,144 @@ describe('combineAdvDis — the 5e cancellation rule, stated as a table', () => 
     expect(combineAdvDis(5, 0)).toBe(1);
     expect(combineAdvDis(-3, 0)).toBe(-1);
     expect(combineAdvDis(5, -3)).toBe(0);
+  });
+});
+
+// ------- G32 — `proficiency` is finally wired ------------------------------------------------
+
+describe('G32 — proficiency is part of the to-hit total', () => {
+  // `Player.proficiency` has existed since M3, is set to 2 at creation and validated by the
+  // save guard — and was read by NO combat path. Measured by the register: 200 rounds at
+  // proficiency 2 vs 99, same seeds, gave 0/200 different outcomes. So the player rolled at a
+  // flat -2 against the intended model for the entire game, and M15 tuned enemy HP and damage
+  // against that unintended baseline.
+  const finesse = () =>
+    player({
+      stats: { STR: 14, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+      mods: { STR: 2, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 },
+    });
+
+  it('a fresh player (proficiency 2) hits AC 16 on a natural 12 where proficiency 0 misses', () => {
+    // Hand-derived: Finesse takes max(STR 2, DEX 0) = 2. 12 + 2 + 2 = 16 >= AC 16 -> HIT.
+    // At proficiency 0: 12 + 2 + 0 = 14 < 16 -> MISS, and no damage die is rolled at all.
+    const target = enemy({ armorClass: 16 });
+    const hit = resolvePlayerAttack(
+      { ...finesse(), proficiency: 2 }, target, RAPIER, 0, scriptedRng([face(12, 20), face(5, 8)]),
+    );
+    expect(hit.outcome).toBe('hit');
+    expect(hit.damage).toBe(5);
+
+    const miss = resolvePlayerAttack(
+      { ...finesse(), proficiency: 0 }, target, RAPIER, 0, scriptedRng([face(12, 20)]),
+    );
+    expect(miss.outcome).toBe('miss');
+    expect(miss.damage).toBe(0);
+  });
+
+  it('folds into `modifier`, so the log equation `natural + modifier = total` stays true', () => {
+    // Deliberately NOT a separate roll field: `AttackRollDetail` documents that identity and
+    // the combat log prints exactly it, so a separate field would print a wrong sum.
+    const r = resolvePlayerAttack(
+      { ...finesse(), proficiency: 2 }, enemy({ armorClass: 10 }), RAPIER, 0,
+      scriptedRng([face(12, 20), face(5, 8)]),
+    );
+    const e = r.events[r.events.length - 1]!;
+    if (e.kind !== 'attack') throw new Error('expected an attack event');
+    expect(e.roll!.modifier).toBe(4); // weaponModifier 2 + proficiency 2
+    expect(e.roll!.total).toBe(e.roll!.natural + e.roll!.modifier);
+    expect(e.roll!.total).toBe(16);
+  });
+
+  it('proficiency 2 and 99 now differ over 200 seeded rounds (the register measured 0/200)', () => {
+    let differing = 0;
+    for (let seed = 1; seed <= 200; seed++) {
+      const target = enemy({ armorClass: 25 }); // high enough that +97 flips the outcome
+      const low = resolvePlayerAttack(
+        { ...finesse(), proficiency: 2 }, target, RAPIER, 0, mulberry32(seed),
+      );
+      const high = resolvePlayerAttack(
+        { ...finesse(), proficiency: 99 }, target, RAPIER, 0, mulberry32(seed),
+      );
+      if (low.outcome !== high.outcome) differing++;
+    }
+    expect(differing).toBeGreaterThan(0);
+    // Sharper than the AC: at AC 25 a proficiency-99 attacker can only ever fumble, while a
+    // proficiency-2 one needs a natural 20, so the two must disagree on most naturals.
+    expect(differing).toBeGreaterThan(100);
+  });
+});
+
+// ------- G22(b)(c) — the enemy charge economy -------------------------------------------------
+
+describe('G22(b) — an enemy never casts a skill it cannot afford', () => {
+  // The gate was `skillCharges > 0` while `useSkill` subtracts the full `chargeCost`, so an
+  // enemy with 1 charge cast a cost-2 skill and ended the round at -1. Reproduced by the
+  // register for these five.
+  const COST_2 = ['wrathSmash', 'riotSlam', 'overload', 'immovableSlam', 'smiteWicked'] as const;
+
+  it('cannot cast a cost-2 skill on 1 charge, and never ends a round negative', () => {
+    for (const id of COST_2) {
+      expect(SKILLS[id].chargeCost).toBe(2); // the premise, restated from the data
+      const r = resolveEnemyAttack(
+        enemy({ skillPool: [id], skillCharges: 1, maxSkillCharges: 2 }),
+        skillTarget(),
+        13,
+        0,
+        // Exactly ONE draw is scripted: the to-hit. A skill-pick draw would exhaust it, which
+        // is how this proves the unaffordable branch takes NO draw at all.
+        scriptedRng([face(15, 20)]),
+      );
+      expect(r.events.some((e) => e.kind === 'enemy-skill-used'), `${id} must not fire`).toBe(false);
+      expect(r.damage, `${id} falls back to the plain 1`).toBe(1);
+      expect(r.enemy.skillCharges, `${id} must never go negative`).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('CAN cast the same skill once it has the charges', () => {
+    const r = resolveEnemyAttack(
+      enemy({ skillPool: ['wrathSmash'], skillCharges: 2, maxSkillCharges: 2 }),
+      skillTarget(),
+      13,
+      0,
+      scriptedRng([face(15, 20), 0.5]),
+    );
+    expect(r.events.some((e) => e.kind === 'enemy-skill-used')).toBe(true);
+    expect(r.enemy.skillCharges).toBe(0);
+  });
+});
+
+describe('G22(c) — an enemy that did not cast regains a charge', () => {
+  it('lands themed skills all battle instead of only the first two hits', () => {
+    // Pre-fix: enemies start on 2 charges with NO restore path, so a family's themed pool
+    // mattered for exactly two landed hits and every later hit was `{kind:'base', amount:1}`.
+    // Twelve consecutive landed hits with a cost-1 pool: charges go 2 ->1 ->0, then the
+    // no-cast turn restores 1, so a skill lands roughly every OTHER turn thereafter.
+    let e: SkillUser = enemy({ skillPool: ['gangShiv'], skillCharges: 2, maxSkillCharges: 2 });
+    let casts = 0;
+    for (let round = 0; round < 12; round++) {
+      const r = resolveEnemyAttack(e, skillTarget(), 13, 0, scriptedRng([face(15, 20), 0.5]));
+      if (r.events.some((ev) => ev.kind === 'enemy-skill-used')) casts++;
+      e = r.enemy;
+      expect(e.skillCharges).toBeGreaterThanOrEqual(0);
+      expect(e.skillCharges).toBeLessThanOrEqual(e.maxSkillCharges);
+    }
+    // Hand-derived: casts on rounds 1 and 2 (the starting charges), then the alternating
+    // restore/cast cycle gives one cast every two rounds over the remaining ten -> 2 + 5 = 7.
+    expect(casts).toBe(7);
+    // The claim that matters, stated separately so it survives any re-tune of the rate:
+    // strictly more than the two the pre-fix engine could ever manage.
+    expect(casts).toBeGreaterThan(2);
+  });
+
+  it('never restores past the maximum', () => {
+    const r = resolveEnemyAttack(
+      enemy({ skillPool: [], skillCharges: 2, maxSkillCharges: 2 }),
+      skillTarget(),
+      13,
+      0,
+      scriptedRng([face(15, 20)]),
+    );
+    expect(r.enemy.skillCharges).toBe(2);
+    expect(ENEMY_CHARGE_RESTORE_PER_TURN).toBe(1);
   });
 });

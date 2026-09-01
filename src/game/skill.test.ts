@@ -10,10 +10,23 @@ import {
 } from './skill.ts';
 import { type Character } from './character.ts';
 import { makeCondition, type ActiveCondition, type ConditionType } from './condition.ts';
+import { RESIST_PER_WIS_MOD } from './statEffects.ts';
+import { AFFIXES } from './enemyAffix.ts';
 
-// Expected damage values are hand-derived from the Java resistance formula
-//   damage = base - floor(res/100) * base
+/** The shipped `blessed` affix row — its `resistBonus` is the data premise for G17 below. */
+const BLESSED = AFFIXES.find((a) => a.id === 'blessed')!;
+
+// Expected damage values are hand-derived from the resistance formula
+//   damage = max(0, base - round(base * clamp(res, 0, 100) / 100))
 // with Pyro at element index 2 and Cryo at index 1 (elements.json order).
+//
+// ⚠ CHANGED by G17. The formula used to be the faithful Java port
+// `base - floor(res / 100) * base` — and `floor(res / 100)` is ZERO for every resistance
+// below 100, while NOTHING in the game produced 100 (the `blessed` affix gave 2, family
+// themes 2, `RESIST_PER_WIS_MOD` 10). So the entire resistance subsystem was inert: seven
+// elements, five family themes, the `blessed` affix, the `bonusResist` item effect and two
+// conditions, all dead. The case below that asserted "50% resistance is still 2" was
+// ASSERTING THE BUG, in so many words, and is corrected rather than deleted.
 
 function caster(
   overrides: Partial<Character & { activeConditions: ActiveCondition[] }> = {},
@@ -58,10 +71,27 @@ describe('computeSkillDamage — resistance formula', () => {
     expect(computeSkillDamage(SKILLS.pyroBall, { resistances: [0, 0, 0, 0, 0, 0, 0] })).toBe(2);
   });
   it('Pyro Ball at 100% pyro resistance is 0', () => {
-    expect(computeSkillDamage(SKILLS.pyroBall, { resistances: [0, 0, 100, 0, 0, 0, 0] })).toBe(2 - 1 * 2);
+    // 2 - round(2 * 100/100) = 2 - 2 = 0.
+    expect(computeSkillDamage(SKILLS.pyroBall, { resistances: [0, 0, 100, 0, 0, 0, 0] })).toBe(0);
   });
-  it('Pyro Ball at 50% pyro resistance is still 2 (floor(50/100)=0)', () => {
-    expect(computeSkillDamage(SKILLS.pyroBall, { resistances: [0, 0, 50, 0, 0, 0, 0] })).toBe(2);
+  it('Pyro Ball at 50% pyro resistance is 1 — resistance finally MITIGATES', () => {
+    // WAS: "still 2 (floor(50/100)=0)" — the test asserted the defect verbatim.
+    // NOW, hand-derived: 2 - round(2 * 50/100) = 2 - round(1) = 1.
+    expect(computeSkillDamage(SKILLS.pyroBall, { resistances: [0, 0, 50, 0, 0, 0, 0] })).toBe(1);
+  });
+  it('resistance below 100 is no longer silently ignored, and negatives clamp to 0', () => {
+    // The whole point of G17: partial resistance does something. Each value hand-derived.
+    const at = (res: number) =>
+      computeSkillDamage(SKILLS.pyroBall, { resistances: [0, 0, res, 0, 0, 0, 0] });
+    expect(at(0)).toBe(2); // 2 - round(0)   = 2
+    expect(at(24)).toBe(2); // 2 - round(0.48) = 2 - 0 = 2
+    expect(at(25)).toBe(1); // 2 - round(0.5)  = 2 - 1 = 1  (Math.round is half-up)
+    expect(at(50)).toBe(1); // 2 - round(1)    = 1
+    expect(at(99)).toBe(0); // 2 - round(1.98) = 2 - 2 = 0
+    // Vulnerability is NOT a feature yet: a negative resistance is clamped, not amplified.
+    expect(at(-50)).toBe(2);
+    // …and an out-of-range resistance cannot drive damage below 0.
+    expect(at(500)).toBe(0);
   });
   it('Freeze! base 1 at 0 resistance is 1', () => {
     expect(computeSkillDamage(SKILLS.freeze, { resistances: [0, 0, 0, 0, 0, 0, 0] })).toBe(1);
@@ -293,4 +323,56 @@ describe('enemy family skills (this milestone) — data-driven, twist-free', () 
       expect(def.selfConditions).toBeUndefined();
     });
   }
+});
+
+// ------- G17 — the resistance subsystem is live, end to end -----------------------------------
+
+describe('G17 — resistances actually mitigate through the real damage path', () => {
+  it('a Blessed (resistant) enemy takes strictly less than an identical plain one', () => {
+    // The `blessed` affix was mechanically inert: a "Blessed Ganger" was an ordinary Ganger.
+    // Pyro Ball is base 2 Pyro; the affix now grants +25 to every slot, so hand-derived:
+    //   plain:   2 - round(2 * 0/100)  = 2
+    //   blessed: 2 - round(2 * 25/100) = 2 - round(0.5) = 1   (Math.round is half-up)
+    const plain = target({ resistances: [0, 0, 0, 0, 0, 0, 0] });
+    const blessed = target({ resistances: plain.resistances.map((r) => r + BLESSED.resistBonus!) });
+    expect(BLESSED.resistBonus).toBe(25); // the data premise, restated
+
+    const onPlain = useSkill(caster(), plain, SKILLS.pyroBall).damage;
+    const onBlessed = useSkill(caster(), blessed, SKILLS.pyroBall).damage;
+    expect(onPlain).toBe(2);
+    expect(onBlessed).toBe(1);
+    expect(onBlessed).toBeLessThan(onPlain);
+  });
+
+  it('a Lucid (WIS-augmented) target takes strictly less — effectiveResistances has a caller', () => {
+    // The second half of G17: `effectiveResistances` — which layers the Lucid/Clouded WIS
+    // shift and equipped `bonusResist` — had ZERO production callers; both damage paths read
+    // the raw stored array. Hand-derived:
+    //   `wise` gives +2 WIS, so WIS 10 -> 12 and its mod 0 -> +1, a delta of 1.
+    //   RESIST_PER_WIS_MOD = 10, so every resistance shifts by +10.
+    //   Martyr is base 5 Force: 5 - round(5 * 10/100) = 5 - round(0.5) = 5 - 1 = 4.
+    expect(RESIST_PER_WIS_MOD).toBe(10);
+    expect(SKILLS.martyr.baseDamage).toBe(5);
+    const plain = target();
+    const lucid = target({ activeConditions: [makeCondition('wise')] });
+    expect(useSkill(caster(), plain, SKILLS.martyr).damage).toBe(5);
+    expect(useSkill(caster(), lucid, SKILLS.martyr).damage).toBe(4);
+  });
+
+  it('a Clouded (WIS-deprived) target takes strictly MORE than an un-augmented one', () => {
+    // The mirror direction, so the test cannot pass by ignoring the sign: `fool` gives -2 WIS
+    // (mod +1 -> 0 for a WIS-12 target), a -10 resistance shift. Starting from 10 resistance:
+    //   un-augmented: 5 - round(5 * 10/100) = 4
+    //   clouded:      5 - round(5 *  0/100) = 5
+    const res = [10, 10, 10, 10, 10, 10, 10];
+    const wis12 = { STR: 18, DEX: 12, CON: 12, INT: 10, WIS: 12, CHA: 10 };
+    const plain = target({ stats: wis12, resistances: [...res] });
+    const clouded = target({
+      stats: wis12,
+      resistances: [...res],
+      activeConditions: [makeCondition('fool')],
+    });
+    expect(useSkill(caster(), plain, SKILLS.martyr).damage).toBe(4);
+    expect(useSkill(caster(), clouded, SKILLS.martyr).damage).toBe(5);
+  });
 });

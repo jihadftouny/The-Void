@@ -18,7 +18,7 @@
 import type { Character, StatKey } from './character.ts';
 import { getElement } from './element.ts';
 import { applyCondition, type ActiveCondition, type ConditionType } from './condition.ts';
-import { statModDelta } from './statEffects.ts';
+import { effectiveResistances, statModDelta } from './statEffects.ts';
 import { subjectOf, type CombatEvent } from './combatEvent.ts';
 
 /**
@@ -296,10 +296,31 @@ export const SKILLS: Record<SkillId, SkillDef> = {
 };
 
 /**
- * Skill damage after resistance, ported faithfully from Java's
- *   damage = base - (Resistances[elementIndex] / 100) * base
- * as `base - floor(res / 100) * base`. At 0 resistance this is the base; each full
- * 100% of resistance subtracts one whole `base` (so 100% -> 0). Never below 0.
+ * Reduce `base` damage by `res` PERCENT of resistance — PURE, RNG-free, the ONE mitigation
+ * formula in the engine.
+ *
+ * G17: the whole resistance subsystem was inert. The old formula was
+ * `base - floor(res / 100) * base`, a faithful port of Java's integer division — and
+ * `floor(res / 100)` is ZERO for every value below 100, while nothing in the game produces
+ * 100 (`blessed.resistBonus` was 2, family `resistAmount` 2, `RESIST_PER_WIS_MOD` 10).
+ * Verified: damage was 3 for res in {0, 2, 10, 20, 50, 99}. Seven elements, five family
+ * themes, the `blessed` affix, the `bonusResist` item effect and two conditions were all dead.
+ *
+ * Now: `max(0, base - round(base * clamp(res, 0, 100) / 100))`. Worked examples, derived from
+ * the formula rather than measured: base 2 at res 0 -> 2; at res 50 -> 2 - round(1) = 1; at
+ * res 100 -> 0. Negative resistance CLAMPS to 0 — vulnerability is not a feature yet, and
+ * this records that rather than inventing it.
+ */
+export function mitigate(base: number, res: number): number {
+  const pct = Math.min(Math.max(res, 0), 100);
+  return Math.max(0, base - Math.round((base * pct) / 100));
+}
+
+/**
+ * Skill damage after resistance. `target.resistances` is the resistance array the CALLER
+ * chose — production callers pass `effectiveResistances(target)`, which layers the
+ * Lucid/Clouded WIS shift and equipped `bonusResist` on top of the stored array (G17's second
+ * half: that function had zero production callers, so both damage paths read the raw array).
  */
 export function computeSkillDamage(
   skill: SkillDef,
@@ -307,8 +328,7 @@ export function computeSkillDamage(
 ): number {
   const index = getElement(skill.element);
   const res = index === undefined ? 0 : target.resistances[index] ?? 0;
-  const damage = skill.baseDamage - Math.floor(res / 100) * skill.baseDamage;
-  return Math.max(damage, 0);
+  return mitigate(skill.baseDamage, res);
 }
 
 /**
@@ -377,7 +397,14 @@ export function useSkill<
   C extends Character & { activeConditions: ActiveCondition[] },
   T extends Character & { activeConditions: ActiveCondition[]; resistances: number[] },
 >(caster: C, target: T, skill: SkillDef): UseSkillResult<C, T> {
-  const damage = Math.max(computeSkillDamage(skill, target) + statModDelta(caster, 'INT'), 0);
+  // G17: mitigate against the target's EFFECTIVE resistances (stored + the Lucid/Clouded WIS
+  // shift + equipped `bonusResist`), not the raw stored array. This is `effectiveResistances`'
+  // first production caller.
+  const damage = Math.max(
+    computeSkillDamage(skill, { resistances: effectiveResistances(target) }) +
+      statModDelta(caster, 'INT'),
+    0,
+  );
   const newCaster: C = { ...caster, skillCharges: caster.skillCharges - skill.chargeCost };
 
   const conditions = target.activeConditions.map((c) => ({ ...c }));

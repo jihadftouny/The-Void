@@ -239,6 +239,11 @@ function attacker(advantageDisadvantage = 0): Attacker {
     hitDie: { quantity: 1, sides: 10 },
     advantageDisadvantage,
     activeConditions: [],
+    // G32 (#0a): `Attacker` gained a REQUIRED `proficiency`, folded into the to-hit
+    // `modifier`. Pinned to 0 here so every hand-written expected STRING in this file
+    // ("d20 15 +2 = 17 vs AC 13") stays exactly as authored — this file tests the FORMATTER,
+    // not the to-hit maths. Only this one line is touched; `format.ts` itself is #0c's.
+    proficiency: 0,
   };
 }
 const AC13 = {

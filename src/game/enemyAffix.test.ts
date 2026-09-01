@@ -124,10 +124,15 @@ describe('applyAffix — pure, hand-derived stat deltas', () => {
     expect(base.stats.STR).toBe(13);
   });
 
-  it('Blessed adds +2 to every resistance slot and leaves stats/hp alone', () => {
+  // CHANGED by G17 (data rescale, 2 -> 25). `resistBonus` was on a scale where nothing could
+  // ever matter: the old mitigation formula subtracted `floor(res/100) * base`, so a bonus of
+  // 2 was worth exactly nothing, and a "Blessed Ganger" was mechanically an ordinary Ganger.
+  // With the real percentage formula, 25 means 25% mitigation. ⚠ M15/#2 BALANCE PLACEHOLDER —
+  // the magnitude only becomes meaningful now that the formula works, so #2 owns tuning it.
+  it('Blessed adds +25 to every resistance slot and leaves stats/hp alone', () => {
     const base = baseEnemy();
     const elite = applyAffix(base, affixById('blessed'));
-    expect(elite.resistances).toEqual(base.resistances.map((r) => r + 2));
+    expect(elite.resistances).toEqual(base.resistances.map((r) => r + 25));
     for (const key of STAT_KEYS) expect(elite.stats[key]).toBe(base.stats[key]);
     expect(elite.maxHp).toBe(base.maxHp);
     expect(elite.affixId).toBe('blessed');

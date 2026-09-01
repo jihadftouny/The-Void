@@ -21,7 +21,7 @@
   {
     "id": "blessed",
     "namePrefix": "Blessed",
-    "resistBonus": 2,
+    "resistBonus": 25,
     "behaviorNote": "warded against all elements"
   },
   {

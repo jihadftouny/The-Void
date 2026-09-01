@@ -29,7 +29,8 @@ function scriptedRng(values: number[]): Rng {
 }
 const face = (f: number, sides: number): number => (f - 0.5) / sides;
 
-// Enforcer with STR 18 -> STR mod 4 (floor((18-10)/2) = 4), equipped Jaaj Sword 1
+// Enforcer with STR 18 -> STR mod 4 (floor((18-10)/2) = 4) and PROFICIENCY 2 (the real
+// `createPlayer` value), so its to-hit modifier is 4 + 2 = 6 (G32). Equipped Jaaj Sword 1
 // (Melee, 1d6). hp/maxHp forced to 20 for clean arithmetic; rests 1, pots 2 (M7: no gold).
 function makePlayer(overrides: Partial<Player> = {}): Player {
   const base = createPlayer({
@@ -113,7 +114,8 @@ describe('resolveRound Fight — exact HP deltas + exact event list', () => {
   //  2) enemy to-hit d20 face 15 + 1 = 16 >= AC 13 -> hit; skill-pick randInt(_,1)=0 ->
   //     Pyro Ball, res 0 -> damage 2, charge 2->1.
   //  3) player tick draws nothing.
-  //  4) player d20 face 15 + STR mod 4 = 19 >= enemy AC 10 -> hit; damage 1d6 face 4 -> 4.
+  //  4) player d20 face 15 + STR mod 4 + proficiency 2 = 21 >= enemy AC 10 -> hit; damage
+  //     1d6 face 4 -> 4.
   //  Results: player.hp 20-2=18 ; enemy.hp 30-4=26 ; ongoing.
   it('produces the hand-derived HP and event stream and leaves the input unmutated', () => {
     const state = createBattle(makePlayer(), makeEnemy({ hp: 30 }), 1);
@@ -136,7 +138,10 @@ describe('resolveRound Fight — exact HP deltas + exact event list', () => {
       {
         kind: 'attack', subject: 'player', outcome: 'hit', damage: 4,
         // natural 15 + 4 (player STR mod) = 19 >= enemy AC 10.
-        roll: { natural: 15, faces: [15], advDis: 0, modifier: 4, total: 19, targetAc: 10 },
+        // CHANGED by G32: `modifier` is now weaponModifier(4) + proficiency(2) = 6, folded
+        // into the one field the log prints as `natural + modifier = total`. The outcome is
+        // unchanged (19 and 21 both clear AC 10) — only the reported sum moved.
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 6, total: 21, targetAc: 10 },
         damageSources: [{ kind: 'weapon-dice', amount: 4, label: '1d6' }],
       },
     ]);
@@ -386,8 +391,9 @@ describe('resolveRound Fight — conditionless round, exact draw order (M4)', ()
   // A conditionless round draws exactly four (M4 adds the enemy to-hit d20 ahead of the
   // skill-pick). Independent hand-derivation (enemy hp 10, player AC 13, enemy +1 to hit):
   //   enemy tick: 0 draws. enemy to-hit face 15 + 1 = 16 >= AC 13 -> hit; skill-pick 0.5 ->
-  //   Pyro Ball dmg 2, charge 2->1. player tick: 0 draws. player d20 face 12 + STR mod 4 =
-  //   16 >= enemy AC 10 -> hit; dmg 1d6 face 5 -> 5. player 20-2=18, enemy 10-5=5, ongoing.
+  //   Pyro Ball dmg 2, charge 2->1. player tick: 0 draws. player d20 face 12 + STR mod 4 +
+  //   proficiency 2 = 18 >= enemy AC 10 -> hit; dmg 1d6 face 5 -> 5. player 20-2=18,
+  //   enemy 10-5=5, ongoing.
   it('produces the hand-derived state + event list and consumes exactly 4 draws', () => {
     const state = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 10 }), 1);
     const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), 0.5, face(12, 20), face(5, 6)]));
@@ -406,7 +412,7 @@ describe('resolveRound Fight — conditionless round, exact draw order (M4)', ()
       {
         kind: 'attack', subject: 'player', outcome: 'hit', damage: 5,
         // natural 12 + 4 (player STR mod) = 16 >= enemy AC 10.
-        roll: { natural: 12, faces: [12], advDis: 0, modifier: 4, total: 16, targetAc: 10 },
+        roll: { natural: 12, faces: [12], advDis: 0, modifier: 6, total: 18, targetAc: 10 }, // G32: 4 + 2
         damageSources: [{ kind: 'weapon-dice', amount: 5, label: '1d6' }],
       },
     ]);
@@ -417,8 +423,8 @@ describe('resolveRound Fight — enemy misses (M4 defense matters)', () => {
   // The enemy rolls a LOW natural: face 5 + 1 = 6 < AC 13 -> MISS. It deals 0, draws no
   // skill-pick, and applies no condition; the player still fights. Draws [enemyToHit,
   // playerD20, playerDamage] (only three — a skill-pick on a miss would exhaust the rng).
-  //   player d20 face 15 + STR 4 = 19 >= enemy AC 10 -> hit; dmg 1d6 face 4 -> 4.
-  //   player 20-0=20, enemy 30-4=26, ongoing.
+  //   player d20 face 15 + STR 4 + proficiency 2 = 21 >= enemy AC 10 -> hit; dmg 1d6 face
+  //   4 -> 4. player 20-0=20, enemy 30-4=26, ongoing.
   it('a whiffed enemy attack deals 0 and emits attack/miss with no enemy-skill-used', () => {
     const state = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1);
     const r = resolveRound(state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
@@ -436,7 +442,7 @@ describe('resolveRound Fight — enemy misses (M4 defense matters)', () => {
       {
         kind: 'attack', subject: 'player', outcome: 'hit', damage: 4,
         // natural 15 + 4 (player STR mod) = 19 >= enemy AC 10.
-        roll: { natural: 15, faces: [15], advDis: 0, modifier: 4, total: 19, targetAc: 10 },
+        roll: { natural: 15, faces: [15], advDis: 0, modifier: 6, total: 21, targetAc: 10 }, // G32: 4 + 2
         damageSources: [{ kind: 'weapon-dice', amount: 4, label: '1d6' }],
       },
     ]);
@@ -567,7 +573,7 @@ describe('G30 — fracture inflicted on the ENEMY finally bites', () => {
   //              a skill-pick draw, Pyro Ball for 2. Player 20 - 2 = 18.
   //   fractured— advDis -1 -> TWO d20s, take the MIN. faces 15 and 3 -> natural 3; 3 + 1 = 4
   //              < AC 13 -> MISS, so 0 damage and NO skill-pick draw. Player stays at 20.
-  //   both     — player d20 face 15 + STR mod 4 = 19 >= enemy AC 10 -> hit, 1d6 face 4 -> 4.
+  //   both     — player d20 face 15 + STR mod 4 + proficiency 2 = 21 >= AC 10 -> hit, 1d6(4).
   it('rolls two dice at disadvantage where a clean enemy rolls one, and the log says so', () => {
     const clean = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1);
     const rClean = resolveRound(
@@ -751,8 +757,8 @@ describe('G12 — advantage is per-round battle state, never a latch on the play
     // fracture is hand-built past its onset with one turn left, so the next two ticks are its
     // active tick and its expiry — exactly the two rounds this test needs.
     //   round A: active -> advDis -1 -> TWO d20s, take the MIN. faces 15 and 3 -> natural 3;
-    //            3 + STR mod 4 = 7 < enemy AC 10 -> MISS, so no damage draw.
-    //   round B: expired -> advDis 0 -> ONE d20. face 15 + 4 = 19 >= 10 -> hit, 1d6(4).
+    //            3 + STR mod 4 + proficiency 2 = 9 < enemy AC 10 -> MISS, so no damage draw.
+    //   round B: expired -> advDis 0 -> ONE d20. face 15 + 4 + 2 = 21 >= 10 -> hit, 1d6(4).
     // The enemy misses in both (face 5 + STR mod 1 = 6 < player AC 13), which also proves no
     // skill-pick draw is taken.
     const start = createBattle(

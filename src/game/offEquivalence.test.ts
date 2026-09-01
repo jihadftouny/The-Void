@@ -68,6 +68,23 @@
 //         |     | issues a rejected action. OBSERVED: every golden row unchanged, byte for
 //         |     | byte — which is the strongest evidence available that the four-site
 //         |     | extraction is faithful rather than merely green.
+//  step 6 | G32 | `proficiency` (2 at creation) enters the to-hit total: the player is about
+//         |     | ten percentage points more accurate. PLAYER STRONGER.
+//         | G17 | resistances mitigate for real (`max(0, base - round(base*res/100))`) against
+//         |     | EFFECTIVE resistances, and the family/affix magnitudes were rescaled 2 -> 25
+//         |     | so they can matter at all. Cuts BOTH ways, but there are far more resistant
+//         |     | ENEMIES than resistant players, so on balance: enemy stronger.
+//         | G22b| the enemy skill pick draws over the AFFORDABLE subset (a changed draw VALUE
+//         |     | for mixed-cost pools) and draws NOTHING when nothing is affordable.
+//         | G22c| an enemy that cast nothing regains 1 charge, so themed skills land all
+//         |     | battle instead of only on the first two hits. ENEMY MUCH STRONGER.
+//         |     | EXPECTED: the enemy side dominates — G22c alone converts most later enemy
+//         |     | hits from a flat 1 into a themed skill. OBSERVED: wins 1/6 -> 2/6 (the
+//         |     | Enforcer's accuracy gain shows), but avg level 71/6 -> 49/6 and floors
+//         |     | cleared 17/6 -> 11/6, with deaths moving hard back to act 1 (0 -> 3): two
+//         |     | seeds now die inside ~20 steps to an act-1 elite. `balance.test.ts`'s
+//         |     | win-rate (> 0.12) and act-1-share (< 0.55) guards still pass over their
+//         |     | 500-run sample, but this is the swing #2's re-run most needs to look at.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -108,12 +125,12 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 
 /** The frozen run records. MEASURED, not derived — see the file header. */
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 401, cause: 'unmade the Hollow (damnation)', rngState: 2582792872 },
-  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 14, floorsCleared: 3, steps: 389, cause: 'Sif', rngState: 3951617707 },
-  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 7, floorsCleared: 2, steps: 265, cause: 'Drifting Ash', rngState: 3812828217 },
-  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 10, floorsCleared: 3, steps: 326, cause: 'Golden Chorus', rngState: 3974346606 },
-  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 15, floorsCleared: 3, steps: 708, cause: 'The Counselor', rngState: 3085831443 },
-  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 277, cause: 'Lust', rngState: 1669132719 },
+  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 420, cause: 'unmade the Hollow (damnation)', rngState: 984262947 },
+  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 461, cause: 'unmade the Hollow (damnation)', rngState: 1194569936 },
+  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 21, cause: 'Armored Psycho', rngState: 560318176 },
+  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 380, cause: 'The Knight', rngState: 2887346257 },
+  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 92, cause: 'Undercity Kingpin', rngState: 2809167167 },
+  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 17, cause: 'Armored Psycho', rngState: 1320036240 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -139,24 +156,24 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(report).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 1,
+      wins: 2,
       grace: 0,
-      damnation: 1,
-      deaths: 5,
-      winRate: 1 / 6,
-      avgLevel: 71 / 6,
-      avgFloorsCleared: 17 / 6,
-      deathByAct: { 1: 0, 2: 0, 3: 2, 4: 3, 5: 0 },
+      damnation: 2,
+      deaths: 4,
+      winRate: 2 / 6,
+      avgLevel: 49 / 6,
+      avgFloorsCleared: 11 / 6,
+      deathByAct: { 1: 3, 2: 0, 3: 0, 4: 1, 5: 0 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
-          winRate: 1 / 3, avgLevel: 37 / 3, avgFloorsCleared: 9 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 1, 5: 0 },
+          runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,
+          winRate: 2 / 3, avgLevel: 33 / 3, avgFloorsCleared: 8 / 3,
+          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0 },
         },
         Hollow: {
           runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 34 / 3, avgFloorsCleared: 8 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 2, 5: 0 },
+          winRate: 0 / 3, avgLevel: 16 / 3, avgFloorsCleared: 3 / 3,
+          deathByAct: { 1: 2, 2: 0, 3: 0, 4: 1, 5: 0 },
         },
       },
     });
