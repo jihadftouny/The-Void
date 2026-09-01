@@ -13,8 +13,11 @@ import { computeStatMods, computeStatMod, type Stats } from './character.ts';
 import { playerArmorClass } from './defense.ts';
 import { type Enemy } from './enemy.ts';
 import { type Rng } from './rng.ts';
-import { type ItemInstance } from './item.ts';
+import { getCatalogItemById, type EffectAction, type ItemInstance } from './item.ts';
 import { applyEffectAction } from './relicEffects.ts';
+import { AFFIXES, applyAffix } from './enemyAffix.ts';
+import { makeCondition } from './condition.ts';
+import { RESIST_PER_WIS_MOD } from './statEffects.ts';
 
 /** The rng float that makes rollDie(rng, sides) land on `face`. */
 function faceOf(face: number, sides: number): number {
@@ -555,5 +558,119 @@ describe('post-hoc damage modifiers are folded back into the event', () => {
     expect(r.state.player.shield).toBe(0);
     expect(10 - r.state.player.hp).toBe(attack.damage - absorbed.amount);
     expect(r.state.player.hp).toBe(9);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G17 — the ELEMENTAL half of `applyEffectAction`'s `dealDamage`.
+//
+// This branch is the second of G17's two production damage paths (the first is `useSkill`), and
+// it is the one the player meets through THROWN CONSUMABLES. Before G17 it duplicated the old
+// `amt - floor(res/100) * amt` formula inline, which is zero mitigation for every resistance
+// below 100 — and nothing in the game produces 100. It now calls the shared `mitigate` against
+// `effectiveResistances`.
+//
+// This file's single enemy fixture carries `resistances: [0,0,0,0,0,0,0]`, and at resistance 0
+// the old and new formulas are ARITHMETICALLY IDENTICAL — so nothing here could tell them apart,
+// and both the whole-line revert and the `effectiveResistances` -> `e.resistances` swap stayed
+// green across the entire suite. Every case below therefore uses a NON-ZERO resistance, and
+// every expected number is hand-derived from `max(0, base - round(base * res / 100))` against
+// the SHIPPED consumable data, never read back from the implementation.
+// ---------------------------------------------------------------------------
+
+/** The shipped `dealDamage` action of a consumable, by id — real content, not a fixture. */
+function thrownDamage(itemId: string): EffectAction {
+  const def = getCatalogItemById(itemId);
+  if (!def?.use) throw new Error(`${itemId} has no use array`);
+  const action = def.use.find((a) => a.kind === 'dealDamage');
+  if (!action) throw new Error(`${itemId} deals no damage`);
+  return action;
+}
+
+/** The shipped `blessed` affix applied to the fixture enemy: +25 to every resistance slot. */
+function blessed(over: Partial<Enemy> = {}): Enemy {
+  const affix = AFFIXES.find((a) => a.id === 'blessed')!;
+  expect(affix.resistBonus).toBe(25); // the data premise, restated
+  return applyAffix(makeEnemy(over), affix);
+}
+
+describe('G17 — a thrown elemental consumable is mitigated by the target resistance', () => {
+  it('the shipped Firebomb is 6 Pyro, and a Blessed target takes 4 of it, not 6', () => {
+    // elements.json order: 0 Physical, 1 Cryo, 2 Pyro, 3 Electro, 4 Poison, 5 Psychic, 6 Force.
+    const bomb = thrownDamage('firebomb');
+    expect(bomb).toEqual({ kind: 'dealDamage', params: { amount: 6 }, element: 2 });
+
+    // Unresisted: 6 - round(6 * 0/100) = 6.
+    const plain = applyEffectAction(bomb, makePlayer(), makeEnemy({ hp: 30 }), {});
+    expect(plain.other.hp).toBe(24);
+
+    // Blessed (+25 to every slot): 6 - round(6 * 25/100) = 6 - round(1.5) = 6 - 2 = 4.
+    // The PRE-G17 formula gave 6 - floor(25/100) * 6 = 6 - 0 = 6, i.e. no mitigation at all.
+    const resisted = applyEffectAction(bomb, makePlayer(), blessed({ hp: 30 }), {});
+    expect(resisted.other.hp).toBe(26);
+  });
+
+  it('the same holds for the other two shipped grenades, on their own elements', () => {
+    // Cryo Grenade 4 Cryo and Shock Charge 4 Electro: 4 - round(4 * 25/100) = 4 - 1 = 3.
+    for (const [id, element] of [['cryo-grenade', 1], ['shock-charge', 3]] as const) {
+      const action = thrownDamage(id);
+      expect(action.params.amount, `${id} amount`).toBe(4);
+      expect(action.element, `${id} element`).toBe(element);
+      const r = applyEffectAction(action, makePlayer(), blessed({ hp: 30 }), {});
+      expect(r.other.hp, `${id} hp after`).toBe(27); // 30 - 3
+    }
+  });
+
+  it('mitigation reads the resisted ELEMENT only — a Firebomb ignores a Cryo-only resistance', () => {
+    // Pyro is index 2. This is what stops the test passing for the wrong reason — an
+    // implementation mitigating by the first slot, or by the sum, would fail here.
+    const cryoOnly = makeEnemy({ hp: 30, resistances: [0, 100, 0, 0, 0, 0, 0] });
+    expect(applyEffectAction(thrownDamage('firebomb'), makePlayer(), cryoOnly, {}).other.hp).toBe(24);
+
+    // …and a Pyro 100% resistance absorbs it entirely: 6 - round(6) = 0.
+    const pyroImmune = makeEnemy({ hp: 30, resistances: [0, 0, 100, 0, 0, 0, 0] });
+    expect(applyEffectAction(thrownDamage('firebomb'), makePlayer(), pyroImmune, {}).other.hp).toBe(30);
+  });
+
+  it('it reads EFFECTIVE resistances — a Lucid target resists what a plain one does not', () => {
+    // The half `mitigate` alone cannot cover: swapping `effectiveResistances(e)` for the raw
+    // `e.resistances` would leave the two numbers below identical.
+    //   `wise` (Lucid) shifts WIS 10 -> 12, so its mod goes 0 -> +1, a delta of 1, and
+    //   RESIST_PER_WIS_MOD = 10 shifts every resistance by +10.
+    //   plain: 6 - round(6 * 0/100) = 6     lucid: 6 - round(6 * 10/100) = 6 - 1 = 5
+    expect(RESIST_PER_WIS_MOD).toBe(10);
+    const bomb = thrownDamage('firebomb');
+    const plain = makeEnemy({ hp: 30 });
+    const lucid = makeEnemy({ hp: 30, activeConditions: [makeCondition('wise')] });
+    expect(applyEffectAction(bomb, makePlayer(), plain, {}).other.hp).toBe(24); // took 6
+    expect(applyEffectAction(bomb, makePlayer(), lucid, {}).other.hp).toBe(25); // took 5
+  });
+
+  it('and in the OTHER direction — a Clouded target resists LESS than a plain one', () => {
+    // The mirror, so the test cannot pass by ignoring the SIGN of the shift. `fool` (Clouded)
+    // takes WIS 10 -> 8, mod 0 -> -1, a -10 shift, against a Blessed base of 25:
+    //   blessed:        6 - round(6 * 25/100) = 6 - 2 = 4
+    //   blessed + fool: 6 - round(6 * 15/100) = 6 - 1 = 5
+    const bomb = thrownDamage('firebomb');
+    const clouded = blessed({ hp: 30, activeConditions: [makeCondition('fool')] });
+    expect(applyEffectAction(bomb, makePlayer(), blessed({ hp: 30 }), {}).other.hp).toBe(26); // took 4
+    expect(applyEffectAction(bomb, makePlayer(), clouded, {}).other.hp).toBe(25); // took 5
+  });
+
+  it('END TO END — throwing a Firebomb from the backpack at a Blessed enemy deals 4', () => {
+    // The player-observable claim, through the real battle action rather than the helper.
+    // Using a consumable draws NOTHING, so the empty rng proves it (it throws if drawn).
+    const base = makePlayer();
+    const carrying: Player = {
+      ...base,
+      inventory: { ...base.inventory, backpack: [{ defId: 'firebomb' }] },
+    };
+    const battle = createBattle(carrying, blessed({ hp: 30 }), 1);
+    const r = resolveRound(battle, { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
+    expect(r.status).toBe('ongoing');
+    expect(r.state.enemy.hp).toBe(26); // 30 - mitigate(6, 25) = 30 - 4
+    expect(r.state.player.inventory.backpack).toEqual([]); // consumed
+    // Its second action lands untouched: the burn is applied regardless of resistance.
+    expect(r.state.enemy.activeConditions.some((c) => c.type === 'burn')).toBe(true);
   });
 });
