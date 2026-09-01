@@ -5,9 +5,25 @@
 //  - Data-driven content: story text is plain JSON in ../data/story.json.
 //  - No RNG, no Math.random/Date.now.
 //
-// Ported from the canonical Java `Story.java`. The `{playerName}` token is kept
-// literal; substitution is M8's job. Act intro/outro bodies are empty strings
-// because the Java prints only a header plus blank lines (M8 fills the prose).
+// Ported from the canonical Java `Story.java`. Act intro/outro bodies are empty strings
+// because the Java prints only a header plus blank lines (PLAN.md #13 fills the prose).
+//
+// G49 — WHERE `{playerName}` ACTUALLY IS. This header, and four of the accessors below,
+// used to say the `{playerName}` token is kept literal and substituted later, as though it
+// appeared throughout the content. It appears in EXACTLY ONE PLACE: `story.json`'s legacy
+// `ending.body`, read only by `getEnding()` — which the type declaration itself calls "kept
+// for back-compat; no longer on the live path". Every accessor the game actually reads
+// (`getIntro`, `getGraceEnding`, `getDamnationEnding`) returns text with no token in it at
+// all. The comments were describing a design that the content never adopted.
+//
+// The consequence, and it is why this is worth a comment rather than a deletion:
+// `game.ts`'s `substituteName` is a NO-OP on all three of its live call sites, because none
+// of the strings it is handed carries the token. That is not a bug — G47 / WORLD.md §8
+// [LOCKED] rules that the narrator never speaks the player's name, so the token being absent
+// from the live endings is CORRECT and `story.test.ts` guards it. But a silent no-op sitting
+// next to a comment claiming otherwise is precisely G49's failure mode, so it is recorded
+// here rather than left to be rediscovered. `story.test.ts` asserts the invariant (only
+// `getEnding` carries the token) rather than trusting these words.
 
 import storyData from '../data/story.json';
 
@@ -35,7 +51,7 @@ export function getStory(): Story {
   return STORY;
 }
 
-/** The opening intro (header + lines, with the `{playerName}` token literal). */
+/** The opening intro (header + lines). Carries no name token — see the G49 note above. */
 export function getIntro(): { header: string; lines: readonly string[] } {
   return STORY.intro;
 }
@@ -50,17 +66,21 @@ export function getActOutro(act: number): StorySection | undefined {
   return STORY.actOutros[act];
 }
 
-/** The legacy ending (header + body, with the `{playerName}` token literal). */
+/**
+ * The legacy ending (header + body). The ONLY story text carrying a literal `{playerName}`
+ * token, and the only accessor whose comment may mention one. Not on the live path — the
+ * game reads `getGraceEnding` / `getDamnationEnding`.
+ */
 export function getEnding(): StorySection {
   return STORY.ending;
 }
 
-/** The GRACE ending (act-4 ascension), with the `{playerName}` token literal. */
+/** The GRACE ending (act-4 ascension). Carries no name token — see the G49 note above. */
 export function getGraceEnding(): StorySection {
   return STORY.endings.grace;
 }
 
-/** The DAMNATION ending (act-5 Hollow fall), with the `{playerName}` token literal. */
+/** The DAMNATION ending (act-5 Hollow fall). Carries no name token — see the G49 note above. */
 export function getDamnationEnding(): StorySection {
   return STORY.endings.damnation;
 }

@@ -3,6 +3,45 @@
 import { formatEntry } from '../log/logger.ts';
 import type { LogEntry } from '../log/logger.ts';
 
+/**
+ * The minimum a `keydown` has to look like for the overlay to decide about it. Declared as a
+ * structural type rather than `KeyboardEvent` so the decision is testable headlessly with
+ * plain objects — no DOM, no jsdom dependency (the repo's standing rule).
+ */
+export interface OverlayKey {
+  key: string;
+  target: unknown;
+}
+
+/**
+ * Is the keystroke going somewhere the user is TYPING? — PURE.
+ *
+ * G40: the overlay bound `keydown` on `window` and called `preventDefault()` for any
+ * backtick, anywhere. The character-name field is an `<input>` on that same window, so a
+ * player whose name contains a backtick could not type it: the key was swallowed and the
+ * debug overlay opened over the game instead. The overlay's OWN filter box is an `<input>`
+ * too, so it could not be typed into either.
+ *
+ * `SELECT` is included alongside `INPUT`/`TEXTAREA` because type-ahead selection is typing as
+ * far as the user is concerned. `isContentEditable` covers any element made editable.
+ */
+export function isTypingTarget(target: unknown): boolean {
+  if (typeof target !== 'object' || target === null) return false;
+  const el = target as { tagName?: unknown; isContentEditable?: unknown };
+  const tag = typeof el.tagName === 'string' ? el.tagName.toUpperCase() : '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  return el.isContentEditable === true;
+}
+
+/**
+ * Should this keystroke toggle the debug overlay? — PURE. True only for the backtick or F2,
+ * and only when the user is not typing into something.
+ */
+export function togglesOverlay(event: OverlayKey): boolean {
+  if (event.key !== '`' && event.key !== 'F2') return false;
+  return !isTypingTarget(event.target);
+}
+
 export function createDebugOverlay(getEntries: () => LogEntry[]): void {
   const panel = document.createElement('div');
   panel.id = 'debug-overlay';
@@ -51,10 +90,12 @@ export function createDebugOverlay(getEntries: () => LogEntry[]): void {
   };
 
   window.addEventListener('keydown', (ev) => {
-    if (ev.key === '`' || ev.key === 'F2') {
-      ev.preventDefault();
-      toggle();
-    }
+    // G40: the decision — including "is the user typing?" — is the pure `togglesOverlay`,
+    // so it is tested. `preventDefault` moved INSIDE the guard: calling it first was the
+    // defect, because it swallowed the keystroke before deciding whether it was ours.
+    if (!togglesOverlay(ev)) return;
+    ev.preventDefault();
+    toggle();
   });
   filter.addEventListener('input', render);
   copyBtn.addEventListener('click', () => {

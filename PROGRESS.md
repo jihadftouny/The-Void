@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1155 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1286 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -78,7 +78,7 @@ full accessibility including a screen-reader pass; licence, free itch release an
 (`docs/SHIPPING.md`). **The engine writes the choices — the LLM-authored-choices plan is dropped**,
 which shrinks M11 substantially. **Min spec now requires a GPU.**
 
-**#0 `critical-engine-bugs` — TWO OF THREE UNITS ARE MERGED (2026-09-01).** ~~Next up (NOT started — no branch exists yet)~~ — **`#0a combat-core` ✅ merged** (23 defects, 12 commits) and **`#0b narration-coverage` ✅ merged** (4 defects, 8 commits); **`#0c persistence-and-reach` is the one left.** Originally **THREE units** —
+**#0 `critical-engine-bugs` — ALL THREE UNITS ARE BUILT; TWO ARE MERGED (2026-09-01).** ~~Next up (NOT started — no branch exists yet)~~ — **`#0a combat-core` ✅ merged** (23 defects, 12 commits), **`#0b narration-coverage` ✅ merged** (4 defects, 8 commits), and **`#0c persistence-and-reach` 🔄 BUILT on `agentic/persistence-reach`, awaiting review and merge** (13 register rows, 9 commits). Originally **THREE units** —
 **thirty-three** defects (G11–G47; there is no G38), far too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
 
 | Unit | Covers |
@@ -137,6 +137,55 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-09-01 — `#0c persistence-and-reach` built: the player can see numbers, and can heal 🔄
+
+**Built and self-verified on `agentic/persistence-reach`; awaiting review and merge.** Suite
+1155 → **1286 tests**, typecheck clean, `npm run build` passing. Thirteen register rows: G1/G19, G2,
+G3, G14, G18, G26, G28, G33, G40, C7, G46, G49, D9.
+
+- **The player can see the dice again (G18).** The most visible change in the batch, and the
+  starkest finding in it: `formatEvent` and `formatRollDetail` were both complete, both tested, and
+  **neither was ever called by anything** — while `VOID_PERSONA` forbids the narrator from
+  mentioning "mechanics, dice, or numbers". So the game has never shown a player a damage number, a
+  die, a hit, a miss or a crit. There is now a battle log — plain per beat, expandable to
+  `d20+2 = 17 vs AC 13 → hit, 1d8 = 4` — that persists for a fight and resets at the next.
+- **Healing is reachable (G14).** 23 of the 38 authored items — every consumable and every unique —
+  could not be obtained by any means, which is *why* there was no healing. A data-driven catalog
+  branch puts them on the victory-drop and chest paths, act-gated by each item's `floor`. Measured
+  over 100 whole runs through the real engine: the **Use item** picker appears in **96%** of runs,
+  offers a heal in **94%**, and a wounded player drinking one is asserted end to end. **One
+  milestone earlier than `SHIP-SCOPE.md` §7 scheduled it.**
+- **A quit mid-descent no longer forfeits the run (G19 → G1).** `runSummary` and `runSeed` live
+  outside `GameState`, so neither survived a save and a resumed run restarted its feat tally at
+  zero. The envelope goes v1 → v2 (**no `SAVE_VERSION` bump** — `GameState` is untouched), with a
+  tolerant v1 path proved against a **real** v1 envelope produced by the shipped writer.
+- **A finished run is finished, and says what it was (G2).** A victory settles at the `ending`
+  phase while the save was cleared on `game-over`, so winning left a resumable save and relaunching
+  offered *"A descent lies unfinished"* about a run already won. One exhaustive predicate now
+  decides both halves, and the run ends on a factual summary — outcome, depth, bosses and unlocks
+  by name. (The Void's own *narrated* account is G10, still open, still #6's.)
+- **Also:** a corrupt unlock store no longer erases everything you have earned (G3 — a backup
+  ladder and a visible notice); condition chips reach the HUD and the player's name is no longer
+  interpolated into markup (G28); charge-reduction relics finally work through the UI (G33); a
+  backtick can be typed into the name field (G40); the log speaks display names, not ids, and stops
+  telling the player that *they* are the one on fire (C7, G46); the balance report computes its
+  verdicts instead of asserting them, and emits its caveats from the generator so regeneration
+  cannot delete them (G28c, D9).
+- **⚠ THE NUMBER TO READ FIRST.** `balance.test.ts` passes **UNMODIFIED**, but its margin
+  **halved**: 66 wins of 500 → **63**, against a floor of 60. §22.21 pins `HOLLOW_GATE_XP = 500` to
+  exactly that threshold. Neuromancer and Penitent are now at **one win in a hundred**. Nothing was
+  retuned — a balance shift here is a finding for #2, not a number to adjust. The shift is
+  RNG-stream displacement, not difficulty (the sim never uses a consumable and cannot equip), and
+  the evidence is that the 6-seed golden sample moved the *other* way. Full ledger in
+  `offEquivalence.test.ts`.
+- **Nine register departures, plus three more this build found.** The largest: `FINDINGS.md` G14
+  says to put **relics** on the drop tables; `GAME-DESIGN.md` §14.1/§14.8/§18.2 all rule relics
+  **deal-only, never dropped**, and `docs/README.md` puts the design doc above the register. Relics
+  were not added, and a test — pinned by mutation — proves none can reach a loot path.
+- **The healing deferral in `HUMAN-CHECKS.md` is lifted**, and replaced with nine play-checks and an
+  explicit warning that **the game is expected to feel too easy**: v1 temporarily carries two
+  healing systems, which is scheduled (§22.6 folds them in with #2), not a defect.
+
 ### 2026-09-01 — the first two engine batches are IN `main` ✅
 
 **27 of the 33 critical engine defects are fixed, verified and merged.** Suite 1029 → **1155 tests**,
@@ -167,9 +216,11 @@ until the merge).
   New: **G48** — the simulator cannot reach 20 of 63 event kinds, which undermines every "measured
   over N runs" claim in the register; **G49** — `story.ts`'s comments now assert a token that was
   removed.
-- ⚠ **The game is still not playable to floor 5, by design order:** there is **no healing** until
+- ~~⚠ **The game is still not playable to floor 5, by design order:** there is **no healing** until
   `PLAN.md` #9 lands (potions folded into consumables; the consumable path is dead). The deep
-  play-checks are therefore deferred — see `HUMAN-CHECKS.md`. **#0c is next, then #9.**
+  play-checks are therefore deferred — see `HUMAN-CHECKS.md`.~~ **SUPERSEDED the same day by `#0c`,
+  which fixed G14: healing is reachable and the deferred play-checks are now fair to attempt.**
+  **#9 is next.**
 
 ### 2026-08-31 — The shipping scope: The Void becomes Game #1, on a 60-hour budget 🎯
 

@@ -23,7 +23,12 @@ export default defineConfig({
     // Logic core is framework-agnostic and must be testable headlessly (node).
     // Renderer (Kaplay/canvas) code is never unit-tested here — only pure logic is.
     environment: 'node',
-    include: ['src/**/*.test.ts', 'electron/**/*.test.mjs'],
+    // `scripts/**/*.test.ts` covers `balance-claims.ts` — the pure claim/verdict helpers the
+    // BALANCE-REPORT generator uses. Those verdicts used to be hard-coded prose beside the
+    // numbers they described (FINDINGS.md G28(c)), so they need a test; `scripts/` is outside
+    // `tsconfig.json`'s include set, so they are RUN here but NOT typechecked. That gap is
+    // the status quo for everything under `scripts/` and is recorded, not fixed here.
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'electron/**/*.test.mjs'],
     // Worktrees live inside the repo (agentic pipeline); never let Vitest walk them.
     exclude: ['worktrees/**', 'node_modules/**', 'dist/**', '.legacy/**'],
   },
