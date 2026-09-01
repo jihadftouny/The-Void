@@ -154,6 +154,79 @@ describe('the battle screen builds its Potion button from potionControl', () => 
 });
 
 // =========================================================================================
+// G28(b) — the player's name is never markup.
+//
+// `renderSheet()` built the HUD by interpolating into `sheetEl.innerHTML`, and two of the
+// interpolated strings are content the game does not control: the name the player TYPES, and
+// the enemy's generated `fullName`. A name of `<img onerror=…>` was live markup in the page.
+//
+// The pure half (the name survives the projection byte for byte) is asserted in
+// `view-model.test.ts`. This is the half that matters for the defect: that the RENDERER sets
+// it as text.
+// =========================================================================================
+
+describe('renderSheet() never interpolates a name into markup', () => {
+  const body = bodyOf('function renderSheet(');
+
+  it('still renders the names (the guard has something to guard)', () => {
+    // If renderSheet stopped showing either name, every "must not" below would pass by
+    // finding nothing at all.
+    expect(body).toMatch(/\bp\.name\b/);
+    expect(body).toMatch(/\bfullName\b/);
+  });
+
+  it('assigns no innerHTML at all', () => {
+    // Loose on purpose. `sheetEl.innerHTML =`, `el.innerHTML=`, `outerHTML`,
+    // `insertAdjacentHTML(...)` and `replaceChildren` of a parsed fragment are all the same
+    // defect wearing different clothes; the first four are matched here, and the fifth cannot
+    // happen without one of `innerHTML`/`createContextualFragment`, which are both matched.
+    const HTML_WRITE =
+      /\.\s*(?:inner|outer)HTML\s*=|insertAdjacentHTML\s*\(|createContextualFragment\s*\(/;
+    expect(
+      body,
+      'renderSheet is writing HTML again — the player name and the enemy name both flow ' +
+        'through it, and neither is escaped anywhere',
+    ).not.toMatch(HTML_WRITE);
+  });
+
+  it('and interpolates neither name into a template string', () => {
+    // The precise shape the bug took: `<b>${p.name}</b>` / `<span class="foe">${e.fullName}</span>`.
+    // Matched as "a name inside a ${…} anywhere in a backtick string", in either order.
+    const INTERPOLATED_NAME = /\$\{\s*[A-Za-z_$][\w$]*\.(?:name|fullName)\b/;
+    expect(body, 'a name is being interpolated into a string again').not.toMatch(
+      INTERPOLATED_NAME,
+    );
+  });
+
+  it('sets its lines as textContent', () => {
+    expect(body, 'renderSheet no longer sets any textContent — how is it rendering?').toMatch(
+      /\.\s*textContent\s*=/,
+    );
+  });
+});
+
+// =========================================================================================
+// G28(a) — condition chips reach the screen.
+// `conditionChips` / `chip` have been complete and tested since M-UI2 and nothing imported
+// them, so the player could be poisoned, fractured and about to lose their turn and the only
+// tell was the HP number moving.
+// =========================================================================================
+
+describe('renderSheet() puts condition chips on the HUD', () => {
+  const body = bodyOf('function renderSheet(');
+
+  it('builds them from the shared model, for the player AND the enemy', () => {
+    expect(body, 'the HUD no longer shows condition chips — that is G28(a)').toMatch(
+      /conditionChips\s*\(/,
+    );
+    expect(body).toMatch(/\bchip\s*\(/);
+    // Both combatants: the player's own row, and the foe's during a battle.
+    expect(body).toMatch(/chips\s*\(\s*p\.activeConditions\s*\)/);
+    expect(body).toMatch(/chips\s*\(\s*e\.activeConditions\s*\)/);
+  });
+});
+
+// =========================================================================================
 // G19 -> G1 — a resumed run keeps what it has earned.
 //
 // `persist.test.ts` proves the ENVELOPE carries the meta and that a straight-through run and

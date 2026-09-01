@@ -27,9 +27,15 @@ html, body { height: 100%; }
   line-height: 1.7;
   color: var(--void-ink-dim);
 }
-#sheet b { color: var(--void-ink); font-size: 15px; }
+/* The player's own name. Was `<b>` built by interpolating into innerHTML (G28(b)); the HUD
+ * now sets every string as text, so the emphasis is a class rather than a tag. */
+#sheet .who { color: var(--void-ink); font-size: 15px; }
 #sheet hr { border: none; border-top: var(--void-rule-hair) solid var(--void-rule); margin: 10px 0; }
 #sheet .foe { color: var(--void-foe); }
+
+/* The condition row (G28(a)): control -> harm -> boon, wrapping in the narrow HUD column.
+ * The chips themselves are styled by src/render/components.css. */
+#sheet .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
 
 /* Rows: title · status · notice · narration · log · choices.
  * Only the NARRATION takes the free space (1fr); the log is capped and scrolls inside its

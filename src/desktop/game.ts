@@ -11,6 +11,7 @@ import type { GameState, GameInput, Awaiting } from '../game/game.ts';
 import type { PlayerClass } from '../game/player.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
+import type { ActiveCondition } from '../game/condition.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun, type RunMeta } from './persist.ts';
 import {
@@ -45,8 +46,8 @@ import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 // The shared render foundation (M-UI2 `ui-foundation`).
 import { applyTheme } from '../render/theme.ts';
-import { buttonModel, rowModel } from '../render/component-model.ts';
-import { appendButton, appendRow, appendLogLine, picker } from '../render/components.ts';
+import { buttonModel, rowModel, conditionChips } from '../render/component-model.ts';
+import { appendButton, appendRow, appendLogLine, chip, picker } from '../render/components.ts';
 import { logLines, startsNewBattle } from '../render/log-model.ts';
 
 interface GenStats { text: string; tokens: number; tokensPerSecond: number; ttftMs: number }
@@ -163,27 +164,60 @@ function retheme(): void {
   applyTheme(document.documentElement, state.place);
 }
 
+/**
+ * The HUD: who you are, how you are doing, and — G28(a) — WHAT IS CURRENTLY HAPPENING TO YOU.
+ *
+ * G28(b): this was built by interpolating strings into `sheetEl.innerHTML`, and two of those
+ * strings are attacker-controlled-ish content: the player's own typed name (`<b>${p.name}</b>`)
+ * and the enemy's generated full name. A name of `<img onerror=...>` was live markup in the
+ * page. It is all `textContent` now, and a source guard in `rendererSource.test.ts` keeps it
+ * that way — the fix is one commit, the guard is what makes it stay fixed.
+ *
+ * G28(a): condition chips. `conditionChips` / `chip` have existed, tested, since M-UI2, and
+ * nothing imported them — so the player could be poisoned, fractured and about to lose their
+ * turn to Insanity, and the only tell was the HP number moving. They now render for the
+ * player always, and for the enemy during a battle, ordered control -> harm -> boon so the
+ * thing that stops you acting reads first.
+ */
 function renderSheet(): void {
   // The live battle combatant during a battle (HP ticks down each round), else
   // the snapshot — the top-level state.player is stale mid-battle. See view-model.
   const p = displayPlayer(state);
-  if (!p) {
-    sheetEl.innerHTML = '';
-    return;
-  }
-  const lines = [
-    `<b>${p.name}</b>`,
-    `${p.classId}`,
-    `HP ${p.hp}/${p.maxHp}`,
-    `XP ${p.xp}`,
-    `Act ${state.act}`,
-    `Pots ${p.pots} · Rests ${p.restsLeft}`,
-  ];
+  sheetEl.replaceChildren();
+  if (!p) return;
+
+  /** One HUD line. `textContent` — never markup, whatever the string contains. */
+  const line = (text: string, className?: string): void => {
+    const el = document.createElement('div');
+    if (className) el.className = className;
+    el.textContent = text;
+    sheetEl.appendChild(el);
+  };
+  /** A combatant's condition row, or nothing at all when they carry none. */
+  const chips = (active: readonly ActiveCondition[]): void => {
+    const models = conditionChips(active);
+    if (models.length === 0) return;
+    const row = document.createElement('div');
+    row.className = 'chips';
+    for (const model of models) row.appendChild(chip(model));
+    sheetEl.appendChild(row);
+  };
+
+  line(p.name, 'who');
+  line(p.classId);
+  line(`HP ${p.hp}/${p.maxHp}`);
+  line(`XP ${p.xp}`);
+  line(`Act ${state.act}`);
+  line(`Pots ${p.pots} · Rests ${p.restsLeft}`);
+  chips(p.activeConditions);
+
   if (state.phase.kind === 'battle') {
+    sheetEl.appendChild(document.createElement('hr'));
     const e = state.phase.battle.enemy;
-    lines.push('<hr/>', `<span class="foe">${e.fullName}</span>`, `HP ${e.hp}/${e.maxHp}`);
+    line(e.fullName, 'foe');
+    line(`HP ${e.hp}/${e.maxHp}`);
+    chips(e.activeConditions);
   }
-  sheetEl.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
 }
 
 /**
