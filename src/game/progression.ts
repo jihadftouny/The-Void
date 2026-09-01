@@ -51,6 +51,29 @@ export function shouldAdvance(act: number, xp: number): boolean {
   return threshold !== undefined && xp >= threshold;
 }
 
+/**
+ * XP at which floor 5's own boss gate opens — the point at which the True Void stops offering
+ * encounters and offers the Hollow (G43).
+ *
+ * WHY A SEPARATE CONSTANT rather than an `ACT_XP_THRESHOLDS[6]` entry: that table is keyed by
+ * *the act being ENTERED*, and there is no act 6. Overloading `shouldAdvance` to mean "the
+ * floor-5 boss is ready" would make it lie about what it computes. (Recorded deviation: G43's
+ * fix text says "add a floor-5 XP threshold like acts 1–3"; the table it points at cannot
+ * express one.)
+ *
+ * ⚠ M15/#2 BALANCE PLACEHOLDER — this number decides how long floor 5 is, and no author has
+ * set it. DERIVATION, so it is not arbitrary: enemy xp is `1 + randInt(0, floor(playerXp/4)+2)`,
+ * mean ~ playerXp/8, so dX/dkill ~ X/8 and X(k) = 240·e^(k/8) from the act-5 entry threshold of
+ * 240. Floors 3 and 4 each take ~8–11 kills; 240·e^(7.5/8) ~ 610. So 600 is ~7–8 kills on floor
+ * 5, and it continues the existing multiplicative shape of 10 / 30 / 90 / 240 (x2.5).
+ */
+export const HOLLOW_GATE_XP = 600;
+
+/** Whether floor 5's boss gate has opened for a player at `xp` — PURE. */
+export function hollowGateOpen(xp: number): boolean {
+  return xp >= HOLLOW_GATE_XP;
+}
+
 // ------- M9 frequent XP leveling (decoupled from act-entry) -------------------
 //
 // The XP curve below is a deliberate M15 PLACEHOLDER. It is single-sourced here so

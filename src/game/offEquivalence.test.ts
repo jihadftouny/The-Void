@@ -85,6 +85,19 @@
 //         |     | seeds now die inside ~20 steps to an act-1 elite. `balance.test.ts`'s
 //         |     | win-rate (> 0.12) and act-1-share (< 0.55) guards still pass over their
 //         |     | 500-run sample, but this is the swing #2's re-run most needs to look at.
+//  step 7 | G43 | floor 5 gets an ENCOUNTER LAYER. The Hollow moves from floor ENTRY to a
+//         |     | floor GATE (`HOLLOW_GATE_XP = 600`), so act 5 now plays like acts 1-4:
+//         |     | random battles, chests, rests, deals and lore, all of which were previously
+//         |     | unreachable (0 act-5 hub states over ~17.7 M probed transitions).
+//         |     | EXPECTED: runs get LONGER at act 5 and some that used to walk straight into
+//         |     | the Hollow now die on the floor before it. OBSERVED exactly that: the two
+//         |     | Enforcer wins become act-5 DEATHS at level 20 and 18 with all four earlier
+//         |     | floors cleared, so this sample drops to 0 wins. The real guard —
+//         |     | `balance.test.ts`'s 500-run heuristic win rate — still passes at 0.126,
+//         |     | though that is uncomfortably close to its 0.12 floor and 47 of its 437
+//         |     | deaths are now on act 5 (previously 0, because act 5 was boss-only).
+//         |     | ⚠ FLAGGED FOR #2: 600 is a derived placeholder, and floor 5 is now the
+//         |     | deadliest stretch of the descent.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -125,8 +138,8 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 
 /** The frozen run records. MEASURED, not derived — see the file header. */
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 420, cause: 'unmade the Hollow (damnation)', rngState: 984262947 },
-  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 461, cause: 'unmade the Hollow (damnation)', rngState: 1194569936 },
+  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 20, floorsCleared: 4, steps: 507, cause: 'The Unraveled Unbeing', rngState: 3601606521 },
+  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 18, floorsCleared: 4, steps: 523, cause: 'Mirrored Reflection', rngState: 3556148722 },
   { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 21, cause: 'Armored Psycho', rngState: 560318176 },
   { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 380, cause: 'The Knight', rngState: 2887346257 },
   { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 92, cause: 'Undercity Kingpin', rngState: 2809167167 },
@@ -156,19 +169,19 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(report).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 2,
+      wins: 0,
       grace: 0,
-      damnation: 2,
-      deaths: 4,
-      winRate: 2 / 6,
-      avgLevel: 49 / 6,
+      damnation: 0,
+      deaths: 6,
+      winRate: 0 / 6,
+      avgLevel: 55 / 6,
       avgFloorsCleared: 11 / 6,
-      deathByAct: { 1: 3, 2: 0, 3: 0, 4: 1, 5: 0 },
+      deathByAct: { 1: 3, 2: 0, 3: 0, 4: 1, 5: 2 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,
-          winRate: 2 / 3, avgLevel: 33 / 3, avgFloorsCleared: 8 / 3,
-          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0 },
+          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
+          winRate: 0 / 3, avgLevel: 39 / 3, avgFloorsCleared: 8 / 3,
+          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 2 },
         },
         Hollow: {
           runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,

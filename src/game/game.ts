@@ -53,6 +53,7 @@ import { summarizeLoot } from './loot.ts';
 import {
   applyLevelUpHp,
   hasPendingLevelUp,
+  hollowGateOpen,
   shouldAdvance,
 } from './progression.ts';
 import { generateDraft, applyDraftOption, describeDraftOption, type DraftOption } from './draft.ts';
@@ -414,27 +415,16 @@ export function step(state: GameState, input: GameInput): StepResult {
     }
 
     case 'act-intro': {
+      // G43: EVERY act intro now returns to the hub, act 5 included. Act 5 used to hard-wire
+      // the Hollow to floor ENTRY here — and `main-menu` is the only phase that calls
+      // `continueJourney`, which is the only caller of `buildRandomBattle`, `buildChestLoot`
+      // and `selectLore`. So the True Void had no random battles, no chests, no rests, no
+      // sacrifice-deals and no lore at all: an exhaustive walk of ~17.7 M probed transitions
+      // from 418 act-5 entries produced ZERO act-5 hub states. Five of 24 families, five of
+      // the 13 bespoke name tables and the `reach-act-5` feat were dead as a result. The
+      // Hollow now waits behind a floor gate in `continueJourney`, exactly as the acts 1–3
+      // bosses wait behind `shouldAdvance`.
       if (input.kind !== 'continue') return noop;
-      if (phase.newAct === 5) {
-        // M12: act 5 opens on the HOLLOW SELF (a mirror of the player), replacing the retired
-        // `Jorginho Matagal` final boss. It scales off FINAL_BOSS_XP inside `generateBoss`.
-        const player = requirePlayer(state);
-        const { enemy, boss } = generateBoss({
-          bossId: 'hollow',
-          act: 5,
-          player,
-          karma: state.karma,
-          rng,
-        });
-        // G4: `canFlee` is derived from the boss by `createBattle` itself — the manual
-        // `canFlee: false` this call site used to append is gone, because a convention every
-        // call site must remember is exactly the kind of rule that gets forgotten.
-        const battle: BattleState = createBattle(player, enemy, 5, { boss });
-        return finish(
-          { kind: 'battle', battle, started: false, final: true },
-          [{ kind: 'final-battle-begins', enemyName: enemy.fullName }],
-        );
-      }
       return finish({ kind: 'main-menu' }, []);
     }
 
@@ -522,9 +512,9 @@ const BOSS_BY_ACT: Record<number, BossId> = { 1: 'kingpin', 2: 'reflection', 3: 
  * `continueJourney` (M12): when the XP gate opens (`shouldAdvance`), the FLOOR BOSS — not an
  * auto-advance — ends the floor. Acts 1–3 enter the boss battle for the CURRENT act (the act is
  * not incremented until the boss falls, via `resolvePostVictory`). Act 4 enters the VERDICT
- * gate (no combat). Act 5 never satisfies `shouldAdvance`, so the Hollow keeps firing on
- * `act-intro(5)`. When the gate is not open, run a normal encounter (off-equivalence — the
- * random-encounter/rest/chest/deal flow is untouched).
+ * gate (no combat). Act 5 never satisfies `shouldAdvance` (there is no act 6), so G43 gives it
+ * its OWN gate, `hollowGateOpen`, checked here — the Hollow is now the end of floor 5 rather
+ * than its entrance. When no gate is open, run a normal encounter.
  */
 function continueJourney(
   state: GameState,
@@ -551,6 +541,25 @@ function continueJourney(
     const battle: BattleState = createBattle(player, enemy, state.act, { boss });
     return finish({ kind: 'battle', battle, started: false, final: false }, [
       { kind: 'boss-encounter', bossId, enemyName: enemy.fullName },
+    ]);
+  }
+  // G43: floor 5's own gate. `shouldAdvance` is unconditionally false at act 5 (there is no
+  // act 6 to advance to), so the True Void gets its boss the same way every other floor does —
+  // from the HUB, once the floor has been played — rather than at floor entry. Below the gate
+  // act 5 falls through to the ordinary encounter/rest/chest flow, which is what gives floor 5
+  // an encounter layer for the first time. Emits the SAME `final-battle-begins` event, moved:
+  // no new event kind is introduced.
+  if (state.act === 5 && hollowGateOpen(player.xp)) {
+    const { enemy, boss } = generateBoss({
+      bossId: 'hollow',
+      act: 5,
+      player,
+      karma: state.karma,
+      rng,
+    });
+    const battle: BattleState = createBattle(player, enemy, 5, { boss });
+    return finish({ kind: 'battle', battle, started: false, final: true }, [
+      { kind: 'final-battle-begins', enemyName: enemy.fullName },
     ]);
   }
   const encounter = selectEncounter(rng);

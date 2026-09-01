@@ -15,13 +15,14 @@ import { createUnlockStore, snapshotUnlocks, type RunUnlocks } from './unlockSto
 import { createBattle, type BattleState } from './battle.ts';
 import { selectEncounter } from './encounter.ts';
 import { buildDeal, selectPool } from './deal.ts';
-import { FINAL_BOSS_NAME, FINAL_BOSS_XP } from './progression.ts';
+import { FINAL_BOSS_NAME, FINAL_BOSS_XP, HOLLOW_GATE_XP } from './progression.ts';
 import { BOSSES, type BossState } from './boss.ts';
 import { getGraceEnding, getDamnationEnding } from './story.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
 import { createKarma, type KarmaState } from './karma.ts';
 import { hasControlCondition, makeCondition } from './condition.ts';
+import { resolveSkill, type SkillId } from './skill.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- Fixtures ------------------------------------------------------------
@@ -570,23 +571,75 @@ describe('frequent level-up draft on battle victory', () => {
 // ------- Act 5 triggers the HOLLOW final battle (M12) -------------------------
 
 describe('entering Act 5', () => {
-  it('act-intro{5} continue builds the HOLLOW SELF (replacing Jorginho)', () => {
-    const player = makePlayer({ skillPool: ['heavyStrike', 'brace'] });
-    const state: GameState = {
+  /** A hub state on floor 5 at the given XP. */
+  function act5Hub(xp: number, rngState = 314): GameState {
+    return {
       version: 8,
-      rngState: 314,
-      player,
+      rngState,
+      player: makePlayer({ skillPool: ['heavyStrike', 'brace'], xp }),
       act: 5,
       place: 4,
       karma: createKarma(),
-      phase: { kind: 'act-intro', newAct: 5 },
+      phase: { kind: 'main-menu' },
     };
+  }
+
+  // ⚠ CHANGED by G43, and this is the defect, not a preference. This case used to assert
+  // "act-intro{5} continue builds the HOLLOW SELF" — i.e. it asserted the bug: the Hollow was
+  // hard-wired to floor ENTRY. `main-menu` is the only phase that calls `continueJourney`,
+  // which is the only caller of `buildRandomBattle`, `buildChestLoot` and `selectLore`, so
+  // going straight from the act intro into the boss meant floor 5 had NO random battles, NO
+  // chests, NO rests, NO sacrifice-deals and NO lore. Measured: an exhaustive input-space walk
+  // over 418 act-5 entries (~17.7 M probed transitions) produced ZERO act-5 hub states, and a
+  // 150-run campaign met 0 of 5 act-5 families while the unlock store had granted all of them.
+  // The Hollow is now the END of floor 5, gated like every other floor's boss.
+  it('act-intro{5} continue returns to the HUB, exactly like every other act intro', () => {
+    const state: GameState = { ...act5Hub(0), phase: { kind: 'act-intro', newAct: 5 } };
     const r = step(state, { kind: 'continue' });
+    expect(r.state.phase).toEqual({ kind: 'main-menu' });
+    expect(r.awaiting).toBe('main-menu');
+    expect(r.events.some((e) => e.kind === 'final-battle-begins')).toBe(false);
+  });
+
+  it('below the gate, the act-5 hub yields ORDINARY encounters — never the Hollow', () => {
+    expect(HOLLOW_GATE_XP).toBe(600); // the premise, restated
+    let sawBattle = false;
+    let sawRest = false;
+    let sawChest = false;
+    const families = new Set<string>();
+    for (let seed = 0; seed < 200; seed++) {
+      const r = step(act5Hub(HOLLOW_GATE_XP - 1, seed), { kind: 'menu', choice: 'continue' });
+      expect(r.events.some((e) => e.kind === 'final-battle-begins')).toBe(false);
+      if (r.state.phase.kind === 'battle') {
+        expect(r.state.phase.final).toBe(false);
+        expect(r.state.phase.battle.boss).toBeUndefined();
+        // §14.9 "there is nowhere to go": act-5 trash still cannot be fled. That rule was
+        // dead code until now, because act 5 had no random encounters at all.
+        expect(r.state.phase.battle.canFlee).toBe(false);
+        families.add(r.state.phase.battle.enemy.familyId);
+        sawBattle = true;
+      } else if (r.state.phase.kind === 'rest') sawRest = true;
+      else if (r.state.phase.kind === 'chest') sawChest = true;
+    }
+    // All three encounter kinds are reachable on floor 5…
+    expect(sawBattle).toBe(true);
+    expect(sawRest).toBe(true);
+    expect(sawChest).toBe(true);
+    // …and every one of the five act-5 families can finally be met (previously 0 of 5).
+    const act5Families = FAMILIES.filter((f) => f.floor === 5).map((f) => f.id);
+    expect(act5Families).toHaveLength(5);
+    for (const id of act5Families) expect(families).toContain(id);
+  });
+
+  it('at the gate, the act-5 hub builds the HOLLOW SELF (replacing Jorginho)', () => {
+    const state = act5Hub(HOLLOW_GATE_XP);
+    const player = state.player!;
+    const r = step(state, { kind: 'menu', choice: 'continue' });
     expect(r.state.phase.kind).toBe('battle');
     if (r.state.phase.kind === 'battle') {
       expect(r.state.phase.final).toBe(true);
       expect(r.state.phase.started).toBe(false);
-      expect(r.state.phase.battle.canFlee).toBe(false); // Act 5: no escape
+      expect(r.state.phase.battle.canFlee).toBe(false); // Act 5 + a boss: no escape
       expect(r.state.phase.battle.boss?.bossId).toBe('hollow');
       // The Hollow's identity is the placeholder Hollow-Self, NOT the retired Jorginho.
       expect(r.state.phase.battle.enemy.type).toBe(BOSSES.hollow.name);
@@ -597,6 +650,20 @@ describe('entering Act 5', () => {
         kind: 'final-battle-begins',
         enemyName: r.state.phase.battle.enemy.fullName,
       });
+    }
+  });
+
+  it('the Hollow is re-fightable once the gate is open (G39 soft-lock is gone)', () => {
+    // Fleeing the Hollow used to strand the run forever, because the boss was constructed
+    // ONLY at floor entry. Now the gate re-opens it from the hub on the next continue.
+    const first = step(act5Hub(HOLLOW_GATE_XP, 7), { kind: 'menu', choice: 'continue' });
+    expect(first.state.phase.kind).toBe('battle');
+    const backAtHub: GameState = { ...first.state, phase: { kind: 'main-menu' } };
+    const second = step(backAtHub, { kind: 'menu', choice: 'continue' });
+    expect(second.state.phase.kind).toBe('battle');
+    if (second.state.phase.kind === 'battle') {
+      expect(second.state.phase.final).toBe(true);
+      expect(second.state.phase.battle.boss?.bossId).toBe('hollow');
     }
   });
 });
@@ -813,7 +880,14 @@ describe('M12 act-4 verdict gate routes the two fates', () => {
     expect(r.state.act).toBe(5);
     r = step(r.state, { kind: 'continue' }); // act-outro → act-intro(5)
     expect(r.state.phase.kind).toBe('act-intro');
-    r = step(r.state, { kind: 'continue' }); // act-intro(5) → the Hollow battle
+    // CHANGED by G43: act-intro(5) now returns to the HUB like every other act intro, and the
+    // Hollow waits behind floor 5's own XP gate. The routing this case is really about — a
+    // cast-down verdict falls to act 5 — is unchanged; what changed is that the player now
+    // gets to PLAY floor 5 first. This fixture's player is at xp 1000, well past
+    // HOLLOW_GATE_XP, so one more continue from the hub reaches the Hollow.
+    r = step(r.state, { kind: 'continue' }); // act-intro(5) → the act-5 hub
+    expect(r.state.phase).toEqual({ kind: 'main-menu' });
+    r = step(r.state, { kind: 'menu', choice: 'continue' }); // hub → the Hollow (gate open)
     expect(r.state.phase.kind).toBe('battle');
     if (r.state.phase.kind === 'battle') {
       expect(r.state.phase.final).toBe(true);
@@ -1229,8 +1303,25 @@ function decide(res: StepResult): GameInput {
         // exactly this reasoning. This scripted policy lacked it; it only never hit the trap
         // because it drove a single seed. Fight instead — the swing is skipped, but the round
         // runs and the control wears off.
-        if (!hasControlCondition(pl) && pl.pots > 0 && pl.hp <= pl.maxHp * 0.4) {
-          return { kind: 'battle-action', action: 'potion' };
+        if (!hasControlCondition(pl)) {
+          if (pl.pots > 0 && pl.hp <= pl.maxHp * 0.4) {
+            return { kind: 'battle-action', action: 'potion' };
+          }
+          // G43: this driver used to fight and drink and NOTHING else. With floor 5 turned
+          // from a single boss into a real floor behind an XP gate, a driver that never uses
+          // its class skills cannot finish the descent at all — measured over 120 seeds it
+          // wins 0 and tops out at 494 xp against a 600 gate, dying on floor 5. That is not a
+          // regression, it is `GAME-DESIGN.md` §18.1 in action ("classes stop playing like
+          // themselves" without their charges); the fix is for the driver to PLAY, not for
+          // the guard to be lowered. It now casts an affordable damage skill when it has one,
+          // which is the same shape as `sim.ts`'s heuristic.
+          for (const raw of pl.skillPool) {
+            const id = raw as SkillId;
+            const def = resolveSkill(pl, id);
+            if (def && def.baseDamage >= 2 && pl.skillCharges >= def.chargeCost) {
+              return { kind: 'battle-action', action: { kind: 'cast', skillId: id } };
+            }
+          }
         }
       }
       return { kind: 'battle-action', action: 'fight' };
