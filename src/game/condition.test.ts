@@ -130,7 +130,13 @@ describe('tickConditions — Stun sets the skip flag without damage', () => {
     );
     expect(r.skipTurn).toBe(true);
     expect(r.hpDelta).toBe(0);
-    expect(r.conditions).toEqual([{ type: 'stun', remainingTurns: 1, maxTurns: 2 }]);
+    // CHANGED by G23: the surviving instance now carries the explicit `onsetDone` phase flag.
+    // Its BEHAVIOUR is unchanged (same skip, same 0 hpDelta, same remainingTurns, same
+    // events) — only the record gained the additive field that stops a later refresh from
+    // rewinding the phase. The old shape is still accepted on load (see the legacy-save guard).
+    expect(r.conditions).toEqual([
+      { type: 'stun', remainingTurns: 1, maxTurns: 2, onsetDone: true },
+    ]);
     expect(r.events.map((e) => e.kind)).toContain('condition-skip');
   });
 });
@@ -186,7 +192,11 @@ describe('exposed (M3 Scavver mark) — pure countdown, no hp/skip, DoT stacking
     expect(r.hpDelta).toBe(0);
     expect(r.skipTurn).toBe(false);
     expect(r.events.map((e) => e.kind)).toEqual(['condition-onset']);
-    expect(r.conditions).toEqual([{ type: 'exposed', remainingTurns: 1, maxTurns: 2 }]);
+    // CHANGED by G23 (shape only — the countdown, the absent hp delta and the events are all
+    // unchanged): the survivor carries the explicit `onsetDone` phase flag from its onset tick.
+    expect(r.conditions).toEqual([
+      { type: 'exposed', remainingTurns: 1, maxTurns: 2, onsetDone: true },
+    ]);
     conditions = r.conditions;
 
     // Turn 2 — active, still no effect, survives at remaining 0.
@@ -194,7 +204,9 @@ describe('exposed (M3 Scavver mark) — pure countdown, no hp/skip, DoT stacking
     expect(r.hpDelta).toBe(0);
     expect(r.skipTurn).toBe(false);
     expect(r.events).toEqual([]);
-    expect(r.conditions).toEqual([{ type: 'exposed', remainingTurns: 0, maxTurns: 2 }]);
+    expect(r.conditions).toEqual([
+      { type: 'exposed', remainingTurns: 0, maxTurns: 2, onsetDone: true },
+    ]);
     conditions = r.conditions;
 
     // Turn 3 — expiry, removed.
@@ -337,6 +349,132 @@ describe('tickConditions — every ConditionType counts down and expires (none d
         expect(cumulative, `${type} DoT should deal net damage`).toBeLessThan(0);
       }
     }
+  });
+});
+
+// ------- G23 — a re-applied condition must not rewind to its onset turn --------------------
+
+describe('G23 — re-applying a damage-over-time condition actually damages', () => {
+  /**
+   * The register's own reproduction, as a pure condition-layer loop in the order a real round
+   * uses: TICK first, then the cast that re-applies. Expected total derived by hand, never
+   * measured:
+   *   round 1 — nothing is active yet, so the tick deals 0; the cast ADDS bleed (intensity 1).
+   *   round 2 — the ONSET tick deals 0 (first-turn flavour); the cast STACKS to intensity 2.
+   *   round n >= 3 — the tick is an ACTIVE tick dealing the intensity banked last round, which
+   *                  is n - 1; the cast then stacks to intensity n.
+   *   total = sum(n = 3..20) of (n - 1) = sum(k = 2..19) of k = (19*20/2) - 1 = 190 - 1 = 189.
+   * Against the pre-fix build this loop deals 0 (each cast reset the live condition to onset)
+   * while a SINGLE cast dealt 1 — the dominant action was strictly worse than acting once.
+   */
+  it('20 rounds of re-applied bleed deal exactly 189 damage', () => {
+    let conditions: ActiveCondition[] = [];
+    let total = 0;
+    for (let round = 1; round <= 20; round++) {
+      const r = tickConditions(
+        creature({ activeConditions: conditions }),
+        creature(),
+        scriptedRng([]), // bleed rolls no save: an empty script proves zero draws
+      );
+      total += r.hpDelta;
+      conditions = r.conditions;
+      applyCondition(conditions, 'bleed'); // the re-application under test
+    }
+    expect(total).toBe(-189);
+    // And the stack really did deepen once per round after the first: 20 applications.
+    expect(conditions).toHaveLength(1);
+    expect(conditions[0]!.intensity).toBe(20);
+  });
+
+  it('a SINGLE application of bleed deals exactly 1 over its whole life', () => {
+    let conditions: ActiveCondition[] = [];
+    applyCondition(conditions, 'bleed');
+    let total = 0;
+    for (let tick = 0; tick < 5; tick++) {
+      const r = tickConditions(
+        creature({ activeConditions: conditions }),
+        creature(),
+        scriptedRng([]),
+      );
+      total += r.hpDelta;
+      conditions = r.conditions;
+    }
+    // onset 0, active -1, expiry 0, then gone.
+    expect(total).toBe(-1);
+    expect(conditions).toEqual([]);
+  });
+
+  it('a refreshed FREEZE reaches the active branch, so its saving throw is finally rolled', () => {
+    // Control half of G23. Fresh freeze -> onset tick (skip, NO draw). Re-apply (refresh sets
+    // remainingTurns back to maxTurns). The next tick must be the ACTIVE branch: it rolls
+    // d20 + STR mod (0) against the opponent's INT (5); face 5 -> 5 >= 5 -> break free.
+    // Pre-fix that second tick read as onset again and rolled nothing, so a refreshed freeze
+    // could never be escaped and the scripted draw would go unconsumed.
+    const opponent = creature({ stats: { STR: 10, DEX: 10, CON: 10, INT: 5, WIS: 10, CHA: 10 } });
+    let conditions: ActiveCondition[] = [makeCondition('freeze')];
+
+    let r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([]));
+    expect(r.skipTurn).toBe(true);
+    conditions = r.conditions;
+    expect(applyCondition(conditions, 'freeze')).toBe('refreshed');
+    expect(conditions[0]!.remainingTurns).toBe(2); // duration refreshed to max
+
+    r = tickConditions(creature({ activeConditions: conditions }), opponent, scriptedRng([face(5, 20)]));
+    expect(r.skipTurn).toBe(true);
+    expect(r.events.map((e) => e.kind)).toContain('condition-expired');
+    expect(r.conditions).toEqual([]);
+  });
+
+  it('a re-applied PUSH pushes again instead of expiring (the companion fix)', () => {
+    // `push` (maxTurns 1) was the one condition whose effect fired only on the onset branch.
+    // With an explicit phase flag, a refreshed push reaches the active branch — and without
+    // its own active case it would EXPIRE there, i.e. re-applying a control would cancel it.
+    let conditions: ActiveCondition[] = [makeCondition('push')];
+    let r = tickConditions(creature({ activeConditions: conditions }), creature(), scriptedRng([]));
+    expect(r.skipTurn).toBe(true);
+    conditions = r.conditions;
+    expect(conditions[0]!.remainingTurns).toBe(0);
+
+    expect(applyCondition(conditions, 'push')).toBe('refreshed');
+    r = tickConditions(creature({ activeConditions: conditions }), creature(), scriptedRng([]));
+    expect(r.skipTurn).toBe(true);
+    expect(r.events.map((e) => e.kind)).toEqual(['condition-skip']);
+    expect(r.conditions).toHaveLength(1);
+  });
+
+  it('LEGACY GUARD — an instance saved with no `onsetDone` ticks exactly as it did before', () => {
+    // Two hand-built records in the pre-flag shape. The fallback is the OLD inference
+    // (`remainingTurns < maxTurns` means onset already happened), so both must behave as the
+    // shipped engine behaved: mid-life -> the active tick damages; full duration -> onset, 0.
+    const midLife: ActiveCondition = { type: 'bleed', remainingTurns: 1, maxTurns: 2 };
+    const mid = tickConditions(
+      creature({ activeConditions: [midLife] }),
+      creature(),
+      scriptedRng([]),
+    );
+    expect(mid.hpDelta).toBe(-1);
+    expect(mid.events).toEqual([
+      { kind: 'condition-damage', subject: 'player', conditionType: 'bleed', amount: 1 },
+    ]);
+
+    const fresh: ActiveCondition = { type: 'bleed', remainingTurns: 2, maxTurns: 2 };
+    const first = tickConditions(
+      creature({ activeConditions: [fresh] }),
+      creature(),
+      scriptedRng([]),
+    );
+    expect(first.hpDelta).toBe(0);
+    expect(first.events.map((e) => e.kind)).toEqual(['condition-onset']);
+
+    // Expiry is still reached at the same tick count for a legacy record.
+    const spent: ActiveCondition = { type: 'bleed', remainingTurns: 0, maxTurns: 2 };
+    const gone = tickConditions(
+      creature({ activeConditions: [spent] }),
+      creature(),
+      scriptedRng([]),
+    );
+    expect(gone.conditions).toEqual([]);
+    expect(gone.events.map((e) => e.kind)).toEqual(['condition-expired']);
   });
 });
 

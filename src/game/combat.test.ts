@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  combineAdvDis,
   rollD20WithAdvantage,
   weaponModifier,
   resolveAttackOutcome,
@@ -584,5 +585,33 @@ describe('attack events carry the roll that decided them', () => {
     );
     const event = r.events[0]!;
     expect(JSON.parse(JSON.stringify(event))).toEqual(event);
+  });
+});
+
+describe('combineAdvDis — the 5e cancellation rule, stated as a table', () => {
+  // The RULE, decided rather than inherited: advantage and disadvantage CANCEL, and two of
+  // the same are still just one. Every cell is written out so a change of rule fails here
+  // loudly instead of silently shifting hit rates:
+  //   - "the condition always wins"  would make (1, -1) read -1.
+  //   - "advantage always wins"      would make (-1, 1) read  1.
+  //   - a naive unclamped sum        would make (-1, -1) read -2, which is not a legal advDis.
+  it('cancels opposites, keeps like sources at one step, and never leaves -1|0|1', () => {
+    expect(combineAdvDis(0, 0)).toBe(0);
+    expect(combineAdvDis(1, 0)).toBe(1);
+    expect(combineAdvDis(0, 1)).toBe(1);
+    expect(combineAdvDis(-1, 0)).toBe(-1);
+    expect(combineAdvDis(0, -1)).toBe(-1);
+    expect(combineAdvDis(1, -1)).toBe(0); // cancellation
+    expect(combineAdvDis(-1, 1)).toBe(0); // cancellation, the other way round
+    expect(combineAdvDis(1, 1)).toBe(1); // two advantages are still one
+    expect(combineAdvDis(-1, -1)).toBe(-1); // two disadvantages are still one
+  });
+
+  it('normalizes any stored integer, so a legacy out-of-range value cannot widen the roll', () => {
+    // `Player.advantageDisadvantage` is a plain `number` on state, so a hand-edited or
+    // legacy save can carry 5 or -3; the roller only accepts -1|0|1.
+    expect(combineAdvDis(5, 0)).toBe(1);
+    expect(combineAdvDis(-3, 0)).toBe(-1);
+    expect(combineAdvDis(5, -3)).toBe(0);
   });
 });

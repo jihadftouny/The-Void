@@ -3,6 +3,7 @@ import { createBattle, resolveRound, rollFlee, spareAvailable } from './battle.t
 import { createPlayer, type Player } from './player.ts';
 import { type Enemy } from './enemy.ts';
 import { makeCondition } from './condition.ts';
+import { type CombatEvent } from './combatEvent.ts';
 import { type Rng } from './rng.ts';
 
 function scriptedRng(values: number[]): Rng {
@@ -527,6 +528,120 @@ describe('resolveRound — M3 class twists in a full round', () => {
       },
       { kind: 'condition-applied', subject: 'enemy', conditionType: 'bleed' },
     ]);
+  });
+});
+
+// ------- G30 / G22(a) ------------------------------------------------------------------------
+
+/** The enemy's `attack` event, narrowed so its roll detail can be read. */
+function enemyAttackEvent(events: readonly CombatEvent[]): Extract<CombatEvent, { kind: 'attack' }> {
+  const found = events.find((e) => e.kind === 'attack' && e.subject === 'enemy');
+  if (!found || found.kind !== 'attack') throw new Error('no enemy attack event was emitted');
+  return found;
+}
+
+describe('G30 — fracture inflicted on the ENEMY finally bites', () => {
+  // Step 3 always read the player's `advDisOverride`; step 2 never read the enemy's, so the
+  // enemy half of fracture — applied by `heavyStrike`, the Enforcer's CORE skill — had no
+  // consumer: the register measured byte-identical attacks at seeds 3/9/21/44.
+  //
+  // Independently derived from the dice rules, not measured:
+  //   clean    — advDis 0  -> ONE d20. face 15 + enemy STR mod 1 = 16 >= player AC 13 -> hit,
+  //              a skill-pick draw, Pyro Ball for 2. Player 20 - 2 = 18.
+  //   fractured— advDis -1 -> TWO d20s, take the MIN. faces 15 and 3 -> natural 3; 3 + 1 = 4
+  //              < AC 13 -> MISS, so 0 damage and NO skill-pick draw. Player stays at 20.
+  //   both     — player d20 face 15 + STR mod 4 = 19 >= enemy AC 10 -> hit, 1d6 face 4 -> 4.
+  it('rolls two dice at disadvantage where a clean enemy rolls one, and the log says so', () => {
+    const clean = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1);
+    const rClean = resolveRound(
+      clean,
+      'fight',
+      scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)]),
+    );
+    const cleanAttack = enemyAttackEvent(rClean.events);
+    expect(cleanAttack.roll!.faces).toEqual([15]);
+    expect(cleanAttack.roll!.advDis).toBe(0);
+    expect(cleanAttack.outcome).toBe('hit');
+    expect(rClean.state.player.hp).toBe(18);
+
+    const fractured = createBattle(
+      makePlayer({ hp: 20 }),
+      makeEnemy({ hp: 30, activeConditions: [makeCondition('fracture')] }),
+      1,
+    );
+    const rFrac = resolveRound(
+      fractured,
+      'fight',
+      // Exactly four draws: two for the disadvantaged enemy roll, then the player's two.
+      // A fifth (the skill-pick) would exhaust the script, proving the miss short-circuits.
+      scriptedRng([face(15, 20), face(3, 20), face(15, 20), face(4, 6)]),
+    );
+    const fracAttack = enemyAttackEvent(rFrac.events);
+    expect(fracAttack.roll!.faces).toEqual([15, 3]);
+    expect(fracAttack.roll!.advDis).toBe(-1);
+    expect(fracAttack.roll!.natural).toBe(3); // disadvantage takes the LOWER face
+    expect(fracAttack.outcome).toBe('miss');
+    expect(rFrac.state.player.hp).toBe(20); // the fractured enemy whiffed
+
+    // The existing `disadvantage` event carries it into the log — no new event kind.
+    expect(rFrac.events).toContainEqual({ kind: 'disadvantage', subject: 'enemy' });
+    expect(rClean.events.some((e) => e.kind === 'disadvantage')).toBe(false);
+  });
+
+  it('a Scavver-imposed disadvantage and an enemy fracture CANCEL to a straight roll', () => {
+    // The 5e cancellation rule, applied to the enemy half. A Scavver forces the enemy to
+    // disadvantage (-1); an enemy fracture is another -1 — but adv/dis is a state, not a
+    // stack, so two of the same still mean ONE disadvantage (two dice, take the lower).
+    // Against a Scavver whose fracture instead granted the enemy advantage, the faces would
+    // still be two but `advDis` would read +1 — so this pins the direction, not just the count.
+    const state = createBattle(
+      makePlayer({ hp: 20, classId: 'Scavver' }),
+      makeEnemy({ hp: 30, activeConditions: [makeCondition('fracture')] }),
+      1,
+    );
+    const r = resolveRound(state, 'fight', scriptedRng([face(15, 20), face(3, 20), face(15, 20), face(4, 8)]));
+    const attack = enemyAttackEvent(r.events);
+    expect(attack.roll!.advDis).toBe(-1);
+    expect(attack.roll!.faces).toEqual([15, 3]);
+  });
+});
+
+describe('G22(a) — a healing condition tick can never exceed effective max HP', () => {
+  // Enemy rolls face 5 + STR mod 1 = 6 < player AC 13 -> MISS (0 damage, no skill-pick draw),
+  // so the heal is isolated from the exchange. Regeneration's ONSET tick heals +2.
+  it('a player at full HP with regeneration stays at maxHp instead of overhealing to 22', () => {
+    const state = createBattle(
+      makePlayer({ hp: 20, maxHp: 20, activeConditions: [makeCondition('regeneration')] }),
+      makeEnemy({ hp: 30 }),
+      1,
+    );
+    const r = resolveRound(state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
+    expect(r.state.player.hp).toBe(20); // pre-fix: 20 + 2 = 22
+    expect(r.events).toContainEqual({
+      kind: 'condition-heal', subject: 'player', conditionType: 'regeneration', amount: 2,
+    });
+  });
+
+  it('the ENEMY side has the same cap (the mirror hole, closed in the same edit)', () => {
+    const state = createBattle(
+      makePlayer({ hp: 20 }),
+      makeEnemy({ hp: 30, maxHp: 30, activeConditions: [makeCondition('regeneration')] }),
+      1,
+    );
+    const r = resolveRound(state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
+    // Capped at 30 by the tick, then the player's 1d6 face 4 lands: 30 - 4 = 26.
+    // Pre-fix: 30 + 2 = 32, then - 4 = 28.
+    expect(r.state.enemy.hp).toBe(26);
+  });
+
+  it('a HEALING tick below the cap still heals in full (the clamp is not a cap-to-current)', () => {
+    const state = createBattle(
+      makePlayer({ hp: 10, maxHp: 20, activeConditions: [makeCondition('regeneration')] }),
+      makeEnemy({ hp: 30 }),
+      1,
+    );
+    const r = resolveRound(state, 'fight', scriptedRng([face(5, 20), face(15, 20), face(4, 6)]));
+    expect(r.state.player.hp).toBe(12); // 10 + 2, well under the cap
   });
 });
 

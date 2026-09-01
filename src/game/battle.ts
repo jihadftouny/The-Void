@@ -24,7 +24,7 @@ import { getFamily } from './enemyFamily.ts';
 import { type Rng } from './rng.ts';
 import { type CombatEvent, type DamageSource, withDamageSource } from './combatEvent.ts';
 import { hasControlCondition, tickConditions, type ConditionType } from './condition.ts';
-import { resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
+import { combineAdvDis, resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
 import { resolveSkill, type SkillDef, type SkillId } from './skill.ts';
 import { castSkill, grantMomentum, usesMomentum } from './classKit.ts';
 import { perkModifiers } from './perks.ts';
@@ -210,7 +210,17 @@ function resolvePlayerTurn(
   //    negative DoT (dotTickMult) — identity 1 for a normal run.
   const etc = tickConditions(enemy, player, rng);
   const enemyTickDelta = etc.hpDelta < 0 ? etc.hpDelta * mods.dotTickMult : etc.hpDelta;
-  enemy = { ...enemy, activeConditions: etc.conditions, hp: enemy.hp + enemyTickDelta };
+  // G22(a), enemy half: a HEALING tick (regeneration) is capped at the enemy's effective max
+  // HP. The player side had the same hole and the same one-line fix; closing only one would
+  // leave the mirror bug live. Negative deltas are untouched (the 0 floor is applied below /
+  // at step 5), and the cap is read from the POST-tick conditions so an augment that expired
+  // this very tick no longer inflates it.
+  const tickedEnemy: Enemy = { ...enemy, activeConditions: etc.conditions };
+  const rawEnemyHp = enemy.hp + enemyTickDelta;
+  enemy = {
+    ...tickedEnemy,
+    hp: enemyTickDelta > 0 ? Math.min(rawEnemyHp, effectiveMaxHp(tickedEnemy)) : rawEnemyHp,
+  };
   events.push(...etc.events);
   const skipEnemyAttack = etc.skipTurn;
   if (enemy.hp <= 0) {
@@ -225,7 +235,14 @@ function resolvePlayerTurn(
   let enemyDamage = 0;
   if (!skipEnemyAttack) {
     const defenderAc = playerArmorClass(player);
-    const enemyAdvDis = enemyAdvDisVs(player);
+    // G30: the enemy's roll now combines the adv/dis its TARGET imposes (Scavver evasion)
+    // with the override its OWN condition tick just produced. Step 3 always read
+    // `advDisOverride` for the player and step 2 never read it for the enemy, so the enemy
+    // half of `fracture` — inflicted by `heavyStrike`, the Enforcer's core skill — had no
+    // consumer at all: a fractured enemy and a clean one rolled byte-identically. The
+    // existing `disadvantage {subject:'enemy'}` event now fires for it, so the log shows it
+    // too, with NO new event kind.
+    const enemyAdvDis = combineAdvDis(enemyAdvDisVs(player), etc.advDisOverride);
     const ea = resolveEnemyAttack(enemy, player, defenderAc, enemyAdvDis, rng);
     enemy = ea.enemy;
     player = ea.target;
@@ -249,7 +266,16 @@ function resolvePlayerTurn(
 
   // 3. Tick the player's conditions (damage/heal/skip/fracture), then apply hp delta.
   const ptc = tickConditions(player, enemy, rng);
-  player = { ...player, activeConditions: ptc.conditions, hp: player.hp + ptc.hpDelta };
+  // G22(a): a HEALING tick (regeneration, Penitent consecrate) is capped at the player's
+  // effective max HP. Before this, `hp + ptc.hpDelta` was written raw, so a regeneration tick
+  // could leave `hp > maxHp` — reproduced in the register. Same shape as the enemy clamp in
+  // step 1; the cap reads the POST-tick conditions.
+  const tickedPlayer: Player = { ...player, activeConditions: ptc.conditions };
+  const rawPlayerHp = player.hp + ptc.hpDelta;
+  player = {
+    ...tickedPlayer,
+    hp: ptc.hpDelta > 0 ? Math.min(rawPlayerHp, effectiveMaxHp(tickedPlayer)) : rawPlayerHp,
+  };
   if (ptc.advDisOverride !== 0) {
     player = { ...player, advantageDisadvantage: ptc.advDisOverride };
   }

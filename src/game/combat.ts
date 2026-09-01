@@ -344,3 +344,22 @@ function normalizeAdvDis(value: number): -1 | 0 | 1 {
   if (value < 0) return -1;
   return 0;
 }
+
+/**
+ * Combine two independent advantage/disadvantage sources into the single −1|0|1 the roller
+ * takes — PURE, RNG-free.
+ *
+ * RULE: they CANCEL (D&D 5e). One source of advantage and one of disadvantage means you roll
+ * straight; two sources of advantage are still just advantage. This is the least surprising
+ * rule for an explicitly D&D-style engine, and it is the reason the sum is clamped rather
+ * than added. Recorded as a DECISION, not an accident: the alternative ("the condition always
+ * wins") would make a fracture override the random-encounter ambush bonus.
+ *
+ * Used for both halves of the round: the player's standing battle advantage combined with a
+ * condition's per-round override, and the enemy's class-imposed disadvantage (Scavver evasion)
+ * combined with a fracture ticking on the ENEMY — the consumer G30 says the enemy half of
+ * fracture never had.
+ */
+export function combineAdvDis(a: number, b: number): -1 | 0 | 1 {
+  return normalizeAdvDis(normalizeAdvDis(a) + normalizeAdvDis(b));
+}
