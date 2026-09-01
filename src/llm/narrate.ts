@@ -209,8 +209,87 @@ export function describeEvent(e: GameEvent): string {
     case 'no-rests':
       return `There is no rest left in you.`;
 
-    default:
+    // ---- G13: DELIBERATE SILENCE — seventeen kinds that return '' on purpose ----------
+    //
+    // This block is the reviewable record of "these were considered and silenced", and it
+    // is what stops the enumeration going stale a third time. It is CURATED, not "whatever
+    // the register did not name" — and the curation is load-bearing, because of G42.
+    //
+    // ⚠ WHY SILENCE IS NOW A DECISION WITH A COST. The G42 fix in src/desktop/game.ts
+    // clears the narration pane only once a prompt exists. That is right — it stops the
+    // click after the ending erasing the ending's own prose — but it means a step whose
+    // events are ALL silent no longer blanks the pane: it leaves the PREVIOUS beat sitting
+    // there. For a rejected input that is exactly correct (nothing happened, so the
+    // narration should not change). For anything that actually happened it would be a lie
+    // on screen. So: if a kind means something HAPPENED, it must get a fact line above,
+    // even if the register never named it. That is why `rest-declined`, `no-rests`,
+    // `shield-gained`, `shield-absorbed` and `revive` are narrated.
+
+    // Rejected inputs — the player asked for something they could not do, so NOTHING
+    // happened. Silence is correct, and leaving the previous beat on screen is correct.
+    case 'cast-unavailable':
+    case 'potion-unavailable':
+    case 'potion-blocked':
+    case 'spare-unavailable':
+    case 'consumable-unavailable':
       return '';
+
+    // The condition family. Narrating these properly needs CONDITION_DATA display names
+    // and subject-aware plurals — that is FINDINGS.md C10/C7, routed to PLAN.md #13 #12.
+    // Writing them here would ship four NEW instances of a known defect straight into the
+    // model's ground truth. `condition-applied` (cased above) already tells the model that
+    // a condition landed, so the beat is not invisible. Keeping the whole family silent
+    // also means PLAN.md #1.5's `insanity` -> `Static` rename touches nothing in this file.
+    case 'condition-onset':
+    case 'condition-heal':
+    case 'condition-skip':
+    case 'condition-expired':
+      return '';
+
+    // Mechanical framing with no observable moment of its own: the `attack` event in the
+    // same step already carries the outcome the player actually sees.
+    case 'advantage':
+    case 'disadvantage':
+      return '';
+
+    // A numeric gauge the HUD owns. VOID_PERSONA forbids the narrator naming numbers or
+    // mechanics, and a momentum/corruption counter is nothing but both.
+    case 'resource-changed':
+      return '';
+
+    // Carries only internal enum ids (`trigger`, `action`) — printing them IS the C9
+    // defect ("On onHit: dealDamage"). Whatever the relic actually DID emits its own event
+    // (`shield-gained` / `revive` / damage), and those are narrated, so the effect is
+    // visible to the model even though its bookkeeping is not.
+    case 'relic-triggered':
+      return '';
+
+    // `itemId` and `stat` are internal ids; both need a catalog/stat display-name table
+    // that does not exist yet (C7 -> #13). A raw id in a fact reads to the model as the
+    // item's real name and it will narrate the id.
+    case 'consumable-used':
+    case 'stat-stolen':
+      return '';
+
+    // Pure phase scaffolding — the UI renders the title screen and the rolled stat line
+    // itself. There is no moment here for the Void to narrate.
+    case 'title':
+    case 'stats-rolled':
+      return '';
+
+    default: {
+      // EXHAUSTIVENESS (G13). If a 64th `GameEvent` kind is ever added without a case
+      // above, `e` is no longer `never` here and THE BUILD FAILS, naming the new kind —
+      // instead of the kind silently producing no narration forever, which is how 34 of
+      // the 63 got here. This is the gate the register asked for; the register's literal
+      // `const _never: never = e;` does not compile under tsconfig's `noUnusedLocals`,
+      // so the value is read with `void`. `return _never` would also compile but would
+      // hand back an event object where a `string` is declared: `describeEvent` must stay
+      // total AND honest, so it returns the empty string.
+      const _never: never = e;
+      void _never;
+      return '';
+    }
   }
 }
 
