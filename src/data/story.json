@@ -7,7 +7,7 @@
       "You are the last hope of your society. The Kingpins of",
       "The Undercity finally put their convoluted plan into action,",
       "and the Arch-Mage of house Grandmore has ordered you",
-      "{playerName}, to delve into the Rift and kill the kingpins.",
+      "to delve into the Rift and kill the kingpins.",
       ". . .",
       "Return with their brainchips so that Grandmore's Memorians can extract all the available information from them."
     ]
@@ -33,11 +33,11 @@
   "endings": {
     "grace": {
       "header": "ASCENSION",
-      "body": "{playerName} is judged worthy and rises from the Void, made whole."
+      "body": "You are judged worthy and rise from the Void, made whole."
     },
     "damnation": {
       "header": "DAMNATION",
-      "body": "{playerName} is cast down, and the Void claims its own."
+      "body": "You are cast down, and the Void claims its own."
     }
   }
 }
