@@ -63,6 +63,35 @@ describe('dispatch() decides "the run is over" ONCE, through isRunOver', () => {
     expect(clear).toBeLessThan(save);
   });
 
+  it('branches on isRunOver POSITIVELY — the polarity, not just the order', () => {
+    // FIX ROUND 2, and the one site in this unit that genuinely cannot be behavioural:
+    // `src/desktop/game.ts` calls the Electron IPC at module scope, so it cannot be imported
+    // at all. The other two polarity holes found in this round were closed by moving the
+    // decision into a pure function and testing it (`handleOverlayKey`, `actionButton`);
+    // there is no equivalent move here, because what is being asserted IS the wiring.
+    //
+    // Why an ordering assertion was not enough: the test above pins
+    // index(isRunOver) < index(clearRun) < index(saveRun), and flipping
+    // `if (isRunOver(...))` to `if (!isRunOver(...))` preserves all three positions exactly.
+    // What it does is restore G2 and add a second, worse defect: a finished run takes the
+    // `saveRun` branch (a won run stays resumable — G2, verbatim), and EVERY ONGOING STEP
+    // takes `clearRun()`, so the autosave is deleted continuously and quitting mid-descent
+    // loses the whole run.
+    //
+    // Matched with any spacing, and requiring the call to be the WHOLE condition, so
+    // `if (!isRunOver(x))` and `if (x && !isRunOver(y))` both fail.
+    const BRANCH = /if\s*\(\s*isRunOver\s*\([^)]*\)\s*\)/;
+    expect(
+      body,
+      'dispatch() no longer branches directly on isRunOver(...) — if the condition was ' +
+        'negated or widened, a finished run is autosaved and an ongoing one is cleared',
+    ).toMatch(BRANCH);
+    // Belt and braces: no negated form anywhere in the body, whatever else changed.
+    expect(body, 'dispatch() negates isRunOver — that inverts G2 and deletes live saves').not.toMatch(
+      /!\s*isRunOver\s*\(/,
+    );
+  });
+
   it('does NOT decide it twice, from two conditions that can disagree', () => {
     // THIS IS G2, in its exact shape: the apply keyed off `phase.kind === 'ending'` while the
     // clear keyed off `awaiting === 'game-over'`. A victory settles at the `ending` phase, so
@@ -224,6 +253,25 @@ describe('renderSheet() puts condition chips on the HUD', () => {
     expect(body).toMatch(/chips\s*\(\s*p\.activeConditions\s*\)/);
     expect(body).toMatch(/chips\s*\(\s*e\.activeConditions\s*\)/);
   });
+
+  it('and the chip row carries no branch that could be inverted', () => {
+    // FOUND BY SWEEPING in fix round 2, in this unit's own new code. The `chips` helper used
+    // to open with `if (models.length === 0) return;`. Inverting that renders the row ONLY
+    // when it is empty — so condition chips never appear again, G28(a) silently restored —
+    // and every assertion above stays green, because the calls are all still there.
+    //
+    // Rather than add a fourth polarity regex, the branch was DELETED: the row is appended
+    // unconditionally and `#sheet .chips:empty` collapses it, the idiom already used for
+    // `#log` and `#notice`. A branch that does not exist cannot be inverted. This asserts it
+    // stays deleted, since re-adding the early return would be the natural "tidy-up".
+    const start = body.indexOf('const chips =');
+    expect(start, 'the chips helper is gone — this guard has gone stale').toBeGreaterThan(-1);
+    const helper = body.slice(start, body.indexOf('};', start));
+    expect(
+      helper,
+      'the chip row grew a conditional again — invert it and the chips vanish for good',
+    ).not.toMatch(/\bif\s*\(|\breturn\b|\?\s*.*:/);
+  });
 });
 
 // =========================================================================================
@@ -251,6 +299,25 @@ describe('the boot resume path restores the meta-progression, not just the state
 
   it('and the state restore it sits beside is still there (so the guard has an anchor)', () => {
     expect(SOURCE).toMatch(/state\s*=\s*saved[A-Za-z0-9_.?!]*\.state/);
+  });
+
+  it('restores the meta on the branch where it EXISTS, not the one where it is null', () => {
+    // FOUND IN THIS ROUND by sweeping for the same shape the report named, rather than only
+    // fixing the three sites it listed. The two assertions above match the assignment text
+    // wherever it sits, so flipping `if (saved.meta)` to `if (!saved.meta)` leaves them
+    // green — while restoring nothing when a meta exists (G19, restored) and dereferencing
+    // `saved.meta.runSummary` when it is null (a TypeError on the boot path, so the game
+    // fails to start at all on a legacy save).
+    const BRANCH = /if\s*\(\s*saved[A-Za-z0-9_.?!]*\.meta\s*\)/;
+    expect(
+      SOURCE,
+      'the resume path no longer branches positively on saved.meta',
+    ).toMatch(BRANCH);
+    expect(
+      SOURCE,
+      'the resume path negates saved.meta — it restores nothing when there IS a meta, and ' +
+        'dereferences null when there is not',
+    ).not.toMatch(/if\s*\(\s*!\s*saved[A-Za-z0-9_.?!]*\.meta\s*\)/);
   });
 });
 

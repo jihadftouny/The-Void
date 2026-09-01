@@ -207,13 +207,23 @@ function renderSheet(): void {
     el.textContent = text;
     sheetEl.appendChild(el);
   };
-  /** A combatant's condition row, or nothing at all when they carry none. */
+  /**
+   * A combatant's condition row. Always appended, even when empty — `#sheet .chips:empty` in
+   * game.css collapses it, exactly as `#log:empty` and `#notice:empty` already do.
+   *
+   * The early return this replaces (`if (models.length === 0) return;`) was a POLARITY HOLE
+   * of the same family as the three the test report named, found by sweeping for the shape
+   * rather than waiting to be told: inverting it renders the row only when there is nothing
+   * to put in it, so condition chips never appear again — G28(a), silently restored — and
+   * every source scan that merely asserts `chips(...)` is called stays green.
+   *
+   * Deleting the branch is a better answer than guarding it. A branch that cannot be written
+   * cannot be inverted, and CSS was already doing this job for two other elements.
+   */
   const chips = (active: readonly ActiveCondition[]): void => {
-    const models = conditionChips(active);
-    if (models.length === 0) return;
     const row = document.createElement('div');
     row.className = 'chips';
-    for (const model of models) row.appendChild(chip(model));
+    for (const model of conditionChips(active)) row.appendChild(chip(model));
     sheetEl.appendChild(row);
   };
 

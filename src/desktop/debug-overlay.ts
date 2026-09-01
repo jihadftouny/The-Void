@@ -42,6 +42,33 @@ export function togglesOverlay(event: OverlayKey): boolean {
   return !isTypingTarget(event.target);
 }
 
+/** A keydown, reduced to the three things the overlay actually touches. */
+export interface OverlayKeyEvent extends OverlayKey {
+  preventDefault(): void;
+}
+
+/**
+ * The whole `keydown` REACTION — PURE apart from the two callbacks it is handed, and
+ * therefore testable with plain object stand-ins.
+ *
+ * WHY THIS IS A FUNCTION AND NOT THREE LINES IN THE LISTENER. Having the DECISION
+ * (`togglesOverlay`) tested was not enough: the listener still owned the `if`, and a source
+ * scan that checks which markers appear and in what ORDER cannot see the POLARITY of the `if`
+ * they hang on. Flipping `if (!togglesOverlay(ev))` to `if (togglesOverlay(ev))` left every
+ * marker in place and every assertion green — while making a backtick on the body do nothing
+ * and making EVERY character typed into the name field call `preventDefault()` and toggle the
+ * panel. The field becomes untypable and the overlay flickers on every keystroke: strictly
+ * worse than the G40 this all started as.
+ *
+ * With the action in here, that mutation is a behavioural failure rather than a spelling the
+ * regex happened not to match, and no future re-spelling of the listener can hide it.
+ */
+export function handleOverlayKey(event: OverlayKeyEvent, toggle: () => void): void {
+  if (!togglesOverlay(event)) return;
+  event.preventDefault();
+  toggle();
+}
+
 export function createDebugOverlay(getEntries: () => LogEntry[]): void {
   const panel = document.createElement('div');
   panel.id = 'debug-overlay';
@@ -89,14 +116,11 @@ export function createDebugOverlay(getEntries: () => LogEntry[]): void {
     }
   };
 
-  window.addEventListener('keydown', (ev) => {
-    // G40: the decision — including "is the user typing?" — is the pure `togglesOverlay`,
-    // so it is tested. `preventDefault` moved INSIDE the guard: calling it first was the
-    // defect, because it swallowed the keystroke before deciding whether it was ours.
-    if (!togglesOverlay(ev)) return;
-    ev.preventDefault();
-    toggle();
-  });
+  // G40: the whole reaction — the decision, the `preventDefault` and the toggle — lives in
+  // the pure `handleOverlayKey`, so all three are tested rather than only the first. The
+  // listener is now nothing but the wire from the browser to that function, which is the
+  // smallest thing that can go wrong here.
+  window.addEventListener('keydown', (ev) => handleOverlayKey(ev, toggle));
   filter.addEventListener('input', render);
   copyBtn.addEventListener('click', () => {
     void navigator.clipboard?.writeText(getEntries().map(formatEntry).join('\n'));

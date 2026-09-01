@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { actionButton, appendLogLine } from './components.ts';
 import {
   hpFraction,
   barModel,
@@ -361,5 +362,150 @@ describe('appendLogLine keeps the native expander, and sets text as text', () =>
     );
     // ...and it does set text, or the "must not" above would pass by rendering nothing.
     expect(body).toMatch(/\.\s*textContent\s*=/);
+  });
+});
+
+// =========================================================================================
+// BEHAVIOURAL tests for the two view builders — FIX ROUND 2.
+//
+// WHY THE SOURCE SCANS ABOVE ARE NOT ENOUGH. They assert which markers appear and in what
+// order. That is structurally blind to the POLARITY of the `if` those markers hang on, and
+// both builders turn on exactly one `if`:
+//
+//   · `actionButton`  — `if (model.disabled)`. Flip it and EVERY ENABLED BUTTON IN THE GAME
+//     gets `disabled = true` and no handler, while every disabled one gets a live handler.
+//     AC-46's whole contract is inverted, and the ordering assertion above cannot see it.
+//   · `appendLogLine` — `if (line.detail === undefined)`. Flip it and plain beats grow empty
+//     expanders while every attack LOSES its dice — G18's second half, silently dead again.
+//     (That second site is not in the report; it is the same root cause, found by looking for
+//     it here.)
+//
+// The repo's rule is that only pure logic is unit-tested, because Vitest runs
+// `environment: 'node'` and there is no DOM. But both builders are pure functions OF the
+// document they are handed — so the document is stood in for, exactly as `persist.test.ts`
+// and `unlockStorage.test.ts` already stand in for `localStorage`. No jsdom, no new
+// dependency, ~30 lines. That is a far more durable guard than a cleverer regex, and it is
+// the form `CLAUDE.md`'s long-term principle asks for.
+// =========================================================================================
+
+interface FakeElement {
+  tagName: string;
+  className: string;
+  textContent: string;
+  disabled: boolean;
+  classes: string[];
+  classList: { add(name: string): void };
+  listeners: { type: string; handler: () => void }[];
+  children: FakeElement[];
+  addEventListener(type: string, handler: () => void, opts?: unknown): void;
+  appendChild(child: FakeElement): FakeElement;
+  append(...kids: FakeElement[]): void;
+}
+
+function fakeElement(tagName: string): FakeElement {
+  const el: FakeElement = {
+    tagName: tagName.toUpperCase(),
+    className: '',
+    textContent: '',
+    disabled: false,
+    classes: [],
+    listeners: [],
+    children: [],
+    classList: { add: (name: string) => void el.classes.push(name) },
+    addEventListener: (type, handler) => void el.listeners.push({ type, handler }),
+    appendChild: (child) => {
+      el.children.push(child);
+      return child;
+    },
+    append: (...kids) => void el.children.push(...kids),
+  };
+  return el;
+}
+
+const g = globalThis as { document?: unknown };
+function withFakeDocument<T>(body: () => T): T {
+  const had = 'document' in g;
+  const previous = g.document;
+  g.document = { createElement: (tag: string) => fakeElement(tag) };
+  try {
+    return body();
+  } finally {
+    if (had) g.document = previous;
+    else delete g.document;
+  }
+}
+
+/** Build a button through the real `actionButton` and read what came out. */
+function builtButton(model: Parameters<typeof actionButton>[0], onClick: () => void): FakeElement {
+  return withFakeDocument(() => actionButton(model, onClick) as unknown as FakeElement);
+}
+
+describe('actionButton — a disabled button is INERT, not merely grey', () => {
+  it('an enabled button carries exactly one live click handler', () => {
+    let clicks = 0;
+    const el = builtButton(buttonModel('Fight'), () => {
+      clicks += 1;
+    });
+    expect(el.tagName).toBe('BUTTON');
+    expect(el.disabled).toBe(false);
+    expect(el.classes).not.toContain('is-disabled');
+    expect(el.listeners.map((l) => l.type)).toEqual(['click']);
+    // The handler is the one we passed, not some other function.
+    el.listeners[0]!.handler();
+    expect(clicks).toBe(1);
+  });
+
+  it('a disabled button carries NO handler at all — a stray press cannot dispatch', () => {
+    let clicks = 0;
+    const el = builtButton(buttonModel('Potion', { disabled: true, hint: '(0)' }), () => {
+      clicks += 1;
+    });
+    expect(el.disabled).toBe(true);
+    expect(el.classes).toContain('is-disabled');
+    expect(el.listeners, 'a disabled button was given a click handler').toEqual([]);
+    expect(clicks).toBe(0);
+  });
+
+  it('the hint is appended to the label, and omitted when there is none', () => {
+    expect(builtButton(buttonModel('Cast', { hint: '(2⚡)' }), () => {}).textContent).toBe('Cast (2⚡)');
+    expect(builtButton(buttonModel('Rest'), () => {}).textContent).toBe('Rest');
+  });
+});
+
+describe('appendLogLine — the expander appears exactly when there are dice', () => {
+  function appended(line: { text: string; detail?: string }): FakeElement {
+    return withFakeDocument(() => {
+      const parent = fakeElement('div');
+      appendLogLine(parent as unknown as HTMLElement, line);
+      expect(parent.children).toHaveLength(1);
+      return parent.children[0]!;
+    });
+  }
+
+  it('a beat with NO dice is a plain line — no empty expander to tab through', () => {
+    const el = appended({ text: 'You escape into the Void.' });
+    expect(el.textContent).toBe('You escape into the Void.');
+    expect(el.children, 'a plain beat grew an expander it has nothing to put in').toEqual([]);
+  });
+
+  it('a beat WITH dice becomes a native details/summary carrying both strings', () => {
+    const el = appended({ text: 'You strike — hit for 4 damage.', detail: 'd20+2 = 17 vs AC 13 → hit, 1d8 = 4' });
+    // The line itself holds no text; the summary does. (If the polarity inverted, the text
+    // would be here and the detail would be gone entirely.)
+    expect(el.textContent).toBe('');
+    expect(el.children).toHaveLength(1);
+    const details = el.children[0]!;
+    expect(details.tagName).toBe('DETAILS');
+    expect(details.children.map((c) => c.tagName)).toEqual(['SUMMARY', 'DIV']);
+    expect(details.children[0]!.textContent).toBe('You strike — hit for 4 damage.');
+    expect(details.children[1]!.textContent).toBe('d20+2 = 17 vs AC 13 → hit, 1d8 = 4');
+  });
+
+  it('the dice are never lost — every detail string reaches the DOM', () => {
+    // The sharpest form of the polarity check: a beat that HAS dice must render them
+    // somewhere. An inverted branch drops `line.detail` on the floor without erroring.
+    const el = appended({ text: 'beat', detail: 'nat 20 → critical, 1d8 + 1d8 = 9' });
+    const rendered = JSON.stringify(el);
+    expect(rendered, 'the roll detail never reached the page').toContain('nat 20 → critical');
   });
 });

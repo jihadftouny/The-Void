@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { isTypingTarget, togglesOverlay } from './debug-overlay.ts';
+import { isTypingTarget, togglesOverlay, handleOverlayKey } from './debug-overlay.ts';
 
 /** A stand-in for an element, carrying only what the predicate reads. */
 const el = (tagName: string, isContentEditable = false) => ({ tagName, isContentEditable });
@@ -71,8 +71,102 @@ describe('togglesOverlay', () => {
 });
 
 // =========================================================================================
+// THE REACTION, not just the decision — FIX ROUND 2.
+//
+// Round 1 made the listener's shape a source scan: it asserted that `togglesOverlay` appears,
+// that `ev.key ===` does not, and that `preventDefault` comes AFTER the guard. All three
+// survive a single-character mutation — flipping `if (!togglesOverlay(ev))` to
+// `if (togglesOverlay(ev))` — because every marker is still present and still in order. A
+// source scan can see WHICH markers appear and in WHAT ORDER; it is structurally blind to the
+// POLARITY of the `if` they hang on.
+//
+// What that mutation actually does: a backtick on the body returns early, so the overlay
+// never opens; and every character typed into the character-name `<input>` reaches
+// `preventDefault()` and `toggle()`. The name field becomes untypable and the debug panel
+// flickers open on every keystroke — strictly worse than the G40 this began as.
+//
+// So the ACTION moved into `handleOverlayKey`, which is pure apart from the two callbacks it
+// is handed, and is tested here with the same plain-object stand-ins the rest of this file
+// uses. Polarity is now a behavioural fact, not a spelling a regex may or may not match.
+// =========================================================================================
+
+/** A stand-in keydown that records whether `preventDefault` was called. */
+function keyOn(key: string, target: unknown) {
+  const calls = { prevented: 0, toggled: 0 };
+  const event = {
+    key,
+    target,
+    preventDefault: () => {
+      calls.prevented += 1;
+    },
+  };
+  const toggle = () => {
+    calls.toggled += 1;
+  };
+  return { event, toggle, calls };
+}
+
+describe('handleOverlayKey — what the listener actually DOES', () => {
+  it('a backtick on the page body opens the overlay and consumes the key', () => {
+    const { event, toggle, calls } = keyOn('`', BODY);
+    handleOverlayKey(event, toggle);
+    expect(calls).toEqual({ prevented: 1, toggled: 1 });
+  });
+
+  it('F2 does the same', () => {
+    const { event, toggle, calls } = keyOn('F2', BODY);
+    handleOverlayKey(event, toggle);
+    expect(calls).toEqual({ prevented: 1, toggled: 1 });
+  });
+
+  it('an ordinary key does NOTHING — it is neither consumed nor acted on', () => {
+    // The half an ordering assertion cannot see. If the guard's polarity inverts, this key
+    // gets swallowed AND opens the panel.
+    for (const key of ['a', 'Z', 'Enter', 'Escape', ' ', '~', "'"]) {
+      const { event, toggle, calls } = keyOn(key, BODY);
+      handleOverlayKey(event, toggle);
+      expect(calls, `"${key}" must be left entirely alone`).toEqual({ prevented: 0, toggled: 0 });
+    }
+  });
+
+  it('a backtick typed into a FIELD is left alone — this is G40 itself', () => {
+    // Not merely "the overlay does not open": `preventDefault` must not fire either, or the
+    // character never reaches the input and the name field cannot contain a backtick.
+    for (const target of [el('INPUT'), el('TEXTAREA'), el('SELECT'), el('DIV', true)]) {
+      const { event, toggle, calls } = keyOn('`', target);
+      handleOverlayKey(event, toggle);
+      expect(calls, `${(target as { tagName: string }).tagName} swallowed the key`).toEqual({
+        prevented: 0,
+        toggled: 0,
+      });
+    }
+  });
+
+  it('consumes the key ONLY when it also toggles — the two always agree', () => {
+    // The invariant behind both halves, swept over the whole matrix. An inverted guard
+    // breaks it in both directions at once: ordinary keys become (1,1) and backticks (0,0).
+    const targets = [BODY, el('DIV'), el('INPUT'), el('TEXTAREA'), el('DIV', true)];
+    let opened = 0;
+    let ignored = 0;
+    for (const key of ['`', 'F2', 'a', 'Enter']) {
+      for (const target of targets) {
+        const { event, toggle, calls } = keyOn(key, target);
+        handleOverlayKey(event, toggle);
+        expect(calls.prevented, `${key} on ${JSON.stringify(target)}`).toBe(calls.toggled);
+        if (calls.toggled > 0) opened += 1;
+        else ignored += 1;
+      }
+    }
+    // Non-vacuity: the sweep must contain BOTH outcomes, or "they always agree" is trivially
+    // satisfied by a function that never does anything at all.
+    expect(opened).toBeGreaterThan(0);
+    expect(ignored).toBeGreaterThan(0);
+  });
+});
+
+// =========================================================================================
 // The WIRING. `createDebugOverlay` builds DOM at call time and so is not unit-tested here
-// (the repo's standing rule). But a pure predicate nothing calls is not a fix: reverting the
+// (the repo's standing rule). But a pure function nothing calls is not a fix: reverting the
 // listener to its original three lines leaves every test above green while the backtick is
 // swallowed exactly as before. So the listener is read.
 // =========================================================================================
@@ -87,9 +181,9 @@ describe('the keydown listener really uses the predicate', () => {
     expect(start, 'the overlay no longer binds keydown — this guard has gone stale').toBeGreaterThan(-1);
   });
 
-  it('routes the decision through togglesOverlay, not a raw key comparison', () => {
+  it('routes the decision through the tested helper, not a raw key comparison', () => {
     const handler = code.slice(start, start + 400);
-    expect(handler, 'the listener bypasses the tested predicate').toMatch(/togglesOverlay\s*\(/);
+    expect(handler, 'the listener bypasses the tested reaction').toMatch(/handleOverlayKey\s*\(/);
     // G40's exact shape: comparing `ev.key` in the listener means the decision is made where
     // no test can see it, and `preventDefault` runs before anyone asks whose key it is.
     // Matched with either quote style and any spacing.
@@ -99,30 +193,28 @@ describe('the keydown listener really uses the predicate', () => {
     ).not.toMatch(/\bev\.key\s*===/);
   });
 
-  it('and calls preventDefault only AFTER deciding the key is ours', () => {
-    // FIX ROUND 1. The two assertions above both go red correctly, but they miss the shape
-    // `debug-overlay.ts`'s own comment names as the defect — "`preventDefault` moved INSIDE
-    // the guard: calling it first was the defect". Hoisting it back above the guard:
+  it('DELEGATES — it makes no decision and takes no action of its own', () => {
+    // FIX ROUND 2 replaces what used to be here. Round 1 asserted an ORDERING —
+    // index(preventDefault) > index(togglesOverlay) — to catch `preventDefault` being hoisted
+    // above the guard. That was a true improvement and it is still caught, but ordering is
+    // blind to POLARITY: flipping `if (!togglesOverlay(ev))` to `if (togglesOverlay(ev))`
+    // preserves both markers and their order, and the assertion stayed green.
     //
-    //     window.addEventListener('keydown', (ev) => {
-    //       ev.preventDefault();              // <-- swallows EVERY keystroke on the window
-    //       if (!togglesOverlay(ev)) return;
-    //       toggle();
-    //     });
-    //
-    // …still calls `togglesOverlay` and still contains no `ev.key ===`, so both pass — while
-    // the game becomes strictly WORSE than G40 ever was: G40 ate only the backtick, this eats
-    // every key, including every character of the player's name and the Enter that submits it.
-    // Position is the only thing that distinguishes them, so position is what is asserted.
+    // The fix is not a cleverer regex. The whole reaction moved into `handleOverlayKey`,
+    // which is behaviourally tested above, so this scan's only remaining job is to prove the
+    // listener is a WIRE: it must not re-implement any part of the decision or the action
+    // locally, because anything it does inline is once again invisible to those tests.
     const handler = code.slice(start, start + 400);
-    const decide = handler.search(/togglesOverlay\s*\(/);
-    const prevent = handler.search(/preventDefault\s*\(/);
-    expect(decide, 'togglesOverlay is missing from the handler').toBeGreaterThan(-1);
-    expect(prevent, 'the handler no longer calls preventDefault at all').toBeGreaterThan(-1);
-    expect(
-      prevent,
-      'preventDefault runs BEFORE the overlay decides the key is its own — that swallows ' +
-        'every keystroke on the window, which is worse than the G40 it replaced',
-    ).toBeGreaterThan(decide);
+    for (const [pattern, what] of [
+      [/preventDefault\s*\(/, 'calls preventDefault itself'],
+      [/\btoggle\s*\(\s*\)/, 'calls toggle itself'],
+      [/\bif\s*\(/, 'makes a decision of its own'],
+      [/togglesOverlay\s*\(/, 'consults the predicate directly instead of the reaction'],
+    ] as const) {
+      expect(
+        handler,
+        `the keydown listener ${what} — put it in handleOverlayKey, where it is tested`,
+      ).not.toMatch(pattern);
+    }
   });
 });
