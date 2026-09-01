@@ -35,6 +35,8 @@ import {
   dealView,
   draftCards,
   chestReveal,
+  isRunOver,
+  runSummaryView,
 } from './view-model.ts';
 import type { ItemView } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
@@ -94,9 +96,9 @@ let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
 // terminal phase. Reset per run. `runApplied` guards against a double-apply (ending -> game-over).
 let runSummary: RunSummary = emptyRunSummary();
 let runApplied = false;
-// The ids most recently unlocked (for the deferred in-UI notification — NEEDS-HUMAN).
+// The ids most recently unlocked. Read by the end-of-run summary screen (G2), which is what
+// finally consumes this — it was written and never read, annotated `void`, since M13.
 let lastNewlyUnlocked: NewlyUnlocked | null = null;
-void lastNewlyUnlocked; // consumed by the deferred unlock-notification UI (out of scope here)
 
 /** The class-select buttons, gated by the unlock store (Enforcer always shown). */
 const CLASS_BUTTONS: readonly { classId: PlayerClass; label: string }[] = [
@@ -418,18 +420,25 @@ async function dispatch(input: GameInput): Promise<void> {
     showThinking();
     await narrate(r.events);
     memory = rememberBeat(memory, r.events); // remember AFTER narrating
-    renderChoices(r.awaiting);
-    // M13: at a terminal phase (an ending, or game-over) grow + persist the unlock store once.
-    if (r.state.phase.kind === 'ending' || r.awaiting === 'game-over') {
+    // G2: ONE predicate decides both halves of "the run is over". The apply used to key off
+    // `phase.kind === 'ending'` while the clear keyed off `awaiting === 'game-over'`, and the
+    // disagreement between those two IS G2: a victory settles at the `ending` phase, so it
+    // took the autosave branch and left a RESUMABLE save behind. Relaunching after an
+    // ascension then offered "A descent lies unfinished" — pointing at a run already won.
+    // `isRunOver` is exhaustive over `Phase['kind']`, so an eighteenth phase fails the build
+    // rather than silently defaulting to "still going".
+    //
+    // This runs BEFORE `renderChoices` on purpose: the end-of-run screen reports what the run
+    // unlocked, and `applyRunOutcome` is what computes it.
+    if (isRunOver(r.state.phase)) {
       applyRunOutcome();
-    }
-    if (r.awaiting === 'game-over') {
       clearRun();
-      log.info('save', 'run cleared (game over)');
+      log.info('save', 'run cleared (the run is over)', { phase: r.state.phase.kind });
     } else {
       saveRun(state, memory, runMeta());
       log.debug('save', 'run autosaved');
     }
+    renderChoices(r.awaiting);
   } finally {
     busy = false;
   }
@@ -606,9 +615,21 @@ function renderChoices(awaiting: Awaiting): void {
       choice('Rest here', () => void dispatch({ kind: 'rest-decision', accept: true }));
       choice('Press on', () => void dispatch({ kind: 'rest-decision', accept: false }));
       break;
-    case 'game-over':
+    case 'game-over': {
+      // G2 / GAME-DESIGN.md §22.15: a finished run gets a WRITTEN RECORD. This is the
+      // FACTUAL half — outcome, depth, bosses by name, spares, unlocks by name. The Void's
+      // own narrated account of your descent is G10, which belongs to PLAN.md #6.
+      const view = runSummaryView(runSummary, state.player, lastNewlyUnlocked);
+      const wrap = document.createElement('div');
+      wrap.className = 'vm-screen run-summary';
+      const head = document.createElement('h3');
+      head.textContent = view.headline; // TEXT, never markup — the rows go through appendRow
+      wrap.appendChild(head);
+      for (const row of view.rows) appendRow(wrap, rowModel(row.label, row.value));
+      choicesEl.appendChild(wrap);
       choice('Descend again', () => start());
       break;
+    }
   }
 }
 

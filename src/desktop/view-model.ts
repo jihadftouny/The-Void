@@ -10,8 +10,9 @@
 // vector. `characterSheet` emits no karma field, and `dealView` deliberately drops
 // the deal's `pool` (a `standard | tempting | grace` tell derived from karma). The
 // UI shows a deal only as cost -> reward. Asserted by the view-model tests.
-import type { GameState } from '../game/game.ts';
+import type { GameState, Phase } from '../game/game.ts';
 import type { Player } from '../game/player.ts';
+import type { RunSummary, NewlyUnlocked } from '../game/unlockStore.ts';
 import type { Inventory } from '../game/inventory.ts';
 import type { EquipSlot, ItemEffect, ItemInstance } from '../game/item.ts';
 import type { ItemKind } from '../game/item.ts';
@@ -32,6 +33,7 @@ import { describeDraftOption } from '../game/draft.ts';
 import { summarizeLoot } from '../game/loot.ts';
 import { CLASSES } from '../game/classKit.ts';
 import { STAT_KEYS } from '../game/character.ts';
+import { BOSSES } from '../game/boss.ts';
 
 /**
  * The player to DISPLAY on the sheet: during a battle the live combatant
@@ -414,4 +416,115 @@ export function chestReveal(loot: readonly ItemInstance[]): LootRow[] {
     const summary = summarizeLoot(instance);
     return { name: summary.name, rarity: summary.rarity };
   });
+}
+
+// ===== Stage 4 — the end of a run =========================================
+// G2 (GAME-DESIGN.md §22.15): winning left a RESUMABLE save. `dispatch()` cleared the run
+// only on `awaiting === 'game-over'`, but a victory settles at `phase.kind === 'ending'` and
+// autosaved instead — so relaunching after an ascension offered "A descent lies unfinished.
+// Return to it, or begin anew", pointing at a run that was already over. §22.15 also rejected
+// "the minimal delete-only patch… gives wins no record", which is why the clear ships
+// alongside a summary rather than on its own.
+
+/**
+ * Is this phase the END of the run? PURE, and EXHAUSTIVE over `Phase['kind']` by construction:
+ * the map is a `Record<Phase['kind'], boolean>`, so an eighteenth phase fails the build here
+ * rather than defaulting to "the run continues" and quietly recreating G2.
+ *
+ * `awaiting` is deliberately NOT a parameter. `awaitingFor` is a total function of the phase,
+ * so passing both would create two sources of truth that can disagree — and the disagreement
+ * between them (`phase.kind === 'ending'` for the apply, `awaiting === 'game-over'` for the
+ * clear) is exactly what G2 was.
+ */
+const RUN_OVER: Record<Phase['kind'], boolean> = {
+  title: false,
+  'name-entry': false,
+  'class-select': false,
+  'stats-roll': false,
+  'main-menu': false,
+  battle: false,
+  'battle-victory': false,
+  rest: false,
+  deal: false,
+  chest: false,
+  'act-outro': false,
+  'level-up-draft': false,
+  'level-up-result': false,
+  'act-intro': false,
+  verdict: false,
+  // The two terminal phases: an ending reached (grace or damnation), or the run is over.
+  ending: true,
+  'game-over': true,
+};
+
+export function isRunOver(phase: Phase): boolean {
+  return RUN_OVER[phase.kind];
+}
+
+/** One label/value line of the end-of-run summary. */
+export interface RunSummaryRow {
+  label: string;
+  value: string;
+}
+
+/** The factual account of a finished run. */
+export interface RunSummaryView {
+  /** The outcome, in player words. */
+  headline: string;
+  rows: RunSummaryRow[];
+}
+
+/** The player-facing depth phrase. `maxAct` 0 means the run never got past the threshold. */
+function depthText(maxAct: number): string {
+  return maxAct <= 0 ? 'You never left the threshold.' : `Act ${maxAct} of 5`;
+}
+
+/**
+ * The FACTUAL end-of-run summary — PURE, no DOM. Outcome, depth reached, bosses felled BY
+ * NAME, foes spared, and anything newly unlocked BY NAME.
+ *
+ * SCOPE, decided rather than omitted: this is the factual half only. The Void's own NARRATED
+ * account of your descent is G10, which belongs to PLAN.md #6 (cut to v1.3 by
+ * SHIP-SCOPE.md §4). §22.15 rejected "the minimal delete-only patch… gives wins no record" —
+ * a factual record IS a record, so this satisfies that ruling's stated intent, and G10 stays
+ * open for the narrated half.
+ *
+ * NO RAW ID may appear in any row. A boss reads `BOSSES[id].name`, a relic reads its catalog
+ * name, and the internal axes (feat ids, enemy families, affixes, skill ids) are not printed
+ * at all — they are gradual-reveal machinery the player is never shown. A test sweeps every
+ * row against those id sets.
+ */
+export function runSummaryView(
+  summary: RunSummary,
+  player: Player | null,
+  newlyUnlocked: NewlyUnlocked | null,
+): RunSummaryView {
+  const headline =
+    summary.endingType === 'grace'
+      ? 'Found worthy. The descent ends in grace.'
+      : summary.endingType === 'damnation'
+        ? 'The Hollow unmade. The descent ends in damnation.'
+        : 'The descent ends here.';
+
+  const rows: RunSummaryRow[] = [];
+  if (player) rows.push({ label: 'Who you were', value: `${player.classId}, level ${player.level}` });
+  rows.push({ label: 'Depth reached', value: depthText(summary.maxAct) });
+  rows.push({
+    label: 'Bosses felled',
+    value:
+      summary.bossKills.length > 0
+        ? summary.bossKills.map((id) => BOSSES[id].name).join(', ')
+        : 'none',
+  });
+  rows.push({ label: 'Foes spared', value: String(summary.spareCount) });
+
+  // Only the two axes the player can actually see the effect of: a class becomes selectable
+  // on the next run, and a relic becomes offerable at an altar. Families and affixes are the
+  // gradual-reveal machinery; feats are internal ids; no feat grants a skill today.
+  const unlocked = [
+    ...(newlyUnlocked?.classes ?? []),
+    ...(newlyUnlocked?.relics ?? []).map((id) => getCatalogItemById(id)?.name ?? id),
+  ];
+  if (unlocked.length > 0) rows.push({ label: 'Newly unlocked', value: unlocked.join(', ') });
+  return { headline, rows };
 }

@@ -12,10 +12,16 @@ import {
   dealView,
   draftCards,
   chestReveal,
+  isRunOver,
+  runSummaryView,
 } from './view-model.ts';
 import { createGame, step } from '../game/game.ts';
-import type { GameState } from '../game/game.ts';
+import type { GameState, Phase } from '../game/game.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
+import { emptyRunSummary, FEATS, type RunSummary, type NewlyUnlocked } from '../game/unlockStore.ts';
+import { BOSSES } from '../game/boss.ts';
+import { CONDITION_DATA } from '../game/condition.ts';
+import { getAllRelics, getAllUniques, getAllConsumables } from '../game/item.ts';
 import { createPlayer } from '../game/player.ts';
 import type { Player } from '../game/player.ts';
 import { buildRandomBattle } from '../game/encounter.ts';
@@ -438,6 +444,147 @@ describe('characterSheet — the player name, and an unknown skill (G28)', () =>
     expect(() => characterSheet(broken)).not.toThrow();
     const rows = characterSheet(broken).skills.map((s) => s.skillId);
     expect(rows).toEqual(['heavyStrike', 'brace']); // the good rows survive; the bad one is dropped
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G2 — a finished run is finished, and says what it was.
+// ---------------------------------------------------------------------------
+
+describe('isRunOver — exhaustive over every phase', () => {
+  // Written out by hand from the `Phase` union in game.ts: 17 members, of which exactly two
+  // are terminal. Listing them here rather than deriving them from the implementation is the
+  // point — this is the independent witness that the map has the right VALUES, while the
+  // `Record<Phase['kind'], boolean>` type is the witness that it has the right KEYS.
+  const CONTINUES: Phase[] = [
+    { kind: 'title' },
+    { kind: 'name-entry' },
+    { kind: 'class-select', name: 'X' },
+    { kind: 'stats-roll', name: 'X', classId: 'Enforcer', stats: fixedStats },
+    { kind: 'main-menu' },
+    { kind: 'battle', battle: buildRandomBattle(snapshot, 1, createRng(3).rng), started: true, final: false },
+    { kind: 'battle-victory', final: false },
+    { kind: 'rest', restOffered: true },
+    { kind: 'deal', deal: { pool: 'standard', cost: { kind: 'hp', amount: 1 }, reward: { kind: 'heal', amount: 1 } } },
+    { kind: 'chest', loot: [] },
+    { kind: 'act-outro', newAct: 2 },
+    { kind: 'level-up-draft', offers: [] },
+    { kind: 'level-up-result' },
+    { kind: 'act-intro', newAct: 2 },
+    { kind: 'verdict', outcome: 'grace' },
+  ];
+  const ENDS: Phase[] = [
+    { kind: 'ending', endingType: 'grace' },
+    { kind: 'game-over' },
+  ];
+
+  it('covers all seventeen phase kinds, and only two of them end the run', () => {
+    expect(CONTINUES.length + ENDS.length).toBe(17);
+    expect(new Set([...CONTINUES, ...ENDS].map((p) => p.kind)).size).toBe(17);
+  });
+
+  it('is false for every phase that is not the end', () => {
+    for (const phase of CONTINUES) {
+      expect(isRunOver(phase), `${phase.kind} must not end the run`).toBe(false);
+    }
+  });
+
+  it('is true for the ENDING phase — which is the whole of G2', () => {
+    // A victory settles at `ending`, not at `game-over`. The renderer keyed its clear off
+    // `awaiting === 'game-over'`, so a win took the AUTOSAVE branch and left a resumable
+    // save; relaunching offered "A descent lies unfinished" about a run already won.
+    for (const phase of ENDS) {
+      expect(isRunOver(phase), `${phase.kind} must end the run`).toBe(true);
+    }
+  });
+});
+
+describe('runSummaryView — the factual record of a finished run', () => {
+  const won: RunSummary = {
+    ...emptyRunSummary(),
+    bossKills: ['kingpin', 'reflection'],
+    spareCount: 3,
+    maxAct: 4,
+    endingType: 'grace',
+  };
+  const unlocked: NewlyUnlocked = {
+    classes: ['Neuromancer'],
+    skills: [],
+    relics: ['overclock-chip'],
+    families: ['cyberEnforcers'],
+    affixes: ['warped'],
+    feats: ['unlock-neuromancer', 'first-boss-kill'],
+  };
+
+  it('states each of the three outcomes in player words', () => {
+    const grace = runSummaryView({ ...won, endingType: 'grace' }, snapshot, null);
+    const damned = runSummaryView({ ...won, endingType: 'damnation' }, snapshot, null);
+    const dead = runSummaryView({ ...emptyRunSummary(), maxAct: 2 }, snapshot, null);
+    expect(grace.headline).toContain('grace');
+    expect(damned.headline).toContain('damnation');
+    // The third case must NOT claim either ending.
+    expect(dead.headline).not.toContain('grace');
+    expect(dead.headline).not.toContain('damnation');
+    // ...and all three must actually say something.
+    for (const h of [grace.headline, damned.headline, dead.headline]) {
+      expect(h.length).toBeGreaterThan(0);
+    }
+    expect(new Set([grace.headline, damned.headline, dead.headline]).size).toBe(3);
+  });
+
+  it('reports depth, bosses BY NAME, and spares', () => {
+    const view = runSummaryView(won, snapshot, unlocked);
+    const values = view.rows.map((r) => r.value).join(' | ');
+    expect(values).toContain('Act 4 of 5');
+    // BOSSES.kingpin.name / BOSSES.reflection.name, from boss.ts.
+    expect(values).toContain('Undercity Kingpin');
+    expect(values).toContain('The Reflection');
+    expect(view.rows.find((r) => r.label === 'Foes spared')?.value).toBe('3');
+  });
+
+  it('names newly unlocked classes and relics, and prints no internal id', () => {
+    const view = runSummaryView(won, snapshot, unlocked);
+    const text = [view.headline, ...view.rows.map((r) => `${r.label} ${r.value}`)].join(' | ');
+    expect(text).toContain('Neuromancer');
+    expect(text).toContain('Overclock Chip'); // relics.json name, not `overclock-chip`
+    // The full id sweep. Every id set the summary could conceivably touch.
+    const ids = [
+      ...getAllRelics().map((r) => r.id),
+      ...getAllUniques().map((u) => u.id),
+      ...getAllConsumables().map((c) => c.id),
+      ...Object.keys(CONDITION_DATA),
+      ...FEATS.map((f) => f.id),
+      ...Object.keys(BOSSES),
+      // The gradual-reveal machinery the player must never be shown.
+      ...unlocked.families,
+      ...unlocked.affixes,
+    ];
+    for (const id of ids) {
+      expect(text, `raw id "${id}" reached the player`).not.toContain(id);
+    }
+    // NON-VACUITY: the sweep is meaningless unless the ids it looks for are real strings that
+    // COULD have appeared — `overclock-chip` and `unlock-neuromancer` are both in this run's
+    // own unlock record, and `kingpin` is in its own boss-kill list.
+    expect(ids).toContain('overclock-chip');
+    expect(ids).toContain('unlock-neuromancer');
+    expect(ids).toContain('kingpin');
+  });
+
+  it('handles a run that unlocked nothing, and one that never left the threshold', () => {
+    const nothing = runSummaryView(emptyRunSummary(), snapshot, null);
+    expect(nothing.rows.some((r) => r.label === 'Newly unlocked')).toBe(false);
+    expect(nothing.rows.find((r) => r.label === 'Depth reached')?.value).toMatch(/threshold/);
+    expect(nothing.rows.find((r) => r.label === 'Bosses felled')?.value).toBe('none');
+    // And a run with no player at all (quit before creation) must not throw.
+    expect(() => runSummaryView(emptyRunSummary(), null, null)).not.toThrow();
+  });
+
+  it('is PURE — it mutates neither the summary nor the unlock record', () => {
+    const summaryBefore = JSON.parse(JSON.stringify(won)) as RunSummary;
+    const unlockedBefore = JSON.parse(JSON.stringify(unlocked)) as NewlyUnlocked;
+    runSummaryView(won, snapshot, unlocked);
+    expect(won).toEqual(summaryBefore);
+    expect(unlocked).toEqual(unlockedBefore);
   });
 });
 
