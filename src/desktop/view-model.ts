@@ -34,6 +34,7 @@ import { summarizeLoot } from '../game/loot.ts';
 import { CLASSES } from '../game/classKit.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import { BOSSES } from '../game/boss.ts';
+import { buttonModel, type ButtonModel } from '../render/component-model.ts';
 
 /**
  * The player to DISPLAY on the sheet: during a battle the live combatant
@@ -527,4 +528,43 @@ export function runSummaryView(
   ];
   if (unlocked.length > 0) rows.push({ label: 'Newly unlocked', value: unlocked.join(', ') });
   return { headline, rows };
+}
+
+// ===== Stage 5 — two small controls the UI got wrong ======================
+
+/**
+ * What to show when the model fails mid-beat — G26. PURE.
+ *
+ * The renderer's `catch` printed `prompt.user.split('\n\n')[0]`. On any step with story
+ * memory that first block is the CONTINUITY RECAP — the run summary and the last five beats —
+ * so a model failure on the turn you landed a critical hit printed "Across this descent you
+ * have felled 1 foe / Recent moments…" and never a word about the crit. The fallback
+ * described the past and called it the present.
+ *
+ * `buildNarrationPrompt` now returns the computed `facts` alongside the prompt (#0b's U7 hook,
+ * added for exactly this), so the fallback can read THIS beat directly instead of slicing the
+ * user string apart and hoping the first block is the right one.
+ */
+export function fallbackNarration(
+  prompt: { facts: readonly string[] } | null,
+): string {
+  const facts = prompt?.facts ?? [];
+  return facts.length > 0 ? facts.join(' ') : '(the Void is silent)';
+}
+
+/**
+ * The Potion button — PURE. Carries the remaining count as a hint, and is DISABLED at zero.
+ *
+ * It used to be an unconditional `choice('Potion', …)`. At 0 potions, at full HP, or under
+ * the Void Pact relic, pressing it dispatched a whole engine step that resolved nothing: the
+ * button looked live, the turn did not advance, and (until this unit) the one event it emitted
+ * was rendered nowhere at all. A disabled `ButtonModel` gets NO click handler from
+ * `actionButton`, so it is inert as well as greyed — a stray press cannot dispatch.
+ *
+ * Only the count is gated here. "Already at full HP" and the `cannotHeal` relic are still
+ * engine refusals; the log now says so (`potion-unavailable`), which it never could before.
+ */
+export function potionControl(player: Player | null): ButtonModel {
+  const pots = player?.pots ?? 0;
+  return buttonModel('Potion', { disabled: pots <= 0, hint: `(${pots})` });
 }

@@ -14,7 +14,10 @@ import {
   chestReveal,
   isRunOver,
   runSummaryView,
+  fallbackNarration,
+  potionControl,
 } from './view-model.ts';
+import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { createGame, step } from '../game/game.ts';
 import type { GameState, Phase } from '../game/game.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
@@ -585,6 +588,79 @@ describe('runSummaryView — the factual record of a finished run', () => {
     runSummaryView(won, snapshot, unlocked);
     expect(won).toEqual(summaryBefore);
     expect(unlocked).toEqual(unlockedBefore);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G26 — when the model fails, the fallback describes what JUST happened.
+// ---------------------------------------------------------------------------
+
+describe('fallbackNarration', () => {
+  const state: GameState = hub(snapshot);
+
+  it('prints THIS beat, not the continuity recap the prompt opens with', () => {
+    // Build a prompt exactly as `narrate()` does: a non-empty StoryMemory (so `.user`'s first
+    // block is the run summary + recent moments) plus a current beat. The old fallback read
+    // `prompt.user.split('\n\n')[0]`, which is that recap.
+    const past: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Rust Choir' }];
+    const memory = rememberBeat(rememberBeat(createStoryMemory(), past), [
+      { kind: 'victory', xpGained: 5, extraRest: false, loot: [] },
+    ]);
+    const now: GameEvent[] = [
+      {
+        kind: 'attack', subject: 'player', outcome: 'crit', damage: 9,
+        roll: { natural: 20, faces: [20], advDis: 0, modifier: 2, total: 22, targetAc: 13 },
+        damageSources: [
+          { kind: 'weapon-dice', amount: 4, label: '1d8' },
+          { kind: 'crit-dice', amount: 5, label: '1d8' },
+        ],
+      },
+    ];
+    const prompt = buildNarrationPrompt(now, state, memory);
+    expect(prompt).not.toBeNull();
+
+    const fallback = fallbackNarration(prompt);
+    // The crit's own words reach the player.
+    expect(fallback).toContain('devastating');
+    expect(fallback).toContain('9');
+    // The recap does NOT. `Rust Choir` is the probe: it is in `prompt.user` but not in the
+    // current beat, so its absence here is the whole assertion.
+    expect(fallback).not.toContain('Rust Choir');
+    expect(fallback).not.toContain('Recent moments');
+    expect(fallback).not.toContain('Across this descent');
+    // NON-VACUITY: the recap really IS in the prompt, and really IS its first block — so the
+    // OLD implementation would have printed it.
+    expect(prompt!.user).toContain('Rust Choir');
+    expect(prompt!.user.split('\n\n')[0]).toContain('Rust Choir');
+  });
+
+  it('says something honest when there is nothing to say', () => {
+    expect(fallbackNarration(null)).toBe('(the Void is silent)');
+    expect(fallbackNarration({ facts: [] })).toBe('(the Void is silent)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Potion button: a press under a control condition used to do nothing at all.
+// ---------------------------------------------------------------------------
+
+describe('potionControl', () => {
+  it('carries the remaining count, and is live while any remain', () => {
+    const model = potionControl({ ...snapshot, pots: 3 });
+    expect(model).toEqual({ label: 'Potion', disabled: false, hint: '(3)' });
+  });
+
+  it('is DISABLED at zero — and a disabled button gets no handler at all', () => {
+    // `actionButton` attaches the click listener only on the enabled branch, so "disabled"
+    // means inert, not merely grey: a stray press cannot dispatch a step that resolves
+    // nothing. Asserted on the model, which is the half that decides it.
+    expect(potionControl({ ...snapshot, pots: 0 })).toEqual({
+      label: 'Potion', disabled: true, hint: '(0)',
+    });
+  });
+
+  it('is disabled before a player exists', () => {
+    expect(potionControl(null).disabled).toBe(true);
   });
 });
 

@@ -79,6 +79,81 @@ describe('dispatch() decides "the run is over" ONCE, through isRunOver', () => {
 });
 
 // =========================================================================================
+// G26 — the model-failure fallback describes what JUST happened.
+//
+// `fallbackNarration` is pure and tested in `view-model.test.ts`. What cannot be tested there
+// is that `narrate()`'s `catch` actually CALLS it rather than going back to slicing the
+// prompt string apart, which is the defect.
+// =========================================================================================
+
+describe("narrate()'s fallback reads the facts, not the prompt's first block", () => {
+  const body = bodyOf('async function narrate(');
+  const catchStart = body.search(/\}\s*catch\s*\(/);
+
+  it('has a catch block to guard (the anchor exists)', () => {
+    expect(catchStart, 'narrate() no longer catches — this guard has gone stale').toBeGreaterThan(-1);
+  });
+
+  it('calls fallbackNarration, and slices nothing', () => {
+    const catchBody = body.slice(catchStart);
+    expect(catchBody, 'the model-failure fallback no longer uses fallbackNarration').toMatch(
+      /fallbackNarration\s*\(/,
+    );
+    // `.split(` in ANY form: `prompt.user.split('\n\n')`, `.split("\n\n")`, a variable
+    // holding the user string — all of them are the G26 defect, and all of them contain this.
+    expect(
+      catchBody,
+      "the fallback is slicing the prompt string again — on any step with story memory that " +
+        'first block is the CONTINUITY RECAP, not what just happened. That is G26.',
+    ).not.toMatch(/\.split\s*\(/);
+  });
+});
+
+// =========================================================================================
+// G18 — the combat log is actually rendered.
+// =========================================================================================
+
+describe('dispatch() renders the combat log', () => {
+  it('calls the log renderer on every step', () => {
+    const body = bodyOf('async function dispatch(');
+    expect(body, 'dispatch() no longer renders the combat log — that is G18 again').toMatch(
+      /renderLog\s*\(/,
+    );
+  });
+
+  it('and the renderer it calls really appends log lines', () => {
+    const body = bodyOf('function renderLog(');
+    expect(body).toMatch(/logLines\s*\(/);
+    expect(body).toMatch(/appendLogLine\s*\(/);
+    // The battle boundary: UI-DESIGN.md §3 wants the log to persist for a whole fight and
+    // then start over, not grow forever.
+    expect(body).toMatch(/startsNewBattle\s*\(/);
+  });
+});
+
+// =========================================================================================
+// The Potion affordance. `potionControl` decides "disabled at 0" and is tested purely; this
+// is the wiring — that the battle screen actually uses it, rather than going back to an
+// unconditional `choice('Potion', …)` that looks live and dispatches a step resolving nothing.
+// =========================================================================================
+
+describe('the battle screen builds its Potion button from potionControl', () => {
+  const body = bodyOf('function renderChoices(');
+
+  it('uses the model, not a bare unconditional choice', () => {
+    expect(body, 'renderChoices no longer has a Potion control at all').toMatch(/[Pp]otion/);
+    expect(body, 'the Potion button is no longer built from potionControl').toMatch(
+      /potionControl\s*\(/,
+    );
+    // The exact defect shape, in either quote style: a `choice(...)` whose label is Potion is
+    // always enabled and always carries a handler.
+    expect(body, "the Potion button is an unconditional `choice()` again").not.toMatch(
+      /choice\s*\(\s*['"`]Potion['"`]/,
+    );
+  });
+});
+
+// =========================================================================================
 // G19 -> G1 — a resumed run keeps what it has earned.
 //
 // `persist.test.ts` proves the ENVELOPE carries the meta and that a straight-through run and

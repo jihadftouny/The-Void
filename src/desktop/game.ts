@@ -37,6 +37,8 @@ import {
   chestReveal,
   isRunOver,
   runSummaryView,
+  fallbackNarration,
+  potionControl,
 } from './view-model.ts';
 import type { ItemView } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
@@ -44,7 +46,8 @@ import { createDebugOverlay } from './debug-overlay.ts';
 // The shared render foundation (M-UI2 `ui-foundation`).
 import { applyTheme } from '../render/theme.ts';
 import { buttonModel, rowModel } from '../render/component-model.ts';
-import { appendButton, appendRow, picker } from '../render/components.ts';
+import { appendButton, appendRow, appendLogLine, picker } from '../render/components.ts';
+import { logLines, startsNewBattle } from '../render/log-model.ts';
 
 interface GenStats { text: string; tokens: number; tokensPerSecond: number; ttftMs: number }
 interface VoidApi {
@@ -62,6 +65,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
 const titleEl = $('title');
 const statusEl = $('status');
 const narrationEl = $('narration');
+const logEl = $('log');
 const choicesEl = $('choices');
 const sheetEl = $('sheet');
 
@@ -182,6 +186,17 @@ function renderSheet(): void {
   sheetEl.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
 }
 
+/**
+ * Append this step's mechanical beats to the combat log, resetting it when a new fight
+ * begins — G18. Everything about WHICH beats and WHAT they read is decided by the pure
+ * `logLines` / `startsNewBattle`; this only appends elements and keeps the view at the bottom.
+ */
+function renderLog(events: readonly GameEvent[]): void {
+  if (startsNewBattle(events)) logEl.replaceChildren();
+  for (const line of logLines(events)) appendLogLine(logEl, line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
 async function narrate(events: readonly GameEvent[]): Promise<void> {
   const prompt = buildNarrationPrompt(events, state, memory);
   // G42 — CHECK BEFORE CLEARING. This used to clear the pane first and discover the null
@@ -225,10 +240,17 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
   } catch (err) {
     // Resilience: if the model fails, fall back to the plain facts so the game
     // remains fully playable (engine is authoritative regardless).
+    //
+    // G26 — WHICH plain facts. This used to read `prompt.user.split('\n\n')[0]`, and on any
+    // step with story memory that first block is the CONTINUITY RECAP: the run summary and
+    // the last five beats. So a model failure on the turn you landed a critical hit printed
+    // "Across this descent you have felled 1 foe / Recent moments…" and never a word about
+    // the crit. `fallbackNarration` reads the facts `buildNarrationPrompt` already computed
+    // for THIS beat, so the fallback describes what just happened.
     log.error('llm', 'narrate:failed', {
       message: err instanceof Error ? err.message : String(err),
     });
-    block.textContent = prompt.user.split('\n\n')[0] ?? '(the Void is silent)';
+    block.textContent = fallbackNarration(prompt);
     block.classList.add('fallback');
   }
 }
@@ -417,6 +439,7 @@ async function dispatch(input: GameInput): Promise<void> {
       act: state.act,
     });
     renderSheet();
+    renderLog(r.events); // G18: the dice and the damage, before the prose that cannot say them
     showThinking();
     await narrate(r.events);
     memory = rememberBeat(memory, r.events); // remember AFTER narrating
@@ -456,6 +479,7 @@ function start(): void {
   runApplied = false;
   lastNewlyUnlocked = null;
   narrationEl.innerHTML = '';
+  logEl.replaceChildren();
   retheme();
   renderSheet();
   renderChoices('title');
@@ -559,7 +583,13 @@ function renderChoices(awaiting: Awaiting): void {
           }
         });
       }
-      choice('Potion', () => void dispatch({ kind: 'battle-action', action: 'potion' }));
+      // The Potion button carries its remaining count, and is INERT at zero — a disabled
+      // ButtonModel gets no click handler at all, so it cannot dispatch a step that resolves
+      // nothing. (The other two refusals — full HP, and the Void Pact relic — stay engine
+      // decisions, and the combat log now reports them.)
+      appendButton(choicesEl, potionControl(p), () =>
+        void dispatch({ kind: 'battle-action', action: 'potion' }),
+      );
       choice('Run', () => void dispatch({ kind: 'battle-action', action: 'run' }));
       break;
     }

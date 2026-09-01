@@ -25,6 +25,7 @@ import type {
   RowModel,
 } from './component-model.ts';
 import { barCells } from './component-model.ts';
+import type { LogLine } from './log-model.ts';
 
 /** Default segment count for a bar — the number of cells a player can count at a glance. */
 export const BAR_CELLS = 20;
@@ -149,6 +150,38 @@ export function appendButton(
   onClick: () => void,
 ): HTMLButtonElement {
   const el = actionButton(model, onClick);
+  parent.appendChild(el);
+  return el;
+}
+
+/**
+ * One line of the combat log (G18): the plain story of a beat, and — when the beat was decided
+ * by a roll — the dice behind it, hidden behind an expander.
+ *
+ * The expander is a native `<details>/<summary>`, not a div with a click handler. That is a
+ * deliberate choice for `UI-DESIGN.md` §15 / S4c: the browser gives keyboard operation, focus
+ * order, and the correct screen-reader announcement ("expanded"/"collapsed") for free, and
+ * none of the three can drift out of sync with the visual state the way a hand-rolled toggle
+ * does. A line with no dice is a plain div — no empty expander to tab through.
+ *
+ * The text is set as `textContent` throughout. `formatEvent` output can contain a player's
+ * name and an enemy's full name, and neither is ever markup.
+ */
+export function appendLogLine(parent: HTMLElement, line: LogLine): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'void-log-line';
+  if (line.detail === undefined) {
+    el.textContent = line.text;
+  } else {
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = line.text;
+    const detail = document.createElement('div');
+    detail.className = 'void-log-detail';
+    detail.textContent = line.detail;
+    details.append(summary, detail);
+    el.appendChild(details);
+  }
   parent.appendChild(el);
   return el;
 }
