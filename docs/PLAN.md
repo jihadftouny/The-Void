@@ -187,7 +187,7 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 > The cross-unit overlap is **`src/desktop/game.ts`**, which **#0b** and **#0c** both need: **G26**'s
 > fix spans `llm/narrate.ts` (#0b) and `desktop/game.ts:202` (#0c), and **G42**'s fix is in
 > `narrate()` in that same file. Under `SKILL.md` §1b — *never parallelize units whose plans touch the
-> same source file* — that one pairing is barred. **#0a shares no file with either** and can run
+> same source file* — that one pairing is barred. ~~**#0a shares no file with either**~~ ⚠ **wrong — corrected 2026-09-01 by #0a's plan-agent: `condition.ts` is #0a's principal file, and G46 (routed to #0c) specifies edits at `condition.ts:311/374/508`.** It is still safe, for a different reason: **#0c has not branched, and forks from `main` *after* #0a merges**, so it inherits the changed file instead of racing it. #0a owns `condition.ts`; G23 was implemented above the `switch` so those three lines stay untouched and #0c's later diff stays small. #0a can run
 > alongside whichever of them is active.
 >
 > > **⚠ Correction, 2026-08-28.** This block previously said all three must serialise, and gave two

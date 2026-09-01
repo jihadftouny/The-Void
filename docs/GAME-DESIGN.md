@@ -1794,3 +1794,21 @@ The suite stays in `node` — fastest, and it **proves the architecture**: any D
 into `src/game` fails by construction. UI units (#6/#7/#8) opt into `jsdom` per test file with a
 one-line directive. Written into #1 change 8 so all three units inherit one decision.
 **Rejected:** `jsdom` everywhere (uniform but slower, and the DOM-leak tripwire disappears).
+
+### 22.19 `momentum` CARRIES BETWEEN BATTLES, WITH DECAY *(2026-09-01, during #0a's plan review)*
+
+**Author's call, against the recommendation.** Building #0a surfaced that `momentum` was never zeroed at battle end (`FINDINGS.md` G34) — so today every fight after the first opens at or near the cap. No document had ever decided this: the code answered it silently, and §4's Enforcer line (*"landing/taking hits builds it; spend on big strikes"*) reads as an in-fight resource.
+
+**The ruling: momentum persists across battles but decays.** At the battle boundary, `floor(momentum × MOMENTUM_CARRY)` carries forward, with `MOMENTUM_CARRY = 0.5` as a **named constant marked a placeholder for `PLAN.md` #2's balance re-run**. A good streak stays worth something; most of it drains. `corruption` — the run-long Hollow resource — is untouched, and no `SAVE_VERSION` bump is needed because momentum already persists.
+
+**Rejected:** resetting per battle (the recommendation — it makes the build-and-spend loop mean something and needs no new number) and keeping today's uncapped carry (the resource stops being a decision).
+
+⚠ **The accepted cost, stated plainly:** this is a mechanic **no document specifies**, so **the decay rate is a number nobody has set**. `0.5` is a starting value chosen to match the author's stated intent, not a measured one, and "reward a streak, mostly drain" is a feel target rather than a balance result. It is flagged for #2.
+
+### 22.20 Found weapons and armour ship mis-modelled until #1 *(2026-09-01)*
+
+Fixing G11 makes found gear equippable for the first time — but the item schema carries no native damage dice or AC, so a generated `mainHand` resolves to **UNARMED `1d1`** and generated `armor` to the **unarmored AC base**. Rare and Legendary drops still beat starting gear on affixes alone; a **Common weapon — roughly 40% of act-1 drops — is a downgrade.**
+
+**The ruling: ship it.** #0a lands the equip fix as specified; the schema unification that would carry native dice and AC is **`PLAN.md` #1 `engine-foundations`**' scope by right, and #1 is the next unit after #0, so the gap is one unit wide. It ships honestly with a `HUMAN-CHECKS.md` line rather than being hidden by a balance fudge.
+
+**Rejected:** pulling the schema work into #0a (takes scope from #1 into a unit already carrying 23 defects, and the v1 budget is zero-sum) and suppressing weapon/armour drops until #1 (guts the loot table and crosses a unit boundary).
