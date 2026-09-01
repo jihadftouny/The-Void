@@ -19,7 +19,7 @@ Format per entry:
 
 ---
 
-## 2026-09-01 — narration-coverage (#0b of the #0 split: G13, G21, G42, G47) [branch `agentic/narration-coverage`, **unmerged**]
+## 2026-09-01 — narration-coverage (#0b of the #0 split: G13, G21, G42, G47) [branch `agentic/narration-coverage`, **merged to `main` 2026-09-01**]
 - Verdict: **PASS** (first pass, no fix round). 1029 → **1072 tests**. 8 commits, each typechecking individually.
 - Fix rounds: **0**.
 - **Ran concurrently with #0a and did not collide.** The doctrine's `#0a + #0b` pairing held: declared file lists were disjoint, and the one shared file (`src/game/game.test.ts`, one flipped assertion) **auto-merged with no conflict** on a trial merge. The clash the plan feared — G13's exhaustiveness check needing the event-kind union — evaporated once the plan-agent located the union in `combatEvent.ts`/`gameEvent.ts`, neither of which #0a touches.
@@ -31,7 +31,7 @@ Format per entry:
 - Plan open-questions: **3** — 1 to the author (recast the two ending anchors → **minimal subject swap**, `GAME-DESIGN.md` §22.1 satisfied, `FINDINGS.md` C12 left open for #13), 2 settled by the orchestrator (feed the draft option string through with a commented fallback; leave the dead `END.` anchor but **require a comment** saying why its `{playerName}` is legitimate there and nowhere else).
 - Manual engineer fixes: none yet
 
-## 2026-09-01 — combat-core (#0a of the #0 critical-engine-bugs split: 23 combat defects) [branch `agentic/combat-core`, **unmerged**]
+## 2026-09-01 — combat-core (#0a of the #0 critical-engine-bugs split: 23 combat defects) [branch `agentic/combat-core`, **merged to `main` 2026-09-01**]
 - Verdict: **PASS** (after 1 fix round). 1029 → 1102 → **1112 tests**. 12 commits.
 - Fix rounds: **1** — test-agent returned FAIL on round 1 for a single unguarded line.
 - **The FAIL is the headline lesson: a shipped fix with a test that could not tell right from wrong.**

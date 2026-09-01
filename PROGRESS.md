@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1029 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1155 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -78,7 +78,7 @@ full accessibility including a screen-reader pass; licence, free itch release an
 (`docs/SHIPPING.md`). **The engine writes the choices — the LLM-authored-choices plan is dropped**,
 which shrinks M11 substantially. **Min spec now requires a GPU.**
 
-**Next up (NOT started — no branch exists yet):** **`#0 critical-engine-bugs`, now THREE units** —
+**#0 `critical-engine-bugs` — TWO OF THREE UNITS ARE MERGED (2026-09-01).** ~~Next up (NOT started — no branch exists yet)~~ — **`#0a combat-core` ✅ merged** (23 defects, 12 commits) and **`#0b narration-coverage` ✅ merged** (4 defects, 8 commits); **`#0c persistence-and-reach` is the one left.** Originally **THREE units** —
 **thirty-three** defects (G11–G47; there is no G38), far too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
 
 | Unit | Covers |
@@ -108,7 +108,7 @@ no warning. **G1's fix landed with G19 and G3's is decided — only G2 still nee
 |---|---|
 | M0 — Consolidate base & reconcile to mechanics-first | ✅ merged to `main` (378 tests) |
 | M1 — Foundational state models (karma + item schema + inventory) | ✅ **merged to `main`** (411 tests) |
-| M2 — Player skills + full 25-condition system | 🔶 **merged, but fails its own "done when"** (456 tests). `ROADMAP.md` requires *"elements/resistances affect skill damage"* — **they do not affect it at all** (`FINDINGS.md` G17: the formula is zero below 100 resistance and nothing produces more than 10, and the function layering gear/WIS has no callers). Skills and conditions themselves are fine |
+| M2 — Player skills + full 25-condition system | 🔶 **still short of its "done when", but for a much smaller reason since 2026-09-01.** ~~*"elements/resistances affect skill damage"* — **they do not affect it at all**~~ **✅ FIXED and independently verified by #0a** (G17 + G23 + G27 all closed; `computeSkillDamage(base 2, res 50)` now = 1, and 20 re-applied `bleed` ticks total exactly 189 where they totalled 0). **What still blocks ✅:** the "done when" also requires *"**all 25** conditions tick correctly with hand-derived tests"*, and no such test exists — `condition.test.ts` spot-checks four durations. **That audit is the only remaining gap.** Original reason kept below for traceability: the formula was zero below 100 resistance (`FINDINGS.md` G17: the formula is zero below 100 resistance and nothing produces more than 10, and the function layering gear/WIS has no callers). Skills and conditions themselves are fine |
 | M3 — Classes & signature kits | ✅ **merged to `main`** (494 tests) |
 | M4 — Combat overhaul: defense matters (enemies roll to-hit) | ✅ **merged to `main`** (526 tests) |
 | M5 — Inventory & equipment (Tibia-style) ★ | 🔶 ENGINE **merged to `main`** (561 tests); **Tibia visual UI deferred to a collab pass w/ you** |
@@ -136,6 +136,40 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-01 — the first two engine batches are IN `main` ✅
+
+**27 of the 33 critical engine defects are fixed, verified and merged.** Suite 1029 → **1155 tests**,
+typecheck clean, build passing, both batches green together (they had never been run side by side
+until the merge).
+
+- **`#0a combat-core`** (12 commits, 23 defects) — **found gear can finally be equipped** (it never
+  could: >100 drops across 300 seeds, zero equippable); **re-applied poison/burn/bleed now deal
+  damage** (they dealt zero, forever — the single most damaging defect in the audit); **floor 5 has
+  enemies** (it had no encounter layer at all). Plus the resistance subsystem, four unguarded damage
+  sites, four cross-battle state leaks, `proficiency`, and the rest path.
+- **`#0b narration-coverage`** (8 commits, 4 defects) — the narrator **now knows the player acted**
+  (100% of player skill-casts previously reached the model with no fact that the player did
+  anything, so it credited the enemy); act transitions carry their header instead of rendering
+  blank; the ending prose survives the terminal click; **the engine no longer speaks the player's
+  name** (§22.1). A new event kind now fails the build.
+- **Both were adversarially verified, and it mattered.** #0a **failed** its first verification: one
+  shipped line could be reverted to the broken formula with all 1102 tests still green, because the
+  test fixture's resistances were all zero — where the old and new formulas are arithmetically
+  identical. Fixed in one round. #0b caught the same failure family in itself: its first guard
+  matched only single quotes, so the same bug written with double quotes passed. 13 + 29 mutations,
+  all red on re-check.
+- **Author rulings:** `GAME-DESIGN.md` §22.19 momentum carries between battles **with decay**
+  (author's call against the recommendation; the decay rate is a number nobody has set) · §22.20
+  found gear ships mis-modelled until #1 · §22.21 `HOLLOW_GATE_XP` = **500**.
+- **Eleven register corrections + two new defects** (`FINDINGS.md` §4c). The dangerous one: `PLAN.md`
+  told a builder to close all four state leaks in `createBattle`, which **would have broken G27**.
+  New: **G48** — the simulator cannot reach 20 of 63 event kinds, which undermines every "measured
+  over N runs" claim in the register; **G49** — `story.ts`'s comments now assert a token that was
+  removed.
+- ⚠ **The game is still not playable to floor 5, by design order:** there is **no healing** until
+  `PLAN.md` #9 lands (potions folded into consumables; the consumable path is dead). The deep
+  play-checks are therefore deferred — see `HUMAN-CHECKS.md`. **#0c is next, then #9.**
 
 ### 2026-08-31 — The shipping scope: The Void becomes Game #1, on a 60-hour budget 🎯
 

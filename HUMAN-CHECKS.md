@@ -1,5 +1,35 @@
 # Human Checks — The Void
 
+> ## ⏸ DEFERRED until `PLAN.md` #9 lands — the game cannot be played to floor 5 yet
+>
+> **Added 2026-09-01.** `#0a` and `#0b` are merged and the engine is far healthier, but **there is
+> no healing in the game**: §22.6 folded potions into consumables, and no consumable can be obtained
+> until **#9 content-reachability** lands. A run therefore ends in act 1–2 regardless of skill, so
+> asking anyone to reach act 5 is not a fair test. **Do these once #9 is in:**
+>
+> - [ ] **Floor-5 length.** Reach act 5, count encounters before the Hollow is offered.
+>       `HOLLOW_GATE_XP = 500` (§22.21) is a derived guess. Under ~4 = not a floor; over ~10 = a grind.
+> - [ ] **Does momentum decay feel right?** End a battle with momentum banked, start the next — you
+>       should open on half, rounded down. `MOMENTUM_CARRY = 0.5` (§22.19) is unmeasured; say whether
+>       it should be gentler or harsher.
+> - [ ] **Is stacked damage-over-time too strong now that it works?** Re-apply the same burn/bleed
+>       three or four times. It has never once fired correctly, so nobody has seen it.
+> - [ ] **Enemy skill cadence.** Enemies now use a themed skill roughly every other hit instead of
+>       twice per battle. Too spiky?
+> - [ ] **A Blessed enemy really resists now.** `resistBonus` went 2 → 25. A Firebomb should do **4**
+>       to a Blessed enemy and **6** to a plain one. Wall, or speed bump?
+> - [ ] **Act-5 encounters cannot be fled.** Press Run in an ordinary act-5 fight — you should get a
+>       clear refusal, not a dead button.
+>
+> **Checkable right now, without a full run** (~10 minutes, from the repo root, `npm run desktop`):
+>
+> - [ ] **It boots and a fight resolves.** No agent can run Electron, so this is genuinely unverified.
+> - [ ] **Equip a Common found weapon — you should hit for LESS.** Expected and known (§22.20): found
+>       weapons swing `1d1` until #1 lands. Confirming it behaves as documented is the point.
+> - [ ] **The to-hit line adds up.** A fresh character should now read `+3`, not `+1`.
+> - [ ] **Reach any ending, press Continue — the ending text must STAY on screen.**
+
+
 Your running checklist — things only you can verify (play-feel, visuals, real hardware, the real
 model). Tick items as you go; leave a note if something's off and I'll route it back through the
 build → test loop.
