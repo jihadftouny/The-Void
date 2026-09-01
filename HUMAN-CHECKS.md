@@ -300,6 +300,37 @@ Each follows the original Java (or cleans up an obvious gap); all are one-line t
 
 ---
 
+## ⚠️ Found gear is equippable but MIS-MODELLED until `PLAN.md` #1 lands (from `#0a combat-core`)
+
+**Added 2026-09-01 by the `#0a` build, as a condition of your "ship it" ruling on the plan's open
+question 1 (Appendix A.1). Do not let this get quietly forgotten — it is a real trap in play.**
+
+G11 is fixed: an item you find now equips. But the mechanical accessors
+(`equipment.ts` `weaponForSlot` / `armorForSlot`) still resolve **by legacy name only**, and a
+generated drop's id is the synthetic `gen:<rarity>:<slot>`, which no legacy table knows. So:
+
+- an equipped **found weapon swings the UNARMED `1d1` die**, not a real weapon die;
+- equipped **found armour falls back to the unarmored `10 + CON` base**, not the armour's own AC;
+- only the rolled item's flat `bonusDamage` / `bonusArmorClass` survives (via the effect pipeline).
+
+**The trap, in numbers:** the Enforcer's starting `Jaaj Sword 1` is `1d6`, averaging **3.5** damage.
+A **Common** generated `mainHand` is `1d1 + (1..2)` = **2–3**. So *equipping a Common weapon drop
+makes you weaker*, and `dropTables.json` gives `mainHand` weight 2 of 5 in act 1 (**~40% of act-1
+drops**). Rare (3–5) is roughly a wash; Legendary (6–9) is a genuine upgrade. The same shape applies
+to armour.
+
+- [ ] **Play-check:** start a run, take an act-1 **Common** weapon drop, equip it, and confirm you
+      hit for *less* than with your starting weapon. Confirm the same trap on a Common armour drop
+      (your Armor class on the character sheet should *drop* toward the unarmored base).
+- [ ] **Then confirm it is gone** once `PLAN.md` **#1 `engine-foundations`** lands the item-schema
+      unification (native dice/AC on the rolled overlay) — #1 is the next unit after #0, so the gap
+      is one unit wide.
+
+*Deliberately NOT worked around in `#0a`:* no balance fudge, and weapon/armour drops were not
+suppressed. The behaviour ships honestly and #1 fixes the cause.
+
+---
+
 ## Review & merge (your gate — I never merge without your explicit OK)
 
 > # ⚠ THIS WHOLE SECTION IS SUPERSEDED — do not run the commands below

@@ -117,7 +117,11 @@ export function resolveInstanceDef(instance: ItemInstance): GearDef | undefined 
   return resolveGearDef(instance.defId);
 }
 
-/** The equip slot a defId belongs in, or `null` for a usable / unknown def. */
+/**
+ * The equip slot a defId belongs in, or `null` for a usable / unknown def. DEF-LEVEL: it has
+ * no instance to read, so a rarity-generated `gen:<rarity>:<slot>` id is unknown to it and
+ * resolves to `null`. Instance-aware inference lives in `equip` (see G11 below).
+ */
 export function slotForDef(defId: string): EquipSlot | null {
   const def = resolveGearDef(defId);
   return def ? def.slot : null;
@@ -126,9 +130,18 @@ export function slotForDef(defId: string): EquipSlot | null {
 /**
  * Whether `instance` may equip into `slot`: the resolved def must exist, carry a non-null
  * slot (usables never equip), and that slot must equal the target. Slot-type validation.
+ *
+ * G11 (FINDINGS §4, the worst defect in the project): this used to resolve by `defId` alone
+ * via `resolveGearDef`, which knows only the catalogs. Every rarity-generated drop carries the
+ * synthetic id `gen:<rarity>:<slot>` (rarityGen.ts), which no catalog holds, so the lookup
+ * returned `undefined` and EVERY item the player found was rejected — measured at 0 of >100
+ * drops over 300 seeds. `resolveInstanceDef` reads the instance's own `rolled` overlay first
+ * (and falls back to `resolveGearDef` for a plain `{defId}` instance), so catalog gear and
+ * rolled loot are now validated through one seam — the same seam `equipEffects.ts` and
+ * `view-model.ts` already read.
  */
 export function canEquip(instance: ItemInstance, slot: EquipSlot): boolean {
-  const def = resolveGearDef(instance.defId);
+  const def = resolveInstanceDef(instance);
   if (!def || def.slot === null) return false;
   return def.slot === slot;
 }
@@ -148,7 +161,12 @@ export function equip(
   const item = inventory.backpack[backpackIndex];
   if (!item) return { inventory, ok: false };
 
-  const targetSlot = slot ?? slotForDef(item.defId);
+  // G11: infer the slot from the INSTANCE (its `rolled` overlay when it has one), falling
+  // back to the def-level lookup for a plain `{defId}` catalog instance. The real UI path
+  // (`view-model.ts`'s Equip button) calls `equip(inventory, index)` with NO slot, so this
+  // inference — not just `canEquip` — has to understand a rolled item or found gear still
+  // cannot be equipped.
+  const targetSlot = slot ?? resolveInstanceDef(item)?.slot ?? slotForDef(item.defId);
   if (targetSlot === null) return { inventory, ok: false };
   if (!canEquip(item, targetSlot)) return { inventory, ok: false };
 
@@ -201,6 +219,18 @@ export function inventoryWithGear(gear: Partial<Record<EquipSlot, string>>): Inv
 }
 
 // ------- Mechanical accessors (the seam combat/defense read) ------------------
+//
+// ⚠ KNOWN GAP, deliberately shipped (author's call, 2026-09-01 — see HUMAN-CHECKS.md).
+// These three resolve by LEGACY NAME ONLY. With G11 fixed, a rarity-generated `gen:*` item
+// finally EQUIPS — but `getWeaponByName('gen:Common:mainHand')` is undefined, so an equipped
+// generated weapon swings the UNARMED 1d1 die and an equipped generated armor falls back to
+// the unarmored `10 + CON` base; only the rolled item's flat `bonusDamage`/`bonusArmorClass`
+// survives (via equipEffects). Arithmetic: the Enforcer's starting 1d6 sword averages 3.5,
+// while a Common generated mainHand is `1d1 + (1..2)` = 2–3, so a COMMON WEAPON DROP IS A
+// DOWNGRADE (~40% of act-1 drops by `dropTables.json` weight); Rare (3–5) is a wash and
+// Legendary (6–9) an upgrade. The honest fix is the deferred M6/M7 schema unification, which
+// is `PLAN.md` #1's scope by right (it owns the item schema and the 9→7 slot migration).
+// Do NOT paper over it with a balance fudge here.
 
 /** The Weapon in the mainHand slot, or `undefined` if empty / not a legacy weapon id. */
 export function weaponForSlot(inventory: Inventory): Weapon | undefined {

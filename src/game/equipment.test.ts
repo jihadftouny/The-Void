@@ -15,7 +15,11 @@ import {
   type GearDef,
 } from './equipment.ts';
 import { createInventory, type Inventory } from './inventory.ts';
-import { type ItemInstance } from './item.ts';
+import { EQUIP_SLOTS, type EquipSlot, type ItemInstance } from './item.ts';
+import { generateItem } from './rarityGen.ts';
+import { rollLootDrop } from './loot.ts';
+import { mulberry32 } from './rng.ts';
+import { type Rarity } from './weapon.ts';
 
 // Every expected value is hand-derived from the data tables:
 //   weapons.json  act1: "Jooj Gun 1" (Common Ranged 1d4), "Jaaj Sword 1" (Rare Melee 1d6),
@@ -163,6 +167,78 @@ describe('equip — pure, with slot-type validation and swap', () => {
     const start = createInventory();
     expect(equip(start, 0, 'mainHand')).toEqual({ inventory: start, ok: false });
     expect(equip(start, -1, 'mainHand').ok).toBe(false);
+  });
+});
+
+// ------- G11 / G11b — found gear must actually be equippable -------------------------------
+//
+// These assert the PLAYER-OBSERVABLE contract the register measured as broken: a rarity-
+// generated drop, taken through the same call the UI makes (`equip(inventory, index)` with NO
+// slot argument), lands in its slot. Every expected value is derived from `rarityGen.ts`'s
+// documented output shape (`defId: gen:<rarity>:<slot>`, `rolled.slot === the requested slot`),
+// never read back from `equipment.ts`. Against the pre-fix build every one of them is 0/N.
+
+const RARITIES: readonly Rarity[] = ['Common', 'Rare', 'Legendary'];
+
+describe('G11 — a rarity-generated item can be equipped through the real UI path', () => {
+  it('every slot x rarity (27 of 27) equips with NO slot argument and lands in rolled.slot', () => {
+    let equipped = 0;
+    const failures: string[] = [];
+    for (const slot of EQUIP_SLOTS) {
+      for (const rarity of RARITIES) {
+        const item = generateItem(mulberry32(7), { slot, rarity });
+        // Independent oracle: the generator stamps the synthetic id and the requested slot.
+        expect(item.defId).toBe(`gen:${rarity}:${slot}`);
+        expect(item.rolled!.slot).toBe(slot);
+
+        const start = pickUp(createInventory(), item);
+        const { inventory, ok } = equip(start, 0); // the UI path: no slot argument
+        if (ok && inventory.slots[slot] === item && inventory.backpack.length === 0) {
+          equipped++;
+        } else {
+          failures.push(`${rarity}/${slot}`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+    expect(equipped).toBe(EQUIP_SLOTS.length * RARITIES.length); // 9 x 3 = 27
+  });
+
+  it('canEquip accepts a rolled instance for its own slot and rejects every other slot', () => {
+    const ring = generateItem(mulberry32(11), { slot: 'ring', rarity: 'Rare' });
+    for (const slot of EQUIP_SLOTS) {
+      expect(canEquip(ring, slot)).toBe(slot === 'ring');
+    }
+  });
+
+  it('an explicit WRONG slot is still rejected (the fix widens resolution, not validation)', () => {
+    const armor = generateItem(mulberry32(13), { slot: 'armor', rarity: 'Legendary' });
+    const start = pickUp(createInventory(), armor);
+    const { inventory, ok } = equip(start, 0, 'mainHand');
+    expect(ok).toBe(false);
+    expect(inventory).toBe(start);
+  });
+});
+
+describe('G11 end-to-end — every real loot drop is equippable', () => {
+  it('seeds 1..300 x acts 1-4: at least 100 drops, and 100% of them equip', () => {
+    let drops = 0;
+    let equippable = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const rng = mulberry32(seed);
+      for (const act of [1, 2, 3, 4]) {
+        const drop = rollLootDrop(act, rng);
+        if (!drop) continue;
+        drops++;
+        const slot = drop.rolled!.slot as EquipSlot;
+        const { inventory, ok } = equip(pickUp(createInventory(), drop), 0);
+        if (ok && inventory.slots[slot] === drop) equippable++;
+      }
+    }
+    // The act tables all carry dropChance >= 0.5 over 1200 rolls, so >100 drops is certain;
+    // the register measured >100 drops and 0% equippable on the same sweep.
+    expect(drops).toBeGreaterThanOrEqual(100);
+    expect(equippable).toBe(drops);
   });
 });
 

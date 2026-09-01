@@ -12,6 +12,7 @@ import {
   effectiveResistances,
 } from './statEffects.ts';
 import { playerArmorClass } from './defense.ts';
+import { equip, pickUp } from './equipment.ts';
 import { type ItemInstance } from './item.ts';
 
 /** A CON-12 Enforcer: mod(12) = +1, so stored maxHp = 10 (hit die) + 1 = 11. */
@@ -23,12 +24,20 @@ function con12Enforcer(): Player {
   });
 }
 
-/** Equip a rolled instance into the ring slot, returning a NEW player. */
+/**
+ * Equip a rolled instance into the ring slot, returning a NEW player.
+ *
+ * G11b: this helper used to WRITE STRAIGHT INTO `inventory.slots.ring`, bypassing `equip()`
+ * entirely — so this whole cascade suite proved rolled gear works ONCE equipped and never that
+ * it CAN be, which is exactly the defect G11 turned out to be. It now goes through the real
+ * `pickUp` -> `equip()` path (no slot argument, as the UI calls it) and asserts the equip
+ * succeeded, so a `canEquip` regression fails this file too.
+ */
 function withRing(base: Player, ring: ItemInstance): Player {
-  return {
-    ...base,
-    inventory: { ...base.inventory, slots: { ...base.inventory.slots, ring } },
-  };
+  const { inventory, ok } = equip(pickUp(base.inventory, ring), base.inventory.backpack.length);
+  expect(ok).toBe(true);
+  expect(inventory.slots.ring).toBe(ring);
+  return { ...base, inventory };
 }
 
 const CON_PLUS_2: ItemInstance = {

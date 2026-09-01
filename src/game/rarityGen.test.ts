@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from './rng.ts';
 import { generateItem, RARITY_TABLE } from './rarityGen.ts';
-import { resolveInstanceDef } from './equipment.ts';
+import { canEquip, equip, pickUp, resolveInstanceDef } from './equipment.ts';
+import { createInventory } from './inventory.ts';
 
 /** A passive ItemEffect narrowed for reading its numeric params in tests. */
 type PassiveEffect = { type: string; params: Record<string, number> };
@@ -74,12 +75,21 @@ describe('generateItem — slot -> primary effect mapping', () => {
     expect(Object.keys(eff.params)).toEqual(['dex']);
   });
 
-  it('an armor slot rolls bonusArmorClass, and the rolled item resolves for equipping', () => {
+  // G11b: this test was NAMED "resolves for equipping" and only called `resolveInstanceDef`,
+  // which was never the function that rejected the item — so it passed for the whole of the
+  // period in which no found item could be equipped at all. It now drives the real equip
+  // pipeline (`canEquip` + `equip`), which is what its name always claimed.
+  it('an armor slot rolls bonusArmorClass, and the rolled item ACTUALLY equips', () => {
     const item = generateItem(mulberry32(SEED), { slot: 'armor', rarity: 'Common' });
     expect(item.rolled!.effects[0]!.type).toBe('bonusArmorClass');
     // The rolled overlay resolves to a GearDef so the equip pipeline can read it.
     const def = resolveInstanceDef(item);
     expect(def!.slot).toBe('armor');
     expect(def!.effects).toEqual(item.rolled!.effects);
+    // …and the pipeline itself accepts it, with and without an explicit slot.
+    expect(canEquip(item, 'armor')).toBe(true);
+    const { inventory, ok } = equip(pickUp(createInventory(), item), 0);
+    expect(ok).toBe(true);
+    expect(inventory.slots.armor).toBe(item);
   });
 });
