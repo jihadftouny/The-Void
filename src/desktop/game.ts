@@ -12,7 +12,7 @@ import type { PlayerClass } from '../game/player.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
-import { loadRun, saveRun, clearRun } from './persist.ts';
+import { loadRun, saveRun, clearRun, type RunMeta } from './persist.ts';
 import {
   snapshotUnlocks,
   classUnlocked,
@@ -106,6 +106,18 @@ const CLASS_BUTTONS: readonly { classId: PlayerClass; label: string }[] = [
   { classId: 'Penitent', label: 'Penitent — devotion in blood' },
   { classId: 'Hollow', label: 'Hollow — the Void within' },
 ];
+
+/**
+ * The renderer-side run bookkeeping that must be SAVED alongside the engine state — G19.
+ * `runSummary` decides which feats fire at the end of the run and `runSeed` is the run
+ * identity `applyRunSummary` records; neither lives in `GameState`, so neither survived a
+ * save. Resuming therefore restarted the feat tally from zero and quietly forfeited
+ * everything the run had earned (reproduced: seed 4242 unlocks the Neuromancer played
+ * straight through, and unlocks nothing when resumed from its own act-2 state).
+ */
+function runMeta(): RunMeta {
+  return { runSummary, runSeed };
+}
 
 /**
  * At a terminal phase (an ending, or game-over), fold the run's summary into the persistent
@@ -271,7 +283,7 @@ function renderInventoryScreen(): void {
         const r = unequipSlot(state, s.slot);
         if (r.ok) {
           state = r.state;
-          saveRun(state, memory);
+          saveRun(state, memory, runMeta());
         }
         rerender();
       });
@@ -298,7 +310,7 @@ function renderInventoryScreen(): void {
         const r = equipFromBackpack(state, b.index);
         if (r.ok) {
           state = r.state;
-          saveRun(state, memory);
+          saveRun(state, memory, runMeta());
         }
         rerender();
       });
@@ -415,7 +427,7 @@ async function dispatch(input: GameInput): Promise<void> {
       clearRun();
       log.info('save', 'run cleared (game over)');
     } else {
-      saveRun(state, memory);
+      saveRun(state, memory, runMeta());
       log.debug('save', 'run autosaved');
     }
   } finally {
@@ -618,6 +630,24 @@ if (saved) {
   log.info('save', 'resumable run found', { act: saved.state.act, phase: saved.state.phase.kind });
   state = saved.state;
   memory = saved.memory;
+  // G19 -> G1: restore what the run has EARNED, not just where it is. Without this the
+  // resumed run restarts its feat tally at zero and every boss felled, foe spared and floor
+  // reached before the quit is forfeited at the end of the run.
+  if (saved.meta) {
+    runSummary = saved.meta.runSummary;
+    runSeed = saved.meta.runSeed;
+    log.info('save', 'run meta-progression restored', {
+      maxAct: runSummary.maxAct,
+      bossKills: runSummary.bossKills,
+      spares: runSummary.spareCount,
+    });
+  } else {
+    // A v1 envelope, written before the envelope carried any of this. There is no installed
+    // base (`desktop:pack` had never succeeded until 2026-08-31 — G44), so in practice this
+    // is the author's own local save. Say so ONCE rather than losing it in silence, which is
+    // what the whole G19 defect was.
+    log.warn('save', 'legacy save (envelope v1): this run starts its feat tally from scratch');
+  }
   retheme(); // a resumed run may be deep in the descent — adopt ITS floor, not floor 0
   renderSheet();
   renderResume();
