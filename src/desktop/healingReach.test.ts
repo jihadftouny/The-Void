@@ -29,6 +29,7 @@ import type { GameEvent } from '../game/gameEvent.ts';
 import { ALL_CLASSES, heuristicPolicy } from '../game/sim.ts';
 import { getCatalogItemById } from '../game/item.ts';
 import { consumableOptions, displayPlayer } from './view-model.ts';
+import { formatEvent } from '../render/format.ts';
 
 /** The same "is it a heal" rule the drop table's `heal` pool is built from. */
 function heals(defId: string): boolean {
@@ -147,6 +148,10 @@ describe('G14 end-to-end — healing is reachable in an ordinary run', () => {
   });
 
   it('the player is told what they drank BY NAME, not by catalog id', () => {
+    // FIX ROUND 1 — this used to assert only `getCatalogItemById(defId).name !== defId`,
+    // which is a property of `consumables.json` (always true) and says nothing whatsoever
+    // about what the player is TOLD. It now renders the real event through the real
+    // formatter, which is the thing the test is named after.
     const { state, index } = RESULT.moment!;
     const defId = displayPlayer(state)!.inventory.backpack[index]!.defId;
     const res = step(state, {
@@ -155,10 +160,17 @@ describe('G14 end-to-end — healing is reachable in an ordinary run', () => {
     });
     const used = res.events.find((e) => e.kind === 'consumable-used');
     expect(used).toBeDefined();
-    // The engine event carries the id (it is data); the FORMATTER is what must not print it.
-    // Asserted here rather than only in format.test.ts because this is the first moment in the
-    // game's history where a real player can see this line at all.
-    expect(defId).toMatch(/^[a-z-]+$/); // it really is a raw id, so the check below has teeth
-    expect(getCatalogItemById(defId)!.name).not.toBe(defId);
+
+    // The engine event carries the id (it is DATA, and should); the FORMATTER is what must
+    // never print it. Asserted here as well as in `format.test.ts` because this is the first
+    // moment in the game's history where a real player can see this line at all — the whole
+    // chain, from a seeded run to the sentence on screen.
+    expect(defId).toMatch(/^[a-z-]+$/); // it really is a raw id, so the checks below have teeth
+    const name = getCatalogItemById(defId)!.name;
+    expect(name).not.toBe(defId);
+
+    const line = formatEvent(used!);
+    expect(line, 'the log line does not name the item the player drank').toContain(name);
+    expect(line, 'the log line printed the raw catalog id').not.toContain(defId);
   });
 });

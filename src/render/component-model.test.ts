@@ -309,3 +309,57 @@ describe('actionButton makes a disabled button inert, not just grey', () => {
     expect(body).toMatch(/is-disabled/);
   });
 });
+
+// =========================================================================================
+// `appendLogLine`'s two stated contracts — added in FIX ROUND 1.
+//
+// The doc comment on `appendLogLine` justifies itself twice, and NEITHER claim was checked:
+//
+//   1. "a native `<details>/<summary>`, not a div with a click handler … the browser gives
+//      keyboard operation, focus order, and the correct screen-reader announcement for free".
+//      Swapping `createElement('details')` for `'div'` left all 1290 tests green — the
+//      expander silently becomes an inert div, and NEEDS-HUMAN item 1 asks a person to check
+//      by hand that `Tab` reaches it. That is the wrong place for a check that can be
+//      anchored headlessly.
+//   2. "The text is set as `textContent` throughout … neither is ever markup." An enemy's
+//      generated full name flows through here. Swapping in `innerHTML` was also green.
+//
+// Same source-scan pattern as `actionButton` above, for the same reason: `components.ts` is
+// DOM assembly that this repo deliberately does not unit-test, so the contract is asserted
+// on the shipping source.
+// =========================================================================================
+
+describe('appendLogLine keeps the native expander, and sets text as text', () => {
+  const source = readFileSync(fileURLToPath(new URL('./components.ts', import.meta.url)), 'utf8');
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const start = code.indexOf('export function appendLogLine(');
+  const body = code.slice(start, code.indexOf('\n}', start));
+
+  it('has an appendLogLine to guard (the anchor exists)', () => {
+    expect(start, 'appendLogLine is gone — this guard has gone stale').toBeGreaterThan(-1);
+    expect(body).toMatch(/line\.detail/);
+  });
+
+  it('builds a real <details>/<summary>, not a div pretending to be one', () => {
+    // Both elements are required: a `<details>` with no `<summary>` has no clickable label,
+    // and a `<summary>` outside a `<details>` does nothing at all. Quote style is free.
+    expect(
+      body,
+      'the expander is no longer a native <details> — keyboard operation, focus order and ' +
+        'the screen-reader expanded/collapsed announcement are all silently lost',
+    ).toMatch(/createElement\s*\(\s*['"`]details['"`]\s*\)/);
+    expect(body).toMatch(/createElement\s*\(\s*['"`]summary['"`]\s*\)/);
+  });
+
+  it('writes no HTML anywhere — every string here can contain a name', () => {
+    // The same four spellings `rendererSource.test.ts` guards `renderSheet` against; that
+    // regex covers `renderSheet` only, and `appendLogLine` shipped in the same unit.
+    const HTML_WRITE =
+      /\.\s*(?:inner|outer)HTML\s*=|insertAdjacentHTML\s*\(|createContextualFragment\s*\(/;
+    expect(body, 'appendLogLine is writing HTML — a log line carries the enemy full name').not.toMatch(
+      HTML_WRITE,
+    );
+    // ...and it does set text, or the "must not" above would pass by rendering nothing.
+    expect(body).toMatch(/\.\s*textContent\s*=/);
+  });
+});

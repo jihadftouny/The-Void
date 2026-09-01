@@ -9,6 +9,7 @@ import type { CombatEvent } from '../game/combatEvent.ts';
 import { mulberry32, type Rng } from '../game/rng.ts';
 import type { GameEvent, GameEventKind } from '../game/gameEvent.ts';
 import type { Stats, Character } from '../game/character.ts';
+import type { TriggerType } from '../game/item.ts';
 import {
   CONDITION_DATA,
   INSANITY_STRINGS,
@@ -209,6 +210,59 @@ describe('formatEvent — totality over every event kind', () => {
     expect(formatEvent(SAMPLES['relic-triggered'])).not.toContain('onHit');
     expect(formatEvent(SAMPLES['consumable-used'])).not.toContain('void-draught');
     expect(formatEvent(SAMPLES['consumable-used'])).toContain('Void Draught');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FIX ROUND 1 — `relic-triggered` for ALL SIX triggers.
+//
+// The sample above covers `onHit` only, so reverting the line to
+// `` `A relic answers (${e.trigger}).` `` passed all 1290 tests. The plan's "no raw id
+// reaches the player" sweep checks the relic / consumable / unique / condition / feat / boss
+// id sets — and `TriggerType` ids are in none of them. The `Record<TriggerType, string>` in
+// `format.ts` makes a SEVENTH trigger a build error; it does not make the table's USE
+// mandatory. That is the gap.
+//
+// `EXPECTED_TRIGGER_LINE` is itself a `Record<TriggerType, string>`, so this test is
+// exhaustive by construction too — and its values are the full sentences, written out by
+// hand from the design intent rather than imported from `TRIGGER_MOMENT`. Importing the
+// table would compare the implementation against itself and prove nothing.
+// ---------------------------------------------------------------------------
+
+const EXPECTED_TRIGGER_LINE: Record<TriggerType, string> = {
+  startOfBattle: 'A relic answers as the battle opens.',
+  onHit: 'A relic answers as your blow lands.',
+  onCrit: 'A relic answers as your blow lands true.',
+  onCast: 'A relic answers as you cast.',
+  onKill: 'A relic answers as the enemy falls.',
+  onTakeDamage: 'A relic answers as you are struck.',
+};
+
+describe('relic-triggered renders a phrase, never the trigger id', () => {
+  const TRIGGERS = Object.keys(EXPECTED_TRIGGER_LINE) as TriggerType[];
+
+  it('the six triggers are all covered (a seventh would not compile)', () => {
+    expect(TRIGGERS).toHaveLength(6);
+  });
+
+  it('every trigger renders its authored sentence exactly', () => {
+    for (const trigger of TRIGGERS) {
+      expect(
+        formatEvent({ kind: 'relic-triggered', trigger, action: 'dealDamage' }),
+        `${trigger} does not render its authored phrase`,
+      ).toBe(EXPECTED_TRIGGER_LINE[trigger]);
+    }
+  });
+
+  it('and none of them leaks the raw enum id', () => {
+    for (const trigger of TRIGGERS) {
+      const line = formatEvent({ kind: 'relic-triggered', trigger, action: 'dealDamage' });
+      // Two independent checks, because neither alone is sufficient: `startOfBattle` has no
+      // standalone "on" so the camelCase pattern misses it, and a future phrase could
+      // legitimately contain a word that happens to be an id substring.
+      expect(line, `${trigger} leaked its own id`).not.toContain(trigger);
+      expect(line, `${trigger} leaked a camelCase enum id`).not.toMatch(/\bon[A-Z]/);
+    }
   });
 });
 

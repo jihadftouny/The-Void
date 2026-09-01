@@ -98,4 +98,31 @@ describe('the keydown listener really uses the predicate', () => {
       'the listener compares ev.key itself again — that is where G40 lived',
     ).not.toMatch(/\bev\.key\s*===/);
   });
+
+  it('and calls preventDefault only AFTER deciding the key is ours', () => {
+    // FIX ROUND 1. The two assertions above both go red correctly, but they miss the shape
+    // `debug-overlay.ts`'s own comment names as the defect — "`preventDefault` moved INSIDE
+    // the guard: calling it first was the defect". Hoisting it back above the guard:
+    //
+    //     window.addEventListener('keydown', (ev) => {
+    //       ev.preventDefault();              // <-- swallows EVERY keystroke on the window
+    //       if (!togglesOverlay(ev)) return;
+    //       toggle();
+    //     });
+    //
+    // …still calls `togglesOverlay` and still contains no `ev.key ===`, so both pass — while
+    // the game becomes strictly WORSE than G40 ever was: G40 ate only the backtick, this eats
+    // every key, including every character of the player's name and the Enter that submits it.
+    // Position is the only thing that distinguishes them, so position is what is asserted.
+    const handler = code.slice(start, start + 400);
+    const decide = handler.search(/togglesOverlay\s*\(/);
+    const prevent = handler.search(/preventDefault\s*\(/);
+    expect(decide, 'togglesOverlay is missing from the handler').toBeGreaterThan(-1);
+    expect(prevent, 'the handler no longer calls preventDefault at all').toBeGreaterThan(-1);
+    expect(
+      prevent,
+      'preventDefault runs BEFORE the overlay decides the key is its own — that swallows ' +
+        'every keystroke on the window, which is worse than the G40 it replaced',
+    ).toBeGreaterThan(decide);
+  });
 });
