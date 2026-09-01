@@ -87,14 +87,22 @@ export function describeEvent(e: GameEvent): string {
         : `You pry it open, but it is hollow.`;
     case 'level-up':
       return `Something in you hardens; you are stronger than before.`;
-    case 'act-outro':
-      return e.body;
-    case 'act-intro':
-      return e.body;
     case 'final-battle-begins':
       return `${e.enemyName}, the end of the descent, stands before you.`;
+    // G21 — the PLUMBING half. These three cases returned `e.body` alone and threw the
+    // header away. All ten act bodies in story.json are still `""` (authoring them is
+    // PLAN.md #13, author-only), so every act transition produced NO fact, so
+    // `buildNarrationPrompt` returned null and the pane went blank: 47 act-intro + 47
+    // act-outro blank screens over 20 runs, one on every floor change. Joining the header
+    // back in makes the fact "ACT II" — thin, but non-empty, so the prompt survives and
+    // `buildNarrationPrompt` still supplies the act/floor context around it.
+    // `filter(Boolean)` is what makes this forward-compatible: when #13 fills the bodies
+    // the prose appears here automatically, with NO code change. That is the whole point
+    // of the split, and it is why this unit writes no prose.
+    case 'act-outro':
+    case 'act-intro':
     case 'ending':
-      return e.body;
+      return [e.header, e.body].filter(Boolean).join(' — ');
     case 'game-over':
       return `Darkness takes you. The descent is over.`;
     default:

@@ -55,6 +55,26 @@ describe('describeEvent', () => {
     expect(s).toContain('Neuromancer');
     expect(s).not.toContain('Zzyzx-Qwph');
   });
+
+  // G21 — an act transition must survive an EMPTY body. All ten bodies in story.json are
+  // still `""` (#13 authors them), and returning `e.body` alone made every floor change a
+  // blank screen. The header alone must be enough to keep the prompt non-null.
+  it('keeps the act header when the body is still empty, and joins both when it is not', () => {
+    expect(describeEvent({ kind: 'act-intro', act: 2, header: 'ACT II', body: '' })).toBe('ACT II');
+    expect(describeEvent({ kind: 'act-outro', act: 2, header: 'ACT II', body: '' })).toBe('ACT II');
+    // Forward compatibility: once #13 authors a body it appears with no code change.
+    expect(
+      describeEvent({ kind: 'act-intro', act: 3, header: 'ACT III', body: 'The mirrors begin.' }),
+    ).toBe('ACT III — The mirrors begin.');
+    expect(
+      describeEvent({
+        kind: 'ending',
+        endingType: 'grace',
+        header: 'ASCENSION',
+        body: 'You are judged worthy and rise from the Void, made whole.',
+      }),
+    ).toBe('ASCENSION — You are judged worthy and rise from the Void, made whole.');
+  });
 });
 
 describe('buildNarrationPrompt', () => {
