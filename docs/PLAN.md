@@ -293,7 +293,15 @@ character that never equips found loot.
 never in the game bundle, never touched by a test.
 
 **#4 probe 04 + approve references** — probe 03 predates `WORLD.md` and is partly wrong. Re-probe
-against the finished world, approve one image as the style anchor. **Also rotate the API key.**
+against the finished world, approve one image as the style anchor. ~~**Also rotate the API key.**~~
+**✅ AUDITED 2026-09-01 — the key was NEVER committed.** Full-history scan of **all 306 commits
+across every ref**: zero occurrences of a Google API-key pattern. `.env` is gitignored
+(`.gitignore:10`) and untracked; the only `.env`-family file ever committed is `.env.example`, a
+placeholder template added by `687ecf5` — the commit that put the guard in place. **So the
+irreversible risk — a key baked into git history, which survives deletion and any later
+`.gitignore`** — does not exist here. Rotation is now **precautionary, not mandatory**: worth doing
+if the key was ever pasted into a terminal, a log, or a chat window outside this repo, since the
+audit can only clear the repository. Not a release blocker.
 
 **#5 FOUR gated batches** — environments (7) → characters (5) → enemies (**30**) → bosses (8).
 *(Was five. The fifth was ~~item icons~~ — **CANCELLED 2026-08-31**, `GAME-DESIGN.md` §22.8: the
