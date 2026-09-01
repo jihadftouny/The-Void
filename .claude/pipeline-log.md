@@ -19,6 +19,50 @@ Format per entry:
 
 ---
 
+## 2026-09-01 — combat-core (#0a of the #0 critical-engine-bugs split: 23 combat defects) [branch `agentic/combat-core`, **unmerged**]
+- Verdict: **PASS** (after 1 fix round). 1029 → 1102 → **1112 tests**. 12 commits.
+- Fix rounds: **1** — test-agent returned FAIL on round 1 for a single unguarded line.
+- **The FAIL is the headline lesson: a shipped fix with a test that could not tell right from wrong.**
+  `relicEffects.ts:80` (G17's elemental-mitigation call site) could be reverted *entirely* to the
+  broken pre-fix formula with all 1102 tests still green, because the test file's only enemy fixture
+  had `resistances: [0,0,0,0,0,0,0]` — and at resistance 0 the old and new formulas are arithmetically
+  identical. The build agent's own G17 tests covered the *other* call site and the shared helper;
+  **a correct helper says nothing about whether a call site uses it.** Reachable from shipped data
+  (Firebomb vs a `blessed` enemy: 6 → 4 damage). Closed in the fix round; both mutations now red.
+- Build-agent deviations: **6 register corrections**, all confirmed by the test-agent.
+  (1) `PLAN.md` #0's *"close all four carry-over leaks in `createBattle`"* **would have broken G27** —
+  `activeConditions` must survive a battle. (2) G31's literal wording creates a free charge refill.
+  (3) G22(c) states a defect and specifies no fix. (4) G4's headline does not match the code — there
+  is no floor-4 boss battle at all. (5) `draft.ts` did **not** already import `resolveSkill`.
+  (6) G43 cannot reuse `ACT_XP_THRESHOLDS`, hence a separate `HOLLOW_GATE_XP`.
+- ⚠ **Departure from a binding author answer:** Appendix A.4 accepted `HOLLOW_GATE_XP = 600`; the unit
+  shipped **500**. Reason is sound (at 600 the win rate measures exactly 0.120 against a `> 0.12`
+  floor) and the move was to the next *integer kill count* on the derived curve rather than the
+  nearest passing value — the opposite of tuning-to-green. Surfaced to the author at handoff.
+- Test failures before fixes: 1 blocking (above) + 3 non-blocking secondary findings, 2 of which the
+  build agent declined with reasons the test-agent agreed with (AC-20's literal grep is a
+  self-defeating acceptance criterion — making it return 0 means deleting the guard; `applyCondition`'s
+  argument mutation is pre-existing and cross-cutting, carried as a ledger item).
+- **Verification quality worth keeping:** the test-agent ran **13 mutations, 13 red**, re-derived every
+  anchor in a throwaway harness rather than trusting shipped tests, re-measured 240,000 seeds to check
+  the balance statistics independently, and proved *"no shipping source changed"* by observing the Vite
+  bundle hash was byte-identical across rounds. It also found that `offEquivalence.test.ts` stays GREEN
+  under the G29 bypass mutation — i.e. the byte-identity replay catches damage *disappearing* but not
+  the guards being *bypassed*, so the new end-to-end tests cover something the lock structurally cannot.
+- **A guard was strengthened rather than weakened under pressure.** Asked whether a 2.75 lower bound on
+  the hits-to-kill anchor was stable, the honest answer was no — at n=80, 54 of 250 blocks fall below
+  it, so the shipped 2.900 was luck of the draw. Instead of accepting a looser bound the agent raised
+  the sample to n=2000 (sd 0.1136 → 0.0243) and kept 2.75, restoring −10%/−20% enemy-HP sensitivity
+  that the widened band had lost. Cost: +0.33 s on a 3.9 s suite.
+- Plan open-questions: **7** — 2 put to the author (found-gear mis-modelling → ship it, `GAME-DESIGN.md`
+  §22.20; momentum across battles → **carry with decay**, §22.19, author's call against the
+  recommendation), 1 settled by the orchestrator (`condition.ts` ownership vs G46/#0c), 4 defaults taken.
+- **Live finding for #2:** enemy HP was tuned against the −2 to-hit baseline G32 removed. A 1d8
+  Legendary rapier now kills a fresh act-1 enemy in **under 3 actions**, and the win rate sits at
+  **0.132 against a 0.12 floor — six wins in 500** — with `HOLLOW_GATE_XP` now effectively pinned by
+  that threshold, a coupling that did not exist before.
+- Manual engineer fixes: none yet
+
 ## 2026-08-25 — ui-foundation (M-UI2 unit 1 of 5: tokens, shared components, retire 2nd front-end, widen combat events) [branch `agentic/ui-foundation`, merged to `main`]
 - Verdict: **PASS** (final, `782fe4f`). 960 → 1014 → 1026 → **1029 tests**.
 - Fix rounds: **3** — round 1 = engineer visual sign-off (SKILL §5), round 2 = test-agent returned
