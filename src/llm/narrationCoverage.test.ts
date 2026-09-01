@@ -61,8 +61,14 @@ const STATS: Stats = { STR: 12, DEX: 11, CON: 13, INT: 10, WIS: 9, CHA: 8 };
  * the member it is keyed by, so this cannot drift from the union: add a kind and this map
  * stops compiling.
  *
- * Enemy names here deliberately avoid WORLD.md §0's reserved words, so the reserved-word
- * guard below tests the LITERALS this unit wrote rather than the fixture data.
+ * The enemy names and the `player-created` class here deliberately avoid WORLD.md §0's
+ * reserved words, so the reserved-word guard below tests the LITERALS this unit wrote
+ * rather than the fixture data.
+ *
+ * ⚠ Do not "improve" this by using the Hollow class or a floor-3 enemy such as "Hollow
+ * Grief". Those are SANCTIONED uses of the load-bearing word — §0 names the Hollow class
+ * and the Hollow Self itself — but they are interpolated data, and feeding them in here
+ * would make the guard go red over something entirely correct.
  */
 const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   // ---- combat (37) ----
