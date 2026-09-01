@@ -277,19 +277,32 @@ describe('bossPostRound — Kingpin summons adds on cadence and the crew deals d
     expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 * KINGPIN_MINION_DAMAGE });
   });
 
-  it('lethal minion damage ends the round in player-died with a defeat event', () => {
-    // Player at 1 HP. Rounds 1 & 2: no minions, no damage. Round 3: first summon → minions 1
-    // → damage 1 × 1 = 1 → hp 0 → player-died (new cadence: every 3 rounds, 1 dmg/minion).
+  // CHANGED by G29: `bossPostRound` no longer applies the damage or decides the death. It
+  // used to write `player.hp` directly and return `status: 'player-died'`, which bypassed
+  // every guard `battle.ts` owns — shield absorb, the `onTakeDamage` relics and the
+  // once-per-battle revive — at the death `BALANCE-REPORT.md` says happens most often. It now
+  // RETURNS the number and leaves the hp and the death decision to `game.ts`, which routes it
+  // through the one guarded path. So this test asserts the boss's own contract: it announces
+  // the damage, hands it back, and touches nothing.
+  it('reports minion damage as a number and never writes player HP itself', () => {
     let battle = kingpinBattle(makePlayer({ hp: 1, maxHp: 40 }));
-    let r = bossPostRound(battle, 'fight'); // r1
-    expect(r.status).toBe('ongoing');
-    r = bossPostRound(r.battle, 'fight'); // r2
-    expect(r.status).toBe('ongoing');
+    let r = bossPostRound(battle, 'fight'); // r1: no minions yet
+    expect(r.playerDamage).toBe(0);
     expect(r.battle.player.hp).toBe(1);
-    r = bossPostRound(r.battle, 'fight'); // r3: summon + 1 damage
-    expect(r.battle.player.hp).toBe(0);
-    expect(r.status).toBe('player-died');
-    expect(r.events).toContainEqual({ kind: 'defeat' });
+    r = bossPostRound(r.battle, 'fight'); // r2: still none
+    expect(r.playerDamage).toBe(0);
+    expect(r.battle.player.hp).toBe(1);
+    r = bossPostRound(r.battle, 'fight'); // r3: first summon -> 1 minion -> 1 damage
+    expect(r.playerDamage).toBe(1 * KINGPIN_MINION_DAMAGE);
+    expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 1 });
+    // The hp is UNTOUCHED here and no death is decided — both belong to game.ts now.
+    expect(r.battle.player.hp).toBe(1);
+    expect(r.events.some((e) => e.kind === 'defeat')).toBe(false);
+  });
+
+  it('every non-summoning boss reports zero player damage', () => {
+    const battle = kingpinBattle(makePlayer({ hp: 500, maxHp: 500 }));
+    expect(bossPostRound(battle, 'fight').playerDamage).toBe(0);
   });
 });
 
@@ -347,7 +360,7 @@ describe('bossPostRound — Sin/Hollow only advance the round counter', () => {
       const battle: BattleState = createBattle(makePlayer(), enemy, 3, { boss });
       const r = bossPostRound(battle, 'fight');
       expect(r.events).toEqual([]);
-      expect(r.status).toBe('ongoing');
+      expect(r.playerDamage).toBe(0); // was `status: 'ongoing'` before G29 moved the death out
       expect(r.battle.boss?.round).toBe(1);
     }
   });

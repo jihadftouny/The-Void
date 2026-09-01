@@ -12,11 +12,11 @@ import { generateEnemy } from './enemy.ts';
 import { getFamily, FAMILIES } from './enemyFamily.ts';
 import { AFFIXES } from './enemyAffix.ts';
 import { createUnlockStore, snapshotUnlocks, type RunUnlocks } from './unlockStore.ts';
-import { type BattleState } from './battle.ts';
+import { createBattle, type BattleState } from './battle.ts';
 import { selectEncounter } from './encounter.ts';
 import { buildDeal, selectPool } from './deal.ts';
 import { FINAL_BOSS_NAME, FINAL_BOSS_XP } from './progression.ts';
-import { BOSSES } from './boss.ts';
+import { BOSSES, type BossState } from './boss.ts';
 import { getGraceEnding, getDamnationEnding } from './story.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
@@ -877,6 +877,88 @@ describe('M12 off-equivalence: a normal battle invokes no boss hook', () => {
     const w = step(winState, { kind: 'continue' });
     expect(w.state.phase.kind).toBe('main-menu');
     expect(w.state.pending).toBeUndefined();
+  });
+});
+
+// ------- G36 — a rejected press must not advance the boss -----------------------------------
+
+/** A started boss battle sitting at `battle-action`, ready to be pressed at. */
+function bossBattleState(boss: BossState, act: number, player: Player, rngState = 3): StepResult {
+  const enemy = generateEnemy(
+    { act, type: BOSSES[boss.bossId].name, playerXp: 0 },
+    mulberry32(1),
+  );
+  const battle: BattleState = createBattle(player, enemy, act, { boss });
+  return {
+    state: {
+      version: 8,
+      rngState,
+      player,
+      act,
+      place: act - 1,
+      karma: createKarma(),
+      phase: { kind: 'battle', battle, started: true, final: false },
+    },
+    events: [],
+    awaiting: 'battle-action',
+  };
+}
+
+describe('G36 — pressing a button the engine refuses costs nothing', () => {
+  it('nine rejected Run presses against the Kingpin cost 0 HP and summon 0 minions', () => {
+    // The register's measurement: the Run button is rendered in EVERY battle and a boss sets
+    // `canFlee: false`, so nine refused presses cost the player 11 HP to minions that the
+    // Kingpin's per-round mechanic had no business summoning. The refusal is now `resolved:
+    // false`, so `game.ts` skips `bossPostRound` entirely.
+    const player = makePlayer({ hp: 20, maxHp: 20 });
+    let r = bossBattleState({ bossId: 'kingpin', round: 0, minions: 0 }, 1, player);
+    for (let i = 0; i < 9; i++) {
+      r = step(r.state, { kind: 'battle-action', action: 'run' });
+      expect(r.events).toEqual([{ kind: 'escape-impossible' }]);
+    }
+    expect(r.state.phase.kind).toBe('battle');
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.player.hp).toBe(20); // pre-fix: 9 (11 HP of minion damage)
+      expect(r.state.phase.battle.boss?.minions).toBe(0);
+      expect(r.state.phase.battle.boss?.round).toBe(0); // the boss never even advanced a round
+    }
+  });
+
+  it("three rejected casts leave the Reflection's once-per-battle adaptation unused", () => {
+    // Worse than HP: three REJECTED casts used to burn the adapt, permanently disadvantaging
+    // the player for pressing a button the engine had just told them did nothing.
+    const player = makePlayer({ hp: 200, maxHp: 200, skillPool: [] }); // owns nothing to cast
+    let r = bossBattleState(
+      { bossId: 'reflection', round: 0, adapted: false, actionTally: {} },
+      2,
+      player,
+    );
+    for (let i = 0; i < 3; i++) {
+      r = step(r.state, { kind: 'battle-action', action: { kind: 'cast', skillId: 'heavyStrike' } });
+      expect(r.events).toEqual([{ kind: 'cast-unavailable' }]);
+    }
+    if (r.state.phase.kind === 'battle') {
+      expect(r.state.phase.battle.boss?.adapted).toBe(false);
+      expect(r.state.phase.battle.boss?.actionTally).toEqual({});
+      expect(r.state.phase.battle.playerAdvantage).toBeUndefined();
+    }
+    expect(r.events.some((e) => e.kind === 'boss-adapt')).toBe(false);
+  });
+
+  it('a REAL round against the same boss still advances its mechanic', () => {
+    // The guard must not have turned the boss off: three real fights DO reach the threshold.
+    const player = makePlayer({ hp: 9999, maxHp: 9999 });
+    let r = bossBattleState(
+      { bossId: 'reflection', round: 0, adapted: false, actionTally: {} },
+      2,
+      player,
+    );
+    let adapted = false;
+    for (let i = 0; i < 3; i++) {
+      r = step(r.state, { kind: 'battle-action', action: 'fight' });
+      if (r.events.some((e) => e.kind === 'boss-adapt')) adapted = true;
+    }
+    expect(adapted).toBe(true);
   });
 });
 

@@ -264,11 +264,23 @@ function actionKey(action: BattleAction): string {
   return `consumable:${JSON.stringify(action.source)}`;
 }
 
-/** What `bossPostRound` returns: the patched battle, extra events, and a possibly-lethal status. */
+/**
+ * What `bossPostRound` returns: the patched battle, extra events, and any damage the boss's
+ * adds want dealt to the player.
+ *
+ * G29: this used to carry a `status: 'ongoing' | 'player-died'`, because the Kingpin branch
+ * wrote `player.hp` DIRECTLY and decided the death itself — bypassing every guard `battle.ts`
+ * owns (shield absorb, the `onTakeDamage` relics, the once-per-battle revive). Since
+ * `BALANCE-REPORT.md` names the act-1 Kingpin as the single biggest act-1 killer, that made it
+ * THE DEATH THAT HAPPENS MOST, with a 20-point shield absorbing nothing and the Halo Fragment
+ * never firing. The damage is now RETURNED AS A NUMBER and applied by `game.ts` through the one
+ * guarded path, which also keeps this module RNG-free and free of the equipment/relic imports.
+ */
 export interface BossRoundResult {
   battle: BattleState;
   events: CombatEvent[];
-  status: 'ongoing' | 'player-died';
+  /** Extra damage the boss's adds deal to the player this round. 0 for every boss with none. */
+  playerDamage: number;
 }
 
 /**
@@ -277,8 +289,8 @@ export interface BossRoundResult {
  * `boss` never reaches here (game.ts guards on `battle.boss`).
  *
  *  - kingpin: `round++`; on the fixed cadence (and under the cap) summon one minion
- *    (`boss-summon`); then the whole crew deals `minions × KINGPIN_MINION_DAMAGE` extra damage
- *    (`boss-minion-damage`), clamped at 0 hp. Player to 0 ⇒ `player-died` (+ `defeat`).
+ *    (`boss-summon`); then the whole crew's `minions × KINGPIN_MINION_DAMAGE` is announced
+ *    (`boss-minion-damage`) and RETURNED as `playerDamage` for game.ts to apply (G29).
  *  - reflection: tally the action; the first time any tally reaches `REFLECTION_ADAPT_THRESHOLD`
  *    (and not yet adapted) the boss adapts — the player rolls at DISADVANTAGE for the rest of
  *    THIS battle (`battle.playerAdvantage = -1`, G12) and a `boss-adapt` fires.
@@ -287,7 +299,7 @@ export interface BossRoundResult {
  */
 export function bossPostRound(battle: BattleState, action: BattleAction): BossRoundResult {
   const boss = battle.boss;
-  if (!boss) return { battle, events: [], status: 'ongoing' };
+  if (!boss) return { battle, events: [], playerDamage: 0 };
 
   const events: CombatEvent[] = [];
   const nextBoss: BossState = { ...boss, round: boss.round + 1 };
@@ -300,19 +312,15 @@ export function bossPostRound(battle: BattleState, action: BattleAction): BossRo
         events.push({ kind: 'boss-summon', minions });
       }
       nextBoss.minions = minions;
-      let player = battle.player;
-      let status: 'ongoing' | 'player-died' = 'ongoing';
+      // G29: announce the damage and hand it back as a NUMBER. `game.ts` puts it through
+      // `applyDamageToBattlePlayer`, which owns shield, relics and the revive gate — and owns
+      // the one death decision. This module never writes `player.hp` again.
+      let playerDamage = 0;
       if (minions > 0) {
-        const amount = minions * KINGPIN_MINION_DAMAGE;
-        const hp = Math.max(player.hp - amount, 0);
-        player = { ...player, hp };
-        events.push({ kind: 'boss-minion-damage', amount });
-        if (hp <= 0) {
-          events.push({ kind: 'defeat' });
-          status = 'player-died';
-        }
+        playerDamage = minions * KINGPIN_MINION_DAMAGE;
+        events.push({ kind: 'boss-minion-damage', amount: playerDamage });
       }
-      return { battle: { ...battle, boss: nextBoss, player }, events, status };
+      return { battle: { ...battle, boss: nextBoss }, events, playerDamage };
     }
     case 'reflection': {
       const tally = { ...(nextBoss.actionTally ?? {}) };
@@ -330,11 +338,11 @@ export function bossPostRound(battle: BattleState, action: BattleAction): BossRo
         next.playerAdvantage = -1;
         events.push({ kind: 'boss-adapt' });
       }
-      return { battle: next, events, status: 'ongoing' };
+      return { battle: next, events, playerDamage: 0 };
     }
     case 'sin':
     case 'hollow':
       // Mechanic is entirely at generation; only advance the save-visible round counter.
-      return { battle: { ...battle, boss: nextBoss }, events, status: 'ongoing' };
+      return { battle: { ...battle, boss: nextBoss }, events, playerDamage: 0 };
   }
 }

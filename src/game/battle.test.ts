@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   MOMENTUM_CARRY,
+  applyDamageToBattlePlayer,
   createBattle,
   openBattle,
   resetTransientCombatState,
   resolveRound,
   rollFlee,
   spareAvailable,
+  type RoundResult,
 } from './battle.ts';
 import { MOMENTUM_CAP } from './classKit.ts';
 import { type BossState } from './boss.ts';
@@ -826,6 +828,180 @@ describe('G4 — a boss battle can never be fled, derived rather than remembered
     // The two non-boss rules are unchanged: act 5 trash is unfleeable, acts 1-4 are not.
     expect(createBattle(makePlayer(), makeEnemy(), 5).canFlee).toBe(false);
     expect(createBattle(makePlayer(), makeEnemy(), 4).canFlee).toBe(true);
+  });
+});
+
+// ------- G24 / G29 / G39 — ONE guarded damage path -------------------------------------------
+
+/** An Enforcer wearing the Halo Fragment (once-per-battle revive on lethal damage). */
+function haloPlayer(overrides: Partial<Player> = {}): Player {
+  const base = makePlayer(overrides);
+  return {
+    ...base,
+    inventory: {
+      ...base.inventory,
+      slots: { ...base.inventory.slots, amulet: { defId: 'halo-fragment' } },
+    },
+  };
+}
+
+/** Put `shield` on the battle's player (mid-battle state, after the transient funnel). */
+function withShield(state: ReturnType<typeof createBattle>, shield: number) {
+  return { ...state, player: { ...state.player, shield } };
+}
+
+describe('G24 — the failed-escape counter-attack runs every defensive guard', () => {
+  // Draw order for a failed run: flee roll (0.9 > 0.25 -> fails), then the counter-attack's
+  // to-hit d20 (face 15 + enemy STR mod 1 = 16 >= player AC 13 -> hit) and its skill-pick
+  // (0.5 -> the only pool entry, Pyro Ball, base 2 vs 0 resistance).
+  const failedRun = [0.9, face(15, 20), 0.5];
+
+  it('a shield absorbs the counter-attack, exactly as it does in an ordinary round', () => {
+    const state = withShield(createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1), 20);
+    const r = resolveRound(state, 'run', scriptedRng(failedRun));
+    expect(r.status).toBe('ongoing');
+    expect(r.state.player.hp).toBe(20); // pre-fix: 18, the shield was not consulted at all
+    expect(r.state.player.shield).toBe(18); // 20 - 2 absorbed
+    expect(r.events).toContainEqual({ kind: 'shield-absorbed', amount: 2 });
+    // `escape-failed` reports the HP actually lost, so it reconciles with the absorb beside it.
+    expect(r.events).toContainEqual({ kind: 'escape-failed', damage: 0 });
+  });
+
+  it('the once-per-battle revive intercepts a lethal counter-attack', () => {
+    // maxHp 20, Halo Fragment heals to 25% -> max(floor(20 * 25/100), 1) = 5.
+    const state = createBattle(haloPlayer({ hp: 1, maxHp: 20 }), makeEnemy({ hp: 30 }), 1);
+    const r = resolveRound(state, 'run', scriptedRng(failedRun));
+    expect(r.status).toBe('ongoing'); // pre-fix: 'player-died' — the relic simply did not fire
+    expect(r.state.player.hp).toBe(5);
+    expect(r.state.reviveUsed).toBe(true);
+    expect(r.events).toContainEqual({ kind: 'revive', healedTo: 5 });
+  });
+
+  it('FOUR-SITE PARITY: the same 2 damage produces the same player state on every path', () => {
+    // The claim is "one pipeline", not "four lookalikes", so the sites are compared directly.
+    const loadout = () => withShield(createBattle(haloPlayer({ hp: 20, maxHp: 20 }), makeEnemy({ hp: 30 }), 1), 20);
+
+    // Site 1: the ordinary round (enemy to-hit face 15 -> hit, skill-pick -> Pyro Ball 2;
+    // then the player's own d20 + damage, which touch nothing on the defensive side).
+    const ordinary = resolveRound(loadout(), 'fight', scriptedRng([face(15, 20), 0.5, face(1, 20)]));
+    // Site 2: the failed-escape counter-attack.
+    const counter = resolveRound(loadout(), 'run', scriptedRng(failedRun));
+    // Site 3: the boss/minion path, driven through the exported helper with the same 2.
+    const bossEvents: CombatEvent[] = [];
+    const boss = applyDamageToBattlePlayer(loadout(), 2, bossEvents);
+
+    for (const [name, player] of [
+      ['ordinary round', ordinary.state.player],
+      ['failed escape', counter.state.player],
+      ['boss minions', boss.state.player],
+    ] as const) {
+      expect(player.hp, `${name}: hp`).toBe(20);
+      expect(player.shield, `${name}: shield`).toBe(18);
+    }
+    for (const [name, events] of [
+      ['ordinary round', ordinary.events],
+      ['failed escape', counter.events],
+      ['boss minions', bossEvents],
+    ] as const) {
+      expect(events, `${name}: shield-absorbed`).toContainEqual({ kind: 'shield-absorbed', amount: 2 });
+    }
+  });
+});
+
+describe('G29 — the boss damage path is the same guarded path', () => {
+  it('shield 20 versus a 5-damage minion tick: hp unchanged, shield 15, absorb announced', () => {
+    const state = withShield(createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1), 20);
+    const events: CombatEvent[] = [];
+    const r = applyDamageToBattlePlayer(state, 5, events);
+    expect(r.died).toBe(false);
+    expect(r.state.player.hp).toBe(20); // pre-fix: 15, written straight through
+    expect(r.state.player.shield).toBe(15);
+    expect(events).toEqual([{ kind: 'shield-absorbed', amount: 5 }]);
+  });
+
+  it('lethal minion damage is intercepted by the revive, once', () => {
+    const state = createBattle(haloPlayer({ hp: 1, maxHp: 20 }), makeEnemy({ hp: 30 }), 1);
+    const first: CombatEvent[] = [];
+    const a = applyDamageToBattlePlayer(state, 5, first);
+    expect(a.died).toBe(false);
+    expect(a.state.player.hp).toBe(5); // floor(20 * 25/100)
+    expect(first).toContainEqual({ kind: 'revive', healedTo: 5 });
+    expect(a.state.reviveUsed).toBe(true);
+
+    // Spent: the next lethal tick in the SAME battle kills.
+    const second: CombatEvent[] = [];
+    const b = applyDamageToBattlePlayer(a.state, 99, second);
+    expect(b.died).toBe(true);
+    expect(b.state.player.hp).toBe(0);
+    expect(second.some((e) => e.kind === 'revive')).toBe(false);
+  });
+});
+
+describe('G39 — a flee consumable cannot escape a battle that forbids fleeing', () => {
+  it('is CONSUMED, emits escape-impossible, and leaves the battle ongoing', () => {
+    // A boss battle sets `canFlee: false` (G4). `resolveUseConsumable` used to return
+    // `status: 'fled'` without consulting it — measured: a Smoke Vial in the act-5 Hollow
+    // fight dropped the player back at the act-5 hub with NO path to any ending.
+    const base = createBattle(
+      makePlayer({ hp: 20 }),
+      makeEnemy({ hp: 30 }),
+      5,
+      { boss: { bossId: 'hollow', round: 0 } },
+    );
+    expect(base.canFlee).toBe(false);
+    const state = {
+      ...base,
+      player: {
+        ...base.player,
+        inventory: { ...base.player.inventory, backpack: [{ defId: 'smoke-vial' }] },
+      },
+    };
+    const r = resolveRound(state, { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]));
+    expect(r.status).toBe('ongoing');
+    expect(r.events).toContainEqual({ kind: 'escape-impossible' });
+    // The turn WAS spent — the item is gone, and the round counts for the boss mechanic.
+    expect(r.state.player.inventory.backpack).toEqual([]);
+    expect(r.resolved).toBe(true);
+  });
+
+  it('still works where fleeing IS allowed', () => {
+    const base = createBattle(makePlayer({ hp: 20 }), makeEnemy({ hp: 30 }), 1);
+    expect(base.canFlee).toBe(true);
+    const state = {
+      ...base,
+      player: {
+        ...base.player,
+        inventory: { ...base.player.inventory, backpack: [{ defId: 'smoke-vial' }] },
+      },
+    };
+    const r = resolveRound(state, { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]));
+    expect(r.status).toBe('fled');
+    expect(r.events.some((e) => e.kind === 'escape-impossible')).toBe(false);
+  });
+});
+
+describe('G36 — a rejected press resolves nothing', () => {
+  it('marks each of the six no-op rejections unresolved, and every real round resolved', () => {
+    const enemy = makeEnemy({ hp: 30 });
+    const rejections: [string, RoundResult][] = [
+      ['escape-impossible', resolveRound(createBattle(makePlayer(), enemy, 5), 'run', scriptedRng([]))],
+      ['potion-unavailable', resolveRound(createBattle(makePlayer({ pots: 0, hp: 1 }), enemy, 1), 'potion', scriptedRng([]))],
+      ['potion-blocked', resolveRound(createBattle(makePlayer({ hp: 1, activeConditions: [makeCondition('stun')] }), enemy, 1), 'potion', scriptedRng([]))],
+      ['cast-unavailable', resolveRound(createBattle(makePlayer({ skillPool: [] }), enemy, 1), { kind: 'cast', skillId: 'ember' }, scriptedRng([]))],
+      ['consumable-unavailable', resolveRound(createBattle(makePlayer(), enemy, 1), { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]))],
+      ['spare-unavailable', resolveRound(createBattle(makePlayer(), makeEnemy({ karmaWeighted: false }), 1), 'spare', scriptedRng([]))],
+    ];
+    for (const [name, r] of rejections) {
+      expect(r.status, `${name}: still ongoing`).toBe('ongoing');
+      expect(r.resolved, `${name}: must NOT be resolved`).toBe(false);
+      expect(r.events.map((e) => e.kind), `${name}: emits only its rejection`).toEqual([name]);
+    }
+
+    // And the real actions ARE resolved.
+    expect(resolveRound(createBattle(makePlayer(), enemy, 1), 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)])).resolved).toBe(true);
+    expect(resolveRound(createBattle(makePlayer({ hp: 1 }), enemy, 1), 'potion', scriptedRng([])).resolved).toBe(true);
+    expect(resolveRound(createBattle(makePlayer(), enemy, 1), 'run', scriptedRng([0.1])).resolved).toBe(true);
+    expect(resolveRound(createBattle(makePlayer(), makeEnemy({ karmaWeighted: true }), 1), 'spare', scriptedRng([])).resolved).toBe(true);
   });
 });
 

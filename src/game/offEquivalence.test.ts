@@ -58,6 +58,16 @@
 //         |     | level 85/6 -> 71/6, floors cleared 21/6 -> 17/6, and deaths bunch at acts
 //         |     | 3-4 (the boss floors) rather than early. `balance.test.ts`'s win-rate and
 //         |     | act-1-share guards still pass unweakened.
+//  step 5 | G24 | the failed-escape counter-attack, the boss-minion tick and the consumable
+//         | G29 | path all run the SAME guarded damage helper as the ordinary round.
+//         | G36 | a rejected press no longer advances the boss's per-round mechanic.
+//         | G39 | a flee consumable cannot escape a battle that forbids fleeing.
+//         |     | EXPECTED: NO MOVEMENT AT ALL in these six runs. Every step of the extracted
+//         |     | helper is RNG-free, the heuristic policy owns no relics or shield (so the
+//         |     | guards are all identity), and `sim.test.ts` already proves the policy never
+//         |     | issues a rejected action. OBSERVED: every golden row unchanged, byte for
+//         |     | byte — which is the strongest evidence available that the four-site
+//         |     | extraction is faithful rather than merely green.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`

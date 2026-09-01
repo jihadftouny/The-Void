@@ -25,7 +25,13 @@ import { type Stats } from './character.ts';
 import { createKarma, recordKarma, type KarmaState } from './karma.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
-import { resolveRound, openBattle, type BattleState, type BattleAction } from './battle.ts';
+import {
+  applyDamageToBattlePlayer,
+  resolveRound,
+  openBattle,
+  type BattleState,
+  type BattleAction,
+} from './battle.ts';
 import { createBattle } from './battle.ts';
 import { generateBoss, bossPostRound, computeVerdict, type BossId } from './boss.ts';
 import {
@@ -60,6 +66,7 @@ import {
 import { playerArmorClass } from './defense.ts';
 import { pickUp } from './equipment.ts';
 import { type ItemInstance } from './item.ts';
+import { type CombatEvent } from './combatEvent.ts';
 import { type GameEvent } from './gameEvent.ts';
 import { type RunUnlocks } from './unlockStore.ts';
 
@@ -616,13 +623,33 @@ function resolveBattleRound(
   let battle = round.state;
   let status = round.status;
   // M12: layer the boss mechanic AFTER `resolveRound` — so the non-boss encounter flow stays
-  // byte-identical (a normal battle has no `boss`, so this whole block is skipped). Runs only
-  // on an ONGOING round of a boss battle; it may flip the round to `player-died` (Kingpin adds).
-  if (status === 'ongoing' && battle.boss) {
+  // byte-identical (a normal battle has no `boss`, so this whole block is skipped).
+  //
+  // G36: it also requires `round.resolved`. `resolveRound` returns `'ongoing'` for six NO-OP
+  // REJECTIONS as well as for a real round, and this gate used to read the status alone — so a
+  // press the engine had just refused still advanced the boss. Measured: nine rejected "Run"
+  // presses against the act-1 Kingpin cost 11 HP to summoned minions, and three rejected casts
+  // burned the Reflection's once-per-battle adaptation.
+  //
+  // G29: the Kingpin's minion damage comes back as a NUMBER and is applied here, through the
+  // one guarded damage path in `battle.ts` (shield -> onTakeDamage relics -> revive gate), so
+  // the most common death in the game finally consults the defenses the player paid for.
+  if (status === 'ongoing' && battle.boss && round.resolved) {
     const post = bossPostRound(battle, action);
     battle = post.battle;
     events.push(...post.events);
-    status = post.status;
+    if (post.playerDamage > 0) {
+      // The helper appends its own combat events (shield-absorbed, relic-triggered, revive)
+      // into a CombatEvent list, which is then spread into the GameEvent stream in order.
+      const guardEvents: CombatEvent[] = [];
+      const hit = applyDamageToBattlePlayer(battle, post.playerDamage, guardEvents);
+      battle = hit.state;
+      events.push(...guardEvents);
+      if (hit.died) {
+        events.push({ kind: 'defeat' });
+        status = 'player-died';
+      }
+    }
   }
   const enemy = battle.enemy;
   switch (status) {

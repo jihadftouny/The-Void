@@ -32,7 +32,7 @@ import { effectiveMaxHp } from './statEffects.ts';
 import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
 import { weaponForSlot, UNARMED, pickUp } from './equipment.ts';
 import { rollLootDrop, summarizeLoot } from './loot.ts';
-import { computeEquipModifiers } from './equipEffects.ts';
+import { computeEquipModifiers, type EquipModifiers } from './equipEffects.ts';
 import { fireTrigger, reviveActionFor } from './relicEffects.ts';
 import { applyConsumable, type ConsumableSource } from './consumable.ts';
 
@@ -98,6 +98,24 @@ export interface RoundResult {
   state: BattleState;
   events: CombatEvent[];
   status: RoundStatus;
+  /**
+   * G36: did a ROUND actually happen?
+   *
+   * `resolveRound` returns `status: 'ongoing'` for six NO-OP REJECTIONS as well as for a real
+   * round — `escape-impossible`, `potion-unavailable`, `potion-blocked`, `cast-unavailable`,
+   * `consumable-unavailable`, `spare-unavailable`. None of them resolves anything: no dice,
+   * no tick, no state change. `game.ts` gated the boss's per-round mechanic on the status
+   * alone, so it fired for those too. Measured: the Run button is rendered in every battle
+   * and bosses set `canFlee: false`, so NINE REJECTED "Run" PRESSES AGAINST THE ACT-1 KINGPIN
+   * COST 11 HP to minions the press had no business summoning; against the Reflection, three
+   * REJECTED casts burned its once-per-battle adaptation, permanently disadvantaging the
+   * player for pressing a button the engine had just told them did nothing.
+   *
+   * Required (not optional) so no future return site can silently omit it. A rejected press
+   * costs NOTHING. Note the one deliberate exception: a flee consumable used against a boss
+   * IS resolved — the item was spent and the turn with it (G39).
+   */
+  resolved: boolean;
 }
 
 /**
@@ -200,6 +218,148 @@ export function openBattle(battle: BattleState): { battle: BattleState; events: 
   return { battle: { ...battle, player: fired.player, enemy: fired.enemy }, events: fired.events };
 }
 
+// ------- THE ONE GUARDED PLAYER-DAMAGE PATH (G24, G29) ------------------------
+//
+// Damage to the player used to be applied at FOUR different places, and only ONE of them ran
+// the guards `resolvePlayerTurn` owns. The register measured all three failures:
+//   - `enemyCounterAttack` (the failed-escape counter) subtracted HP raw and checked death
+//     raw, skipping shield absorb, the Scrap Plating first-hit reduction, the `onTakeDamage`
+//     relic triggers AND the once-per-battle revive. So the Halo Fragment did NOT save you at
+//     a failed escape, while the same relic works correctly against an ordinary round.
+//   - `boss.ts`'s Kingpin minions wrote `player.hp` directly and decided `player-died`
+//     themselves. `BALANCE-REPORT.md` names the act-1 Kingpin as the single biggest act-1
+//     killer, so THIS IS THE DEATH THAT HAPPENS MOST — with shield absorbing nothing, no
+//     revive, and Mirror Shard reflecting nothing.
+//   - `resolveUseConsumable` missed the revive gate.
+// Every step below is RNG-FREE, so folding the four sites into one changes no draw.
+
+/** What `applyDamageToPlayer` needs beyond the damage number itself. */
+interface PlayerDamageContext {
+  /** The player's aggregated equip modifiers (read once by the caller). */
+  mods: EquipModifiers;
+  /** Has Scrap Plating's one free zero-damage hit already been consumed this battle? */
+  firstHitDone: boolean;
+  /** Has the once-per-battle revive already fired this battle? */
+  reviveUsed: boolean;
+  /** The live event list; the helper appends to it (and may fold into an earlier entry). */
+  events: CombatEvent[];
+  /**
+   * Where in `events` the attack that REPORTED this damage sits, so a first-hit reduction can
+   * be folded back into it as a negative term instead of leaving the log announcing damage the
+   * player never took. Omitted when the damage came from no attack event (boss minions).
+   */
+  attackEventIndex?: number;
+}
+
+/** What `applyDamageToPlayer` returns. */
+interface PlayerDamageResult {
+  player: Player;
+  enemy: Enemy;
+  firstHitDone: boolean;
+  reviveUsed: boolean;
+  /** HP damage ACTUALLY taken, after the first-hit reduction and after shield absorption. */
+  applied: number;
+  /** True when the player is at 0 HP and the revive gate did not (or could not) save them. */
+  died: boolean;
+}
+
+/**
+ * Apply `damage` to the player through every defensive guard, in order — PURE and RNG-FREE.
+ *
+ *   1. first-hit reduction (Scrap Plating), folded back into the reporting attack event as a
+ *      NEGATIVE term so the log shows the 0 HP actually lost;
+ *   2. shield absorb, emitting `shield-absorbed`;
+ *   3. the HP subtraction, clamped at 0;
+ *   4. the `onTakeDamage` relic triggers (they read the post-shield HP damage);
+ *   5. the once-per-battle revive gate, emitting `revive`.
+ *
+ * This is the ONLY place any of those five steps happens.
+ */
+function applyDamageToPlayer(
+  player: Player,
+  enemy: Enemy,
+  damage: number,
+  ctx: PlayerDamageContext,
+): PlayerDamageResult {
+  let p = player;
+  let e = enemy;
+  let amount = damage;
+  let firstHitDone = ctx.firstHitDone;
+  let reviveUsed = ctx.reviveUsed;
+
+  // 1. Scrap Plating: the first enemy hit each battle is reduced to 0 (once per battle).
+  if (ctx.mods.firstHitReduction && !firstHitDone && amount > 0) {
+    if (ctx.attackEventIndex !== undefined) {
+      foldDamageSource(ctx.events, ctx.attackEventIndex, {
+        kind: 'first-hit-reduction',
+        amount: -amount,
+      });
+    }
+    amount = 0;
+    firstHitDone = true;
+  }
+
+  // 2. Grace-Forged Aegis: the shield eats damage before HP, in its own event.
+  const shield = p.shield ?? 0;
+  if (shield > 0 && amount > 0) {
+    const absorbed = Math.min(shield, amount);
+    amount -= absorbed;
+    p = { ...p, shield: shield - absorbed };
+    ctx.events.push({ kind: 'shield-absorbed', amount: absorbed });
+  }
+
+  // 3. HP.
+  p = { ...p, hp: Math.max(p.hp - amount, 0) };
+
+  // 4. onTakeDamage relics (Mirror Shard's reflect, etc.). `damageTaken` is the HP damage
+  //    after shield. Empty for effect-free gear (off-equivalence).
+  if (amount > 0) {
+    const t = fireTrigger('onTakeDamage', p, e, { damageTaken: amount });
+    p = t.player;
+    e = t.enemy;
+    ctx.events.push(...t.events);
+  }
+
+  // 5. The Halo Fragment revive gate, intercepting lethal damage once per battle.
+  let died = false;
+  if (p.hp <= 0) {
+    const rev = reviveActionFor(p);
+    if (rev && !reviveUsed) {
+      const healedTo = Math.max(Math.floor((effectiveMaxHp(p) * (rev.params.pctMaxHp ?? 25)) / 100), 1);
+      p = { ...p, hp: healedTo };
+      reviveUsed = true;
+      ctx.events.push({ kind: 'revive', healedTo });
+    } else {
+      died = true;
+    }
+  }
+
+  return { player: p, enemy: e, firstHitDone, reviveUsed, applied: amount, died };
+}
+
+/**
+ * Apply damage that did not come from the round's own exchange — currently the Kingpin's
+ * minions (G29) — through the same guarded path, and thread the per-battle flags back onto
+ * the battle. PURE, RNG-FREE. Exported so `game.ts` can layer the boss mechanic without
+ * `boss.ts` needing to import the equipment/relic stack or decide a death itself.
+ */
+export function applyDamageToBattlePlayer(
+  state: BattleState,
+  damage: number,
+  events: CombatEvent[],
+): { state: BattleState; died: boolean } {
+  const res = applyDamageToPlayer(state.player, state.enemy, damage, {
+    mods: computeEquipModifiers(state.player.inventory),
+    firstHitDone: state.firstEnemyHitDone ?? false,
+    reviveUsed: state.reviveUsed ?? false,
+    events,
+  });
+  return {
+    state: withFlags(state, res.player, res.enemy, res.firstHitDone, res.reviveUsed),
+    died: res.died,
+  };
+}
+
 /**
  * The literal Java flee check: `rng()*10 + 1 <= 3.5` (one draw). Escapes when the
  * draw is <= 0.25 (~25%). See the module DEVIATIONS note re: 25% vs 35%.
@@ -234,7 +394,7 @@ export function resolveRound(state: BattleState, action: BattleAction, rng: Rng)
       return resolveSpare(state);
     /* istanbul ignore next */
     default:
-      return { state, events: [], status: 'ongoing' };
+      return { state, events: [], status: 'ongoing', resolved: false };
   }
 }
 
@@ -256,12 +416,13 @@ export function spareAvailable(battle: BattleState): boolean {
  */
 function resolveSpare(state: BattleState): RoundResult {
   if (!state.enemy.karmaWeighted) {
-    return { state, events: [{ kind: 'spare-unavailable' }], status: 'ongoing' };
+    return { state, events: [{ kind: 'spare-unavailable' }], status: 'ongoing', resolved: false };
   }
   return {
     state,
     events: [{ kind: 'spared', enemyName: state.enemy.fullName }],
     status: 'spared',
+    resolved: true,
   };
 }
 
@@ -326,6 +487,8 @@ function resolvePlayerTurn(
   //    condition tick in step 3). On a miss enemyDamage stays 0, so the momentum hook
   //    below sees no taken damage.
   let enemyDamage = 0;
+  /** Where the enemy's attack event landed, so step 5 can fold a reduction into it. */
+  let enemyAttackIndex: number | undefined;
   if (!skipEnemyAttack) {
     const defenderAc = playerArmorClass(player);
     // G30: the enemy's roll now combines the adv/dis its TARGET imposes (Scavver evasion)
@@ -342,19 +505,10 @@ function resolvePlayerTurn(
     enemyDamage = ea.damage;
     events.push(...ea.events);
     // `resolveEnemyAttack` always pushes its `attack` event LAST, so after this spread the
-    // attack sits at the end of `events`. Asserted by a test in combat.test.ts.
-    const enemyAttackIndex = events.length - 1;
-    // Scrap Plating: the first enemy hit each battle is reduced to 0 (once per battle).
-    if (mods.firstHitReduction && !firstHitDone && enemyDamage > 0) {
-      // Fold the reduction into the event as a NEGATIVE term, so the attack reports the 0
-      // HP the player actually loses instead of the damage that was rolled and then voided.
-      foldDamageSource(events, enemyAttackIndex, {
-        kind: 'first-hit-reduction',
-        amount: -enemyDamage,
-      });
-      enemyDamage = 0;
-      firstHitDone = true;
-    }
+    // attack sits at the end of `events`. Asserted by a test in combat.test.ts. The index is
+    // captured here and used at step 5, where the shared damage helper folds any first-hit
+    // reduction back into it.
+    enemyAttackIndex = events.length - 1;
   }
 
   // 3. Tick the player's conditions (damage/heal/skip/fracture), then apply hp delta.
@@ -499,18 +653,25 @@ function resolvePlayerTurn(
     }
   }
 
-  // 5. Apply the exchanged damage. Grace-Forged Aegis shield absorbs enemy damage before HP.
-  let absorbed = 0;
-  let shield = player.shield ?? 0;
-  if (shield > 0 && enemyDamage > 0) {
-    absorbed = Math.min(shield, enemyDamage);
-    shield -= absorbed;
-    enemyDamage -= absorbed;
-    player = { ...player, shield };
-    events.push({ kind: 'shield-absorbed', amount: absorbed });
-  }
-  player = { ...player, hp: Math.max(player.hp - enemyDamage, 0) };
+  // 5. Apply the exchanged damage. The player's blow lands first (nothing between reads
+  //    either hp, and this keeps the enemy's HP settled before any onTakeDamage reflect),
+  //    then the enemy's damage goes through the ONE guarded path (G24/G29): first-hit
+  //    reduction -> shield -> hp -> onTakeDamage -> revive gate.
   enemy = { ...enemy, hp: Math.max(enemy.hp - playerDamage, 0) };
+  const taken = applyDamageToPlayer(player, enemy, enemyDamage, {
+    mods,
+    firstHitDone,
+    reviveUsed,
+    events,
+    ...(enemyAttackIndex !== undefined ? { attackEventIndex: enemyAttackIndex } : {}),
+  });
+  player = taken.player;
+  enemy = taken.enemy;
+  firstHitDone = taken.firstHitDone;
+  reviveUsed = taken.reviveUsed;
+  // The HP the player ACTUALLY lost (post-reduction, post-shield) — what the momentum hook
+  // has always read, and what the death check below tests.
+  enemyDamage = taken.applied;
 
   // Momentum-on-damage hooks (Enforcer only): dealing damage grants +1 and taking enemy
   // damage grants +1, capped. SILENT (no event) and pure arithmetic (no rng draw), so a
@@ -522,13 +683,8 @@ function resolvePlayerTurn(
     if (gain > 0) player = grantMomentum(player, gain);
   }
 
-  // 5b. Fire triggered relic effects (RNG-free). Order: onTakeDamage (enemy struck first,
-  //     in step 2) then the player's action triggers. `damageTaken` is the HP damage after
-  //     shield. Empty for effect-free gear (off-equivalence).
-  if (enemyDamage > 0) {
-    const t = fireTrigger('onTakeDamage', player, enemy, { damageTaken: enemyDamage });
-    player = t.player; enemy = t.enemy; events.push(...t.events);
-  }
+  // 5b. Fire the player's ACTION triggers (RNG-free). `onTakeDamage` already fired inside the
+  //     damage helper above, alongside the shield and the revive gate it belongs with.
   if (didHit) {
     const t = fireTrigger('onHit', player, enemy, {});
     player = t.player; enemy = t.enemy; events.push(...t.events);
@@ -542,27 +698,26 @@ function resolvePlayerTurn(
     player = t.player; enemy = t.enemy; events.push(...t.events);
   }
 
-  // 6. Resolve the outcome (player death checked first, faithful to pre-M2) — with the
-  //    Halo Fragment revive gate intercepting lethal damage once per battle.
+  // 6. Resolve the outcome (player death checked first, faithful to pre-M2). The revive gate
+  //    already ran inside the damage helper, so reaching 0 HP here is final.
   if (player.hp <= 0) {
-    const rev = reviveActionFor(player);
-    if (rev && !reviveUsed) {
-      const healedTo = Math.max(
-        Math.floor((effectiveMaxHp(player) * (rev.params.pctMaxHp ?? 25)) / 100),
-        1,
-      );
-      player = { ...player, hp: healedTo };
-      reviveUsed = true;
-      events.push({ kind: 'revive', healedTo });
-    } else {
-      events.push({ kind: 'defeat' });
-      return { state: withFlags(state, player, enemy, firstHitDone, reviveUsed), events, status: 'player-died' };
-    }
+    events.push({ kind: 'defeat' });
+    return {
+      state: withFlags(state, player, enemy, firstHitDone, reviveUsed),
+      events,
+      status: 'player-died',
+      resolved: true,
+    };
   }
   if (enemy.hp <= 0) {
     return killAndVictory(state, player, enemy, events, rng);
   }
-  return { state: withFlags(state, player, enemy, firstHitDone, reviveUsed), events, status: 'ongoing' };
+  return {
+    state: withFlags(state, player, enemy, firstHitDone, reviveUsed),
+    events,
+    status: 'ongoing',
+    resolved: true,
+  };
 }
 
 /**
@@ -618,7 +773,7 @@ function resolveCast(state: BattleState, skillId: SkillId, rng: Rng): RoundResul
   const discount = computeEquipModifiers(player.inventory).chargeDiscount;
   const effectiveCost = Math.max((skill?.chargeCost ?? 0) - discount, 0);
   if (!skill || !player.skillPool.includes(skillId) || player.skillCharges < effectiveCost) {
-    return { state, events: [{ kind: 'cast-unavailable' }], status: 'ongoing' };
+    return { state, events: [{ kind: 'cast-unavailable' }], status: 'ongoing', resolved: false };
   }
   return resolvePlayerTurn(state, { kind: 'cast', skill }, rng);
 }
@@ -654,18 +809,18 @@ function applyVictory(
     inventory,
   };
   events.push({ kind: 'victory', xpGained, extraRest, loot });
-  return { state: { ...state, player: newPlayer, enemy }, events, status: 'player-won' };
+  return { state: { ...state, player: newPlayer, enemy }, events, status: 'player-won', resolved: true };
 }
 
 function resolvePotion(state: BattleState): RoundResult {
   const player = state.player;
   if (hasControlCondition(player)) {
-    return { state, events: [{ kind: 'potion-blocked' }], status: 'ongoing' };
+    return { state, events: [{ kind: 'potion-blocked' }], status: 'ongoing', resolved: false };
   }
   // Void Pact's `cannotHeal` blocks the potion heal site. 0/false for a normal run, so the
   // potion path is byte-identical (off-equivalence).
   if (computeEquipModifiers(player.inventory).cannotHeal) {
-    return { state, events: [{ kind: 'potion-unavailable' }], status: 'ongoing' };
+    return { state, events: [{ kind: 'potion-unavailable' }], status: 'ongoing', resolved: false };
   }
   // Heal cap is the EFFECTIVE max HP (Hardy raises it, Frail lowers it). Off-equivalent:
   // equals the stored maxHp when no CON augment is active.
@@ -676,9 +831,10 @@ function resolvePotion(state: BattleState): RoundResult {
       state: { ...state, player: healed },
       events: [{ kind: 'potion-drunk', healedTo: cap }],
       status: 'ongoing',
+      resolved: true,
     };
   }
-  return { state, events: [{ kind: 'potion-unavailable' }], status: 'ongoing' };
+  return { state, events: [{ kind: 'potion-unavailable' }], status: 'ongoing', resolved: false };
 }
 
 /**
@@ -696,51 +852,107 @@ function resolveUseConsumable(
 ): RoundResult {
   const res = applyConsumable(state.player, state.enemy, source);
   if (!res.consumed) {
-    return { state, events: res.events, status: 'ongoing' };
+    return { state, events: res.events, status: 'ongoing', resolved: false };
   }
-  const player = res.player;
+  let player = res.player;
   const enemy = res.enemy;
   const events = res.events;
   if (res.fled) {
-    return { state: { ...state, player, enemy }, events, status: 'fled' };
+    // G39: a flee consumable used to return `fled` WITHOUT consulting `canFlee`, which every
+    // boss battle sets to false. Measured: a Smoke Vial in the act-5 Hollow fight returned
+    // `status: 'fled'` and dropped the player back at the act-5 hub — where the Hollow was
+    // constructed only at floor entry, so the run had NO path to any ending at all: death or
+    // Quit only. The item is still CONSUMED and the turn still spent (it was used; that is
+    // `resolved: true`), but the escape simply fails.
+    if (state.canFlee) {
+      return { state: { ...state, player, enemy }, events, status: 'fled', resolved: true };
+    }
+    events.push({ kind: 'escape-impossible' });
   }
+  // G24's fourth site: run the once-per-battle revive gate here too. It is the one guard of
+  // the shared path that a consumable outcome can reach — shield/first-hit/onTakeDamage all
+  // key off damage taken from an ATTACK, and no self-damaging consumable ships today, so
+  // this branch is guarded by construction rather than reachable in play.
+  let reviveUsed = state.reviveUsed ?? false;
   if (player.hp <= 0) {
-    events.push({ kind: 'defeat' });
-    return { state: { ...state, player, enemy }, events, status: 'player-died' };
+    const gated = applyDamageToPlayer(player, enemy, 0, {
+      mods: computeEquipModifiers(player.inventory),
+      firstHitDone: state.firstEnemyHitDone ?? false,
+      reviveUsed,
+      events,
+    });
+    player = gated.player;
+    reviveUsed = gated.reviveUsed;
+    if (gated.died) {
+      events.push({ kind: 'defeat' });
+      return {
+        state: withFlags(state, player, enemy, state.firstEnemyHitDone ?? false, reviveUsed),
+        events,
+        status: 'player-died',
+        resolved: true,
+      };
+    }
   }
   if (enemy.hp <= 0) {
     return killAndVictory(state, player, enemy, events, rng);
   }
-  return { state: { ...state, player, enemy }, events, status: 'ongoing' };
+  return {
+    state: withFlags(state, player, enemy, state.firstEnemyHitDone ?? false, reviveUsed),
+    events,
+    status: 'ongoing',
+    resolved: true,
+  };
 }
 
 function resolveRun(state: BattleState, rng: Rng): RoundResult {
   if (!state.canFlee) {
-    return { state, events: [{ kind: 'escape-impossible' }], status: 'ongoing' };
+    // G36: a REJECTED press. Nothing was resolved — no dice, no tick, no state change — so
+    // `game.ts` must not layer the boss's per-round mechanic on top of it.
+    return { state, events: [{ kind: 'escape-impossible' }], status: 'ongoing', resolved: false };
   }
   // A controlled (stunned/etc.) player cannot even attempt to flee: forced counter.
   if (hasControlCondition(state.player)) {
     return enemyCounterAttack(state, rng);
   }
   if (rollFlee(rng)) {
-    return { state: { ...state }, events: [{ kind: 'fled' }], status: 'fled' };
+    return { state: { ...state }, events: [{ kind: 'fled' }], status: 'fled', resolved: true };
   }
   return enemyCounterAttack(state, rng);
 }
 
-/** Shared "your escape failed, take a counter-attack" path (also the controlled case). */
+/**
+ * Shared "your escape failed, take a counter-attack" path (also the controlled case).
+ *
+ * G24: this used to subtract HP raw and check death raw, skipping every guard
+ * `resolvePlayerTurn` applies. It now goes through the SAME `applyDamageToPlayer` helper, so
+ * a shield absorbs here, Scrap Plating's free hit applies here, `onTakeDamage` relics fire
+ * here, and — the one that matters most — the Halo Fragment revives you here. The register
+ * measured all four failing at exactly the death players most often walk into.
+ */
 function enemyCounterAttack(state: BattleState, rng: Rng): RoundResult {
   const defenderAc = playerArmorClass(state.player);
   const enemyAdvDis = enemyAdvDisVs(state.player);
   const ea = resolveEnemyAttack(state.enemy, state.player, defenderAc, enemyAdvDis, rng);
-  const enemy: Enemy = ea.enemy;
-  const player: Player = { ...ea.target, hp: Math.max(ea.target.hp - ea.damage, 0) };
-  const events: CombatEvent[] = [...ea.events, { kind: 'escape-failed', damage: ea.damage }];
-  if (player.hp <= 0) {
+  const events: CombatEvent[] = [...ea.events];
+  // `resolveEnemyAttack` always pushes its `attack` event last.
+  const attackEventIndex = events.length - 1;
+  const taken = applyDamageToPlayer(ea.target, ea.enemy, ea.damage, {
+    mods: computeEquipModifiers(ea.target.inventory),
+    firstHitDone: state.firstEnemyHitDone ?? false,
+    reviveUsed: state.reviveUsed ?? false,
+    events,
+    attackEventIndex,
+  });
+  // `escape-failed` reports the HP the player ACTUALLY lost, so it reconciles with the
+  // `shield-absorbed` / first-hit-reduction entries beside it. Identical to the rolled damage
+  // for a player with no such gear (off-equivalence).
+  events.push({ kind: 'escape-failed', damage: taken.applied });
+  const next = withFlags(state, taken.player, taken.enemy, taken.firstHitDone, taken.reviveUsed);
+  if (taken.died) {
     events.push({ kind: 'defeat' });
-    return { state: { ...state, player, enemy }, events, status: 'player-died' };
+    return { state: next, events, status: 'player-died', resolved: true };
   }
-  return { state: { ...state, player, enemy }, events, status: 'ongoing' };
+  return { state: next, events, status: 'ongoing', resolved: true };
 }
 
 /**
