@@ -19,7 +19,34 @@ const FLOORS = [
   'the Fifth Floor',
 ];
 
-/** One short factual clause describing an event, or '' if it needs no narration. */
+/**
+ * One short factual clause describing an event, or '' if it needs no narration.
+ *
+ * TOTAL over the `GameEvent` union — every one of its 63 kinds has an explicit case, and
+ * the `default:` branch is a compile-time exhaustiveness check (G13). Before that check,
+ * 34 kinds fell through a silent `default: return ''`, including `skill-cast`: the
+ * player's own class action never reached the model, so on a cast round the only
+ * skill-naming fact in the prompt was the ENEMY's `enemy-skill-used`, and the model
+ * credited the player's biggest hit to the foe.
+ *
+ * THE CLASSIFICATION RULE. A kind earns a FACT LINE if and only if all three hold:
+ *   1. it is player-observable — someone acted, HP moved, or the world offered or
+ *      resolved something; and
+ *   2. its clause can be written from the event's OWN fields, with no display-name or
+ *      pluralisation table (that work is C7/C10, routed to PLAN.md #13); and
+ *   3. it prints no internal enum id (the C9 defect: "On onHit: dealDamage").
+ * Everything else returns '' from the DELIBERATE SILENCE block at the bottom, which
+ * carries a reason per group. A WRONG fact line is worse than no fact line, because the
+ * facts reach the model as ground truth and it will narrate them as true.
+ *
+ * These clauses are ENGINE FACTS, not authored story prose (that lives in
+ * `src/data/story.json`, and is #13's): terse, second person for the player, "The enemy"
+ * for the foe, no karma, and never the player's name (G47 / §22.1, WORLD.md §8).
+ * `WORLD.md` §0 also reserves two words — *hollow* and *made whole* — so no fact literal
+ * added here may spend them. (Two PRE-EXISTING lines below do: `chest-loot`'s "it is
+ * hollow" and `rest-full`'s "already whole". Those are FINDINGS.md C1 and belong to #13;
+ * they are left exactly as they shipped rather than silently rewritten here.)
+ */
 export function describeEvent(e: GameEvent): string {
   switch (e.kind) {
     case 'intro':
@@ -105,6 +132,83 @@ export function describeEvent(e: GameEvent): string {
       return [e.header, e.body].filter(Boolean).join(' — ');
     case 'game-over':
       return `Darkness takes you. The descent is over.`;
+
+    // ---- G13: the beats that used to fall through `default` in silence ----------------
+    // Seventeen kinds that pass the three-part rule above. Measurements are from the
+    // 400-run / 170,491-step sweep recorded in FINDINGS.md G13.
+
+    case 'skill-cast':
+      // G13's HEADLINE. 5,727 steps contained a player cast and 100% reached the model
+      // with no fact that the player had acted; 1,395 of them also carried the enemy's
+      // identically-named `enemy-skill-used`, so the only named skill in the prompt was
+      // the foe's. "You" (never "The enemy") is what makes the two lines distinguishable
+      // in the same prompt. The damage clause mirrors the `attack` case above.
+      return `You unleash ${e.name}${e.damage ? ` for ${e.damage} harm` : ''}.`;
+    case 'detonate':
+      return `The built-up charge goes off for ${e.bonusDamage} more.`;
+    case 'lifesteal':
+      return `You draw ${e.amount} life out of the wound.`;
+    case 'self-sacrifice':
+      // `ofMaxHp` is the PERMANENT cost — the clause must not make the two sound alike.
+      return `You spend ${e.amount} of your own ${
+        e.ofMaxHp ? 'lifeblood, and it does not come back' : 'blood'
+      }.`;
+    case 'shield-gained':
+      return `A ward closes over you.`;
+    case 'shield-absorbed':
+      return `The ward takes ${e.amount} of it.`;
+    case 'revive':
+      // The player nearly died and did not. Silence here makes the game lie about the
+      // single most dramatic thing that can happen in a battle.
+      return `You should be dead. You are not — you come back at ${e.healedTo}.`;
+    case 'spared':
+      // The whole mercy path, and the only route to the grace ending, was silent.
+      return `You let ${e.enemyName} live.`;
+    case 'boss-summon':
+      return `More of them arrive — ${e.minions} now stand against you.`;
+    case 'boss-minion-damage':
+      // 2,499 steps; 346 of them had NO damage fact at all, so the player lost HP and
+      // nothing in the prompt said so.
+      return `The others close in and strike you for ${e.amount} harm.`;
+    case 'boss-adapt':
+      // The mechanic is a to-hit penalty, so the clause carries no number: the narrator
+      // is forbidden mechanics, and a to-hit modifier is nothing the player can observe.
+      return `It reads your pattern; your next strike will be harder to land.`;
+    case 'boss-encounter':
+      // Every floor's boss reveal. Mirrors the `final-battle-begins` shape above.
+      return `${e.enemyName}, the master of this floor, stands before you.`;
+    case 'verdict':
+      // The act-4 reckoning — the single payoff of the whole karma system, and it said
+      // nothing. NEVER a karma axis or a number: the event deliberately carries none
+      // (see gameEvent.ts's own contract comment), and the fact must not invent one.
+      return e.outcome === 'grace'
+        ? `The reckoning ends in your favour.`
+        : `The reckoning ends against you.`;
+    case 'draft-offer':
+      // Deliberately does NOT list the options: the UI renders the cards, and repeating
+      // all three would triple the mechanical text in the prompt. "three" is true by
+      // construction — `generateDraft` returns a 3-tuple and `enterLevelUp` is its only
+      // emit site (both asserted at run scale in narrationCoverage.test.ts). If the draft
+      // ever offers a different number, THIS LINE MUST CHANGE WITH IT.
+      return `The descent lays three paths in front of you.`;
+    case 'draft-picked':
+      // The genuinely blank level-up step (the offer step also emits `level-up`, which is
+      // narrated, so it was never blank — the register's phrasing is loose there).
+      // `e.option` is the MECHANICAL string ("+1 STR", "Learn Heavy Strike"): faithful
+      // ground truth, matching every other fact line, and VOID_PERSONA separately forbids
+      // the model from repeating mechanics back at the player.
+      // NEEDS-HUMAN: if a real model is seen echoing "+1 STR", take the contentless
+      // fallback — replace the line below, and nothing else, with:
+      //     return `Something new settles into you.`;
+      return `You take what the descent offers: ${e.option}.`;
+    case 'rest-declined':
+      // Narrated even though G13 does not name it: it is the SOLE event of its step, so
+      // with the G42 fix silence here would leave the previous beat stale on screen while
+      // the player had in fact chosen to press on. See the silence block below.
+      return `You press on without resting.`;
+    case 'no-rests':
+      return `There is no rest left in you.`;
+
     default:
       return '';
   }
