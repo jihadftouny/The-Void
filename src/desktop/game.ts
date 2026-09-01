@@ -169,11 +169,26 @@ function renderSheet(): void {
 }
 
 async function narrate(events: readonly GameEvent[]): Promise<void> {
+  const prompt = buildNarrationPrompt(events, state, memory);
+  // G42 — CHECK BEFORE CLEARING. This used to clear the pane first and discover the null
+  // prompt second, so a step with nothing to narrate wiped whatever was on screen. The
+  // worst case is the last thing a completed run shows you: `game.ts`'s terminal step
+  // deliberately emits NO events "so the run's final event stays the `ending` event", so
+  // the player read the ASCENSION or DAMNATION text, pressed Continue, and landed on an
+  // empty pane with a lone "Descend again".
+  //
+  // ⚠ THE COST, and why it is the right trade. Leaving the pane alone turns a step with no
+  // fact from BLANK into STALE — the previous beat stays up. That is CORRECT for a rejected
+  // input (`cast-unavailable`, `potion-blocked`, …): nothing happened, so the narration
+  // should not change. It would be a lie for anything that did happen, which is why the
+  // deliberate-silence list in src/llm/narrate.ts is curated rather than "everything the
+  // register did not name", and why `rest-declined`, `no-rests`, `shield-gained`,
+  // `shield-absorbed` and `revive` are narrated even though G13 never named them. If you
+  // add a silent case there, you are choosing to leave the previous beat on screen here.
+  if (!prompt) return;
   // Show ONLY the current moment: replace the narration area each turn rather
   // than accumulating a growing scroll of past beats (bug 2).
   narrationEl.innerHTML = '';
-  const prompt = buildNarrationPrompt(events, state, memory);
-  if (!prompt) return; // pure-input phase: nothing narratable — leave the area blank.
   log.debug('llm', 'narrate:request', { promptChars: prompt.user.length });
   const block = document.createElement('p');
   block.className = 'beat';

@@ -31,6 +31,8 @@
 //    measured from the output and pasted back.
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   describeEvent,
   eventsToFacts,
@@ -832,5 +834,47 @@ describe('R6 — the terminal step gives the renderer nothing to draw (G42)', ()
     ]);
     expect(memory.beats.length).toBeGreaterThan(0);
     expect(buildNarrationPrompt(r.events, r.state, memory)).toBeNull();
+  });
+
+  // The other half of G42 is one statement ORDER in the renderer, and `src/desktop/game.ts`
+  // cannot be imported in a test at all: it calls the Electron IPC (`window.void`) at module
+  // scope, which is why `npm run dev` cannot run outside Electron. So the guard is a scan of
+  // the shipping source itself — aimed at `narrate()` in the file that ships, not at a
+  // helper a future edit could bypass. It lives in this file because this file owns the
+  // narration pipeline end to end, and because this unit's territory is exactly six files.
+  //
+  // The VISUAL half (does the ending prose actually stay on screen?) is NEEDS-HUMAN; only a
+  // person running `npm run desktop` can see it.
+  it('the renderer confirms a prompt BEFORE it clears the narration pane', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('../desktop/game.ts', import.meta.url)),
+      'utf8',
+    );
+    const start = source.indexOf('async function narrate(');
+    expect(start, 'narrate() not found — this guard has gone stale, fix it').toBeGreaterThan(-1);
+    // The body ends at the first closing brace in column 0 after the declaration.
+    const end = source.indexOf('\n}', start);
+    expect(end).toBeGreaterThan(start);
+    const body = source.slice(start, end);
+
+    // Both patterns are deliberately loose about spelling. A guard that only recognises the
+    // exact characters that happen to be there today is untested in every other shape the
+    // violation can take — double quotes instead of single, `textContent` instead of
+    // `innerHTML`, `replaceChildren()` instead of an assignment — and each of those is an
+    // ordinary thing for a future edit to write. All four are verified to trip this test.
+    const NULL_CHECK = /if\s*\(\s*!\s*prompt\s*\)/;
+    const CLEARS_PANE =
+      /narrationEl\s*\.\s*(?:innerHTML|textContent)\s*=|narrationEl\s*\.\s*replaceChildren\s*\(/;
+
+    const nullCheck = body.search(NULL_CHECK);
+    const clear = body.search(CLEARS_PANE);
+    // Both markers must exist, or the comparison below would pass by finding nothing.
+    expect(nullCheck, 'the null-prompt guard is missing from narrate()').toBeGreaterThan(-1);
+    expect(clear, 'narrate() no longer clears the pane — re-check this guard').toBeGreaterThan(-1);
+    expect(
+      nullCheck,
+      'narrate() clears the narration pane before confirming a prompt — that is G42, and it ' +
+        "erases the ending prose on the run's terminal click",
+    ).toBeLessThan(clear);
   });
 });
