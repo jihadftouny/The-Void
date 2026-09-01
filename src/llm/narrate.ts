@@ -358,12 +358,19 @@ export function runSummary(memory: StoryMemory): string {
  * prefixed with continuity from `memory` (a one-line run summary + recent
  * moments). Returns null when nothing narratable happened (pure input phases
  * like name entry) — the UI then simply shows its choices with no new prose.
+ *
+ * `facts` is the already-computed engine fact list, returned alongside the prompt so a
+ * caller that needs the facts themselves does not have to re-derive them by slicing the
+ * user string apart. This is the hook FINDINGS.md G26 needs (#0c): the renderer's
+ * model-failure fallback currently prints `prompt.user.split('\n\n')[0]`, which on any step
+ * with story memory is the PREVIOUS beats rather than this one. Purely additive — no
+ * existing consumer changes — and it means a later unit never has to reopen this file.
  */
 export function buildNarrationPrompt(
   events: readonly GameEvent[],
   state: GameState,
   memory?: StoryMemory,
-): { system: string; user: string } | null {
+): { system: string; user: string; facts: readonly string[] } | null {
   const facts = eventsToFacts(events);
   if (facts.length === 0) return null;
   const floor = FLOORS[state.place] ?? 'the Void';
@@ -381,5 +388,5 @@ export function buildNarrationPrompt(
     facts.join('\n- ') +
     `\n\nNarrate this new moment in 2-4 vivid second-person sentences. ` +
     `Stay consistent with what came before; do not repeat earlier narration.`;
-  return { system: VOID_PERSONA, user };
+  return { system: VOID_PERSONA, user, facts };
 }

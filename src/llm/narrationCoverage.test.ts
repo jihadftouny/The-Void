@@ -878,3 +878,54 @@ describe('R6 — the terminal step gives the renderer nothing to draw (G42)', ()
     ).toBeLessThan(clear);
   });
 });
+
+// =========================================================================================
+// U7 — the computed facts are exposed (the hook #0c's G26 fallback needs)
+// =========================================================================================
+
+describe('buildNarrationPrompt exposes the facts it built', () => {
+  const state: GameState = {
+    version: 8,
+    rngState: 1,
+    player: null,
+    act: 2,
+    place: 1,
+    karma: createKarma(),
+    phase: { kind: 'main-menu' },
+  };
+
+  it('returns exactly the facts it embedded in the user prompt', () => {
+    const events: GameEvent[] = [
+      { kind: 'encounter-start', enemyName: 'Feral Cryo Rat' },
+      { kind: 'cast-unavailable' }, // deliberately silent — must NOT appear
+      { kind: 'boss-adapt' },
+    ];
+    const p = buildNarrationPrompt(events, state);
+    expect(p).not.toBeNull();
+    expect(p!.facts).toEqual(eventsToFacts(events));
+    expect(p!.facts).toHaveLength(2); // the silent one is dropped, so this is not 3
+    for (const f of p!.facts) expect(p!.user).toContain(f);
+  });
+
+  it('the facts are THIS beat only, which is the whole point for G26', () => {
+    // The renderer's model-failure fallback prints `prompt.user.split('\n\n')[0]`. With any
+    // story memory present that first block is the RUN SUMMARY and the PREVIOUS beats, not
+    // what just happened — FINDINGS.md G26, and #0c's to fix. `facts` gives it the current
+    // beat directly. Asserted here so the hook cannot regress into "whatever is in .user".
+    const past: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Rust Choir' }];
+    const memory = rememberBeat(rememberBeat(createStoryMemory(), past), [
+      { kind: 'victory', xpGained: 5, extraRest: false, loot: [] },
+    ]);
+    const now: GameEvent[] = [{ kind: 'boss-encounter', bossId: 'kingpin', enemyName: 'Kingpin' }];
+    const p = buildNarrationPrompt(now, state, memory);
+    expect(p).not.toBeNull();
+    expect(p!.facts).toEqual(eventsToFacts(now));
+    expect(p!.facts.join(' ')).not.toContain('Rust Choir'); // no past beat leaks in
+    expect(p!.user).toContain('Rust Choir'); // ...but the prompt still carries the context
+  });
+
+  it('is null, not an empty fact list, when nothing narratable happened', () => {
+    expect(buildNarrationPrompt([], state)).toBeNull();
+    expect(buildNarrationPrompt([{ kind: 'cast-unavailable' }], state)).toBeNull();
+  });
+});
