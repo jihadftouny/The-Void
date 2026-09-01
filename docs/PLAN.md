@@ -49,7 +49,7 @@ do nothing at all.**
 2. **G11b — add the test that would have caught it.** Two existing tests *look* like coverage and are
    circular: one never calls `equip()`, the other writes into `inventory.slots` directly. **The new
    test must call `equip()` on a real `generateItem` output** (`PRINCIPLES.md` §A3).
-3. **G13 — ELEVEN event kinds have no `describeEvent` case, including the player's own skill casts.**
+3. **G13 — ~~ELEVEN~~ THIRTY-FOUR OF 63 event kinds have no `describeEvent` case, including the player's own skill casts.** ⚠ **Recounted 2026-09-01 by the #0b build (measured by script): the eleven below are the *significant subset*, but the exhaustiveness check cannot land without ruling on all 34.** #0b's resolution: **17 get fact lines, 17 get a deliberate `''` with a comment** — condition/relic/consumable/stat kinds stay silent because writing them properly needs C7/C10's display-name work (#13's), and a wrong fact line is worse than none because it reaches the model as ground truth.
    ⚠ **Corrected 2026-08-31 (pass 15A): this said "four major beats… the five cases", and both the
    count and the headline symptom were wrong.** Blank narration is the *minority* case. Measured over
    400 runs / 170,491 steps: **5,727 steps contain a player `skill-cast`, and 100% reach the model
@@ -58,7 +58,7 @@ do nothing at all.**
    one. Also uncased: `boss-minion-damage` (346 steps where the player loses HP and nothing says so),
    `lifesteal`, `self-sacrifice`, `boss-summon`, `boss-adapt`, plus the original five
    (`boss-encounter`, `verdict`, `spared`, `draft-picked`, `draft-offer`). **Fix:** add every case
-   **and** land the `const _never: never = e` exhaustiveness check — that check is what stops this
+   **and** land the exhaustiveness check — ⚠ **`const _never: never = e` as written here DOES NOT COMPILE** under this repo's `noUnusedLocals: true`; it must be followed by `void _never;` *(found 2026-09-01 by the #0b build; the register was wrong, the compiler was not)*. That check is what stops this
    enumeration going stale a third time.
 4. **G12 — `advantageDisadvantage` is a write-only latch.** Every boss is fought at ±5 to-hit
    depending on unrelated leftover state. **Fix:** compute it per round rather than storing it.
@@ -122,7 +122,7 @@ including the ⛔⛔ one. Found by round 9C.)*
 23. **G33 — the Cast picker ignores `chargeDiscount`**, so charge-reduction relics do nothing through
     the real UI at exactly the margin where they matter. *(→ #0c, not #0a — it is a view-model fix.)*
 24. **G34 — `momentum` is the fourth carry-over leak**, after `shield`, `activeConditions` and the
-    advantage latch. Close all four in `createBattle`, the single funnel every battle passes through.
+    advantage latch. ~~Close all four in `createBattle`~~ ⚠ **WRONG — corrected 2026-09-01 by the #0a build, and verified: closing all four in `createBattle` CLEARS `activeConditions`, which BREAKS G27** (fracture's `maxTurns: 100` is tuned on "it needs a rest to clear", so conditions must survive a battle). **Close THREE at the `createBattle` funnel; the fourth — `activeConditions` — is cleared at the REST node instead.** And per §22.19 `momentum` is not cleared at all: it carries with decay.
 
 **Round 9A added four more.** *(Round 9A's ids reached the coverage cells on 2026-08-30 but not this
 list — the mirror image of the round-8A failure recorded above, and the reason the prose a planner
