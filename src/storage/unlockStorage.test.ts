@@ -381,15 +381,52 @@ describe('the unlock ladder reports what happened (principle 7)', () => {
     expect(withMessage('write failed')).toHaveLength(0);
   });
 
-  it('no message carries a number or an interpolation', () => {
-    const fake = makeFakeLocalStorage();
-    g.window = { localStorage: fake };
-    fake.map.set(UNLOCK_KEY, 'corrupt{');
-    fake.map.set(UNLOCK_BACKUP_KEY, 'also corrupt{');
+  it('no message carries a number or an interpolation — over ALL FOUR messages', () => {
+    // ⚠ Every message this module can emit, not a convenient subset. The first version of
+    // this sweep reached only rung 5, so `recovered from backup`, `write failed` and
+    // `backup rotation failed` escaped it entirely.
     entries = [];
-    loadUnlockStore();
+
+    // Rung 4 — recovered from backup.
+    const recover = makeFakeLocalStorage();
+    g.window = { localStorage: recover };
     saveUnlockStore(grownStore());
-    expect(unlockEntries().length, 'nothing captured — this would pass vacuously').toBeGreaterThan(0);
+    saveUnlockStore(grownStore());
+    recover.map.set(UNLOCK_KEY, 'corrupt{');
+    loadUnlockStore();
+
+    // Rung 5 — both copies unreadable.
+    const lost = makeFakeLocalStorage();
+    g.window = { localStorage: lost };
+    lost.map.set(UNLOCK_KEY, 'corrupt{');
+    lost.map.set(UNLOCK_BACKUP_KEY, 'also corrupt{');
+    loadUnlockStore();
+
+    // A failing primary write, and a failing backup rotation.
+    const raw = makeFakeLocalStorage();
+    raw.map.set(UNLOCK_KEY, encodeUnlockStore(grownStore()));
+    g.window = {
+      localStorage: {
+        getItem: (k: string) => raw.getItem(k),
+        setItem: (k: string) => {
+          if (k.startsWith('__thevoid')) return;
+          throw new Error('QuotaExceededError');
+        },
+        removeItem: (k: string) => raw.removeItem(k),
+      },
+    };
+    saveUnlockStore(createUnlockStore());
+
+    const messages = new Set(unlockEntries().map((e) => e.message));
+    expect(
+      [...messages].sort(),
+      'the sweep no longer reaches every message this module can emit',
+    ).toEqual([
+      'backup rotation failed',
+      'recovered from backup',
+      'store LOST — both copies unreadable',
+      'write failed',
+    ]);
     for (const e of unlockEntries()) {
       expect(e.message, `"${e.message}" contains a digit`).toMatch(/^[^0-9]*$/);
       expect(e.message, `"${e.message}" contains an interpolation`).toMatch(/^[^$]*$/);

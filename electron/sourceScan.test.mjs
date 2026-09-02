@@ -8,7 +8,12 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { stripComments, callsTo, argsOf } from './sourceScan.testutil.mjs';
+import {
+  stripComments,
+  callsTo,
+  argsOf,
+  stripReachesEndOfFile,
+} from '../src/log/sourceScan.testutil.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -75,6 +80,133 @@ describe('stripComments', () => {
       expect(stripped.length).toBeLessThan(raw.length);
     });
   }
+});
+
+// =========================================================================================
+// THE REGEX-LITERAL HOLE — round 2 of the same defect, and the reason this scanner has a
+// lexer rather than a state machine.
+//
+// The single-pass scanner that replaced the two regexes tracked strings and both comment
+// forms, but not regular-expression literals. `const HOLE = /a\/*b/;` is a regex whose body
+// contains an escaped slash followed by a star: the scanner walked past the opening `/`,
+// met `\` `/` `*`, and read `/*` as a block-comment opener. Everything to the next `*​/` was
+// swallowed, and a G6 restoration hidden in that gap stayed GREEN with every anchor above
+// it passing.
+//
+// "Assert your anchors survive" only catches a hole that SPANS an anchor. Two shapes escape
+// it, and both were demonstrated by mutation:
+//   - a hole APPENDED after the last export (swallows to EOF, no anchor below it);
+//   - a hole between two ADJACENT anchors (spans none).
+// Only recognising the regex literal closes both, which is what the scanner now does.
+// =========================================================================================
+
+describe('regular-expression literals are consumed whole', () => {
+  it('a regex containing an escaped slash and a star opens NO comment', () => {
+    // THE EXACT MUTATION. `\/*` inside the regex body must not be read as `/*`.
+    const source = "const HOLE = /a\\/*b/;\nconst __dirname = process.cwd();\n";
+    const stripped = stripComments(source);
+    expect(stripped, 'the regex still swallows the code after it').toContain('__dirname');
+    expect(stripped).toContain('process.cwd()');
+    expect(stripReachesEndOfFile(source)).toBe(true);
+  });
+
+  it('...and the same hole appended AFTER the last export', () => {
+    const source = "export function last() {}\nconst H = /x\\/*y/;\nconst __dirname = 1;\n";
+    expect(stripComments(source)).toContain('__dirname');
+  });
+
+  it('...and the same hole placed BETWEEN two anchors (the shape anchors cannot catch)', () => {
+    const source = [
+      'export const first = 1;',
+      'const H = /a\\/*b/;',
+      'const SECRET = 2;',
+      '/** doc */',
+      'export const last = 3;',
+    ].join('\n');
+    const stripped = stripComments(source);
+    expect(stripped, 'the region between the anchors is still swallowed').toContain('SECRET');
+    expect(stripped).toContain('export const first');
+    expect(stripped).toContain('export const last');
+    expect(stripped).not.toContain('doc');
+  });
+
+  it('a regex with a `//` in a character class is not read as a line comment', () => {
+    const source = 'const P = /[/]a/;\nconst keep = 1;';
+    expect(stripComments(source)).toContain('const keep = 1;');
+  });
+
+  it('and a real one from this repo survives verbatim', () => {
+    const source = "if (!/\\bLISTENING\\b/i.test(line)) continue;\nconst keep = 1;";
+    expect(stripComments(source)).toBe(source);
+  });
+
+  // ---- the other half: DIVISION must not be mistaken for a regex -----------------------
+  it('division after an identifier, a number, `)` or `]` is left alone', () => {
+    // Mis-reading a division as a regex would consume to the next `/` and swallow code —
+    // the same failure from the other direction. Every one of these is real in this repo.
+    for (const source of [
+      'const r = (tokens / Math.max(1, total - firstMs)) * 1000;\nconst keep = 1;',
+      'const lines = Math.ceil((20 * CAP) / 150);\nconst keep = 1;',
+      'const half = arr[0] / 2;\nconst keep = 1;',
+      'const x = 10 / 2 / 5;\nconst keep = 1;',
+      'const m = obj.a / obj.b;\nconst keep = 1;',
+    ]) {
+      expect(stripComments(source), source).toBe(source);
+    }
+  });
+
+  it('but a regex after `=`, `(`, `,` or `return` IS recognised', () => {
+    for (const source of [
+      'const P = /a\\/*b/;\nconst keep = 1;',
+      'if (test(/a\\/*b/)) f();\nconst keep = 1;',
+      'const arr = [1, /a\\/*b/];\nconst keep = 1;',
+      'function f() { return /a\\/*b/.test(s); }\nconst keep = 1;',
+    ]) {
+      expect(stripComments(source), source).toContain('const keep = 1;');
+    }
+  });
+
+  it('the real scanned files are byte-identical apart from their comments', () => {
+    // The end-to-end check that the lexer did not start eating code: every non-comment
+    // line of every scanned file must survive verbatim.
+    for (const file of ['log.mjs', 'main.mjs', 'llm.mjs', 'instrument.mjs', 'narrator-gate.mjs']) {
+      const raw = fs.readFileSync(path.join(HERE, file), 'utf8');
+      const stripped = stripComments(raw);
+      let checked = 0;
+      for (const line of raw.split('\n')) {
+        const t = line.trim();
+        if (t === '' || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue;
+        // A line with a TRAILING comment is legitimately shortened by the strip, so it
+        // cannot be compared whole. Skipped rather than half-compared — the floor below
+        // keeps this from quietly becoming a scan of nothing.
+        if (t.includes('//')) continue;
+        expect(stripped, `${file}: the scanner ate "${t}"`).toContain(t);
+        checked += 1;
+      }
+      expect(checked, `${file}: no code lines checked`).toBeGreaterThan(20);
+    }
+  });
+});
+
+describe('stripReachesEndOfFile', () => {
+  // Kept as the cheap, independent check that the lexer did not lose its place for ANY
+  // reason — not only the regex case it was originally written for.
+  it('is true for a well-formed file', () => {
+    expect(stripReachesEndOfFile("const a = 1; // note\n/** doc */\nexport const b = 2;\n")).toBe(true);
+    expect(stripReachesEndOfFile('')).toBe(true);
+  });
+
+  it('is FALSE for an unterminated block comment', () => {
+    expect(stripReachesEndOfFile('const a = 1;\n/* never closed')).toBe(false);
+    expect(stripReachesEndOfFile('export const a = 1;\n/** doc that never closes\n * more')).toBe(false);
+  });
+
+  it('every file the guards scan currently reaches its end', () => {
+    for (const file of ['log.mjs', 'main.mjs', 'llm.mjs', 'instrument.mjs', 'narrator-gate.mjs']) {
+      const raw = fs.readFileSync(path.join(HERE, file), 'utf8');
+      expect(stripReachesEndOfFile(raw), `${file} ends inside a comment hole`).toBe(true);
+    }
+  });
 });
 
 describe('callsTo', () => {

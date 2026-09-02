@@ -25,7 +25,7 @@ import {
   flushLog,
   closeLog,
 } from './log.mjs';
-import { stripComments } from './sourceScan.testutil.mjs';
+import { stripComments, stripReachesEndOfFile } from '../src/log/sourceScan.testutil.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SHIPPING_SOURCE = fs.readFileSync(path.join(HERE, 'log.mjs'), 'utf8');
@@ -67,13 +67,29 @@ describe('G6: the log directory is injected, never derived from __dirname', () =
     // WITHOUT THIS the guard below is worthless, and that is not a hypothetical: a naive
     // regex stripper deleted this file's whole import section (the `/*` inside the header's
     // "electron/**"), and reintroducing G6 verbatim stayed GREEN. Assert the region first.
+    //
+    // ⚠ AND THE ANCHORS MUST REACH THE END OF THE FILE. The scanner does not track regular
+    // expression literals, so a regex containing `/*` opens a hole to the next `*​/`.
+    // Anchoring only the top left the last ~12% of this file unprotected: a
+    // `const HOLE = /a\/*b/;` inserted after `fileLog`, followed by G6 verbatim, was GREEN.
+    // The last two entries are this module's final exports, so any hole spans an anchor.
     expect(SOURCE, 'the comment strip ate the imports — every guard below is scanning a hole').toMatch(
       /import\s+fs\s+from\s+'node:fs'/,
     );
     expect(SOURCE).toMatch(/import\s+path\s+from\s+'node:path'/);
     expect(SOURCE).toMatch(/export\s+function\s+configureLogDir/);
     expect(SOURCE).toMatch(/export\s+function\s+fileLog/);
+    expect(SOURCE, 'the strip ate the tail of log.mjs — a hole below the old last anchor').toMatch(
+      /export\s+async\s+function\s+flushLog/,
+    );
+    expect(SOURCE, 'the strip ate the final export of log.mjs').toMatch(
+      /export\s+async\s+function\s+closeLog/,
+    );
     // ...and the strip really did remove the comments (or "not.toMatch" would be trivial).
+    expect(
+      stripReachesEndOfFile(SHIPPING_SOURCE),
+      'the strip ran off the END of the file — a regex literal containing `/*` with no later `*/` swallows everything after it, and every anchor ABOVE it still passes',
+    ).toBe(true);
     expect(SOURCE.length).toBeLessThan(SHIPPING_SOURCE.length);
     expect(SOURCE).not.toContain('electron-builder packs');
   });
@@ -303,6 +319,42 @@ describe('the session banner', () => {
     expect(banners[0]).toContain('cwd=C:/wt/observability');
     expect(banners[0]).toContain('version=1.2.3');
     expect(banners[0]).toContain('platform=win32-x64');
+  });
+
+  it('the REAL banner — with nothing injected — names this process and this checkout', async () => {
+    // ⚠ The test above injects all four fields, so it proves the FORMAT and nothing about
+    // the values a real launch writes. `defaultSession()` was asserted nowhere: gutting it
+    // to `{}` left every real banner reading `pid=? cwd=?` — which defeats AC-32's entire
+    // purpose, because `cwd` is the only thing keeping two worktrees sharing one user-data
+    // log apart. This drives the production default path.
+    const dir = tempDir();
+    configureLogDir(dir);
+    fileLog({ time: 0, level: 'info', category: 'x', message: 'go' });
+    await flushLog();
+    const banner = fs.readFileSync(path.join(dir, 'void.log'), 'utf8').split('\n')[0];
+    expect(banner.startsWith('=== session ')).toBe(true);
+    expect(banner, 'the banner does not name this process').toContain(`pid=${process.pid}`);
+    expect(banner, 'the banner does not name this checkout — two worktrees become one log').toContain(
+      `cwd=${process.cwd()}`,
+    );
+    expect(banner, 'the banner does not name the platform').toContain(
+      `platform=${process.platform}-${process.arch}`,
+    );
+    expect(banner, 'the banner has no version field at all').toMatch(/version=\S+/);
+    // ...and none of them degraded to the unknown marker.
+    expect(banner, 'a banner field degraded to "?" on the real default path').not.toContain('=?');
+  });
+
+  it('an injected session OVERRIDES the defaults, field by field', async () => {
+    // The other half: `main.mjs` supplies only `version`, so the other three must survive.
+    const dir = tempDir();
+    configureLogDir(dir, { session: { version: '9.9.9' } });
+    fileLog({ time: 0, level: 'info', category: 'x', message: 'go' });
+    await flushLog();
+    const banner = fs.readFileSync(path.join(dir, 'void.log'), 'utf8').split('\n')[0];
+    expect(banner).toContain('version=9.9.9');
+    expect(banner).toContain(`pid=${process.pid}`);
+    expect(banner).toContain(`cwd=${process.cwd()}`);
   });
 
   it('a SECOND launch appends its own banner rather than replacing the first', async () => {

@@ -589,16 +589,53 @@ describe('persist reports what it did (principle 7)', () => {
   it('no message carries a number or an interpolation — every measurement is in `data`', () => {
     // Principle 7: "Never interpolate a number into a string and lose it." Enforced over
     // every entry this file can emit, so `grep '"ms":'` over a log always works.
+    //
+    // ⚠ EVERY message, not a convenient subset. The first version of this sweep exercised
+    // only the happy paths plus `not-json`, so `save FAILED`, `clear FAILED` and
+    // `unreadable` escaped it entirely — a digit added to any of those three would have
+    // been invisible here. The list below is checked against the full message inventory at
+    // the end of the test, so a NEW message that this sweep never triggers fails too.
     const state = createGame(999);
     const memory = createStoryMemory();
-    saveRun(state, memory, meta());
-    loadRun();
     const backing = installMemoryLocalStorage();
+
+    saveRun(state, memory, meta()); // run saved
+    loadRun(); // run loaded
     backing.set('thevoid:run', '{broken');
-    loadRun();
+    loadRun(); // save rejected (not-json)
     backing.set('thevoid:run', JSON.stringify({ state: createGame(1), memory: createStoryMemory() }));
-    loadRun();
-    expect(saved().length, 'nothing was captured — this guard would pass vacuously').toBeGreaterThan(4);
+    loadRun(); // legacy envelope
+    backing.delete('thevoid:run');
+    loadRun(); // save rejected (absent)
+
+    // The three failure paths the earlier sweep never reached.
+    (globalThis as { localStorage: unknown }).localStorage = {
+      getItem: () => {
+        throw new Error('SecurityError');
+      },
+      setItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+      removeItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    saveRun(state, memory, meta()); // save FAILED
+    clearRun(); // clear FAILED
+    loadRun(); // save rejected (unreadable)
+
+    const messages = new Set(saved().map((e) => e.message));
+    expect(
+      [...messages].sort(),
+      'the sweep no longer reaches every message this module can emit',
+    ).toEqual([
+      'clear FAILED',
+      'legacy envelope',
+      'run loaded',
+      'run saved',
+      'save FAILED',
+      'save rejected',
+    ]);
     for (const e of saved()) {
       expect(e.message, `"${e.message}" contains a digit`).toMatch(/^[^0-9]*$/);
       expect(e.message, `"${e.message}" contains an interpolation`).toMatch(/^[^$]*$/);

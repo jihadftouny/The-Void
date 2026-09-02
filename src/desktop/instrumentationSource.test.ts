@@ -27,62 +27,16 @@
 // ---------------------------------------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { logLines } from '../render/log-model.ts';
 import { buildNarrationPrompt } from '../llm/narrate.ts';
 import { createGame } from '../game/game.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
+import { stripComments, stripReachesEndOfFile } from '../log/sourceScan.testutil.ts';
 
 const RAW = readFileSync(fileURLToPath(new URL('./game.ts', import.meta.url)), 'utf8');
-
-/**
- * Comments removed by a single left-to-right scan that also understands string and
- * template literals.
- *
- * NOT the usual pair of regexes. `src.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/.*$/gm,'')`
- * treats the `/*` inside a LINE comment that mentions a glob (`electron/**`,
- * `./models/*.gguf` — both real in this repo) as a block-comment opener and deletes
- * everything up to the next `*​/`, which is the end of some JSDoc far below. Every guard
- * downstream then scans a hole and passes. Found by mutation-testing this unit's own work.
- */
-function stripComments(source: string): string {
-  let out = '';
-  let i = 0;
-  while (i < source.length) {
-    const c = source[i];
-    const d = source[i + 1];
-    if (c === '/' && d === '/') {
-      while (i < source.length && source[i] !== '\n') i += 1;
-      continue;
-    }
-    if (c === '/' && d === '*') {
-      i += 2;
-      while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) i += 1;
-      i += 2;
-      continue;
-    }
-    if (c === '"' || c === "'" || c === '`') {
-      out += c;
-      i += 1;
-      while (i < source.length) {
-        if (source[i] === '\\') {
-          out += source[i] + (source[i + 1] ?? '');
-          i += 2;
-          continue;
-        }
-        out += source[i];
-        const done = source[i] === c;
-        i += 1;
-        if (done) break;
-      }
-      continue;
-    }
-    out += c;
-    i += 1;
-  }
-  return out;
-}
 
 const SOURCE = stripComments(RAW);
 
@@ -145,6 +99,8 @@ describe('the source scanner itself', () => {
   });
 
   it('logCalls balances nested parentheses and ignores parens inside strings', () => {
+    // RED against: counting a parenthesis inside a string literal (which truncates every
+    // captured call); and stopping at the first `)` (which truncates any nested call).
     expect(logCalls(`log.info('a', 'b (c)', { d: f(1, g(2)) });`)).toEqual([
       `log.info('a', 'b (c)', { d: f(1, g(2)) })`,
     ]);
@@ -152,12 +108,28 @@ describe('the source scanner itself', () => {
   });
 
   it('and the strip left game.ts intact (rule 2 — the anchor for everything below)', () => {
+    // ⚠ THE ANCHOR SET REACHES THE END OF THE FILE. The scanner does not track regular
+    // expression literals, so a regex containing `/*` opens a hole running to the next
+    // `*​/`. Anchoring only the top leaves everything BELOW the lowest anchor unprotected
+    // — a defect could be hidden there with every guard green. The last two entries are
+    // near the bottom of `game.ts` on purpose, so any hole spans an anchor.
     expect(SOURCE, 'the strip ate the imports — every guard below scans a hole').toMatch(
       /import\s*\{\s*createGame,\s*step,\s*awaitingFor\s*\}\s*from\s*'\.\.\/game\/game\.ts'/,
     );
+    expect(SOURCE).toMatch(/import\s*\{[^}]*startTimer[^}]*\}\s*from\s*'\.\.\/log\/timing\.ts'/);
     expect(SOURCE).toMatch(/async function dispatch\(/);
     expect(SOURCE).toMatch(/async function narrate\(/);
-    expect(SOURCE).toMatch(/import\s*\{[^}]*startTimer[^}]*\}\s*from\s*'\.\.\/log\/timing\.ts'/);
+    expect(SOURCE).toMatch(/function renderChoices\(/);
+    expect(SOURCE, 'the strip ate the tail of game.ts — a hole below the last anchor').toMatch(
+      /function renderResume\(/,
+    );
+    expect(SOURCE, 'the strip ate the boot block at the very end of game.ts').toMatch(
+      /const saved\s*=\s*loadRun\(\s*\)/,
+    );
+    expect(
+      stripReachesEndOfFile(RAW),
+      'the strip ran off the END of the file — a regex literal containing `/*` with no later `*/` swallows everything after it, and every anchor ABOVE it still passes',
+    ).toBe(true);
     expect(SOURCE.length).toBeLessThan(RAW.length);
   });
 });
@@ -300,6 +272,34 @@ describe('dispatch() times the step and the whole turn', () => {
       /^log\.debug\s*\(/,
     );
   });
+
+  it('and NO call above debug passes the whole input object — the exhaustive form', () => {
+    // ⚠ Pinning only the `'choice'` line is not enough. The name reaches the log through
+    // the WHOLE `input` object, and any future `log.info('ui','turn',{ input })` would put
+    // it in a packaged log while the guard above stayed green. So: every call that is not
+    // `log.debug` must pass `input.kind`, never `input` itself.
+    //
+    // `{ input: input.kind }` does not match — the token before the comma is `kind`.
+    // `{ input }` and `{ input: input }` both do.
+    const SHORTHAND = /\binput\s*[,}]/;
+    const WHOLE_OBJECT = /input:\s*input\s*[,}]/;
+    const above = logCalls(SOURCE).filter((c) => !c.startsWith('log.debug('));
+    expect(above.length, 'no calls above debug — this guard has gone stale').toBeGreaterThan(5);
+    for (const call of above) {
+      expect(
+        call,
+        'a call above `debug` carries the whole input object, which holds the player-typed ' +
+          `name — a packaged build would write it to disk: ${call.slice(0, 70)}`,
+      ).not.toMatch(SHORTHAND);
+      expect(call).not.toMatch(WHOLE_OBJECT);
+    }
+    // Non-vacuity, both ways: the patterns fire on the offending shape and not on the safe one.
+    expect(SHORTHAND.test("log.info('ui', 'turn', { input })")).toBe(true);
+    expect(WHOLE_OBJECT.test("log.info('ui', 'turn', { input: input })")).toBe(true);
+    expect(SHORTHAND.test("log.info('ui', 'turn', { input: input.kind, ms: turnMs })")).toBe(false);
+    // ...and the debug call this excludes really does carry it, so the filter is load-bearing.
+    expect(logCalls(SOURCE).filter((c) => SHORTHAND.test(c)).length).toBe(1);
+  });
 });
 
 describe('narrate() times the round trip to the model', () => {
@@ -329,6 +329,27 @@ describe('narrate() times the round trip to the model', () => {
     );
     expect(done).toMatch(/ttftMs/);
     expect(done).toMatch(/tokPerSec/);
+  });
+
+  it('...and all three of those numbers are MEASURED, not fabricated', () => {
+    // Pinned by EXPRESSION, the way `ms: stepMs` already is in `dispatch`. Every one of
+    // these was green when only the KEY was asserted:
+    //   `const generateMs = 0`         -> ipcOverheadMs becomes the whole round trip, so
+    //                                     the log blames the IPC bridge for model time;
+    //   `ipcOverheadMs: roundTripMs`   -> identical lie, from the other end;
+    //   `const roundTripMs = 0`        -> the narration is recorded as instant forever.
+    expect(body, 'the round trip is fabricated rather than measured').toMatch(
+      /const roundTripMs\s*=\s*genTimer\.stop\(\s*\)/,
+    );
+    expect(body, "the main process's own measurement is discarded").toMatch(
+      /const generateMs\s*=\s*Math\.round\(\s*stats\.totalMs\s*\?\?\s*0\s*\)/,
+    );
+    expect(body, 'ipcOverheadMs is no longer the DIFFERENCE — it says nothing new').toMatch(
+      /ipcOverheadMs:\s*Math\.round\(\s*roundTripMs\s*\)\s*-\s*generateMs/,
+    );
+    expect(body, 'the failure path fabricates its duration').toMatch(
+      /roundTripMs:\s*genTimer\.stop\(\s*\)/,
+    );
   });
 
   it('the FAILURE path reports how long it waited before falling back', () => {
@@ -427,6 +448,139 @@ describe('no log line can reach the screen', () => {
 // =========================================================================================
 // 5. A NUMBER LIVES IN `data`, NEVER IN `message`.
 // =========================================================================================
+
+// =========================================================================================
+// The complement of that rule: a measurement key must carry a MEASUREMENT. Pinning a key
+// by NAME is satisfied by `ms: 0`, and a log that answers the question wrongly is worse
+// than one that does not answer it. The specific expressions are pinned at their own sites
+// above; this is the class guard that catches the next one nobody thought to pin.
+// =========================================================================================
+
+describe('a measurement key in game.ts never carries a constant', () => {
+  const CONSTANT = /^-?\d+(?:\.\d+)?$/;
+
+  /** `{key, value}` for every `…ms`/`…Ms` property anywhere in a log call's arguments. */
+  function measurements(callText: string): { key: string; value: string }[] {
+    const found: { key: string; value: string }[] = [];
+    for (const m of callText.matchAll(/\b([A-Za-z]*[Mm]s)\s*:\s*([^,\n}]+)/g)) {
+      found.push({ key: m[1] as string, value: (m[2] as string).trim() });
+    }
+    return found;
+  }
+
+  it('every ms-valued key in a log payload is an expression', () => {
+    const seen = logCalls(SOURCE).flatMap(measurements);
+    expect(seen.length, 'no ms-valued keys found — this guard has gone stale').toBeGreaterThan(4);
+    for (const { key, value } of seen) {
+      expect(
+        CONSTANT.test(value),
+        `${key} is the constant ${value}, not a measurement`,
+      ).toBe(false);
+    }
+  });
+
+  it('the detector fires on a planted constant, and not on a real expression', () => {
+    expect(measurements("log.warn('llm', 'x', { roundTripMs: 0 })")).toEqual([
+      { key: 'roundTripMs', value: '0' },
+    ]);
+    expect(CONSTANT.test('0')).toBe(true);
+    expect(CONSTANT.test(measurements("log.warn('x', 'y', { ms: turnMs })")[0]!.value)).toBe(false);
+  });
+});
+
+// =========================================================================================
+// R2 — the test runner's own configuration. A test file that no `include` glob matches is
+// collected by nothing and "passes" by never running: deleting `scripts/**/*.test.mjs`
+// from `vite.config.ts` drops the suite from 1602 to 1560 and everything stays green.
+// AC-39 called that "proved by the run count rising", which is a human noticing, not a
+// check. This file lives under `src/**/*.test.ts` — the largest glob, whose removal would
+// take ~1300 tests with it and be impossible to miss — so it is a safe home for the guard.
+// =========================================================================================
+
+describe('every test file on disk is collected by the runner', () => {
+  const ROOT = fileURLToPath(new URL('../../', import.meta.url));
+  const CONFIG = readFileSync(fileURLToPath(new URL('../../vite.config.ts', import.meta.url)), 'utf8');
+
+  /** Every `*.test.ts` / `*.test.mjs` under the three source roots, as posix paths. */
+  function testFilesOnDisk(): string[] {
+    const out: string[] = [];
+    const walk = (dir: string, prefix: string): void => {
+      for (const entry of readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+        if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+        const rel = `${prefix}${entry.name}`;
+        if (entry.isDirectory()) walk(path.join(dir, entry.name), `${rel}/`);
+        else if (/\.test\.(ts|mjs)$/.test(entry.name)) out.push(rel);
+      }
+    };
+    for (const root of ['src', 'scripts', 'electron']) walk(root, `${root}/`);
+    return out;
+  }
+
+  /** The `include:` globs, read out of the config as literal strings. */
+  function includeGlobs(): string[] {
+    const block = CONFIG.slice(CONFIG.indexOf('include:'), CONFIG.indexOf(']', CONFIG.indexOf('include:')));
+    return [...block.matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
+  }
+
+  /** Does `glob` (only `**` and `*` are used here) match `file`? */
+  function matches(glob: string, file: string): boolean {
+    const pattern = glob
+      .split('**/')
+      .map((part) => part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*'))
+      .join('(?:.*/)?');
+    return new RegExp(`^${pattern}$`).test(file);
+  }
+
+  it('the glob matcher works (or the sweep below proves nothing)', () => {
+    expect(matches('scripts/**/*.test.mjs', 'scripts/dev-server.test.mjs')).toBe(true);
+    expect(matches('scripts/**/*.test.mjs', 'scripts/a/b/c.test.mjs')).toBe(true);
+    expect(matches('scripts/**/*.test.mjs', 'scripts/dev-server.test.ts')).toBe(false);
+    expect(matches('src/**/*.test.ts', 'src/log/timing.test.ts')).toBe(true);
+    expect(matches('src/**/*.test.ts', 'electron/log.test.mjs')).toBe(false);
+    expect(includeGlobs().length, 'no include globs parsed out of vite.config.ts').toBeGreaterThan(3);
+  });
+
+  it('and no test is disabled', () => {
+    // AC-3's "zero skips added" was enforced by a human reading the diff. `it.skip` is the
+    // cheapest way to make a red guard green, and it is invisible in a passing run.
+    // ANCHORED at statement position (`^\s*`), which is where a real `it.skip` always
+    // sits. Unanchored, this guard flagged its own non-vacuity literals below — a scan
+    // that reads the file it is written in has to say where it is looking.
+    const DISABLED = /^\s*(?:it|test|describe)\s*\.\s*(?:skip|only|todo|fails)\b/;
+    const offenders: string[] = [];
+    for (const rel of testFilesOnDisk()) {
+      const source = readFileSync(path.join(ROOT, rel), 'utf8');
+      for (const [i, line] of source.split('\n').entries()) {
+        if (DISABLED.test(line)) offenders.push(`${rel}:${i + 1}`);
+      }
+    }
+    expect(offenders, 'a test is skipped, focused or marked todo').toEqual([]);
+    // Non-vacuity: the matcher fires on the shapes it is meant to catch, and not on the
+    // game's own `skipTurn` field, which is what an unanchored word match would hit.
+    expect(DISABLED.test('  it.skip("x", () => {})')).toBe(true);
+    expect(DISABLED.test('describe.only("x", () => {})')).toBe(true);
+    expect(DISABLED.test('  test.todo("later");')).toBe(true);
+    expect(DISABLED.test('  expect(r.skipTurn).toBe(true);')).toBe(false);
+    expect(testFilesOnDisk().length, 'no files scanned').toBeGreaterThan(60);
+  });
+
+  it('no test file is left uncollected', () => {
+    const globs = includeGlobs();
+    const files = testFilesOnDisk();
+    expect(files.length, 'no test files found — this guard has gone stale').toBeGreaterThan(60);
+    const orphans = files.filter((f) => !globs.some((g) => matches(g, f)));
+    expect(
+      orphans,
+      'these test files match no `include` glob in vite.config.ts — they are collected by ' +
+        'nothing and "pass" by never running',
+    ).toEqual([]);
+    // Non-vacuity: an invented file in an uncovered location MUST be reported.
+    expect(['scripts/made-up.test.mjs'].filter((f) => !globs.some((g) => matches(g, f)))).toEqual([]);
+    expect(['tools/made-up.test.ts'].filter((f) => !globs.some((g) => matches(g, f)))).toEqual([
+      'tools/made-up.test.ts',
+    ]);
+  });
+});
 
 describe('no measurement is interpolated into a message', () => {
   it('no log call in game.ts contains a template interpolation', () => {

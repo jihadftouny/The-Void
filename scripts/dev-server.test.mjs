@@ -19,47 +19,10 @@ import {
   isPortInUse,
   describePortConflict,
 } from './dev-server.mjs';
+import { stripComments, stripReachesEndOfFile } from '../src/log/sourceScan.testutil.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RAW_LAUNCHER = fs.readFileSync(path.join(HERE, 'desktop-dev.mjs'), 'utf8');
-/** Single-pass comment strip — a `/*` inside a line comment must not eat the imports. */
-function stripComments(source) {
-  let out = '';
-  let i = 0;
-  while (i < source.length) {
-    const c = source[i];
-    const d = source[i + 1];
-    if (c === '/' && d === '/') {
-      while (i < source.length && source[i] !== '\n') i += 1;
-      continue;
-    }
-    if (c === '/' && d === '*') {
-      i += 2;
-      while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) i += 1;
-      i += 2;
-      continue;
-    }
-    if (c === '"' || c === "'" || c === '`') {
-      out += c;
-      i += 1;
-      while (i < source.length) {
-        if (source[i] === '\\') {
-          out += source[i] + (source[i + 1] ?? '');
-          i += 2;
-          continue;
-        }
-        out += source[i];
-        const done = source[i] === c;
-        i += 1;
-        if (done) break;
-      }
-      continue;
-    }
-    out += c;
-    i += 1;
-  }
-  return out;
-}
 const LAUNCHER = stripComments(RAW_LAUNCHER);
 
 // =========================================================================================
@@ -279,6 +242,17 @@ describe('describePortConflict', () => {
   it('says it is REFUSING, so the message cannot be read as a warning to ignore', () => {
     expect(describePortConflict({ port: 5173, pids: [1] })).toMatch(/REFUSING/);
   });
+
+  it('defaults to THIS platform — a Windows engineer is never told `kill -9`', () => {
+    // Every assertion above passes `platform:` explicitly, so deleting the
+    // `platform = process.platform` default was green while printing a command that does
+    // not exist on the machine reading it. The point of the message is that it can be
+    // pasted.
+    const here = describePortConflict({ port: 5173, pids: [4242] });
+    const expected = describePortConflict({ port: 5173, pids: [4242], platform: process.platform });
+    expect(here, 'the default platform is gone — the kill command is for another OS').toBe(expected);
+    expect(here).toContain(process.platform === 'win32' ? 'taskkill' : 'kill -9');
+  });
 });
 
 // =========================================================================================
@@ -288,9 +262,20 @@ describe('describePortConflict', () => {
 
 describe('the launcher cannot orphan Vite or silently join somebody else (G41)', () => {
   it('the stripped source is intact (the anchor for everything below)', () => {
+    // ⚠ The anchors reach the END of the file. The scanner does not track regular
+    // expression literals, so a regex containing `/*` opens a hole to the next `*​/`, and
+    // anything BELOW the lowest anchor could then be hidden with every guard green.
     expect(LAUNCHER).toMatch(/import\s*\{\s*createServer\s*\}\s*from\s*'vite'/);
     expect(LAUNCHER).toMatch(/import\s+electronPath\s+from\s+'electron'/);
+    expect(LAUNCHER).toMatch(/async function start\(/);
     expect(LAUNCHER).toMatch(/spawn\s*\(\s*electronPath/);
+    expect(LAUNCHER, 'the strip ate the tail of the launcher — a hole below the last anchor').toMatch(
+      /process\.on\s*\(\s*'uncaughtException'/,
+    );
+    expect(
+      stripReachesEndOfFile(RAW_LAUNCHER),
+      'the strip ran off the END of the file — a regex literal containing `/*` with no later `*/` swallows everything after it, and every anchor ABOVE it still passes',
+    ).toBe(true);
     expect(LAUNCHER.length).toBeLessThan(RAW_LAUNCHER.length);
   });
 
@@ -333,6 +318,25 @@ describe('the launcher cannot orphan Vite or silently join somebody else (G41)',
     expect(LAUNCHER, 'the launcher polls desktop.html to decide readiness').not.toMatch(
       /desktop\.html/,
     );
+    // NOT spelling-bound. Forbidding `fetch(` and the name `waitForServer` leaves every
+    // other way to ask the port whether somebody is listening — `http.get`, `net.connect`,
+    // a `.request(` — and any of them reintroduces "accept whoever answers 5173", which IS
+    // G41. The launcher must make NO outbound request of any kind: the identity probe
+    // lives in `dev-server.mjs`, where its answer can only lead to reclaim or abort.
+    for (const [what, pattern] of [
+      ['fetch', /fetch\s*\(/],
+      ['http.get / https.get', /https?\.get\s*\(/],
+      ['a raw request', /\.request\s*\(/],
+      ['a socket connect', /net\.(connect|createConnection)\s*\(/],
+      ['an http import', /from\s*'node:https?'/],
+      ['a net import', /from\s*'node:net'/],
+    ]) {
+      expect(
+        LAUNCHER,
+        `the launcher talks to the port itself (${what}) — that is how it ends up attached ` +
+          "to somebody else's dev server",
+      ).not.toMatch(pattern);
+    }
   });
 
   it('binds strictly, so a taken port is an ERROR rather than a silent drift to 5174', () => {

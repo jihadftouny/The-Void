@@ -26,56 +26,7 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-
-/**
- * Comments stripped — a comment mentioning `log/logger` is prose, not an import.
- *
- * A single left-to-right scan, NOT the obvious pair of regexes. `.replace(/\/\*[\s\S]*?\*\//g,
- * '').replace(/\/\/.*$/gm, '')` treats the `/*` inside a LINE comment that mentions a glob
- * (`src/render/**`, `./models/*.gguf` — this repo writes both) as a block-comment opener
- * and deletes everything up to the next `*​/`, which is the end of some JSDoc far below.
- * The file's whole import section then vanishes and this scan reports a clean tree because
- * it read a HOLE. That is not hypothetical: it is how this unit's first G6 guard stayed
- * green against G6 reintroduced verbatim. Of every guard in this unit, THIS one is the
- * worst place for that to happen, because it is the guard on determinism itself.
- */
-function stripComments(source: string): string {
-  let out = '';
-  let i = 0;
-  while (i < source.length) {
-    const c = source[i];
-    const d = source[i + 1];
-    if (c === '/' && d === '/') {
-      while (i < source.length && source[i] !== '\n') i += 1;
-      continue;
-    }
-    if (c === '/' && d === '*') {
-      i += 2;
-      while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) i += 1;
-      i += 2;
-      continue;
-    }
-    if (c === '"' || c === "'" || c === '`') {
-      out += c;
-      i += 1;
-      while (i < source.length) {
-        if (source[i] === '\\') {
-          out += source[i] + (source[i + 1] ?? '');
-          i += 2;
-          continue;
-        }
-        out += source[i];
-        const done = source[i] === c;
-        i += 1;
-        if (done) break;
-      }
-      continue;
-    }
-    out += c;
-    i += 1;
-  }
-  return out;
-}
+import { stripComments } from './sourceScan.testutil.ts';
 
 /**
  * Every module specifier reached by an import in any spelling: `import x from '…'`,
@@ -241,5 +192,85 @@ describe('no shipping file in a pure core imports the logging layer', () => {
       }
     }
     expect(importLines, 'no import lines seen at all — this guard scanned nothing').toBeGreaterThan(60);
+  });
+});
+
+// =========================================================================================
+// ONE CLOCK SEAM (Appendix A.6.2), asserted rather than intended.
+//
+// Every duration the renderer and the storage adapters record must flow through
+// `logger.now()` — the single function `setClock` replaces — or a test cannot script it and
+// has to fall back to a wall clock with a tolerance window, which is the classic flake.
+//
+// Nothing enforced that. A future `const t0 = performance.now()` inside `game.ts` or
+// `persist.ts` would create a second, unscriptable seam and no assertion would fire. This
+// is the guard; the exceptions are named, and each one is a decision on the record rather
+// than an accident.
+// =========================================================================================
+
+describe('the renderer and the storage adapters measure through the seam, never a wall clock', () => {
+  /** Every shipping `.ts` file under the instrumented (non-core) directories. */
+  function instrumentedFiles(): { name: string; source: string }[] {
+    return ['desktop', 'storage', 'log'].flatMap((d) => shippingFiles(d));
+  }
+
+  it('no shipping file outside logger.ts reads `performance`', () => {
+    // `logger.ts#defaultClock` is THE seam's implementation and the only sanctioned reader.
+    const offenders: string[] = [];
+    for (const f of instrumentedFiles()) {
+      if (f.name === 'log/logger.ts') continue;
+      const clean = stripComments(f.source);
+      if (/\bperformance\s*\.\s*(now|timeOrigin)\b/.test(clean)) offenders.push(f.name);
+    }
+    expect(
+      offenders,
+      'a second clock seam appeared — durations measured there cannot be scripted, and ' +
+        'their tests would have to read a wall clock',
+    ).toEqual([]);
+  });
+
+  it('`Date.now()` appears only in the seam itself and where it SEEDS a run', () => {
+    // The two `runSeed = Date.now() >>> 0` lines in `game.ts` are pre-existing and are not
+    // measurements: a run's identity has to come from somewhere outside the run. Anything
+    // else is a duration measured off the seam.
+    const offenders: string[] = [];
+    for (const f of instrumentedFiles()) {
+      if (f.name === 'log/logger.ts') continue;
+      const clean = stripComments(f.source);
+      for (const [i, line] of clean.split('\n').entries()) {
+        if (!/\bDate\s*\.\s*now\s*\(/.test(line)) continue;
+        if (/\brunSeed\s*=\s*Date\.now\(\)\s*>>>\s*0/.test(line)) continue; // the seed
+        offenders.push(`${f.name}:${i + 1}: ${line.trim()}`);
+      }
+    }
+    expect(
+      offenders,
+      'a duration is being measured off a wall clock instead of `logger.now()` — script ' +
+        'the seam instead, or the test that covers it will need a tolerance window',
+    ).toEqual([]);
+  });
+
+  it('...and the sanctioned exceptions really are still there (non-vacuity)', () => {
+    // If the seed lines vanished, or `logger.ts` stopped implementing the clock, the two
+    // guards above would pass by having nothing to exempt.
+    const game = instrumentedFiles().find((f) => f.name === 'desktop/game.ts');
+    expect(game, 'game.ts is no longer scanned').toBeDefined();
+    expect(
+      (game!.source.match(/runSeed = Date\.now\(\) >>> 0/g) ?? []).length,
+      'the run-seed lines are gone — the exemption above now exempts nothing',
+    ).toBe(2);
+    const logger = instrumentedFiles().find((f) => f.name === 'log/logger.ts');
+    expect(logger!.source, 'logger.ts no longer implements the clock').toMatch(
+      /performance\s*\.\s*timeOrigin/,
+    );
+    expect(instrumentedFiles().length, 'nothing was scanned at all').toBeGreaterThan(6);
+  });
+
+  it('and the timing module itself takes its clock from the seam', () => {
+    const timing = instrumentedFiles().find((f) => f.name === 'log/timing.ts');
+    expect(timing, 'timing.ts is gone').toBeDefined();
+    expect(timing!.source, 'startTimer no longer measures through logger.now()').toMatch(
+      /import\s*\{[^}]*\bnow\b[^}]*\}\s*from\s*'\.\/logger\.ts'/,
+    );
   });
 });

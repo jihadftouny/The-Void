@@ -24,7 +24,12 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { stripComments, callsTo, argsOf } from './sourceScan.testutil.mjs';
+import {
+  stripComments,
+  callsTo,
+  argsOf,
+  stripReachesEndOfFile,
+} from '../src/log/sourceScan.testutil.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = (f) => fs.readFileSync(path.join(HERE, f), 'utf8');
@@ -43,16 +48,33 @@ function bodyOf(source, declaration) {
 }
 
 describe('the scanned sources survived the comment strip (rule 2)', () => {
-  it('main.mjs keeps its imports, its handler and its ready block', () => {
+  // ⚠ THE ANCHOR SET MUST REACH THE END OF THE FILE. The scanner does not track regular
+  // expression literals, so a regex containing `/*` opens a hole that swallows everything
+  // to the next `*​/`. Anchoring only the TOP of a file leaves the region BELOW the lowest
+  // anchor unprotected — demonstrated: a `const HOLE = /a\/*b/;` inserted after the last
+  // anchored export, followed by G6 verbatim, was green. Each list below therefore ends
+  // with the file's LAST statement, so any hole spans an anchor and fires.
+  it('main.mjs keeps its imports, its handler, its ready block AND its last statement', () => {
     expect(MAIN).toMatch(/import\s*\{\s*app,\s*BrowserWindow,\s*ipcMain\s*\}\s*from\s*'electron'/);
+    expect(MAIN).toMatch(/function\s+mlog\s*\(/);
+    expect(MAIN).toMatch(/async function createWindow\(/);
     expect(MAIN).toMatch(/ipcMain\.handle\s*\(\s*'llm:generate'/);
     expect(MAIN).toMatch(/app\.whenReady\s*\(\s*\)/);
+    expect(MAIN, 'the strip ate the tail of main.mjs — a hole below the last anchor').toMatch(
+      /app\.on\s*\(\s*'window-all-closed'/,
+    );
+    expect(stripReachesEndOfFile(RAW_MAIN), 'the strip ran off the END of the file — a regex literal containing `/*` with no later `*/` swallows everything after it, and every anchor ABOVE it still passes').toBe(true);
     expect(MAIN.length).toBeLessThan(RAW_MAIN.length);
   });
 
-  it('llm.mjs keeps its imports and its narrator factory', () => {
+  it('llm.mjs keeps its imports, its factory AND its last statement', () => {
     expect(LLM).toMatch(/import\s*\{[^}]*getLlama[^}]*\}\s*from\s*'node-llama-cpp'/);
     expect(LLM).toMatch(/export\s+async\s+function\s+createNarrator/);
+    expect(LLM).toMatch(/async generate\(/);
+    expect(LLM, 'the strip ate the tail of llm.mjs — a hole below the last anchor').toMatch(
+      /sequence\.dispose\s*\(\s*\)/,
+    );
+    expect(stripReachesEndOfFile(RAW_LLM), 'the strip ran off the END of the file — a regex literal containing `/*` with no later `*/` swallows everything after it, and every anchor ABOVE it still passes').toBe(true);
     expect(LLM.length).toBeLessThan(RAW_LLM.length);
   });
 });
@@ -87,6 +109,8 @@ describe('llm.mjs instruments every phase of the model load', () => {
   const runCalls = callsTo(LLM, 'inst\\.run');
 
   it('has one instrumented block per phase (the anchor)', () => {
+    // RED against: deleting an `inst.run` wrapper; and renaming the operation so no
+    // block answers to the phase name.
     expect(runCalls.length, 'llm.mjs has no inst.run calls at all').toBeGreaterThanOrEqual(
       PHASES.length,
     );
@@ -113,13 +137,39 @@ describe('llm.mjs instruments every phase of the model load', () => {
     });
   }
 
-  it('passes a real threshold to each phase, not the default of never-warn', () => {
-    for (const [name] of PHASES) {
-      const block = runCalls.find((c) => argsOf(c)[1] === `'${name}'`);
-      const args = argsOf(block);
-      expect(args.length, `${name}: no threshold argument — a slow phase would never warn`).toBe(5);
-      expect(args[4], `${name}: the threshold is not from the derived table`).toMatch(/^THRESHOLDS\./);
+  it('passes a real threshold to EVERY instrumented operation, run and begin alike', () => {
+    // `createInstrument`'s threshold defaults to `Infinity`, so an omitted argument means
+    // the operation can NEVER escalate to `warn`. §4.5's whole argument for shipping at
+    // `info` — "every slow operation is captured because slowness escalates" — depends on
+    // this, and the operation it was missing on was `generate`: the single slowest thing
+    // in the product, where a 60-second generation would have been logged `info` forever.
+    // `run(category, name, data, fn, threshold)` takes five; `begin(category, name, data,
+    // threshold)` takes four. Both put the threshold LAST, so the check is "the last
+    // argument is a threshold AND the count is right" — a dropped threshold shortens the
+    // list, and a threshold moved to the wrong position fails the pattern.
+    const ops = [
+      ...runCalls.map((c) => ['inst.run', c, 5]),
+      ...callsTo(LLM, 'inst\\.begin').map((c) => ['inst.begin', c, 4]),
+    ];
+    expect(ops.length, 'no instrumented operations found — this guard has gone stale').toBe(
+      PHASES.length + 1,
+    );
+    for (const [kind, call, arity] of ops) {
+      const args = argsOf(call);
+      const name = args[1];
+      expect(
+        args.length,
+        `${kind}(${name}): expected ${arity} arguments — a dropped threshold means this ` +
+          'operation can never warn, however slow it gets',
+      ).toBe(arity);
+      expect(args[arity - 1], `${kind}(${name}): the last argument is not a derived threshold`).toMatch(
+        /^THRESHOLDS\./,
+      );
     }
+    // ...and the one `begin` really is the generation, with the generation's threshold.
+    const gen = callsTo(LLM, 'inst\\.begin')[0];
+    expect(argsOf(gen)[1]).toBe("'generate'");
+    expect(argsOf(gen)[3]).toBe('THRESHOLDS.generate');
   });
 
   it('records existedBefore, which is what tells a DOWNLOAD from a cache hit', () => {
@@ -141,6 +191,8 @@ describe("llm.mjs's generate is bracketed, heartbeated, and never swallows", () 
 
   it('the anchor exists', () => {
     expect(LLM.indexOf('async generate('), 'generate() is gone').toBeGreaterThan(-1);
+    // RED against: removing `generate` entirely; and renaming `session.prompt`, which
+    // would leave every guard in this block scanning nothing at all.
     expect(body).toMatch(/session\.prompt\s*\(/);
   });
 
@@ -188,11 +240,15 @@ describe("llm.mjs's generate is bracketed, heartbeated, and never swallows", () 
   });
 
   it('returns totalMs, so the renderer can isolate IPC overhead from the model', () => {
+    // RED against: deleting `totalMs` from the returned object; and computing it but
+    // dropping it before the `return`, which the second assertion catches.
     expect(body, 'generate no longer returns totalMs').toMatch(/totalMs\s*:/);
     expect(body).toMatch(/return\s*\{[\s\S]*totalMs/);
   });
 
   it('still disposes the session and the sequence (the instrument changed nothing)', () => {
+    // RED against: dropping either dispose while wrapping the body in the instrument —
+    // the sequence-pool leak this file already fixed once ("No sequences left").
     expect(body).toMatch(/session\.dispose\s*\(/);
     expect(body).toMatch(/sequence\.dispose\s*\(/);
   });
@@ -238,9 +294,19 @@ describe('main.mjs configures the log FIRST, inside whenReady (G6)', () => {
     expect(argsOf(call)[0], 'configureLogDir is handed something other than that directory').toBe(
       'logDir',
     );
+    // AC-32: the banner must name the APP VERSION, and only `main.mjs` knows it. Dropping
+    // this second argument leaves every real banner reading `version=unknown`, which is
+    // what a mailed-in log needs most in order to be interpretable.
+    expect(
+      argsOf(call)[1],
+      'the session banner is no longer given the app version — every shipped log becomes ' +
+        'unattributable to a build',
+    ).toMatch(/session:\s*\{[^}]*version:\s*app\.getVersion\(\s*\)/);
   });
 
   it('and prints where it is logging, from the module that owns the path', () => {
+    // RED against: printing a locally recomputed path instead of `logFilePath()`; and
+    // reintroducing the module-scope `LOG_FILE` constant, which is G6's own shape.
     expect(MAIN).toMatch(/logFilePath\s*\(\s*\)/);
     expect(MAIN, 'main.mjs imports the old module-scope LOG_FILE constant again').not.toMatch(
       /\bLOG_FILE\b/,
@@ -262,7 +328,74 @@ describe('main.mjs memoises the narrator PROMISE (G37)', () => {
     );
   });
 
+  // =======================================================================================
+  // ⭐ THE DOOR THE CODE ACTUALLY USES (rule 4) — and the one this unit got wrong first.
+  //
+  // Everything else in this describe watches the gate's CONSTRUCTION. `main.mjs` can
+  // construct a perfect gate, keep it fully unit-tested, and then never call it: replacing
+  // `ensureNarrator`'s body with a direct `return createNarrator({...})` left ALL 1602
+  // TESTS GREEN while restoring G37 completely — a second `resolveModelFile`, a second set
+  // of GPU probes at 30 s each, a second 2.5 GB `loadModel`, on the first narrated beat.
+  //
+  // This is the identical mistake `rendererSource.test.ts` records against `runMeta`:
+  // scanning the caller after the value moved one level down. Rule 4 was written at the
+  // top of this file as that scar and then not applied to the single defect this unit
+  // exists to fix.
+  //
+  // So: assert the DELEGATION positively, and assert that `createNarrator` is reachable
+  // from exactly ONE place — the gate's factory. Both are name-independent, which is what
+  // closes the "restore G37 verbatim but rename the variable" bypass that the two negative
+  // guards below cannot see.
+  // =======================================================================================
+  describe('...and ensureNarrator actually goes THROUGH it', () => {
+    const body = bodyOf(MAIN, 'function ensureNarrator(');
+
+    it('delegates to the gate, and does nothing else', () => {
+      expect(
+        body,
+        'ensureNarrator no longer delegates to the gate — every caller would start its own ' +
+          'complete model load, which is G37 in full',
+      ).toMatch(/return\s+narratorGate\.ensure\s*\(\s*trigger\s*,\s*onStatus\s*\)/);
+    });
+
+    it('contains no `await` — the defect IS "assigns after an await"', () => {
+      // Name-independent, so `let pending = null; if (!pending) pending = await ...` is
+      // caught just as `narrator` is. The memoisation is only safe because the assignment
+      // happens synchronously; an `await` anywhere in this function reopens the window.
+      expect(body, 'ensureNarrator awaits again — that is the exact shape of G37').not.toMatch(
+        /\bawait\b/,
+      );
+    });
+
+    it('and does not build a narrator itself', () => {
+      expect(body, 'ensureNarrator constructs a narrator directly, bypassing the gate').not.toMatch(
+        /createNarrator\s*\(/,
+      );
+    });
+
+    it('createNarrator is reachable from EXACTLY ONE place: the gate factory', () => {
+      // The strongest form, and the one that survives any renaming. If a second call site
+      // exists anywhere — a "warm-up" in createWindow, a second gate, a restored
+      // `ensureNarrator` — the count rises and this fires.
+      const calls = callsTo(MAIN, 'createNarrator');
+      expect(
+        calls.length,
+        `createNarrator is called ${calls.length} times; exactly one call site may exist, ` +
+          'and it must be the gate\'s factory — a second one is a second 2.5 GB model load',
+      ).toBe(1);
+      const gate = callsTo(MAIN, 'createNarratorGate')[0];
+      expect(gate, 'the gate is not constructed').toBeDefined();
+      expect(
+        gate.includes(calls[0]),
+        'the one createNarrator call is OUTSIDE the gate factory — the gate memoises nothing',
+      ).toBe(true);
+    });
+  });
+
   it('the gate is created with a factory that is CALLED, not awaited, at the seam', () => {
+    // RED against: `await createNarrator(...)` inside the factory (the gate then
+    // memoises nothing); deleting the gate's own `log: mlog`; and replacing that sink
+    // with a no-op. All three verified.
     const call = callsTo(MAIN, 'createNarratorGate')[0];
     expect(call, 'the gate is not constructed').toBeDefined();
     expect(call, 'the gate no longer builds a narrator').toMatch(/createNarrator\s*\(/);
@@ -270,10 +403,34 @@ describe('main.mjs memoises the narrator PROMISE (G37)', () => {
       call,
       'the factory awaits inside itself before returning — the gate would memoise nothing',
     ).not.toMatch(/await\s+createNarrator/);
-    expect(call, 'the narrator is no longer given a log sink').toMatch(/log:\s*mlog/);
+    // ⚠ NOT `toMatch(/log:\s*mlog/)` over the whole call. That regex is satisfied by the
+    // INNER `createNarrator({ …, log: mlog })`, so deleting the GATE's own `log: mlog`
+    // silences every `narrator load: start / done / FAILED` line and every `call:` counter
+    // — the exact lines HUMAN-CHECKS.md item 3 asks the engineer to read — with the whole
+    // suite green. Asserted as a TOP-LEVEL property of the gate's own config object.
+    const config = argsOf(call)[0];
+    expect(config, 'the gate takes no configuration object').toMatch(/^\{[\s\S]*\}$/);
+    const props = argsOf(`f(${config.trim().replace(/^\{/, '').replace(/\}$/, '')})`);
+    expect(
+      props.some((prop) => /^log\s*:\s*mlog$/.test(prop)),
+      'the GATE has no log sink of its own — it falls back to a no-op, so every ' +
+        '`narrator load:` line and the G37 call counter vanish from the real log',
+    ).toBe(true);
+    // Both sinks must be wired: the gate's and the narrator's. One is not enough.
+    expect((call.match(/log:\s*mlog/g) ?? []).length, 'a log sink is unwired').toBe(2);
+  });
+
+  it('and the gate really is the thing whose counter the log reports', () => {
+    // AC-17: "ensureNarrator increments and logs a call counter". The counter lives in
+    // `narrator-gate.mjs` (where it is behaviourally tested under concurrency); what
+    // `main.mjs` owes is to route every caller through it AND give it a real sink.
+    expect(MAIN).toMatch(/narratorGate\.ensure\s*\(/);
+    expect(MAIN, 'nothing reads the gate readiness').toMatch(/narratorGate\.isReady\s*\(/);
   });
 
   it('every ensureNarrator call names its trigger, so the log says who paid for the load', () => {
+    // RED against: dropping the trigger argument; and passing `'boot'` at every call
+    // site, which makes the generate path indistinguishable in the log.
     const calls = callsTo(MAIN, 'ensureNarrator');
     expect(calls.length, 'nothing calls ensureNarrator any more').toBeGreaterThan(1);
     for (const c of calls) {
@@ -318,9 +475,22 @@ describe('the llm:generate handler times the wait and reports its own failures',
     expect(wait, 'the waiting line is gone').toBeDefined();
     expect(wait, 'the wait is not recorded in milliseconds').toMatch(/waitedMs/);
     expect(argsOf(wait)[0], 'a wait of tens of seconds is not a debug detail').toBe("'warn'");
+    // ⭐ PINNED BY EXPRESSION, NOT BY KEY. `waitedMs: 0` satisfies every assertion above
+    // and satisfies `toMatch(/waitedMs/)` — and it is THE FREEZE NUMBER, the one
+    // HUMAN-CHECKS.md check 3 asks the engineer to read off the log. A key with a
+    // fabricated value is worse than no key: it answers the question wrongly.
+    expect(wait, 'waitedMs is no longer the measured wait — the freeze number is fabricated').toMatch(
+      /waitedMs:\s*Date\.now\(\)\s*-\s*t0/,
+    );
+    expect(body, 'the clock is not started before the wait').toMatch(/const t0\s*=\s*Date\.now\(\)/);
+    expect(body, 'readiness is no longer read from the gate').toMatch(
+      /const wasReady\s*=\s*narratorGate\.isReady\(\s*\)/,
+    );
   });
 
   it('logs before re-throwing, so the main-side cause is not lost across IPC', () => {
+    // RED against: dropping the `throw err` (a silent success across IPC); and swapping
+    // the log and the re-throw, so the cause is gone by the time anything records it.
     const catchAt = body.search(/\}\s*catch\s*\(/);
     expect(catchAt, 'the handler no longer catches — the cause dies at the IPC boundary').toBeGreaterThan(-1);
     const tail = body.slice(catchAt);
@@ -332,9 +502,14 @@ describe('the llm:generate handler times the wait and reports its own failures',
     const failure = callsTo(tail, 'mlog')[0];
     expect(argsOf(failure)[0]).toBe("'error'");
     expect(failure).toMatch(/stack/);
+    expect(failure, 'the failure duration is fabricated rather than measured').toMatch(
+      /ms:\s*Date\.now\(\)\s*-\s*t0/,
+    );
   });
 
   it('the request id reaches the narrator, so a log line can be tied to a request', () => {
+    // RED against: dropping `requestId` from the generate call; and renaming it, which
+    // orphans every `generate:` line from the request that caused it.
     expect(body).toMatch(/generate\s*\(\s*\{[\s\S]*requestId/);
   });
 });
@@ -362,6 +537,27 @@ describe('the window load is timed (G41 shows up here first)', () => {
     expect(body).toMatch(/windowMs\s*>=\s*THRESHOLDS\.windowLoad\s*\?\s*'warn'\s*:\s*'info'/);
     expect(body).not.toMatch(/windowMs\s*<\s*THRESHOLDS\.windowLoad\s*\?\s*'warn'/);
   });
+
+  it('and windowMs is MEASURED — a constant would make the threshold unreachable', () => {
+    // `const windowMs = 0` keeps every assertion above green while guaranteeing the
+    // comparison can never be true. The escalation rule is then decorative.
+    expect(body, 'the window duration is fabricated rather than measured').toMatch(
+      /const windowMs\s*=\s*Date\.now\(\)\s*-\s*windowT0/,
+    );
+    expect(body, 'the window clock is never started').toMatch(/const windowT0\s*=\s*Date\.now\(\)/);
+  });
+
+  it('labels the mode from the dev-server URL, the right way round', () => {
+    // `DEV_URL ? 'file' : 'dev'` is green everywhere else, and every packaged-build log
+    // then claims to be a dev build — the first thing a reader uses to interpret the rest
+    // of the file.
+    expect(body, 'the build mode is no longer labelled').toMatch(
+      /const mode\s*=\s*DEV_URL\s*\?\s*'dev'\s*:\s*'file'/,
+    );
+    expect(body, 'the mode label is inverted — a packaged log would claim to be a dev run').not.toMatch(
+      /DEV_URL\s*\?\s*'file'\s*:\s*'dev'/,
+    );
+  });
 });
 
 describe('the process-level handlers and the level filter', () => {
@@ -370,7 +566,21 @@ describe('the process-level handlers and the level filter', () => {
       const call = callsTo(MAIN, 'mlog').find((c) => c.includes(`'${kind}'`));
       expect(call, `${kind} is no longer logged`).toBeDefined();
       expect(call, `${kind} does not say how long the session had been running`).toMatch(/uptimeMs/);
+      expect(call, `${kind}'s uptime is fabricated rather than measured`).toMatch(
+        /uptimeMs:\s*Date\.now\(\)\s*-\s*BOOT_MS/,
+      );
     }
+  });
+
+  it('the boot line reports a MEASURED bootMs, not a constant', () => {
+    const booted = callsTo(MAIN, 'mlog').find((c) => c.includes("'app booted'"));
+    expect(booted, 'the app-booted line is gone').toBeDefined();
+    expect(booted, 'bootMs is fabricated — the boot timeline would read as instant forever').toMatch(
+      /bootMs:\s*Date\.now\(\)\s*-\s*BOOT_MS/,
+    );
+    expect(MAIN, 'BOOT_MS is no longer captured at module scope').toMatch(
+      /const BOOT_MS\s*=\s*Date\.now\(\)/,
+    );
   });
 
   it('mlog filters by the resolved level rather than writing everything', () => {
@@ -387,6 +597,80 @@ describe('the process-level handlers and the level filter', () => {
 // =========================================================================================
 // The rule that makes a log greppable: A NUMBER LIVES IN `data`, NEVER IN `message`.
 // =========================================================================================
+
+// =========================================================================================
+// AND THE COMPLEMENT OF THAT RULE: a measurement key must carry a MEASUREMENT.
+//
+// Every `data` key here was pinned by NAME and never by VALUE, so `waitedMs: 0`,
+// `bootMs: 0` and `const windowMs = 0` were all green. A key with a fabricated value is
+// worse than a missing key: the log answers the question, and answers it wrongly, and
+// nothing downstream can tell. This is the class guard — the specific expressions are
+// pinned at their own sites above; this catches the NEXT one nobody thought to pin.
+// =========================================================================================
+
+describe('a measurement key never carries a constant', () => {
+  const CONSTANT = /^-?\d+(?:\.\d+)?$/;
+
+  /**
+   * `{ key, value }` for every `…ms`/`…Ms` property of the PAYLOAD argument only.
+   *
+   * Scanning the whole call text would be wrong, and the first version of this guard was:
+   * `inst.run('llm','gpu probe', {}, async () => makeSpawnProbe({ timeoutMs: 30000 }), …)`
+   * has a `timeoutMs` in the operation BODY, and 30000 there is a configuration input, not
+   * a fabricated measurement. Only what is written into the log payload is a measurement.
+   */
+  function payloadMeasurements(callText, payloadIndex) {
+    const payload = argsOf(callText)[payloadIndex] ?? '';
+    const found = [];
+    for (const m of payload.matchAll(/\b([A-Za-z]*[Mm]s)\s*:\s*([^,\n}]+)/g)) {
+      found.push({ key: m[1], value: m[2].trim() });
+    }
+    return found;
+  }
+
+  function assertAllMeasured(seen, floor, where) {
+    expect(seen.length, `no ms-valued keys found in ${where} — this guard has gone stale`).toBeGreaterThan(
+      floor,
+    );
+    for (const { key, value } of seen) {
+      expect(
+        CONSTANT.test(value),
+        `${where}: ${key} is the constant ${value}, not a measurement — the log answers the ` +
+          'question, and answers it wrongly',
+      ).toBe(false);
+    }
+  }
+
+  it('main.mjs: every ms-valued key in an mlog payload is an expression', () => {
+    // `mlog(level, category, message, data)` — the payload is argument 3.
+    assertAllMeasured(callsTo(MAIN, 'mlog').flatMap((c) => payloadMeasurements(c, 3)), 4, 'main.mjs');
+  });
+
+  it('llm.mjs: same, for every instrumented payload', () => {
+    const seen = [
+      ...callsTo(LLM, 'inst\\.run').flatMap((c) => payloadMeasurements(c, 2)),
+      ...callsTo(LLM, 'inst\\.begin').flatMap((c) => payloadMeasurements(c, 2)),
+      ...callsTo(LLM, 'op\\.note').flatMap((c) => payloadMeasurements(c, 0)),
+      ...callsTo(LLM, 'op\\.done').flatMap((c) => payloadMeasurements(c, 0)),
+    ];
+    assertAllMeasured(seen, 0, 'llm.mjs');
+  });
+
+  it('the detector itself finds a planted constant (or it guards nothing)', () => {
+    // Non-vacuity: the sweeps above pass whether or not the matcher works. Prove it fires.
+    const planted = payloadMeasurements("mlog('warn', 'llm', 'x', { requestId, waitedMs: 0 })", 3);
+    expect(planted).toEqual([{ key: 'waitedMs', value: '0' }]);
+    expect(CONSTANT.test(planted[0].value)).toBe(true);
+    // ...and does NOT fire on a real expression, or every payload would be an offender.
+    const real = payloadMeasurements("mlog('warn', 'llm', 'x', { waitedMs: Date.now() - t0 })", 3);
+    expect(CONSTANT.test(real[0].value)).toBe(false);
+    // ...and it reads the PAYLOAD, not the operation body — a configuration constant in a
+    // nested call is not a fabricated measurement.
+    expect(payloadMeasurements("inst.run('llm', 'p', {}, () => f({ timeoutMs: 30000 }), T)", 2)).toEqual(
+      [],
+    );
+  });
+});
 
 describe('no measurement is interpolated into a message', () => {
   it('main.mjs: no mlog call contains a template interpolation anywhere', () => {
