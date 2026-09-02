@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1286 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1320 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -78,7 +78,7 @@ full accessibility including a screen-reader pass; licence, free itch release an
 (`docs/SHIPPING.md`). **The engine writes the choices — the LLM-authored-choices plan is dropped**,
 which shrinks M11 substantially. **Min spec now requires a GPU.**
 
-**#0 `critical-engine-bugs` — ALL THREE UNITS ARE BUILT; TWO ARE MERGED (2026-09-01).** ~~Next up (NOT started — no branch exists yet)~~ — **`#0a combat-core` ✅ merged** (23 defects, 12 commits), **`#0b narration-coverage` ✅ merged** (4 defects, 8 commits), and **`#0c persistence-and-reach` 🔄 BUILT on `agentic/persistence-reach`, awaiting review and merge** (13 register rows, 9 commits). Originally **THREE units** —
+**#0 `critical-engine-bugs` — ✅ COMPLETE. ALL THREE UNITS MERGED (2026-09-02).**  ~~Next up (NOT started — no branch exists yet)~~ — **`#0a combat-core` ✅ merged** (23 defects, 12 commits), **`#0b narration-coverage` ✅ merged** (4 defects, 8 commits), and **`#0c persistence-and-reach` 🔄 BUILT on `agentic/persistence-reach`, awaiting review and merge** (13 register rows, 9 commits). Originally **THREE units** —
 **thirty-three** defects (G11–G47; there is no G38), far too many for one. **This blocks #1.** Full detail in `PLAN.md` #0:
 
 | Unit | Covers |
