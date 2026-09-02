@@ -273,6 +273,49 @@ describe('dispatch() times the step and the whole turn', () => {
     );
   });
 
+  it('and NO call above debug REFERENCES the input object except as `input.kind`', () => {
+    // ⚠ WHAT THIS IS AND IS NOT. The guarantee Appendix A.4 demanded is BEHAVIOURAL and it
+    // lives in `src/log/level.test.ts` ("at info, the ui/choice name payload is not emitted
+    // at all"), which is identifier-independent and does not care how the payload was
+    // built. THIS guard is belt-and-braces over that one: a source scan, and therefore
+    // bounded by what a source scan can see.
+    //
+    // It catches every DIRECT reference: `{ input }`, `{ input: input }`, `{ ...input }`,
+    // and `{ name: (input as {name?: string}).name }`. It CANNOT catch an alias
+    // (`const chosen = input; log.info(..., { chosen })`), because that needs dataflow, not
+    // pattern matching. That limit is stated rather than papered over — the behavioural
+    // test is what actually holds the line, and a guard whose limits are written down is
+    // worth more than one whose limits are discovered later.
+    const above = logCalls(SOURCE).filter((c) => !c.startsWith('log.debug('));
+    expect(above.length, 'no calls above debug — this guard has gone stale').toBeGreaterThan(5);
+    for (const call of above) {
+      // Every mention of the identifier `input` must be the `.kind` projection.
+      // The negative lookahead skips a property KEY (`{ input: ... }`) — a key is a name,
+      // not a read of the object. Only the VALUE side is a reference.
+      const mentions = [...call.matchAll(/\binput\b(?!\s*:)(\s*\.\s*[A-Za-z_$][\w$]*)?/g)];
+      for (const m of mentions) {
+        expect(
+          (m[1] ?? '').replace(/\s+/g, ''),
+          'a call above `debug` reads something other than `input.kind` off the player input ' +
+            `— the typed name would reach a packaged log: ${call.slice(0, 70)}`,
+        ).toBe('.kind');
+      }
+    }
+    // Non-vacuity, both directions.
+    const readsOnlyKind = (text: string): boolean =>
+      [...text.matchAll(/\binput\b(?!\s*:)(\s*\.\s*[A-Za-z_$][\w$]*)?/g)].every(
+        (m) => (m[1] ?? '').replace(/\s+/g, '') === '.kind',
+      );
+    expect(readsOnlyKind("log.info('ui','turn',{ input: input.kind, ms })")).toBe(true);
+    expect(readsOnlyKind("log.info('ui','turn',{ input })")).toBe(false);
+    expect(readsOnlyKind("log.info('ui','turn',{ ...input })")).toBe(false);
+    expect(readsOnlyKind("log.info('ui','x',{ name: (input as {name?: string}).name ?? null })")).toBe(
+      false,
+    );
+    // ...and the `debug` call this excludes really does reference it, so the filter matters.
+    expect(logCalls(SOURCE).some((c) => c.startsWith('log.debug(') && !readsOnlyKind(c))).toBe(true);
+  });
+
   it('and NO call above debug passes the whole input object — the exhaustive form', () => {
     // ⚠ Pinning only the `'choice'` line is not enough. The name reaches the log through
     // the WHOLE `input` object, and any future `log.info('ui','turn',{ input })` would put

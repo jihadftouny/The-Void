@@ -166,25 +166,82 @@ describe('regular-expression literals are consumed whole', () => {
     }
   });
 
-  it('the real scanned files are byte-identical apart from their comments', () => {
-    // The end-to-end check that the lexer did not start eating code: every non-comment
-    // line of every scanned file must survive verbatim.
-    for (const file of ['log.mjs', 'main.mjs', 'llm.mjs', 'instrument.mjs', 'narrator-gate.mjs']) {
-      const raw = fs.readFileSync(path.join(HERE, file), 'utf8');
+  // =======================================================================================
+  // THE SWEEP THAT DOES NOT CARE WHY THE LEXER LOST ITS PLACE.
+  //
+  // The regex heuristic is not perfect and never will be: telling a regex from a division
+  // is context-dependent, and three contexts still read a real regex as a division
+  // (`function f() {}` then a regex on the next line; a regex as the body of an `if` or a
+  // `for` with no braces). In those, a `/*` inside the regex body opens a hole and swallows
+  // code. Chasing more keyword contexts keeps the class open-ended forever.
+  //
+  // This is the guard that closes it instead, because it does not care WHY: every
+  // non-comment line of every scanned file must survive the strip verbatim. Whatever the
+  // lexer mis-reads, the lines it swallows go missing and this fires.
+  //
+  // ⚠ ITS FILE LIST IS THE POINT. It used to name five Electron files, so the hole was live
+  // in `src/desktop/game.ts` — a demonstrated mutation hid `const __t0 = performance.now()`
+  // (a second clock seam, which A.6.2 forbids) behind a regex hole and `npx vitest run
+  // src/log` stayed green. The list is now DERIVED, so a file that any guard starts
+  // scanning is covered without anyone remembering to add it.
+  // =======================================================================================
+
+  /** Every shipping source file that any source guard on this branch strips. */
+  function everyScannedFile() {
+    const files = [];
+    // Named explicitly: scanned by a guard, but not part of a directory sweep.
+    for (const rel of [
+      'electron/log.mjs',
+      'electron/main.mjs',
+      'electron/llm.mjs',
+      'electron/instrument.mjs',
+      'electron/narrator-gate.mjs',
+      'scripts/desktop-dev.mjs',
+      'scripts/dev-server.mjs',
+      'vite.config.ts',
+    ]) {
+      files.push(rel);
+    }
+    // Derived: every shipping `.ts` under the directories the purity scan, the clock-seam
+    // scan and the renderer guards walk.
+    for (const dir of ['game', 'llm', 'render', 'desktop', 'storage', 'log']) {
+      const abs = path.join(HERE, '..', 'src', dir);
+      for (const name of fs.readdirSync(abs)) {
+        if (!name.endsWith('.ts') || name.endsWith('.test.ts')) continue;
+        files.push(`src/${dir}/${name}`);
+      }
+    }
+    return files;
+  }
+
+  it('EVERY scanned file is byte-identical apart from its comments', () => {
+    const files = everyScannedFile();
+    expect(files.length, 'the scanned-file list collapsed').toBeGreaterThan(60);
+    // The three that a narrower list previously missed, named so a silent shrink fails.
+    for (const required of ['src/desktop/game.ts', 'scripts/desktop-dev.mjs', 'vite.config.ts']) {
+      expect(files, `${required} is no longer swept`).toContain(required);
+    }
+
+    let totalChecked = 0;
+    for (const file of files) {
+      const raw = fs.readFileSync(path.join(HERE, '..', file), 'utf8');
       const stripped = stripComments(raw);
+      expect(stripReachesEndOfFile(raw), `${file}: the strip ran off the end`).toBe(true);
       let checked = 0;
       for (const line of raw.split('\n')) {
         const t = line.trim();
         if (t === '' || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue;
         // A line with a TRAILING comment is legitimately shortened by the strip, so it
-        // cannot be compared whole. Skipped rather than half-compared — the floor below
-        // keeps this from quietly becoming a scan of nothing.
+        // cannot be compared whole. Skipped rather than half-compared — the floors below
+        // keep this from quietly becoming a scan of nothing.
         if (t.includes('//')) continue;
         expect(stripped, `${file}: the scanner ate "${t}"`).toContain(t);
         checked += 1;
       }
-      expect(checked, `${file}: no code lines checked`).toBeGreaterThan(20);
+      expect(checked, `${file}: no code lines checked`).toBeGreaterThan(3);
+      totalChecked += checked;
     }
+    expect(totalChecked, 'the sweep checked almost nothing').toBeGreaterThan(2000);
   });
 });
 
