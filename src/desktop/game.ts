@@ -11,8 +11,9 @@ import type { GameState, GameInput, Awaiting } from '../game/game.ts';
 import type { PlayerClass } from '../game/player.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
+import type { ActiveCondition } from '../game/condition.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
-import { loadRun, saveRun, clearRun } from './persist.ts';
+import { loadRun, saveRun, clearRun, type RunMeta } from './persist.ts';
 import {
   snapshotUnlocks,
   classUnlocked,
@@ -35,14 +36,19 @@ import {
   dealView,
   draftCards,
   chestReveal,
+  isRunOver,
+  runSummaryView,
+  fallbackNarration,
+  potionControl,
 } from './view-model.ts';
 import type { ItemView } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 // The shared render foundation (M-UI2 `ui-foundation`).
 import { applyTheme } from '../render/theme.ts';
-import { buttonModel, rowModel } from '../render/component-model.ts';
-import { appendButton, appendRow, picker } from '../render/components.ts';
+import { buttonModel, rowModel, conditionChips } from '../render/component-model.ts';
+import { appendButton, appendRow, appendLogLine, chip, picker } from '../render/components.ts';
+import { logLines, startsNewBattle } from '../render/log-model.ts';
 
 interface GenStats { text: string; tokens: number; tokensPerSecond: number; ttftMs: number }
 interface VoidApi {
@@ -59,7 +65,9 @@ const $ = <T extends HTMLElement>(id: string): T => {
 };
 const titleEl = $('title');
 const statusEl = $('status');
+const noticeEl = $('notice');
 const narrationEl = $('narration');
+const logEl = $('log');
 const choicesEl = $('choices');
 const sheetEl = $('sheet');
 
@@ -86,7 +94,20 @@ window.addEventListener('unhandledrejection', (ev) =>
 
 // M13 meta-progression: the persistent cross-run unlock store, loaded once at boot. Read at
 // class-select (gating) and run start (snapshot); grown at run end (applyRunSummary + persist).
-let unlockStore = loadUnlockStore();
+//
+// G3: the load now REPORTS what it found. This is the only copy of everything the player has
+// ever earned, and one unparseable byte used to replace all of it with an empty store —
+// silently, with the class select simply back to Enforcer-only and no explanation. When the
+// store was recovered from its backup, or could not be recovered at all, say so where the
+// player will actually see it. `textContent`, never markup.
+const unlockLoad = loadUnlockStore();
+let unlockStore = unlockLoad.store;
+if (unlockLoad.lost !== undefined) {
+  noticeEl.textContent = unlockLoad.lost;
+  log.warn('unlocks', 'unlock store did not load cleanly', { source: unlockLoad.source });
+} else {
+  log.info('unlocks', 'unlock store loaded', { source: unlockLoad.source });
+}
 let runSeed = Date.now() >>> 0;
 let state: GameState = createGame(runSeed, snapshotUnlocks(unlockStore));
 let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
@@ -94,9 +115,9 @@ let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
 // terminal phase. Reset per run. `runApplied` guards against a double-apply (ending -> game-over).
 let runSummary: RunSummary = emptyRunSummary();
 let runApplied = false;
-// The ids most recently unlocked (for the deferred in-UI notification — NEEDS-HUMAN).
+// The ids most recently unlocked. Read by the end-of-run summary screen (G2), which is what
+// finally consumes this — it was written and never read, annotated `void`, since M13.
 let lastNewlyUnlocked: NewlyUnlocked | null = null;
-void lastNewlyUnlocked; // consumed by the deferred unlock-notification UI (out of scope here)
 
 /** The class-select buttons, gated by the unlock store (Enforcer always shown). */
 const CLASS_BUTTONS: readonly { classId: PlayerClass; label: string }[] = [
@@ -106,6 +127,18 @@ const CLASS_BUTTONS: readonly { classId: PlayerClass; label: string }[] = [
   { classId: 'Penitent', label: 'Penitent — devotion in blood' },
   { classId: 'Hollow', label: 'Hollow — the Void within' },
 ];
+
+/**
+ * The renderer-side run bookkeeping that must be SAVED alongside the engine state — G19.
+ * `runSummary` decides which feats fire at the end of the run and `runSeed` is the run
+ * identity `applyRunSummary` records; neither lives in `GameState`, so neither survived a
+ * save. Resuming therefore restarted the feat tally from zero and quietly forfeited
+ * everything the run had earned (reproduced: seed 4242 unlocks the Neuromancer played
+ * straight through, and unlocks nothing when resumed from its own act-2 state).
+ */
+function runMeta(): RunMeta {
+  return { runSummary, runSeed };
+}
 
 /**
  * At a terminal phase (an ending, or game-over), fold the run's summary into the persistent
@@ -145,27 +178,81 @@ function retheme(): void {
   applyTheme(document.documentElement, state.place);
 }
 
+/**
+ * The HUD: who you are, how you are doing, and — G28(a) — WHAT IS CURRENTLY HAPPENING TO YOU.
+ *
+ * G28(b): this was built by interpolating strings into `sheetEl.innerHTML`, and two of those
+ * strings are attacker-controlled-ish content: the player's own typed name (`<b>${p.name}</b>`)
+ * and the enemy's generated full name. A name of `<img onerror=...>` was live markup in the
+ * page. It is all `textContent` now, and a source guard in `rendererSource.test.ts` keeps it
+ * that way — the fix is one commit, the guard is what makes it stay fixed.
+ *
+ * G28(a): condition chips. `conditionChips` / `chip` have existed, tested, since M-UI2, and
+ * nothing imported them — so the player could be poisoned, fractured and about to lose their
+ * turn to Insanity, and the only tell was the HP number moving. They now render for the
+ * player always, and for the enemy during a battle, ordered control -> harm -> boon so the
+ * thing that stops you acting reads first.
+ */
 function renderSheet(): void {
   // The live battle combatant during a battle (HP ticks down each round), else
   // the snapshot — the top-level state.player is stale mid-battle. See view-model.
   const p = displayPlayer(state);
-  if (!p) {
-    sheetEl.innerHTML = '';
-    return;
-  }
-  const lines = [
-    `<b>${p.name}</b>`,
-    `${p.classId}`,
-    `HP ${p.hp}/${p.maxHp}`,
-    `XP ${p.xp}`,
-    `Act ${state.act}`,
-    `Pots ${p.pots} · Rests ${p.restsLeft}`,
-  ];
+  sheetEl.replaceChildren();
+  if (!p) return;
+
+  /** One HUD line. `textContent` — never markup, whatever the string contains. */
+  const line = (text: string, className?: string): void => {
+    const el = document.createElement('div');
+    if (className) el.className = className;
+    el.textContent = text;
+    sheetEl.appendChild(el);
+  };
+  /**
+   * A combatant's condition row. Always appended, even when empty — `#sheet .chips:empty` in
+   * game.css collapses it, exactly as `#log:empty` and `#notice:empty` already do.
+   *
+   * The early return this replaces (`if (models.length === 0) return;`) was a POLARITY HOLE
+   * of the same family as the three the test report named, found by sweeping for the shape
+   * rather than waiting to be told: inverting it renders the row only when there is nothing
+   * to put in it, so condition chips never appear again — G28(a), silently restored — and
+   * every source scan that merely asserts `chips(...)` is called stays green.
+   *
+   * Deleting the branch is a better answer than guarding it. A branch that cannot be written
+   * cannot be inverted, and CSS was already doing this job for two other elements.
+   */
+  const chips = (active: readonly ActiveCondition[]): void => {
+    const row = document.createElement('div');
+    row.className = 'chips';
+    for (const model of conditionChips(active)) row.appendChild(chip(model));
+    sheetEl.appendChild(row);
+  };
+
+  line(p.name, 'who');
+  line(p.classId);
+  line(`HP ${p.hp}/${p.maxHp}`);
+  line(`XP ${p.xp}`);
+  line(`Act ${state.act}`);
+  line(`Pots ${p.pots} · Rests ${p.restsLeft}`);
+  chips(p.activeConditions);
+
   if (state.phase.kind === 'battle') {
+    sheetEl.appendChild(document.createElement('hr'));
     const e = state.phase.battle.enemy;
-    lines.push('<hr/>', `<span class="foe">${e.fullName}</span>`, `HP ${e.hp}/${e.maxHp}`);
+    line(e.fullName, 'foe');
+    line(`HP ${e.hp}/${e.maxHp}`);
+    chips(e.activeConditions);
   }
-  sheetEl.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
+}
+
+/**
+ * Append this step's mechanical beats to the combat log, resetting it when a new fight
+ * begins — G18. Everything about WHICH beats and WHAT they read is decided by the pure
+ * `logLines` / `startsNewBattle`; this only appends elements and keeps the view at the bottom.
+ */
+function renderLog(events: readonly GameEvent[]): void {
+  if (startsNewBattle(events)) logEl.replaceChildren();
+  for (const line of logLines(events)) appendLogLine(logEl, line);
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
 async function narrate(events: readonly GameEvent[]): Promise<void> {
@@ -211,10 +298,17 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
   } catch (err) {
     // Resilience: if the model fails, fall back to the plain facts so the game
     // remains fully playable (engine is authoritative regardless).
+    //
+    // G26 — WHICH plain facts. This used to read `prompt.user.split('\n\n')[0]`, and on any
+    // step with story memory that first block is the CONTINUITY RECAP: the run summary and
+    // the last five beats. So a model failure on the turn you landed a critical hit printed
+    // "Across this descent you have felled 1 foe / Recent moments…" and never a word about
+    // the crit. `fallbackNarration` reads the facts `buildNarrationPrompt` already computed
+    // for THIS beat, so the fallback describes what just happened.
     log.error('llm', 'narrate:failed', {
       message: err instanceof Error ? err.message : String(err),
     });
-    block.textContent = prompt.user.split('\n\n')[0] ?? '(the Void is silent)';
+    block.textContent = fallbackNarration(prompt);
     block.classList.add('fallback');
   }
 }
@@ -271,7 +365,7 @@ function renderInventoryScreen(): void {
         const r = unequipSlot(state, s.slot);
         if (r.ok) {
           state = r.state;
-          saveRun(state, memory);
+          saveRun(state, memory, runMeta());
         }
         rerender();
       });
@@ -298,7 +392,7 @@ function renderInventoryScreen(): void {
         const r = equipFromBackpack(state, b.index);
         if (r.ok) {
           state = r.state;
-          saveRun(state, memory);
+          saveRun(state, memory, runMeta());
         }
         rerender();
       });
@@ -403,21 +497,29 @@ async function dispatch(input: GameInput): Promise<void> {
       act: state.act,
     });
     renderSheet();
+    renderLog(r.events); // G18: the dice and the damage, before the prose that cannot say them
     showThinking();
     await narrate(r.events);
     memory = rememberBeat(memory, r.events); // remember AFTER narrating
-    renderChoices(r.awaiting);
-    // M13: at a terminal phase (an ending, or game-over) grow + persist the unlock store once.
-    if (r.state.phase.kind === 'ending' || r.awaiting === 'game-over') {
+    // G2: ONE predicate decides both halves of "the run is over". The apply used to key off
+    // `phase.kind === 'ending'` while the clear keyed off `awaiting === 'game-over'`, and the
+    // disagreement between those two IS G2: a victory settles at the `ending` phase, so it
+    // took the autosave branch and left a RESUMABLE save behind. Relaunching after an
+    // ascension then offered "A descent lies unfinished" — pointing at a run already won.
+    // `isRunOver` is exhaustive over `Phase['kind']`, so an eighteenth phase fails the build
+    // rather than silently defaulting to "still going".
+    //
+    // This runs BEFORE `renderChoices` on purpose: the end-of-run screen reports what the run
+    // unlocked, and `applyRunOutcome` is what computes it.
+    if (isRunOver(r.state.phase)) {
       applyRunOutcome();
-    }
-    if (r.awaiting === 'game-over') {
       clearRun();
-      log.info('save', 'run cleared (game over)');
+      log.info('save', 'run cleared (the run is over)', { phase: r.state.phase.kind });
     } else {
-      saveRun(state, memory);
+      saveRun(state, memory, runMeta());
       log.debug('save', 'run autosaved');
     }
+    renderChoices(r.awaiting);
   } finally {
     busy = false;
   }
@@ -435,6 +537,7 @@ function start(): void {
   runApplied = false;
   lastNewlyUnlocked = null;
   narrationEl.innerHTML = '';
+  logEl.replaceChildren();
   retheme();
   renderSheet();
   renderChoices('title');
@@ -538,7 +641,13 @@ function renderChoices(awaiting: Awaiting): void {
           }
         });
       }
-      choice('Potion', () => void dispatch({ kind: 'battle-action', action: 'potion' }));
+      // The Potion button carries its remaining count, and is INERT at zero — a disabled
+      // ButtonModel gets no click handler at all, so it cannot dispatch a step that resolves
+      // nothing. (The other two refusals — full HP, and the Void Pact relic — stay engine
+      // decisions, and the combat log now reports them.)
+      appendButton(choicesEl, potionControl(p), () =>
+        void dispatch({ kind: 'battle-action', action: 'potion' }),
+      );
       choice('Run', () => void dispatch({ kind: 'battle-action', action: 'run' }));
       break;
     }
@@ -594,9 +703,21 @@ function renderChoices(awaiting: Awaiting): void {
       choice('Rest here', () => void dispatch({ kind: 'rest-decision', accept: true }));
       choice('Press on', () => void dispatch({ kind: 'rest-decision', accept: false }));
       break;
-    case 'game-over':
+    case 'game-over': {
+      // G2 / GAME-DESIGN.md §22.15: a finished run gets a WRITTEN RECORD. This is the
+      // FACTUAL half — outcome, depth, bosses by name, spares, unlocks by name. The Void's
+      // own narrated account of your descent is G10, which belongs to PLAN.md #6.
+      const view = runSummaryView(runSummary, state.player, lastNewlyUnlocked);
+      const wrap = document.createElement('div');
+      wrap.className = 'vm-screen run-summary';
+      const head = document.createElement('h3');
+      head.textContent = view.headline; // TEXT, never markup — the rows go through appendRow
+      wrap.appendChild(head);
+      for (const row of view.rows) appendRow(wrap, rowModel(row.label, row.value));
+      choicesEl.appendChild(wrap);
       choice('Descend again', () => start());
       break;
+    }
   }
 }
 
@@ -618,6 +739,24 @@ if (saved) {
   log.info('save', 'resumable run found', { act: saved.state.act, phase: saved.state.phase.kind });
   state = saved.state;
   memory = saved.memory;
+  // G19 -> G1: restore what the run has EARNED, not just where it is. Without this the
+  // resumed run restarts its feat tally at zero and every boss felled, foe spared and floor
+  // reached before the quit is forfeited at the end of the run.
+  if (saved.meta) {
+    runSummary = saved.meta.runSummary;
+    runSeed = saved.meta.runSeed;
+    log.info('save', 'run meta-progression restored', {
+      maxAct: runSummary.maxAct,
+      bossKills: runSummary.bossKills,
+      spares: runSummary.spareCount,
+    });
+  } else {
+    // A v1 envelope, written before the envelope carried any of this. There is no installed
+    // base (`desktop:pack` had never succeeded until 2026-08-31 — G44), so in practice this
+    // is the author's own local save. Say so ONCE rather than losing it in silence, which is
+    // what the whole G19 defect was.
+    log.warn('save', 'legacy save (envelope v1): this run starts its feat tally from scratch');
+  }
   retheme(); // a resumed run may be deep in the descent — adopt ITS floor, not floor 0
   renderSheet();
   renderResume();

@@ -12,9 +12,19 @@ import {
   dealView,
   draftCards,
   chestReveal,
+  isRunOver,
+  runSummaryView,
+  fallbackNarration,
+  potionControl,
 } from './view-model.ts';
-import { createGame } from '../game/game.ts';
-import type { GameState } from '../game/game.ts';
+import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
+import { createGame, step } from '../game/game.ts';
+import type { GameState, Phase } from '../game/game.ts';
+import type { GameEvent } from '../game/gameEvent.ts';
+import { emptyRunSummary, FEATS, type RunSummary, type NewlyUnlocked } from '../game/unlockStore.ts';
+import { BOSSES } from '../game/boss.ts';
+import { CONDITION_DATA } from '../game/condition.ts';
+import { getAllRelics, getAllUniques, getAllConsumables } from '../game/item.ts';
 import { createPlayer } from '../game/player.ts';
 import type { Player } from '../game/player.ts';
 import { buildRandomBattle } from '../game/encounter.ts';
@@ -333,6 +343,324 @@ describe('draftCards', () => {
       { index: 1, label: '+1 DEX' },
       { index: 2, label: 'Learn Intimidate' },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G33 — the charge discount is real through the UI, and the view AGREES with the engine.
+//
+// `overclock-chip` (relics.json) is a ring carrying `skillChargeDiscount: 1`. The Enforcer
+// core pool is heavyStrike (base cost 2) and brace (base cost 1), so with the chip on and
+// ONE charge banked, heavyStrike costs 1 and IS castable. Every number below is read off
+// relics.json / skill.ts, not off the implementation.
+// ---------------------------------------------------------------------------
+
+/** The snapshot with a charge-discount ring on and a single charge banked. */
+const discounted: Player = {
+  ...snapshot,
+  skillCharges: 1,
+  inventory: {
+    slots: { ...snapshot.inventory.slots, ring: { defId: 'overclock-chip' } },
+    backpack: [],
+  },
+};
+/** The same player, same charges, NO ring — the non-vacuity control. */
+const undiscounted: Player = { ...snapshot, skillCharges: 1 };
+
+/** Dispatch one cast through the REAL engine `step` from a started battle. */
+function castThroughStep(player: Player, skillId: 'heavyStrike'): GameEvent[] {
+  const { rng } = createRng(1234);
+  const battle = { ...buildRandomBattle(player, 1, rng), player };
+  const state: GameState = {
+    ...hub(player),
+    phase: { kind: 'battle', battle, started: true, final: false },
+  };
+  return step(state, { kind: 'battle-action', action: { kind: 'cast', skillId } }).events;
+}
+
+describe('castOptions — the equipped charge discount (G33)', () => {
+  it('reports the DISCOUNTED cost, and marks the skill affordable at that cost', () => {
+    const heavy = castOptions(discounted).find((c) => c.skillId === 'heavyStrike');
+    expect(heavy).toEqual({
+      skillId: 'heavyStrike',
+      name: 'Heavy Strike',
+      chargeCost: 1, // base 2, minus the chip's 1
+      affordable: true, // 1 banked charge pays a 1-charge cost
+    });
+    // The floor at 0: brace's base cost is 1, so the same chip takes it to free.
+    expect(castOptions(discounted).find((c) => c.skillId === 'brace')?.chargeCost).toBe(0);
+  });
+
+  it('and the ENGINE agrees — the same cast really resolves', () => {
+    // This is the actual defect: the picker said "unaffordable" about a cast the engine
+    // was happy to run, so through the real UI the relic did nothing.
+    const kinds = castThroughStep(discounted, 'heavyStrike').map((e) => e.kind);
+    expect(kinds).not.toContain('cast-unavailable');
+    expect(kinds).toContain('skill-cast');
+  });
+
+  it('NON-VACUITY: without the ring the same cast at the same charge is refused', () => {
+    // If this were also castable, the assertion above would prove nothing about the chip.
+    expect(castOptions(undiscounted).find((c) => c.skillId === 'heavyStrike')).toEqual({
+      skillId: 'heavyStrike',
+      name: 'Heavy Strike',
+      chargeCost: 2,
+      affordable: false,
+    });
+    const kinds = castThroughStep(undiscounted, 'heavyStrike').map((e) => e.kind);
+    expect(kinds).toContain('cast-unavailable');
+    expect(kinds).not.toContain('skill-cast');
+  });
+
+  it('the SHEET and the PICKER cannot disagree — both read the one engine helper', () => {
+    const sheetCosts = new Map(characterSheet(discounted).skills.map((s) => [s.skillId, s.chargeCost]));
+    for (const opt of castOptions(discounted)) {
+      expect(sheetCosts.get(opt.skillId)).toBe(opt.chargeCost);
+    }
+    // Non-vacuous: the discounted costs really differ from the undiscounted ones.
+    const plainCosts = new Map(castOptions(undiscounted).map((s) => [s.skillId, s.chargeCost]));
+    expect([...sheetCosts.values()]).not.toEqual([...plainCosts.values()]);
+  });
+});
+
+describe('characterSheet — the player name, and an unknown skill (G28)', () => {
+  it('carries the name through verbatim, as a LABEL', () => {
+    // Nobody had ever asserted that the sheet renders the name at all. The probe is
+    // deliberately odd-looking so a "close enough" match cannot pass.
+    const named: Player = { ...snapshot, name: 'Zzyzx-Qwph' };
+    expect(characterSheet(named).name).toBe('Zzyzx-Qwph');
+  });
+
+  it('does not mangle, escape, or strip a name that looks like markup', () => {
+    // The view-model half of G28(b): the value must arrive at the renderer EXACTLY as the
+    // player typed it, so the renderer can set it as textContent. (That the renderer really
+    // does set it as text rather than interpolate it is guarded separately, on the source.)
+    const markup = '<b>&"</b>';
+    expect(characterSheet({ ...snapshot, name: markup }).name).toBe(markup);
+  });
+
+  it('survives an id in skillPool that this build does not know (G28(e))', () => {
+    // `resolveSkill` is typed to return a SkillDef but is `SKILLS[id]` underneath, so an
+    // unknown id handed back `undefined` and reading `.id` off it threw — losing the whole
+    // sheet instead of one row.
+    const broken: Player = { ...snapshot, skillPool: ['heavyStrike', 'no-such-skill', 'brace'] };
+    expect(() => characterSheet(broken)).not.toThrow();
+    const rows = characterSheet(broken).skills.map((s) => s.skillId);
+    expect(rows).toEqual(['heavyStrike', 'brace']); // the good rows survive; the bad one is dropped
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G2 — a finished run is finished, and says what it was.
+// ---------------------------------------------------------------------------
+
+describe('isRunOver — exhaustive over every phase', () => {
+  // Written out by hand from the `Phase` union in game.ts: 17 members, of which exactly two
+  // are terminal. Listing them here rather than deriving them from the implementation is the
+  // point — this is the independent witness that the map has the right VALUES, while the
+  // `Record<Phase['kind'], boolean>` type is the witness that it has the right KEYS.
+  const CONTINUES: Phase[] = [
+    { kind: 'title' },
+    { kind: 'name-entry' },
+    { kind: 'class-select', name: 'X' },
+    { kind: 'stats-roll', name: 'X', classId: 'Enforcer', stats: fixedStats },
+    { kind: 'main-menu' },
+    { kind: 'battle', battle: buildRandomBattle(snapshot, 1, createRng(3).rng), started: true, final: false },
+    { kind: 'battle-victory', final: false },
+    { kind: 'rest', restOffered: true },
+    { kind: 'deal', deal: { pool: 'standard', cost: { kind: 'hp', amount: 1 }, reward: { kind: 'heal', amount: 1 } } },
+    { kind: 'chest', loot: [] },
+    { kind: 'act-outro', newAct: 2 },
+    { kind: 'level-up-draft', offers: [] },
+    { kind: 'level-up-result' },
+    { kind: 'act-intro', newAct: 2 },
+    { kind: 'verdict', outcome: 'grace' },
+  ];
+  const ENDS: Phase[] = [
+    { kind: 'ending', endingType: 'grace' },
+    { kind: 'game-over' },
+  ];
+
+  it('covers all seventeen phase kinds, and only two of them end the run', () => {
+    expect(CONTINUES.length + ENDS.length).toBe(17);
+    expect(new Set([...CONTINUES, ...ENDS].map((p) => p.kind)).size).toBe(17);
+  });
+
+  it('is false for every phase that is not the end', () => {
+    for (const phase of CONTINUES) {
+      expect(isRunOver(phase), `${phase.kind} must not end the run`).toBe(false);
+    }
+  });
+
+  it('is true for the ENDING phase — which is the whole of G2', () => {
+    // A victory settles at `ending`, not at `game-over`. The renderer keyed its clear off
+    // `awaiting === 'game-over'`, so a win took the AUTOSAVE branch and left a resumable
+    // save; relaunching offered "A descent lies unfinished" about a run already won.
+    for (const phase of ENDS) {
+      expect(isRunOver(phase), `${phase.kind} must end the run`).toBe(true);
+    }
+  });
+});
+
+describe('runSummaryView — the factual record of a finished run', () => {
+  const won: RunSummary = {
+    ...emptyRunSummary(),
+    bossKills: ['kingpin', 'reflection'],
+    spareCount: 3,
+    maxAct: 4,
+    endingType: 'grace',
+  };
+  const unlocked: NewlyUnlocked = {
+    classes: ['Neuromancer'],
+    skills: [],
+    relics: ['overclock-chip'],
+    families: ['cyberEnforcers'],
+    affixes: ['warped'],
+    feats: ['unlock-neuromancer', 'first-boss-kill'],
+  };
+
+  it('states each of the three outcomes in player words', () => {
+    const grace = runSummaryView({ ...won, endingType: 'grace' }, snapshot, null);
+    const damned = runSummaryView({ ...won, endingType: 'damnation' }, snapshot, null);
+    const dead = runSummaryView({ ...emptyRunSummary(), maxAct: 2 }, snapshot, null);
+    expect(grace.headline).toContain('grace');
+    expect(damned.headline).toContain('damnation');
+    // The third case must NOT claim either ending.
+    expect(dead.headline).not.toContain('grace');
+    expect(dead.headline).not.toContain('damnation');
+    // ...and all three must actually say something.
+    for (const h of [grace.headline, damned.headline, dead.headline]) {
+      expect(h.length).toBeGreaterThan(0);
+    }
+    expect(new Set([grace.headline, damned.headline, dead.headline]).size).toBe(3);
+  });
+
+  it('reports depth, bosses BY NAME, and spares', () => {
+    const view = runSummaryView(won, snapshot, unlocked);
+    const values = view.rows.map((r) => r.value).join(' | ');
+    expect(values).toContain('Act 4 of 5');
+    // BOSSES.kingpin.name / BOSSES.reflection.name, from boss.ts.
+    expect(values).toContain('Undercity Kingpin');
+    expect(values).toContain('The Reflection');
+    expect(view.rows.find((r) => r.label === 'Foes spared')?.value).toBe('3');
+  });
+
+  it('names newly unlocked classes and relics, and prints no internal id', () => {
+    const view = runSummaryView(won, snapshot, unlocked);
+    const text = [view.headline, ...view.rows.map((r) => `${r.label} ${r.value}`)].join(' | ');
+    expect(text).toContain('Neuromancer');
+    expect(text).toContain('Overclock Chip'); // relics.json name, not `overclock-chip`
+    // The full id sweep. Every id set the summary could conceivably touch.
+    const ids = [
+      ...getAllRelics().map((r) => r.id),
+      ...getAllUniques().map((u) => u.id),
+      ...getAllConsumables().map((c) => c.id),
+      ...Object.keys(CONDITION_DATA),
+      ...FEATS.map((f) => f.id),
+      ...Object.keys(BOSSES),
+      // The gradual-reveal machinery the player must never be shown.
+      ...unlocked.families,
+      ...unlocked.affixes,
+    ];
+    for (const id of ids) {
+      expect(text, `raw id "${id}" reached the player`).not.toContain(id);
+    }
+    // NON-VACUITY: the sweep is meaningless unless the ids it looks for are real strings that
+    // COULD have appeared — `overclock-chip` and `unlock-neuromancer` are both in this run's
+    // own unlock record, and `kingpin` is in its own boss-kill list.
+    expect(ids).toContain('overclock-chip');
+    expect(ids).toContain('unlock-neuromancer');
+    expect(ids).toContain('kingpin');
+  });
+
+  it('handles a run that unlocked nothing, and one that never left the threshold', () => {
+    const nothing = runSummaryView(emptyRunSummary(), snapshot, null);
+    expect(nothing.rows.some((r) => r.label === 'Newly unlocked')).toBe(false);
+    expect(nothing.rows.find((r) => r.label === 'Depth reached')?.value).toMatch(/threshold/);
+    expect(nothing.rows.find((r) => r.label === 'Bosses felled')?.value).toBe('none');
+    // And a run with no player at all (quit before creation) must not throw.
+    expect(() => runSummaryView(emptyRunSummary(), null, null)).not.toThrow();
+  });
+
+  it('is PURE — it mutates neither the summary nor the unlock record', () => {
+    const summaryBefore = JSON.parse(JSON.stringify(won)) as RunSummary;
+    const unlockedBefore = JSON.parse(JSON.stringify(unlocked)) as NewlyUnlocked;
+    runSummaryView(won, snapshot, unlocked);
+    expect(won).toEqual(summaryBefore);
+    expect(unlocked).toEqual(unlockedBefore);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G26 — when the model fails, the fallback describes what JUST happened.
+// ---------------------------------------------------------------------------
+
+describe('fallbackNarration', () => {
+  const state: GameState = hub(snapshot);
+
+  it('prints THIS beat, not the continuity recap the prompt opens with', () => {
+    // Build a prompt exactly as `narrate()` does: a non-empty StoryMemory (so `.user`'s first
+    // block is the run summary + recent moments) plus a current beat. The old fallback read
+    // `prompt.user.split('\n\n')[0]`, which is that recap.
+    const past: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Rust Choir' }];
+    const memory = rememberBeat(rememberBeat(createStoryMemory(), past), [
+      { kind: 'victory', xpGained: 5, extraRest: false, loot: [] },
+    ]);
+    const now: GameEvent[] = [
+      {
+        kind: 'attack', subject: 'player', outcome: 'crit', damage: 9,
+        roll: { natural: 20, faces: [20], advDis: 0, modifier: 2, total: 22, targetAc: 13 },
+        damageSources: [
+          { kind: 'weapon-dice', amount: 4, label: '1d8' },
+          { kind: 'crit-dice', amount: 5, label: '1d8' },
+        ],
+      },
+    ];
+    const prompt = buildNarrationPrompt(now, state, memory);
+    expect(prompt).not.toBeNull();
+
+    const fallback = fallbackNarration(prompt);
+    // The crit's own words reach the player.
+    expect(fallback).toContain('devastating');
+    expect(fallback).toContain('9');
+    // The recap does NOT. `Rust Choir` is the probe: it is in `prompt.user` but not in the
+    // current beat, so its absence here is the whole assertion.
+    expect(fallback).not.toContain('Rust Choir');
+    expect(fallback).not.toContain('Recent moments');
+    expect(fallback).not.toContain('Across this descent');
+    // NON-VACUITY: the recap really IS in the prompt, and really IS its first block — so the
+    // OLD implementation would have printed it.
+    expect(prompt!.user).toContain('Rust Choir');
+    expect(prompt!.user.split('\n\n')[0]).toContain('Rust Choir');
+  });
+
+  it('says something honest when there is nothing to say', () => {
+    expect(fallbackNarration(null)).toBe('(the Void is silent)');
+    expect(fallbackNarration({ facts: [] })).toBe('(the Void is silent)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Potion button: a press under a control condition used to do nothing at all.
+// ---------------------------------------------------------------------------
+
+describe('potionControl', () => {
+  it('carries the remaining count, and is live while any remain', () => {
+    const model = potionControl({ ...snapshot, pots: 3 });
+    expect(model).toEqual({ label: 'Potion', disabled: false, hint: '(3)' });
+  });
+
+  it('is DISABLED at zero — and a disabled button gets no handler at all', () => {
+    // `actionButton` attaches the click listener only on the enabled branch, so "disabled"
+    // means inert, not merely grey: a stray press cannot dispatch a step that resolves
+    // nothing. Asserted on the model, which is the half that decides it.
+    expect(potionControl({ ...snapshot, pots: 0 })).toEqual({
+      label: 'Potion', disabled: true, hint: '(0)',
+    });
+  });
+
+  it('is disabled before a player exists', () => {
+    expect(potionControl(null).disabled).toBe(true);
   });
 });
 

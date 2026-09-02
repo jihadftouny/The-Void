@@ -1,11 +1,34 @@
 # Human Checks — The Void
 
+> ## ✅ THE DEFERRAL BELOW IS LIFTED — healing is reachable as of `#0c persistence-and-reach`
+>
+> **Updated 2026-09-01, by `#0c`.** The block immediately below deferred the floor-5 checks on the
+> grounds that "there is no healing in the game… no consumable can be obtained until **#9**". **That
+> is no longer true.** `#0c` fixed G14: authored consumables and uniques are now on the victory-drop
+> and chest paths, act-gated by each item's `floor`. Measured over 100 whole runs (20 seeds × 5
+> classes) driven through the real engine: the **Use item** picker appears in **96%** of runs and
+> offers something that **heals** in **94%**. The deferred checks below are now fair to attempt.
+> (This arrives one milestone earlier than `SHIP-SCOPE.md` §7 scheduled it, which is why the
+> deferral note reads as it does. It is kept, not deleted, so the change is traceable.)
+>
+> ### ⚠ EXPECTED: the game will feel TOO EASY, and that is scheduled, not a bug
+>
+> **Do not report generosity as a defect.** v1 temporarily carries **two healing systems at once**:
+> the `STARTING_POTS` potions the game has always had, AND the newly-droppable consumables — one of
+> which, `void-draught`, heals **100% of max HP**. `GAME-DESIGN.md` §22.6 folds potions into
+> consumables, and §18.4 says healing must become scarce, but both belong to the balance re-run
+> (`PLAN.md` #2), which must follow #9. This was an explicit ruling, not an oversight: a game with
+> NO healing is worse than one with too much, and #2 will tighten it with measurements rather than
+> guesses. **What IS worth reporting:** whether finding a heal feels like a find, and whether the
+> drop rate makes the Use-item picker feel cluttered.
+>
 > ## ⏸ DEFERRED until `PLAN.md` #9 lands — the game cannot be played to floor 5 yet
 >
-> **Added 2026-09-01.** `#0a` and `#0b` are merged and the engine is far healthier, but **there is
+> **Added 2026-09-01.** ~~`#0a` and `#0b` are merged and the engine is far healthier, but **there is
 > no healing in the game**: §22.6 folded potions into consumables, and no consumable can be obtained
-> until **#9 content-reachability** lands. A run therefore ends in act 1–2 regardless of skill, so
-> asking anyone to reach act 5 is not a fair test. **Do these once #9 is in:**
+> until **#9 content-reachability** lands.~~ **(Superseded by `#0c` — see above.)** A run therefore
+> ends in act 1–2 regardless of skill, so asking anyone to reach act 5 is not a fair test. **Do
+> these once #9 is in:**
 >
 > - [ ] **Floor-5 length.** Reach act 5, count encounters before the Hollow is offered.
 >       `HOLLOW_GATE_XP = 500` (§22.21) is a derived guess. Under ~4 = not a floor; over ~10 = a grind.
@@ -28,6 +51,39 @@
 >       weapons swing `1d1` until #1 lands. Confirming it behaves as documented is the point.
 > - [ ] **The to-hit line adds up.** A fresh character should now read `+3`, not `+1`.
 > - [ ] **Reach any ending, press Continue — the ending text must STAY on screen.**
+
+## ▶️ From `#0c persistence-and-reach` (2026-09-01) — nine checks no agent can do
+
+No agent can run Electron, so every item here is genuinely unverified. `npm run desktop` from the
+repo root. ⚠ **`npm run desktop` orphans its Vite server on quit (`FINDINGS.md` G41, unfixed), so
+the SECOND and later launches serve STALE CODE.** Kill whatever holds port 5173 between play-tests,
+or these checks are worthless.
+
+- [ ] **The combat log — the biggest visible change in the whole unit.** Until now the player saw
+      **no numbers at all**: the formatters existed and nothing called them, and the narrator is
+      forbidden from mentioning dice or numbers. Start a fight. You should now see a running log of
+      what happened. **Click an attack line** — it should expand to the dice
+      (`d20+2 = 17 vs AC 13 → hit, 1d8 = 4`). It should scroll, and **start over at each new
+      battle**. Check the arrow marker reads clearly and that `Tab` reaches the expanders.
+- [ ] **Healing, end to end.** Win fights until an item drops, open **Use item**, drink it, watch HP
+      rise. The log should name it (*"You use Void Draught."*) — never `void-draught`.
+- [ ] **Condition chips.** Get poisoned or stunned. Chips should appear in the left HUD column for
+      you, and for the enemy during a battle, ordered control → harm → boon. Are they legible at
+      that size? Does the row wrap sensibly in a 220px column?
+- [ ] **A backtick in the name field.** Type `` ` `` into the character-name box. It must type a
+      backtick and **must not** open the debug overlay. (Then press `` ` `` outside the field — the
+      overlay should still open.)
+- [ ] **Relaunch after a WIN.** Reach an ending, then quit and relaunch. You should be offered a
+      **new** run, not *"A descent lies unfinished."*
+- [ ] **The end-of-run summary reads well — after all three outcomes.** Death, grace, and damnation.
+      It should name bosses and unlocks in words, never ids, and it should not feel like a receipt.
+- [ ] **The unlock-recovery notice.** Hard to trigger deliberately; if you ever see the red-bordered
+      notice at the top of the stage, say whether it was comprehensible. (To force it: with the app
+      closed, corrupt `thevoid:unlocks` in the Electron localStorage.)
+- [ ] **Layout at the minimum window size.** The stage gained two rows (notice, log). Shrink the
+      window: the narration must not be squeezed out, and the log should scroll inside its own cap.
+- [ ] **Feel: are the new drop rates right?** Too many consumables? Too few? A unique dropping too
+      early? All three are `PLAN.md` #2's dials, not defects — but your read is the input it needs.
 
 
 Your running checklist — things only you can verify (play-feel, visuals, real hardware, the real

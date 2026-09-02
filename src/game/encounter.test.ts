@@ -7,6 +7,10 @@ import {
   computeRestHeal,
 } from './encounter.ts';
 import { createPlayer } from './player.ts';
+import { step, type GameState } from './game.ts';
+import { createKarma } from './karma.ts';
+import { resolveInstanceDef } from './equipment.ts';
+import { getAllUniques } from './item.ts';
 import { type Stats } from './character.ts';
 import { mulberry32, type Rng } from './rng.ts';
 
@@ -52,11 +56,140 @@ describe('buildChestLoot', () => {
   it('yields the guaranteed chest items and is deterministic for a fixed seed', () => {
     // chestItemCount is 1 (dropTables.json), so a chest always yields exactly one item;
     // determinism is proved by two independent rolls from the same seed matching.
-    const a = buildChestLoot(mulberry32(31));
-    const b = buildChestLoot(mulberry32(31));
+    //
+    // CHANGED: the signature gained `act` (G14). A chest can now also hold an AUTHORED
+    // catalog item, whose instance is a bare `{ defId }` with no `rolled` overlay — so the
+    // old `expect(a[0]!.rolled).toBeDefined()` no longer describes every legal chest. It is
+    // replaced by the invariant that actually matters and holds for both branches: whatever
+    // the chest yields, it resolves to a real item. Seed 31 / act 1 is not re-picked to keep
+    // the old assertion true; the assertion is the thing that was too narrow.
+    const a = buildChestLoot(mulberry32(31), 1);
+    const b = buildChestLoot(mulberry32(31), 1);
     expect(a).toHaveLength(1);
     expect(a).toEqual(b);
-    expect(a[0]!.rolled).toBeDefined();
+    expect(resolveInstanceDef(a[0]!)).not.toBeNull();
+  });
+
+  it('threads the act through, so a floor-5 unique cannot fall out of a floor-1 cache', () => {
+    // Every authored unique carries `floor` >= 2, so act 1 can yield none of them at all.
+    //
+    // ⚠ THIS ASSERTION ALONE PROVES NOTHING, and the block below is why it is kept rather
+    // than replaced: it is an invariant over an EMPTY collection. At act 1 the unique pool is
+    // `[]`, so "holds no unique" is true of the correct implementation AND of one that
+    // ignores the act completely. The positive half lives below.
+    const uniqueIds = new Set(getAllUniques().map((u) => u.id));
+    for (let seed = 1; seed <= 200; seed += 1) {
+      for (const item of buildChestLoot(mulberry32(seed), 1)) {
+        expect(uniqueIds.has(item.defId)).toBe(false);
+      }
+    }
+  });
+});
+
+// =========================================================================================
+// The POSITIVE direction of the act threading — added in FIX ROUND 1, and it is the exact
+// trap the brief names: an invariant checked over an empty collection.
+//
+// Three mutations pinned the act to a constant and passed ALL 1290 tests — including
+// `buildChestLoot(rng, 1)` at the SHIPPING call site in `game.ts`. Measured consequence: no
+// chest in the game could ever yield a unique, and the chest table's deliberately tripled
+// `unique: 3` jackpot weight would be dead data. Silently.
+//
+// So the act must be shown to make a DIFFERENCE, not merely to be harmless. Every expected
+// count below is derived from the data, never measured: the chest table's act-5 pools are
+// heal 4 + utility 3 + unique 3 = weight 10, behind a 0.45 catalog gate, so P(unique) =
+// 0.45 x 3/10 = 13.5% per chest — about 54 of 400 — and `hollow-regalia` is one of the four
+// uniques available at act 5, so about 13 of those. The floors are set far below both.
+// =========================================================================================
+
+describe('buildChestLoot — the act really is what gates the unique pool', () => {
+  const uniqueIds = new Set(getAllUniques().map((u) => u.id));
+  /** Every defId a chest yields at `act` across seeds 1..400. */
+  function chestIdsAt(act: number): string[] {
+    const out: string[] = [];
+    for (let seed = 1; seed <= 400; seed += 1) {
+      for (const item of buildChestLoot(mulberry32(seed), act)) out.push(item.defId);
+    }
+    return out;
+  }
+
+  it('act 5 chests DO yield uniques — the half that was missing', () => {
+    const uniques = chestIdsAt(5).filter((id) => uniqueIds.has(id));
+    expect(
+      uniques.length,
+      'no act-5 chest yielded a unique — the act is being ignored somewhere in the chain',
+    ).toBeGreaterThan(0);
+  });
+
+  it('a floor-5 unique appears at act 5 and NEVER at act 4', () => {
+    // `hollow-regalia` is authored `floor: 5`. The sharpest single probe available: it
+    // separates "the act is threaded" from "the act is pinned to ANY constant".
+    expect(getAllUniques().find((u) => u.id === 'hollow-regalia')!.floor).toBe(5);
+    expect(chestIdsAt(5)).toContain('hollow-regalia');
+    expect(chestIdsAt(4)).not.toContain('hollow-regalia');
+    expect(chestIdsAt(1)).not.toContain('hollow-regalia');
+  });
+
+  it('each act sees exactly the uniques its floor allows, and no others', () => {
+    // The whole ladder, so pinning the act to any constant fails — not only pinning it to 1.
+    for (const act of [1, 2, 3, 4, 5]) {
+      const allowed = new Set(
+        getAllUniques().filter((u) => (u.floor ?? 1) <= act).map((u) => u.id),
+      );
+      const seen = new Set(chestIdsAt(act).filter((id) => uniqueIds.has(id)));
+      for (const id of seen) {
+        expect(allowed.has(id), `act ${act} yielded "${id}", floored above it`).toBe(true);
+      }
+      // Non-vacuity: from act 2 on the pool is non-empty and really is drawn from.
+      if (act >= 2) expect(seen.size, `act ${act} yielded no unique at all`).toBeGreaterThan(0);
+    }
+  });
+});
+
+// =========================================================================================
+// The SHIPPING call site. `src/game/game.ts` is the only caller of `buildChestLoot`, and the
+// mutation that mattered most — `buildChestLoot(rng, 1)` THERE — is invisible to every test
+// above, because those call the helper directly. `src/game/game.ts` is pure and importable,
+// so this is asserted by driving the REAL `step` rather than by reading the source.
+// =========================================================================================
+
+describe('the chest encounter reached through `step` is act-aware', () => {
+  /** Open a hub chest at `act` for each seed, and collect what it deposited. */
+  function chestIdsThroughStep(act: number, seedCount: number): string[] {
+    const out: string[] = [];
+    for (let seed = 1; seed <= seedCount; seed += 1) {
+      const state: GameState = {
+        version: 8,
+        rngState: seed,
+        // xp 0 keeps every act gate — and act 5's Hollow gate — shut, so `continue` takes the
+        // ordinary encounter path rather than walking into a boss.
+        player: { ...createPlayer({ name: 'Hero', classId: 'Enforcer', stats: stats() }), xp: 0 },
+        act,
+        place: act - 1,
+        karma: createKarma(),
+        phase: { kind: 'main-menu' },
+      };
+      const r = step(state, { kind: 'menu', choice: 'continue' });
+      if (r.state.phase.kind !== 'chest') continue;
+      for (const item of r.state.phase.loot) out.push(item.defId);
+    }
+    return out;
+  }
+
+  it('a chest opened at act 5 can hold a floor-5 unique; the same chest at act 4 cannot', () => {
+    // A chest is 1 of the 6 encounter slots, so about 1/6 of these seeds open one.
+    const atFive = chestIdsThroughStep(5, 900);
+    const atFour = chestIdsThroughStep(4, 900);
+    // Non-vacuity first: the sweep must really be opening chests, or everything below is an
+    // assertion about an empty list — which is the very defect this block exists to close.
+    expect(atFive.length, 'no chest opened at act 5 — this guard has gone stale').toBeGreaterThan(20);
+    expect(atFour.length, 'no chest opened at act 4 — this guard has gone stale').toBeGreaterThan(20);
+    expect(
+      atFive,
+      'the act is not reaching buildChestLoot from game.ts — no chest in the game can ever ' +
+        'yield a floor-5 unique, and the chest table\'s `unique: 3` weight is dead data',
+    ).toContain('hollow-regalia');
+    expect(atFour).not.toContain('hollow-regalia');
   });
 });
 

@@ -15,7 +15,7 @@ import {
   type GearDef,
 } from './equipment.ts';
 import { createInventory, type Inventory } from './inventory.ts';
-import { EQUIP_SLOTS, type EquipSlot, type ItemInstance } from './item.ts';
+import { EQUIP_SLOTS, getCatalogItemById, type EquipSlot, type ItemInstance } from './item.ts';
 import { generateItem } from './rarityGen.ts';
 import { rollLootDrop } from './loot.ts';
 import { mulberry32 } from './rng.ts';
@@ -220,25 +220,63 @@ describe('G11 — a rarity-generated item can be equipped through the real UI pa
   });
 });
 
-describe('G11 end-to-end — every real loot drop is equippable', () => {
-  it('seeds 1..300 x acts 1-4: at least 100 drops, and 100% of them equip', () => {
-    let drops = 0;
-    let equippable = 0;
+// G11's guard, SPLIT (not weakened) because its premise changed by design.
+//
+// It used to sweep every drop, dereference `drop.rolled!` for the slot, and require 100% to
+// equip. G14 puts AUTHORED CATALOG items on the same path: a consumable is a legitimate drop
+// that has no `rolled` overlay and — correctly — does not equip into anything. Under the old
+// shape that is a crash on `rolled!` followed by a failure, for an item behaving exactly as
+// designed.
+//
+// So the sweep is split in two, and BOTH halves are at full strength:
+//   (i)  every GENERATED-gear drop still equips, 100%, exactly as G11b demanded; and
+//   (ii) every CATALOG drop resolves through the catalogs, and every catalog drop that
+//        HAS a slot equips too — which is what keeps a dropped unique from being a
+//        decoration you cannot wear.
+describe('G11 end-to-end — every real loot drop is usable for what it is', () => {
+  it('seeds 1..300 x acts 1-5: at least 100 drops, and 100% behave correctly', () => {
+    let gearDrops = 0;
+    let gearEquippable = 0;
+    let catalogDrops = 0;
+    let catalogResolved = 0;
+    let slottedCatalog = 0;
+    let slottedCatalogEquipped = 0;
+
     for (let seed = 1; seed <= 300; seed++) {
       const rng = mulberry32(seed);
-      for (const act of [1, 2, 3, 4]) {
+      for (const act of [1, 2, 3, 4, 5]) {
         const drop = rollLootDrop(act, rng);
         if (!drop) continue;
-        drops++;
-        const slot = drop.rolled!.slot as EquipSlot;
+        if (drop.rolled) {
+          gearDrops++;
+          const slot = drop.rolled.slot as EquipSlot;
+          const { inventory, ok } = equip(pickUp(createInventory(), drop), 0);
+          if (ok && inventory.slots[slot] === drop) gearEquippable++;
+          continue;
+        }
+        catalogDrops++;
+        const def = getCatalogItemById(drop.defId);
+        if (!def) continue;
+        catalogResolved++;
+        if (def.slot === null) continue;
+        slottedCatalog++;
         const { inventory, ok } = equip(pickUp(createInventory(), drop), 0);
-        if (ok && inventory.slots[slot] === drop) equippable++;
+        if (ok && inventory.slots[def.slot] === drop) slottedCatalogEquipped++;
       }
     }
-    // The act tables all carry dropChance >= 0.5 over 1200 rolls, so >100 drops is certain;
+
+    // The act tables all carry dropChance >= 0.5 over 1500 rolls, so >100 drops is certain;
     // the register measured >100 drops and 0% equippable on the same sweep.
-    expect(drops).toBeGreaterThanOrEqual(100);
-    expect(equippable).toBe(drops);
+    expect(gearDrops + catalogDrops).toBeGreaterThanOrEqual(100);
+    // (i) G11b at full strength.
+    expect(gearDrops).toBeGreaterThan(0);
+    expect(gearEquippable).toBe(gearDrops);
+    // (ii) the new half. Non-vacuous: catalog drops really occur, and some really have slots
+    // (the four uniques do; the nineteen consumables do not).
+    expect(catalogDrops).toBeGreaterThan(0);
+    expect(catalogResolved).toBe(catalogDrops);
+    expect(slottedCatalog).toBeGreaterThan(0);
+    expect(slottedCatalogEquipped).toBe(slottedCatalog);
   });
 });
 

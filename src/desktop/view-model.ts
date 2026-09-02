@@ -10,8 +10,9 @@
 // vector. `characterSheet` emits no karma field, and `dealView` deliberately drops
 // the deal's `pool` (a `standard | tempting | grace` tell derived from karma). The
 // UI shows a deal only as cost -> reward. Asserted by the view-model tests.
-import type { GameState } from '../game/game.ts';
+import type { GameState, Phase } from '../game/game.ts';
 import type { Player } from '../game/player.ts';
+import type { RunSummary, NewlyUnlocked } from '../game/unlockStore.ts';
 import type { Inventory } from '../game/inventory.ts';
 import type { EquipSlot, ItemEffect, ItemInstance } from '../game/item.ts';
 import type { ItemKind } from '../game/item.ts';
@@ -25,12 +26,15 @@ import { EQUIP_SLOTS, getCatalogItemById } from '../game/item.ts';
 import { resolveSkill } from '../game/skill.ts';
 import { spareAvailable } from '../game/battle.ts';
 import { resolveInstanceDef, equip, unequip } from '../game/equipment.ts';
+import { effectiveChargeCost } from '../game/equipEffects.ts';
 import { playerArmorClass } from '../game/defense.ts';
 import { describeCost, describeReward } from '../game/deal.ts';
 import { describeDraftOption } from '../game/draft.ts';
 import { summarizeLoot } from '../game/loot.ts';
 import { CLASSES } from '../game/classKit.ts';
 import { STAT_KEYS } from '../game/character.ts';
+import { BOSSES } from '../game/boss.ts';
+import { buttonModel, type ButtonModel } from '../render/component-model.ts';
 
 /**
  * The player to DISPLAY on the sheet: during a battle the live combatant
@@ -61,17 +65,24 @@ export interface CastOption {
  * player banks at least `chargeCost` charges. The engine re-checks affordability on
  * dispatch, so a stale display is a safe no-op. Unknown ids (not in the skill table)
  * are skipped.
+ *
+ * G33: `chargeCost` is the EFFECTIVE cost — the engine's own `effectiveChargeCost`, which
+ * is also what `battle.ts`'s cast guard consults. It used to report `skill.chargeCost`
+ * raw, so an Overclock Chip / Hollow Heart made no difference to the picker: a 2-cost
+ * skill rendered disabled at 1 charge even though the engine would have cast it. The
+ * relic was real in the rules and invisible through the only UI that ships.
  */
 export function castOptions(player: Player): CastOption[] {
   const out: CastOption[] = [];
   for (const id of player.skillPool) {
     const skill = resolveSkill(player, id as SkillId);
     if (!skill) continue;
+    const chargeCost = effectiveChargeCost(player.inventory, skill.chargeCost);
     out.push({
       skillId: skill.id,
       name: skill.name,
-      chargeCost: skill.chargeCost,
-      affordable: player.skillCharges >= skill.chargeCost,
+      chargeCost,
+      affordable: player.skillCharges >= chargeCost,
     });
   }
   return out;
@@ -312,10 +323,31 @@ export interface CharacterSheet {
 /**
  * Project a player to a full character sheet — PURE. `armorClass` is computed live via the
  * engine's `playerArmorClass` (the gear-derived value, not the stored unarmored score).
- * Skills resolve through `resolveSkill` for name + effective cost. Emits NO karma field.
+ * `name` is carried through verbatim as a plain string, for the view to set as TEXT.
+ * Emits NO karma field.
+ *
+ * Skills resolve through `resolveSkill` for the name, and through `effectiveChargeCost` for
+ * the cost — the SAME helper `castOptions` and `battle.ts` use, so the sheet and the picker
+ * cannot disagree about what a skill costs (G33).
+ *
+ * G28(e): an id in `skillPool` that no longer resolves is SKIPPED, not dereferenced.
+ * `resolveSkill` is typed to return a `SkillDef` but is `SKILLS[skillId]` underneath, so an
+ * id this build does not know (a save from an older content set, a mistyped draft grant)
+ * returned `undefined` and reading `.id` off it threw — taking the whole character sheet
+ * down rather than losing one row.
  */
 export function characterSheet(player: Player): CharacterSheet {
   const classDef = CLASSES[player.classId];
+  const skills: SkillRow[] = [];
+  for (const id of player.skillPool) {
+    const skill = resolveSkill(player, id as SkillId);
+    if (!skill) continue;
+    skills.push({
+      skillId: skill.id,
+      name: skill.name,
+      chargeCost: effectiveChargeCost(player.inventory, skill.chargeCost),
+    });
+  }
   const sheet: CharacterSheet = {
     name: player.name,
     classId: player.classId,
@@ -327,10 +359,7 @@ export function characterSheet(player: Player): CharacterSheet {
     skillCharges: player.skillCharges,
     maxSkillCharges: player.maxSkillCharges,
     stats: STAT_KEYS.map((key) => ({ key, score: player.stats[key], mod: player.mods[key] })),
-    skills: player.skillPool.map((id) => {
-      const skill = resolveSkill(player, id as SkillId);
-      return { skillId: skill.id, name: skill.name, chargeCost: skill.chargeCost };
-    }),
+    skills,
     equipped: EQUIP_SLOTS.map((slot) => {
       const item = player.inventory.slots[slot];
       return { slot, name: item ? displayItem(item).name : null };
@@ -388,4 +417,154 @@ export function chestReveal(loot: readonly ItemInstance[]): LootRow[] {
     const summary = summarizeLoot(instance);
     return { name: summary.name, rarity: summary.rarity };
   });
+}
+
+// ===== Stage 4 — the end of a run =========================================
+// G2 (GAME-DESIGN.md §22.15): winning left a RESUMABLE save. `dispatch()` cleared the run
+// only on `awaiting === 'game-over'`, but a victory settles at `phase.kind === 'ending'` and
+// autosaved instead — so relaunching after an ascension offered "A descent lies unfinished.
+// Return to it, or begin anew", pointing at a run that was already over. §22.15 also rejected
+// "the minimal delete-only patch… gives wins no record", which is why the clear ships
+// alongside a summary rather than on its own.
+
+/**
+ * Is this phase the END of the run? PURE, and EXHAUSTIVE over `Phase['kind']` by construction:
+ * the map is a `Record<Phase['kind'], boolean>`, so an eighteenth phase fails the build here
+ * rather than defaulting to "the run continues" and quietly recreating G2.
+ *
+ * `awaiting` is deliberately NOT a parameter. `awaitingFor` is a total function of the phase,
+ * so passing both would create two sources of truth that can disagree — and the disagreement
+ * between them (`phase.kind === 'ending'` for the apply, `awaiting === 'game-over'` for the
+ * clear) is exactly what G2 was.
+ */
+const RUN_OVER: Record<Phase['kind'], boolean> = {
+  title: false,
+  'name-entry': false,
+  'class-select': false,
+  'stats-roll': false,
+  'main-menu': false,
+  battle: false,
+  'battle-victory': false,
+  rest: false,
+  deal: false,
+  chest: false,
+  'act-outro': false,
+  'level-up-draft': false,
+  'level-up-result': false,
+  'act-intro': false,
+  verdict: false,
+  // The two terminal phases: an ending reached (grace or damnation), or the run is over.
+  ending: true,
+  'game-over': true,
+};
+
+export function isRunOver(phase: Phase): boolean {
+  return RUN_OVER[phase.kind];
+}
+
+/** One label/value line of the end-of-run summary. */
+export interface RunSummaryRow {
+  label: string;
+  value: string;
+}
+
+/** The factual account of a finished run. */
+export interface RunSummaryView {
+  /** The outcome, in player words. */
+  headline: string;
+  rows: RunSummaryRow[];
+}
+
+/** The player-facing depth phrase. `maxAct` 0 means the run never got past the threshold. */
+function depthText(maxAct: number): string {
+  return maxAct <= 0 ? 'You never left the threshold.' : `Act ${maxAct} of 5`;
+}
+
+/**
+ * The FACTUAL end-of-run summary — PURE, no DOM. Outcome, depth reached, bosses felled BY
+ * NAME, foes spared, and anything newly unlocked BY NAME.
+ *
+ * SCOPE, decided rather than omitted: this is the factual half only. The Void's own NARRATED
+ * account of your descent is G10, which belongs to PLAN.md #6 (cut to v1.3 by
+ * SHIP-SCOPE.md §4). §22.15 rejected "the minimal delete-only patch… gives wins no record" —
+ * a factual record IS a record, so this satisfies that ruling's stated intent, and G10 stays
+ * open for the narrated half.
+ *
+ * NO RAW ID may appear in any row. A boss reads `BOSSES[id].name`, a relic reads its catalog
+ * name, and the internal axes (feat ids, enemy families, affixes, skill ids) are not printed
+ * at all — they are gradual-reveal machinery the player is never shown. A test sweeps every
+ * row against those id sets.
+ */
+export function runSummaryView(
+  summary: RunSummary,
+  player: Player | null,
+  newlyUnlocked: NewlyUnlocked | null,
+): RunSummaryView {
+  const headline =
+    summary.endingType === 'grace'
+      ? 'Found worthy. The descent ends in grace.'
+      : summary.endingType === 'damnation'
+        ? 'The Hollow unmade. The descent ends in damnation.'
+        : 'The descent ends here.';
+
+  const rows: RunSummaryRow[] = [];
+  if (player) rows.push({ label: 'Who you were', value: `${player.classId}, level ${player.level}` });
+  rows.push({ label: 'Depth reached', value: depthText(summary.maxAct) });
+  rows.push({
+    label: 'Bosses felled',
+    value:
+      summary.bossKills.length > 0
+        ? summary.bossKills.map((id) => BOSSES[id].name).join(', ')
+        : 'none',
+  });
+  rows.push({ label: 'Foes spared', value: String(summary.spareCount) });
+
+  // Only the two axes the player can actually see the effect of: a class becomes selectable
+  // on the next run, and a relic becomes offerable at an altar. Families and affixes are the
+  // gradual-reveal machinery; feats are internal ids; no feat grants a skill today.
+  const unlocked = [
+    ...(newlyUnlocked?.classes ?? []),
+    ...(newlyUnlocked?.relics ?? []).map((id) => getCatalogItemById(id)?.name ?? id),
+  ];
+  if (unlocked.length > 0) rows.push({ label: 'Newly unlocked', value: unlocked.join(', ') });
+  return { headline, rows };
+}
+
+// ===== Stage 5 — two small controls the UI got wrong ======================
+
+/**
+ * What to show when the model fails mid-beat — G26. PURE.
+ *
+ * The renderer's `catch` printed `prompt.user.split('\n\n')[0]`. On any step with story
+ * memory that first block is the CONTINUITY RECAP — the run summary and the last five beats —
+ * so a model failure on the turn you landed a critical hit printed "Across this descent you
+ * have felled 1 foe / Recent moments…" and never a word about the crit. The fallback
+ * described the past and called it the present.
+ *
+ * `buildNarrationPrompt` now returns the computed `facts` alongside the prompt (#0b's U7 hook,
+ * added for exactly this), so the fallback can read THIS beat directly instead of slicing the
+ * user string apart and hoping the first block is the right one.
+ */
+export function fallbackNarration(
+  prompt: { facts: readonly string[] } | null,
+): string {
+  const facts = prompt?.facts ?? [];
+  return facts.length > 0 ? facts.join(' ') : '(the Void is silent)';
+}
+
+/**
+ * The Potion button — PURE. Carries the remaining count as a hint, and is DISABLED at zero.
+ *
+ * It used to be an unconditional `choice('Potion', …)`. At 0 potions, at full HP, or under
+ * the Void Pact relic, pressing it dispatched a whole engine step that resolved nothing: the
+ * button looked live, the turn did not advance, and (until this unit) the one event it emitted
+ * was rendered nowhere at all. A disabled `ButtonModel` gets NO click handler from
+ * `actionButton`, so it is inert as well as greyed — a stray press cannot dispatch.
+ *
+ * Only the count is gated here. "Already at full HP" and the `cannotHeal` relic are still
+ * engine refusals; the log now says so (`potion-unavailable`), which it never could before.
+ */
+export function potionControl(player: Player | null): ButtonModel {
+  const pots = player?.pots ?? 0;
+  return buttonModel('Potion', { disabled: pots <= 0, hint: `(${pots})` });
 }

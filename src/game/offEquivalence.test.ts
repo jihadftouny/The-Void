@@ -148,6 +148,46 @@
 //         |     | not the guard: `HOLLOW_GATE_XP` 600 -> 500, one step down the same derived
 //         |     | curve (k = 6 kills, 240·e^(0.75) ~ 508). That measures 0.132.
 // ---------------------------------------------------------------------------------------------
+// #0c `persistence-and-reach` — ONE row, and it is a pure STREAM DISPLACEMENT.
+//
+//   RULE CHANGED                                        FIX   STEP  DIRECTION ON THESE RUNS
+//   authored consumables/uniques join the drop tables   G14    3    NONE (noise, not difficulty)
+//   act 5 uses the authored act-5 drop table            G14    3    NONE (inert in the sim)
+//
+// PREDICTION, WRITTEN BEFORE MEASURING. G14 inserts exactly ONE extra rng draw — the catalog
+// gate — into every successful loot drop, on both the victory and the chest path, and both
+// branches then take the same two draws, so a drop costs six either way. It changes no rule
+// this sample can feel:
+//   - the shipped sim policies NEVER use a consumable (`chooseBattleAction` returns only
+//     fight / cast / potion / run / spare — FINDINGS.md G48), so a consumable in the backpack
+//     is inert;
+//   - the `step` controller has no equip action either (the balance report's own
+//     "equipment un-modelled" caveat), so a dropped UNIQUE is equally inert;
+//   - nothing in the combat path reads backpack contents at all.
+// The act-5 clamp fix likewise only changes which rarity/slot weights an act-5 drop uses, and
+// an act-5 drop is inert for the same three reasons. So the ONLY effect is that every draw
+// after a run's first successful drop is shifted by one, and the run diverges chaotically
+// from there. EXPECTED: all six rngStates move; outcomes scatter with NO systematic
+// direction; the 500-run guard moves by noise.
+//
+// OBSERVED, and it matches: wins unchanged at 0/6. avg level 49/6 -> 54/6 and floors cleared
+// 11/6 -> 13/6 (i.e. this small sample got slightly EASIER), while `balance.test.ts`'s
+// 500-run heuristic sample went the OTHER WAY, 0.132 -> 0.126. A 6-seed sample and a 500-run
+// sample disagreeing in SIGN is exactly what noise looks like, and is the evidence that this
+// is displacement rather than a difficulty change. Deaths move out of act 5 (2 -> 0) and act
+// 1 (3 -> 1) into acts 3-4 (1 -> 5); act-1 death SHARE on the 500-run sample improves
+// 0.207 -> 0.163.
+//
+// ⚠ FLAGGED FOR #2, and it is the most important number this unit produces. `balance.test.ts`
+// still passes UNMODIFIED, but its margin HALVED: 66 wins of 500 -> 63, against a floor of 60
+// (`winRate > 0.12`). §22.21 records the pre-existing margin as six wins in 500 and pins
+// `HOLLOW_GATE_XP = 500` to exactly this threshold. Three wins is not a margin anybody should
+// rely on, and per this unit's hard gate NOTHING was retuned to widen it — that is #2's call,
+// with measurements. Per-class wins over the same 500 runs: Enforcer 9 -> 13, Neuromancer
+// 2 -> 1, Scavver 45 -> 42, Penitent 3 -> 1, Hollow 7 -> 6. Neuromancer and Penitent are now
+// at ONE win in a hundred, so the "no class stuck at ~0%" assertion is one unlucky seed from
+// failing for a reason that has nothing to do with the class.
+// ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
 // (outcome, act, level, floors, step count, cause), the FINAL RNG ACCUMULATOR of a full run
@@ -189,15 +229,18 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 }
 
 /** The frozen run records. MEASURED, not derived — see the file header. */
+// #0c: ALL SIX rows moved, and every one of them was expected to — the catalog gate shifts
+// every draw after a run's first successful loot drop, and each of these runs takes a drop
+// early. NO row is byte-identical this time, and that absence is itself consistent with the
+// prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
+// first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 444, cause: 'The Husk Remnant', rngState: 841227953 },
-  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 531, cause: 'The Spent Remnant', rngState: 291816878 },
-  // The three rows below are BYTE-IDENTICAL to their step-7 values: these runs end before the
-  // second `cheaper` offer G35 removed could ever reach them. A useful control on step 8.
-  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 21, cause: 'Armored Psycho', rngState: 560318176 },
-  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 380, cause: 'The Knight', rngState: 2887346257 },
-  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 92, cause: 'Undercity Kingpin', rngState: 2809167167 },
-  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 17, cause: 'Armored Psycho', rngState: 1320036240 },
+  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 318, cause: 'The Counselor', rngState: 254850083 },
+  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 354, cause: 'Ancient Sif', rngState: 2902498858 },
+  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 10, floorsCleared: 2, steps: 322, cause: 'The Cruelty', rngState: 1262756637 },
+  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 8, floorsCleared: 2, steps: 272, cause: 'Cursed Nameless Dread', rngState: 2861286560 },
+  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 383, cause: 'Ravenous The Counselor', rngState: 559403469 },
+  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 2, floorsCleared: 0, steps: 92, cause: 'Armored Punk', rngState: 1233366143 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -228,19 +271,21 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
       damnation: 0,
       deaths: 6,
       winRate: 0 / 6,
-      avgLevel: 49 / 6,
-      avgFloorsCleared: 11 / 6,
-      deathByAct: { 1: 3, 2: 0, 3: 0, 4: 1, 5: 2 },
+      // Summed from the GOLDEN_RUNS rows above: levels 12+11+10+8+11+2 = 54, floors
+      // 3+3+2+2+3+0 = 13. Written as the fraction so the two stay visibly tied together.
+      avgLevel: 54 / 6,
+      avgFloorsCleared: 13 / 6,
+      deathByAct: { 1: 1, 2: 0, 3: 2, 4: 3, 5: 0 },
       perClass: {
         Enforcer: {
           runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
           winRate: 0 / 3, avgLevel: 33 / 3, avgFloorsCleared: 8 / 3,
-          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 2 },
+          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 2, 5: 0 },
         },
         Hollow: {
           runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 16 / 3, avgFloorsCleared: 3 / 3,
-          deathByAct: { 1: 2, 2: 0, 3: 0, 4: 1, 5: 0 },
+          winRate: 0 / 3, avgLevel: 21 / 3, avgFloorsCleared: 5 / 3,
+          deathByAct: { 1: 1, 2: 0, 3: 1, 4: 1, 5: 0 },
         },
       },
     });

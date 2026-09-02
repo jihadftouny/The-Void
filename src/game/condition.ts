@@ -334,7 +334,11 @@ export function tickConditions(
     switch (type) {
       case 'burn': {
         if (isOnset) {
-          events.push({ kind: 'condition-onset', subject, conditionType: type, text: 'You caught on fire!' });
+          // G46: no `text`. The line that used to ride here was "You caught on fire!" —
+          // second person, stamped on the event WHATEVER the subject, so the enemy's own
+          // burn onset told the player THEY were alight. `format.ts` now renders the pair
+          // ("You succumb to Burn." / "The enemy succumbs to Burn.") from `subject`.
+          events.push({ kind: 'condition-onset', subject, conditionType: type });
           cond.remainingTurns--;
           survivors.push(cond);
         } else if (isActive) {
@@ -397,7 +401,10 @@ export function tickConditions(
       }
       case 'bleed': {
         if (isOnset) {
-          events.push({ kind: 'condition-onset', subject, conditionType: type, text: 'Your skin is ruptured!' });
+          // G46: no `text` — see the burn case. This one read "Your skin is ruptured!" and
+          // was the most-measured instance of the defect (676 enemy-subject bleed onsets
+          // over 250 runs, every one of them describing the FOE's wound as the player's).
+          events.push({ kind: 'condition-onset', subject, conditionType: type });
           cond.remainingTurns--;
           survivors.push(cond);
         } else if (isActive) {
@@ -484,8 +491,25 @@ export function tickConditions(
           cond.remainingTurns--;
           survivors.push(cond);
         } else if (isActive) {
+          // G46, the fourth site — and the only one where the flavour is KEPT, because
+          // `INSANITY_STRINGS` is authored content (fourteen hallucination lines), not a
+          // one-line restatement of the template. It is first/second person throughout, so
+          // it can only ever describe the PLAYER; on an enemy-subject tick it narrated the
+          // foe's lost turn in the player's own voice.
+          //
+          // ⚠ THE DRAW IS TAKEN UNCONDITIONALLY. Only the ATTACHMENT is subject-gated.
+          // Moving `pick` inside the `if` would make an enemy insanity tick consume one
+          // FEWER rng draw than a player one, shifting every downstream roll in the run —
+          // and with it the balance sample this unit is gated on (§22.21). The rng stream
+          // must not learn who the condition is on.
           const line = pick(rng, INSANITY_STRINGS);
-          events.push({ kind: 'condition-skip', subject, conditionType: type, text: line });
+          const skip: Extract<CombatEvent, { kind: 'condition-skip' }> = {
+            kind: 'condition-skip',
+            subject,
+            conditionType: type,
+          };
+          if (subject === 'player') skip.text = line;
+          events.push(skip);
           cond.remainingTurns--;
           survivors.push(cond);
         } else {
@@ -544,7 +568,8 @@ export function tickConditions(
         // its `intensity` (default 1). [HOOK: game-design §5 notes poison should partly
         // ignore mitigation; no mitigation system exists yet, so it is a plain DoT now.]
         if (isOnset) {
-          events.push({ kind: 'condition-onset', subject, conditionType: type, text: 'Venom courses through you.' });
+          // G46: no `text` — see the burn case. This one read "Venom courses through you."
+          events.push({ kind: 'condition-onset', subject, conditionType: type });
           cond.remainingTurns--;
           survivors.push(cond);
         } else if (isActive) {

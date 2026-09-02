@@ -25,6 +25,17 @@ import {
   type SimPolicy,
 } from '../src/game/sim.ts';
 import { type PlayerClass } from '../src/game/player.ts';
+import {
+  act1Share,
+  peakDeath,
+  actsAtOrAbove,
+  bandVerdict,
+  bandPhrase,
+  extremeClasses,
+  classesWithNoWin,
+  STANDING_CAVEATS,
+  TARGET_BAND,
+} from './balance-claims.ts';
 
 /** Sample size: seeds 1..N per class per policy. 500 × 5 = 2500 runs per policy. */
 const N = 500;
@@ -81,53 +92,84 @@ function policySection(title: string, note: string, report: AggregateReport): st
   ].join('\n');
 }
 
-/** The modal (most-common) death act and its share of all deaths. */
-function peakDeath(report: AggregateReport): { act: number; share: number } {
-  let act = 1;
-  let best = -1;
-  for (const a of [1, 2, 3, 4, 5]) {
-    const n = report.deathByAct[a] ?? 0;
-    if (n > best) {
-      best = n;
-      act = a;
-    }
-  }
-  return { act, share: report.deaths > 0 ? best / report.deaths : 0 };
-}
-
-/** Act-1's share of all baseline deaths (the structural "bunching" metric). */
-function act1Share(report: AggregateReport): number {
-  return report.deaths > 0 ? (report.deathByAct[1] ?? 0) / report.deaths : 0;
-}
-
-/** How many of the five acts each hold at least 10% of all deaths (the "spread" metric). */
-function actsWithShare(report: AggregateReport, minShare: number): number {
-  if (report.deaths === 0) return 0;
-  return [1, 2, 3, 4, 5].filter((a) => (report.deathByAct[a] ?? 0) / report.deaths >= minShare).length;
-}
-
-/** A short, data-driven plain-language read of the M15-tuned balance. */
+/**
+ * A short plain-language read of the balance. G28(c): EVERY verdict word below is now
+ * COMPUTED from the report by `balance-claims.ts`. It used to hard-code its conclusions —
+ * whether the win-rate met the target, which class was best and worst, whether anyone was
+ * stuck at zero — so a balance change moved the numbers and left the sentences asserting the
+ * old answer beside them. A generated document that contradicts its own data is worse than
+ * none, because it is trusted BECAUSE it is generated.
+ */
 function problemsRead(baseline: AggregateReport, merciful: AggregateReport): string {
   const peak = peakDeath(baseline);
+  const verdict = bandVerdict(baseline.winRate);
+  const spread = actsAtOrAbove(baseline, 0.1);
+  const extremes = extremeClasses(baseline);
+  const noWin = classesWithNoWin(baseline);
   const bullets: string[] = [];
 
+  const bandWord =
+    verdict === 'in'
+      ? `inside the ${pct(TARGET_BAND.min)}–${pct(TARGET_BAND.max)} "about 1 in 3" target`
+      : verdict === 'above'
+        ? `ABOVE the ${pct(TARGET_BAND.min)}–${pct(TARGET_BAND.max)} target — easier than intended`
+        : `BELOW the ${pct(TARGET_BAND.min)}–${pct(TARGET_BAND.max)} target — harder than intended`;
   bullets.push(
-    `- **Winnable in the target band.** The no-sacrifice baseline wins ${pct(baseline.winRate)} of runs — inside the 25–35% "about 1 in 3" target — and this is the equipment-un-modelled LOWER BOUND, so real play (found loot equipped) is easier still.`,
+    `- **Winnability vs the target.** The no-sacrifice baseline wins ${pct(baseline.winRate)} of runs — ${bandWord}. See the caveats above for what these numbers do and do not model.`,
   );
   bullets.push(
-    `- **Deaths are SPREAD, no longer bunched at Act 1.** Act 1 now holds only ${pct(act1Share(baseline))} of deaths (was ~98% pre-M15); the modal death act is Act ${peak.act} at ${pct(peak.share)} (< 50%), and ${actsWithShare(baseline, 0.1)} of the 5 acts each hold ≥ 10% of deaths. The run is a full descent now, not a first-floor wall.`,
+    `- **Where deaths fall.** Act 1 holds ${pct(act1Share(baseline))} of all deaths; the modal death act is Act ${peak.act} at ${pct(peak.share)}, and ${spread.length} of the 5 acts each hold ≥ 10% of deaths (${spread.length > 0 ? `acts ${spread.join(', ')}` : 'none'}). The M15 goal was deaths SPREAD across the descent rather than bunched at Act 1 (~98% pre-M15).`,
   );
   bullets.push(
-    `- **Average floors cleared is ${f2(baseline.avgFloorsCleared)} of 4** (avg final level ${f2(baseline.avgLevel)}) — progression reaches the mid/late game where leveling compounds, instead of stalling at the front.`,
+    `- **Average floors cleared is ${f2(baseline.avgFloorsCleared)} of 4** (avg final level ${f2(baseline.avgLevel)}).`,
   );
   bullets.push(
     `- **The grace path stays a mercy choice.** The kill-everything baseline reaches grace ${baseline.grace} time(s) (its neutral/negative karma routes cast-down → it wins by unmaking the Act-5 Hollow); the merciful policy (spares ⚖ foes) reaches grace ${merciful.grace} time(s) for overall win-rate ${pct(merciful.winRate)}. Mercy still shifts the moral ending, exactly as intended.`,
   );
+  const perClass = extremes
+    ? `strongest **${extremes.strongest}** (${pct(baseline.perClass[extremes.strongest].winRate)}), weakest **${extremes.weakest}** (${pct(baseline.perClass[extremes.weakest].winRate)})`
+    : 'no classes in the sample';
+  const zeroes =
+    noWin.length === 0
+      ? 'every class wins at least once over the sample'
+      : `**${noWin.join(', ')}** never won a single run`;
   bullets.push(
-    `- **Per-class shape to watch (author call).** Scavver's enemy-disadvantage evasion makes it the strongest class and the fragile casters (Neuromancer, Hollow) the weakest; every class wins at least occasionally (none at 0%). Whether to narrow that gap is a per-class balance follow-up, separate from the global winnability now achieved.`,
+    `- **Per-class shape (author call).** ${perClass}; ${zeroes}. Whether to narrow that gap is a per-class balance follow-up, separate from global winnability.`,
   );
 
   return bullets.join('\n');
+}
+
+/** "Acts 1, 2, 3 each hold ≥ 10% of deaths" — the acts NAMED, never a hard-coded range. */
+function describeSpread(report: AggregateReport): string {
+  const acts = actsAtOrAbove(report, 0.1);
+  if (acts.length === 0) return 'no act holds ≥ 10% of deaths';
+  return `Act${acts.length === 1 ? '' : 's'} ${acts.join(', ')} each hold ≥ 10% of deaths`;
+}
+
+/** "Every class wins" — or the names of the ones that do not. */
+function describeZeroes(report: AggregateReport): string {
+  const noWin = classesWithNoWin(report);
+  if (noWin.length === 0) {
+    const extremes = extremeClasses(report);
+    return extremes
+      ? `Every class wins (lowest baseline win-rate is ${extremes.weakest}).`
+      : 'Every class wins.';
+  }
+  return `**${noWin.join(', ')}** never won a run in this sample.`;
+}
+
+/** The D9 provenance block — emitted by the generator, so regeneration cannot delete it. */
+function provenance(): string {
+  return [
+    '> **Generated** by `scripts/balance-report.ts`',
+    '> (`npx vite-node scripts/balance-report.ts`). Every number below is that run\'s real',
+    '> output, and every verdict word is computed from it — nothing here is asserted by hand.',
+    '',
+    '## What these numbers do NOT include',
+    '',
+    ...STANDING_CAVEATS.map((c) => `- ${c.text}`),
+  ].join('\n');
 }
 
 // ------- Run the sample ------------------------------------------------------
@@ -146,27 +188,21 @@ console.log(`  merciful  win-rate: ${pct(merciful.winRate)}`);
 const md = [
   '# The Void — balance / winnability report',
   '',
-  '> **Generated** by `scripts/balance-report.ts` (`npx vite-node scripts/balance-report.ts`).',
-  "> Regenerate after any balance change; the numbers below are the harness's real output.",
+  provenance(),
   '',
-  '## Difficulty TARGET — SET (M15) and MET',
+  `## Difficulty TARGET (M15) — ${bandPhrase(bandVerdict(baseline.winRate))}`,
   '',
   '**Target (author, M15):** a careful baseline run wins about **1 in 3** — overall baseline',
-  'win-rate in the **25–35% band (aim ~30%)** — and, the KEY structural goal, **deaths SPREAD',
+  `win-rate in the **${pct(TARGET_BAND.min)}–${pct(TARGET_BAND.max)} band (aim ~30%)** — and, the KEY structural goal, **deaths SPREAD`,
   'across all five acts** rather than bunched at Act 1, with Act-1 enemies taking **~3–4 hits** to',
   'kill. The band is judged on the **baseline** (kill-everything, no-sacrifice) policy; the',
   'merciful policy is kept below for the grace-path view.',
   '',
-  `**Result — MET.** Baseline overall win-rate **${pct(baseline.winRate)}** (in band); Act-1 deaths`,
+  `**Result — ${bandPhrase(bandVerdict(baseline.winRate))}.** Baseline overall win-rate **${pct(baseline.winRate)}**; Act-1 deaths`,
   `**${pct(act1Share(baseline))}** of all baseline deaths (was ~98% pre-M15), the modal death act`,
-  `holds **${pct(peakDeath(baseline).share)}** (< 50%), and Acts 1–4 each hold ≥ 10% of deaths.`,
-  'Every class wins (lowest baseline win-rate is Neuromancer). Committed anchor tests',
+  `holds **${pct(peakDeath(baseline).share)}** (Act ${peakDeath(baseline).act}), and ${describeSpread(baseline)}.`,
+  `${describeZeroes(baseline)} Committed anchor tests`,
   '(`src/game/balance.test.ts`) hold the Act-1 "~3–4 hits" feel and this winnability floor.',
-  '',
-  '> **Documented near-miss / feel caveat.** These are the no-equipment LOWER BOUND (see the',
-  "> caveat below); REAL play equips found loot, so it is easier than these figures. The band is",
-  '> hit on the lower bound, so real play sits at the easier end — a **NEEDS-HUMAN play-test**',
-  '> confirms the "tough-but-fair" feel (esp. `STARTING_POTS = 6`, generous for equipped play).',
   '',
   '## What was measured',
   '',
@@ -175,12 +211,6 @@ const md = [
   '- **Two policies:** a **baseline** (reasonable play, kills everything, never seeks a sacrifice',
   '  deal) and a **merciful** variant (identical, but spares living ⚖ karma-weighted non-boss foes)',
   '  so the grace path\'s reachability is measured, not just death and damnation.',
-  '',
-  '> **Lower-bound caveat (equipment un-modelled).** The `step` controller has no equip action, so',
-  '> the sim fights with **starting gear** the whole way — found loot lands in the backpack unused.',
-  '> Real players equip better loot, so the true win-rate is **at least** what is reported here;',
-  '> these figures are a floor, not the ceiling. Promoting equip to a step input is a later',
-  '> follow-up.',
   '',
   '## Headline',
   '',

@@ -51,11 +51,13 @@ export function selectEncounter(rng: Rng): EncounterType {
 
 /**
  * Build the loot a chest/cache yields — PURE, seeded. Delegates to `loot.rollChestLoot`
- * (guaranteed items, no drop gate). Chests are act-agnostic for now (a single richer table);
- * per-Act chest tables are an M8/M10 data expansion. Draw order is documented in loot.ts.
+ * (guaranteed items, no drop gate). The chest still uses ONE richer rarity/slot table for
+ * every act (per-Act chest tables are an M8/M10 data expansion); `act` is threaded through
+ * only so the chest's authored-unique pool is floor-gated exactly as the victory drop's is
+ * (G14). Draw order is documented in loot.ts.
  */
-export function buildChestLoot(rng: Rng): ItemInstance[] {
-  return rollChestLoot(rng);
+export function buildChestLoot(rng: Rng, act: number): ItemInstance[] {
+  return rollChestLoot(rng, act);
 }
 
 /**

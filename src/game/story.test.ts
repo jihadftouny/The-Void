@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   getStory,
@@ -38,6 +40,55 @@ describe('the {playerName} token is gone from every LIVE story string (G47)', ()
       ]),
     ];
     for (const s of live) expect(s).not.toContain('{playerName}');
+  });
+});
+
+// =========================================================================================
+// G49 — the doc comments claimed a token that is in exactly one place.
+//
+// `story.ts`'s header and four of its accessors all said the `{playerName}` token was "kept
+// literal" and substituted later, as though it ran through the content. It appears ONCE, in
+// the legacy `ending.body`. The consequence is that `game.ts`'s `substituteName` is a no-op
+// on all three of its live call sites — correct, because G47 rules the name is never spoken,
+// but a silent no-op sitting beside a comment claiming otherwise is the failure mode.
+//
+// The INVARIANT is asserted here rather than the edit, so a future content change that puts
+// the token back somewhere fails loudly instead of quietly re-truthing a stale comment.
+// =========================================================================================
+
+describe('G49 — exactly one accessor carries the name token', () => {
+  it('getEnding does, and it is the only one', () => {
+    // The positive half. `story.test.ts` already asserts the ABSENCE across the live strings;
+    // without this, deleting the token from story.json entirely would leave that guard green
+    // and this file silently no longer describing anything.
+    expect(getEnding().body).toContain('{playerName}');
+    for (const section of [getGraceEnding(), getDamnationEnding()]) {
+      expect(section.body).not.toContain('{playerName}');
+      expect(section.header).not.toContain('{playerName}');
+    }
+    expect(getIntro().lines.join(' ')).not.toContain('{playerName}');
+    expect(getStory().intro.header).not.toContain('{playerName}');
+  });
+
+  it('and no OTHER accessor even mentions it in its doc comment', () => {
+    // The companion source check. A comment is not covered by any behavioural test, and a
+    // stale comment about where a token lives is exactly what G49 is.
+    const src = readFileSync(fileURLToPath(new URL('./story.ts', import.meta.url)), 'utf8');
+    const docs = [...src.matchAll(/\/\*\*[\s\S]*?\*\/\s*export function (\w+)/g)];
+    // The regex must actually be finding the accessors, or the loop below is vacuous.
+    expect(docs.map((m) => m[1])).toEqual([
+      'getStory',
+      'getIntro',
+      'getActIntro',
+      'getActOutro',
+      'getEnding',
+      'getGraceEnding',
+      'getDamnationEnding',
+    ]);
+    const mentioning = docs.filter((m) => m[0].includes('{playerName}')).map((m) => m[1]);
+    expect(mentioning, 'a doc comment names the token above the wrong accessor').toEqual([
+      'getEnding',
+    ]);
   });
 });
 

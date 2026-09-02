@@ -174,3 +174,22 @@ export function computeEquipModifiers(inventory: Inventory): EquipModifiers {
   }
   return bundle;
 }
+
+/**
+ * The charge cost a player ACTUALLY pays to cast a skill, after the equipped
+ * charge-reduction relics (Overclock Chip, Hollow Heart) — PURE, RNG-free, never below 0.
+ *
+ * WHY THIS FUNCTION EXISTS (G33). The rule was inlined in `battle.ts`'s cast guard and
+ * NOWHERE else, so the two things that DISPLAY a charge cost — the battle Cast picker and
+ * the character sheet — both showed the undiscounted number. With an Overclock Chip
+ * equipped and one charge banked, the picker greyed out a 2-cost skill that the engine
+ * would have cast without complaint: through the real UI the relic did nothing at all.
+ * A single definition read by the engine AND by both views is what stops the view and the
+ * rule disagreeing again; asserted by driving `step` and `castOptions` off the same player.
+ *
+ * Off-equivalence: `chargeDiscount` is 0 for effect-free (starting) gear, so this is
+ * `Math.max(chargeCost, 0)` — i.e. the base cost — for a normal run.
+ */
+export function effectiveChargeCost(inventory: Inventory, chargeCost: number): number {
+  return Math.max(chargeCost - computeEquipModifiers(inventory).chargeDiscount, 0);
+}

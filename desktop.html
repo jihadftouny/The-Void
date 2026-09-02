@@ -13,7 +13,13 @@
       <section id="stage">
         <h1 id="title">THE VOID</h1>
         <p id="status" class="status">starting…</p>
+        <!-- Boot notices the player must not miss (an unlock store recovered from
+             backup, or lost). Empty by default; game.css collapses an empty one. -->
+        <div id="notice" class="notice" role="status"></div>
         <div id="narration" class="narration" aria-live="polite"></div>
+        <!-- The combat log (G18): the mechanical record of a fight, plain by default and
+             expandable to the dice. Empty outside battle, and collapsed when empty. -->
+        <div id="log" class="log" aria-label="combat log"></div>
         <div id="choices" class="choices"></div>
       </section>
     </main>

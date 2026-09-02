@@ -32,7 +32,7 @@ import { effectiveMaxHp } from './statEffects.ts';
 import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
 import { weaponForSlot, UNARMED, pickUp } from './equipment.ts';
 import { rollLootDrop, summarizeLoot } from './loot.ts';
-import { computeEquipModifiers, type EquipModifiers } from './equipEffects.ts';
+import { computeEquipModifiers, effectiveChargeCost, type EquipModifiers } from './equipEffects.ts';
 import { fireTrigger, reviveActionFor } from './relicEffects.ts';
 import { applyConsumable, type ConsumableSource } from './consumable.ts';
 
@@ -770,8 +770,11 @@ function resolveCast(state: BattleState, skillId: SkillId, rng: Rng): RoundResul
   const skill = resolveSkill(player, skillId);
   // Overclock Chip / Hollow Heart cut the effective charge cost (never below 0). 0 for a
   // normal run, so availability is unchanged (off-equivalence).
-  const discount = computeEquipModifiers(player.inventory).chargeDiscount;
-  const effectiveCost = Math.max((skill?.chargeCost ?? 0) - discount, 0);
+  //
+  // G33: this used to inline the arithmetic, which made it the ONLY place the rule lived —
+  // so the Cast picker and the character sheet showed the undiscounted cost and the relic
+  // did nothing through the real UI. The shared helper is byte-equivalent to what was here.
+  const effectiveCost = effectiveChargeCost(player.inventory, skill?.chargeCost ?? 0);
   if (!skill || !player.skillPool.includes(skillId) || player.skillCharges < effectiveCost) {
     return { state, events: [{ kind: 'cast-unavailable' }], status: 'ongoing', resolved: false };
   }

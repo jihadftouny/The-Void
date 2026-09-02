@@ -584,7 +584,7 @@ function continueJourney(
   if (encounter === 'chest') {
     // A chest/cache: roll its guaranteed loot, pick every item up into the backpack, then
     // show the reveal. `continue` from the chest phase returns to the hub.
-    const loot = buildChestLoot(rng);
+    const loot = buildChestLoot(rng, state.act);
     let inventory = player.inventory;
     for (const item of loot) inventory = pickUp(inventory, item);
     const nextPlayer: Player = { ...player, inventory };
