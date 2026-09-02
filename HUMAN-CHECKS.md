@@ -458,3 +458,154 @@ Review the diff with `git -C "worktrees/<tip>" diff main...HEAD`. If any check i
 
 ## Verified
 _(move items here once you've confirmed them)_
+
+---
+
+# 2026-09-02 — unit `observability` (principle 7, G6, G37, G41, G50)
+
+**Why this unit exists.** You hit a freeze on the first enemy encounter — on a GPU machine, so the
+known CPU-slowness explanation did not apply. It recovered on its own and never recurred, and **we
+could not diagnose it**, because there was no timing instrumentation anywhere in the codebase and
+`electron/llm.mjs` had **zero** log calls. This unit both **fixes the most likely cause** (G37) and
+**makes the next one diagnosable**.
+
+**No agent can run Electron**, so everything below needs you. Ten checks; **check 3 is the decisive
+one** and is written as a fill-in-the-numbers form.
+
+## Where the log is now
+
+| OS | Path |
+|---|---|
+| Windows | `%APPDATA%\the-void\logs\void.log` (previous session: `void.log.1`) |
+| macOS | `~/Library/Application Support/the-void/logs/void.log` |
+| Linux | `~/.config/the-void/logs/void.log` |
+
+It is **capped at 4 MiB with exactly two files** (~8 MiB hard ceiling) and **it was previously a
+silent no-op in any packaged build** — that is G6, and it is why a shipped game had no crash
+diagnostics at all. Every launch writes one banner line naming `pid`, `cwd`, the app version and the
+platform, so two worktrees sharing one user-data log stay distinguishable.
+
+`npm run desktop` prints `[void] logging to <path>` at boot, and the path is now correct in a
+packaged build too.
+
+---
+
+## 1. `[manual]` The log exists where it should
+
+Run `npm run desktop`. Confirm the printed path is under the user-data folder in the table above and
+**not inside the repo**. Confirm the file exists and its first line is a `=== session … ===` banner.
+
+## 2. `[manual]` The boot timeline is complete
+
+In that file, confirm one line each for: `log configured`, `window loaded` (`ms`),
+`narrator load: start`, `model resolve: done` (`ms`), `gpu probe: done` (`ms`), `llama init: done`
+(`ms`), `model load: done` (`ms`), `context create: done` (`ms`), `narrator load: done` (`ms`),
+`app booted` (`bootMs`). **Every one must carry its number in `data`, and no message anywhere may
+contain a digit.** A quick check: `findstr /C:"\"ms\":" void.log` should find plenty.
+
+## 3. `[manual]` ⭐ THE FREEZE — IS IT FIXED, AND IS IT NOW DIAGNOSABLE?
+
+**This is the check the whole unit is for.** Start the game and click through to the first enemy
+encounter **as fast as you can** — that is what the incident did: the first `generate` lands on the
+stats-accept step, four clicks in, well inside the model-load window.
+
+Then open the log and fill this in:
+
+| Question | Where to look | Your answer |
+|---|---|---|
+| Did the game freeze at all? | (your own experience) | |
+| How many `narrator load: start` lines are there? | grep `narrator load: start` | |
+| Is there one with `"call":2`? | same lines, `data.call` | |
+| Is there a `narrator load: already in flight` line, and what is its `data.call`? | grep `already in flight` | |
+| Is there a `generate: waiting for narrator` line? What is `data.waitedMs`? | grep `waiting for narrator` | |
+| Are there `generate: STILL RUNNING` lines? | grep `STILL RUNNING` | |
+| If so, does `data.chunks` GROW between them? | the heartbeat payloads | |
+| What is the `ui`/`turn` `data.ms` for that first narrated action? | grep `"turn"` | |
+
+**How to read it:**
+
+- **`narrator load: start` must appear EXACTLY ONCE, with `"call":1`.** A second one with `"call":2`
+  means G37 is back — two concurrent model loads. The fix memoises the load promise, and a headless
+  concurrency test asserts "exactly one construction" under twenty racing callers, so this should be
+  impossible. If you see it anyway, that is the single most important thing to report.
+- **`already in flight` with `"call":2` is the fix WORKING.** It means the second caller arrived
+  during the load and waited for the first instead of starting its own.
+- **`generate: waiting for narrator` → `data.waitedMs` IS the freeze, in milliseconds.** After the
+  fix this should be roughly the remaining model-load time (seconds on a warm cache, longer on a
+  first-run download) rather than a *second whole load* (~2× everything, including GPU probes at a
+  30 s timeout each).
+- **`STILL RUNNING` heartbeats:** a `warn` every 10 s while a generation is outstanding. If
+  `data.chunks` GROWS between beats the model is merely slow; if `chunks` is FROZEN the token stream
+  has stopped. That single distinction is the question the original incident could not answer.
+- **`ui`/`turn` `data.ms`** is exactly how long the game was unresponsive, because `busy` is held for
+  the whole dispatch.
+
+**Write the numbers into this file either way.** If the freeze does not recur, the same lines from a
+healthy run are the baseline the next incident is compared to.
+
+## 4. `[manual]` The player sees nothing
+
+Play five minutes. No millisecond, token count, category tag (`[llm]`, `[engine]`) or level word
+(`WARN`) may appear in the narration pane, the combat log, the HUD or the status line. (Machine-
+checked as far as it can be: the render and LLM layers are forbidden by test from importing the
+logger at all, and no log call in `game.ts` may touch a player-facing element — but only you can see
+the actual screen.)
+
+## 5. `[manual]` Rotation
+
+Set `VOID_LOG_LEVEL=debug` and play for a while, or leave the game running. When `void.log` passes
+4 MiB, confirm **exactly two files** exist and the older one is `void.log.1`.
+
+## 6. `[manual]` The shipped level, and the player's name
+
+Launch the packaged / `file://` build (`npm run desktop:build`). In its log confirm:
+- the action timeline is there (one `engine`/`step` and one `ui`/`turn` line per action, with `ms`);
+- generation stats are there (`ttftMs`, `tokens`, `tokPerSec`);
+- **no `DEBUG` lines at all**;
+- **the character name you typed does NOT appear anywhere.** This is the deliberate decision behind
+  keeping the name in a developer log (plan ruling A.4): a packaged build runs at `info` and the
+  `ui`/`choice` payload that carries the name is `debug`. `src/log/level.test.ts` asserts that
+  consequence, but this is the real build.
+
+## 7. `[manual]` G41-a — the clean quit
+
+`npm run desktop`, quit the window, then `netstat -ano | findstr :5173` → **nothing**. Repeat twice.
+
+## 8. `[manual]` G41-b — back-to-back worktrees
+
+Launch from one worktree, quit, launch from another. The launcher prints `[void] serving <absolute
+path>` — confirm it matches the checkout you are in, and that your edits actually take effect.
+
+## 9. `[manual]` G41-c — the ugly exit
+
+Launch, then kill the launcher hard (`taskkill /F` on the `node scripts/desktop-dev.mjs` PID, or just
+close the terminal). Port 5173 must be free afterwards. **This is the case the register's recorded
+fix could not cover**, and it works now because Vite runs *inside* the launcher process — the OS
+releases the socket whichever way that process dies.
+
+## 10. `[manual]` G41-d — a squatter
+
+Start a plain `npm run dev` in another terminal, then run `npm run desktop` in a second one. It must
+print `port 5173 is held by a stale Vite dev server (pid …) — reclaiming it`, kill it, and start
+normally. Then repeat with a NON-Vite server on 5173 (e.g. `npx http-server -p 5173`): it must
+**refuse loudly**, naming the PID and a `taskkill /F /PID …` command, and **must never boot Electron
+against it**.
+
+> ⚠ **There is very likely a stale Vite already on your port 5173 right now.** While verifying this
+> unit, `netstat` showed `TCP [::1]:5173 [::]:0 LISTENING 29236` with `/@vite/client` answering
+> `200 text/javascript` — a live orphaned dev server, i.e. **G41 in the wild on your machine**. It
+> was left alone rather than killed without asking. The new launcher will reclaim it automatically
+> on the next `npm run desktop`, which is check 10 happening for real.
+
+---
+
+## What was NOT verified, and cannot be by any agent
+
+- Anything requiring Electron to actually run: the log file in a **packaged** build, the real boot
+  timeline, the heartbeat firing against a real model, and every G41 check above. The pure decisions
+  behind all of them are unit-tested, and the G41 reclaim path was additionally exercised against a
+  **real Vite dev server** (a real `strictPort` rejection, a real `netstat` parse, a real
+  `/@vite/client` probe, a real kill, and a real port release) — but the launcher and `main.mjs`
+  themselves are covered by source guards only.
+- Whether the freeze was **actually** G37. The evidence is circumstantial but matches on every
+  observable. Check 3 is what settles it.
