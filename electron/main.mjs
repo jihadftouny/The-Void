@@ -6,28 +6,49 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createNarrator } from './llm.mjs';
 import { resolveModelDir, filesToMigrate } from './model-path.mjs';
-import { fileLog, LOG_FILE } from './log.mjs';
+import {
+  fileLog,
+  configureLogDir,
+  logFilePath,
+  resolveMainLogLevel,
+  passesLevel,
+  LOG_CAP_BYTES,
+} from './log.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.VITE_DEV_SERVER_URL; // set by scripts/desktop-dev.mjs
 const SMOKE = process.env.VOID_SMOKE === '1'; // headless verify path
+const BOOT_MS = Date.now();
 
 let win = null;
-let narrator = null;
+
+// The main process's own level. `debug` under the dev launcher, `info` in a packaged
+// build, overridable with VOID_LOG_LEVEL. Resolved at module scope because the very first
+// thing that can fail (an uncaughtException before `ready`) must already be filtered.
+const LOG_LEVEL = resolveMainLogLevel({ env: process.env, dev: !!DEV_URL });
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
-// Main-process logging → console + the shared log file.
+// Main-process logging → the shared log file. NEVER interpolate a measurement into
+// `message`: numbers go in `data`, so `grep '"ms":'` over a log always works.
 function mlog(level, category, message, data) {
+  if (!passesLevel(level, LOG_LEVEL)) return;
   fileLog({ time: Date.now(), level, category, message, ...(data !== undefined ? { data } : {}) });
 }
 process.on('uncaughtException', (err) =>
-  mlog('error', 'electron', 'uncaughtException', { message: String(err?.message ?? err), stack: err?.stack }),
+  mlog('error', 'electron', 'uncaughtException', {
+    message: String(err?.message ?? err),
+    stack: err?.stack,
+    uptimeMs: Date.now() - BOOT_MS,
+  }),
 );
 process.on('unhandledRejection', (reason) =>
-  mlog('error', 'electron', 'unhandledRejection', { reason: String(reason) }),
+  mlog('error', 'electron', 'unhandledRejection', {
+    reason: String(reason),
+    uptimeMs: Date.now() - BOOT_MS,
+  }),
 );
 
 // Resolve (and prepare) the single per-user models directory. Must run after
@@ -129,6 +150,21 @@ ipcMain.handle('llm:generate', async (event, { requestId, prompt, system }) => {
 ipcMain.on('log:entry', (_e, entry) => fileLog(entry));
 
 app.whenReady().then(async () => {
+  // FIRST, before anything else can want to log. G6: the log directory MUST come from
+  // `app.getPath('userData')` — a path derived from `__dirname` lands inside the asar in a
+  // packaged build, where `mkdirSync` throws and every log call becomes a silent no-op.
+  // This is also why it sits above the SMOKE branch: a smoke run that fails is exactly a
+  // run whose log we need.
+  const logDir = path.join(app.getPath('userData'), 'logs');
+  const logFile = configureLogDir(logDir, { session: { version: app.getVersion() } });
+  mlog('info', 'electron', 'log configured', {
+    dir: logDir,
+    file: logFile,
+    capBytes: LOG_CAP_BYTES,
+    level: LOG_LEVEL,
+  });
+  console.log(`[void] logging to ${logFilePath()}`);
+
   if (SMOKE) {
     // Verify node-llama-cpp loads and runs INSIDE Electron's runtime (the ABI
     // risk) with no window, then quit — automatable without a human watching.
@@ -150,8 +186,20 @@ app.whenReady().then(async () => {
   }
 
   await createWindow();
-  mlog('info', 'electron', 'app booted');
-  console.log(`[void] logging to ${LOG_FILE}`);
+  mlog('info', 'electron', 'app booted', {
+    bootMs: Date.now() - BOOT_MS,
+    dev: !!DEV_URL,
+    versions: {
+      electron: process.versions.electron,
+      node: process.versions.node,
+      chrome: process.versions.chrome,
+    },
+    platform: process.platform,
+    arch: process.arch,
+    appVersion: app.getVersion(),
+    cwd: process.cwd(),
+    level: LOG_LEVEL,
+  });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
