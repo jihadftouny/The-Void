@@ -28,7 +28,15 @@ export default defineConfig({
     // numbers they described (FINDINGS.md G28(c)), so they need a test; `scripts/` is outside
     // `tsconfig.json`'s include set, so they are RUN here but NOT typechecked. That gap is
     // the status quo for everything under `scripts/` and is recorded, not fixed here.
-    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts', 'electron/**/*.test.mjs'],
+    // `scripts/**/*.test.mjs` was MISSING and had to be added: `dev-server.test.mjs` (the
+    // G41 launcher helpers) would otherwise have been collected by nothing and passed by
+    // never running — a whole test file that silently does not exist.
+    include: [
+      'src/**/*.test.ts',
+      'scripts/**/*.test.ts',
+      'scripts/**/*.test.mjs',
+      'electron/**/*.test.mjs',
+    ],
     // Worktrees live inside the repo (agentic pipeline); never let Vitest walk them.
     exclude: ['worktrees/**', 'node_modules/**', 'dist/**', '.legacy/**'],
   },
