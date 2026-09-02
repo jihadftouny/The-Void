@@ -73,17 +73,32 @@ export function stripComments(source) {
 /**
  * The text of a call `name(...)`, with balanced parentheses — so an assertion about a
  * call's ARGUMENTS cannot be fooled by the first `)` inside a nested call.
+ *
+ * String-aware, and that is load-bearing: this repo really does log
+ * `mlog('error','llm','generate: FAILED (main)', …)`, and a depth counter that counted
+ * the parenthesis inside that message would end the call in the wrong place and hand
+ * every downstream assertion a truncated string.
  */
 export function callsTo(source, name) {
   const found = [];
   const needle = new RegExp(`\\b${name}\\s*\\(`, 'g');
   for (const m of source.matchAll(needle)) {
+    // A DECLARATION is not a call. `function mlog(level, category, message, data)` would
+    // otherwise be returned as a call whose "arguments" are parameter names, and every
+    // assertion about a call's arguments would fail on it — or, worse, pass on it.
+    if (/(?:async\s+)?function\s+$/.test(source.slice(Math.max(0, m.index - 20), m.index))) continue;
     let depth = 0;
-    let i = m.index + m[0].length - 1;
     const start = m.index;
+    let i = start + m[0].length - 1;
     for (; i < source.length; i += 1) {
-      if (source[i] === '(') depth += 1;
-      else if (source[i] === ')') {
+      const c = source[i];
+      if (c === '"' || c === "'" || c === '`') {
+        i += 1;
+        while (i < source.length && source[i] !== c) i += source[i] === '\\' ? 2 : 1;
+        continue;
+      }
+      if (c === '(') depth += 1;
+      else if (c === ')') {
         depth -= 1;
         if (depth === 0) {
           found.push(source.slice(start, i + 1));
@@ -93,4 +108,44 @@ export function callsTo(source, name) {
     }
   }
   return found;
+}
+
+/**
+ * The TOP-LEVEL arguments of a call text (as produced by `callsTo`), split on commas that
+ * are not inside nested brackets or strings. Trimmed; empty for a no-argument call.
+ */
+export function argsOf(callText) {
+  const open = callText.indexOf('(');
+  const inner = callText.slice(open + 1, callText.lastIndexOf(')'));
+  const args = [];
+  let depth = 0;
+  let current = '';
+  for (let i = 0; i < inner.length; i += 1) {
+    const c = inner[i];
+    if (c === '"' || c === "'" || c === '`') {
+      current += c;
+      i += 1;
+      while (i < inner.length && inner[i] !== c) {
+        if (inner[i] === '\\') {
+          current += inner[i] + (inner[i + 1] ?? '');
+          i += 2;
+          continue;
+        }
+        current += inner[i];
+        i += 1;
+      }
+      current += inner[i] ?? '';
+      continue;
+    }
+    if (c === '(' || c === '[' || c === '{') depth += 1;
+    if (c === ')' || c === ']' || c === '}') depth -= 1;
+    if (c === ',' && depth === 0) {
+      args.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  if (current.trim() !== '') args.push(current.trim());
+  return args;
 }

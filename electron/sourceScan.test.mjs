@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { stripComments, callsTo } from './sourceScan.testutil.mjs';
+import { stripComments, callsTo, argsOf } from './sourceScan.testutil.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -94,5 +94,45 @@ describe('callsTo', () => {
 
   it('returns nothing when the name is absent (so a caller must assert non-emptiness)', () => {
     expect(callsTo('const x = 1;', 'mlog')).toEqual([]);
+  });
+
+  it('skips a DECLARATION — parameter names are not arguments', () => {
+    const src = 'function mlog(level, category, message, data) {}\nmlog("info", "x", "m");';
+    expect(callsTo(src, 'mlog')).toEqual(['mlog("info", "x", "m")']);
+    expect(callsTo('async function go(a, b) {}\ngo(1, 2);', 'go')).toEqual(['go(1, 2)']);
+  });
+
+  it('is not fooled by a PARENTHESIS INSIDE A STRING — the real case in main.mjs', () => {
+    // `mlog('error','llm','generate: FAILED (main)', {...})` is in the shipping source. A
+    // depth counter that counted that `)` would end the call early and hand every
+    // downstream assertion a truncated string.
+    const src = `mlog('error', 'llm', 'generate: FAILED (main)', { requestId, ms });`;
+    expect(callsTo(src, 'mlog')).toEqual([
+      `mlog('error', 'llm', 'generate: FAILED (main)', { requestId, ms })`,
+    ]);
+  });
+
+  it('and not by an unbalanced parenthesis in a string', () => {
+    expect(callsTo(`f('oops :-(', 1);`, 'f')).toEqual([`f('oops :-(', 1)`]);
+  });
+});
+
+describe('argsOf', () => {
+  it('splits top-level arguments only', () => {
+    expect(argsOf(`mlog('info', 'llm', 'x', { a: 1, b: [2, 3] })`)).toEqual([
+      `'info'`,
+      `'llm'`,
+      `'x'`,
+      '{ a: 1, b: [2, 3] }',
+    ]);
+  });
+
+  it('does not split on a comma inside a string', () => {
+    expect(argsOf(`f('a, b', 2)`)).toEqual([`'a, b'`, '2']);
+  });
+
+  it('handles a no-argument call and an arrow argument', () => {
+    expect(argsOf('f()')).toEqual([]);
+    expect(argsOf('f(a, (x, y) => x + y)')).toEqual(['a', '(x, y) => x + y']);
   });
 });
