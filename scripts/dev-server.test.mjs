@@ -323,20 +323,77 @@ describe('the launcher cannot orphan Vite or silently join somebody else (G41)',
     // a `.request(` — and any of them reintroduces "accept whoever answers 5173", which IS
     // G41. The launcher must make NO outbound request of any kind: the identity probe
     // lives in `dev-server.mjs`, where its answer can only lead to reclaim or abort.
-    for (const [what, pattern] of [
-      ['fetch', /fetch\s*\(/],
-      ['http.get / https.get', /https?\.get\s*\(/],
-      ['a raw request', /\.request\s*\(/],
-      ['a socket connect', /net\.(connect|createConnection)\s*\(/],
-      ['an http import', /from\s*'node:https?'/],
-      ['a net import', /from\s*'node:net'/],
-    ]) {
+    //
+    // ⚠ EACH PATTERN IS PAIRED WITH A PLANTED POSITIVE. Three of these were once INERT:
+    // the `\b` in them had been mangled into a literal BACKSPACE byte (0x08) by the script
+    // that inserted them, so `/<BS>fetch\s*\(/` could never match anything and three of
+    // the six guards were decoration. A list of "must not appear" patterns proves nothing
+    // about the patterns themselves — over a clean file, a broken regex and a working one
+    // are indistinguishable. Every other list-shaped guard on this branch carries a
+    // self-test; this one did not, and that is exactly where the dead bytes hid.
+    const FORBIDDEN_CALLS = [
+      ['fetch', /\bfetch\s*\(/, "const r = await fetch('http://localhost:5173/');"],
+      ['http.get / https.get', /\bhttps?\.get\s*\(/, "http.get('http://localhost:5173/', cb);"],
+      ['a raw request', /\.request\s*\(/, 'const req = http.request(opts, cb);'],
+      [
+        'a socket connect',
+        /\bnet\.(connect|createConnection)\s*\(/,
+        "const s = net.connect(PORT, 'localhost');",
+      ],
+      ['an http import', /from\s*'node:https?'/, "import http from 'node:http';"],
+      ['a net import', /from\s*'node:net'/, "import net from 'node:net';"],
+    ];
+
+    for (const [what, pattern, planted] of FORBIDDEN_CALLS) {
+      // The guard.
       expect(
         LAUNCHER,
         `the launcher talks to the port itself (${what}) — that is how it ends up attached ` +
           "to somebody else's dev server",
       ).not.toMatch(pattern);
+      // ...and the proof that the guard can fire at all.
+      expect(
+        planted,
+        `the pattern for ${what} matches NOTHING — it is an inert guard, and the launcher ` +
+          'could reintroduce G41 through it with every test green',
+      ).toMatch(pattern);
     }
+    expect(FORBIDDEN_CALLS.length, 'the forbidden-call table shrank').toBe(6);
+  });
+
+  it('the dynamic-import forms are caught too, not just the static ones', () => {
+    // THE SHAPES THAT ACTUALLY SLIPPED THROUGH. `await import('node:http')` carries no
+    // `from 'node:http'`, so the two import patterns miss it entirely — only the CALL
+    // patterns (`http.get`, `net.connect`) stand between the launcher and a readiness poll
+    // written that way, and those were among the three inert ones. The earlier `net.connect`
+    // mutation used a STATIC import, so it went red on the wrong pattern and the pairing
+    // rule did not save it.
+    const POLL_SHAPES = [
+      "const http = await import('node:http'); http.get(url, cb);",
+      "const net2 = await import('node:net'); net2.connect(PORT, 'localhost');",
+      "const { get } = await import('node:http'); get(url, cb);",
+      "const r = await fetch('http://localhost:5173/');",
+    ];
+    const DETECTORS = [
+      /\bfetch\s*\(/,
+      /\bhttps?\.get\s*\(/,
+      /\.request\s*\(/,
+      /\bnet\.(connect|createConnection)\s*\(/,
+      /\bimport\s*\(\s*'node:(https?|net)'/,
+    ];
+    for (const shape of POLL_SHAPES) {
+      expect(
+        DETECTORS.some((p) => p.test(shape)),
+        `a readiness poll written this way would pass unnoticed: ${shape}`,
+      ).toBe(true);
+    }
+    // And the launcher must not dynamically import a network module either — the shape
+    // that is invisible to every static-import guard.
+    expect(
+      LAUNCHER,
+      'the launcher dynamically imports a network module — a readiness poll hidden from ' +
+        'every static-import guard, and G41 restored',
+    ).not.toMatch(/\bimport\s*\(\s*'node:(https?|net)'/);
   });
 
   it('binds strictly, so a taken port is an ERROR rather than a silent drift to 5174', () => {
