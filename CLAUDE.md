@@ -64,6 +64,25 @@ core (breaks reproducibility), and class instances/functions in saved state (bre
 6. **Desktop-first, responsive.** (Amended 2026-08-02 from mobile-first: local LLMs are weakest on
    phones.) Target desktop; keep layouts responsive so a mobile path (smaller model or engine-only
    mode) can come later. Narrative text renders as DOM; Kaplay is the atmosphere/effects layer.
+7. **Always log. A bug you cannot reproduce is a bug you cannot fix.** *(Added 2026-09-02, after a
+   first-encounter freeze that recovered on its own and left no evidence — on a GPU machine, where
+   the known CPU-slowness explanation did not apply.)* **Every unit adds logging for the behaviour
+   it introduces**; it is part of the work, not a follow-up. Specifically:
+   - **Anything that can be slow gets timed** — model load, time-to-first-token, total generation,
+     tokens and tokens/second, step duration, save and load. A duration nobody records is a freeze
+     nobody can explain.
+   - **Every failure path logs before it recovers.** A fallback that silently papers over an error
+     destroys the only evidence that it happened.
+   - **Log at the BOUNDARY, never inside the pure cores.** `src/game` and `src/llm` stay
+     deterministic and hermetically testable — `src/log/logger.ts` says this in its own header and
+     it is not negotiable. The renderer, the Electron main process and the IPC edge are where
+     instrumentation belongs.
+   - **Structured and JSON-serializable** (`category`, `message`, `data`), so a sink can write it to
+     file and a human can grep it. Never interpolate a number into a string and lose it.
+   - **The player never sees it.** Logging is a developer surface; it must not leak into the
+     narration, the combat log, or the UI.
+   - **A log line is not a substitute for a test.** If a machine can assert it, assert it. Logs are
+     for what only happens on real hardware, at real speed, in front of a real person.
 
 ## Stack & targets
 
