@@ -214,6 +214,32 @@ describe('the renderer and the storage adapters measure through the seam, never 
     return ['desktop', 'storage', 'log'].flatMap((d) => shippingFiles(d));
   }
 
+  it('the text these guards SCAN is faithful — no line was swallowed by a comment hole', () => {
+    // ⚠ A GUARD MUST VALIDATE ITS OWN INPUT. The two scans below read the STRIPPED source,
+    // so a comment hole that swallows a line makes them pass by not seeing it. Demonstrated:
+    // a regex literal containing `/*` placed in `game.ts` hid `const __t0 =
+    // performance.now()` — a second clock seam, the very thing the next test forbids — and
+    // `npx vitest run src/log` was GREEN. `sourceScan.test.mjs` sweeps every scanned file
+    // repo-wide, but relying on a different test file to validate this one's input is how a
+    // guard ends up trusting something it never checked.
+    let checked = 0;
+    for (const f of instrumentedFiles()) {
+      const stripped = stripComments(f.source);
+      expect(
+        stripComments(`${f.source}\nVOID_STRIP_SENTINEL`),
+        `${f.name}: the strip ran off the end of the file`,
+      ).toContain('VOID_STRIP_SENTINEL');
+      for (const line of f.source.split('\n')) {
+        const t = line.trim();
+        if (t === '' || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue;
+        if (t.includes('//')) continue; // a trailing comment legitimately shortens the line
+        expect(stripped, `${f.name}: the scanner ate "${t}" — the scans below see a hole`).toContain(t);
+        checked += 1;
+      }
+    }
+    expect(checked, 'no code lines checked — this validation is vacuous').toBeGreaterThan(300);
+  });
+
   it('no shipping file outside logger.ts reads `performance`', () => {
     // `logger.ts#defaultClock` is THE seam's implementation and the only sanctioned reader.
     const offenders: string[] = [];
