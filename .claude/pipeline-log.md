@@ -19,7 +19,7 @@ Format per entry:
 
 ---
 
-## 2026-09-02 — persistence-reach (#0c of the #0 split: G1/G19, G2, G3, G14, G18, G26, G28, G33, G40, C7, G46, G49, D9) [branch `agentic/persistence-reach`, **unmerged**]
+## 2026-09-02 — persistence-reach (#0c of the #0 split: G1/G19, G2, G3, G14, G18, G26, G28, G33, G40, C7, G46, G49, D9) [branch `agentic/persistence-reach`, **merged to `main` 2026-09-02**]
 - Verdict: **PASS** (after **3 fix rounds**). 1155 → 1290 → 1301 → 1315 → **1320 tests**. 13 commits.
 - Fix rounds: **3** — ⚠ **and that is a DELIBERATE DEVIATION from this skill's two-round rule, recorded here with its reasoning.**
 

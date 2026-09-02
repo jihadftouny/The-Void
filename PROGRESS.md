@@ -137,6 +137,43 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-09-02 — `#0 critical-engine-bugs` is DONE. All three units merged ✅
+
+**All 33 critical engine defects are fixed, verified and on `main`.** Suite **1029 → 1320 tests**,
+typecheck clean, build passing, verified on the trunk after each merge.
+
+- **`#0c persistence-and-reach`** (13 commits) closes the last thirteen rows. **The player can see
+  damage and dice for the first time** — `render/format.ts` was imported by nothing but its own test,
+  so the whole roll-detail pipeline was computed every attack and shown to nobody, while the narrator
+  is forbidden from saying numbers. **A resumed run keeps what it earned** (it silently forfeited
+  every unlock — verified on seed 4242: the identical run, resumed, unlocked nothing). **A finished
+  run is finished** and reports what it was.
+- ⭐ **HEALING IS REACHABLE — one milestone earlier than `SHIP-SCOPE.md` scheduled it.** G14's catalog
+  branch puts consumables and uniques on the drop paths, and the rest of the chain was already built.
+  Measured over 100 whole runs through the real `step`: the Use-item picker appears in **96%** of runs
+  and offers a heal in **94%**; reproduced by the test-agent on disjoint seeds (87–96%). **The game is
+  playable end to end for the first time.**
+- **It took THREE fix rounds — a recorded deviation from the pipeline's two-round rule**
+  (`.claude/pipeline-log.md` carries the reasoning). Each round closed its findings *and* surfaced a
+  strictly new class of blind guard: contracts that could not fail → polarity-blind source scans → a
+  guard watching the caller while all five call sites had moved behind a helper. That last one,
+  found only by **enumerating the diff mechanically instead of reading it**, would have restored G19
+  in full — every save carrying an empty tally — with all 1315 tests green.
+- **Balance verified unchanged at scale:** 20,000 runs, 20 disjoint blocks per tree. `main` 13.51% →
+  `HEAD` 13.14%, difference −0.37 pp, **p ≈ 0.44**. AC-29 held byte-identical through four checks.
+  ⚠ **But the gate itself is weak and always was** — `winRate > 0.12` fails on 3 of 20 alternative
+  seed blocks on `main` alone. **#2 must re-derive it against ~1000 seeds, not retune constants.**
+- **New defects: G50** (the renderer's `foldRunEvents` call is unguarded — neutering it forfeits every
+  feat in every run, and the behavioural test folds it in its own harness so it can never prove the
+  renderer calls it) and **G51** (`src/desktop/game.ts` cannot be imported, which is the *proven* root
+  cause of every remaining test blind spot — **the first thing #6 should do**).
+- **`CLAUDE.md` gained principle 7: always log.** Prompted by a first-encounter freeze that recovered
+  on its own, on a GPU machine, leaving no evidence — because the logging system is used in exactly
+  one file and there is **no timing instrumentation anywhere**. Next unit closes that.
+- **Milestone statuses unchanged** — no demoted milestone yet meets its full "done when". M6/M7/M13's
+  gaps all shrank (consumables now generate and can be found), but relics remain deal-only-in-
+  principle and `snapshotUnlocks` still reads nothing, both of which belong to **#9**.
+
 ### 2026-09-01 — `#0c persistence-and-reach` built: the player can see numbers, and can heal 🔄
 
 **Built and self-verified on `agentic/persistence-reach`; awaiting review and merge.** Suite
