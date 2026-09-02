@@ -357,6 +357,50 @@ describe('the launcher cannot orphan Vite or silently join somebody else (G41)',
     );
   });
 
+  it('only treats a PORT-IN-USE failure as a conflict — anything else propagates', () => {
+    // FOUND BY THE DIFF ENUMERATION. Inverted, a completely unrelated startup failure
+    // ("cannot find module vite") is handled as a port conflict: the launcher probes,
+    // finds nothing, and aborts with a message naming a port that was never the problem.
+    expect(LAUNCHER, 'the launcher no longer distinguishes a port conflict from a real failure').toMatch(
+      /if\s*\(\s*!\s*isPortInUse\s*\(\s*err\s*,\s*PORT\s*\)\s*\)\s*throw\s+err/,
+    );
+    expect(LAUNCHER, 'the check is inverted — a genuine port conflict would be re-thrown').not.toMatch(
+      /if\s*\(\s*isPortInUse\s*\(\s*err\s*,\s*PORT\s*\)\s*\)\s*throw\s+err/,
+    );
+  });
+
+  it('gives up when the port does NOT free after the kill, rather than racing it', () => {
+    // FOUND BY THE DIFF ENUMERATION. Inverted, the launcher retries `listen()` while the
+    // port is still held (an immediate crash) and refuses when it is free.
+    expect(LAUNCHER, 'the launcher no longer waits for the port to be released').toMatch(
+      /if\s*\(\s*!\s*\(\s*await\s+waitForPortFree\s*\(\s*\)\s*\)\s*\)/,
+    );
+    expect(LAUNCHER, 'the wait is inverted — it aborts when the port IS free').not.toMatch(
+      /if\s*\(\s*await\s+waitForPortFree\s*\(\s*\)\s*\)\s*\{[^}]*process\.exit/,
+    );
+  });
+
+  it('shuts down ONCE, and really does shut down — inverting this restores G41 in full', () => {
+    // FOUND BY THE DIFF ENUMERATION, and the most consequential of the three. `if
+    // (shuttingDown) return;` inverted means the FIRST call returns immediately, so
+    // quitting the game never closes the server and never exits the launcher — the port
+    // stays held and the next launch serves this session's code. That is G41's headline
+    // consequence, restored by one character, with every other guard here still green.
+    expect(LAUNCHER, 'the re-entry guard is gone').toMatch(
+      /if\s*\(\s*shuttingDown\s*\)\s*return\s*;/,
+    );
+    expect(LAUNCHER, 'the re-entry guard is inverted — teardown would never run at all').not.toMatch(
+      /if\s*\(\s*!\s*shuttingDown\s*\)\s*return\s*;/,
+    );
+    // ...and the flag really is set, or the guard protects nothing.
+    expect(LAUNCHER, 'shuttingDown is never set — the guard can never fire').toMatch(
+      /shuttingDown\s*=\s*true\s*;/,
+    );
+    const guardAt = LAUNCHER.search(/if\s*\(\s*shuttingDown\s*\)/);
+    const setAt = LAUNCHER.search(/shuttingDown\s*=\s*true/);
+    expect(guardAt, 'the flag is set before it is checked — the first call would be skipped').toBeLessThan(setAt);
+  });
+
   it('exits non-zero when it refuses, so nothing downstream proceeds', () => {
     expect(LAUNCHER).toMatch(/describePortConflict\s*\(/);
     expect(LAUNCHER).toMatch(/process\.exit\s*\(\s*1\s*\)/);

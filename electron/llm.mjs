@@ -44,12 +44,12 @@ const MODEL_FILE = MODEL_URI.slice(MODEL_URI.lastIndexOf('/') + 1);
  * line and a heartbeat are the only things that can ever produce any.
  */
 export async function createNarrator({ onStatus, modelsDir, log, now, setTimer, clearTimer } = {}) {
-  const inst = createInstrument({
-    ...(log ? { log } : {}),
-    ...(now ? { now } : {}),
-    ...(setTimer ? { setTimer } : {}),
-    ...(clearTimer ? { clearTimer } : {}),
-  });
+  // Passed straight through. NOT conditionally spread: `createInstrument` destructures
+  // with defaults, and a destructuring default already fires on `undefined`, so four
+  // `...(x ? {x} : {})` branches would be four things that can be inverted to no purpose.
+  // A branch that does not exist cannot be inverted (the lesson `renderSheet`'s chip row
+  // already learned in `rendererSource.test.ts`).
+  const inst = createInstrument({ log, now, setTimer, clearTimer });
 
   onStatus?.({ phase: 'resolving', modelsDir });
   const modelPath = await inst.run(
