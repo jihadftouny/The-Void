@@ -441,7 +441,9 @@ describe('no measurement is interpolated into a message', () => {
   });
 
   it('and every message argument is a constant string with no digit', () => {
-    for (const call of logCalls(SOURCE)) {
+    const calls = logCalls(SOURCE);
+    expect(calls.length, 'no log calls found — this loop would run over nothing').toBeGreaterThan(10);
+    for (const call of calls) {
       // `log.log(level, cat, msg, data)` has the message third; the four shorthands have
       // it second. Split on top-level commas.
       const inner = call.slice(call.indexOf('(') + 1, call.lastIndexOf(')'));

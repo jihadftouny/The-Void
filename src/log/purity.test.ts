@@ -27,9 +27,54 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-/** Comments stripped — a comment mentioning `log/logger` is prose, not an import. */
+/**
+ * Comments stripped — a comment mentioning `log/logger` is prose, not an import.
+ *
+ * A single left-to-right scan, NOT the obvious pair of regexes. `.replace(/\/\*[\s\S]*?\*\//g,
+ * '').replace(/\/\/.*$/gm, '')` treats the `/*` inside a LINE comment that mentions a glob
+ * (`src/render/**`, `./models/*.gguf` — this repo writes both) as a block-comment opener
+ * and deletes everything up to the next `*​/`, which is the end of some JSDoc far below.
+ * The file's whole import section then vanishes and this scan reports a clean tree because
+ * it read a HOLE. That is not hypothetical: it is how this unit's first G6 guard stayed
+ * green against G6 reintroduced verbatim. Of every guard in this unit, THIS one is the
+ * worst place for that to happen, because it is the guard on determinism itself.
+ */
 function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  let out = '';
+  let i = 0;
+  while (i < source.length) {
+    const c = source[i];
+    const d = source[i + 1];
+    if (c === '/' && d === '/') {
+      while (i < source.length && source[i] !== '\n') i += 1;
+      continue;
+    }
+    if (c === '/' && d === '*') {
+      i += 2;
+      while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) i += 1;
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      out += c;
+      i += 1;
+      while (i < source.length) {
+        if (source[i] === '\\') {
+          out += source[i] + (source[i + 1] ?? '');
+          i += 2;
+          continue;
+        }
+        out += source[i];
+        const done = source[i] === c;
+        i += 1;
+        if (done) break;
+      }
+      continue;
+    }
+    out += c;
+    i += 1;
+  }
+  return out;
 }
 
 /**
@@ -98,6 +143,19 @@ describe('the logger-import detector', () => {
     });
   }
 
+  it('a glob inside a LINE comment does not swallow the imports that follow it', () => {
+    // The stripper failure that makes this whole file a scan of a hole. Note the guard
+    // must ALSO still find a real violation in the same text, or "returns []" would be
+    // indistinguishable from "read nothing".
+    const source = [
+      '// this module deliberately imports nothing from src/log/** — principle 7',
+      '/** and the first JSDoc block, whose close is what a naive stripper runs to */',
+      `import { log } from '../log/logger.ts';`,
+    ].join('\n');
+    expect(stripComments(source)).toContain(`import { log } from '../log/logger.ts';`);
+    expect(loggingImports(source)).toHaveLength(1);
+  });
+
   it('finds BOTH when a file has two of them (it does not stop at the first)', () => {
     const source = `import { log } from '../log/logger.ts';\nimport { startTimer } from '../log/timing.ts';`;
     expect(loggingImports(source)).toHaveLength(2);
@@ -156,10 +214,32 @@ describe('no shipping file in a pure core imports the logging layer', () => {
   });
 
   it('and the files it reads are real source, not empty strings', () => {
+    let checked = 0;
     for (const dir of ['game', 'llm', 'render']) {
       for (const f of shippingFiles(dir)) {
         expect(f.source.length, `${f.name} read as empty — the scan is reading nothing`).toBeGreaterThan(50);
+        checked += 1;
       }
     }
+    expect(checked, 'the loop above ran over nothing').toBeGreaterThan(40);
+  });
+
+  it('and the text it actually SCANS still contains every import line', () => {
+    // The assertion the count-and-name guards above cannot make, because they read the RAW
+    // source: `offendersIn` scans the STRIPPED source, so it is the stripped source that
+    // has to still contain the imports. A stripper that ate half of `game.ts` would leave
+    // every check above green while reporting a clean tree it never read.
+    let importLines = 0;
+    for (const dir of ['game', 'llm', 'render']) {
+      for (const f of shippingFiles(dir)) {
+        const stripped = stripComments(f.source);
+        for (const line of f.source.split('\n')) {
+          if (!/^import\s/.test(line)) continue;
+          importLines += 1;
+          expect(stripped, `${f.name}: the strip ate "${line.trim()}"`).toContain(line.trim());
+        }
+      }
+    }
+    expect(importLines, 'no import lines seen at all — this guard scanned nothing').toBeGreaterThan(60);
   });
 });

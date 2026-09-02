@@ -401,6 +401,7 @@ describe('no measurement is interpolated into a message', () => {
 
   it('main.mjs: every mlog message is a plain quoted string with no digit', () => {
     const calls = callsTo(MAIN, 'mlog');
+    expect(calls.length, 'no mlog calls found — this loop would run over nothing').toBeGreaterThan(8);
     for (const c of calls) {
       const message = argsOf(c)[2];
       expect(message, `${c.slice(0, 60)} has no message argument`).toBeDefined();

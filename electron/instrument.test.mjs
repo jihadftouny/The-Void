@@ -126,6 +126,7 @@ describe('a completed operation', () => {
     const { inst, entries } = harness({ clock: scriptClock([0, 5]) });
     const op = inst.begin('llm', 'context create', { contextSize: 4096 }, THRESHOLDS.contextCreate);
     op.done();
+    expect(entries.length, 'nothing was emitted — this loop would run over nothing').toBe(2);
     for (const e of entries) {
       expect(e.message, `"${e.message}" contains a digit`).toMatch(/^[^0-9]*$/);
       expect(e.message).toMatch(/^[^$]*$/);

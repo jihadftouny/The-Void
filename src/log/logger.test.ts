@@ -95,12 +95,42 @@ describe('the clock seam', () => {
     expect(new Date(t).getUTCFullYear()).toBeGreaterThanOrEqual(2024);
   });
 
-  it('the default clock is FRACTIONAL, so a sub-millisecond span is not rounded to zero', () => {
+  it('the default clock reads `performance`, DETERMINISTICALLY — not by luck', () => {
     // `Date.now()` has 1 ms granularity: two reads inside the same millisecond are equal,
     // and every fast operation would be recorded as `0`. This is why the default is
     // `performance.timeOrigin + performance.now()`.
-    const samples = Array.from({ length: 5 }, () => defaultClock());
-    expect(samples.some((v) => !Number.isInteger(v))).toBe(true);
+    //
+    // Asserted by SUBSTITUTING `performance`, not by sampling the real clock and hoping
+    // for a fractional value: a runtime that coarsens `performance.now()` would make a
+    // sampling test flake, and a sampling test also cannot pin WHICH branch was taken.
+    const g = globalThis as { performance?: unknown };
+    const real = g.performance;
+    try {
+      g.performance = { timeOrigin: 1_700_000_000_000, now: () => 234.5 };
+      expect(defaultClock()).toBe(1_700_000_000_234.5);
+    } finally {
+      g.performance = real;
+    }
+  });
+
+  it('...and falls back to Date.now() only when `performance` is unusable', () => {
+    // The other side of the branch. Both halves pinned, so inverting the condition fails.
+    const g = globalThis as { performance?: unknown };
+    const real = g.performance;
+    try {
+      g.performance = undefined;
+      const fallback = defaultClock();
+      expect(Number.isInteger(fallback), 'the fallback is not Date.now()').toBe(true);
+      expect(Math.abs(fallback - Date.now())).toBeLessThan(5000);
+
+      // A partial/broken `performance` must also fall back rather than produce NaN.
+      g.performance = { now: () => 1 }; // no timeOrigin
+      expect(Number.isInteger(defaultClock())).toBe(true);
+      g.performance = { timeOrigin: 5 }; // no now()
+      expect(Number.isInteger(defaultClock())).toBe(true);
+    } finally {
+      g.performance = real;
+    }
   });
 });
 
