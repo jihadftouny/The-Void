@@ -467,6 +467,53 @@ describe('the launcher cannot orphan Vite or silently join somebody else (G41)',
     expect(LAUNCHER).toMatch(/process\.exit\s*\(\s*1\s*\)/);
   });
 
+  it('...and the EXIT IS INSIDE THE ABORT BRANCH, not merely somewhere in the file', () => {
+    // ⚠ THIS IS THE G50 FAMILY: the decision is computed correctly and then DISCARDED.
+    // `reclaimDecision` is exhaustively tested, `describePortConflict` is exhaustively
+    // tested, the branch is entered on the right condition — and the assertion above only
+    // requires `process.exit(1)` to appear SOMEWHERE in the file. Two of them live further
+    // down (the failed kill, the port that never frees), so replacing the abort branch with
+    //
+    //     console.warn('[void] joining the existing server');
+    //     return { resolvedUrls: { local: [`http://localhost:${PORT}/`] }, close: () => {} };
+    //
+    // is valid ESM, passes every other guard here, makes no network call so every anti-poll
+    // pattern is irrelevant — and boots Electron against an unknown squatter. That is G41's
+    // headline consequence, restored through the one door that was still open.
+    const abortAt = LAUNCHER.search(/decision\s*===\s*'abort'/);
+    const reclaimAt = LAUNCHER.search(/const\s*\[\s*pid\s*\]\s*=\s*pids/);
+    expect(abortAt, 'the abort branch is gone — this guard has gone stale').toBeGreaterThan(-1);
+    expect(reclaimAt, 'the reclaim path is gone — this guard has gone stale').toBeGreaterThan(-1);
+    expect(abortAt, 'the abort branch no longer precedes the reclaim path').toBeLessThan(reclaimAt);
+
+    const abortBranch = LAUNCHER.slice(abortAt, reclaimAt);
+    expect(
+      abortBranch,
+      'the abort branch no longer exits — the launcher would carry on and attach to an ' +
+        'unknown squatter, which is G41 in full',
+    ).toMatch(/process\.exit\s*\(\s*1\s*\)/);
+    expect(
+      abortBranch,
+      'the abort branch RETURNS instead of exiting — a fabricated server object is exactly ' +
+        'how "refuse loudly" turns back into "attach silently"',
+    ).not.toMatch(/\breturn\b/);
+    // And it must exit NON-ZERO: `process.exit(0)` tells everything downstream that all is
+    // well, which is the same lie told with the right keyword.
+    expect(
+      abortBranch,
+      'the abort branch exits zero — it reports success after refusing to start',
+    ).not.toMatch(/process\.exit\s*\(\s*0\s*\)/);
+    // It must still SAY why, or the refusal is a silent death.
+    expect(abortBranch, 'the abort branch no longer explains itself').toMatch(
+      /describePortConflict\s*\(/,
+    );
+
+    // Non-vacuity: the slice really is the branch, not the whole file.
+    expect(abortBranch.length, 'the abort slice is empty').toBeGreaterThan(30);
+    expect(abortBranch.length, 'the abort slice swallowed the rest of the file').toBeLessThan(400);
+    expect(abortBranch, 'the slice reaches into the reclaim path').not.toMatch(/process\.kill/);
+  });
+
   it('prints the project root it is serving — two worktrees in sequence is a named failure', () => {
     expect(LAUNCHER, 'the launcher no longer says which checkout it is serving').toMatch(
       /serving \$\{ROOT\}|serving \$\{process\.cwd\(\)\}/,

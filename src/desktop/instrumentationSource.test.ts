@@ -274,18 +274,26 @@ describe('dispatch() times the step and the whole turn', () => {
   });
 
   it('and NO call above debug REFERENCES the input object except as `input.kind`', () => {
-    // ⚠ WHAT THIS IS AND IS NOT. The guarantee Appendix A.4 demanded is BEHAVIOURAL and it
-    // lives in `src/log/level.test.ts` ("at info, the ui/choice name payload is not emitted
-    // at all"), which is identifier-independent and does not care how the payload was
-    // built. THIS guard is belt-and-braces over that one: a source scan, and therefore
-    // bounded by what a source scan can see.
+    // ⚠ WHAT THIS IS AND IS NOT — read this before trusting either half.
     //
-    // It catches every DIRECT reference: `{ input }`, `{ input: input }`, `{ ...input }`,
-    // and `{ name: (input as {name?: string}).name }`. It CANNOT catch an alias
+    // Appendix A.4 asked for one assertion and it exists: `src/log/level.test.ts` proves
+    // that a logger at `info` does not emit a `ui`/`choice` name payload. But be precise
+    // about that test's reach — it drives a HAND-WRITTEN call list, not `game.ts`. So it
+    // proves the LEVEL POLICY (an `info` logger filters `debug`), and it says nothing about
+    // what `game.ts` actually passes. It is not a backstop for this scan; the two cover
+    // different things and NEITHER covers the other.
+    //
+    // THIS guard is the only thing that looks at `game.ts`'s call CONTENT, and being a
+    // source scan it is bounded by what a source scan can see. It catches every DIRECT
+    // reference: `{ input }`, `{ input: input }`, `{ ...input }`, `JSON.stringify(input)`
+    // and `{ name: (input as {name?: string}).name }`. It CANNOT catch an ALIAS
     // (`const chosen = input; log.info(..., { chosen })`), because that needs dataflow, not
-    // pattern matching. That limit is stated rather than papered over — the behavioural
-    // test is what actually holds the line, and a guard whose limits are written down is
-    // worth more than one whose limits are discovered later.
+    // pattern matching — and an aliased `info` call escapes BOTH tests.
+    //
+    // That gap is real, it is unclosed, and it is written down here rather than discovered
+    // later. Closing it properly needs `game.ts` to become importable (G51, PLAN.md #6),
+    // after which this becomes a behavioural assertion over the entries `dispatch()`
+    // actually emits — which is the same reason §5.4 argues for scheduling G51 first.
     const above = logCalls(SOURCE).filter((c) => !c.startsWith('log.debug('));
     expect(above.length, 'no calls above debug — this guard has gone stale').toBeGreaterThan(5);
     for (const call of above) {

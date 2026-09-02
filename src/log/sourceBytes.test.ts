@@ -70,8 +70,20 @@ function sourceFiles(): string[] {
     }
   };
   for (const root of ROOTS) walk(root, `${root}/`);
-  // The build/test configuration is source too, and is where a mangled glob would hide.
-  for (const extra of ['vite.config.ts', 'tsconfig.json', 'package.json']) out.push(extra);
+  // The build/test/packaging configuration is source too, and is where a mangled glob
+  // would hide with the worst consequences: `electron-builder.json` decides what goes into
+  // the shipped archive, and a control byte in one of its globs breaks `desktop:pack`
+  // silently. `main`'s commit d8eb952 ("delete the $comment key that made desktop:pack fail
+  // every time") is a real instance of that file breaking packaging, which is why it is
+  // named here rather than left to the directory walk that does not reach it.
+  for (const extra of [
+    'vite.config.ts',
+    'tsconfig.json',
+    'package.json',
+    'electron-builder.json',
+  ]) {
+    out.push(extra);
+  }
   return out;
 }
 
@@ -83,6 +95,7 @@ describe('no source file contains a control character', () => {
     expect(files).toContain('src/desktop/game.ts');
     expect(files).toContain('electron/main.mjs');
     expect(files).toContain('vite.config.ts');
+    expect(files, 'the packaging config is outside the scan again').toContain('electron-builder.json');
     for (const f of files) {
       expect(readFileSync(path.join(ROOT, f), 'utf8').length, `${f} read as empty`).toBeGreaterThan(0);
     }
