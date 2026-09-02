@@ -33,12 +33,28 @@
 // that, but it is N3 / `UI-DESIGN.md` §14's named save slots, tied to PLAN.md #8, which
 // SHIP-SCOPE.md cuts to v1.3. Only the backup/restore/report half is v1.
 
+//
+// AND WHY IT NOW LOGS (principle 7). The ladder below RECOVERS. Every rung of it is a
+// fallback, and a fallback that papers over the failure silently destroys the only
+// evidence the failure happened — so the recovery reached the player as a notice while
+// the developer log said nothing at all. Rung 4 (recovered from backup) and rung 5 (both
+// copies unreadable) are the two moments where a player's entire history is at stake, and
+// the two write failures are how it gets there. All four now speak. Nothing about the
+// ladder's decisions changes; `unlockStorage.test.ts`'s existing `source`/`lost`/store
+// assertions are the control.
+
 import {
   createUnlockStore,
   encodeUnlockStore,
   decodeUnlockStore,
   type UnlockStore,
 } from '../game/unlockStore.ts';
+import { log } from '../log/logger.ts';
+
+/** The message of a thrown value, whatever it is. Never throws. */
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 /** The single storage key for the unlock store. Its version lives inside the payload. */
 export const UNLOCK_KEY = 'thevoid:unlocks';
@@ -138,7 +154,11 @@ export function loadUnlockStore(): UnlockLoadResult {
   }
 
   const backup = readStore(ls, UNLOCK_BACKUP_KEY);
-  if (backup) return { store: backup, source: 'backup', lost: RECOVERED_MESSAGE };
+  if (backup) {
+    log.warn('unlocks', 'recovered from backup', {});
+    return { store: backup, source: 'backup', lost: RECOVERED_MESSAGE };
+  }
+  log.error('unlocks', 'store LOST — both copies unreadable', {});
   return { store: createUnlockStore(), source: 'fresh', lost: LOST_MESSAGE };
 }
 
@@ -174,13 +194,18 @@ export function saveUnlockStore(store: UnlockStore): void {
     } else if (!readStore(ls, UNLOCK_BACKUP_KEY)) {
       ls.setItem(UNLOCK_BACKUP_KEY, encoded);
     }
-  } catch {
+  } catch (err) {
     // The backup is an extra safety net, not the store itself. Losing the rotation must not
-    // stop the real write below.
+    // stop the real write below — but a safety net that has quietly stopped existing is
+    // worth knowing about BEFORE the day it is needed.
+    log.warn('unlocks', 'backup rotation failed', { message: messageOf(err) });
   }
   try {
     ls.setItem(UNLOCK_KEY, encoded);
-  } catch {
-    // Persisting is best-effort; a full/blocked quota is non-fatal.
+  } catch (err) {
+    // Persisting is best-effort; a full/blocked quota is non-fatal to THIS session. It is
+    // fatal to everything the session earned, which is why this is an error and the
+    // rotation above is a warning.
+    log.error('unlocks', 'write failed', { message: messageOf(err) });
   }
 }
