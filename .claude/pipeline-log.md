@@ -19,6 +19,38 @@ Format per entry:
 
 ---
 
+## 2026-09-03 — observability (logging everywhere + G41, and by ruling also G6, G37, G50) [branch `agentic/observability`, **unmerged**]
+- Verdict: **PASS** (after 2 fix rounds + 1 post-pass addendum). 1320 → **1646 tests** (+326). 12 commits.
+- Fix rounds: **2**, both entirely *"the production code is right, the guard cannot fail"*. No production file changed in either round, nor in the addendum — proven independently by the **build output keeping the same content hash across all three rounds**.
+
+### Why the unit existed
+A **freeze on the first enemy encounter**, on a GPU machine (so the known no-GPU slowness did not explain it), which recovered alone and never recurred. It was **undiagnosable**: `src/log/logger.ts` was a good system called from exactly one file, `electron/llm.mjs` had **zero** log calls, and there was **no timing instrumentation anywhere in the codebase**. The engineer asked for logging before further feature work; `CLAUDE.md` **principle 7** was added to make it permanent.
+
+### ⭐ The freeze was found, and fixed
+`ensureNarrator` assigned **after** its `await`, so a second caller started a **second full model load** — `resolveModelFile`, `selectGpuDevice` (1+n probes at 30 s each), a 2.5 GB `loadModel`, `createContext` — while `busy = true` held the input lock. Matches every observable: first narrated beat, tens of seconds, self-recovering, never recurring, GPU-independent. **This is G37**, recorded as #14's, and the orchestrator authorised the ~5-line fix here (memoise the *promise*, null on rejection) because a game that appears to hang the first time you meet an enemy fails `SHIP-SCOPE.md` §2.1's third question. Extracted to `narrator-gate.mjs` so it is **provable under real concurrency** rather than by grep: 20 racing callers → **1** construction, with the old implementation kept as a live control that must produce 2.
+
+### The lesson this unit taught, stated once
+**Three of the four hardest findings were the same shape: a correct decision, computed and then dropped, with every test around it green.** G50 (the fold's result never reaching the save), F1 (a perfect narrator gate wired to nothing — the bypass passed all 1602 tests), and R1 (the launcher refusing a squatter and then attaching anyway — passed 131/131). **The guard that catches this class is never "does the call appear" but "does the RESULT reach the thing that acts on it", asserted at the narrowest scope the code actually executes.** Carry it into #6, which inherits `game.ts`.
+
+### F5 — a defect no review could have caught, and its root cause
+Three regexes in the anti-polling guard contained byte **`0x08`** — a literal BACKSPACE — where `\b` was intended, making them **inert**. Three dynamic-import readiness polls (`http.get`, `net.connect`, destructured `{ get }`) therefore reinstated **G41's silent-attach defect with the suite green**. **Root cause: the patterns were inserted by a Python script, where `\b` is a *valid* escape meaning backspace** — so Python warned about `\.` and `\s` on the neighbouring lines and stayed **silent** on the one that corrupted the file. Invisible in a diff and in every editor.
+**The permanent answer** is `src/log/sourceBytes.test.ts`, a repo-wide byte scan over 168 files. It is deliberately built so that **it cannot contain the bytes it forbids** — `\uXXXX` escapes and `String.fromCharCode` — closing the failure mode where *"fix it by deleting the guard"* becomes the path of least resistance.
+
+### F6 — the fix was to stop chasing the lexer
+The string-aware `stripComments` mis-reads three contexts unsafely (a regex after `}`, or after a braceless `if`/`for`), letting `/*` in a regex body swallow code. **The orchestrator ruled against chasing keyword contexts** — an open-ended treadmill — in favour of the per-line **survival sweep**, which does not care *why* the lexer lost its place. The file list is now **derived, not hand-maintained** (66 files / 8,739 code lines), proven by creating a brand-new `src/game/zzProbe.ts` with a hidden import: red on two guards, no list edited. The build agent went further than asked and made `npx vitest run src/log` **alone** red, since a guard concluding things from a strip it never validated was the actual defect.
+
+### Three times a recommended fix was proved insufficient by its implementer
+(1) The orchestrator's anchor-set fix for the scanner hole — two shapes escaped it, so the build agent taught the scanner to recognise **regex literals**, tested in both directions against the repo's real divisions and real regexes. (2) The same for R1: the test-agent's slice-based patch was defeated by the build agent's own invented `if (refused && false) process.exit(1)` — dead code inside the sliced region — so it moved to **balanced-brace extraction plus a gap check**. (3) Four copies of a subtle lexer were consolidated into **one typechecked module**. **This is the behaviour to keep: implement the fix, then try to beat it.**
+
+### Other notable
+- **G6** taken by ruling (the session log's design *was* G6's fix; without it the log is a **silent no-op in the packaged build** — the one place a player's bug report is the only evidence). **G41** landed as a **register departure**: Vite runs **in-process**, so there is no child to orphan and the readiness poll that *is* the silent-attach defect is deleted outright; reclaim is proof-gated on `/@vite/client` **and** a single PID. **G41 was confirmed live on the engineer's machine** during verification (`[::1]:5173`, pid 29236, answering) — the orchestrator killed it at the engineer's request.
+- **A guard the build agent declined to add, correctly:** a hash pin on `balance.test.ts`/`sim.ts`. Byte-identity was a *unit-scoped instruction*, not a product invariant, and a committed hash would fail #2's balance re-run — *"a guard whose override is routine trains people to override it."* Verified by diff instead, **eight times**.
+- **Process incident, self-reported:** `git checkout --` on a file holding **uncommitted** fixes silently lost the byte fix and a whole table. Caught by a **mechanical test-count drop of one**, not by noticing. The agent then committed before mutating and rewrote its mutation tooling to take payloads **from files rather than shell strings** — the same escape-mangling hazard class that caused F5.
+- Test failures before fixes: 10 green mutations in round 1 (two restoring G37), 3 findings in round 2, 2 closures post-pass. **All guard-quality; zero production defects found by any round.**
+- Plan open-questions: **5**, all settled by the orchestrator — G6 taken, G37 fixed (overriding the plan's deferral), G50 taken (the register's `Blocks` cell was right and the task brief wrong), the typed name kept at `debug` with a *tested* level policy, proof-gated port reclaim.
+- **Still unguarded, bounded and scheduled:** behaviour only a real process exhibits. `game.ts` is retired by **G51's `boot()` extraction, `PLAN.md` #6's first act**; for `main.mjs` the pattern to copy is already on this branch — the narrator-gate extraction is what made G37 provable at all.
+- Manual engineer fixes: none yet
+
 ## 2026-09-02 — persistence-reach (#0c of the #0 split: G1/G19, G2, G3, G14, G18, G26, G28, G33, G40, C7, G46, G49, D9) [branch `agentic/persistence-reach`, **merged to `main` 2026-09-02**]
 - Verdict: **PASS** (after **3 fix rounds**). 1155 → 1290 → 1301 → 1315 → **1320 tests**. 13 commits.
 - Fix rounds: **3** — ⚠ **and that is a DELIBERATE DEVIATION from this skill's two-round rule, recorded here with its reasoning.**
