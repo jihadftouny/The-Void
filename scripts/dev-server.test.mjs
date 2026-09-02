@@ -480,38 +480,64 @@ describe('the launcher cannot orphan Vite or silently join somebody else (G41)',
     // is valid ESM, passes every other guard here, makes no network call so every anti-poll
     // pattern is irrelevant — and boots Electron against an unknown squatter. That is G41's
     // headline consequence, restored through the one door that was still open.
-    const abortAt = LAUNCHER.search(/decision\s*===\s*'abort'/);
+    // ⚠ THE BRANCH BODY, BRACE-MATCHED — not "the region between two landmarks". Slicing
+    // from the condition to the reclaim path was my first attempt and it was still the same
+    // weakness one size smaller: a mutation that sets a flag in the branch and leaves a DEAD
+    // `if (refused && false) process.exit(1);` after it satisfied the region and was GREEN.
+    // That is the G50 shape a third time — compute, then discard — so the assertion has to
+    // land inside the braces the branch actually executes.
+    const abortAt = LAUNCHER.search(/if\s*\(\s*decision\s*===\s*'abort'\s*\)/);
     const reclaimAt = LAUNCHER.search(/const\s*\[\s*pid\s*\]\s*=\s*pids/);
     expect(abortAt, 'the abort branch is gone — this guard has gone stale').toBeGreaterThan(-1);
     expect(reclaimAt, 'the reclaim path is gone — this guard has gone stale').toBeGreaterThan(-1);
     expect(abortAt, 'the abort branch no longer precedes the reclaim path').toBeLessThan(reclaimAt);
 
-    const abortBranch = LAUNCHER.slice(abortAt, reclaimAt);
+    /** The `{ … }` the branch executes, with balanced braces, and where it ends. */
+    const { body: abortBody, end: abortEnd } = (() => {
+      const open = LAUNCHER.indexOf('{', abortAt);
+      expect(open, 'the abort branch has no block body').toBeGreaterThan(-1);
+      let depth = 0;
+      for (let i = open; i < LAUNCHER.length; i += 1) {
+        if (LAUNCHER[i] === '{') depth += 1;
+        else if (LAUNCHER[i] === '}') {
+          depth -= 1;
+          if (depth === 0) return { body: LAUNCHER.slice(open, i + 1), end: i + 1 };
+        }
+      }
+      throw new Error('unbalanced braces in the abort branch');
+    })();
+
     expect(
-      abortBranch,
+      abortBody,
       'the abort branch no longer exits — the launcher would carry on and attach to an ' +
         'unknown squatter, which is G41 in full',
     ).toMatch(/process\.exit\s*\(\s*1\s*\)/);
     expect(
-      abortBranch,
+      abortBody,
       'the abort branch RETURNS instead of exiting — a fabricated server object is exactly ' +
         'how "refuse loudly" turns back into "attach silently"',
     ).not.toMatch(/\breturn\b/);
-    // And it must exit NON-ZERO: `process.exit(0)` tells everything downstream that all is
+    // It must exit NON-ZERO: `process.exit(0)` tells everything downstream that all is
     // well, which is the same lie told with the right keyword.
     expect(
-      abortBranch,
+      abortBody,
       'the abort branch exits zero — it reports success after refusing to start',
     ).not.toMatch(/process\.exit\s*\(\s*0\s*\)/);
-    // It must still SAY why, or the refusal is a silent death.
-    expect(abortBranch, 'the abort branch no longer explains itself').toMatch(
+    // And it must still SAY why, or the refusal is a silent death.
+    expect(abortBody, 'the abort branch no longer explains itself').toMatch(
       /describePortConflict\s*\(/,
     );
+    // Nothing may sit between the branch and the reclaim path either — that gap is where a
+    // "well, carry on then" would go.
+    const gap = LAUNCHER.slice(abortEnd, reclaimAt);
+    expect(gap.trim(), 'code appeared between the refusal and the reclaim path').toBe('');
 
-    // Non-vacuity: the slice really is the branch, not the whole file.
-    expect(abortBranch.length, 'the abort slice is empty').toBeGreaterThan(30);
-    expect(abortBranch.length, 'the abort slice swallowed the rest of the file').toBeLessThan(400);
-    expect(abortBranch, 'the slice reaches into the reclaim path').not.toMatch(/process\.kill/);
+    // Non-vacuity: the body really is the branch, not the whole file and not empty.
+    expect(abortBody.startsWith('{')).toBe(true);
+    expect(abortBody.endsWith('}')).toBe(true);
+    expect(abortBody.length, 'the abort body is empty').toBeGreaterThan(30);
+    expect(abortBody.length, 'the abort body swallowed the rest of the file').toBeLessThan(400);
+    expect(abortBody, 'the body reaches into the reclaim path').not.toMatch(/process\.kill/);
   });
 
   it('prints the project root it is serving — two worktrees in sequence is a named failure', () => {
