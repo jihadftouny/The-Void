@@ -1,6 +1,17 @@
-import { describe, it, expect } from 'vitest';
-import { Logger, createRingBuffer, formatEntry, setClock } from './logger.ts';
+import { describe, it, expect, afterEach } from 'vitest';
+import {
+  Logger,
+  createRingBuffer,
+  formatEntry,
+  setClock,
+  now,
+  defaultClock,
+} from './logger.ts';
 import type { LogEntry } from './logger.ts';
+
+afterEach(() => {
+  setClock(defaultClock);
+});
 
 describe('Logger', () => {
   it('dispatches to sinks and respects the level filter', () => {
@@ -49,6 +60,101 @@ describe('ring buffer', () => {
     expect(ring.get().map((e) => e.message)).toEqual(['m2', 'm3', 'm4']);
     ring.clear();
     expect(ring.get()).toEqual([]);
+  });
+});
+
+describe('the clock seam', () => {
+  it('now() reads the SAME clock setClock sets — one seam, not two', () => {
+    // If `now()` had its own clock, every duration measured through `timing.ts` would be
+    // unscriptable and every timing test would have to read a wall clock.
+    setClock(() => 4242);
+    expect(now()).toBe(4242);
+    setClock(() => -1);
+    expect(now()).toBe(-1);
+  });
+
+  it('an entry stamps its time from that same clock', () => {
+    setClock(() => 777);
+    const log = new Logger();
+    const seen: LogEntry[] = [];
+    log.addSink((e) => seen.push(e));
+    log.info('x', 'm');
+    expect(seen[0]?.time).toBe(777);
+    expect(seen[0]?.time).toBe(now());
+  });
+
+  it('the DEFAULT clock is a real epoch time (asserted directly, not via the seam)', () => {
+    // The one place in this unit that may look at a wall clock, and it is a PLAUSIBILITY
+    // bound derived independently: `formatEntry`/`fileLog` both do `new Date(entry.time)`,
+    // so the default must be epoch milliseconds, not a `performance.now()` offset. The
+    // lower bound is a fixed date in the past; the window is 5 s, far above any scheduling
+    // jitter, so this cannot flake.
+    const t = defaultClock();
+    expect(t).toBeGreaterThan(Date.UTC(2024, 0, 1));
+    expect(Math.abs(t - Date.now())).toBeLessThan(5000);
+    expect(new Date(t).getUTCFullYear()).toBeGreaterThanOrEqual(2024);
+  });
+
+  it('the default clock reads `performance`, DETERMINISTICALLY — not by luck', () => {
+    // `Date.now()` has 1 ms granularity: two reads inside the same millisecond are equal,
+    // and every fast operation would be recorded as `0`. This is why the default is
+    // `performance.timeOrigin + performance.now()`.
+    //
+    // Asserted by SUBSTITUTING `performance`, not by sampling the real clock and hoping
+    // for a fractional value: a runtime that coarsens `performance.now()` would make a
+    // sampling test flake, and a sampling test also cannot pin WHICH branch was taken.
+    const g = globalThis as { performance?: unknown };
+    const real = g.performance;
+    try {
+      g.performance = { timeOrigin: 1_700_000_000_000, now: () => 234.5 };
+      expect(defaultClock()).toBe(1_700_000_000_234.5);
+    } finally {
+      g.performance = real;
+    }
+  });
+
+  it('...and falls back to Date.now() only when `performance` is unusable', () => {
+    // The other side of the branch. Both halves pinned, so inverting the condition fails.
+    const g = globalThis as { performance?: unknown };
+    const real = g.performance;
+    try {
+      g.performance = undefined;
+      const fallback = defaultClock();
+      expect(Number.isInteger(fallback), 'the fallback is not Date.now()').toBe(true);
+      expect(Math.abs(fallback - Date.now())).toBeLessThan(5000);
+
+      // A partial/broken `performance` must also fall back rather than produce NaN.
+      g.performance = { now: () => 1 }; // no timeOrigin
+      expect(Number.isInteger(defaultClock())).toBe(true);
+      g.performance = { timeOrigin: 5 }; // no now()
+      expect(Number.isInteger(defaultClock())).toBe(true);
+    } finally {
+      g.performance = real;
+    }
+  });
+});
+
+describe('Logger#level', () => {
+  it('reports the level it was set to', () => {
+    const log = new Logger();
+    expect(log.level()).toBe('debug');
+    log.setLevel('warn');
+    expect(log.level()).toBe('warn');
+    log.setLevel('error');
+    expect(log.level()).toBe('error');
+  });
+
+  it('and the reported level really is the one being filtered on', () => {
+    // Pins the two together: a `level()` that returned a stale field while the filter used
+    // another would make every boot line a lie about what the log contains.
+    const log = new Logger();
+    const seen: string[] = [];
+    log.addSink((e) => seen.push(`${e.level}:${e.message}`));
+    log.setLevel('info');
+    log.debug('x', 'dropped');
+    log.info('x', 'kept');
+    expect(log.level()).toBe('info');
+    expect(seen).toEqual(['info:kept']);
   });
 });
 

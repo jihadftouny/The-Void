@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { saveRun, loadRun, clearRun, ENVELOPE_VERSION, type RunMeta } from './persist.ts';
+import { log, setClock, defaultClock, type LogEntry } from '../log/logger.ts';
 import { createGame, step, awaitingFor } from '../game/game.ts';
 import type { GameState, StepResult } from '../game/game.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
@@ -339,5 +340,305 @@ describe('G19 — a run resumed from its own save unlocks exactly what it would 
     expect(lost.length, 'no feat was lost by forgetting the summary — G19 would be unreal').toBeGreaterThan(0);
     // Name them, so a reviewer can see WHAT the player was losing.
     expect(lost.join(' | ')).toMatch(/reach-act-\d|unlock-\w+|first-boss-kill|win-battle-unhurt/);
+  });
+});
+
+// =========================================================================================
+// PRINCIPLE 7 — every failure path speaks before it recovers, and every duration is
+// recorded. ADDED, never substituted: not one assertion above changed, and they are the
+// control for "the instrumentation did not change the behaviour it measures".
+//
+// Durations are measured against the SCRIPTED clock and asserted as EXACT integers. No
+// wall clock is read anywhere in this block.
+// =========================================================================================
+
+describe('persist reports what it did (principle 7)', () => {
+  let entries: LogEntry[] = [];
+  let off: () => void = () => undefined;
+
+  beforeEach(() => {
+    installMemoryLocalStorage();
+    entries = [];
+    off = log.addSink((e) => entries.push(e));
+    setClock(() => 0);
+  });
+  afterEach(() => {
+    off();
+    setClock(defaultClock);
+  });
+
+  /** Hand the shared clock a script; each read takes the next value. */
+  function scriptClock(values: readonly number[]): void {
+    let i = 0;
+    setClock(() => values[Math.min(i++, values.length - 1)] as number);
+  }
+
+  const saved = (): LogEntry[] => entries.filter((e) => e.category === 'save');
+  const withMessage = (m: string): LogEntry[] => saved().filter((e) => e.message === m);
+  const dataOf = (e: LogEntry | undefined): Record<string, unknown> =>
+    (e?.data ?? {}) as Record<string, unknown>;
+
+  it('a save records its EXACT duration and the real byte count', () => {
+    // Clock reads: [start, stop] -> 250 exactly. The byte count is derived independently:
+    // it must equal the length of the string that actually landed in storage.
+    const state = createGame(999);
+    const memory = createStoryMemory();
+    const backing = installMemoryLocalStorage();
+    entries = [];
+    scriptClock([1000, 1250]);
+    saveRun(state, memory, meta());
+    const entry = withMessage('run saved')[0];
+    expect(entry, 'no "run saved" line was emitted').toBeDefined();
+    expect(dataOf(entry).ms).toBe(250);
+    expect(dataOf(entry).bytes).toBe(backing.get('thevoid:run')!.length);
+    expect(dataOf(entry).bytes as number).toBeGreaterThan(0);
+  });
+
+  it('a save that takes longer than the threshold escalates to warn', () => {
+    // SLOW_MS.save is 100 ms. 99 -> debug (healthy); 100 -> warn (at the boundary).
+    const state = createGame(999);
+    const memory = createStoryMemory();
+    scriptClock([0, 99]);
+    saveRun(state, memory, meta());
+    expect(withMessage('run saved')[0]?.level).toBe('debug');
+
+    entries = [];
+    scriptClock([0, 100]);
+    saveRun(state, memory, meta());
+    expect(withMessage('run saved')[0]?.level).toBe('warn');
+  });
+
+  it('a save that THROWS reports it once, at error, and still does not throw', () => {
+    const state = createGame(999);
+    const memory = createStoryMemory();
+    (globalThis as { localStorage: unknown }).localStorage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('QuotaExceededError: the disk is full');
+      },
+      removeItem: () => undefined,
+    };
+    expect(() => saveRun(state, memory, meta())).not.toThrow();
+    const failures = withMessage('save FAILED');
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.level).toBe('error');
+    expect(dataOf(failures[0]).message).toContain('the disk is full');
+    // ...and no success line was emitted alongside it.
+    expect(withMessage('run saved')).toHaveLength(0);
+  });
+
+  it('clearRun reports a storage failure instead of swallowing it', () => {
+    (globalThis as { localStorage: unknown }).localStorage = {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => {
+        throw new Error('removeItem is blocked');
+      },
+    };
+    expect(() => clearRun()).not.toThrow();
+    const failures = withMessage('clear FAILED');
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.level).toBe('warn');
+    expect(dataOf(failures[0]).message).toContain('blocked');
+  });
+
+  it('a successful load records ms, bytes, the envelope version and whether meta survived', () => {
+    const state = createGame(4242);
+    const memory = createStoryMemory();
+    const backing = installMemoryLocalStorage();
+    // The bytes come from a string this test built, so `data.bytes` has a source
+    // independent of the implementation.
+    const raw = JSON.stringify({
+      v: ENVELOPE_VERSION,
+      state,
+      memory,
+      runSummary: emptyRunSummary(),
+      runSeed: 7,
+    });
+    backing.set('thevoid:run', raw);
+    entries = [];
+    scriptClock([100, 140]);
+    const loaded = loadRun();
+    expect(loaded).not.toBeNull();
+    const entry = withMessage('run loaded')[0];
+    expect(entry, 'no "run loaded" line was emitted').toBeDefined();
+    expect(entry!.level).toBe('info'); // 40 ms is well under SLOW_MS.load (250)
+    expect(dataOf(entry)).toEqual({ ms: 40, bytes: raw.length, envelope: 2, metaPresent: true });
+  });
+
+  it('a slow load escalates to warn at the derived boundary', () => {
+    const state = createGame(4242);
+    const memory = createStoryMemory();
+    saveRun(state, memory, meta());
+    entries = [];
+    scriptClock([0, 250]); // SLOW_MS.load === 250 => at the boundary, so warn
+    loadRun();
+    expect(withMessage('run loaded')[0]?.level).toBe('warn');
+  });
+
+  // -------------------------------------------------------------------------------------
+  // EVERY refusal branch, table-driven, with a DISTINCT reason — and the return value
+  // unchanged in each case. Six of these used to be indistinguishable silent `return null`s.
+  // -------------------------------------------------------------------------------------
+  describe('every refusal says which one it was', () => {
+    const RUN_KEY = 'thevoid:run';
+    const goodState = createGame(31337);
+    const goodMemory = createStoryMemory();
+
+    /** Stage a raw envelope string (or nothing) and load it. */
+    function loadWith(raw: string | null): ReturnType<typeof loadRun> {
+      const backing = installMemoryLocalStorage();
+      if (raw !== null) backing.set(RUN_KEY, raw);
+      entries = [];
+      return loadRun();
+    }
+
+    const envelope = (over: Record<string, unknown>): string =>
+      JSON.stringify({
+        v: ENVELOPE_VERSION,
+        state: goodState,
+        memory: goodMemory,
+        runSummary: emptyRunSummary(),
+        runSeed: 5,
+        ...over,
+      });
+
+    const CASES: readonly { reason: string; raw: string | null }[] = [
+      { reason: 'absent', raw: null },
+      { reason: 'not-json', raw: '{not json at all' },
+      { reason: 'unknown-version', raw: envelope({ v: 99 }) },
+      { reason: 'state-decode-failed', raw: envelope({ state: { nonsense: true } }) },
+      { reason: 'memory-invalid', raw: envelope({ memory: { beats: 'not an array' } }) },
+      { reason: 'meta-invalid', raw: envelope({ runSummary: { bossKills: ['not-a-boss'] } }) },
+    ];
+
+    for (const c of CASES) {
+      it(`reports "${c.reason}"`, () => {
+        loadWith(c.raw);
+        const rejections = withMessage('save rejected');
+        expect(rejections, `no rejection line for ${c.reason}`).toHaveLength(1);
+        expect(rejections[0]!.level).toBe('warn');
+        expect(dataOf(rejections[0]).reason).toBe(c.reason);
+      });
+    }
+
+    it('a JSON array (valid JSON, wrong shape) is not-json, not a crash', () => {
+      loadWith('[1,2,3]');
+      expect(dataOf(withMessage('save rejected')[0]).reason).toBe('not-json');
+    });
+
+    it('storage that THROWS is "unreadable" — never conflated with bad bytes', () => {
+      (globalThis as { localStorage: unknown }).localStorage = {
+        getItem: () => {
+          throw new Error('SecurityError');
+        },
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      };
+      entries = [];
+      expect(loadRun()).toBeNull();
+      const rejections = withMessage('save rejected');
+      expect(rejections).toHaveLength(1);
+      expect(dataOf(rejections[0]).reason).toBe('unreadable');
+    });
+
+    it('the reasons are all DIFFERENT — a shared string answers no question', () => {
+      const seen: string[] = [];
+      for (const c of CASES) {
+        loadWith(c.raw);
+        seen.push(String(dataOf(withMessage('save rejected')[0]).reason));
+      }
+      expect(new Set(seen).size).toBe(CASES.length);
+    });
+
+    it('and the RETURN VALUES are exactly what they were (the control)', () => {
+      for (const c of CASES) {
+        const result = loadWith(c.raw);
+        if (c.reason === 'meta-invalid') {
+          // A v2 envelope with a corrupt meta still opens the run — it only loses the meta.
+          expect(result, c.reason).not.toBeNull();
+          expect(result!.meta, c.reason).toBeNull();
+        } else {
+          expect(result, c.reason).toBeNull();
+        }
+      }
+    });
+
+    it('a v1 envelope warns ONCE about the legacy shape and still returns the run', () => {
+      const result = loadWith(JSON.stringify({ state: goodState, memory: goodMemory }));
+      expect(result).not.toBeNull();
+      expect(result!.meta).toBeNull();
+      expect(result!.state).toEqual(goodState);
+      const legacy = withMessage('legacy envelope');
+      expect(legacy).toHaveLength(1);
+      expect(legacy[0]!.level).toBe('warn');
+      expect(dataOf(legacy[0]).v).toBe(1);
+      // A v1 envelope is NOT also reported as meta-invalid — it has no meta by design.
+      expect(withMessage('save rejected')).toHaveLength(0);
+    });
+
+    it('a healthy v2 load emits no rejection and no legacy warning at all', () => {
+      // Non-vacuity for the whole block: these messages are not simply always present.
+      loadWith(envelope({}));
+      expect(withMessage('save rejected')).toHaveLength(0);
+      expect(withMessage('legacy envelope')).toHaveLength(0);
+      expect(withMessage('run loaded')).toHaveLength(1);
+    });
+  });
+
+  it('no message carries a number or an interpolation — every measurement is in `data`', () => {
+    // Principle 7: "Never interpolate a number into a string and lose it." Enforced over
+    // every entry this file can emit, so `grep '"ms":'` over a log always works.
+    //
+    // ⚠ EVERY message, not a convenient subset. The first version of this sweep exercised
+    // only the happy paths plus `not-json`, so `save FAILED`, `clear FAILED` and
+    // `unreadable` escaped it entirely — a digit added to any of those three would have
+    // been invisible here. The list below is checked against the full message inventory at
+    // the end of the test, so a NEW message that this sweep never triggers fails too.
+    const state = createGame(999);
+    const memory = createStoryMemory();
+    const backing = installMemoryLocalStorage();
+
+    saveRun(state, memory, meta()); // run saved
+    loadRun(); // run loaded
+    backing.set('thevoid:run', '{broken');
+    loadRun(); // save rejected (not-json)
+    backing.set('thevoid:run', JSON.stringify({ state: createGame(1), memory: createStoryMemory() }));
+    loadRun(); // legacy envelope
+    backing.delete('thevoid:run');
+    loadRun(); // save rejected (absent)
+
+    // The three failure paths the earlier sweep never reached.
+    (globalThis as { localStorage: unknown }).localStorage = {
+      getItem: () => {
+        throw new Error('SecurityError');
+      },
+      setItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+      removeItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    saveRun(state, memory, meta()); // save FAILED
+    clearRun(); // clear FAILED
+    loadRun(); // save rejected (unreadable)
+
+    const messages = new Set(saved().map((e) => e.message));
+    expect(
+      [...messages].sort(),
+      'the sweep no longer reaches every message this module can emit',
+    ).toEqual([
+      'clear FAILED',
+      'legacy envelope',
+      'run loaded',
+      'run saved',
+      'save FAILED',
+      'save rejected',
+    ]);
+    for (const e of saved()) {
+      expect(e.message, `"${e.message}" contains a digit`).toMatch(/^[^0-9]*$/);
+      expect(e.message, `"${e.message}" contains an interpolation`).toMatch(/^[^$]*$/);
+    }
   });
 });

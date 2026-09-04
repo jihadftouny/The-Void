@@ -20,19 +20,56 @@ export type LogSink = (entry: LogEntry) => void;
 
 const RANK: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 
+/**
+ * The default clock: an EPOCH millisecond value with sub-millisecond resolution.
+ *
+ * `performance.timeOrigin` is the epoch time the page/process started and
+ * `performance.now()` is a monotonic offset from it, so the sum is still an epoch
+ * timestamp (`formatEntry` and the Electron file sink can keep calling
+ * `new Date(entry.time)` unchanged) while being (a) fractional, so a step that takes
+ * 0.4 ms is not recorded as `0`, and (b) monotonic within a session, so a clock
+ * correction can never make a measured duration negative. `Date.now()` is the
+ * fallback for any runtime without `performance` (old Node, exotic embedders).
+ *
+ * Exported so its plausibility can be asserted DIRECTLY, without mutating the module's
+ * clock seam — a test that called `setClock` to check the default would have to put the
+ * default back, and every other test in the file would depend on that happening.
+ */
+export function defaultClock(): number {
+  const p = (globalThis as { performance?: { timeOrigin?: number; now?: () => number } }).performance;
+  if (p && typeof p.now === 'function' && typeof p.timeOrigin === 'number') {
+    return p.timeOrigin + p.now();
+  }
+  return Date.now();
+}
+
 // Clock seam — so the file this lives in never hard-codes Date.now() in a way
 // tests can't control, and so timestamps are injectable in unit tests.
-let nowMs: () => number = () => Date.now();
+//
+// THIS IS THE ONLY CLOCK SEAM in `src/`. Every duration the renderer and the storage
+// adapters record is measured through `now()` below (via `src/log/timing.ts`), so a test
+// scripts one function and gets EXACT integers instead of a tolerance window.
+let nowMs: () => number = defaultClock;
 export function setClock(fn: () => number): void {
   nowMs = fn;
 }
 
+/** The current time from the injectable clock — the same one `setClock` sets. */
+export function now(): number {
+  return nowMs();
+}
+
 export class Logger {
   private sinks: LogSink[] = [];
-  private minRank = RANK.debug;
+  private minLevel: LogLevel = 'debug';
 
   setLevel(level: LogLevel): void {
-    this.minRank = RANK[level];
+    this.minLevel = level;
+  }
+
+  /** The current minimum level. Read by the boot line so a log says what it is filtering. */
+  level(): LogLevel {
+    return this.minLevel;
   }
 
   /** Register a sink; returns an unsubscribe function. */
@@ -44,7 +81,7 @@ export class Logger {
   }
 
   log(level: LogLevel, category: string, message: string, data?: unknown): void {
-    if (RANK[level] < this.minRank) return;
+    if (RANK[level] < RANK[this.minLevel]) return;
     const entry: LogEntry = {
       time: nowMs(),
       level,

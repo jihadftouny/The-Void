@@ -1,0 +1,563 @@
+// FINDINGS.md G41 — the launcher's pure decisions, plus source guards on the launcher
+// itself (which cannot be imported: it starts a Vite server and spawns Electron at module
+// scope).
+//
+// Every `netstat` sample below is HAND-WRITTEN, including the `[::1]:5173` row, because
+// that is what Vite actually binds on this machine — measured, `httpServer.address()` →
+// `{address:'::1', family:'IPv6'}`. A parser that only understands `127.0.0.1:5173` finds
+// nothing, aborts on every conflict, and is a new bug wearing the fix's clothes.
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  PORT,
+  IDENTITY_PATH,
+  parseListeningPids,
+  looksLikeViteDevServer,
+  reclaimDecision,
+  isPortInUse,
+  describePortConflict,
+} from './dev-server.mjs';
+import { stripComments, stripReachesEndOfFile } from '../src/log/sourceScan.testutil.ts';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const RAW_LAUNCHER = fs.readFileSync(path.join(HERE, 'desktop-dev.mjs'), 'utf8');
+const LAUNCHER = stripComments(RAW_LAUNCHER);
+
+// =========================================================================================
+// parseListeningPids
+// =========================================================================================
+
+// A hand-written `netstat -ano` capture. Rows, and why each is here:
+//   1. the header                            -> must be ignored
+//   2. IPv4 wildcard on 5173, pid 4242       -> a real holder
+//   3. IPv6 loopback  on 5173, pid 4242      -> THE SAME PROCESS, both families: dedupe
+//   4. 127.0.0.1:15173                       -> a decoy that CONTAINS "5173"
+//   5. 127.0.0.1:51730                       -> a decoy that STARTS WITH "5173"
+//   6. an ESTABLISHED client of 5173, pid 99 -> not a holder; killing it kills a browser
+//   7. another port entirely                 -> noise
+const NETSTAT = [
+  '',
+  'Active Connections',
+  '',
+  '  Proto  Local Address          Foreign Address        State           PID',
+  '  TCP    0.0.0.0:5173           0.0.0.0:0              LISTENING       4242',
+  '  TCP    [::1]:5173             [::]:0                 LISTENING       4242',
+  '  TCP    127.0.0.1:15173        0.0.0.0:0              LISTENING       7001',
+  '  TCP    127.0.0.1:51730        0.0.0.0:0              LISTENING       7002',
+  '  TCP    127.0.0.1:5173         127.0.0.1:60123        ESTABLISHED     99',
+  '  TCP    0.0.0.0:3000           0.0.0.0:0              LISTENING       8080',
+  '',
+].join('\r\n');
+
+describe('parseListeningPids (netstat)', () => {
+  it('finds the one PID holding the port, across both address families', () => {
+    expect(parseListeningPids(NETSTAT, 5173)).toEqual([4242]);
+  });
+
+  it('handles the IPv6 row ALONE — which is what Vite actually binds', () => {
+    const ipv6Only = ['  TCP    [::1]:5173             [::]:0                 LISTENING       4242'].join('\n');
+    expect(parseListeningPids(ipv6Only, 5173)).toEqual([4242]);
+  });
+
+  it('and the IPv6 wildcard form', () => {
+    expect(parseListeningPids('  TCP    [::]:5173   [::]:0   LISTENING   17', 5173)).toEqual([17]);
+  });
+
+  it('rejects the decoy ports rather than matching a substring', () => {
+    expect(parseListeningPids(NETSTAT, 15173)).toEqual([7001]);
+    expect(parseListeningPids(NETSTAT, 51730)).toEqual([7002]);
+    expect(parseListeningPids(NETSTAT, 3000)).toEqual([8080]);
+    expect(parseListeningPids(NETSTAT, 5174)).toEqual([]);
+  });
+
+  it('ignores a non-LISTENING row — a client of the port does not hold it', () => {
+    // Killing pid 99 would be killing whatever browser tab is connected to the server.
+    expect(parseListeningPids(NETSTAT, 5173)).not.toContain(99);
+  });
+
+  it('returns EVERY holder when there is more than one (which forces an abort)', () => {
+    const two = [
+      '  TCP    0.0.0.0:5173    0.0.0.0:0    LISTENING       111',
+      '  TCP    [::1]:5173      [::]:0       LISTENING       222',
+    ].join('\n');
+    expect(parseListeningPids(two, 5173)).toEqual([111, 222]);
+  });
+
+  it('reads an lsof -t PID list too', () => {
+    expect(parseListeningPids('4242\n', 5173)).toEqual([4242]);
+    expect(parseListeningPids('111\n222\n', 5173)).toEqual([111, 222]);
+    expect(parseListeningPids('4242\n4242\n', 5173)).toEqual([4242]);
+  });
+
+  it('is empty for empty, blank or non-string input rather than throwing', () => {
+    expect(parseListeningPids('', 5173)).toEqual([]);
+    expect(parseListeningPids('   \n\n', 5173)).toEqual([]);
+    expect(parseListeningPids(null, 5173)).toEqual([]);
+    expect(parseListeningPids(undefined, 5173)).toEqual([]);
+  });
+
+  it('is empty for output that mentions the port but lists no LISTENING socket', () => {
+    expect(parseListeningPids('  TCP  127.0.0.1:5173  127.0.0.1:1  TIME_WAIT  5', 5173)).toEqual([]);
+  });
+});
+
+// =========================================================================================
+// looksLikeViteDevServer — the PROOF that gates the kill
+// =========================================================================================
+
+describe('looksLikeViteDevServer', () => {
+  it('is true only for a 200 that answers as JavaScript', () => {
+    // Measured: a live Vite answers /@vite/client with 200 text/javascript.
+    expect(looksLikeViteDevServer({ ok: true, status: 200, contentType: 'text/javascript' })).toBe(true);
+    expect(
+      looksLikeViteDevServer({ ok: true, status: 200, contentType: 'application/javascript; charset=utf-8' }),
+    ).toBe(true);
+  });
+
+  it('is false for every other answer — we never kill on a guess', () => {
+    const cases = [
+      ['a 404 (something else is serving)', { ok: false, status: 404, contentType: 'text/html' }],
+      ['a 500', { ok: false, status: 500, contentType: 'text/html' }],
+      ['HTML on 200 (a web app, not Vite)', { ok: true, status: 200, contentType: 'text/html' }],
+      ['JSON on 200 (an API)', { ok: true, status: 200, contentType: 'application/json' }],
+      ['no content type at all', { ok: true, status: 200, contentType: null }],
+      ['a 200 that is somehow not ok', { ok: false, status: 200, contentType: 'text/javascript' }],
+      ['a network error', { ok: false, status: 0, contentType: null }],
+      ['nothing', null],
+      ['undefined', undefined],
+    ];
+    for (const [name, probe] of cases) {
+      expect(looksLikeViteDevServer(probe), name).toBe(false);
+    }
+  });
+
+  it('probes a path only Vite serves', () => {
+    expect(IDENTITY_PATH).toBe('/@vite/client');
+  });
+});
+
+// =========================================================================================
+// reclaimDecision — the full table. Killing is gated on PROOF and on a single owner.
+// =========================================================================================
+
+describe('reclaimDecision', () => {
+  const TABLE = [
+    // occupied, isVite, pids            -> expected                     why
+    [false, false, [], 'proceed', 'the port is free'],
+    [false, true, [4242], 'proceed', 'free wins over everything else'],
+    [true, true, [4242], 'reclaim', 'proven Vite, exactly one owner'],
+    [true, true, [], 'abort', 'proven Vite but the PID lookup failed — nothing to kill'],
+    [true, true, [111, 222], 'abort', 'proven Vite but two owners — which one?'],
+    [true, false, [4242], 'abort', 'an UNKNOWN squatter: never kill it, never join it'],
+    [true, false, [], 'abort', 'unknown and unlocatable'],
+    [true, false, [111, 222], 'abort', 'unknown and ambiguous'],
+  ];
+
+  for (const [occupied, isVite, pids, expected, why] of TABLE) {
+    it(`${expected}: ${why}`, () => {
+      expect(reclaimDecision({ occupied, isVite, pids })).toBe(expected);
+    });
+  }
+
+  it('never reclaims without proof — the polarity that matters most', () => {
+    // If `isVite` were ignored, the launcher would kill any process on 5173, including a
+    // colleague's unrelated server or a system service.
+    expect(reclaimDecision({ occupied: true, isVite: false, pids: [4242] })).toBe('abort');
+    expect(reclaimDecision({ occupied: true, isVite: undefined, pids: [4242] })).toBe('abort');
+    expect(reclaimDecision({ occupied: true, isVite: 'yes', pids: [4242] })).toBe('abort');
+    expect(reclaimDecision({ occupied: true, isVite: 1, pids: [4242] })).toBe('abort');
+  });
+
+  it('and NEVER returns anything that means "attach" — the G41 defect has no verdict', () => {
+    const verdicts = new Set();
+    for (const occupied of [true, false]) {
+      for (const isVite of [true, false]) {
+        for (const pids of [[], [1], [1, 2]]) {
+          verdicts.add(reclaimDecision({ occupied, isVite, pids }));
+        }
+      }
+    }
+    expect([...verdicts].sort()).toEqual(['abort', 'proceed', 'reclaim']);
+  });
+
+  it('degrades to abort on garbage rather than to reclaim', () => {
+    expect(reclaimDecision({ occupied: true, isVite: true, pids: null })).toBe('abort');
+    expect(reclaimDecision({ occupied: true })).toBe('abort');
+    expect(reclaimDecision()).toBe('proceed'); // nothing said "occupied"
+  });
+});
+
+// =========================================================================================
+// isPortInUse — Vite's strictPort rejection carries NO `.code`, measured.
+// =========================================================================================
+
+describe('isPortInUse', () => {
+  it('recognises Vite\'s own message, which has no error code', () => {
+    expect(isPortInUse(new Error('Port 5173 is already in use'), 5173)).toBe(true);
+  });
+
+  it('recognises a raw EADDRINUSE', () => {
+    const err = new Error('listen EADDRINUSE: address already in use :::5173');
+    err.code = 'EADDRINUSE';
+    expect(isPortInUse(err, 5173)).toBe(true);
+    expect(isPortInUse(new Error('listen EADDRINUSE'), 5173)).toBe(true);
+  });
+
+  it('does NOT swallow an unrelated failure — that must propagate, not become a reclaim', () => {
+    expect(isPortInUse(new Error('Cannot find module vite'), 5173)).toBe(false);
+    expect(isPortInUse(new Error('Port 9999 is already in use'), 5173)).toBe(false);
+    expect(isPortInUse(null, 5173)).toBe(false);
+    expect(isPortInUse(undefined, 5173)).toBe(false);
+  });
+});
+
+// =========================================================================================
+// describePortConflict — the loud refusal
+// =========================================================================================
+
+describe('describePortConflict', () => {
+  it('names the port, the PIDs and a Windows kill command', () => {
+    const text = describePortConflict({ port: 5173, pids: [4242], platform: 'win32' });
+    expect(text).toContain('5173');
+    expect(text).toContain('4242');
+    expect(text).toContain('taskkill /F /PID 4242');
+    expect(text).toContain('G41');
+  });
+
+  it('and a POSIX one elsewhere', () => {
+    const text = describePortConflict({ port: 5173, pids: [111, 222], platform: 'darwin' });
+    expect(text).toContain('kill -9 111 222');
+    expect(text).not.toContain('taskkill');
+  });
+
+  it('still tells the engineer how to LOOK when no PID was found', () => {
+    expect(describePortConflict({ port: 5173, pids: [], platform: 'win32' })).toContain(
+      'netstat -ano | findstr :5173',
+    );
+    expect(describePortConflict({ port: 5173, pids: [], platform: 'linux' })).toContain('lsof -nP');
+  });
+
+  it('says it is REFUSING, so the message cannot be read as a warning to ignore', () => {
+    expect(describePortConflict({ port: 5173, pids: [1] })).toMatch(/REFUSING/);
+  });
+
+  it('defaults to THIS platform — a Windows engineer is never told `kill -9`', () => {
+    // Every assertion above passes `platform:` explicitly, so deleting the
+    // `platform = process.platform` default was green while printing a command that does
+    // not exist on the machine reading it. The point of the message is that it can be
+    // pasted.
+    const here = describePortConflict({ port: 5173, pids: [4242] });
+    const expected = describePortConflict({ port: 5173, pids: [4242], platform: process.platform });
+    expect(here, 'the default platform is gone — the kill command is for another OS').toBe(expected);
+    expect(here).toContain(process.platform === 'win32' ? 'taskkill' : 'kill -9');
+  });
+});
+
+// =========================================================================================
+// SOURCE GUARDS on the launcher itself. It starts a Vite server and spawns Electron at
+// module scope, so it can never be imported by a test.
+// =========================================================================================
+
+describe('the launcher cannot orphan Vite or silently join somebody else (G41)', () => {
+  it('the stripped source is intact (the anchor for everything below)', () => {
+    // ⚠ The anchors reach the END of the file. The scanner does not track regular
+    // expression literals, so a regex containing `/*` opens a hole to the next `*​/`, and
+    // anything BELOW the lowest anchor could then be hidden with every guard green.
+    expect(LAUNCHER).toMatch(/import\s*\{\s*createServer\s*\}\s*from\s*'vite'/);
+    expect(LAUNCHER).toMatch(/import\s+electronPath\s+from\s+'electron'/);
+    expect(LAUNCHER).toMatch(/async function start\(/);
+    expect(LAUNCHER).toMatch(/spawn\s*\(\s*electronPath/);
+    expect(LAUNCHER, 'the strip ate the tail of the launcher — a hole below the last anchor').toMatch(
+      /process\.on\s*\(\s*'uncaughtException'/,
+    );
+    expect(
+      stripReachesEndOfFile(RAW_LAUNCHER),
+      'the strip ran off the END of the file — a regex literal containing `/*` with no later `*/` swallows everything after it, and every anchor ABOVE it still passes',
+    ).toBe(true);
+    expect(LAUNCHER.length).toBeLessThan(RAW_LAUNCHER.length);
+  });
+
+  it('runs Vite IN PROCESS — there is no child that can be orphaned', () => {
+    expect(LAUNCHER, 'the launcher no longer starts Vite through its Node API').toMatch(
+      /await\s+createServer\s*\(/,
+    );
+    // Look at the FIRST ARGUMENT of every spawn — the program being run. Matching "vite"
+    // anywhere in the call is a false positive, because the one legitimate spawn passes
+    // `VITE_DEV_SERVER_URL` in its env.
+    const spawnTargets = [...LAUNCHER.matchAll(/\bspawn\s*\(/g)].map((m) => {
+      const from = m.index + m[0].length;
+      const comma = LAUNCHER.indexOf(',', from);
+      return LAUNCHER.slice(from, comma === -1 ? from + 40 : comma).trim();
+    });
+    expect(spawnTargets.length, 'nothing is spawned at all — this guard has gone stale').toBe(1);
+    expect(spawnTargets[0], 'the one spawn is no longer Electron').toBe('electronPath');
+    for (const target of spawnTargets) {
+      expect(target, 'Vite is being spawned as a child process again — that is G41').not.toMatch(
+        /vite/i,
+      );
+    }
+    expect(LAUNCHER, 'the npx wrapper is back — the real Vite becomes a GRANDCHILD on Windows').not.toMatch(
+      /\bnpx\b/,
+    );
+    expect(LAUNCHER, 'shell: true is back — kill() cannot reach through cmd.exe').not.toMatch(
+      /shell\s*:\s*true/,
+    );
+  });
+
+  it('takes the URL from the server IT created, and never polls the port for one', () => {
+    expect(LAUNCHER, 'the URL is no longer read off the server object').toMatch(/resolvedUrls/);
+    // THE DEFECT ITSELF: `waitForServer()` asked "does anything answer 5173?" and accepted
+    // whatever did. There must be no fetch of the dev URL in this file at all — the
+    // identity probe lives in `dev-server.mjs` and can only lead to reclaim or abort.
+    expect(LAUNCHER, 'the launcher fetches the dev URL again — it can attach to an orphan').not.toMatch(
+      /\bfetch\s*\(/,
+    );
+    expect(LAUNCHER, 'the readiness poll is back').not.toMatch(/waitForServer/);
+    expect(LAUNCHER, 'the launcher polls desktop.html to decide readiness').not.toMatch(
+      /desktop\.html/,
+    );
+    // NOT spelling-bound. Forbidding `fetch(` and the name `waitForServer` leaves every
+    // other way to ask the port whether somebody is listening — `http.get`, `net.connect`,
+    // a `.request(` — and any of them reintroduces "accept whoever answers 5173", which IS
+    // G41. The launcher must make NO outbound request of any kind: the identity probe
+    // lives in `dev-server.mjs`, where its answer can only lead to reclaim or abort.
+    //
+    // ⚠ EACH PATTERN IS PAIRED WITH A PLANTED POSITIVE. Three of these were once INERT:
+    // the `\b` in them had been mangled into a literal BACKSPACE byte (0x08) by the script
+    // that inserted them, so `/<BS>fetch\s*\(/` could never match anything and three of
+    // the six guards were decoration. A list of "must not appear" patterns proves nothing
+    // about the patterns themselves — over a clean file, a broken regex and a working one
+    // are indistinguishable. Every other list-shaped guard on this branch carries a
+    // self-test; this one did not, and that is exactly where the dead bytes hid.
+    const FORBIDDEN_CALLS = [
+      ['fetch', /\bfetch\s*\(/, "const r = await fetch('http://localhost:5173/');"],
+      ['http.get / https.get', /\bhttps?\.get\s*\(/, "http.get('http://localhost:5173/', cb);"],
+      ['a raw request', /\.request\s*\(/, 'const req = http.request(opts, cb);'],
+      [
+        'a socket connect',
+        /\bnet\.(connect|createConnection)\s*\(/,
+        "const s = net.connect(PORT, 'localhost');",
+      ],
+      ['an http import', /from\s*'node:https?'/, "import http from 'node:http';"],
+      ['a net import', /from\s*'node:net'/, "import net from 'node:net';"],
+    ];
+
+    for (const [what, pattern, planted] of FORBIDDEN_CALLS) {
+      // The guard.
+      expect(
+        LAUNCHER,
+        `the launcher talks to the port itself (${what}) — that is how it ends up attached ` +
+          "to somebody else's dev server",
+      ).not.toMatch(pattern);
+      // ...and the proof that the guard can fire at all.
+      expect(
+        planted,
+        `the pattern for ${what} matches NOTHING — it is an inert guard, and the launcher ` +
+          'could reintroduce G41 through it with every test green',
+      ).toMatch(pattern);
+    }
+    expect(FORBIDDEN_CALLS.length, 'the forbidden-call table shrank').toBe(6);
+  });
+
+  it('the dynamic-import forms are caught too, not just the static ones', () => {
+    // THE SHAPES THAT ACTUALLY SLIPPED THROUGH. `await import('node:http')` carries no
+    // `from 'node:http'`, so the two import patterns miss it entirely — only the CALL
+    // patterns (`http.get`, `net.connect`) stand between the launcher and a readiness poll
+    // written that way, and those were among the three inert ones. The earlier `net.connect`
+    // mutation used a STATIC import, so it went red on the wrong pattern and the pairing
+    // rule did not save it.
+    const POLL_SHAPES = [
+      "const http = await import('node:http'); http.get(url, cb);",
+      "const net2 = await import('node:net'); net2.connect(PORT, 'localhost');",
+      "const { get } = await import('node:http'); get(url, cb);",
+      "const r = await fetch('http://localhost:5173/');",
+    ];
+    const DETECTORS = [
+      /\bfetch\s*\(/,
+      /\bhttps?\.get\s*\(/,
+      /\.request\s*\(/,
+      /\bnet\.(connect|createConnection)\s*\(/,
+      /\bimport\s*\(\s*'node:(https?|net)'/,
+    ];
+    for (const shape of POLL_SHAPES) {
+      expect(
+        DETECTORS.some((p) => p.test(shape)),
+        `a readiness poll written this way would pass unnoticed: ${shape}`,
+      ).toBe(true);
+    }
+    // And the launcher must not dynamically import a network module either — the shape
+    // that is invisible to every static-import guard.
+    expect(
+      LAUNCHER,
+      'the launcher dynamically imports a network module — a readiness poll hidden from ' +
+        'every static-import guard, and G41 restored',
+    ).not.toMatch(/\bimport\s*\(\s*'node:(https?|net)'/);
+  });
+
+  it('binds strictly, so a taken port is an ERROR rather than a silent drift to 5174', () => {
+    expect(LAUNCHER, 'strictPort is gone — Vite would quietly move to another port').toMatch(
+      /strictPort\s*:\s*true/,
+    );
+  });
+
+  it('kills only after `reclaimDecision` says so, never on the raw probe', () => {
+    const decisionAt = LAUNCHER.search(/reclaimDecision\s*\(/);
+    const abortAt = LAUNCHER.search(/decision\s*===\s*'abort'/);
+    const killAt = LAUNCHER.search(/process\.kill\s*\(/);
+    expect(decisionAt, 'the launcher no longer asks for a decision').toBeGreaterThan(-1);
+    expect(abortAt, 'the abort branch is gone').toBeGreaterThan(-1);
+    expect(killAt, 'the launcher never reclaims — the engineer is back to typing kill commands').toBeGreaterThan(-1);
+    expect(decisionAt).toBeLessThan(abortAt);
+    expect(abortAt, 'it kills BEFORE deciding whether it may').toBeLessThan(killAt);
+    // The polarity: `=== 'reclaim'` inverted would abort on the one case it may reclaim
+    // and kill on every case it may not.
+    expect(LAUNCHER, 'the abort branch is negated — it would kill an unknown squatter').not.toMatch(
+      /decision\s*!==\s*'abort'/,
+    );
+  });
+
+  it('only treats a PORT-IN-USE failure as a conflict — anything else propagates', () => {
+    // FOUND BY THE DIFF ENUMERATION. Inverted, a completely unrelated startup failure
+    // ("cannot find module vite") is handled as a port conflict: the launcher probes,
+    // finds nothing, and aborts with a message naming a port that was never the problem.
+    expect(LAUNCHER, 'the launcher no longer distinguishes a port conflict from a real failure').toMatch(
+      /if\s*\(\s*!\s*isPortInUse\s*\(\s*err\s*,\s*PORT\s*\)\s*\)\s*throw\s+err/,
+    );
+    expect(LAUNCHER, 'the check is inverted — a genuine port conflict would be re-thrown').not.toMatch(
+      /if\s*\(\s*isPortInUse\s*\(\s*err\s*,\s*PORT\s*\)\s*\)\s*throw\s+err/,
+    );
+  });
+
+  it('gives up when the port does NOT free after the kill, rather than racing it', () => {
+    // FOUND BY THE DIFF ENUMERATION. Inverted, the launcher retries `listen()` while the
+    // port is still held (an immediate crash) and refuses when it is free.
+    expect(LAUNCHER, 'the launcher no longer waits for the port to be released').toMatch(
+      /if\s*\(\s*!\s*\(\s*await\s+waitForPortFree\s*\(\s*\)\s*\)\s*\)/,
+    );
+    expect(LAUNCHER, 'the wait is inverted — it aborts when the port IS free').not.toMatch(
+      /if\s*\(\s*await\s+waitForPortFree\s*\(\s*\)\s*\)\s*\{[^}]*process\.exit/,
+    );
+  });
+
+  it('shuts down ONCE, and really does shut down — inverting this restores G41 in full', () => {
+    // FOUND BY THE DIFF ENUMERATION, and the most consequential of the three. `if
+    // (shuttingDown) return;` inverted means the FIRST call returns immediately, so
+    // quitting the game never closes the server and never exits the launcher — the port
+    // stays held and the next launch serves this session's code. That is G41's headline
+    // consequence, restored by one character, with every other guard here still green.
+    expect(LAUNCHER, 'the re-entry guard is gone').toMatch(
+      /if\s*\(\s*shuttingDown\s*\)\s*return\s*;/,
+    );
+    expect(LAUNCHER, 'the re-entry guard is inverted — teardown would never run at all').not.toMatch(
+      /if\s*\(\s*!\s*shuttingDown\s*\)\s*return\s*;/,
+    );
+    // ...and the flag really is set, or the guard protects nothing.
+    expect(LAUNCHER, 'shuttingDown is never set — the guard can never fire').toMatch(
+      /shuttingDown\s*=\s*true\s*;/,
+    );
+    const guardAt = LAUNCHER.search(/if\s*\(\s*shuttingDown\s*\)/);
+    const setAt = LAUNCHER.search(/shuttingDown\s*=\s*true/);
+    expect(guardAt, 'the flag is set before it is checked — the first call would be skipped').toBeLessThan(setAt);
+  });
+
+  it('exits non-zero when it refuses, so nothing downstream proceeds', () => {
+    expect(LAUNCHER).toMatch(/describePortConflict\s*\(/);
+    expect(LAUNCHER).toMatch(/process\.exit\s*\(\s*1\s*\)/);
+  });
+
+  it('...and the EXIT IS INSIDE THE ABORT BRANCH, not merely somewhere in the file', () => {
+    // ⚠ THIS IS THE G50 FAMILY: the decision is computed correctly and then DISCARDED.
+    // `reclaimDecision` is exhaustively tested, `describePortConflict` is exhaustively
+    // tested, the branch is entered on the right condition — and the assertion above only
+    // requires `process.exit(1)` to appear SOMEWHERE in the file. Two of them live further
+    // down (the failed kill, the port that never frees), so replacing the abort branch with
+    //
+    //     console.warn('[void] joining the existing server');
+    //     return { resolvedUrls: { local: [`http://localhost:${PORT}/`] }, close: () => {} };
+    //
+    // is valid ESM, passes every other guard here, makes no network call so every anti-poll
+    // pattern is irrelevant — and boots Electron against an unknown squatter. That is G41's
+    // headline consequence, restored through the one door that was still open.
+    // ⚠ THE BRANCH BODY, BRACE-MATCHED — not "the region between two landmarks". Slicing
+    // from the condition to the reclaim path was my first attempt and it was still the same
+    // weakness one size smaller: a mutation that sets a flag in the branch and leaves a DEAD
+    // `if (refused && false) process.exit(1);` after it satisfied the region and was GREEN.
+    // That is the G50 shape a third time — compute, then discard — so the assertion has to
+    // land inside the braces the branch actually executes.
+    const abortAt = LAUNCHER.search(/if\s*\(\s*decision\s*===\s*'abort'\s*\)/);
+    const reclaimAt = LAUNCHER.search(/const\s*\[\s*pid\s*\]\s*=\s*pids/);
+    expect(abortAt, 'the abort branch is gone — this guard has gone stale').toBeGreaterThan(-1);
+    expect(reclaimAt, 'the reclaim path is gone — this guard has gone stale').toBeGreaterThan(-1);
+    expect(abortAt, 'the abort branch no longer precedes the reclaim path').toBeLessThan(reclaimAt);
+
+    /** The `{ … }` the branch executes, with balanced braces, and where it ends. */
+    const { body: abortBody, end: abortEnd } = (() => {
+      const open = LAUNCHER.indexOf('{', abortAt);
+      expect(open, 'the abort branch has no block body').toBeGreaterThan(-1);
+      let depth = 0;
+      for (let i = open; i < LAUNCHER.length; i += 1) {
+        if (LAUNCHER[i] === '{') depth += 1;
+        else if (LAUNCHER[i] === '}') {
+          depth -= 1;
+          if (depth === 0) return { body: LAUNCHER.slice(open, i + 1), end: i + 1 };
+        }
+      }
+      throw new Error('unbalanced braces in the abort branch');
+    })();
+
+    expect(
+      abortBody,
+      'the abort branch no longer exits — the launcher would carry on and attach to an ' +
+        'unknown squatter, which is G41 in full',
+    ).toMatch(/process\.exit\s*\(\s*1\s*\)/);
+    expect(
+      abortBody,
+      'the abort branch RETURNS instead of exiting — a fabricated server object is exactly ' +
+        'how "refuse loudly" turns back into "attach silently"',
+    ).not.toMatch(/\breturn\b/);
+    // It must exit NON-ZERO: `process.exit(0)` tells everything downstream that all is
+    // well, which is the same lie told with the right keyword.
+    expect(
+      abortBody,
+      'the abort branch exits zero — it reports success after refusing to start',
+    ).not.toMatch(/process\.exit\s*\(\s*0\s*\)/);
+    // And it must still SAY why, or the refusal is a silent death.
+    expect(abortBody, 'the abort branch no longer explains itself').toMatch(
+      /describePortConflict\s*\(/,
+    );
+    // Nothing may sit between the branch and the reclaim path either — that gap is where a
+    // "well, carry on then" would go.
+    const gap = LAUNCHER.slice(abortEnd, reclaimAt);
+    expect(gap.trim(), 'code appeared between the refusal and the reclaim path').toBe('');
+
+    // Non-vacuity: the body really is the branch, not the whole file and not empty.
+    expect(abortBody.startsWith('{')).toBe(true);
+    expect(abortBody.endsWith('}')).toBe(true);
+    expect(abortBody.length, 'the abort body is empty').toBeGreaterThan(30);
+    expect(abortBody.length, 'the abort body swallowed the rest of the file').toBeLessThan(400);
+    expect(abortBody, 'the body reaches into the reclaim path').not.toMatch(/process\.kill/);
+  });
+
+  it('prints the project root it is serving — two worktrees in sequence is a named failure', () => {
+    expect(LAUNCHER, 'the launcher no longer says which checkout it is serving').toMatch(
+      /serving \$\{ROOT\}|serving \$\{process\.cwd\(\)\}/,
+    );
+  });
+
+  it('tears down in both directions', () => {
+    expect(LAUNCHER).toMatch(/electron\.on\s*\(\s*'exit'/);
+    expect(LAUNCHER).toMatch(/server\.close\s*\(/);
+    for (const signal of ['SIGINT', 'SIGTERM', 'uncaughtException']) {
+      expect(LAUNCHER, `the launcher ignores ${signal} — the port would stay held`).toContain(signal);
+    }
+  });
+
+  it('and the port it uses is the one everything else agrees on', () => {
+    expect(PORT).toBe(5173);
+    expect(LAUNCHER, 'the launcher hard-codes a port instead of sharing the constant').toMatch(
+      /\bPORT\b/,
+    );
+  });
+});

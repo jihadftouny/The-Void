@@ -43,6 +43,8 @@ import {
 } from './view-model.ts';
 import type { ItemView } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
+import { resolveLogLevel } from '../log/level.ts';
+import { SLOW_MS, levelForDuration, startTimer } from '../log/timing.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 // The shared render foundation (M-UI2 `ui-foundation`).
 import { applyTheme } from '../render/theme.ts';
@@ -50,13 +52,27 @@ import { buttonModel, rowModel, conditionChips } from '../render/component-model
 import { appendButton, appendRow, appendLogLine, chip, picker } from '../render/components.ts';
 import { logLines, startsNewBattle } from '../render/log-model.ts';
 
-interface GenStats { text: string; tokens: number; tokensPerSecond: number; ttftMs: number }
+// `totalMs` is the main process's own measurement of the generation (`llm.mjs` computed
+// it already and used to throw it away). Optional because an older main process would not
+// send it; subtracting it from the renderer's round trip isolates the IPC/queue cost from
+// the model, which is the difference between "the model is slow" and "the bridge is".
+interface GenStats {
+  text: string;
+  tokens: number;
+  tokensPerSecond: number;
+  ttftMs: number;
+  totalMs?: number;
+}
 interface VoidApi {
   onStatus(cb: (s: { phase: string; gpu?: unknown; device?: string | null; message?: string }) => void): () => void;
   generate(o: { prompt: string; system?: string; onToken?: (c: string) => void }): Promise<GenStats>;
   log?(entry: unknown): void;
 }
 declare global { interface Window { void: VoidApi } }
+
+// Started before anything else runs, so the boot line can say how long the renderer's own
+// prologue took. Measured through `logger.now()` — the single clock seam.
+const bootTimer = startTimer();
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -71,9 +87,35 @@ const logEl = $('log');
 const choicesEl = $('choices');
 const sheetEl = $('sheet');
 
+/**
+ * The developer's explicit opt-in: `localStorage['thevoid:loglevel'] = 'debug'`. Wrapped
+ * because `localStorage` can throw outright (blocked origin, storage policy) and a boot
+ * that dies here dies before the logger exists to say why. An invalid value is ignored by
+ * `resolveLogLevel`, so a typo can never silently downgrade a packaged build.
+ */
+function readLogLevelOverride(): unknown {
+  try {
+    return localStorage.getItem('thevoid:loglevel');
+  } catch {
+    return null;
+  }
+}
+
 // ---- Logging: console + in-memory ring (for the debug overlay) + forward to
 // the Electron main process (which writes the log file). Overlay: ` or F2.
 const ring = createRingBuffer(1000);
+// THE SHIPPED-VS-DEVELOPER LEVEL POLICY, decided in one pure, tested function. `file:` is
+// a packaged build (`main.mjs` loads `dist/desktop.html` from disk) and logs at `info`;
+// `http:` is the dev server and logs at `debug`. The consequence that matters: the
+// `ui`/`choice` payload carries the player's TYPED NAME, and `info` never emits it, so a
+// packaged build never writes a player's name to disk. `src/log/level.test.ts` asserts
+// that consequence rather than trusting this comment.
+log.setLevel(
+  resolveLogLevel({
+    protocol: location.protocol,
+    override: readLogLevelOverride(),
+  }),
+);
 log.addSink(consoleSink);
 log.addSink(ring.sink);
 log.addSink((e) => {
@@ -84,7 +126,11 @@ log.addSink((e) => {
   }
 });
 createDebugOverlay(ring.get);
-log.info('game', 'renderer booted');
+log.info('game', 'renderer booted', {
+  level: log.level(),
+  protocol: location.protocol,
+  ms: bootTimer.stop(),
+});
 window.addEventListener('error', (ev) =>
   log.error('error', 'window error', { message: ev.message, source: ev.filename, line: ev.lineno }),
 );
@@ -156,7 +202,9 @@ function applyRunOutcome(): void {
 }
 
 window.void.onStatus((s) => {
-  log.info('llm', `model ${s.phase}`, s);
+  // The phase is in `s` — interpolating it into the message would make the boot timeline
+  // ungreppable, since every line would have a different message.
+  log.info('llm', 'model status', s);
   if (s.phase === 'ready') {
     statusEl.textContent = `the Void is listening — ${s.gpu ? `GPU (${s.device ? String(s.device) : String(s.gpu)})` : 'CPU'}`;
   } else if (s.phase === 'loading') statusEl.textContent = 'the Void stirs (loading model)…';
@@ -276,11 +324,15 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
   // Show ONLY the current moment: replace the narration area each turn rather
   // than accumulating a growing scroll of past beats (bug 2).
   narrationEl.innerHTML = '';
-  log.debug('llm', 'narrate:request', { promptChars: prompt.user.length });
+  log.debug('llm', 'narrate: request', { promptChars: prompt.user.length, beats: memory.beats.length });
   const block = document.createElement('p');
   block.className = 'beat';
   narrationEl.appendChild(block);
   narrationEl.scrollTop = narrationEl.scrollHeight;
+  // The RENDERER's own view of the generation, started before the IPC call and stopped on
+  // both exits. `roundTripMs - generateMs` is the IPC/queue cost: the difference between
+  // "the model is slow" and "the bridge is", which no single number can tell apart.
+  const genTimer = startTimer();
   try {
     const stats = await window.void.generate({
       prompt: prompt.user,
@@ -290,10 +342,15 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
         narrationEl.scrollTop = narrationEl.scrollHeight;
       },
     });
-    log.debug('llm', 'narrate:done', {
+    const roundTripMs = genTimer.stop();
+    const generateMs = Math.round(stats.totalMs ?? 0);
+    log.log(levelForDuration(roundTripMs, SLOW_MS.narrate, 'info'), 'llm', 'narrate: done', {
+      roundTripMs,
+      generateMs,
+      ipcOverheadMs: Math.round(roundTripMs) - generateMs,
+      ttftMs: Math.round(stats.ttftMs),
       tokens: stats.tokens,
       tokPerSec: Math.round(stats.tokensPerSecond),
-      ttftMs: Math.round(stats.ttftMs),
     });
   } catch (err) {
     // Resilience: if the model fails, fall back to the plain facts so the game
@@ -305,7 +362,8 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
     // "Across this descent you have felled 1 foe / Recent moments…" and never a word about
     // the crit. `fallbackNarration` reads the facts `buildNarrationPrompt` already computed
     // for THIS beat, so the fallback describes what just happened.
-    log.error('llm', 'narrate:failed', {
+    log.error('llm', 'narrate: FAILED', {
+      roundTripMs: genTimer.stop(),
       message: err instanceof Error ? err.message : String(err),
     });
     block.textContent = fallbackNarration(prompt);
@@ -481,20 +539,46 @@ async function dispatch(input: GameInput): Promise<void> {
   if (busy) return;
   busy = true;
   screen = 'game'; // a real engine transition always returns to the plain game view
+  // ⭐ THE PLAYER-PERCEIVED FREEZE, IN MILLISECONDS. `busy` is held for the whole of this
+  // function, so every input is dead until it returns; this timer is exactly how long the
+  // game was unresponsive, and it is reported in the `finally` so it survives a throw.
+  const turnTimer = startTimer();
   try {
     choicesEl.innerHTML = '';
-    log.debug('ui', 'choice', input);
+    // At `debug` only — this payload carries the player's typed name on the name step, and
+    // a packaged build runs at `info`. See `src/log/level.ts`.
+    log.debug('ui', 'choice', { input });
+    const stepTimer = startTimer();
     const r = step(state, input);
+    const stepMs = stepTimer.stop();
     state = r.state;
     retheme(); // the step may have descended a floor — re-tint before anything re-renders
     // M13: fold this step into the run summary (pure subscriber — the engine flow is untouched).
     runSummary = foldRunEvents(runSummary, r.events, r.state);
-    log.debug('engine', `step -> ${r.awaiting}`, {
-      input,
+    // ONE COMPACT LINE PER PLAYER ACTION, at `info` — this is the timeline a shipped log
+    // needs, and the only thing that can say "which action was the slow one".
+    log.log(levelForDuration(stepMs, SLOW_MS.step, 'info'), 'engine', 'step', {
+      input: input.kind,
       awaiting: r.awaiting,
+      ms: stepMs,
+      events: r.events.length,
+    });
+    // The `debug` detail, including the run summary — which is the observability hook for
+    // G50: a neutered `foldRunEvents` leaves this object identical on every step of a whole
+    // run, visible at a glance. (The TEST that pins the fold lives in
+    // `instrumentationSource.test.ts`; a log line is never a substitute for one.)
+    log.debug('engine', 'step detail', {
       events: r.events.map((e) => e.kind),
-      hp: state.player ? `${state.player.hp}/${state.player.maxHp}` : null,
+      // Two NUMBERS, not the string "5/20". A payload that bakes numbers into a string is
+      // the same defect as a message that does: nothing downstream can compare them.
+      hp: state.player?.hp ?? null,
+      maxHp: state.player?.maxHp ?? null,
       act: state.act,
+      summary: {
+        maxAct: runSummary.maxAct,
+        bossKills: runSummary.bossKills.length,
+        spares: runSummary.spareCount,
+      },
     });
     renderSheet();
     renderLog(r.events); // G18: the dice and the damage, before the prose that cannot say them
@@ -522,6 +606,11 @@ async function dispatch(input: GameInput): Promise<void> {
     renderChoices(r.awaiting);
   } finally {
     busy = false;
+    const turnMs = turnTimer.stop();
+    log.log(levelForDuration(turnMs, SLOW_MS.turn, 'info'), 'ui', 'turn', {
+      input: input.kind,
+      ms: turnMs,
+    });
   }
 }
 
@@ -755,7 +844,7 @@ if (saved) {
     // base (`desktop:pack` had never succeeded until 2026-08-31 — G44), so in practice this
     // is the author's own local save. Say so ONCE rather than losing it in silence, which is
     // what the whole G19 defect was.
-    log.warn('save', 'legacy save (envelope v1): this run starts its feat tally from scratch');
+    log.warn('save', 'legacy save envelope: this run starts its feat tally from scratch', { v: 1 });
   }
   retheme(); // a resumed run may be deep in the descent — adopt ITS floor, not floor 0
   renderSheet();

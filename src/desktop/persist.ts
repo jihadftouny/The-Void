@@ -31,8 +31,45 @@ import type { GameState } from '../game/game.ts';
 import type { StoryMemory } from '../llm/narrate.ts';
 import type { RunSummary } from '../game/unlockStore.ts';
 import { BOSSES, type BossId } from '../game/boss.ts';
+import { log } from '../log/logger.ts';
+import { SLOW_MS, levelForDuration, startTimer } from '../log/timing.ts';
 
 const KEY = 'thevoid:run';
+
+/**
+ * WHY THIS FILE LOGS (principle 7). Every rejection below used to be a bare `return null`
+ * and every write failure a bare `catch {}`. That is a player losing a run in complete
+ * silence: the game simply offers "begin a new descent" and nothing anywhere records that
+ * a save existed and was refused, or why. Six indistinguishable silent exits are six
+ * unreproducible bug reports.
+ *
+ * THE MEASUREMENT NEVER CHANGES THE MEASUREMENT (PRINCIPLES.md §A18). Not one return
+ * value, branch or order changes here; the log lines are added beside the existing
+ * decisions. `persist.test.ts`'s pre-existing assertions are the control for that and are
+ * untouched.
+ *
+ * NUMBERS LIVE IN `data`, NEVER IN `message`. Every message below is a constant string
+ * with no digit and no interpolation, so `grep '"ms":'` over a log file always works.
+ */
+
+/** The message of a thrown value, whatever it is. Never throws, never returns undefined. */
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** Why a stored envelope was refused. One constant per branch — never a shared "invalid". */
+export type SaveRejection =
+  | 'absent'
+  | 'not-json'
+  | 'unknown-version'
+  | 'state-decode-failed'
+  | 'memory-invalid'
+  | 'meta-invalid'
+  | 'unreadable';
+
+function rejected(reason: SaveRejection, data: Record<string, unknown> = {}): void {
+  log.warn('save', 'save rejected', { reason, ...data });
+}
 
 /** The current envelope version. Independent of the engine's `SAVE_VERSION`. */
 export const ENVELOPE_VERSION = 2;
@@ -61,27 +98,33 @@ export interface SavedRun {
  * mandatory turns the defect into a type error.
  */
 export function saveRun(state: GameState, memory: StoryMemory, meta: RunMeta): void {
+  const timer = startTimer();
+  let bytes = 0;
   try {
-    localStorage.setItem(
-      KEY,
-      JSON.stringify({
-        v: ENVELOPE_VERSION,
-        state,
-        memory,
-        runSummary: meta.runSummary,
-        runSeed: meta.runSeed,
-      }),
-    );
-  } catch {
-    /* storage unavailable — the run still plays, it just won't persist */
+    const payload = JSON.stringify({
+      v: ENVELOPE_VERSION,
+      state,
+      memory,
+      runSummary: meta.runSummary,
+      runSeed: meta.runSeed,
+    });
+    bytes = payload.length;
+    localStorage.setItem(KEY, payload);
+    const ms = timer.stop();
+    log.log(levelForDuration(ms, SLOW_MS.save), 'save', 'run saved', { ms, bytes });
+  } catch (err) {
+    // Still no throw — the run must keep playing when storage is unavailable. But it no
+    // longer happens in silence, which is the difference between "autosave is broken" and
+    // "the game randomly forgets my descent".
+    log.error('save', 'save FAILED', { message: messageOf(err), bytes });
   }
 }
 
 export function clearRun(): void {
   try {
     localStorage.removeItem(KEY);
-  } catch {
-    /* ignore */
+  } catch (err) {
+    log.warn('save', 'clear FAILED', { message: messageOf(err) });
   }
 }
 
@@ -147,18 +190,41 @@ function decodeRunSummary(raw: unknown): RunSummary | null {
  * envelope must not half-read it.
  */
 export function loadRun(): SavedRun | null {
+  const timer = startTimer();
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const env = JSON.parse(raw) as Record<string, unknown>;
-    if (!isPlainObject(env)) return null;
+    if (!raw) {
+      rejected('absent');
+      return null;
+    }
+    const bytes = raw.length;
+    let env: Record<string, unknown>;
+    try {
+      env = JSON.parse(raw) as Record<string, unknown>;
+    } catch (err) {
+      rejected('not-json', { bytes, message: messageOf(err) });
+      return null;
+    }
+    if (!isPlainObject(env)) {
+      rejected('not-json', { bytes });
+      return null;
+    }
     const version = env.v === undefined ? 1 : env.v;
-    if (version !== 1 && version !== ENVELOPE_VERSION) return null;
+    if (version !== 1 && version !== ENVELOPE_VERSION) {
+      rejected('unknown-version', { bytes, v: version });
+      return null;
+    }
     // Reuse the engine's validating decoder for the game state (rejects corrupt/old saves).
     const state = decodeSave(JSON.stringify(env.state ?? null));
-    if (!state) return null;
+    if (!state) {
+      rejected('state-decode-failed', { bytes });
+      return null;
+    }
     const m = env.memory as Partial<StoryMemory> | undefined;
-    if (!m || !Array.isArray(m.beats)) return null;
+    if (!m || !Array.isArray(m.beats)) {
+      rejected('memory-invalid', { bytes });
+      return null;
+    }
     const memory: StoryMemory = {
       beats: m.beats.map(String),
       enemiesDefeated: Number(m.enemiesDefeated) || 0,
@@ -171,9 +237,27 @@ export function loadRun(): SavedRun | null {
       const runSummary = decodeRunSummary(env.runSummary);
       const runSeed = finite(env.runSeed);
       if (runSummary && runSeed !== undefined) meta = { runSummary, runSeed };
+      // A v2 envelope whose meta did not survive validation degrades to `meta: null` — the
+      // run still opens, but everything it had EARNED is gone (G19's consequence, arriving
+      // by a different door). That is not a silent detail.
+      if (!meta) rejected('meta-invalid', { bytes });
+    } else {
+      log.warn('save', 'legacy envelope', { v: 1, bytes });
     }
+    const ms = timer.stop();
+    log.log(levelForDuration(ms, SLOW_MS.load, 'info'), 'save', 'run loaded', {
+      ms,
+      bytes,
+      envelope: version,
+      metaPresent: meta !== null,
+    });
     return { state, memory, meta };
-  } catch {
+  } catch (err) {
+    // The seventh branch, and a real one: `localStorage.getItem` itself can throw (quota
+    // policy, a blocked origin). It is NOT folded into `not-json`, because conflating
+    // "the browser refused to talk to us" with "the stored bytes are garbage" is exactly
+    // the kind of shared reason string that makes a log unable to answer the question.
+    rejected('unreadable', { message: messageOf(err) });
     return null;
   }
 }

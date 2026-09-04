@@ -5,29 +5,52 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createNarrator } from './llm.mjs';
+import { createNarratorGate } from './narrator-gate.mjs';
+import { THRESHOLDS } from './instrument.mjs';
 import { resolveModelDir, filesToMigrate } from './model-path.mjs';
-import { fileLog, LOG_FILE } from './log.mjs';
+import {
+  fileLog,
+  configureLogDir,
+  logFilePath,
+  resolveMainLogLevel,
+  passesLevel,
+  LOG_CAP_BYTES,
+} from './log.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.VITE_DEV_SERVER_URL; // set by scripts/desktop-dev.mjs
 const SMOKE = process.env.VOID_SMOKE === '1'; // headless verify path
+const BOOT_MS = Date.now();
 
 let win = null;
-let narrator = null;
+
+// The main process's own level. `debug` under the dev launcher, `info` in a packaged
+// build, overridable with VOID_LOG_LEVEL. Resolved at module scope because the very first
+// thing that can fail (an uncaughtException before `ready`) must already be filtered.
+const LOG_LEVEL = resolveMainLogLevel({ env: process.env, dev: !!DEV_URL });
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
-// Main-process logging → console + the shared log file.
+// Main-process logging → the shared log file. NEVER interpolate a measurement into
+// `message`: numbers go in `data`, so `grep '"ms":'` over a log always works.
 function mlog(level, category, message, data) {
+  if (!passesLevel(level, LOG_LEVEL)) return;
   fileLog({ time: Date.now(), level, category, message, ...(data !== undefined ? { data } : {}) });
 }
 process.on('uncaughtException', (err) =>
-  mlog('error', 'electron', 'uncaughtException', { message: String(err?.message ?? err), stack: err?.stack }),
+  mlog('error', 'electron', 'uncaughtException', {
+    message: String(err?.message ?? err),
+    stack: err?.stack,
+    uptimeMs: Date.now() - BOOT_MS,
+  }),
 );
 process.on('unhandledRejection', (reason) =>
-  mlog('error', 'electron', 'unhandledRejection', { reason: String(reason) }),
+  mlog('error', 'electron', 'unhandledRejection', {
+    reason: String(reason),
+    uptimeMs: Date.now() - BOOT_MS,
+  }),
 );
 
 // Resolve (and prepare) the single per-user models directory. Must run after
@@ -59,12 +82,27 @@ function resolveModelsDir() {
   return modelsDir;
 }
 
-async function ensureNarrator(onStatus) {
-  if (!narrator) {
-    const modelsDir = resolveModelsDir();
-    narrator = await createNarrator({ onStatus, modelsDir });
-  }
-  return narrator;
+// G37 — the narrator is memoised as a PROMISE, not as a resolved value.
+//
+// This used to be `if (!narrator) { narrator = await createNarrator(...) }`, which assigns
+// only AFTER the await, so the guard was blind to an in-flight load: `createWindow` fires
+// it un-awaited at boot, the renderer's first `llm:generate` fires it again a few clicks
+// later, both see `null`, and a SECOND complete load starts — a second 2.5 GB
+// resolve/download, a second set of GPU probes at 30 s each, a second `loadModel`. The
+// renderer holds `busy = true` across the whole dispatch, so every input is dead until it
+// returns. That is the freeze this unit exists for.
+//
+// The gate lives in its own module because `main.mjs` imports `electron` at module scope
+// and can never be imported by a test; `narrator-gate.test.mjs` proves the fix under
+// GENUINE CONCURRENCY (two callers racing before the first resolves construct exactly
+// once), which is the only shape that can tell the fix from the defect.
+const narratorGate = createNarratorGate({
+  create: (onStatus) => createNarrator({ onStatus, modelsDir: resolveModelsDir(), log: mlog }),
+  log: mlog,
+});
+
+function ensureNarrator(trigger, onStatus) {
+  return narratorGate.ensure(trigger, onStatus);
 }
 
 async function createWindow() {
@@ -79,13 +117,27 @@ async function createWindow() {
     },
   });
 
-  if (DEV_URL) await win.loadURL(new URL('desktop.html', DEV_URL).href);
-  else await win.loadFile(path.join(__dirname, '..', 'dist', 'desktop.html'));
+  // The window load is timed because it is the FIRST thing that can hang, and because a
+  // slow one is G41's symptom exactly: `loadURL` against a LOCAL dev server should be
+  // instant, so seconds mean the URL is wrong or the server on that port is not ours.
+  const windowT0 = Date.now();
+  const mode = DEV_URL ? 'dev' : 'file';
+  const url = DEV_URL
+    ? new URL('desktop.html', DEV_URL).href
+    : path.join(__dirname, '..', 'dist', 'desktop.html');
+  if (DEV_URL) await win.loadURL(url);
+  else await win.loadFile(url);
+  const windowMs = Date.now() - windowT0;
+  mlog(windowMs >= THRESHOLDS.windowLoad ? 'warn' : 'info', 'electron', 'window loaded', {
+    ms: windowMs,
+    mode,
+    url,
+  });
 
   // Load the model after the window exists; stream progress to the renderer.
-  ensureNarrator((s) => {
+  ensureNarrator('boot', (s) => {
     send('llm:status', s);
-    mlog('info', 'llm', `status:${s.phase}`, s);
+    mlog('info', 'llm', 'status', s);
   }).then(
     (n) => {
       send('llm:status', {
@@ -110,30 +162,60 @@ async function createWindow() {
 
 // Renderer asks to generate; we stream tokens back per-request and return stats.
 ipcMain.handle('llm:generate', async (event, { requestId, prompt, system }) => {
-  const n = await ensureNarrator((s) => send('llm:status', s));
-  mlog('debug', 'llm', 'generate:request', { requestId, promptChars: (prompt ?? '').length });
-  const result = await n.generate({
-    prompt,
-    system,
-    onToken: (chunk) => event.sender.send('llm:token', { requestId, chunk }),
-  });
-  mlog('info', 'llm', 'generate:done', {
-    requestId,
-    tokens: result.tokens,
-    tokPerSec: Math.round(result.tokensPerSecond),
-  });
-  return result;
+  const t0 = Date.now();
+  // Read BEFORE the await: `false` here means this request is about to WAIT for a model
+  // load it did not start, and `waitedMs` below is that wait in milliseconds. That number
+  // IS the freeze, and nothing recorded it before.
+  const wasReady = narratorGate.isReady();
+  try {
+    const n = await ensureNarrator('generate', (s) => send('llm:status', s));
+    if (!wasReady) {
+      mlog('warn', 'llm', 'generate: waiting for narrator', { requestId, waitedMs: Date.now() - t0 });
+    }
+    const result = await n.generate({
+      requestId,
+      prompt,
+      system,
+      onToken: (chunk) => event.sender.send('llm:token', { requestId, chunk }),
+    });
+    return result;
+  } catch (err) {
+    // The renderer only ever receives a serialized message across IPC, so without this
+    // the main-side cause — and the stack — is lost entirely.
+    mlog('error', 'llm', 'generate: FAILED (main)', {
+      requestId,
+      ms: Date.now() - t0,
+      message: String(err?.message ?? err),
+      stack: String(err?.stack ?? ''),
+    });
+    throw err;
+  }
 });
 
 // Renderer forwards its log entries here so everything lands in one file.
 ipcMain.on('log:entry', (_e, entry) => fileLog(entry));
 
 app.whenReady().then(async () => {
+  // FIRST, before anything else can want to log. G6: the log directory MUST come from
+  // `app.getPath('userData')` — a path derived from `__dirname` lands inside the asar in a
+  // packaged build, where `mkdirSync` throws and every log call becomes a silent no-op.
+  // This is also why it sits above the SMOKE branch: a smoke run that fails is exactly a
+  // run whose log we need.
+  const logDir = path.join(app.getPath('userData'), 'logs');
+  const logFile = configureLogDir(logDir, { session: { version: app.getVersion() } });
+  mlog('info', 'electron', 'log configured', {
+    dir: logDir,
+    file: logFile,
+    capBytes: LOG_CAP_BYTES,
+    level: LOG_LEVEL,
+  });
+  console.log(`[void] logging to ${logFilePath()}`);
+
   if (SMOKE) {
     // Verify node-llama-cpp loads and runs INSIDE Electron's runtime (the ABI
     // risk) with no window, then quit — automatable without a human watching.
     try {
-      const n = await ensureNarrator((s) => console.log('[status]', JSON.stringify(s)));
+      const n = await ensureNarrator('boot', (s) => console.log('[status]', JSON.stringify(s)));
       const r = await n.generate({
         prompt: 'In two sentences, describe stepping onto the First Floor of the Void.',
         onToken: (c) => process.stdout.write(c),
@@ -150,8 +232,20 @@ app.whenReady().then(async () => {
   }
 
   await createWindow();
-  mlog('info', 'electron', 'app booted');
-  console.log(`[void] logging to ${LOG_FILE}`);
+  mlog('info', 'electron', 'app booted', {
+    bootMs: Date.now() - BOOT_MS,
+    dev: !!DEV_URL,
+    versions: {
+      electron: process.versions.electron,
+      node: process.versions.node,
+      chrome: process.versions.chrome,
+    },
+    platform: process.platform,
+    arch: process.arch,
+    appVersion: app.getVersion(),
+    cwd: process.cwd(),
+    level: LOG_LEVEL,
+  });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
