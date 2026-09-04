@@ -170,7 +170,7 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
 > `npm run desktop` after the first silently serves **stale code from the previous session**. Any
 > play-test that follows a quit is testing the wrong build, and the terminal error looks unrelated.
 >
-> **Not in this unit: G44, G37 and the escalated G6** — all three are **packaging** defects and
+> ~~**Not in this unit: G44, G37 and the escalated G6**~~ ✅ **ALL THREE ARE NOW FIXED** — G44 by `d8eb952`, and **G37 + G6 by the `observability` unit (2026-09-04)**, which took them because the session log's design *was* G6's fix and G37 turned out to be **the cause of the reported first-encounter freeze**. #14 no longer carries them. Original note kept: all three were **packaging** defects and
 > belong to **#14**. **G44 was the register's only `⛔⛔ blocks shipping` row: `npm run desktop:pack`
 > ~~has never once succeeded~~ — **✅ FIXED 2026-08-31 (§22.12); the config now validates.** See
 > #14 below. *(This note said "both" and omitted G44 until
