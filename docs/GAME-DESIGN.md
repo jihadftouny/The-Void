@@ -1820,3 +1820,15 @@ This number decides how long floor 5 runs before the Hollow is offered. §22 had
 **Why it moved:** at 600 the simulated win rate measures *exactly* 0.120 against a `> 0.12` floor — it fails by nothing. The build moved one step down the same derived curve (6 kills, `240·e^0.75 ≈ 508` → 500) rather than to the nearest passing value, which would have been 576. Choosing a *larger* change than the test demanded is the opposite of tuning-until-green, and the test-agent verified the sweep independently: 396→0.154, 448→0.142, **500→0.132**, 541→0.128, 576→0.122, 600→0.120.
 
 ⚠ **The accepted cost:** 0.132 against a 0.12 floor is **six wins in 500**, and `HOLLOW_GATE_XP` is now effectively pinned by a test threshold — a coupling that did not exist before. **Flagged for #2's balance re-run**, and floor-5 length is a NEEDS-HUMAN play-check regardless of what the simulation says.
+
+### 22.22 A spare records EVERY karma action it earns, not one *(2026-09-04)*
+
+**Author's call, against the recommendation.** Wiring #10a exposed that the enemy-family seam allows **exactly one** karma action per spare. §9 says *"The Judged: spare = reverence"*, so following it literally would have meant **sparing a Judged stops counting as mercy at all**.
+
+**The ruling: it counts as both.** Sparing The Judged records **mercy *and* reverence**. The family schema changes so a family can hold a **list** of karma actions rather than one, and the shipped data for The Judged carries both.
+
+**Why:** the premise is that *the whole pattern of play is read into your nature*. Sparing is an act of mercy whoever it is granted to; that a particular enemy also makes it an act of reverence is an addition, not a substitution. A player who spares everything and finds one enemy type silently not counting would have no way to know, and no way to guess.
+
+**Rejected — and it was the recommendation:** reverence only, exactly as §9 words it. It needed no schema change, stayed strictly inside what §22.5 authorised, and had a real defence — different enemies teaching different virtues. **The accepted cost of overriding it is a small scope addition** (`onSpare` becomes a list, in data and in its type) beyond what §22.5 asked for.
+
+**§9's wording is now read as additive**: *"spare = reverence"* means *"a spare here also earns reverence"*, not *"instead of"*. ⚠ The companion half of §9 — *killing* The Judged recording **desecration** — stays **unbuilt**: the shipped data records cruelty, and there is no desecration action not named for shrines, so it needs a fifth `KarmaAction`. That is a design addition, not wiring, and it belongs with #2's floor-4 work.
