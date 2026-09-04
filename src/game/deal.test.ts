@@ -422,17 +422,60 @@ describe('G20 — no deal leaves maxHp, hp or a stat below 1', () => {
     // The `statPoint` cost was unbounded in exactly the same way, and it is clamped in the
     // same edit: a stat at 0 or below would invert its modifier (and, for CON, every number
     // derived from it).
+    //
+    // STRENGTHENED in fix round 1, and this is the one line of a pre-existing test that moved.
+    // It used to assert `outcome === 'taken'` on EVERY iteration, including the ones past the
+    // floor — which encoded the very defect that turned out to matter: a deal that clamps to
+    // MIN_STAT, takes NOTHING, and still pays out its reward. `canAfford` now refuses a stat
+    // cost the player cannot actually pay, so the loop asserts the sharper property: taken
+    // while there is a point to give, REFUSED once there is not, and never below the floor at
+    // any point. Everything the old assertion protected still holds and more.
     let player = makePlayer();
     const start = player.stats.STR;
+    let taken = 0;
+    let refused = 0;
     for (let i = 0; i < start + 10; i++) {
       const r = applyDeal(player, createKarma(), dealWith({ kind: 'statPoint', stat: 'STR' }));
-      expect(r.outcome).toBe('taken');
+      if (player.stats.STR > 1) {
+        expect(r.outcome, `iteration ${i} at STR ${player.stats.STR}`).toBe('taken');
+        taken += 1;
+      } else {
+        expect(r.outcome, `iteration ${i} at STR ${player.stats.STR}`).toBe('unaffordable');
+        expect(r.player).toBe(player); // and NOTHING changed — not even the reward
+        refused += 1;
+      }
       player = r.player;
       expect(player.stats.STR).toBeGreaterThanOrEqual(1);
     }
+    // Hand-derived from STR 16: 15 deals walk it 16 -> 1, the remaining 11 iterations are all
+    // refused. Both counts are asserted so neither branch can go unexercised.
+    expect(taken).toBe(start - 1);
+    expect(refused).toBe(start + 10 - (start - 1));
     expect(player.stats.STR).toBe(1);
     // …and the derived mod table was recomputed from the clamped value, not the raw one.
     expect(player.mods.STR).toBe(computeStatMod(1));
+  });
+
+  it('a cost at its floor is REFUSED, not silently taken for free (fix round 1)', () => {
+    // The two arms this unit originally hand-wrote back as unconditional `return true`. Both
+    // clamp when applied, so "affordable" used to mean "takes nothing and still pays out" — and
+    // both of the templates they gate reward an ITEM, which #10a's offering turns into karma.
+    const drained = makePlayer({ skillCharges: 0 });
+    expect(canAfford(drained, { kind: 'skillCharge', amount: 1 })).toBe(false);
+    expect(applyDeal(drained, createKarma(), dealWith({ kind: 'skillCharge', amount: 1 })).outcome)
+      .toBe('unaffordable');
+    // …and the polarity control: with the charges in hand it IS payable, and really spends them.
+    const charged = makePlayer({ skillCharges: 2 });
+    expect(canAfford(charged, { kind: 'skillCharge', amount: 2 })).toBe(true);
+    expect(canAfford(charged, { kind: 'skillCharge', amount: 3 })).toBe(false);
+
+    const floored = makePlayer({ stats: { STR: 16, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 1 } });
+    expect(canAfford(floored, { kind: 'statPoint', stat: 'CHA' })).toBe(false);
+    expect(applyDeal(floored, createKarma(), dealWith({ kind: 'statPoint', stat: 'CHA' })).outcome)
+      .toBe('unaffordable');
+    // …polarity control: one point above the floor and it is payable again.
+    const spare = makePlayer({ stats: { STR: 16, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 2 } });
+    expect(canAfford(spare, { kind: 'statPoint', stat: 'CHA' })).toBe(true);
   });
 
   it('an accepted deal never leaves the player unable to act, for any shipped cost kind', () => {
@@ -449,7 +492,10 @@ describe('G20 — no deal leaves maxHp, hp or a stat below 1', () => {
       hp: { kind: 'hp', amount: 1 },
       maxHp: { kind: 'maxHp', amount: 1 },
       statPoint: { kind: 'statPoint', stat: 'CON' },
-      skillCharge: { kind: 'skillCharge', amount: 99 },
+      // Fix round 1: was `amount: 99`, which is now correctly UNAFFORDABLE at 3 charges and
+      // would have dropped this row out of the sweep. 3 is the whole pool: payable, and it
+      // still drains the counter to 0, so the clamp this test exists for is still exercised.
+      skillCharge: { kind: 'skillCharge', amount: 3 },
       relic: { kind: 'relic' },
       offering: { kind: 'offering' },
       desecrate: { kind: 'desecrate' },

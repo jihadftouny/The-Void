@@ -108,8 +108,24 @@ interface DealTemplate {
  * integer deltas ⇒ ANY net-positive ledger earns it). #2 owns the real values:
  *
  *  - `offering` → `heal 6`. Costs the first backpack item; grants at most 6 HP, capped at maxHp.
- *    NOT farmable: each acceptance destroys one finite backpack item and the altar hands back no
- *    item, so the item count strictly falls and `canAfford` refuses on an empty backpack.
+ *
+ *    ⚠ CORRECTION (fix round 1). This comment used to read *"NOT farmable: … the altar hands back
+ *    no item"*, and that was FALSE — as was the plan's load-bearing justification, *"an item cost
+ *    bounds it to what the run actually found."* The altar hands an item back in TWO shipped
+ *    templates: `standard[1]` (`skillCharge 1` → a rolled ring) and `grace[1]` (`statPoint CHA` →
+ *    `mirror-shard`). Both of those costs were, until this round, silently free at the floor —
+ *    `canAfford` returned `true` unconditionally for them while `withStat` clamps at `MIN_STAT`
+ *    and the charge subtraction clamps at 0 — so the altar was an UNBOUNDED item source, and
+ *    #10a's offering turned unbounded items into an unbounded ledger. Measured before the fix:
+ *    6000 free seeks from a fresh hub, no combat at all, produced a weighted ledger of **7512**
+ *    against `GATE_THRESHOLD` 1. `canAfford` now refuses a cost that cannot actually be paid, so
+ *    every item the altar sells is bought with a strictly-decreasing player resource.
+ *
+ *    What is true now, and is the bound the test asserts: the ledger a run can buy from the menu
+ *    is bounded by the finite resources it rolled at creation (stat points above `MIN_STAT`, and
+ *    skill charges) — it SATURATES instead of climbing. It is still far above `GATE_THRESHOLD`,
+ *    and that residue is G52 (the altar is free and unlimited) and #2's to bound; it is recorded,
+ *    not papered over.
  *  - `whisper` → `heal 4`. Costs no material thing (only a point of delusion) and IS repeatable,
  *    exactly like the shipped `desecrate`/`greed` templates. Deliberately a HEAL and nothing
  *    else: `standard[0]` (cost 8 HP → heal 12, a net +4) already makes HP unbounded at the altar
@@ -197,15 +213,29 @@ function firstRelicIndex(player: Player): number {
 const MIN_STAT = 1;
 
 /**
- * Can the player pay `cost`? — PURE. An HP cost must leave the player alive (`amount < hp`); a
- * MAX-HP cost must leave a living body behind (`amount < maxHp`); a relic cost needs a relic in
- * the backpack; an OFFERING needs any item in the backpack; the purely-karmic costs are always
- * affordable.
+ * Can the player pay `cost`? — PURE.
  *
- * #10a: the `default: return true` arm is GONE. The switch is now exhaustive over `DealCost`, so
- * a future cost kind is a COMPILE ERROR here rather than a silently-free one. That arm is what
- * G20 fell through, and an `offering` falling through it would have handed out free reverence
- * forever (an empty backpack, `applyDeal`'s `slice(1)` a no-op, the karma still recorded).
+ * THE RULE, one line, because hand-writing each arm from memory is how this went wrong twice:
+ * **a cost is affordable only if paying it will actually TAKE something.** An HP cost must leave
+ * the player alive (`amount < hp`); a MAX-HP cost must leave a living body behind; a relic cost
+ * needs a relic; an OFFERING needs any item; a STAT-POINT cost needs a point above `MIN_STAT` to
+ * give; a SKILL-CHARGE cost needs the charges in hand. Only the three purely-karmic costs are
+ * unconditional, and they are not free — the karma IS the price.
+ *
+ * #10a: the `default: return true` arm is GONE. The switch is exhaustive over `DealCost`, so a
+ * future cost kind is a COMPILE ERROR here rather than a silently-free one. That arm is what G20
+ * fell through, and an `offering` falling through it would have handed out free reverence forever
+ * (an empty backpack, `applyDeal`'s `slice(1)` a no-op, the karma still recorded).
+ *
+ * FIX ROUND 1 — deleting the default was right; the arms that replaced it were not. `statPoint`
+ * and `skillCharge` were hand-written back as unconditional `return true`, which carried G20's
+ * exact shape forward into the two arms where it still bit. `withStat` clamps at `MIN_STAT` and
+ * the charge subtraction clamps at 0, so at CHA 1 / at 0 charges the deal was "affordable", took
+ * NOTHING, and still paid out — and both of those templates pay out an ITEM (`standard[1]`,
+ * `grace[1]`). With #10a's offering turning an item into reverence, that made the altar an
+ * unbounded karma mint: measured at a weighted ledger of **7512** after 6000 free seeks from a
+ * fresh hub with no combat, against `GATE_THRESHOLD` 1. The two conditions below close the loop;
+ * `karmaActions.test.ts`'s all-accepting seeker asserts the ledger now SATURATES.
  *
  * G20: the `maxHp` case used to fall through to `return true`, and `applyDeal` subtracted with
  * NO floor — unlike every other max-HP sink in the engine. Verified: `deals.json`'s `tempting`
@@ -225,10 +255,18 @@ export function canAfford(player: Player, cost: DealCost): boolean {
     case 'offering':
       return player.inventory.backpack.length > 0;
     case 'statPoint':
+      // A stat already at the floor cannot be given: `withStat` would clamp and take nothing.
+      return player.stats[cost.stat] > MIN_STAT;
     case 'skillCharge':
+      // Charges the player does not hold cannot be spent: the subtraction clamps at 0.
+      return cost.amount <= player.skillCharges;
     case 'desecrate':
     case 'greed':
     case 'whisper':
+      // The three purely-karmic costs. Nothing material changes hands, so there is nothing to
+      // be short of — but they are NOT free: each records a NEGATIVE karma action, and the
+      // ledger is the price. See the "a cost must take something" test in karmaActions.test.ts,
+      // which holds them to that and would fail a karmic cost whose action moved an axis UP.
       return true;
   }
 }
