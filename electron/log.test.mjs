@@ -47,6 +47,36 @@ function tempDir() {
   return dir;
 }
 
+/**
+ * The observable state of a path — enough to prove that nothing touched it.
+ *
+ * For a file: its size and modification time. For a directory: its sorted entries, each
+ * with size and modification time. For an absent path: simply `{exists:false}`.
+ *
+ * Comparing one of these before and after an operation answers "did WE change this?",
+ * which is a different and much more useful question than "does this exist?" — the latter
+ * conflates our effect with whatever the machine happened to be carrying already.
+ */
+function snapshotPath(target) {
+  let stat;
+  try {
+    stat = fs.statSync(target);
+  } catch {
+    return { exists: false };
+  }
+  if (!stat.isDirectory()) {
+    return { exists: true, kind: 'file', size: stat.size, mtimeMs: stat.mtimeMs };
+  }
+  const entries = fs
+    .readdirSync(target)
+    .sort()
+    .map((name) => {
+      const s = fs.statSync(path.join(target, name));
+      return { name, size: s.size, mtimeMs: s.mtimeMs, isDir: s.isDirectory() };
+    });
+  return { exists: true, kind: 'dir', entries };
+}
+
 afterEach(async () => {
   await closeLog();
   for (const d of tmpDirs.splice(0)) {
@@ -130,20 +160,62 @@ describe('G6: the log directory is injected, never derived from __dirname', () =
     expect(rotatedFilePath()).toBe(path.join(dir, 'void.log.1'));
   });
 
-  it('a configured log writes to that directory and creates nothing under electron/../logs', async () => {
+  it('a configured log writes to that directory and TOUCHES NOTHING under electron/../logs', async () => {
+    // ⚠ THIS ASSERTS AN EFFECT, NOT A STATE OF THE WORLD — and the difference is the whole
+    // point of G6.
+    //
+    // It used to read `expect(fs.existsSync(repoLogs/void.log)).toBe(false)`, which was
+    // green in every worktree and RED on the trunk. Not a code defect: on a machine that
+    // has ever run a PRE-FIX build, `<repo>/logs/void.log` exists — it is the physical
+    // residue of the very bug this test guards, written there by the `__dirname`-derived
+    // path G6 removed. `logs/` is gitignored and a worktree is a fresh checkout, so the
+    // directory had never existed anywhere the test ran.
+    //
+    // "That file does not exist" is not what this unit can promise. What it can promise is
+    // "this code does not create or write there", and only the second is falsifiable here.
+    // So: snapshot the whole directory before, snapshot it after, and require them to be
+    // IDENTICAL. That one comparison covers both worlds — if it was absent it must stay
+    // absent, and if it was present every entry must keep its exact size and mtime. The
+    // engineer's file is genuine evidence of the old defect; the test leaves it alone.
     const dir = tempDir();
     const repoLogs = path.join(HERE, '..', 'logs');
+
+    const before = snapshotPath(repoLogs);
     configureLogDir(dir);
     fileLog({ time: 0, level: 'info', category: 'electron', message: 'hello' });
     await flushLog();
+
+    // The G6 claim comes FIRST, so that when it breaks the message names the defect. (Put
+    // second, it never ran: reintroducing G6 makes the temp file absent, so the positive
+    // read below threw ENOENT and reported "no such file" — true, but three inferences away
+    // from "this code wrote into your checkout".)
+    const after = snapshotPath(repoLogs);
+    expect(
+      after,
+      before.exists
+        ? 'the repo-root logs/ directory was MODIFIED — this code wrote into the checkout, ' +
+          'which is G6 exactly. (The pre-existing file there is residue of the OLD defect ' +
+          'and is not itself a failure — do not delete it to make this pass.)'
+        : 'the repo-root logs/ directory was CREATED — this code derived its path from ' +
+          '__dirname again, which is G6 exactly',
+    ).toEqual(before);
+
+    // ...and the positive half: it really did write, somewhere — so "touched nothing"
+    // cannot pass by this code doing nothing at all.
     const written = fs.readFileSync(path.join(dir, 'void.log'), 'utf8');
     expect(written).toContain('hello');
-    expect(fs.existsSync(path.join(repoLogs, 'void.log'))).toBe(false);
   });
 
   it('does not create its directory until something is actually written', () => {
     // Lazy on purpose: the pre-ready temp directory should normally never exist.
+    //
+    // Absence IS the effect here, legitimately: `dir` is a fresh path inside a temp
+    // directory this test just made, so nothing else could have created it. That is what
+    // makes this assertion sound while the same shape one test above was not — the
+    // distinction is "did WE create it", and only a path we own can answer that by
+    // existence alone.
     const dir = path.join(tempDir(), 'not-yet');
+    expect(fs.existsSync(dir), 'the temp path was not fresh — this test proves nothing').toBe(false);
     configureLogDir(dir);
     expect(fs.existsSync(dir)).toBe(false);
     fileLog({ time: 0, level: 'info', category: 'x', message: 'now' });
