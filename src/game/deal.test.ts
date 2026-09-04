@@ -8,6 +8,7 @@ import {
   buildDeal,
   applyDeal,
   canAfford,
+  describeCost,
   type SacrificeDeal,
 } from './deal.ts';
 import { createPlayer, type Player } from './player.ts';
@@ -64,6 +65,30 @@ describe('buildDeal — pool is the karma read; determinism', () => {
 
   it('is deterministic for a fixed karma + seed', () => {
     expect(buildDeal(NEUTRAL, 1, mulberry32(7))).toEqual(buildDeal(NEUTRAL, 1, mulberry32(7)));
+  });
+
+  it('#10a APPENDED its four templates — every pool still leads with its first authored one', () => {
+    // `pick` is `items[floor(x*len)]`, so at x=0.0 the draw is index 0 WHATEVER the length.
+    // This is the property that keeps every scripted-rng deal test honest across a data edit:
+    // it fails the moment a template is INSERTED at the head of a pool instead of appended.
+    // Expected values are read off `deals.json`'s authoring order by hand, not from the loader.
+    expect(buildDeal(NEUTRAL, 1, scriptedRng([0.0])).cost).toEqual({ kind: 'hp', amount: 8 });
+    expect(
+      buildDeal({ ...NEUTRAL, restraintGreed: -5 }, 1, scriptedRng([0.0])).cost,
+    ).toEqual({ kind: 'desecrate' });
+    expect(
+      buildDeal({ ...NEUTRAL, reverenceDesecration: 5 }, 1, scriptedRng([0.0])).cost,
+    ).toEqual({ kind: 'hp', amount: 5 });
+  });
+
+  it('offers the offering and the whisper at NEUTRAL karma (the standard pool, not a gated one)', () => {
+    // Reachability, not mere existence. Putting `offering` only in `grace` would have been
+    // circular — `grace` opens at reverence >= 3 and the offering is the only way to earn it —
+    // and putting `whisper` only in `tempting` would have hidden The Delusion behind a fall the
+    // player must already have taken. `pick` = items[floor(x*5)] over the 5-long standard pool:
+    // x=0.7 -> index 3 (offering), x=0.9 -> index 4 (whisper). Hand-derived from the file order.
+    expect(buildDeal(NEUTRAL, 1, scriptedRng([0.7])).cost).toEqual({ kind: 'offering' });
+    expect(buildDeal(NEUTRAL, 1, scriptedRng([0.9])).cost).toEqual({ kind: 'whisper' });
   });
 });
 
@@ -233,6 +258,132 @@ describe('applyDeal — karma-shifting costs flow through the real recordKarma',
     const r = applyDeal(p, NEUTRAL, deal);
     expect(r.karma).toEqual(NEUTRAL);
   });
+
+  // ------- #10a: the two new karma-shifting costs ------------------------------------------
+
+  it('an offering deal moves BOTH restraint and reverence by +1 and takes the first pack item', () => {
+    // Expected from karma.ts's KARMA_DELTAS.leaveOffering = { restraintGreed: 1,
+    // reverenceDesecration: 1 } — read from the design table, not from the implementation.
+    // Both unmoved axes are asserted too: naming the wrong action would move a different pair.
+    const p = makePlayer({
+      inventory: {
+        slots: makePlayer().inventory.slots,
+        backpack: [{ defId: 'Jaaj Sword 1' }, { defId: 'mirror-shard' }],
+      },
+    });
+    const deal: SacrificeDeal = {
+      pool: 'standard',
+      cost: { kind: 'offering' },
+      reward: { kind: 'heal', amount: 0 },
+    };
+    const r = applyDeal(p, NEUTRAL, deal);
+    expect(r.outcome).toBe('taken');
+    expect(r.karma).toEqual({ ...NEUTRAL, restraintGreed: 1, reverenceDesecration: 1 });
+    // The FIRST item goes — and it really is gone, not merely one fewer of something.
+    expect(r.player.inventory.backpack).toEqual([{ defId: 'mirror-shard' }]);
+  });
+
+  it('an offering with an EMPTY backpack is unaffordable — no free reverence', () => {
+    // The single most likely silent bug in this unit: `canAfford` used to end in
+    // `default: return true`, so a cost that takes an item would have been affordable with no
+    // item, `slice(1)` on `[]` is a silent no-op, and the karma would still have been recorded.
+    // That is an unlimited, cost-free reverence tap at a free, unlimited hub action.
+    const p = makePlayer(); // empty backpack
+    expect(p.inventory.backpack).toEqual([]);
+    const deal: SacrificeDeal = {
+      pool: 'standard',
+      cost: { kind: 'offering' },
+      reward: { kind: 'heal', amount: 5 },
+    };
+    expect(canAfford(p, deal.cost)).toBe(false);
+    const r = applyDeal(p, NEUTRAL, deal);
+    expect(r.outcome).toBe('unaffordable');
+    expect(r.player).toBe(p); // nothing changed at all — not even the heal
+    expect(r.karma).toEqual(NEUTRAL);
+  });
+
+  it('a whisper deal shifts clarityDelusion by -1 and no other axis, and costs nothing material', () => {
+    // KARMA_DELTAS.embraceWhisper = { clarityDelusion: -1 }. The SIGN is the point: karma.ts's
+    // convention is positive = virtue, and embracing a whisper is the shadow pole.
+    const p = makePlayer({ hp: 30, skillCharges: 3 });
+    const deal: SacrificeDeal = {
+      pool: 'standard',
+      cost: { kind: 'whisper' },
+      reward: { kind: 'heal', amount: 0 },
+    };
+    const r = applyDeal(p, NEUTRAL, deal);
+    expect(r.outcome).toBe('taken');
+    expect(r.karma).toEqual({ ...NEUTRAL, clarityDelusion: -1 });
+    expect(r.player.hp).toBe(30);
+    expect(r.player.skillCharges).toBe(3);
+    expect(r.player.inventory.backpack).toEqual([]);
+  });
+});
+
+// ------- #10a — `canAfford` is EXHAUSTIVE over DealCost, arm by arm ---------------------------
+
+describe('canAfford — every cost kind, both polarities where it has two', () => {
+  // Type-exhaustive: a future `DealCost` member makes this Record a COMPILE error, so the
+  // sweep can never silently stop covering a kind. (The old `default: return true` arm is gone
+  // from `canAfford` for the same reason — a new kind must be decided, not defaulted.)
+  const ONE_OF_EACH: Record<SacrificeDeal['cost']['kind'], SacrificeDeal['cost']> = {
+    hp: { kind: 'hp', amount: 5 },
+    maxHp: { kind: 'maxHp', amount: 5 },
+    statPoint: { kind: 'statPoint', stat: 'CHA' },
+    skillCharge: { kind: 'skillCharge', amount: 1 },
+    relic: { kind: 'relic' },
+    offering: { kind: 'offering' },
+    desecrate: { kind: 'desecrate' },
+    greed: { kind: 'greed' },
+    whisper: { kind: 'whisper' },
+  };
+
+  // Hand-derived from the doc contract, NOT from a run: hp/maxHp must leave something behind,
+  // relic needs a relic, offering needs any item, the purely-karmic costs are always payable.
+  const EXPECTED_WITH_EMPTY_PACK: Record<SacrificeDeal['cost']['kind'], boolean> = {
+    hp: true, // 5 < 30
+    maxHp: true, // 5 < 40
+    statPoint: true,
+    skillCharge: true,
+    relic: false, // no relic held
+    offering: false, // nothing to give
+    desecrate: true,
+    greed: true,
+    whisper: true,
+  };
+
+  it('a player with an EMPTY backpack can afford everything except a relic and an offering', () => {
+    const p = makePlayer();
+    for (const [kind, cost] of Object.entries(ONE_OF_EACH)) {
+      expect(canAfford(p, cost), kind).toBe(
+        EXPECTED_WITH_EMPTY_PACK[kind as SacrificeDeal['cost']['kind']],
+      );
+    }
+    // Non-vacuity: the sweep really covered all nine arms.
+    expect(Object.keys(ONE_OF_EACH)).toHaveLength(9);
+  });
+
+  it('a single NON-relic item makes the offering payable but still not the relic cost', () => {
+    // The polarity control for the offering arm: `backpack.length > 0`, not "holds a relic".
+    const p = makePlayer({
+      inventory: { slots: makePlayer().inventory.slots, backpack: [{ defId: 'Jaaj Sword 1' }] },
+    });
+    expect(canAfford(p, { kind: 'offering' })).toBe(true);
+    expect(canAfford(p, { kind: 'relic' })).toBe(false);
+  });
+});
+
+// ------- #10a — the four karma-cost strings name the ACT, never the axis (G53) ----------------
+
+describe('describeCost — the karma costs, verbatim', () => {
+  it('reads as acts, with no axis vocabulary and no numbers', () => {
+    // Pinned verbatim so a "helpful" rewrite that reintroduces `your reverence (…)` is a red
+    // test here as well as in the universal guard in karmaActions.test.ts.
+    expect(describeCost({ kind: 'offering' })).toBe('an offering from your pack');
+    expect(describeCost({ kind: 'whisper' })).toBe('a whisper, heeded');
+    expect(describeCost({ kind: 'desecrate' })).toBe('a shrine, broken open');
+    expect(describeCost({ kind: 'greed' })).toBe('a cache, stripped bare');
+  });
 });
 
 // ------- G20 — a sacrifice deal cannot drive the player below a living body -------------------
@@ -287,21 +438,45 @@ describe('G20 — no deal leaves maxHp, hp or a stat below 1', () => {
   it('an accepted deal never leaves the player unable to act, for any shipped cost kind', () => {
     // A sweep across every cost kind at the tightest legal player, asserting the invariant
     // rather than one branch: nothing an accepted deal does may produce a dead body.
-    const costs: SacrificeDeal['cost'][] = [
-      { kind: 'hp', amount: 1 },
-      { kind: 'maxHp', amount: 1 },
-      { kind: 'statPoint', stat: 'CON' },
-      { kind: 'skillCharge', amount: 99 },
-      { kind: 'desecrate' },
-      { kind: 'greed' },
-    ];
-    for (const cost of costs) {
-      const player = makePlayer({ maxHp: 2, hp: 2 });
+    //
+    // #10a made this TYPE-EXHAUSTIVE (a new `DealCost` member is now a compile error here, not
+    // a quietly-missed row) and gave the player a stocked backpack so the `relic` and
+    // `offering` rows are actually TAKEN rather than skipped by `canAfford`. The taken-count
+    // assertion at the end is what stops the whole sweep from passing vacuously if every row
+    // starts being skipped — an invariant asserted over nothing is the failure mode this
+    // codebase keeps meeting.
+    const costs: Record<SacrificeDeal['cost']['kind'], SacrificeDeal['cost']> = {
+      hp: { kind: 'hp', amount: 1 },
+      maxHp: { kind: 'maxHp', amount: 1 },
+      statPoint: { kind: 'statPoint', stat: 'CON' },
+      skillCharge: { kind: 'skillCharge', amount: 99 },
+      relic: { kind: 'relic' },
+      offering: { kind: 'offering' },
+      desecrate: { kind: 'desecrate' },
+      greed: { kind: 'greed' },
+      whisper: { kind: 'whisper' },
+    };
+    const stocked = (): Player =>
+      makePlayer({
+        maxHp: 2,
+        hp: 2,
+        inventory: {
+          slots: makePlayer().inventory.slots,
+          backpack: [{ defId: 'mirror-shard' }, { defId: 'Jaaj Sword 1' }],
+        },
+      });
+    let taken = 0;
+    for (const cost of Object.values(costs)) {
+      const player = stocked();
       if (!canAfford(player, cost)) continue;
+      taken += 1;
       const r = applyDeal(player, createKarma(), dealWith(cost));
       expect(r.player.maxHp, `${cost.kind}: maxHp`).toBeGreaterThanOrEqual(1);
       expect(r.player.hp, `${cost.kind}: hp`).toBeGreaterThanOrEqual(1);
       expect(r.player.skillCharges, `${cost.kind}: charges`).toBeGreaterThanOrEqual(0);
     }
+    // Hand-derived: at maxHp 2 / hp 2 with a relic and a sword in the pack, every one of the
+    // nine kinds is payable (hp 1 < 2, maxHp 1 < 2, a relic is held, the pack is non-empty).
+    expect(taken).toBe(9);
   });
 });

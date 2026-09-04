@@ -2,7 +2,8 @@
 //
 // Replaces the gold shop (shop.ts, deleted). An altar / shrouded stranger offers a REWARD in
 // exchange for a COST paid FROM THE PLAYER — HP, max-HP, a stat point, a skill charge, a relic,
-// or a karma-shifting ACT (desecrate a shrine / loot greedily). Take-or-leave.
+// an OFFERING from the backpack, or a karma-shifting ACT (desecrate a shrine / loot greedily /
+// heed a whisper). Take-or-leave.
 //
 // LOAD-BEARING PRINCIPLES honored here:
 //  - Pure logic / render split: no Kaplay/DOM/canvas; nothing printed. `applyDeal` returns a
@@ -13,10 +14,23 @@
 //    Adding deals edits DATA, not this logic.
 //  - Serializable plain-data state: every cost/reward/deal is a flat plain-data record.
 //
-// KARMA (M7 scope): a karma-shifting COST calls the REAL `recordKarma` — a genuine karma INPUT
-// (desecrateShrine / lootGreedily). `selectPool` READS the karma vector to flavor the offer.
-// No karma EFFECT on world/tone/gate/ending is added here (deferred to M10/M14). Every magnitude
-// / threshold is an M15 balance placeholder.
+// KARMA: a karma-shifting COST calls the REAL `recordKarma` — a genuine karma INPUT
+// (desecrateShrine / lootGreedily / leaveOffering / embraceWhisper). `selectPool` READS the
+// karma vector to flavor the offer. Every magnitude / threshold is a balance placeholder.
+//
+// #10a (2026-09-04) added the `offering` and `whisper` costs, which is what finally gives the
+// four-axis vector inputs on more than one axis pair. Before them `reverenceDesecration` had a
+// single wired input (`desecrateShrine`, -2), so the axis was ONE-DIRECTIONAL, the `grace` pool
+// (`selectPool` needs reverence >= 3) could never open — taking `mirror-shard` with it — and
+// `clarityDelusion` was permanently 0, so "The Delusion" could never be the act-3 Sin.
+//
+// KARMA STAYS HIDDEN (GAME-DESIGN §7 "no meter, no number, ever"). The line, made checkable:
+// `describeCost`/`describeReward` may name what you DID; they may NEVER name the axis it moved.
+// G53: `desecrate`/`greed` used to read "your reverence (…)" / "your restraint (…)" — axis poles
+// stated to the player (via `dealView` -> the deal screen) AND to the model (via the `deal-offer`
+// fact line in `narrate.ts`). Both are reworded below to name the ACT. `karmaActions.test.ts`
+// asserts the rule UNIVERSALLY, with no grandfathered exceptions — an exception list is how a
+// leak comes back.
 //
 // DOCUMENTED DRAW ORDER (load-bearing for tests), buildDeal:
 //   (1) template pick from the selected pool's list (`pick`, one draw).
@@ -36,15 +50,24 @@ import dealsData from '../data/deals.json';
 /** Which offer pool the altar draws from, chosen by karma (see `selectPool`). */
 export type Pool = 'standard' | 'tempting' | 'grace';
 
-/** What the deal takes FROM the player. */
+/**
+ * What the deal takes FROM the player.
+ *
+ * `offering` is a MATERIAL cost that also shifts karma: it gives up the first item in the
+ * backpack. It costs a real, finite, non-regenerating resource on purpose — `seek-deal` is a
+ * free, unlimited hub action, so a karma GAIN with no material price would be farmable to any
+ * ledger the player liked. `whisper`, like `desecrate` and `greed`, costs karma alone.
+ */
 export type DealCost =
   | { kind: 'hp'; amount: number }
   | { kind: 'maxHp'; amount: number }
   | { kind: 'statPoint'; stat: StatKey }
   | { kind: 'skillCharge'; amount: number }
   | { kind: 'relic' }
+  | { kind: 'offering' }
   | { kind: 'desecrate' }
-  | { kind: 'greed' };
+  | { kind: 'greed' }
+  | { kind: 'whisper' };
 
 /** What the deal GIVES the player (the reward item is rolled at build time). */
 export type DealReward =
@@ -75,6 +98,25 @@ interface DealTemplate {
   reward: DealRewardSpec;
 }
 
+/**
+ * The authored offer table, grouped by pool. APPEND-ONLY by convention: `buildDeal` picks with
+ * `pick` (`items[floor(x*len)]`), so inserting a template renumbers every scripted-rng test.
+ *
+ * ⚠ #2 BALANCE PLACEHOLDERS — every number in `deals.json` is one, and the two templates #10a
+ * appended are no exception. They set HOW CHEAPLY A RUN CAN BUY BACK REVERENCE, which matters
+ * more than the other magnitudes now that §22.16 makes grace generous (`GATE_THRESHOLD` 1 over
+ * integer deltas ⇒ ANY net-positive ledger earns it). #2 owns the real values:
+ *
+ *  - `offering` → `heal 6`. Costs the first backpack item; grants at most 6 HP, capped at maxHp.
+ *    NOT farmable: each acceptance destroys one finite backpack item and the altar hands back no
+ *    item, so the item count strictly falls and `canAfford` refuses on an empty backpack.
+ *  - `whisper` → `heal 4`. Costs no material thing (only a point of delusion) and IS repeatable,
+ *    exactly like the shipped `desecrate`/`greed` templates. Deliberately a HEAL and nothing
+ *    else: `standard[0]` (cost 8 HP → heal 12, a net +4) already makes HP unbounded at the altar
+ *    (**FINDINGS G52**), so a heal reward adds NO capability the altar does not already have. An
+ *    `item` / `statPoint` / `skillCharge` reward would have made those unbounded from the hub for
+ *    the first time — a NEW fountain — so none of them is used here.
+ */
 const TEMPLATES = dealsData as unknown as Record<Pool, readonly DealTemplate[]>;
 
 // ------- Karma-read thresholds (M15 placeholders) ----------------------------
@@ -87,6 +129,8 @@ const DESECRATION_TH = 3;
 const KARMA_COST_ACTION = {
   desecrate: 'desecrateShrine',
   greed: 'lootGreedily',
+  offering: 'leaveOffering',
+  whisper: 'embraceWhisper',
 } as const;
 
 /**
@@ -155,7 +199,13 @@ const MIN_STAT = 1;
 /**
  * Can the player pay `cost`? — PURE. An HP cost must leave the player alive (`amount < hp`); a
  * MAX-HP cost must leave a living body behind (`amount < maxHp`); a relic cost needs a relic in
- * the backpack; every other cost is always affordable.
+ * the backpack; an OFFERING needs any item in the backpack; the purely-karmic costs are always
+ * affordable.
+ *
+ * #10a: the `default: return true` arm is GONE. The switch is now exhaustive over `DealCost`, so
+ * a future cost kind is a COMPILE ERROR here rather than a silently-free one. That arm is what
+ * G20 fell through, and an `offering` falling through it would have handed out free reverence
+ * forever (an empty backpack, `applyDeal`'s `slice(1)` a no-op, the karma still recorded).
  *
  * G20: the `maxHp` case used to fall through to `return true`, and `applyDeal` subtracted with
  * NO floor — unlike every other max-HP sink in the engine. Verified: `deals.json`'s `tempting`
@@ -172,7 +222,13 @@ export function canAfford(player: Player, cost: DealCost): boolean {
       return cost.amount < player.maxHp;
     case 'relic':
       return firstRelicIndex(player) >= 0;
-    default:
+    case 'offering':
+      return player.inventory.backpack.length > 0;
+    case 'statPoint':
+    case 'skillCharge':
+    case 'desecrate':
+    case 'greed':
+    case 'whisper':
       return true;
   }
 }
@@ -193,10 +249,11 @@ function withStat(player: Player, stat: StatKey, delta: number): Player {
  * (`outcome: 'unaffordable'`).
  *
  * POLICY (matches level-up): a stat cost/reward recomputes `mods` only — maxHp/AC are NOT
- * retroactively re-derived (M15 placeholder, documented). A karma-shifting cost (desecrate /
- * greed) records the real karma action and pays no HP/stat; every other cost returns karma
- * unchanged. A max-HP cost clamps hp down to the new max; a heal caps at (the possibly-reduced)
- * maxHp; a skill-charge reward caps at maxSkillCharges.
+ * retroactively re-derived (M15 placeholder, documented). A purely-karmic cost (desecrate /
+ * greed / whisper) records the real karma action and pays no HP/stat; an `offering` records its
+ * karma action AND gives up the first backpack item; every other cost returns karma unchanged.
+ * A max-HP cost clamps hp down to the new max; a heal caps at (the possibly-reduced) maxHp; a
+ * skill-charge reward caps at maxSkillCharges.
  */
 export function applyDeal(
   player: Player,
@@ -234,11 +291,23 @@ export function applyDeal(
       next = { ...next, inventory: { slots: { ...next.inventory.slots }, backpack } };
       break;
     }
+    case 'offering': {
+      // The offering is the FIRST backpack item, removed — the material half of the cost —
+      // and the karma is recorded in the SAME arm. Both halves or neither: a version that
+      // recorded the karma without taking the item would be free reverence.
+      const backpack = next.inventory.backpack.slice(1);
+      next = { ...next, inventory: { slots: { ...next.inventory.slots }, backpack } };
+      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.offering);
+      break;
+    }
     case 'desecrate':
       nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.desecrate);
       break;
     case 'greed':
       nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.greed);
+      break;
+    case 'whisper':
+      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.whisper);
       break;
   }
 
@@ -264,7 +333,22 @@ export function applyDeal(
   return { player: next, karma: nextKarma, outcome: 'taken' };
 }
 
-/** A serializable one-line summary of a deal's cost, for the `deal-offer` event. */
+/**
+ * A serializable one-line summary of a deal's cost, for the `deal-offer` event.
+ *
+ * G53 (fixed by #10a): the four karma-shifting costs name THE ACT, never the axis. The old
+ * `desecrate`/`greed` strings — "your reverence (desecrate a shrine)", "your restraint (loot
+ * greedily)" — stated an axis pole as a quantity the player possesses, and this string reaches
+ * both the player (`dealView` -> the deal screen) and the model (the `deal-offer` fact line).
+ * The verb `desecrate` is fine; it names what you do. The noun `desecration` is not; it names
+ * the axis. Same class of engine-side voice break as G47.
+ *
+ * DEVIATION, recorded (plan §"Load-bearing principles"): the house style for these two was
+ * `your <axis> (<act>)`. The hidden-karma rule (§7, CLAUDE.md constraint 5) outranks internal
+ * consistency, so the two OLD strings were changed to match the new ones rather than the
+ * reverse — otherwise the leak guard would have to be written around the exact defect it exists
+ * to catch. Blast radius checked before the change: no test asserted either string.
+ */
 export function describeCost(cost: DealCost): string {
   switch (cost.kind) {
     case 'hp':
@@ -277,10 +361,14 @@ export function describeCost(cost: DealCost): string {
       return `${cost.amount} skill charge${cost.amount === 1 ? '' : 's'}`;
     case 'relic':
       return `a relic`;
+    case 'offering':
+      return `an offering from your pack`;
     case 'desecrate':
-      return `your reverence (desecrate a shrine)`;
+      return `a shrine, broken open`;
     case 'greed':
-      return `your restraint (loot greedily)`;
+      return `a cache, stripped bare`;
+    case 'whisper':
+      return `a whisper, heeded`;
   }
 }
 
