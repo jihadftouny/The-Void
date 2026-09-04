@@ -74,13 +74,23 @@ It will. The protocol is three steps and takes two minutes:
 |---|---|---|---:|---:|
 | 1 | **Engine truth** | `PLAN.md` **#0a, #0b, #0c** — all 33 critical defects (G11–G47) | 24 h | 24 h |
 | 2 | **Reachability + healing** | **#9** — 19 consumables, 4 uniques, 14 of 15 relics currently have no acquisition path; the §22.6 consumable fold-in means **this is the only healing in the game** | 8 h | 32 h |
-| 3 | **Both endings reachable** | **#10a** — wire `leaveOffering`, `honorDead`, `embraceWhisper` (not `seeThroughIllusion`, which needs floor 2's unbuilt illusions) | 4 h | 36 h |
+| 3 | **The reverence axis, the grace deals and The Delusion become reachable** ~~Both endings reachable~~ | **#10a** — wire `leaveOffering`, `honorDead`, `embraceWhisper` (not `seeThroughIllusion`, which needs floor 2's unbuilt illusions) | 4 h | 36 h |
 | 4 | **The authored pass** | **#13-lite** — C1–C12, the endings in second person, the intro, floor prose, no placeholder text on any live path. **Author-only work; no agent can do it** | 16 h | 52 h |
 | 5 | **Ship** | **#14** — packaged build, icon, first-run model download *with a real failure path*, store copy | 12 h | **64 h** |
 
 **The scope is 4 hours over the 60 h cap, and that is stated rather than hidden.** The plan's own rule is *"scope shrinks before hours grow"*, so the cut ladder in §6 is pre-armed rather than improvised at hour 58.
 
-**Why block 3 is not optional, though it looks like polish:** until those actions are wired, `reverenceDesecration` — the verdict's heaviest axis — can only ever move toward *cast down*. The grace ending is **mathematically unreachable**. A game with two advertised endings and one reachable ending is not shippable; this is the cheapest possible fix for it.
+**Why block 3 is not optional, though it looks like polish.**
+
+> ⚠ **CORRECTED 2026-09-04 — this section previously claimed "the grace ending is mathematically unreachable". That is FALSE, and it was my error, not the register's.** `FINDINGS.md` G15 never said it; it says the *axis* can only move one way. Measured by #10a's plan-agent over 200 runs of the shipped `mercifulPolicy`: **grace is reached 26 times today**, and `sim.test.ts:50` and `game.test.ts:834` already assert a grace verdict. The claim was repeated to the author several times before it was caught.
+
+What *is* true, and still justifies block 3 under §2.1's first question (**does its absence make the game lie?**): until these actions are wired, `reverenceDesecration` — the axis the final reckoning weights most heavily (weight 3) — **can only ever move toward cast-down**, never toward grace. Three consequences, all of them advertised content that cannot be reached:
+
+- **the entire grace deal pool is unreachable**, taking `mirror-shard` with it — the only hard-coded item on any acquisition path;
+- **`clarityDelusion` is permanently 0**, so *"The Delusion"* can never be the act-3 boss;
+- a whole axis of a four-axis system is **one-directional**, which is not the design.
+
+That is the same class as G14 (built, tested, unreachable), and 4 h is the cheapest possible fix for it.
 
 ---
 
