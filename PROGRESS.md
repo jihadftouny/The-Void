@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1320 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1646 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,41 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-04 — The game can be debugged, and the freeze is fixed ✅
+
+**`observability` merged.** Suite **1320 → 1646 tests**, typecheck clean, build passing, trunk verified.
+
+- ⭐ **The 2026-09-01 first-encounter freeze is SOLVED and FIXED.** It was **G37**: `ensureNarrator`
+  recorded the narrator only *after* its `await`, so the first narration started a **second full 2.5 GB
+  model load** — GPU probes at 30 s timeouts included — while `busy = true` held the input lock. That
+  matches every observable: first beat, tens of seconds, self-recovering, never recurring,
+  GPU-independent. Extracted to `narrator-gate.mjs` so it is **provable under real concurrency**: 20
+  racing callers → exactly 1 construction, with the old implementation kept as a **live control that
+  must produce 2**.
+- **`CLAUDE.md` gained principle 7 — always log.** Prompted by that freeze leaving *no evidence*: the
+  logging system was called from one file and there was **no timing instrumentation anywhere**. Now ~40
+  measurement points — model load, time-to-first-token, tokens/sec, every turn, every save — with a
+  heartbeat that distinguishes *slow* from *wedged*, which is the question the original report could not
+  answer.
+- **G41 fixed, and it was live on the machine at the time** (`[::1]:5173`, pid 29236, still answering).
+  **Register departure:** Vite now runs **in-process**, so there is no child to orphan, and the readiness
+  poll that *was* the silent-attach defect is **deleted**. Reclaim is proof-gated on `/@vite/client` and a
+  single PID. **No kill command is ever needed again.**
+- **G6 fixed** — before this the packaged build's logging was a **silent no-op**, so a player's bug report
+  carried no evidence at all. **G50 fixed.** `PLAN.md` #14 no longer carries G6 or G37.
+- **Zero production defects found across two fix rounds** — every finding was a guard that could not fail,
+  proven by the build output keeping the **same content hash** throughout. The unit's own lesson: three of
+  its four hardest findings were **a correct decision computed and then dropped**, so the guard that catches
+  that class asks *"does the RESULT reach the thing that acts on it"*, at the narrowest scope the code runs.
+- ⚠ **A post-merge escape worth knowing about:** the trunk went red on a test that asserted a *state*
+  (`logs/void.log` must not exist) where the fix only ever promised a *delta* (this code does not write
+  there). It failed on the **residue of the very bug it guards** — a log this project wrote into its own
+  checkout back in August. **Worktrees are fresh checkouts, so this class is invisible to every unit and
+  only trunk verification can catch it.** Fixed; the file was left alone.
+- **v1 status: 24 of 64 h logged**, both merged gates **ahead of schedule** (14 Sep gate merged the 1st;
+  28 Sep gate merged the 2nd). Remaining: **#10a** grace wiring (4 h), **#13-lite** the authored pass
+  (16 h, author-only), **#14** ship (12 h).
 
 ### 2026-09-02 — `#0 critical-engine-bugs` is DONE. All three units merged ✅
 

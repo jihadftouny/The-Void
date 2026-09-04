@@ -19,7 +19,7 @@ Format per entry:
 
 ---
 
-## 2026-09-03 — observability (logging everywhere + G41, and by ruling also G6, G37, G50) [branch `agentic/observability`, **unmerged**]
+## 2026-09-03 — observability (logging everywhere + G41, and by ruling also G6, G37, G50) [branch `agentic/observability`, **merged to `main` 2026-09-04**]
 - Verdict: **PASS** (after 2 fix rounds + 1 post-pass addendum). 1320 → **1646 tests** (+326). 12 commits.
 - Fix rounds: **2**, both entirely *"the production code is right, the guard cannot fail"*. No production file changed in either round, nor in the addendum — proven independently by the **build output keeping the same content hash across all three rounds**.
 
