@@ -268,6 +268,41 @@ describe('leaveOffering — accepting an offering deal, through the real step', 
   });
 });
 
+describe('leaveOffering is NOT farmable — the reverence it can buy is bounded by what you own', () => {
+  it('N items buy exactly N reverence, and the N+1th offering is refused', () => {
+    // `seek-deal` is a free, unlimited hub action (FINDINGS G52), so anything it grants that is
+    // not paid for in a finite resource is farmable to any ledger the player likes. The
+    // offering's price is a backpack item, the altar never hands an item back, so the item
+    // count strictly falls and the tap runs dry. This is the bound, asserted rather than
+    // asserted-about.
+    const N = 4;
+    const hub = hubWithItems(1, N);
+    const owned = hub.state.player!.inventory.backpack.length;
+    expect(owned).toBeGreaterThanOrEqual(N);
+    const before = hub.state.karma.reverenceDesecration;
+
+    let r = hub;
+    for (let i = 0; i < owned; i += 1) r = seekAndAccept(r, 'offering');
+    expect(r.state.karma.reverenceDesecration).toBe(before + owned);
+    expect(r.state.player!.inventory.backpack).toEqual([]);
+
+    // One more time: the altar refuses, and the ledger does not move.
+    const stalled = r.state.karma;
+    let refused = false;
+    for (let i = 0; i < 300 && !refused; i += 1) {
+      r = step(r.state, { kind: 'menu', choice: 'seek-deal' });
+      const phase = r.state.phase;
+      if (phase.kind !== 'deal') throw new Error('seek-deal did not open a deal');
+      const isOffering = phase.deal.cost.kind === 'offering';
+      r = step(r.state, { kind: 'deal-decision', accept: isOffering });
+      refused = isOffering;
+    }
+    expect(refused, 'the altar never offered again — the bound proved nothing').toBe(true);
+    expect(r.events.map((e) => e.kind)).toContain('deal-unaffordable');
+    expect(r.state.karma).toEqual(stalled);
+  });
+});
+
 describe('embraceWhisper — accepting a whisper deal, through the real step', () => {
   it('moves clarity -1 and nothing else, and costs nothing material', () => {
     const hub = newRunAtHub(5);
