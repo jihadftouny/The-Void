@@ -14,10 +14,27 @@
 // family stat themes are placeholders to be tuned in M15. The family list, tags,
 // per-floor assignment, and the ⚖ (karma-weighted) flags are the load-bearing content.
 //
-// KARMA SEAM (M10): each ⚖ family carries an optional `onSpare`/`onKill` KarmaAction
-// pair, uniformly set to the mercy↔cruelty pair now (spareWeighted / killWeighted). M10
-// differentiates the axes (§7: The Judged spare=reverence/kill=desecration; Sins/Feelings
-// heavier cruelty) by EDITING THIS DATA, not the game.ts logic that reads it.
+// KARMA SEAM: each ⚖ family carries an optional `onSpare` LIST of KarmaActions and an
+// optional `onKill` KarmaAction. The seam was built so the axes could be differentiated by
+// EDITING THIS DATA rather than the game.ts logic that reads it, and #10a is the first use:
+// The Judged now spares as `["spareWeighted", "honorDead"]`.
+//
+// WHY `onSpare` IS A LIST (§22.22, author's ruling 2026-09-04, against the recommendation).
+// §9 words it as "The Judged ⚖⚖ — spare = reverence, kill = desecration", which reads as a
+// SUBSTITUTION, and a single-action seam could only express it that way. The author's call is
+// that it is ADDITIVE: sparing is an act of mercy whoever receives it, and that this particular
+// enemy ALSO makes it reverence is an addition. A player who spares everything, with one enemy
+// type silently not counting toward mercy, could never know or guess. Every OTHER ⚖ family
+// therefore carries the one-element list `["spareWeighted"]` — same behaviour as before.
+//
+// The list is applied IN ORDER inside a single `step` (game.ts's `spared` branch folds it with
+// `recordKarma`). A reader that applied only the first entry would look perfect and do half the
+// job; `karmaActions.test.ts` asserts that one Judged spare moves BOTH axes in one step.
+//
+// NOT DONE, deliberately (§22.22, A.2): §9's other half — killing The Judged records
+// DESECRATION — stays unbuilt. The shipped data records cruelty, and there is no desecration
+// action that is not named for shrines, so it needs a FIFTH `KarmaAction`: a design addition,
+// not a wiring. It belongs with #2's floor-4 work. `onKill` therefore stays a single action.
 
 import enemyFamiliesData from '../data/enemyFamilies.json';
 import { type Stats } from './character.ts';
@@ -52,8 +69,11 @@ export interface EnemyFamily {
   floor: number;
   /** True when killing/sparing this family moves the karma vector (⚖). */
   karmaWeighted: boolean;
-  /** Karma action a SPARE records for this ⚖ family (default mercy: 'spareWeighted'). */
-  onSpare?: KarmaAction;
+  /**
+   * The karma actions a SPARE records for this ⚖ family, applied IN ORDER within one `step`
+   * (§22.22). Default when absent: the uniform mercy action alone, `['spareWeighted']`.
+   */
+  onSpare?: readonly KarmaAction[];
   /** Karma action a KILL records for this ⚖ family (default cruelty: 'killWeighted'). */
   onKill?: KarmaAction;
   theme: FamilyTheme;

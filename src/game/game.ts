@@ -22,7 +22,7 @@
 
 import { createRng, type Rng } from './rng.ts';
 import { type Stats } from './character.ts';
-import { createKarma, recordKarma, type KarmaState } from './karma.ts';
+import { createKarma, recordKarma, type KarmaAction, type KarmaState } from './karma.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
 import {
@@ -513,6 +513,12 @@ function resolvePostVictory(state: GameState, finish: Finish): StepResult {
   return finish({ kind: 'main-menu' }, []);
 }
 
+/**
+ * What a spare records when the ⚖ family declares no `onSpare` list of its own — the uniform
+ * mercy action, exactly as before §22.22 made the seam plural.
+ */
+const DEFAULT_SPARE_ACTIONS: readonly KarmaAction[] = ['spareWeighted'];
+
 /** The floor boss id for acts 1–3 (act 4 is the verdict gate; act 5 is the Hollow). */
 const BOSS_BY_ACT: Record<number, BossId> = { 1: 'kingpin', 2: 'reflection', 3: 'sin' };
 
@@ -675,12 +681,20 @@ function resolveBattleRound(
     case 'fled':
       return finish({ kind: 'main-menu' }, events, { player: battle.player });
     case 'spared':
-      // Mercy: end the encounter with no rewards. Record the spare on the karma vector
-      // (INPUT only — no world/tone effect yet). The action is data-sourced from the
-      // family (the M10 seam), defaulting to the uniform mercy action.
+      // Mercy: end the encounter with no rewards. Record the spare on the karma vector. The
+      // actions are data-sourced from the family (the karma seam), defaulting to the uniform
+      // mercy action.
+      //
+      // §22.22: `onSpare` is a LIST, and EVERY entry is applied, in order, in THIS ONE step —
+      // The Judged's spare is mercy AND reverence, not one instead of the other. Folded inline
+      // rather than behind a helper so this, the only site that reads the seam, is also the
+      // site the behavioural test watches.
       return finish({ kind: 'main-menu' }, events, {
         player: battle.player,
-        karma: recordKarma(state.karma, getFamily(enemy.familyId)?.onSpare ?? 'spareWeighted'),
+        karma: (getFamily(enemy.familyId)?.onSpare ?? DEFAULT_SPARE_ACTIONS).reduce(
+          recordKarma,
+          state.karma,
+        ),
       });
     case 'player-won': {
       // A moral (⚖) kill records cruelty; a plain enemy (and every boss) records nothing.
