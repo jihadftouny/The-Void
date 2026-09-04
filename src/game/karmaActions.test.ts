@@ -28,7 +28,7 @@ import {
   type GameState,
   type StepResult,
 } from './game.ts';
-import { heuristicPolicy, mercifulPolicy, type SimPolicy } from './sim.ts';
+import { ALL_CLASSES, heuristicPolicy, mercifulPolicy, type SimPolicy } from './sim.ts';
 import {
   selectPool,
   buildDeal,
@@ -667,6 +667,203 @@ describe('the save format is untouched by #10a', () => {
     expect(json).not.toContain('onSpare');
     expect(json).not.toContain('honorDead');
     expect(decodeSave(json)).toEqual(battle.state);
+  });
+});
+
+// =============================================================================================
+// 7. THE HEADLINE — full runs through the real `step`, to a terminal state.
+//
+// A player who spares, honours the dead and leaves offerings must finish with a net-positive
+// weighted ledger and be granted grace, and the reverence axis must be demonstrably capable of
+// ending ABOVE zero — which it was not, at all, before this unit.
+//
+// The weight table below is WRITTEN OUT BY HAND from GAME-DESIGN §7 (reverence is the heaviest
+// axis) and §22.16 ("any net-positive ledger earns grace"). It is deliberately NOT imported
+// from `GATE_WEIGHTS`, so the test is free to disagree with the code: an illegitimate change to
+// the threshold turns this red, while a legitimate #2 re-weighting of the axes does not, and
+// the exact shipped values are pinned separately in section 1.
+// =============================================================================================
+
+const DESIGN_WEIGHTS: Record<KarmaAxis, number> = {
+  reverenceDesecration: 3,
+  mercyCruelty: 1,
+  restraintGreed: 1,
+  clarityDelusion: 1,
+};
+
+/** The §7/§22.16 ledger, computed from the hand-written table. */
+function designLedger(k: KarmaState): number {
+  return (
+    DESIGN_WEIGHTS.reverenceDesecration * k.reverenceDesecration +
+    DESIGN_WEIGHTS.mercyCruelty * k.mercyCruelty +
+    DESIGN_WEIGHTS.restraintGreed * k.restraintGreed +
+    DESIGN_WEIGHTS.clarityDelusion * k.clarityDelusion
+  );
+}
+
+/**
+ * A test-local PENITENT policy: the shipped `mercifulPolicy` (so runs are exactly as strong as
+ * the measured merciful baseline — the spare/skill/potion play is not re-invented here), with
+ * two overrides. It seeks the altar while it still has something to give and its seek budget
+ * holds, and it accepts ONLY `offering` deals — never a whisper, never a desecration. The
+ * budget is what keeps a run terminating: seeking earns no XP, so an unbounded seeker never
+ * advances an act.
+ */
+function penitentPolicy(classId: PlayerClass, maxSeeks: number): SimPolicy {
+  const base = mercifulPolicy(classId);
+  let seeks = 0;
+  return (res) => {
+    if (res.awaiting === 'main-menu') {
+      const pack = res.state.player?.inventory.backpack.length ?? 0;
+      if (seeks < maxSeeks && pack > 0) {
+        seeks += 1;
+        return { kind: 'menu', choice: 'seek-deal' };
+      }
+      return base(res);
+    }
+    if (res.awaiting === 'deal-decision') {
+      const phase = res.state.phase;
+      return {
+        kind: 'deal-decision',
+        accept: phase.kind === 'deal' && phase.deal.cost.kind === 'offering',
+      };
+    }
+    return base(res);
+  };
+}
+
+/** What one whole run tells us. */
+interface RunRecord {
+  seed: number;
+  classId: PlayerClass;
+  karma: KarmaState;
+  verdict: 'grace' | 'cast-down' | null;
+  dealOffers: number;
+  spares: number;
+}
+
+/** Play one run to its terminal state through the real `step`, recording what it did. */
+function playRun(seed: number, classId: PlayerClass, policy: SimPolicy, guard = 200_000): RunRecord {
+  let r = atStart(createGame(seed));
+  let verdict: 'grace' | 'cast-down' | null = null;
+  let dealOffers = 0;
+  let spares = 0;
+  let steps = 0;
+  while (r.awaiting !== 'game-over' && steps < guard) {
+    r = step(r.state, policy(r));
+    steps += 1;
+    for (const e of r.events) {
+      if (e.kind === 'verdict') verdict = e.outcome;
+      else if (e.kind === 'deal-offer') dealOffers += 1;
+      else if (e.kind === 'spared') spares += 1;
+    }
+  }
+  expect(steps, `run ${classId}/${seed} hit the step guard`).toBeLessThan(guard);
+  return { seed, classId, karma: r.state.karma, verdict, dealOffers, spares };
+}
+
+function batch(seeds: number[], classes: PlayerClass[], policy: (c: PlayerClass) => SimPolicy) {
+  const out: RunRecord[] = [];
+  for (const classId of classes) for (const seed of seeds) out.push(playRun(seed, classId, policy(classId)));
+  return out;
+}
+
+const SEEDS_60 = Array.from({ length: 60 }, (_, i) => i + 1);
+const SEEDS_20 = Array.from({ length: 20 }, (_, i) => i + 1);
+
+// Each batch is played ONCE and shared, so the suite pays for 320 runs rather than 800.
+const PENITENT = batch(SEEDS_60, ['Penitent', 'Enforcer'], (c) => penitentPolicy(c, 60));
+const HEURISTIC = batch(SEEDS_20, [...ALL_CLASSES], heuristicPolicy);
+const MERCIFUL = batch(SEEDS_20, [...ALL_CLASSES], mercifulPolicy);
+
+describe('the headline — a penitent run finishes net-positive and is granted grace', () => {
+  const verdicts = PENITENT.filter((r) => r.verdict !== null);
+
+  it('penitent runs really do reach the act-4 reckoning', () => {
+    // A floor implied by the design (act 4 runs from xp 90 to 240 and a penitent forfeits kill
+    // XP by sparing), NOT the count that came out — #2's difficulty retune will move the count
+    // and must not turn this red. It should stay comfortably above 3.
+    expect(verdicts.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a net-positive ledger earns grace, and a non-positive one does not — both directions', () => {
+    // §22.16, asserted as a BICONDITIONAL against the hand-written weights. The penitent batch
+    // supplies the positive side; the shipped `heuristicPolicy` (kills everything, spares
+    // nothing) supplies the negative side, so neither half of the claim is vacuous.
+    for (const r of verdicts) {
+      expect(designLedger(r.karma) > 0, `penitent ${r.classId}/${r.seed}`).toBe(
+        r.verdict === 'grace',
+      );
+    }
+    const cruelVerdicts = HEURISTIC.filter((r) => r.verdict !== null);
+    for (const r of cruelVerdicts) {
+      expect(designLedger(r.karma) > 0, `heuristic ${r.classId}/${r.seed}`).toBe(
+        r.verdict === 'grace',
+      );
+    }
+    expect(verdicts.some((r) => designLedger(r.karma) > 0)).toBe(true);
+    expect(cruelVerdicts.length).toBeGreaterThanOrEqual(3);
+    expect(cruelVerdicts.every((r) => designLedger(r.karma) <= 0)).toBe(true);
+  });
+
+  it('a run can now END with a POSITIVE reverence axis — the ledger nothing could produce before', () => {
+    // THE point of the unit. Before it, `reverenceDesecration` had one wired input
+    // (`desecrateShrine`, -2) and 400 simulated runs never moved the axis off 0 in either
+    // direction. A single run ending above 0 is a ledger no input sequence could reach.
+    const positive = PENITENT.filter((r) => r.karma.reverenceDesecration > 0);
+    expect(positive.length).toBeGreaterThanOrEqual(1);
+    // …and at least one of those is a run that went all the way to grace.
+    expect(
+      verdicts.some((r) => r.karma.reverenceDesecration > 0 && r.verdict === 'grace'),
+    ).toBe(true);
+  });
+
+  it('the reverence axis contributed: a graced run is positive on reverence alone', () => {
+    // Guards against "grace was reached, but only because mercy was already enough" being
+    // mistaken for evidence that this unit did anything.
+    const graced = verdicts.filter((r) => r.verdict === 'grace');
+    expect(graced.length).toBeGreaterThanOrEqual(1);
+    expect(
+      graced.some((r) => DESIGN_WEIGHTS.reverenceDesecration * r.karma.reverenceDesecration > 0),
+    ).toBe(true);
+  });
+});
+
+// =============================================================================================
+// 8. ISOLATION — `balance.test.ts` and `sim.ts` are byte-identical, and this unit is provably
+//    invisible to the balance anchor. An ABSENCE claim, so it ships with positive controls in
+//    the same describe: without them it would hold just as happily in a world where the
+//    counters are broken.
+// =============================================================================================
+
+describe('the balance anchor cannot see this unit', () => {
+  it('the shipped heuristic policy never opens a deal and never spares', () => {
+    // `sim.ts`: `main-menu` always answers `continue` ("the shipped policies never seek a
+    // deal"), and `chooseBattleAction` reaches `'spare'` only under `if (merciful && …)`. So
+    // `buildDeal` is never called (deals.json unread) and `game.ts`'s `spared` branch never
+    // runs (enemyFamilies.json's onSpare unread) — the two data files this unit edits.
+    expect(HEURISTIC.reduce((a, r) => a + r.dealOffers, 0)).toBe(0);
+    expect(HEURISTIC.reduce((a, r) => a + r.spares, 0)).toBe(0);
+    expect(HEURISTIC.length).toBe(100); // the sweep really ran
+  });
+
+  it('POSITIVE CONTROL — the merciful policy DOES spare over the very same seeds', () => {
+    expect(MERCIFUL.reduce((a, r) => a + r.spares, 0)).toBeGreaterThan(0);
+  });
+
+  it('POSITIVE CONTROL — the penitent policy DOES open deals', () => {
+    expect(PENITENT.reduce((a, r) => a + r.dealOffers, 0)).toBeGreaterThan(0);
+  });
+
+  it('under the heuristic policy the three axes this unit touches never move at all', () => {
+    // The sharpest statement of inertness: reverence, restraint and clarity stay exactly 0
+    // across every heuristic run, so no draw is added, no outcome flips, and the win-rate the
+    // anchor measures cannot move. `mercyCruelty` moves (kills) and always did.
+    for (const r of HEURISTIC) {
+      expect(r.karma.reverenceDesecration, `${r.classId}/${r.seed}`).toBe(0);
+      expect(r.karma.restraintGreed, `${r.classId}/${r.seed}`).toBe(0);
+      expect(r.karma.clarityDelusion, `${r.classId}/${r.seed}`).toBe(0);
+    }
   });
 });
 
