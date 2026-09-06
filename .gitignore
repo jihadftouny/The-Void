@@ -19,3 +19,8 @@ art-candidates/
 # Legacy Java/Python/Pixi ports: kept on disk for reference, not tracked by this
 # repo (each carries its own nested .git history). Consult them locally.
 .legacy/
+
+# Personal planning documents. These are not game documents and are deliberately kept
+# outside this repository. Never track one here, even temporarily.
+docs/plan-dashboard.html
+plan-dashboard.html
