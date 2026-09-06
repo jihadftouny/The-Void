@@ -1,0 +1,37 @@
+Copyright (c) 2026 Jihad Ftouny. All rights reserved.
+
+This source code is published so that it can be read, studied and evaluated.
+It is not open source.
+
+You MAY:
+
+  - read, browse and study this source code;
+  - quote short excerpts of it for the purpose of review, commentary,
+    teaching or academic discussion, with attribution.
+
+You MAY NOT, without prior written permission from the copyright holder:
+
+  - copy, reproduce or redistribute this source code, in whole or in
+    substantial part;
+  - modify it or create derivative works from it;
+  - compile, package, distribute, publish, sell, licence or otherwise
+    exploit this work or any derivative of it, commercially or otherwise;
+  - use it to train, fine-tune or evaluate a machine learning model.
+
+No licence, express or implied, is granted beyond what is stated above. All
+rights not expressly granted are reserved.
+
+Third-party dependencies are covered by their own licences, which are not
+affected by this notice. The language model this game downloads at runtime is
+distributed by its own authors under its own licence and is not part of this
+work.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+For permissions beyond the scope of this licence, contact the copyright holder.
