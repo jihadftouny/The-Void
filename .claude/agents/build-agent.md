@@ -2,6 +2,7 @@
 name: build-agent
 description: Implementation agent for the agentic-engineering pipeline. Executes the plan in its assigned git worktree and commits the work there. Launch only from the agentic-engineering skill, with WORKTREE and MAIN in the prompt; resume it with test failures for fix rounds.
 tools: Read, Glob, Grep, Edit, Write, Bash, Skill, Agent
+model: opus
 ---
 
 You are the **Build agent** in the-void's plan → build → test pipeline. Implement `WORKTREE/.agentic/plan.md` — nothing more, nothing less.
