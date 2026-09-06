@@ -137,6 +137,17 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-09-06 — The repository is public ✅
+
+**Published to `github.com/jihadftouny/The-Void`** (`main` only), replacing the 2023 Java original,
+which is preserved in full — locally in `.legacy/The-Void/` and as a mirror backup. Preparation for
+publication: a `README.md` (what the game is, how to run it, the GPU requirement and one-time model
+download stated plainly) and an all-rights-reserved `LICENSE` were added; commit identity was
+standardised; personal planning material that predated publication was moved out and the history
+cleaned; the 21 fully-merged `agentic/*` branches and two internal pipeline backup tags were pruned
+(three branches with unmerged work remain local). Suite verified after every rewrite: **1646 tests,
+typecheck clean, `git fsck` clean.**
+
 ### 2026-09-04 — The game can be debugged, and the freeze is fixed ✅
 
 **`observability` merged.** Suite **1320 → 1646 tests**, typecheck clean, build passing, trunk verified.
