@@ -1832,3 +1832,15 @@ This number decides how long floor 5 runs before the Hollow is offered. §22 had
 **Rejected — and it was the recommendation:** reverence only, exactly as §9 words it. It needed no schema change, stayed strictly inside what §22.5 authorised, and had a real defence — different enemies teaching different virtues. **The accepted cost of overriding it is a small scope addition** (`onSpare` becomes a list, in data and in its type) beyond what §22.5 asked for.
 
 **§9's wording is now read as additive**: *"spare = reverence"* means *"a spare here also earns reverence"*, not *"instead of"*. ⚠ The companion half of §9 — *killing* The Judged recording **desecration** — stays **unbuilt**: the shipped data records cruelty, and there is no desecration action not named for shrines, so it needs a fifth `KarmaAction`. That is a design addition, not wiring, and it belongs with #2's floor-4 work.
+
+### 22.23 Bargains find YOU — seek-a-bargain stops being an on-demand action *(2026-09-06, raised by the author unprompted during the first play-test of #10a)*
+
+**The ruling: the altar is not a shop counter. Bargains arrive as RANDOM EVENTS during the descent** — the Void offers; the player does not summon. The always-available **"Seek a bargain"** hub button is removed when this lands.
+
+**Why, and what it solves at the root:** today `seek-deal` is a free, unlimited hub action, which is the enabling half of **G52** (the altar as an unlimited healing fountain — `standard[0]` is net **+4 HP** per pull) and was the delivery mechanism of the ledger-minting exploit the #10a fix round closed. Every patch considered so far (once per hub visit, once per floor, remove the net-positive template) rationed the tap; **this ruling removes the tap**. A bargain that arrives on the Void's schedule cannot be farmed on the player's.
+
+**It is also better fiction:** temptation that must be *sought* is shopping; temptation that *finds you* is the Void behaving as written (§0b, §12 — the descent acts on you).
+
+**Scope:** NOT v1 (fails all three §2.1 gate questions — the current behaviour makes the game too easy, which v1 already accepts). **Lands with #2's floor/encounter work**, where the event tables live. Until then the button stays and v1's "expected to feel too easy" note covers it. Frequency/act-weighting of the event = #2 balance numbers.
+
+**Rejected:** once-per-hub-visit and once-per-floor rationing (both keep the shop-counter frame and need anti-farm bookkeeping); removing only the net-positive template (fixes G52's symptom, keeps the frame).

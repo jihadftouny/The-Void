@@ -1,5 +1,22 @@
 # Human Checks — The Void
 
+> ## ✅ Play-test results, 2026-09-06 (first hands-on of the #10a candidate build)
+>
+> - **THE FREEZE IS CONFIRMED FIXED ON REAL HARDWARE.** The author raced to the first encounter:
+>   *"no freeze, it plays normally."* G37's fix holds outside the test suite. *(The log-form numbers
+>   were not captured this session — grab them on any future run for the baseline.)*
+> - **Boot, first fight, general play: normal.** No blank window, no dead buttons.
+> - **H-2 feedback — the bargain cost labels do not land.** The author read *"a whisper, heeded"*
+>   and asked what it means. The labels are agent-written placeholders; **the final words are the
+>   author's, queued for #13.** The design constraint they must keep: convey the ACT without naming
+>   the hidden price.
+> - **A ruling came out of the session** (`GAME-DESIGN.md` **§22.23**): bargains become **random
+>   descent events**; the on-demand Seek-a-bargain button is removed. Lands with #2. Until then the
+>   altar remains farm-able for healing and v1's "expected to feel too easy" note covers it.
+> - Still open from the checklist: the altar-runs-dry check (#10a), the Judged spare silence, the
+>   full-run checks (log/summary/resume), and the offering-vs-whisper design read (H-5).
+
+
 > ## ✅ THE DEFERRAL BELOW IS LIFTED — healing is reachable as of `#0c persistence-and-reach`
 >
 > **Updated 2026-09-01, by `#0c`.** The block immediately below deferred the floor-5 checks on the
@@ -55,9 +72,10 @@
 ## ▶️ From `#0c persistence-and-reach` (2026-09-01) — nine checks no agent can do
 
 No agent can run Electron, so every item here is genuinely unverified. `npm run desktop` from the
-repo root. ⚠ **`npm run desktop` orphans its Vite server on quit (`FINDINGS.md` G41, unfixed), so
-the SECOND and later launches serve STALE CODE.** Kill whatever holds port 5173 between play-tests,
-or these checks are worthless.
+repo root. ~~⚠ `npm run desktop` orphans its Vite server on quit (G41, unfixed) — kill port 5173
+between play-tests~~ **✅ G41 was FIXED by the `observability` unit (merged 2026-09-04): the server
+runs in-process, cleans up on any exit, and reclaims a stale one on its own. No kill command is
+ever needed again.**
 
 - [ ] **The combat log — the biggest visible change in the whole unit.** Until now the player saw
       **no numbers at all**: the formatters existed and nothing called them, and the narrator is
