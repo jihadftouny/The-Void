@@ -1,7 +1,8 @@
 # The Void
 
 A **mechanics-first roguelike RPG with a local-LLM narrator** — a deep D&D-style game the engine
-owns completely, with a language model narrating over the top. Inspired by lived experience of psychosis. A **local model** (**4B** — the only tier shipped, no cloud, no keys, no per-turn cost) narrates and
+owns completely, with a language model narrating over the top. Inspired by lived experience of
+psychosis. A **local model** (**4B** — the only tier shipped, no cloud, no keys, no per-turn cost) narrates and
 adapts to the player's choices; the deterministic engine owns every rule and number (dice combat,
 status conditions, skills, sacrifice-deals/rest, XP across five Acts, bosses). Shipped as a
 **packaged desktop game** (itch.io).

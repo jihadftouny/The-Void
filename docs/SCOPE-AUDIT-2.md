@@ -119,7 +119,8 @@ reduced-motion toggle, text speed, or a model-tier override.
   whose terms are recorded nowhere.**
 - No privacy statement, though the app writes to disk. No age rating / content descriptor.
 - **NO CONTENT WARNING ANYWHERE.** Zero hits across every file for content/trigger warning,
-  disclaimer, mental health, suicide, self-harm. The game's own design doc calls it *"lived experience of psychosis rendered as a dungeon"*; floor 3 is populated by Grief, Dread and
+  disclaimer, mental health, suicide, self-harm. The game's own design doc calls it *"psychosis
+  rendered as a dungeon"*; floor 3 is populated by Grief, Dread and
   Numbness. **This is the most conspicuous omission in the project.** It is free to add, expected of
   the subject matter, and its absence becomes a public conversation rather than a bug report.
 

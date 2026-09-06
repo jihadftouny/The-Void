@@ -14,8 +14,8 @@
 
 A **mechanics-first, roguelike descent** through five floors of the Void — a crunchy Dungeons &
 Dragons-style RPG where a **local language model narrates** the journey, but the deterministic engine
-owns every rule and number — **including the choices** (§10). The descent is lived experience of
-psychosis rendered as a dungeon: it starts literal and becomes a journey into a fracturing mind. What
+owns every rule and number — **including the choices** (§10). The descent is psychosis rendered as a
+dungeon: it starts literal and becomes a journey into a fracturing mind. What
 you *do* — everything you do — is read by the Void and decides how it ends.
 
 ---
