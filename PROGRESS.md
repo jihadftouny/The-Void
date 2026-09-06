@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1646 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1700 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,20 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-06 — #10a merged: both endings are now EARNED, and the exploit died first ✅
+
+**Suite 1646 → 1700.** Merciful play finally moves the verdict: three karma actions wired
+(`leaveOffering`, `embraceWhisper`, `honorDead`; the fourth waits for floor 2). Proven over 120 real
+runs — every net-positive run reaching the reckoning is granted grace; the ordinary policy never is.
+Sparing The Judged records **mercy AND reverence** (§22.22, the author's call). **G53 fixed** (the
+deal screen printed karma axis-pole names). **The fix round killed a live exploit:** two deal costs
+were silently free at their floors, and wiring items→reverence made the ending **buyable from the
+menu** — 6000 free seeks, no combat, ledger 7512 vs threshold 1. Now the same attack yields 48 and
+saturates. **First play-test on real hardware:** the freeze is CONFIRMED fixed; the author ruled
+**bargains become random descent events** (§22.23, kills the altar-farming frame at the root, lands
+with #2); the bargain cost labels are placeholders for #13. **v1 engine work is COMPLETE** — what
+remains is #13-lite (the authored pass, author-only) and #14 (ship).
 
 ### 2026-09-06 — The repository is public ✅
 
