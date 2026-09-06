@@ -5,7 +5,7 @@
     "tag": "Humanoid",
     "floor": 1,
     "karmaWeighted": true,
-    "onSpare": "spareWeighted",
+    "onSpare": ["spareWeighted"],
     "onKill": "killWeighted",
     "theme": {
       "statBias": { "STR": 1 },
@@ -59,7 +59,7 @@
     "tag": "Humanoid",
     "floor": 1,
     "karmaWeighted": true,
-    "onSpare": "spareWeighted",
+    "onSpare": ["spareWeighted"],
     "onKill": "killWeighted",
     "theme": {
       "skills": ["desperateSwing"],
@@ -121,7 +121,7 @@
     "tag": "Nightmare",
     "floor": 3,
     "karmaWeighted": true,
-    "onSpare": "spareWeighted",
+    "onSpare": ["spareWeighted"],
     "onKill": "killWeighted",
     "theme": {
       "skills": ["drainingSob", "heavyHeart"],
@@ -134,7 +134,7 @@
     "tag": "Nightmare",
     "floor": 3,
     "karmaWeighted": true,
-    "onSpare": "spareWeighted",
+    "onSpare": ["spareWeighted"],
     "onKill": "killWeighted",
     "theme": {
       "statBias": { "STR": 2 },
@@ -148,7 +148,7 @@
     "tag": "Nightmare",
     "floor": 3,
     "karmaWeighted": true,
-    "onSpare": "spareWeighted",
+    "onSpare": ["spareWeighted"],
     "onKill": "killWeighted",
     "theme": {
       "skills": ["creepingFear", "paralyzingDread"],
@@ -161,7 +161,7 @@
     "tag": "Nightmare",
     "floor": 3,
     "karmaWeighted": true,
-    "onSpare": "spareWeighted",
+    "onSpare": ["spareWeighted"],
     "onKill": "killWeighted",
     "theme": {
       "skills": ["deadeningTouch", "numbingCold"],
@@ -174,7 +174,7 @@
     "tag": "Nightmare",
     "floor": 3,
     "karmaWeighted": true,
-    "onSpare": "spareWeighted",
+    "onSpare": ["spareWeighted"],
     "onKill": "killWeighted",
     "theme": {
       "statBias": { "CHA": 2 },
@@ -225,11 +225,11 @@
     "tag": "Humanoid",
     "floor": 4,
     "karmaWeighted": true,
-    "onSpare": "spareWeighted",
+    "onSpare": ["spareWeighted", "honorDead"],
     "onKill": "killWeighted",
     "theme": {
       "skills": ["sorrowfulGaze"],
-      "behaviorNote": "non-hostile souls awaiting judgement — provisional, M10 floor hooks (§7 spare=reverence/kill=desecration seam)"
+      "behaviorNote": "non-hostile souls awaiting judgement; a spare is mercy AND honours the dead (§9 + §22.22). The kill half — desecration — is NOT wired: it needs a fifth KarmaAction and belongs with #2's floor-4 work."
     }
   },
   {
@@ -287,7 +287,7 @@
     "tag": "Nightmare",
     "floor": 5,
     "karmaWeighted": true,
-    "onSpare": "spareWeighted",
+    "onSpare": ["spareWeighted"],
     "onKill": "killWeighted",
     "theme": {
       "skills": ["echoedStrike", "echoedHex"],

@@ -10,12 +10,28 @@
 //  - Serializable plain-data state: `KarmaState` is a flat record of four numbers,
 //    so it round-trips through JSON unchanged (no classes, no methods).
 //
-// SCOPE (M1): this module RECORDS karma only. `recordKarma` sums signed deltas into
-// the vector and returns a new vector; it applies NO world/tone/gate/ending effect
-// and clamps nothing. Karma changing an engine outcome is deferred (M10/M14), and
-// clamping bounds are deferred to M14. Because no engine event carries a karma
-// action in M1, live outcomes are unchanged — the reducer is exercised only by its
-// unit test and stands ready for later milestones.
+// SCOPE: this module RECORDS karma only. `recordKarma` sums signed deltas into the
+// vector and returns a new vector; it applies NO world/tone effect and clamps
+// nothing. Clamping bounds are still deferred (#10).
+//
+// WHO CALLS IT (was: "no engine event carries a karma action in M1 — the reducer is
+// exercised only by its unit test". BOTH halves of that are now false, and leaving
+// them would invite someone to "restore" a dead module):
+//   · a spare  -> game.ts folds the ⚖ family's `onSpare` LIST, in order, in one step.
+//   · a kill   -> game.ts records the ⚖ family's `onKill`.
+//   · a deal   -> deal.ts's `applyDeal`, for the four karma-shifting costs
+//                 (desecrate / greed / offering / whisper).
+// The first EFFECT is the act-4 verdict gate (`boss.ts computeVerdict`), plus the
+// Sin's identity and bonus HP (`pickIndulgedAxis`) and the altar's offer pool
+// (`deal.ts selectPool`).
+//
+// STILL UNWIRED, deliberately: `seeThroughIllusion`. It needs floor 2's illusions,
+// and the only illusion seam in the engine is `statEffects.ts`'s
+// `illusionSightTwist` — a `return 0` stub its own test labels as #2's. Inventing a
+// trigger for it would mean inventing floor 2's mechanic.
+//
+// EVERY MAGNITUDE BELOW IS A #2 BALANCE PLACEHOLDER. §22.5 ruled WIRE and explicitly
+// rejected re-weighting; the numbers are re-run with #2's balance pass.
 
 /**
  * The four-axis Karma / Nature vector. SIGN CONVENTION: positive = the virtue pole,
@@ -32,7 +48,7 @@ export interface KarmaState {
   clarityDelusion: number;
 }
 
-/** A named karma-weighted action. Real action -> axis authoring lands in M7/M8/M10. */
+/** A named karma-weighted action. Seven of the eight are wired; see the header. */
 export type KarmaAction =
   | 'spareWeighted'
   | 'killWeighted'
