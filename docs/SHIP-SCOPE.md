@@ -231,7 +231,6 @@ The ordering principle is not "what would be nicest next". It is: **what raises 
 
 ---
 
-*Companion board: the **Plan v3 Mission Board** (lane V), which lives **outside this repository** at
-`(kept outside this repository)` — it is personal
-and deliberately not tracked here. Register of defects: `FINDINGS.md`. Work
-order: `PLAN.md`.*
+*Companion board: the **Plan v3 Mission Board** (lane V) — a personal planning document, kept
+outside this repository and deliberately not tracked here. Register of defects: `FINDINGS.md`.
+Work order: `PLAN.md`.*

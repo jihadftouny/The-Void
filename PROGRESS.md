@@ -310,11 +310,12 @@ until the merge).
   ships with **no generated art**, and `b2`'s required "page art" must be typographic, at $0.
 - **Ship gates** (lane V on the board): `v1` Sep 14 → `v4` **FIRST PLAYABLE** Oct 19 (52 h) → `v5`
   ship candidate Nov 2 → `v7` **itch page + jam** Dec 14, seventeen days before `b2`'s deadline.
-- **`docs/plan-dashboard.html` rebuilt and published** as an artifact: a fourth lane for The Void, a
+- **The planning board rebuilt and published** as an artifact: a fourth lane for The Void, a
   60-hour budget meter, rolling week cards, and the scope/cut list on the board. **Three silent
   defects fixed:** state was written to a `window.storage` API that never existed (so nothing ever
   saved), and both the webfonts and the markdown parser were CDN-loaded, which the artifact CSP
   blocks — the fonts fell back silently and the entire reference section rendered as raw markdown.
+  *(The board is a personal planning document and is kept outside this repository — 2026-09-06.)*
 - **Reframed the same day, on the author's clarification:** these milestones are **a gate against
   scope creep**, not a schedule. Three additions make the gate actually work — a **v1 test**
   (`SHIP-SCOPE.md` §2.1: does its absence make the game *lie*, make a run *unfinishable*, or make it
