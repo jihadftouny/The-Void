@@ -13,7 +13,7 @@ import { STAT_KEYS } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import type { ActiveCondition } from '../game/condition.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
-import { loadRun, saveRun, clearRun, type RunMeta } from './persist.ts';
+import { loadRun, saveRun, clearRun, type RunMeta, type SavedRun } from './persist.ts';
 import {
   snapshotUnlocks,
   classUnlocked,
@@ -822,10 +822,19 @@ function renderResume(): void {
   choice('Begin a new descent', () => start());
 }
 
-retheme(); // paint the floor-0 palette before the first frame
-const saved = loadRun();
-if (saved) {
-  log.info('save', 'resumable run found', { act: saved.state.act, phase: saved.state.phase.kind });
+/**
+ * ADOPT A WHOLE FOREIGN RUN — the single seam, shared by the two callers that need it.
+ *
+ * This block used to live inline in the boot resume path below. It is a function now because
+ * the developer state panel adopts a state the same way, and "the same way" has to be
+ * STRUCTURAL rather than a claim in a comment: two call sites that drift apart are a bug
+ * waiting to be found in the field instead of in a test.
+ *
+ * Note what it deliberately does NOT do: it never advances anything. Replacing the whole
+ * state is exactly what resuming a save has always done — from here on every change still
+ * goes through `step`.
+ */
+function adoptRun(saved: SavedRun): void {
   state = saved.state;
   memory = saved.memory;
   // G19 -> G1: restore what the run has EARNED, not just where it is. Without this the
@@ -846,9 +855,57 @@ if (saved) {
     // what the whole G19 defect was.
     log.warn('save', 'legacy save envelope: this run starts its feat tally from scratch', { v: 1 });
   }
-  retheme(); // a resumed run may be deep in the descent — adopt ITS floor, not floor 0
+  // The adopted run has not reached its own ending yet, whatever the PREVIOUS one did. Left
+  // stale, a run adopted after a finished one would never apply its outcome.
+  runApplied = false;
+  lastNewlyUnlocked = null;
+  retheme(); // an adopted run may be deep in the descent — adopt ITS floor, not floor 0
   renderSheet();
+}
+
+/**
+ * The developer panel's adoption path: the SAME `adoptRun`, plus the two things a jump needs
+ * that a boot does not — a re-entry guard, and a screen cleared of the previous run's beats.
+ *
+ * `busy` is held for the whole of `dispatch`, so adopting mid-turn would let an in-flight
+ * step render its stale `awaiting` over the jumped state. Refusing is the only safe answer;
+ * the panel says so rather than pretending the jump landed.
+ */
+function adoptFromPanel(saved: SavedRun): boolean {
+  if (busy) return false;
+  adoptRun(saved);
+  narrationEl.innerHTML = '';
+  logEl.replaceChildren();
+  screen = 'game';
+  renderChoices(awaitingFor(state.phase));
+  return true;
+}
+
+retheme(); // paint the floor-0 palette before the first frame
+const saved = loadRun();
+if (saved) {
+  log.info('save', 'resumable run found', { act: saved.state.act, phase: saved.state.phase.kind });
+  adoptRun(saved);
   renderResume();
 } else {
   start();
+}
+
+// THE DEVELOPER STATE PANEL — present in dev, ABSENT FROM THE PACKAGED BUILD BY CONSTRUCTION.
+//
+// `vite build` replaces `import.meta.env.DEV` with the literal `false`, Rollup eliminates the
+// dead branch, and the dynamic import goes with it — so nothing under the dev directory is in
+// a shipped build's module graph: no chunk, no string, nothing in the sourcemap. There is no
+// runtime flag and no env var, by the author's explicit decision; the cost (states cannot be
+// jumped inside a packaged build) was named and accepted. `src/dev/exclusion.test.ts` proves
+// the exclusion by running the real bundler twice in a subprocess.
+if (import.meta.env.DEV) {
+  void import('../dev/panel.ts').then((m) =>
+    m.mountDebugPanel({
+      getBundle: () => ({ state, memory, meta: runMeta() }),
+      adopt: adoptFromPanel,
+      env: { protocol: location.protocol },
+      unlockStorage: localStorage,
+    }),
+  );
 }
