@@ -21,9 +21,10 @@ _The live plan: what is left to build, in what order, and what blocks what. Deri
   #10 #10a #11 #12 #14 — independent, sequenced by judgement
 ```
 
-**Unblocked right now: #1, #2 (after #9), #3, #4, #9, #13, #14.** ~~#0, #3, #4, and three-quarters of #10a~~ — ✅ **#0 (all three units) and #10a are MERGED as of 2026-09-06; v1 engine work is complete.** (every karma action except
-`seeThroughIllusion`, which needs floor-2 illusions and lands inside #2). *(#1 was unblocked until 2026-08-28; **#0 now precedes it**, because
-#0 fixes the equip resolution path that #1's change 1 and change 10 both build on top of.)*
+**Unblocked right now: #1, #2 (after #9), #3, #4, #9, #13, #14.** ~~#0, #3, #4, and three-quarters of #10a~~ — ✅ **#0 (all three units) and #10a are MERGED as of 2026-09-06; v1 engine work is complete.**
+*#10a wired every karma action except `seeThroughIllusion`, which needs floor-2 illusions and lands
+inside #2.* *(Historical note: #1 was unblocked until 2026-08-28, when #0 was placed ahead of it
+because #0 fixes the equip resolution path that #1's changes 1 and 10 both build on.)*
 
 ---
 
