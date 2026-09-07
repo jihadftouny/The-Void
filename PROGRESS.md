@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1700 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1913 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,34 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-07 — the F3 state panel: the long-run checklist becomes a few clicks ✅
+
+**`debug-state` merged.** 1700 → **1913 tests**, and **nothing under `src/game`/`src/llm` was touched** —
+the panel builds a complete valid state and adopts it through `adoptRun(saved)`, the same seam the
+resume path uses. Ten presets cover every deferred check: act 4 with **The Judged** forced, act 5
+below the Hollow gate, all three endings, karma set directly, items granted, HP/momentum/charges
+edited. **Built because the author asked for it** — *"to avoid wasting time testing multiple times in
+long runs."*
+
+- **It cannot reach the packaged build**, and I verified that myself on the trunk build after
+  merging: the marker is absent from `dist/`. Six smuggling routes were attacked; two re-export
+  shapes are **tree-shaken away and caught only by the direction scan**, and a re-homed panel id is
+  caught **only by the sourcemap sweep**. **G54** records the contract limit honestly.
+- **The plan's own proof was found broken before any code was written:** building in "development
+  mode" alone produces a **byte-identical** bundle to production, so the control would never have
+  been true and the assertion resting on it would have proved nothing.
+- ⭐ **The backspace-byte trap fired LIVE** — a script turned `` into a literal control byte while
+  writing a guard, which would have made that guard **inert from birth**. The byte scan added three
+  units ago caught it. *The trap is neither hypothetical nor historical.*
+- **A new failure shape for the catalogue:** seven decisions were extracted so they could be tested,
+  and all seven were — but **nothing tested that the panel calls them.** Five of seven bypasses
+  survived `tsc` and all 1888 tests. Fixed as **invariants**, so a jump button added years from now
+  cannot silently skip validation.
+- **The build agent refused an instruction and was right:** asserting three stacked damage-over-time
+  entries would have pinned behaviour the engine has never had.
+- **Three checks moved from manual to machine-proved** (momentum 5→2→1, DoT intensity, Blessed
+  mitigation), so the author now judges only how they look, not whether they work.
 
 ### 2026-09-06 — #10a merged: both endings are now EARNED, and the exploit died first ✅
 
