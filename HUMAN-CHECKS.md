@@ -17,6 +17,64 @@
 >   full-run checks (log/summary/resume), and the offering-vs-whisper design read (H-5).
 
 
+> ## ▶️ From `debug-state` (#19) — most of the checks below no longer need a full run
+>
+> **Added 2026-09-07.** There is now a **developer state panel**: run `npm run desktop` and press
+> **F3**. It jumps the game to any state, so the checks that have been deferred for months because
+> they each needed an hour of play can be reached in a few clicks. The log overlay (`` ` `` or F2)
+> is unchanged and both can be open at once — the panel takes the left half, the log the right.
+>
+> **What it can do:** ten one-click preset jumps (act-1 control, act-4 verdict-ready, grace,
+> cast-down, act-5 below the gate, act-5 at the gate, the Hollow fight, the damnation ending, the
+> death summary, and The Judged on floor 4) · force any of the 24 enemy families with any of the 5
+> affixes at any act · set HP / maxHP / potions / rests / charges / momentum / corruption on the
+> live run · set the four karma axes · grant any catalog item or roll one at a chosen slot and
+> rarity, with or without equipping it · copy the whole run out as JSON and paste one back.
+>
+> ⚠ **A jumped run is not a real run, and it is not a balance measurement.** Your gear is what you
+> granted, not what a descent would have dropped. The panel answers *"does this behave correctly
+> here?"*, never *"is this how a run would feel"*. Feel is #2's balance re-run.
+>
+> ⚠ **A jumped run DOES write to your real unlock store** — that is deliberate, so the "Newly
+> unlocked" rows on the ending screens can be checked against the real thing rather than a fake.
+> The panel's **Reset unlock store** button puts it back to first-run state (no classes past the
+> Enforcer, no feats, no relics); restart the game afterwards to see it. Every jumped session also
+> writes one loud line to the log — `THIS SESSION IS NO LONGER A REAL RUN` — so if you ever wonder
+> why a class is unlocked, that line is the evidence.
+>
+> **Checks the panel unblocks (all previously deferred):**
+>
+> - [ ] **The Judged spare silence** — jump to `judged-act4`, spare it, and confirm that **nothing**
+>       on screen, in the narration or in the combat log hints that anything was scored. *(The engine
+>       side is now proved by test: the spare moves mercy AND reverence in one step, and no rendered
+>       string carries any axis vocabulary. What only you can check is the SCREEN.)*
+> - [ ] **All three ending summaries** read correctly — `verdict-grace`, `ending-damnation`,
+>       `ending-death`. Each is one or two clicks from its preset.
+> - [ ] **Floor-5 length** — from `act5-hub-fresh`, play to the Hollow and say how many encounters it
+>       took and whether it felt like a floor. *(A simulated run currently reaches the gate in **7**
+>       encounters. That is a machine playing, not a person; the number to trust is yours. Feeds #2.)*
+> - [ ] **Momentum decay** — set momentum in the Player section, finish a battle, and check you open
+>       the next on half, rounded down.
+> - [ ] **Stacked damage-over-time** — force an encounter and re-apply the same burn/bleed three or
+>       four times.
+> - [ ] **A Blessed enemy really resists** — force any family with the `Blessed` affix.
+> - [ ] **Act-5 no-flee** — from `hollow-fight`, press Run and confirm the refusal reads clearly.
+>
+> **Checks on the panel itself:**
+>
+> - [ ] **F3 opens it; `` ` ``/F2 still opens the log; both can be open at once**, and neither
+>       swallows a key typed into the name field or into the panel's own inputs.
+> - [ ] **Each of the ten presets lands on a screen that LOOKS right** — buttons present, HUD
+>       populated, no blank pane.
+> - [ ] **`npm run desktop:build` (or `desktop:pack`), then press F3: nothing must happen, and the
+>       panel must not be in the window.** The automated guard reads the bundle; this reads the
+>       product. *(This is the one check no agent can do, and it is the check that matters most.)*
+> - [ ] **A jumped run, quit and resumed, still opens**, and the log carries the
+>       `THIS SESSION IS NO LONGER A REAL RUN` line.
+> - [ ] **Reset unlock store really resets** — unlock a class by jumping to an ending, press reset,
+>       restart, and confirm the class select is back to the Enforcer alone.
+
+
 > ## ✅ THE DEFERRAL BELOW IS LIFTED — healing is reachable as of `#0c persistence-and-reach`
 >
 > **Updated 2026-09-01, by `#0c`.** The block immediately below deferred the floor-5 checks on the
