@@ -519,6 +519,7 @@ banner.)*
 | **#16** | Bundle **JetBrains Mono**, re-check the type scale against a real face |
 | **#17** | Ship assets — app icon, title art, store art, cursors |
 | **#18** | **The Hollow ascent campaign** — 5→1, ends at the Undercity threshold |
+| **#19** | **Dev tooling — the state panel** (`debug-state`, merged). An F3 developer panel that jumps the game to any state, so a play-test no longer needs a full run to reach the thing under test: act / XP / level, the karma axes, HP / charges / momentum, a forced enemy family and affix, catalog and rolled item grants, the three ending screens, and a copy/paste state-JSON envelope. **Never in the packaged bundle; the exclusion is proved by running the real bundler.** A jumped run writes to the real unlock store (so the "newly unlocked" rows can be checked against the real thing), which is why the panel also carries a reset button. Extend it by adding rows to `DEV_PRESETS` — it is data, not code, and `buildJump` is pure and importable, so a script can seed a simulation from a jump. |
 
 > **Still true and worth repeating:** three bugs **silently destroy player data** (quitting mid-run
 > voids all unlock progress; winning leaves a resumable save; a corrupt unlock store wipes
