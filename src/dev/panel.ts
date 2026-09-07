@@ -34,14 +34,16 @@ import {
   DEV_PRESETS,
   affixOptions,
   applyEdits,
+  applyJump,
   buildJump,
   catalogOptions,
-  decideAdopt,
+  createOnce,
   devStatus,
   encodeBundle,
   familyOptions,
-  grantItem,
+  grantIntoState,
   parseBundle,
+  presetSpec,
   type GrantSpec,
   type JumpBundle,
   type JumpSpec,
@@ -49,7 +51,6 @@ import {
   type StateEdits,
 } from './devState.ts';
 import { resetUnlockStore, type RemovableStore } from './unlockReset.ts';
-import { createRng } from '../game/rng.ts';
 import type { EquipSlot } from '../game/item.ts';
 import type { StatKey } from '../game/character.ts';
 import type { Rarity } from '../game/weapon.ts';
@@ -246,32 +247,34 @@ function buildPanel(deps: PanelDeps): void {
 
   // Emitted once per session, the first time a jump lands. A jumped session's log is
   // otherwise indistinguishable from a real run's — and any class or relic unlocked after
-  // this line was earned in a state nobody played to.
-  let sessionMarked = false;
-  const markSession = (seed: number, presetId: string): void => {
-    if (sessionMarked) return;
-    sessionMarked = true;
-    log.warn('dev', 'THIS SESSION IS NO LONGER A REAL RUN', { seed, preset: presetId });
-  };
+  // this line was earned in a state nobody played to. The latch is `createOnce`, which is
+  // tested: inverted here it would simply never fire, silently, and exactly when it matters.
+  const firstJump = createOnce();
 
   /**
-   * Validate, adopt, and say what happened — the single door every jump goes through.
+   * Say what happened to a jump. Every DECISION lives in the pure `applyJump`; this is the
+   * reporting half — the log line and the on-screen notice — and nothing else.
    * A refusal logs BEFORE it recovers, and the live state is left exactly as it was.
    */
   const applyBundle = (bundle: JumpBundle, presetId: string): void => {
     const timer = startTimer();
-    const decision = decideAdopt(bundle);
-    if (!decision.ok) {
-      log.warn('dev', 'jump REFUSED', { preset: presetId, reasons: decision.reasons });
-      say(`refused: ${decision.reasons.join(', ')}`);
+    const outcome = applyJump(bundle, deps.adopt);
+    if (outcome.kind === 'refused') {
+      log.warn('dev', 'jump REFUSED', { preset: presetId, reasons: outcome.reasons });
+      say(`refused: ${outcome.reasons.join(', ')}`);
       return;
     }
-    if (!deps.adopt(bundle)) {
+    if (outcome.kind === 'busy') {
       log.warn('dev', 'jump REFUSED', { preset: presetId, reasons: ['renderer-busy'] });
       say('refused: the renderer is mid-turn, try again');
       return;
     }
-    markSession(bundle.meta.runSeed, presetId);
+    if (firstJump()) {
+      log.warn('dev', 'THIS SESSION IS NO LONGER A REAL RUN', {
+        seed: bundle.meta.runSeed,
+        preset: presetId,
+      });
+    }
     const ms = timer.stop();
     const s = devStatus(bundle.state);
     log.log(levelForDuration(ms, SLOW_JUMP_MS, 'info'), 'dev', 'jump applied', {
@@ -298,10 +301,11 @@ function buildPanel(deps: PanelDeps): void {
   for (const row of DEV_PRESETS) {
     presetRow.appendChild(
       button(row.label, () => {
-        const spec: JumpSpec = { ...row.spec, seed: readNumber(seed.input) ?? row.spec.seed ?? 1 };
-        const live = deps.getBundle().state.unlocks;
-        if (live) spec.unlocks = live;
-        applyBundle(buildJump(spec), row.id);
+        // `presetSpec` carries the LIVE unlock snapshot over rather than fabricating one.
+        applyBundle(
+          buildJump(presetSpec(row, readNumber(seed.input), deps.getBundle().state)),
+          row.id,
+        );
       }),
     );
   }
@@ -402,20 +406,16 @@ function buildPanel(deps: PanelDeps): void {
   const stat = selectField('rolled stat', STAT_OPTIONS);
   items.append(catalog.row, slot.row, rarity.row, stat.row);
 
-  /** Grant into the LIVE state, drawing from the state's own RNG stream (never a new one). */
+  /** Grant into the LIVE state. `grantIntoState` owns the draw and the no-character case. */
   const grant = (spec: GrantSpec, label: string): void => {
     const current = deps.getBundle();
-    const player = current.state.player;
-    if (!player) {
+    const result = grantIntoState(current.state, spec);
+    if (!result.ok) {
+      log.warn('dev', 'grant REFUSED', { reasons: ['no-character'] });
       say('refused: there is no character yet');
       return;
     }
-    const { rng, getState } = createRng(current.state.rngState);
-    const granted = grantItem(player, spec, rng);
-    applyBundle(
-      { ...current, state: { ...current.state, player: granted, rngState: getState() } },
-      label,
-    );
+    applyBundle({ ...current, state: result.state }, label);
   };
 
   const grantRow = el('div', 'display:flex;flex-wrap:wrap;gap:4px;');

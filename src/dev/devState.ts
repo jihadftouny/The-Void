@@ -531,6 +531,86 @@ export type AdoptDecision =
   | { ok: true }
   | { ok: false; reasons: JumpRejection[] };
 
+/** What happened to a jump, as plain data the panel turns into a log line and a notice. */
+export type JumpOutcome =
+  | { kind: 'refused'; reasons: JumpRejection[] }
+  | { kind: 'busy' }
+  | { kind: 'applied' };
+
+/**
+ * THE ONE DOOR EVERY JUMP GOES THROUGH — pure apart from the injected `adopt` callback, and
+ * therefore testable with a plain stand-in.
+ *
+ * WHY THIS IS A FUNCTION AND NOT THREE LINES IN THE PANEL. It carries the two decisions with
+ * the worst failure modes in this unit, and both sit inside a DOM closure that no test can
+ * reach. Inverting `if (!decision.ok)` adopts every INVALID bundle and refuses every valid
+ * one — which is exactly how a hand-edited state JSON reaches a phase whose `requirePlayer`
+ * throws. Inverting `if (!adopt(...))` reports a jump that never landed. In here, both are
+ * behavioural failures instead of spellings a regex may miss (the lesson `handleOverlayKey`
+ * records at its own listener).
+ *
+ * The safety property, and the reason the order matters: a refused bundle must never reach
+ * `adopt`, so the live state is untouched by a jump that was rejected.
+ */
+export function applyJump(
+  bundle: JumpBundle,
+  adopt: (bundle: JumpBundle) => boolean,
+): JumpOutcome {
+  const decision = decideAdopt(bundle);
+  if (!decision.ok) return { kind: 'refused', reasons: decision.reasons };
+  if (!adopt(bundle)) return { kind: 'busy' };
+  return { kind: 'applied' };
+}
+
+/**
+ * A once-per-session latch: true the FIRST time it is called, false ever after.
+ *
+ * It guards the loud "this is no longer a real run" warning, which the author's ruling (A.1)
+ * makes the ONLY evidence that a persisted unlock came from a jumped state. Inverted, that
+ * line never fires at all — silently, and exactly when it is needed.
+ */
+export function createOnce(): () => boolean {
+  let fired = false;
+  return () => {
+    if (fired) return false;
+    fired = true;
+    return true;
+  };
+}
+
+/**
+ * The spec a preset button jumps with — PURE. The row's own spec, the panel's seed if it set
+ * one, and the LIVE unlock snapshot CARRIED OVER rather than fabricated (invariant 11): a
+ * jumped run's gradual-reveal window stays whatever the store actually said. When the live
+ * state carries none, the key is left OFF rather than set to `undefined`
+ * (`exactOptionalPropertyTypes`), so the jumped state's save shape is unchanged.
+ */
+export function presetSpec(preset: DevPreset, seed: number | undefined, live: GameState): JumpSpec {
+  const spec: JumpSpec = { ...preset.spec, seed: seed ?? preset.spec.seed ?? 1 };
+  if (live.unlocks) spec.unlocks = live.unlocks;
+  return spec;
+}
+
+/**
+ * Grant an item into a whole `GameState` — PURE, drawing from the STATE'S OWN RNG stream and
+ * writing the advanced accumulator back, the identical discipline `step`'s `finish` uses. A
+ * "roll a legendary" button therefore advances the run's own stream and leaves a state that
+ * is still a valid continuation of it, rather than forking a private one.
+ *
+ * `ok: false` (state unchanged) when there is no character yet — the decision lives here,
+ * where it is tested, rather than in the panel's closure, where it would not be.
+ */
+export function grantIntoState(
+  state: GameState,
+  grant: GrantSpec,
+): { ok: boolean; state: GameState } {
+  const player = state.player;
+  if (!player) return { ok: false, state };
+  const { rng, getState } = createRng(state.rngState);
+  const granted = grantItem(player, grant, rng);
+  return { ok: true, state: { ...state, player: granted, rngState: getState() } };
+}
+
 /**
  * Adopt a bundle, or refuse it — PURE. A bundle with ANY reason is refused; only a bundle
  * with none is adopted. Both directions matter: refusing everything makes the panel useless,

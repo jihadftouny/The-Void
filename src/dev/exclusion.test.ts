@@ -467,12 +467,17 @@ describe('nothing in the dev directory reads a clock or an unseeded random', () 
     ).toEqual([]);
   });
 
-  it('and the panel takes its randomness from the state being edited', () => {
-    // The positive half: not merely "no forbidden source", but the seeded one really used.
-    const panel = readFileSync(path.join(ROOT, 'src/dev/panel.ts'), 'utf8');
-    expect(panel, 'the panel no longer draws from the run’s own RNG stream').toMatch(
-      /createRng\s*\(\s*current\.state\.rngState\s*\)/,
+  it('and a grant takes its randomness from the state being edited', () => {
+    // The positive half: not merely "no forbidden source", but the seeded one really used —
+    // the run's OWN accumulator, so a rolled item advances the run's stream rather than
+    // forking a private one. (`devState.test.ts` asserts the consequence behaviourally.)
+    const core = readFileSync(path.join(ROOT, 'src/dev/devState.ts'), 'utf8');
+    expect(core, 'a grant no longer draws from the run’s own RNG stream').toMatch(
+      /createRng\s*\(\s*state\.rngState\s*\)/,
     );
+    // ...and the panel does not roll its own seed behind the core's back.
+    const panel = readFileSync(path.join(ROOT, 'src/dev/panel.ts'), 'utf8');
+    expect(panel, 'the panel creates an RNG of its own').not.toMatch(/createRng\s*\(/);
   });
 });
 

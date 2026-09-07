@@ -17,19 +17,23 @@ import {
   KARMA_MIN,
   affixOptions,
   applyEdits,
+  applyJump,
   applyPlayerEdits,
   bossOptions,
   buildJump,
   catalogOptions,
+  createOnce,
   decideAdopt,
   devStatus,
   encodeBundle,
   familyOptions,
   getPreset,
+  grantIntoState,
   grantItem,
   levelTo,
   normalizeKarma,
   parseBundle,
+  presetSpec,
   survivesSaveRoundTrip,
   validateJump,
   type JumpBundle,
@@ -340,6 +344,162 @@ describe('decideAdopt', () => {
       breakIt(bundle);
       expect(decideAdopt(bundle).ok).toBe(false);
     }
+  });
+});
+
+// =========================================================================================
+// 5b. The four decisions that used to live inside the panel's DOM closures, where no test
+//     could reach them. Extracted on purpose: each one's inversion is SILENT, so each is
+//     behaviourally pinned here instead of declared unpinnable.
+// =========================================================================================
+
+describe('applyJump — the one door every jump goes through', () => {
+  /** An adopt stand-in that records what it was handed. */
+  function recording(accepts = true) {
+    const seen: JumpBundle[] = [];
+    return { seen, adopt: (b: JumpBundle) => (seen.push(b), accepts) };
+  }
+
+  it('a valid bundle is adopted, and the adopter really receives it', () => {
+    const bundle = buildJump({ act: 2, xp: 30 });
+    const { seen, adopt } = recording();
+    expect(applyJump(bundle, adopt)).toEqual({ kind: 'applied' });
+    expect(seen).toEqual([bundle]);
+  });
+
+  it('an INVALID bundle never reaches the adopter — the live state stays untouched', () => {
+    // The safety property, and the reason the order of the two checks matters. Inverted,
+    // this adopts exactly the states that cannot be rendered.
+    const bundle = clone(buildJump({ act: 2, xp: 30 }));
+    bundle.state.player = null;
+    const { seen, adopt } = recording();
+    const outcome = applyJump(bundle, adopt);
+    expect(outcome.kind).toBe('refused');
+    expect(outcome.kind === 'refused' && outcome.reasons).toContain('player-missing');
+    expect(seen, 'a refused bundle was handed to the adopter anyway').toEqual([]);
+  });
+
+  it('a busy renderer is reported as busy, not as applied', () => {
+    const bundle = buildJump({ act: 2, xp: 30 });
+    const { seen, adopt } = recording(false);
+    expect(applyJump(bundle, adopt)).toEqual({ kind: 'busy' });
+    // It was OFFERED — the refusal came from the renderer, not from validation.
+    expect(seen).toEqual([bundle]);
+  });
+
+  it('the three outcomes are distinguishable, and each is reachable', () => {
+    // Non-vacuity: a function that always returned one of them would satisfy any single
+    // assertion above.
+    const good = buildJump({ act: 1, xp: 0 });
+    const bad = clone(good);
+    bad.state.place = bad.state.act;
+    const kinds = [
+      applyJump(good, () => true).kind,
+      applyJump(good, () => false).kind,
+      applyJump(bad, () => true).kind,
+    ];
+    expect(kinds).toEqual(['applied', 'busy', 'refused']);
+  });
+});
+
+describe('createOnce — the latch behind the loud session warning', () => {
+  it('is true the first time and false ever after', () => {
+    const once = createOnce();
+    expect(once()).toBe(true);
+    expect(once()).toBe(false);
+    expect(once()).toBe(false);
+  });
+
+  it('each latch is independent (it is not a module-level flag)', () => {
+    const a = createOnce();
+    const b = createOnce();
+    expect(a()).toBe(true);
+    expect(b(), 'one latch consumed another').toBe(true);
+  });
+
+  it('fires EXACTLY once over many calls — never zero, never twice', () => {
+    // Inverted, this never fires at all: the only evidence that a persisted unlock came
+    // from a jumped state would silently disappear.
+    const once = createOnce();
+    const fired = Array.from({ length: 50 }, () => once()).filter(Boolean);
+    expect(fired).toHaveLength(1);
+  });
+});
+
+describe('presetSpec — the live unlock snapshot is CARRIED, never fabricated', () => {
+  const preset = DEV_PRESETS[0]!;
+
+  it('carries the live snapshot through when the run has one', () => {
+    const live = buildJump({ act: 1, xp: 0 }).state;
+    const withUnlocks = { ...live, unlocks: { families: ['gangers'], affixes: ['ancient'] } };
+    expect(presetSpec(preset, undefined, withUnlocks).unlocks).toEqual({
+      families: ['gangers'],
+      affixes: ['ancient'],
+    });
+  });
+
+  it('leaves the key OFF when there is none — never sets it to undefined', () => {
+    // `exactOptionalPropertyTypes`: an `undefined`-valued key would change the save shape.
+    const live = buildJump({ act: 1, xp: 0 }).state;
+    expect(live.unlocks).toBeUndefined();
+    const spec = presetSpec(preset, undefined, live);
+    expect('unlocks' in spec, 'the spec fabricated an unlocks key').toBe(false);
+  });
+
+  it('the panel seed wins, and the row keeps its own when the field is blank', () => {
+    expect(presetSpec(preset, 77, buildJump({ act: 1, xp: 0 }).state).seed).toBe(77);
+    expect(presetSpec(preset, undefined, buildJump({ act: 1, xp: 0 }).state).seed).toBe(1);
+  });
+
+  it('and the carried snapshot really reaches the built state', () => {
+    const live = { ...buildJump({ act: 1, xp: 0 }).state, unlocks: { families: ['grief'], affixes: [] } };
+    const bundle = buildJump(presetSpec(preset, undefined, live));
+    expect(bundle.state.unlocks).toEqual({ families: ['grief'], affixes: [] });
+    expect(validateJump(bundle)).toEqual([]);
+  });
+});
+
+describe('grantIntoState — a grant advances the run’s own RNG stream', () => {
+  it('refuses when there is no character, leaving the state exactly as it was', () => {
+    const bundle = clone(buildJump({ act: 1, xp: 0 }));
+    bundle.state.player = null;
+    bundle.state.phase = { kind: 'title' };
+    const result = grantIntoState(bundle.state, { catalogId: 'suture-kit' });
+    expect(result.ok).toBe(false);
+    expect(result.state).toBe(bundle.state);
+  });
+
+  it('grants when there is one, and reports that it did', () => {
+    const state = buildJump({ act: 1, xp: 0 }).state;
+    const result = grantIntoState(state, { catalogId: 'suture-kit' });
+    expect(result.ok).toBe(true);
+    expect(result.state.player!.inventory.backpack.map((i) => i.defId)).toEqual(['suture-kit']);
+  });
+
+  it('a ROLLED grant advances rngState; a catalog grant spends no draw', () => {
+    // The discipline `step`'s `finish` uses: the jumped state stays a valid CONTINUATION of
+    // its own stream rather than a fork of it. `generateItem` draws exactly twice.
+    const state = buildJump({ act: 1, xp: 0 }).state;
+    const rolled = grantIntoState(state, { generated: { slot: 'ring', rarity: 'Rare' } });
+    expect(rolled.state.rngState).not.toBe(state.rngState);
+    const catalog = grantIntoState(state, { catalogId: 'suture-kit' });
+    expect(catalog.state.rngState).toBe(state.rngState);
+  });
+
+  it('the resulting state still validates and still saves', () => {
+    const bundle = buildJump({ act: 3, xp: 90 });
+    const result = grantIntoState(bundle.state, {
+      generated: { slot: 'mainHand', rarity: 'Legendary' },
+      equip: true,
+    });
+    expect(validateJump({ ...bundle, state: result.state })).toEqual([]);
+  });
+
+  it('never mutates the state it was given', () => {
+    const state = buildJump({ act: 1, xp: 0 }).state;
+    const before = JSON.stringify(state);
+    grantIntoState(state, { generated: { slot: 'ring', rarity: 'Legendary' } });
+    expect(JSON.stringify(state)).toBe(before);
   });
 });
 
