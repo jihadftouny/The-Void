@@ -269,6 +269,24 @@ Then **#2** (which also carries §22.23's ruling that bargains become random des
 
 **The v1.3 rung of the increment ladder (§9) is now largely empty**, since its contents moved into v1. Audio (#15) is what remains there.
 
+### 11.1 What "a certain level of graphics" actually means — two further calls *(2026-09-07)*
+
+The amendment above said v1's look would be "typographic and CSS-only" but left the visual idea itself undefined. The author then defined it, in two directives, and they are what this unit builds to.
+
+**First — the floor is the visual system.** *"each floor has a distinct font color, and background color with a certain level of texture, we can use the atmospheric css option in conjunction."* So all five floors get their own text colour, background colour and texture, rather than one fixed theme carrying a small per-floor accent. **The descent becomes visible.** Still $0 — CSS gradients, scanlines, vignette and noise, no image files.
+
+This buys a real identity for no money, and it costs one thing that must be paid honestly: **five text-on-background pairings are five chances to ship something unreadable.** The contrast ratio of every floor is therefore machine-checked from the actual colour values, high contrast must be able to defeat the atmosphere on all five, and reduced motion must stop anything that moves. Where a floor's intended palette cannot pass, **the palette changes, not the gate.**
+
+**Second — reserve the art space now, ship no art.** *"we want placeholders for where scenery and enemy images and character image would be."* Three regions get designed into the layout — scenery on the floor screens, the enemy on the battle screen, the player's portrait in the status area — as empty framed panels carrying the current floor's colour and texture.
+
+**No art is generated, bought or downloaded.** The standing instruction holds and §5.2's $0 rule is untouched. What this actually secures is the geometry: **the aspect ratio is the commitment, not the picture.** Whatever shape these regions are is the shape all future art must be drawn to, and fixing it now — while it costs nothing — is what stops finished art from later being invalidated by a re-layout. The regions must also read as deliberate framing rather than missing assets: **no placeholder text or dimension labels in the shipped path**, because a grey box reading "IMAGE HERE" is what makes a released game look unfinished.
+
+This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather than disappearing — when the safety fund allows art, it drops into slots that already exist.
+
+**Budget effect: none material.** The five-floor palette work was already inside #8's ~14 h; the reserved regions are data descriptors and CSS ratio boxes. **The ~114 h total in §11 stands.** If it proves otherwise the build stops and reports rather than absorbing it quietly.
+
+> **Merge action, still outstanding:** the per-floor palettes and the three fixed aspect ratios belong permanently in **`ART-BIBLE.md`** (the visual authority), not here. They are recorded in this scope document first only because the build is concurrently editing `ART-BIBLE.md` in its own worktree. **Propagate them at merge**, along with the five register corrections the plan surfaced.
+
 ---
 
 *Companion board: the **Plan v3 Mission Board** (lane V) — a personal planning document, kept
