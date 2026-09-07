@@ -25,7 +25,9 @@ import {
   createOnce,
   decideAdopt,
   devStatus,
+  editsFrom,
   encodeBundle,
+  encounterTarget,
   familyOptions,
   getPreset,
   grantIntoState,
@@ -36,6 +38,8 @@ import {
   presetSpec,
   survivesSaveRoundTrip,
   validateJump,
+  withUnlocks,
+  EDITABLE_FIELDS,
   type JumpBundle,
   type JumpRejection,
 } from './devState.ts';
@@ -456,6 +460,82 @@ describe('presetSpec — the live unlock snapshot is CARRIED, never fabricated',
     const bundle = buildJump(presetSpec(preset, undefined, live));
     expect(bundle.state.unlocks).toEqual({ families: ['grief'], affixes: [] });
     expect(validateJump(bundle)).toEqual([]);
+  });
+});
+
+describe('encounterTarget — the "(no affix)" row must mean NO KEY', () => {
+  it('an empty affix id leaves the key OFF, never sets it to an empty string', () => {
+    // `buildPhase` looks an affix up by id; `affixId: ''` resolves to nothing and is silently
+    // ignored, so the difference is invisible in behaviour and loud in the save shape.
+    const target = encounterTarget('theJudged', '');
+    expect(target).toEqual({ kind: 'encounter', familyId: 'theJudged' });
+    expect('affixId' in target).toBe(false);
+  });
+
+  it('a real affix id is carried through', () => {
+    expect(encounterTarget('theJudged', 'blessed')).toEqual({
+      kind: 'encounter',
+      familyId: 'theJudged',
+      affixId: 'blessed',
+    });
+  });
+
+  it('and the two really produce different enemies (the flag is read, not decoration)', () => {
+    // Non-vacuity: both jumps build, both validate, and the affixed one is marked as elite.
+    const plain = buildJump({ act: 4, xp: 240, target: encounterTarget('theJudged', '') });
+    const elite = buildJump({ act: 4, xp: 240, target: encounterTarget('theJudged', 'blessed') });
+    const enemyOf = (b: JumpBundle) =>
+      b.state.phase.kind === 'battle' ? b.state.phase.battle.enemy : null;
+    expect(enemyOf(plain)!.affixId).toBeUndefined();
+    expect(enemyOf(elite)!.affixId).toBe('blessed');
+    // The affix prefixes the name, which is how the author will SEE that it took.
+    expect(enemyOf(elite)!.fullName).not.toBe(enemyOf(plain)!.fullName);
+    expect(validateJump(elite)).toEqual([]);
+  });
+});
+
+describe('editsFrom — a blank field means "leave this alone"', () => {
+  it('drops every undefined value rather than making it a key', () => {
+    const edits = editsFrom({ hp: 5, maxHp: undefined, pots: 0 });
+    expect(edits).toEqual({ hp: 5, pots: 0 });
+    expect('maxHp' in edits, 'a blank field became an undefined-valued key').toBe(false);
+  });
+
+  it('an all-blank form produces no edits at all', () => {
+    expect(editsFrom({})).toEqual({});
+    // ...and applying it changes nothing, which is the behaviour that matters.
+    const state = buildJump({ act: 2, xp: 30 }).state;
+    expect(applyEdits(state, editsFrom({}))).toEqual(state);
+  });
+
+  it('keeps ZERO, which is a real value and the one an inverted check would eat', () => {
+    expect(editsFrom({ pots: 0 }).pots).toBe(0);
+  });
+
+  it('covers every field the panel offers', () => {
+    const all = Object.fromEntries(EDITABLE_FIELDS.map((k) => [k, 1]));
+    expect(Object.keys(editsFrom(all)).sort()).toEqual([...EDITABLE_FIELDS].sort());
+    expect(EDITABLE_FIELDS).toHaveLength(7);
+  });
+});
+
+describe('withUnlocks — carried, never fabricated', () => {
+  it('carries the snapshot when the live run has one', () => {
+    const live = { ...buildJump({ act: 1, xp: 0 }).state, unlocks: { families: ['rage'], affixes: [] } };
+    expect(withUnlocks({ act: 1, xp: 0 }, live).unlocks).toEqual({ families: ['rage'], affixes: [] });
+  });
+
+  it('leaves the key OFF when it has none', () => {
+    const live = buildJump({ act: 1, xp: 0 }).state;
+    const spec = withUnlocks({ act: 1, xp: 0 }, live);
+    expect('unlocks' in spec).toBe(false);
+  });
+
+  it('never mutates the spec it was handed', () => {
+    const live = { ...buildJump({ act: 1, xp: 0 }).state, unlocks: { families: [], affixes: [] } };
+    const spec = { act: 1, xp: 0 };
+    withUnlocks(spec, live);
+    expect('unlocks' in spec).toBe(false);
   });
 });
 

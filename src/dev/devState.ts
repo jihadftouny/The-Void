@@ -579,17 +579,62 @@ export function createOnce(): () => boolean {
 }
 
 /**
+ * CARRY the live run's unlock snapshot onto a spec — PURE, invariant 11. Never fabricated:
+ * when the live state has none, the key is left OFF rather than set to `undefined`
+ * (`exactOptionalPropertyTypes`), so the jumped state's save shape is unchanged. One
+ * function, so all three of the panel's jump builders obey the same rule.
+ */
+export function withUnlocks(spec: JumpSpec, live: GameState): JumpSpec {
+  if (!live.unlocks) return spec;
+  return { ...spec, unlocks: live.unlocks };
+}
+
+/**
  * The spec a preset button jumps with — PURE. The row's own spec, the panel's seed if it set
- * one, and the LIVE unlock snapshot CARRIED OVER rather than fabricated (invariant 11): a
- * jumped run's gradual-reveal window stays whatever the store actually said. When the live
- * state carries none, the key is left OFF rather than set to `undefined`
- * (`exactOptionalPropertyTypes`), so the jumped state's save shape is unchanged.
+ * one, and the live unlock snapshot carried over.
  */
 export function presetSpec(preset: DevPreset, seed: number | undefined, live: GameState): JumpSpec {
-  const spec: JumpSpec = { ...preset.spec, seed: seed ?? preset.spec.seed ?? 1 };
-  if (live.unlocks) spec.unlocks = live.unlocks;
-  return spec;
+  return withUnlocks({ ...preset.spec, seed: seed ?? preset.spec.seed ?? 1 }, live);
 }
+
+/**
+ * The target a forced encounter jumps to — PURE. The panel's affix dropdown carries an
+ * explicit "(no affix)" row whose id is the empty string; that has to mean NO AFFIX KEY, not
+ * an `affixId` of `''`, which `buildPhase` would then fail to resolve and silently ignore.
+ * Deciding it here rather than in the panel's closure is what makes the empty case testable.
+ */
+export function encounterTarget(familyId: string, affixId: string): TargetSpec {
+  if (affixId === '') return { kind: 'encounter', familyId };
+  return { kind: 'encounter', familyId, affixId };
+}
+
+/**
+ * The player edits a form produced — PURE. A BLANK field means "leave this alone", so an
+ * absent value must not become a key: `applyPlayerEdits` reads `!== undefined`, and an
+ * `undefined`-valued key would sail through it under `exactOptionalPropertyTypes` while
+ * meaning something different to every other reader.
+ */
+export function editsFrom(
+  values: Partial<Record<keyof StateEdits, number | undefined>>,
+): StateEdits {
+  const edits: StateEdits = {};
+  for (const key of EDITABLE_FIELDS) {
+    const value = values[key];
+    if (value !== undefined) edits[key] = value;
+  }
+  return edits;
+}
+
+/** Every field the panel's Player section can set, in the order it renders them. */
+export const EDITABLE_FIELDS: readonly (keyof StateEdits)[] = [
+  'hp',
+  'maxHp',
+  'pots',
+  'restsLeft',
+  'skillCharges',
+  'momentum',
+  'corruption',
+];
 
 /**
  * Grant an item into a whole `GameState` — PURE, drawing from the STATE'S OWN RNG stream and

@@ -39,16 +39,18 @@ import {
   catalogOptions,
   createOnce,
   devStatus,
+  editsFrom,
   encodeBundle,
+  encounterTarget,
   familyOptions,
   grantIntoState,
   parseBundle,
   presetSpec,
+  withUnlocks,
   type GrantSpec,
   type JumpBundle,
   type JumpSpec,
   type MenuOption,
-  type StateEdits,
 } from './devState.ts';
 import { resetUnlockStore, type RemovableStore } from './unlockReset.ts';
 import type { EquipSlot } from '../game/item.ts';
@@ -321,19 +323,16 @@ function buildPanel(deps: PanelDeps): void {
   forced.append(family.row, affix.row, forcedAct.row, forcedXp.row);
   forced.appendChild(
     button('Force this encounter', () => {
+      const current = deps.getBundle().state;
       const spec: JumpSpec = {
         act: readNumber(forcedAct.input) ?? 1,
         xp: readNumber(forcedXp.input) ?? 0,
         seed: readNumber(seed.input) ?? 1,
-        karma: deps.getBundle().state.karma,
-        target: { kind: 'encounter', familyId: family.select.value },
+        karma: current.karma,
+        // `encounterTarget` owns the "(no affix)" case: an empty id must leave the key OFF.
+        target: encounterTarget(family.select.value, affix.select.value),
       };
-      if (affix.select.value !== '' && spec.target && spec.target.kind === 'encounter') {
-        spec.target = { ...spec.target, affixId: affix.select.value };
-      }
-      const live = deps.getBundle().state.unlocks;
-      if (live) spec.unlocks = live;
-      applyBundle(buildJump(spec), `encounter:${family.select.value}`);
+      applyBundle(buildJump(withUnlocks(spec, current)), `encounter:${family.select.value}`);
     }),
   );
   panel.appendChild(forced);
@@ -351,20 +350,17 @@ function buildPanel(deps: PanelDeps): void {
   playerSection.append(hp.row, maxHp.row, pots.row, rests.row, charges.row, momentum.row, corruption.row);
   playerSection.appendChild(
     button('Apply edits', () => {
-      const edits: StateEdits = {};
-      const fields: [keyof StateEdits, HTMLInputElement][] = [
-        ['hp', hp.input],
-        ['maxHp', maxHp.input],
-        ['pots', pots.input],
-        ['restsLeft', rests.input],
-        ['skillCharges', charges.input],
-        ['momentum', momentum.input],
-        ['corruption', corruption.input],
-      ];
-      for (const [key, input] of fields) {
-        const value = readNumber(input);
-        if (value !== undefined) edits[key] = value;
-      }
+      // `editsFrom` owns the blank-field rule: a blank box means "leave this alone", and
+      // must not become an `undefined`-valued key.
+      const edits = editsFrom({
+        hp: readNumber(hp.input),
+        maxHp: readNumber(maxHp.input),
+        pots: readNumber(pots.input),
+        restsLeft: readNumber(rests.input),
+        skillCharges: readNumber(charges.input),
+        momentum: readNumber(momentum.input),
+        corruption: readNumber(corruption.input),
+      });
       const current = deps.getBundle();
       applyBundle({ ...current, state: applyEdits(current.state, edits) }, 'edits');
     }),
@@ -392,8 +388,7 @@ function buildPanel(deps: PanelDeps): void {
           clarityDelusion: readNumber(clarity.input) ?? 0,
         },
       };
-      if (current.unlocks) spec.unlocks = current.unlocks;
-      applyBundle(buildJump(spec), 'karma');
+      applyBundle(buildJump(withUnlocks(spec, current)), 'karma');
     }),
   );
   panel.appendChild(karmaSection);
