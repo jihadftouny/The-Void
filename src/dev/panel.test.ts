@@ -253,7 +253,7 @@ describe('the panel source', () => {
     // nothing at all. The exclusion guards cannot see that, because a panel that builds
     // nothing is still absent from the packaged build.
     expect(body, 'bootPanel is handed something other than buildPanel — F3 would open nothing').toMatch(
-      /bootPanel\s*\(\s*deps\.env\s*,\s*\(\s*\)\s*=>\s*buildPanel\s*\(\s*deps\s*\)\s*\)/,
+      WIRING.bootPanel,
     );
   });
 
@@ -322,6 +322,26 @@ describe('the panel source', () => {
 // time and is not unit-tested by standing rule, so reading it is the honest tool.
 // =========================================================================================
 
+/**
+ * THE CALL-SHAPE PATTERNS, named so the scans below and the self-test at the bottom use the
+ * SAME objects. A pattern proved only against a hand-written sample, while the scan quietly
+ * uses a second copy, proves nothing about the scan.
+ *
+ * ⚠ EVERY ONE ENDS `,?\s*\)`, AND THAT IS LOAD-BEARING. These calls will grow arguments, and
+ * Prettier wraps a long argument list one-per-line WITH A TRAILING COMMA. A guard that rejects
+ * correctly-formatted code is worse than no guard: it trains the next person to weaken or
+ * delete it, which is exactly how guards in this project have rotted before. `\s*` alone
+ * rejected four of these five.
+ */
+const WIRING = {
+  applyJump: /applyJump\s*\(\s*bundle\s*,\s*deps\.adopt\s*,?\s*\)/,
+  encounterTarget:
+    /target:\s*encounterTarget\s*\(\s*family\.select\.value\s*,\s*affix\.select\.value\s*,?\s*\)/,
+  grantIntoState: /const result = grantIntoState\s*\(\s*current\.state\s*,\s*spec\s*,?\s*\)\s*;/,
+  applyEdits: /applyEdits\s*\(\s*current\.state\s*,\s*edits\s*,?\s*\)/,
+  bootPanel: /bootPanel\s*\(\s*deps\.env\s*,\s*\(\s*\)\s*=>\s*buildPanel\s*\(\s*deps\s*\)\s*,?\s*\)/,
+} as const;
+
 describe('the panel WIRES every helper it was given, not just imports it', () => {
   const start = SOURCE.indexOf('function buildPanel(');
   const BODY = SOURCE.slice(start, SOURCE.indexOf('\n}', start));
@@ -336,7 +356,7 @@ describe('the panel WIRES every helper it was given, not just imports it', () =>
     // every INVALID bundle — which is exactly how a hand-edited state JSON reaches a phase
     // whose `requirePlayer` throws". Calling `deps.adopt` directly produces precisely that.
     expect(BODY, 'the panel no longer routes its jump through applyJump').toMatch(
-      /applyJump\s*\(\s*bundle\s*,\s*deps\.adopt\s*\)/,
+      WIRING.applyJump,
     );
     // The bypass, in every spelling: `deps.adopt` may be MENTIONED only as applyJump's second
     // argument, never invoked. A call has a `(` after it.
@@ -347,6 +367,22 @@ describe('the panel WIRES every helper it was given, not just imports it', () =>
       [...BODY.matchAll(/deps\.adopt/g)].length,
       'deps.adopt is referenced more than once — one of them is not applyJump’s argument',
     ).toBe(1);
+    // …and the count invariant alone has ONE hole, so it does not stand alone: destructuring
+    // (`const { adopt } = deps;`) erases the `deps.adopt` token entirely, so a dead
+    // `void applyJump(bundle, deps.adopt);` beside a live `adopt(bundle)` satisfies the count
+    // AND lets an invalid bundle through. Nothing may INVOKE a bare `adopt` either.
+    //
+    // ⚠ THE WORD BOUNDARY BELOW HAD TO BE WRITTEN BY HAND. Generating this line through a
+    // script turned its word-boundary escape into a literal BACKSPACE byte — G41's exact
+    // defect, reproduced live while writing this unit, invisible in the diff and in every
+    // editor, and caught by `src/log/sourceBytes.test.ts` rather than by anyone reading it.
+    // That is what that guard is for. Never write a word-boundary escape into this repo
+    // through a heredoc, a shell one-liner, or a Python string.
+    expect(
+      BODY,
+      'a bare `adopt(…)` is called — a destructured alias bypasses applyJump’s validation ' +
+        'while leaving the `deps.adopt` count untouched',
+    ).not.toMatch(/(?<!\.)\badopt\s*\(/);
   });
 
   it('the session latch is a real createOnce(), not a constant', () => {
@@ -377,7 +413,12 @@ describe('the panel WIRES every helper it was given, not just imports it', () =>
     // Stated as an invariant over ALL the call sites rather than as three examples, so a
     // fourth jump button added later cannot quietly skip it.
     const calls = callsTo(BODY, 'buildJump');
-    expect(calls.length, 'no buildJump call sites — this guard has gone stale').toBe(3);
+    expect(
+      calls.length,
+      'the number of jump buttons changed. This is a DELIBERATE CHECKPOINT, not a bug: a new ' +
+        'jump button must carry the live unlock snapshot through `withUnlocks` or `presetSpec` ' +
+        '(invariant 11). Read the loop below, satisfy it, then update this count.',
+    ).toBe(3);
     for (const call of calls) {
       expect(
         call,
@@ -393,7 +434,7 @@ describe('the panel WIRES every helper it was given, not just imports it', () =>
     // C6: forcing `.ok` true means a grant with no character reports success and silently
     // does nothing — and `grantIntoState`'s tested refusal becomes unreachable.
     expect(BODY, 'the grant no longer goes through grantIntoState').toMatch(
-      /const result = grantIntoState\s*\(\s*current\.state\s*,\s*spec\s*\)\s*;/,
+      WIRING.grantIntoState,
     );
     expect(BODY, 'the grant ignores whether grantIntoState refused').toMatch(
       /if\s*\(\s*!\s*result\.ok\s*\)/,
@@ -408,7 +449,7 @@ describe('the panel WIRES every helper it was given, not just imports it', () =>
     // C1, including the decorative-reference variant: `...(void encounterTarget, {})` makes
     // `noUnusedLocals` happy while the target is inlined. Pinning the ARGUMENTS kills both.
     expect(BODY, 'the forced-encounter target is built by hand again').toMatch(
-      /target:\s*encounterTarget\s*\(\s*family\.select\.value\s*,\s*affix\.select\.value\s*\)/,
+      WIRING.encounterTarget,
     );
     // The inlined shape, which is what the bypass writes.
     expect(BODY, 'an encounter target is hand-built — the "(no affix)" case would be lost').not.toMatch(
@@ -420,7 +461,7 @@ describe('the panel WIRES every helper it was given, not just imports it', () =>
     // C2, same story: a raw object literal makes every blank field an `undefined`-valued key.
     expect(BODY, 'the edits object is hand-built again').toMatch(/const edits = editsFrom\s*\(\s*\{/);
     expect(BODY, 'applyEdits is handed something other than editsFrom’s result').toMatch(
-      /applyEdits\s*\(\s*current\.state\s*,\s*edits\s*\)/,
+      WIRING.applyEdits,
     );
   });
 
@@ -447,6 +488,58 @@ describe('the panel WIRES every helper it was given, not just imports it', () =>
         pattern,
       );
     }
+  });
+
+  it('every wiring pattern accepts a Prettier-wrapped call and still rejects the bypass', () => {
+    // ⚠ A GUARD THAT REJECTS CORRECT CODE IS WORSE THAN NO GUARD. These calls will grow
+    // arguments, and Prettier wraps a long argument list one-per-line with a TRAILING COMMA.
+    // Four of these five patterns originally ended `\s*\)` and rejected exactly that — which
+    // trains the next person to weaken or delete the guard, and is how guards in this project
+    // have rotted before.
+    //
+    // Both directions, against the SAME regex objects the real scans above use — a pattern
+    // proved against a hand-written sample while the scan quietly holds a second copy proves
+    // nothing about the scan.
+    const CASES: readonly [keyof typeof WIRING, string, string][] = [
+      [
+        'applyJump',
+        'const outcome = applyJump(\n      bundle,\n      deps.adopt,\n    );',
+        'const outcome = deps.adopt(bundle);',
+      ],
+      [
+        'encounterTarget',
+        'target: encounterTarget(\n          family.select.value,\n          affix.select.value,\n        ),',
+        "target: { kind: 'encounter', familyId: family.select.value },",
+      ],
+      [
+        'grantIntoState',
+        'const result = grantIntoState(\n      current.state,\n      spec,\n    );',
+        'const result = { ...grantIntoState(current.state, spec), ok: true };',
+      ],
+      [
+        'applyEdits',
+        'applyEdits(\n        current.state,\n        edits,\n      )',
+        'applyEdits(current.state, { hp: 1 })',
+      ],
+      [
+        'bootPanel',
+        'return bootPanel(\n    deps.env,\n    () => buildPanel(deps),\n  );',
+        'buildPanel(deps);\n  return true;',
+      ],
+    ];
+    for (const [name, wrapped, bypassed] of CASES) {
+      expect(
+        WIRING[name].test(wrapped),
+        `${name}: the pattern REJECTS a correctly wrapped call — it will fire on good code`,
+      ).toBe(true);
+      expect(
+        WIRING[name].test(bypassed),
+        `${name}: the pattern ACCEPTS the bypass — it guards nothing`,
+      ).toBe(false);
+    }
+    // Every pattern in the table is covered, so adding one cannot skip this proof.
+    expect(CASES.map(([name]) => name).sort()).toEqual(Object.keys(WIRING).sort());
+    expect(CASES).toHaveLength(5);
   });
 
   it('and every helper the panel imports is actually CALLED, with arguments', () => {
