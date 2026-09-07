@@ -35,6 +35,7 @@ import {
   levelTo,
   normalizeKarma,
   parseBundle,
+  parseField,
   presetSpec,
   survivesSaveRoundTrip,
   validateJump,
@@ -491,6 +492,54 @@ describe('encounterTarget — the "(no affix)" row must mean NO KEY', () => {
     // The affix prefixes the name, which is how the author will SEE that it took.
     expect(enemyOf(elite)!.fullName).not.toBe(enemyOf(plain)!.fullName);
     expect(validateJump(elite)).toEqual([]);
+  });
+});
+
+describe('parseField — BLANK and ZERO are different answers', () => {
+  it('a blank box is undefined, NOT zero', () => {
+    // The whole point. Returning 0 here compiles, passes every other test, and then makes
+    // "Apply edits" ZERO momentum, corruption, potions, rests and charges on every press —
+    // because `editsFrom` would produce a key for every untouched field.
+    expect(parseField('')).toBeUndefined();
+    expect(parseField('   ')).toBeUndefined();
+    expect(parseField('\t\n')).toBeUndefined();
+  });
+
+  it('an explicit zero IS zero — the value an inverted check would eat', () => {
+    expect(parseField('0')).toBe(0);
+    expect(parseField(' 0 ')).toBe(0);
+  });
+
+  it('reads ordinary numbers, including negatives and decimals', () => {
+    expect(parseField('7')).toBe(7);
+    expect(parseField('-3')).toBe(-3);
+    expect(parseField('2.5')).toBe(2.5);
+  });
+
+  it('garbage is undefined rather than NaN — NaN would reach the state', () => {
+    // `decodeSave` rejects a non-finite number outright, so a NaN escaping here would build a
+    // state its own save refuses. Undefined means "leave it alone", which is always safe.
+    for (const text of ['abc', '1/2', 'Infinity', '-Infinity', 'NaN', '1e', '--4']) {
+      expect(parseField(text), text).toBeUndefined();
+    }
+  });
+
+  it('and the consequence, end to end: a blank form leaves the character untouched', () => {
+    // The behaviour the unit actually promises, not the helper's return value.
+    const state = buildJump({ act: 3, xp: 90, edits: { pots: 4, momentum: 3 } }).state;
+    const blankForm = editsFrom({
+      hp: parseField(''),
+      maxHp: parseField(''),
+      pots: parseField(''),
+      restsLeft: parseField(''),
+      skillCharges: parseField(''),
+      momentum: parseField(''),
+      corruption: parseField(''),
+    });
+    expect(blankForm).toEqual({});
+    expect(applyEdits(state, blankForm)).toEqual(state);
+    expect(state.player!.pots).toBe(4);
+    expect(state.player!.momentum).toBe(3);
   });
 });
 

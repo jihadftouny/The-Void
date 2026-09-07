@@ -900,12 +900,21 @@ if (saved) {
 // jumped inside a packaged build) was named and accepted. `src/dev/exclusion.test.ts` proves
 // the exclusion by running the real bundler twice in a subprocess.
 if (import.meta.env.DEV) {
-  void import('../dev/panel.ts').then((m) =>
-    m.mountDebugPanel({
-      getBundle: () => ({ state, memory, meta: runMeta() }),
-      adopt: adoptFromPanel,
-      env: { protocol: location.protocol },
-      unlockStorage: localStorage,
-    }),
-  );
+  void import('../dev/panel.ts')
+    .then((m) =>
+      m.mountDebugPanel({
+        getBundle: () => ({ state, memory, meta: runMeta() }),
+        adopt: adoptFromPanel,
+        env: { protocol: location.protocol },
+        unlockStorage: localStorage,
+      }),
+    )
+    // A failure here is a dev-tooling failure and must never take the game down — but it must
+    // not vanish either. Without this the panel simply never appears and the only trace is an
+    // unhandled rejection nobody is watching for (principle 7: log before you recover).
+    .catch((err: unknown) =>
+      log.error('dev', 'panel failed to load', {
+        message: err instanceof Error ? err.message : String(err),
+      }),
+    );
 }

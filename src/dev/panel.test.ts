@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { stripComments, stripReachesEndOfFile } from '../log/sourceScan.testutil.ts';
+import { callsTo, stripComments, stripReachesEndOfFile } from '../log/sourceScan.testutil.ts';
 import { PANEL_ID, SLOW_JUMP_MS, bootPanel, handlePanelKey, panelAllowed, togglesPanel } from './panel.ts';
 import { togglesOverlay } from '../desktop/debug-overlay.ts';
 
@@ -292,6 +292,182 @@ describe('the panel source', () => {
       expect(call[0], `a value is interpolated into a log call: ${call[0].slice(0, 70)}`).not.toMatch(
         /\$\{/,
       );
+    }
+  });
+});
+
+// =========================================================================================
+// 5b. THE CALL SITES. Every pure helper this unit extracted is also WIRED, and the wiring is
+//     what makes it the panel's behaviour.
+//
+// ⚠ WHY THIS SECTION EXISTS — the defect that made fix round 1 fail. The eight helpers were
+// moved out of `buildPanel`'s DOM closures precisely so their decisions could be tested, and
+// they were: every inversion INSIDE a helper goes red. But nothing watched the CALL, so the
+// helper could simply be bypassed at the shipping site and the whole 1888-test suite stayed
+// green. Five did, silently and with a clean `tsc`:
+//
+//   `applyJump(bundle, deps.adopt)` -> `deps.adopt(bundle)`   adopts every INVALID bundle
+//   `createOnce()`                  -> `() => false`          the loud session line never fires
+//   `withUnlocks(spec, current)`    -> `spec`                 the unlock snapshot is dropped
+//   `grantIntoState(...).ok`        -> forced true            the no-character case is ignored
+//   `presetSpec(row, readNumber(...))` -> `presetSpec(row, undefined)`  the seed box is dead
+//
+// This is the catalogue's "watching the caller after the work moved behind a helper" WITH THE
+// POLARITY REVERSED: the callee was watched and the caller was not. Two more (`encounterTarget`,
+// `editsFrom`) were caught only incidentally by `noUnusedLocals`, which is not a guard at all —
+// one decorative reference (`...(void encounterTarget, {}),`) makes that compile too.
+//
+// So each pin below asserts the ARGUMENT SHAPE, never merely that the identifier appears. A
+// SUPPLEMENT, exactly as the rest of this file's scans are: `buildPanel` builds DOM at call
+// time and is not unit-tested by standing rule, so reading it is the honest tool.
+// =========================================================================================
+
+describe('the panel WIRES every helper it was given, not just imports it', () => {
+  const start = SOURCE.indexOf('function buildPanel(');
+  const BODY = SOURCE.slice(start, SOURCE.indexOf('\n}', start));
+
+  it('there is a buildPanel body to read (the anchor)', () => {
+    expect(start, 'buildPanel is gone — every pin below would scan nothing').toBeGreaterThan(-1);
+    expect(BODY.length, 'the buildPanel body read as trivially short').toBeGreaterThan(2000);
+  });
+
+  it('the jump goes through applyJump, and NOTHING adopts behind its back', () => {
+    // C3, the worst of the five. `applyJump` exists because bypassing its validation "adopts
+    // every INVALID bundle — which is exactly how a hand-edited state JSON reaches a phase
+    // whose `requirePlayer` throws". Calling `deps.adopt` directly produces precisely that.
+    expect(BODY, 'the panel no longer routes its jump through applyJump').toMatch(
+      /applyJump\s*\(\s*bundle\s*,\s*deps\.adopt\s*\)/,
+    );
+    // The bypass, in every spelling: `deps.adopt` may be MENTIONED only as applyJump's second
+    // argument, never invoked. A call has a `(` after it.
+    expect(BODY, 'something adopts a bundle without validating it first').not.toMatch(
+      /deps\.adopt\s*\(/,
+    );
+    expect(
+      [...BODY.matchAll(/deps\.adopt/g)].length,
+      'deps.adopt is referenced more than once — one of them is not applyJump’s argument',
+    ).toBe(1);
+  });
+
+  it('the session latch is a real createOnce(), not a constant', () => {
+    // C5, and the sharpest of them: `panel.test.ts` scans for the WARNING LITERAL, so
+    // replacing the latch with `() => false` leaves the string in the source while the line
+    // never fires — a defect invisible because it looks exactly like the desired end state.
+    // Appendix A.1 makes that line the ONLY evidence a persisted unlock came from a jump.
+    expect(BODY, 'the once-per-session latch is no longer createOnce()').toMatch(
+      /const firstJump = createOnce\s*\(\s*\)\s*;/,
+    );
+    // ...and it is really what gates the warning.
+    expect(BODY, 'the loud session line is not gated by the latch').toMatch(
+      /if\s*\(\s*firstJump\s*\(\s*\)\s*\)\s*\{[\s\S]{0,120}?THIS SESSION IS NO LONGER A REAL RUN/,
+    );
+  });
+
+  it('the seed box really reaches the preset jump', () => {
+    // C7: `presetSpec(row, undefined, …)` compiles and passes everything — and makes every
+    // preset jump use seed 1, so two "different seeds" produce identical runs and the field
+    // is decoration.
+    expect(BODY, 'the preset jump no longer reads the seed field').toMatch(
+      /presetSpec\s*\(\s*row\s*,\s*readNumber\s*\(\s*seed\.input\s*\)\s*,/,
+    );
+  });
+
+  it('every buildJump call carries the unlock snapshot, through one of the two carriers', () => {
+    // C4: dropping `withUnlocks` loses the run's frozen gradual-reveal window (invariant 11).
+    // Stated as an invariant over ALL the call sites rather than as three examples, so a
+    // fourth jump button added later cannot quietly skip it.
+    const calls = callsTo(BODY, 'buildJump');
+    expect(calls.length, 'no buildJump call sites — this guard has gone stale').toBe(3);
+    for (const call of calls) {
+      expect(
+        call,
+        `a jump is built without carrying the live unlock snapshot: ${call.slice(0, 60)}`,
+      ).toMatch(/buildJump\s*\(\s*(?:withUnlocks|presetSpec)\s*\(/);
+    }
+    // Both carriers are really in use, or the invariant above is satisfied by one of them.
+    expect(calls.filter((c) => c.includes('withUnlocks(')).length).toBe(2);
+    expect(calls.filter((c) => c.includes('presetSpec(')).length).toBe(1);
+  });
+
+  it('a grant goes through grantIntoState AND its refusal is consulted', () => {
+    // C6: forcing `.ok` true means a grant with no character reports success and silently
+    // does nothing — and `grantIntoState`'s tested refusal becomes unreachable.
+    expect(BODY, 'the grant no longer goes through grantIntoState').toMatch(
+      /const result = grantIntoState\s*\(\s*current\.state\s*,\s*spec\s*\)\s*;/,
+    );
+    expect(BODY, 'the grant ignores whether grantIntoState refused').toMatch(
+      /if\s*\(\s*!\s*result\.ok\s*\)/,
+    );
+    // The panel must not roll its own item behind the helper's back.
+    expect(BODY, 'the panel calls grantItem directly, bypassing the seeded state draw').not.toMatch(
+      /\bgrantItem\s*\(/,
+    );
+  });
+
+  it('the forced encounter builds its target through encounterTarget', () => {
+    // C1, including the decorative-reference variant: `...(void encounterTarget, {})` makes
+    // `noUnusedLocals` happy while the target is inlined. Pinning the ARGUMENTS kills both.
+    expect(BODY, 'the forced-encounter target is built by hand again').toMatch(
+      /target:\s*encounterTarget\s*\(\s*family\.select\.value\s*,\s*affix\.select\.value\s*\)/,
+    );
+    // The inlined shape, which is what the bypass writes.
+    expect(BODY, 'an encounter target is hand-built — the "(no affix)" case would be lost').not.toMatch(
+      /target:\s*\{\s*kind:\s*['"`]encounter['"`]/,
+    );
+  });
+
+  it('the player edits are assembled by editsFrom', () => {
+    // C2, same story: a raw object literal makes every blank field an `undefined`-valued key.
+    expect(BODY, 'the edits object is hand-built again').toMatch(/const edits = editsFrom\s*\(\s*\{/);
+    expect(BODY, 'applyEdits is handed something other than editsFrom’s result').toMatch(
+      /applyEdits\s*\(\s*current\.state\s*,\s*edits\s*\)/,
+    );
+  });
+
+  it('readNumber is a WIRE over parseField, and makes no decision of its own', () => {
+    // D2, the eighth member. `if (text === '') return 0` survives tsc and the whole suite, and
+    // then every blank box ZEROES momentum, corruption, potions, rests and charges on "Apply
+    // edits". The decision now lives in `parseField`, which a test can hand `''`.
+    const readStart = SOURCE.indexOf('function readNumber(');
+    expect(readStart, 'readNumber is gone — this guard has gone stale').toBeGreaterThan(-1);
+    const wire = SOURCE.slice(readStart, SOURCE.indexOf('\n}', readStart));
+    expect(wire, 'readNumber no longer delegates to parseField').toMatch(
+      /return parseField\s*\(\s*input\.value\s*\)/,
+    );
+    for (const [pattern, what] of [
+      [/\bif\s*\(/, 'makes a decision of its own'],
+      [/===\s*['"`]['"`]/, 'compares against the empty string itself'],
+      // ⚠ The word boundary is load-bearing, and this guard caught its own bug: an unanchored
+      // `Number\(` matches the substring inside `readNumber(` — its own declaration — so it
+      // fired on a clean wire. Written as a regex LITERAL, never assembled from a string, so
+      // the `\b` cannot become a BACKSPACE byte (the repo-wide trap `sourceBytes.test.ts` owns).
+      [/\bNumber\s*\(/, 'parses the value itself'],
+    ] as const) {
+      expect(wire, `readNumber ${what} — put it in parseField, where it is tested`).not.toMatch(
+        pattern,
+      );
+    }
+  });
+
+  it('and every helper the panel imports is actually CALLED, with arguments', () => {
+    // The class guard behind the seven specific pins: an import that is never invoked (or is
+    // invoked only as a decorative `void` reference) is a helper that does not run.
+    for (const helper of [
+      'applyJump',
+      'createOnce',
+      'presetSpec',
+      'withUnlocks',
+      'grantIntoState',
+      'encounterTarget',
+      'editsFrom',
+      'parseField',
+    ]) {
+      const calls = callsTo(SOURCE, helper);
+      expect(calls.length, `${helper} is imported but never called`).toBeGreaterThan(0);
+      expect(
+        calls.some((c) => c.replace(/\s/g, '') !== `${helper}()`),
+        `${helper} is only ever called with no arguments — is it a decorative reference?`,
+      ).toBe(helper !== 'createOnce');
     }
   });
 });

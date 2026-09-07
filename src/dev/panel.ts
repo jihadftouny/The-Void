@@ -45,6 +45,7 @@ import {
   familyOptions,
   grantIntoState,
   parseBundle,
+  parseField,
   presetSpec,
   withUnlocks,
   type GrantSpec,
@@ -193,12 +194,13 @@ function section(title: string): HTMLDivElement {
   return wrap;
 }
 
-/** A field's value as a finite number, or `undefined` when the field is blank/garbage. */
+/**
+ * A field's value as a number, or `undefined` when it is blank. A WIRE ONLY: the decision —
+ * and specifically the blank-is-not-zero rule — lives in the pure `parseField`, where a test
+ * can hand it `''` directly. An `HTMLInputElement` cannot be handed to one.
+ */
 function readNumber(input: HTMLInputElement): number | undefined {
-  const text = input.value.trim();
-  if (text === '') return undefined;
-  const value = Number(text);
-  return Number.isFinite(value) ? value : undefined;
+  return parseField(input.value);
 }
 
 // ------- The mount --------------------------------------------------------------

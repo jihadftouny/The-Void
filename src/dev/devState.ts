@@ -625,6 +625,23 @@ export function editsFrom(
   return edits;
 }
 
+/**
+ * One form field's text as a number, or `undefined` when there is nothing there — PURE.
+ *
+ * THE EIGHTH MEMBER OF THE EXTRACTED SET, and it was misfiled as display-only. A BLANK box
+ * means "leave this alone", and returning `0` for it instead is not a cosmetic difference:
+ * `editsFrom` would then produce a key for every untouched field, so pressing "Apply edits"
+ * to change one number would silently ZERO momentum, corruption, potions, rests and skill
+ * charges. Blank and zero are different answers to different questions, and only a function
+ * that can be called with `''` can prove it knows that.
+ */
+export function parseField(text: string): number | undefined {
+  const trimmed = text.trim();
+  if (trimmed === '') return undefined;
+  const value = Number(trimmed);
+  return Number.isFinite(value) ? value : undefined;
+}
+
 /** Every field the panel's Player section can set, in the order it renders them. */
 export const EDITABLE_FIELDS: readonly (keyof StateEdits)[] = [
   'hp',
