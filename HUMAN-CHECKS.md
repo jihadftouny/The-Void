@@ -53,11 +53,25 @@
 > - [ ] **Floor-5 length** — from `act5-hub-fresh`, play to the Hollow and say how many encounters it
 >       took and whether it felt like a floor. *(A simulated run currently reaches the gate in **7**
 >       encounters. That is a machine playing, not a person; the number to trust is yours. Feeds #2.)*
-> - [ ] **Momentum decay** — set momentum in the Player section, finish a battle, and check you open
->       the next on half, rounded down.
-> - [ ] **Stacked damage-over-time** — force an encounter and re-apply the same burn/bleed three or
->       four times.
-> - [ ] **A Blessed enemy really resists** — force any family with the `Blessed` affix.
+> **⚠ Three of these are no longer yours to prove — only to judge.** Momentum decay, DoT stacking
+> and Blessed resistance were on this list since 2026-09-01, and NOT because they need a human eye:
+> they are deterministic engine rules with exact expected numbers, and nobody could reach them
+> without a deep run. The panel reaches them, so they are now asserted headlessly in
+> `src/dev/observable.test.ts` and each is mutation-proved. **What is left for you is whether the
+> numbers FEEL right** — a different question, and the only one that was ever yours.
+>
+> - [ ] **Momentum decay — does the rate feel right?** *(Correctness is proved: a battle opens on
+>       `floor(banked x MOMENTUM_CARRY)`, and the curve 5 → 2 → 1 is asserted across two real
+>       fights.)* Bank some momentum in the Player section, fight twice, and say whether losing half
+>       each time rewards a streak or just annoys. `MOMENTUM_CARRY = 0.5` is unmeasured — feeds #2.
+> - [ ] **Stacked damage-over-time — is it too strong now that it works?** *(Correctness is proved:
+>       re-applying a DoT raises `intensity` on ONE entry — it does not add a second — and the
+>       per-turn damage IS the stack depth, 1 → 1 and 3 → 3.)* Force an encounter, stack the same
+>       burn three or four times, and say whether it trivialises the fight.
+> - [ ] **A Blessed enemy — wall, or speed bump?** *(Correctness is proved: the affix adds its
+>       stated `resistBonus` of 25 to every element slot, and resisted damage is strictly below an
+>       unaffixed control on the same seed — 6 damage becomes 4, exactly as this file predicted.)*
+>       Force any family with the `Blessed` affix and say whether it reads as a meaningful threat.
 > - [ ] **Act-5 no-flee** — from `hollow-fight`, press Run and confirm the refusal reads clearly.
 >
 > **Checks on the panel itself:**

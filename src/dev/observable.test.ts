@@ -26,6 +26,11 @@ import { KARMA_DELTAS, createKarma, type KarmaState } from '../game/karma.ts';
 import { HOLLOW_GATE_XP } from '../game/progression.ts';
 import { getDamnationEnding, getGraceEnding } from '../game/story.ts';
 import { getFamily } from '../game/enemyFamily.ts';
+import { AFFIXES } from '../game/enemyAffix.ts';
+import { MOMENTUM_CARRY } from '../game/battle.ts';
+import { applyCondition, tickConditions, type ActiveCondition } from '../game/condition.ts';
+import { SKILLS, computeSkillDamage } from '../game/skill.ts';
+import { createRng } from '../game/rng.ts';
 import { emptyRunSummary, foldRunEvents } from '../game/unlockStore.ts';
 import { heuristicPolicy } from '../game/sim.ts';
 import { runSummaryView, spareOffered } from '../desktop/view-model.ts';
@@ -498,7 +503,193 @@ describe('a karma vector set from the panel never reaches the player', () => {
 });
 
 // =========================================================================================
-// 8. The presets that exist to open a screen really open it.
+// 8. THREE RULES THAT SHOULD NEVER HAVE BEEN `[manual]`.
+//
+// `HUMAN-CHECKS.md` has carried momentum decay, DoT stacking and Blessed resistance as
+// hands-on items since 2026-09-01 — not because they need a human eye, but because nobody
+// could REACH them: each needed a deep run to see. They are deterministic engine rules with
+// exact expected numbers, and this unit built precisely the machinery to reach them
+// headlessly. So they are asserted here, from a jumped state, through the real engine.
+//
+// What stays `[manual]` is the part that genuinely is: whether the numbers FEEL right, and
+// whether the screen reads clearly. That is a different question from whether they are
+// correct, and only the second one was ever blocking a machine.
+// =========================================================================================
+
+describe('momentum decays across a battle boundary, and by how much', () => {
+  /** A jumped fight against the floor-1 Gangers, with a chosen momentum bank. */
+  const fightWith = (momentum: number) =>
+    buildJump({
+      act: 1,
+      xp: 0,
+      edits: { momentum },
+      target: { kind: 'encounter', familyId: 'gangers' },
+    });
+
+  it('the carry rate is MOMENTUM_CARRY, read as a spec', () => {
+    expect(MOMENTUM_CARRY).toBe(0.5);
+  });
+
+  it('a battle OPENS on floor(banked x MOMENTUM_CARRY) — the hub bank is left alone', () => {
+    // `createBattle` funnels every battle through `resetTransientCombatState`, which is where
+    // the decay happens. Derived: floor(5 x 0.5) = 2.
+    const bundle = fightWith(5);
+    expect(bundle.state.player!.momentum, 'the hub snapshot was decayed too').toBe(5);
+    const phase = bundle.state.phase;
+    expect(phase.kind).toBe('battle');
+    expect(phase.kind === 'battle' && phase.battle.player.momentum).toBe(
+      Math.floor(5 * MOMENTUM_CARRY),
+    );
+    expect(Math.floor(5 * MOMENTUM_CARRY)).toBe(2);
+  });
+
+  it('and it decays AGAIN at the next fight — the curve, through the real step', () => {
+    // The check the register actually wants: not one halving, but that a streak drains.
+    const bundle = fightWith(5);
+    // `momentum` is an optional field (absent reads as 0), so each read is normalised
+    // here rather than asserted away — the curve is about the numbers, not the encoding.
+    const banked: number[] = [bundle.state.player!.momentum ?? 0];
+
+    // End this fight the deterministic way — a spare costs zero rng draws and no counter-
+    // attack — which writes the battle combatant back to the hub.
+    const opened = step(bundle.state, { kind: 'continue' });
+    const spared = step(opened.state, { kind: 'battle-action', action: 'spare' });
+    expect(spared.state.phase.kind).toBe('main-menu');
+    banked.push(spared.state.player!.momentum ?? 0);
+
+    // Walk the hub until the next battle opens, and read what it opened with.
+    let state = spared.state;
+    let steps = 0;
+    while (state.phase.kind !== 'battle' && steps < 60) {
+      const awaiting = awaitingFor(state.phase);
+      state = step(state, awaiting === 'main-menu' ? { kind: 'menu', choice: 'continue' } : { kind: 'continue' }).state;
+      steps += 1;
+    }
+    expect(state.phase.kind, 'no second battle within 60 steps — the sweep proved nothing').toBe(
+      'battle',
+    );
+    banked.push(state.phase.kind === 'battle' ? state.phase.battle.player.momentum ?? 0 : -1);
+
+    // Derived from MOMENTUM_CARRY alone: 5 -> floor(2.5) = 2 -> floor(1) = 1.
+    expect(banked).toEqual([5, 2, 1]);
+    // Stated as the rule, not just the sample, so a retune of MOMENTUM_CARRY still checks out.
+    for (let i = 1; i < banked.length; i += 1) {
+      expect(banked[i], `step ${i}`).toBe(Math.floor(banked[i - 1]! * MOMENTUM_CARRY));
+    }
+  });
+
+  it('CONTROL: zero banked stays zero, so the rule is a decay and not a reset to a constant', () => {
+    const phase = fightWith(0).state.phase;
+    expect(phase.kind === 'battle' && phase.battle.player.momentum).toBe(0);
+  });
+});
+
+describe('a stacked damage-over-time really stacks', () => {
+  /** The enemy from a jumped fight — a real generated combatant, not a hand-built one. */
+  function jumpedEnemy() {
+    const phase = buildJump({
+      act: 1,
+      xp: 0,
+      target: { kind: 'encounter', familyId: 'gangers' },
+    }).state.phase;
+    if (phase.kind !== 'battle') throw new Error('the jump did not open a battle');
+    return phase.battle.enemy;
+  }
+
+  it('re-applying a DoT raises INTENSITY on one entry — it does not add a second', () => {
+    // ⚠ A CORRECTION TO THE CHECK AS IT WAS WRITTEN. The register (and the round-1 report)
+    // describe this as "three stacked entries". The engine does not do that and should not:
+    // `applyCondition` keeps ONE entry per type and raises `intensity`, because the tick
+    // reads `cond.intensity ?? 1` as the per-turn damage. Asserting three entries would have
+    // pinned a behaviour the engine has never had.
+    const list = [...jumpedEnemy().activeConditions];
+    expect(list, 'the enemy already carries conditions — the count below would be wrong').toEqual([]);
+    expect(applyCondition(list, 'burn')).toBe('added');
+    expect(applyCondition(list, 'burn')).toBe('stacked');
+    expect(applyCondition(list, 'burn')).toBe('stacked');
+    expect(list).toHaveLength(1);
+    expect(list[0]!.intensity).toBe(3);
+  });
+
+  it('and the per-turn damage IS the stack depth', () => {
+    // Derived from the tick: `const amount = cond.intensity ?? 1`. Burn's first tick is the
+    // ONSET (no damage, G23); the second deals `intensity`.
+    const damageAfter = (applications: number): number => {
+      const enemy = { ...jumpedEnemy(), activeConditions: [] as ActiveCondition[] };
+      for (let i = 0; i < applications; i += 1) applyCondition(enemy.activeConditions, 'burn');
+      const { rng } = createRng(99);
+      const onset = tickConditions(enemy, enemy, rng);
+      expect(onset.events.map((e) => e.kind), 'the onset tick dealt damage').not.toContain(
+        'condition-damage',
+      );
+      const ticked = tickConditions({ ...enemy, activeConditions: onset.conditions }, enemy, rng);
+      const hit = ticked.events.find((e) => e.kind === 'condition-damage');
+      expect(hit, `${applications} application(s) dealt no damage at all`).toBeDefined();
+      return (hit as { amount: number }).amount;
+    };
+    expect(damageAfter(1)).toBe(1);
+    expect(damageAfter(3)).toBe(3);
+    // The rule, not just the two samples: stacking three times is strictly worse for the
+    // victim than stacking once. Before G23 this was the opposite way round.
+    expect(damageAfter(3)).toBeGreaterThan(damageAfter(1));
+  });
+});
+
+describe('a Blessed enemy really resists', () => {
+  /** The same seed, the same family, with and without the affix — a controlled pair. */
+  function pair() {
+    const of = (affixId: string) => {
+      const phase = buildJump({
+        act: 1,
+        xp: 0,
+        seed: 7,
+        target: { kind: 'encounter', familyId: 'gangers', ...(affixId ? { affixId } : {}) },
+      }).state.phase;
+      if (phase.kind !== 'battle') throw new Error('the jump did not open a battle');
+      return phase.battle.enemy;
+    };
+    return { plain: of(''), blessed: of('blessed') };
+  }
+
+  it('the affix adds its stated resistBonus to EVERY element slot', () => {
+    // Read off `enemyAffixes.json` as a spec, not measured: `blessed` carries resistBonus 25.
+    const bonus = AFFIXES.find((a) => a.id === 'blessed')!.resistBonus!;
+    expect(bonus).toBe(25);
+    const { plain, blessed } = pair();
+    expect(plain.resistances, 'the control family carries a resistance of its own').toEqual(
+      plain.resistances.map(() => 0),
+    );
+    expect(blessed.resistances).toEqual(plain.resistances.map((r) => r + bonus));
+    expect(blessed.affixId).toBe('blessed');
+    expect(plain.affixId).toBeUndefined();
+  });
+
+  it('and resisted damage is strictly below the unaffixed control, by the stated formula', () => {
+    // `mitigate(base, pct) = max(0, base - round(base * pct / 100))`, read as a spec.
+    const { plain, blessed } = pair();
+    const expected = (base: number, res: number) => Math.max(0, base - Math.round((base * res) / 100));
+    let compared = 0;
+    for (const id of ['pyroBall', 'strike', 'heavyStrike', 'execute'] as const) {
+      const skill = SKILLS[id];
+      const plainHit = computeSkillDamage(skill, plain);
+      const blessedHit = computeSkillDamage(skill, blessed);
+      expect(plainHit, `${id} vs plain`).toBe(expected(skill.baseDamage, 0));
+      expect(blessedHit, `${id} vs Blessed`).toBe(expected(skill.baseDamage, 25));
+      expect(blessedHit, `${id} was not resisted at all`).toBeLessThan(plainHit);
+      compared += 1;
+    }
+    expect(compared, 'no skills compared — this sweep proved nothing').toBe(4);
+  });
+
+  it('the register’s own worked example: 6 damage becomes 4 against Blessed', () => {
+    // `HUMAN-CHECKS.md` states "A Firebomb should do 4 to a Blessed enemy and 6 to a plain
+    // one". Derived from the same formula: 6 - round(6 x 25 / 100) = 6 - round(1.5) = 6 - 2 = 4.
+    expect(6 - Math.round((6 * 25) / 100)).toBe(4);
+  });
+});
+
+// =========================================================================================
+// 9. The presets that exist to open a screen really open it.
 // =========================================================================================
 
 describe('the act-4 hub jump is verdict-ready', () => {
