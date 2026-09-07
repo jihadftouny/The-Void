@@ -19,6 +19,34 @@ Format per entry:
 
 ---
 
+## 2026-09-07 — debug-state (the F3 state panel; work item #19; G54) [branch `agentic/debug-state`, **merged to `main` 2026-09-07**]
+- Verdict: **PASS** (after 1 fix round + 1 post-pass addendum). 1700 → **1913 tests**. 11 commits. **No file under `src/game`/`src/llm` modified; no existing test file touched in the entire unit.**
+- **Why it exists:** the author asked for it directly — *"things that make us do a long run won't be tested now, to avoid wasting time testing multiple times in long runs."* Every deferred play-test became a preset button.
+
+### ⭐ The byte trap fired LIVE, on the fix for a fix round — and the guard built three units ago caught it
+Writing the A1 pattern **through a script turned its `\b` into a literal BACKSPACE byte** — `/(?<!\.)\x08adopt\s*\(/`, which can never match anything. **The guard closing A1 would have been inert from birth**, invisible in the diff and in every editor. `src/log/sourceBytes.test.ts` — added by the `observability` unit after F5 for exactly this — caught it. **The trap is neither hypothetical nor historical: it fired in the file whose job is to guard guards.** Recorded at the line itself so nobody regenerates it.
+
+### The failure: helpers pinned, call sites unwatched — a NEW catalogue entry
+The build agent did the right thing — it found **seven decisions inside DOM closures carrying real state effects with silent inversions**, extracted each into a pure function, and tested all seven. **But it never tested that the panel calls them.** Rewired at the call site, **five of seven survived `tsc` AND all 1888 tests.** This is the catalogue's *"watching the caller after the work moved behind a helper"* **with the polarity reversed — the callee is watched and the caller is not.** Worst cases: bypassing `applyJump` adopts invalid bundles silently (the exact thing its own commit message says it exists to prevent); breaking `createOnce` kills the *"this is no longer a real run"* warning while **the literal stays in source so the scan still passes** — a defect invisible because it looks like the desired end state, six lines from the fix added for that same class.
+- **Fixed as invariants, not examples:** `deps.adopt` must occur **exactly once** in `buildPanel`; **every** `buildJump` call site must carry the snapshot. A jump button added years from now cannot silently skip validation.
+- **An eighth member found by the test-agent:** `readNumber` blank→`0` meant any empty field **zeroed** momentum, corruption, pots, rests and charges on Apply. Extracted as `parseField`.
+
+### The exclusion proof — the plan's own control was inert, found before any code was written
+`vite build --mode development` **alone produces a byte-identical bundle to production** (same SHA-256, same filename), because the mode flag never moves `NODE_ENV`. The "panel is present" half would never have been true and the "panel is absent" half would have proved nothing. Also confirmed: **Vitest's own `NODE_ENV=test` makes an in-process "production" build non-production** — the subprocess is load-bearing. Six smuggling attacks: **two re-export shapes are tree-shaken away and caught only by the direction scan**; a re-homed panel id is caught **only by the `.map` sweep** (`function adoptRun` lives verbatim in the sourcemap and in no `.js`). **G54** records the contract limit honestly: airtight for *"nothing under `src/dev` reaches the bundle"*, **not** *"no cheat surface can exist"*.
+
+### The build agent refused an instruction, correctly
+Both the test-agent's report and the orchestrator's fix-round message demanded DoT stacking assert **"three stacked entries"**. It read `condition.ts:209-222` and refused: the engine keeps **one entry per type and raises `intensity`**, which the tick reads as per-turn damage. **Asserting three entries would have pinned a behaviour the engine has never had, and the only way to make it pass would have been to make the engine wrong.** Verified independently; the correction stands. It also corrected two of its own reported numbers unprompted (77 modules not 75; the act-3 boss has 15 *fewer* HP, not 12 more).
+
+### Also
+- **A residual worth fixing before merge, and it was:** four pins **rejected correctly-formatted calls** (Prettier's trailing comma). A guard that fails on correct code trains people to weaken it — which is how guards in this project have rotted before. Fixed with both-directions proof, including physically rewrapping all five calls in the real file.
+- **Design finding:** karma is **not** a passenger before the act-4 verdict — the act-3 Sin reads the vector twice, and the vector drifts via `killWeighted`. Two runs differing only in karma diverged at step 185 into a differently-named boss. The leak sweep's `act < 3` bound is **self-verifying** (widening it goes red).
+- **Register row for whoever next owns `view-model.test.ts`:** its hidden-karma guard at `:310` is a **key scan over all-zero fixtures**, so it cannot see a value leaked under an innocuous key.
+- Declined, named as judgements: `toggle` inversion and the refused-branch early return (display/log only, loud, unconditional path); `corruption: Infinity` passes both gates but is **unreachable from any panel control**.
+- Test-agent effort: 39 mutations + 6 smuggling attacks + attacks on the pins themselves, ~40 min of verification.
+- Manual engineer fixes: none yet
+
+---
+
 ## 2026-09-06 — karma-actions (#10a: wire leaveOffering, honorDead, embraceWhisper; G53; §22.22) [branch `agentic/karma-actions`, **merged to `main` 2026-09-06**]
 - Verdict: **PASS** (after 1 fix round that survived an agent stall AND a repo history rewrite). 1646 → **1700 tests**. 6 commits.
 - Fix rounds: **1** — but its execution is the story. Mid-round the build agent **stalled** (no output for 10 min, killed by the watchdog); its last committed act was *"commit before mutating — the lesson from earlier."* While it was down the engineer **deleted every worktree and rewrote the repository's history** (stripping personal material) before **publishing to GitHub**. The worktree was recreated from the surviving branch — and the pre-stall commit turned out to contain **the entire round's work**: staging whole files had carried F2 and the pool-tell in under the F1-titled message. **Nothing was lost. The commit-early discipline, adopted after a near-miss two units ago, is the only reason.**
