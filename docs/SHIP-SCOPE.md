@@ -231,6 +231,46 @@ The ordering principle is not "what would be nicest next". It is: **what raises 
 
 ---
 
+---
+
+## 11. The look-and-feel amendment — v1 grows from 64 h to ~114 h *(2026-09-07, the author's call)*
+
+**The author asked for "a certain level of graphics and a good UI in the first deliverable."** Under §2.1 that request **fails all three v1 gate questions** — a plain build does not lie, is not unfinishable, and is still a product. §2.2 therefore requires either a named displacement or a conscious budget increase. **The author chose the increase, with the schedule checked first.**
+
+### What was decided
+
+**IN, added to v1:** **#8 screens restyle** + **#16 bundled typeface** (a real type scale, spacing, colour and hierarchy across every non-battle screen) · **#6 battle-screen rework** · and therefore **#2 floor mechanics + the balance re-run**, which #6 has as a **hard prerequisite** — `PLAN.md` #6's own words: *"building on a battle loop with no floor-modifier hook is the most expensive mistake available."*
+
+**STILL OUT:** **generated art** (#3/#4/#5) and **the canvas layer** (#7). Not for effort — **for money.** Plan v3 rule 2 forbids all game spending until the safety fund is full (~Apr 2028), and the art batches cost ~$10.05. **The author did not override that rule**, and it is not this document's to override. v1's visual identity is therefore **typographic and CSS-only**, which suits a text-forward game about signal and static.
+
+### The honest arithmetic
+
+| | h |
+|---|---|
+| blocks 1–3, **merged** | 36 |
+| block 4, the authored pass (author-only) | 16 |
+| block 5, ship | 12 |
+| **NEW** — #2 floor mechanics + balance re-run | ~24 |
+| **NEW** — #6 battle screen (+ audio hooks, + the free-text boss input) | ~12 |
+| **NEW** — #8 restyle + #16 typeface | ~14 |
+| **total** | **~114** |
+
+**Against the deadline, not the cap.** `b2` is due **31 Dec**. From 7 Sep that is ~16 weeks at 8 h/week ≈ **128 h of capacity**, and **78 h remain**. That lands mid-to-late November with roughly four weeks of slack. **The 60 h cap was a discipline to force shipping, not the deadline** — the deadline is what actually binds, and it still holds.
+
+### The order, and why
+
+**#8 + #16 go FIRST**, before #2 and #6. They have no dependencies, they are the cheapest visible change, and — the deciding reason — **the author writes block 4's prose onto these screens.** Writing into the final typography is worth more than writing into placeholder styling and re-reading it later.
+
+Then **#2** (which also carries §22.23's ruling that bargains become random descent events, and the whole accumulated balance input: G32's to-hit baseline, the weak win-rate gate, `HOLLOW_GATE_XP`'s coupling, G52's altar, the unreachable `tempting` pool, `MOMENTUM_CARRY`, uncapped DoT, backpack N). Then **#6**.
+
+### What this costs, stated plainly
+
+**Shipping moves from ~early October to ~late November.** That is five to seven weeks of the year's remaining slack spent on how the game looks rather than on getting it in front of players sooner. It is a defensible trade — first impressions on itch are visual, and a text game with default styling reads as unfinished — but it **is** the trade, and it was made knowingly.
+
+**The v1.3 rung of the increment ladder (§9) is now largely empty**, since its contents moved into v1. Audio (#15) is what remains there.
+
+---
+
 *Companion board: the **Plan v3 Mission Board** (lane V) — a personal planning document, kept
 outside this repository and deliberately not tracked here. Register of defects: `FINDINGS.md`.
 Work order: `PLAN.md`.*
