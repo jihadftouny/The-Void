@@ -247,6 +247,14 @@ describe('the panel source', () => {
     expect(body, 'mountDebugPanel builds the panel without consulting bootPanel').not.toMatch(
       /buildPanel\s*\(\s*deps\s*\)\s*;/,
     );
+    // ...and what it hands `bootPanel` really is the builder. FOUND BY MUTATION: replacing
+    // the callback with a no-op left the whole suite green — the panel still bundles (so the
+    // dev control finds its marker) and `bootPanel` is still consulted, but F3 would open
+    // nothing at all. The exclusion guards cannot see that, because a panel that builds
+    // nothing is still absent from the packaged build.
+    expect(body, 'bootPanel is handed something other than buildPanel — F3 would open nothing').toMatch(
+      /bootPanel\s*\(\s*deps\.env\s*,\s*\(\s*\)\s*=>\s*buildPanel\s*\(\s*deps\s*\)\s*\)/,
+    );
   });
 
   it('every failure path logs BEFORE it recovers (principle 7)', () => {
