@@ -289,8 +289,21 @@ describe('a fresh run shows the content warning before the title (S1)', () => {
     // Deliberately recorded rather than pinned as a polarity: there is nothing to invert.
     // `start()` is the only path to the warning and `renderResume()` never calls it, so
     // "every fresh run, never on resume" is structural.
-    const gate = body.slice(body.search(/buildContentWarning\s*\(/));
-    expect(gate, 'the warning grew a condition — it can now be skipped').not.toMatch(/\bif\s*\(/);
+    //
+    // ⚠ THE FIRST VERSION OF THIS SLICED FROM `buildContentWarning(` ONWARDS, and it was
+    // blind. Found by mutation, not by reading: writing
+    // `if (runSeed > 0) choicesEl.appendChild(buildContentWarning(…))` puts the condition
+    // BEFORE the slice begins, so the warning became skippable with the guard still green.
+    // The whole function is judged instead, which is also the more truthful statement —
+    // starting a fresh run is unconditional from its first line to its last, and a future
+    // edit that needs a branch in here should have to come and think about this.
+    expect(body, 'start() grew a condition — a fresh run can now skip something').not.toMatch(
+      /\bif\s*\(/,
+    );
+    expect(body, 'start() grew a ternary').not.toMatch(/\?/);
+    expect(body, 'start() grew a short-circuit').not.toMatch(/&&|\|\|/);
+    // ...and the append really is the bare statement it looks like.
+    expect(body).toMatch(/\n\s*choicesEl\.appendChild\(buildContentWarning\(/);
   });
 
   it('acknowledging it is what renders the title', () => {
