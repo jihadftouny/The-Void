@@ -89,6 +89,60 @@
 >       restart, and confirm the class select is back to the Enforcer alone.
 
 
+> ## 🎨 From `visual-identity` (#8 + #16, merged 2026-09-08) — the game has a look now, and only your eyes can judge it
+>
+> **This is the first build where the game is meant to look like something.** Each floor now has its
+> own text colour, background and texture; there is a bundled typeface, a settings screen, a content
+> warning, an always-on floor tag, and three empty framed regions reserving space for future art.
+>
+> **Everything measurable was measured.** All five floors clear their contrast gates against the
+> ground *with the texture composited on top*, the packaged build still cannot contain the F3 panel,
+> and 2149 tests pass. **None of that can tell us whether it looks good, whether the descent feels
+> like a descent, or whether a control actually does what it says on real hardware.** That is this
+> list. Run them in this order — most-likely-wrong first.
+>
+> - [ ] **1. Do the floors actually paint?** `npm run desktop`. The title screen should be a very
+>       dark green-black with slow drifting fog. **Failure: a flat, textureless background.** This is
+>       first because it is the whole feature, and because a wiring break here looks like nothing at
+>       all rather than like an error.
+> - [ ] **2. Does high contrast kill the atmosphere — and give it back?** Settings → High contrast
+>       → on: must go pure black/white with **no** texture and nothing moving. Then off: the floor's
+>       colour and texture must return. **A one-way switch is the failure.**
+> - [ ] **3. Reduced motion, both directions, then the OS.** Settings → Motion → Reduce with your
+>       Windows setting untouched: nothing may animate, and narration must stop fading in. Then Full:
+>       motion returns. Then turn *Windows Settings → Accessibility → Visual effects → Animation
+>       effects* **off**, restart with Motion on **System**, and confirm nothing moves. **That last
+>       part is the only half no test can reach** — the rest is now machine-checked.
+> - [ ] **4. Did the typeface load?** Find the `render / fonts ready` line in the log (`` ` `` or
+>       F2). **Failure: `fonts: 0`**, or glyphs that look like Consolas. JetBrains Mono has a slashed
+>       zero and a tailed lowercase `l`. Repeat on `npm run desktop:pack` if you can.
+> - [ ] **5. Is it usable at the new 960×640 minimum?** Drag the window as small as it goes — it
+>       should stop there. Walk title → content warning → name → class → stat roll → hub → inventory
+>       → sheet → a battle. **Failure: any clipped or unreachable control**, or the choice row
+>       vanishing. Nothing headless can see layout; this has never been rendered.
+> - [ ] **6. A battle at minimum size.** **Failure: you must scroll the left column to see your HP
+>       or the enemy's HP**, above the two empty framed regions. (The sheet scrolls by design —
+>       needing to scroll for the *vitals* is what counts as broken.)
+> - [ ] **7. Do the empty art regions read as deliberate?** On the hub and in a battle. **Failure:
+>       any of them reads as a missing image** — a grey void, a box unrelated to the floor's colour,
+>       or anything with words in it. They are meant to look like framing, not like absence.
+> - [ ] **8. Focus ring on all five floors.** Tab through the buttons, using **F3** to jump floors.
+>       **Failure: on any floor the focused button is not obviously findable.** ⚠ **Test floor 2
+>       hardest** — its accent clears the standard by only 0.24, the tightest margin in the palette.
+> - [ ] **9. Screen-reader spot pass** (NVDA or Narrator) on the content warning and settings.
+>       **Failure: the empty art regions get announced at all**, or a settings option does not say
+>       whether it is on.
+> - [ ] **10. Accept or reject the look.** The wordmark, the reading column, the hub as a command
+>       list, the floor tag, whether five floors feel like a descent rather than five themes, and the
+>       **placeholder content-warning words** (those are yours to write in #13). **Irreducibly your
+>       call — no assertion in the unit touches any of it.**
+>
+> **If floor 2 fails check 8**, a pre-verified alternative palette (`ENTRANCE_ALTERNATIVE_WHITE` in
+> `src/render/tokens.ts`) is ready to swap in. Floor 2 was the one palette that had to move to clear
+> its contrast gate: the author's direction is "blinding white with red flecks", and the scarlet is
+> the tightest colour in the palette, so the white went into the ink and the texture rather than the
+> ground.
+
 > ## ✅ THE DEFERRAL BELOW IS LIFTED — healing is reachable as of `#0c persistence-and-reach`
 >
 > **Updated 2026-09-01, by `#0c`.** The block immediately below deferred the floor-5 checks on the

@@ -254,6 +254,66 @@ and must be regenerated cold. Ash is what is left after the burning, not the bur
 empty, drained. Floor 4 is **warm bone** — sacred, lit, alive. Cold versus warm is the whole
 difference, and it carries the meaning: emptiness against grace.
 
+### The ramp AS SHIPPED — five environments, not one theme **[IMPLEMENTED 2026-09-08, #8]**
+
+The ramp above was written for *art*. On 2026-09-07 the author extended it to the whole interface:
+*"each floor has a distinct font color, and background color with a certain level of texture, we can
+use the atmospheric css option in conjunction."* So the ramp is no longer an accent swapped on a
+fixed ground — **each floor is its own environment**, and descending re-tints everything. All of it
+is CSS: gradients, scanlines, vignette and noise. **No image files, $0**, per `SHIP-SCOPE.md` §11.1.
+
+**Legibility is gated, not trusted.** Body ink must clear **7:1** (WCAG AAA) and the accent **4.5:1**
+(AA) — measured not against the flat ground but against the ground **with the floor's texture
+composited on it at peak alpha**, because that is the surface text is actually read against. The
+ratio function is itself proven against hand-derived values before it is allowed to judge anything.
+
+| Floor | ink : composite | accent : composite | Texture |
+|---|---|---|---|
+| 1 The Undercity | 15.24 | 8.75 | fog @ 0.10 |
+| 2 Entrance to the Void | 15.32 | **4.74** — tightest in the palette | static @ 0.07 |
+| 3 The Ash City | 11.94 | 8.29 | ash @ 0.07 |
+| 4 The Angelic Underground | 13.53 | 12.53 | glow @ 0.10 |
+| 5 The True Void | 14.73 | 6.56 | absence @ 0.55 — the only texture that SUBTRACTS light |
+
+**Floor 2 is the one palette that had to move**, and the rule was *change the palette, never the
+gate*. "Blinding white with red flecks" first became the lightest ground of the five, but the
+Entrance scarlet is the tightest colour here — red carries only 0.2126 of the luminance weight — and
+a lighter ground pushed the accent to **4.32:1**, under AA, with the keyboard focus ring riding on
+it. The white therefore went into the **ink** (the brightest and coldest of the five) and into the
+**texture** (a white static wash), and the ground stayed the coldest and second-lightest. The
+author's direction survives; the reading of it moved. A pre-verified alternative
+(`ENTRANCE_ALTERNATIVE_WHITE` in `src/render/tokens.ts`) is ready if the author prefers the white in
+the accent after seeing it. **Floors 3 and 4 still separate cold-versus-warm as a machine-checked
+rule, not as an intention.**
+
+**High contrast defeats all five** — 21:1 white on black, every texture opacity forced to 0 and the
+layer removed — which is what makes the atmosphere safe to be this bold. **Reduced motion stops
+everything that moves.** Nothing animates opacity or colour, only `background-position`, so a
+floor's worst-case surface is identical at every frame and the contrast gate cannot be invalidated
+mid-animation. `ART-BIBLE` rule 4 still governs: floor 2's register is mirrors, doubles and signal
+— **degradation is a texture, never a diagnosis.**
+
+### The three reserved art regions — the RATIO is the commitment **[LOCKED 2026-09-08, #8]**
+
+The author asked for *"placeholders for where scenery and enemy images and character image would
+be"*. Three regions now exist in the layout, **empty**; no art was generated, bought or downloaded,
+and the $0 rule is untouched. What is committed is the **geometry**, because whatever shape a region
+is, is the shape every future asset must be drawn to — fixing it now, while it costs nothing, is
+what stops finished art from being invalidated by a later re-layout.
+
+| Slot | Ratio | Why this shape |
+|---|---|---|
+| **Scenery** | **16:9** | Not a preference — §3 already LOCKS the five floor backdrops at 16:9 with a deep-shadow bottom third. The region was drawn to the existing brief rather than the brief bent to the region. Capped at 440px |
+| **Enemy** | **3:4** | Upright, because the subject is a standing figure. The shallowest upright ratio that still reads as a portrait: at the 140px HUD cap that is 187px, where 2:3 (210px) and 9:16 (249px) would crowd the vitals. The same shape survives the move to #6's battle screen |
+| **Character** | **1:1** | Forced by the layout, not chosen for the subject: the HUD column caps slots at 140px, and the 47px an upright bust would add costs HP, XP and the condition chips their place. **It also tells the art brief something true — this is a chest-up crop, not a full figure** |
+
+Slots are **data** (`src/data/artSlots.json`), so adding art later is a change to one `source` field
+and nothing else — never a layout-code change. Each renders as an atmospheric framed region carrying
+its floor's colour and texture, so an empty slot reads as deliberate framing rather than as a
+missing asset. **Nothing in the shipped path prints placeholder text, dimensions or a TODO marker**,
+and `buildArtSlot` creates no text node on any path in any build — that holds by construction, not
+by dead-code elimination.
+
 ### Floor 4's environment **[LOCKED 2026-08-25]**
 
 **Ancient overgrown ruins opening into a buried city.** You come through ruins with pale trees
@@ -680,7 +740,12 @@ every spacing decision is only true on the machine it was made on.
 
 - **One face, monospace, open licence permitting redistribution.** Roughly 200–400 KB.
 - **THE FACE IS `JetBrains Mono`** — chosen 2026-08-26 for legibility at small sizes (11px condition
-  chips, dense combat logs). **SIL Open Font Licence, verified free to bundle** (`SHIPPING.md`).
+  chips, dense combat logs). **SIL Open Font Licence — and as of 2026-09-08 the licence TEXT
+  actually ships**, at `src/assets/fonts/jetbrains-mono/OFL.txt`, with `THIRD-PARTY-NOTICES.md`
+  and a test that keeps it there. *Until #8 this claim cited `SHIPPING.md`, whose "verification"
+  was a table row — a licence claim with no licence file in the tree is an assertion, not a fact,
+  and it was a citation loop. Four latin `woff2` (400, 400 italic, 500, 700) totalling ~87 KB are
+  vendored and emitted with relative URLs; no CDN, no runtime fetch.*
   **Rejected:** *IBM Plex Mono* (warmer, more institutional — arguably more on-theme, since the
   interface *is* an institution's record, but less legible small); *Berkeley Mono* (best tonal fit,
   but **paid**, so it would need a purchase decision).

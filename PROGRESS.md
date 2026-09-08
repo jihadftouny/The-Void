@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 1913 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2149 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -117,7 +117,7 @@ no warning. **G1's fix landed with G19 and G3's is decided — only G2 still nee
 | M8 — Enemies: families, affixes, karma-weighting | 🔶 **merged, but fails its own "done when"** (691 tests). Shipped: 24 families + 5 affixes + spare action + family-themed kits. **But `ROADMAP.md` requires karma-weighted families to "shift Nature *axes*" — all nine ⚖ families declare the same pair and only `mercyCruelty` ever moves.** `enemyFamily.ts:17` says so itself: *"uniformly set to the mercy↔cruelty pair now. M10 differentiates the axes."* One axis, not axes (`FINDINGS.md` G15) |
 | M9 — In-run progression (frequent level-up picks) | 🔶 **merged, then partly reversed by design** (726 tests). Shipped: XP-frequent leveling + draft-1-of-3 + lean start + auto-HP. **But §19.5 removed `stat` from the draft** (per-level allowance instead) **and set a level cap of 20** — neither is in `src/` yet |
 | M-UI — Functional UI (surfaces the whole engine, hand-testable) | ✅ **merged to `main`** (753 tests); plain/utilitarian — the turn-based battle screen is the NEXT unit |
-| M-UI2 — Visual restyle (5 units) | 🔶 **unit 1 of 5 (`ui-foundation`) merged to `main`** (1026 tests): design tokens, shared components, second front-end retired, combat events widened. **Units 2–5 are `PLAN.md` #6–#8.** *(Added 2026-08-28 — this had no tracker row at all despite being merged, so a five-unit restyle with 273 tests behind it was invisible to the milestone table.)* |
+| M-UI2 — Visual restyle (5 units) | 🔶 **units 1 and 2 of 5 merged to `main`.** **Unit 2 = `visual-identity` (#8 + #16), merged 2026-09-08** (2149 tests): JetBrains Mono bundled with its OFL text, five per-floor palettes with textures and machine-gated contrast, settings screen, content warning, always-on floor tag, and three reserved-but-empty art regions. **Remaining: #6 battle screen and #7 canvas (out of v1).** Unit 1 (`ui-foundation`) merged earlier (1026 tests): design tokens, shared components, second front-end retired, combat events widened. **Units 2–5 are `PLAN.md` #6–#8.** *(Added 2026-08-28 — this had no tracker row at all despite being merged, so a five-unit restyle with 273 tests behind it was invisible to the milestone table.)* |
 | M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ needs your PROSE |
 | M11 — LLM layer to spec (**narrate ONLY** — floor voices, beat significance, karma-in-prompt, boss agents, boss talk) | ⬜ **shrank 2026-08-25** — grammar-constrained choices + the tool registry are DROPPED; the engine writes the choices |
 | M12 — Bosses: five unique encounters as agents | 🔶 **4 of 5** merged (894 tests) — `boss.ts` has **four** combat bosses; the **floor-4 executioner fight does not exist** (`PLAN.md` #11). Karma verdict gate + two endings done. **No boss is an agent yet.** Boss prose still yours |
@@ -136,6 +136,47 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-08 — the game has a face, and each floor has its own ✅
+
+**`visual-identity` (#8 screens-restyle + #16 typeface) merged. 1913 → 2149 tests.** This is the
+first build meant to *look* like something. The author bought look-and-feel into v1 (`SHIP-SCOPE.md`
+§11) and then defined it in two directives (§11.1): every floor gets its own text colour, background
+and texture; and three regions are reserved where scenery, enemy and character art will eventually
+go. **No art was generated, bought or downloaded** — the $0 rule is untouched and the slots ship
+empty.
+
+**What landed:** JetBrains Mono vendored (4 woff2, ~87 KB) with its OFL text actually in the tree,
+so a licence claim that had been circular since August is now backed by a file. Five floor palettes
+applied as root variables — descending re-tints the whole interface with no reload. A settings
+screen (text size, reduced motion, high contrast — the reduced subset, on the rule that *a control
+must control something*), the content-warning screen with marked placeholder prose, an always-on
+floor tag, a confirmation on "Abandon the descent", the run seed shown on the summary, and a
+960×640 minimum window — a number `UI-DESIGN.md` §14 had required since August without ever naming.
+
+**Legibility was gated rather than hoped for.** Every floor's body text clears 7:1 and its accent
+4.5:1 measured against the ground *with the texture composited on top*, using a ratio function that
+is itself proven against hand-derived values first. **Floor 2 was the one palette that had to move**
+— "blinding white with red flecks" pushed its accent to 4.32:1, under the gate, with the focus ring
+riding on it — so the white went into the ink and the texture instead of the ground. The palette
+moved; the gate did not.
+
+**⚠ Verification caught two guards that proved nothing, and one of them was hiding the whole
+feature.** Renaming the three outputs of `theme.ts` left 2126 tests, typecheck and build **all
+green** — with no floor painting, high contrast no longer removing texture, and reduced motion
+inert. The floor-texture coupling had been guarded on the CSS side only. Both fixed and proven red;
+recorded as **catalogue entry 9** in `.claude/pipeline-log.md`: *a guard that checks only one end of
+a two-ended coupling*. Notably, 83 build-agent mutations had all come back red without finding
+either — a mutation campaign aimed at the watched side never reveals the unwatched one.
+
+**Also found:** a developer-only caption was deleted rather than shipped, because `sourcemap: true`
+means a hidden branch inside a shipping module stays readable in the released `.map` (G55, measured:
+0 hits in `.js`, 1 in `.js.map`); and an assertion that could never have been satisfied by any
+correct build (`distFont.test.ts` swept for a string its own error messages always emit).
+
+**Next: the author's eyes.** Ten manual checks are queued in `HUMAN-CHECKS.md`, ordered
+most-likely-wrong-first — nothing machine-checkable remains, and whether it actually *looks* good is
+not something any test in this repo can answer.
 
 ### 2026-09-07 — the F3 state panel: the long-run checklist becomes a few clicks ✅
 

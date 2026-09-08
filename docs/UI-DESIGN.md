@@ -513,6 +513,14 @@ degraded state it can — **and where recovery is possible, it is attempted.**
 The minimum matters most: **without it the responsive layout has no design target**, and `#6`/`#7`
 need to know the range they must hold up across.
 
+**THE NUMBER IS `960×640` — decided 2026-09-08, enforced in `electron/main.mjs` (#8).**
+*This section decided a minimum must exist and then never named one, which is the same as not
+having decided — nothing could be designed or tested against it.* The initial window stays
+`1100×820`. A guard pins the minimum, and 960×640 is now the size every layout must survive:
+it is what forced the character portrait to be square rather than upright (`src/data/artSlots.json`),
+and it is the width the reading column and the choice row are proved against. ⚠ **jsdom does no
+layout, so nothing has actually been RENDERED at this size** — that is a standing manual check.
+
 ## 15. Accessibility — the full commitment **[DECIDED 2026-08-26]**
 
 Beyond reduced motion (§13), the game commits to:

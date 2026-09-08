@@ -285,7 +285,7 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 
 **Budget effect: none material.** The five-floor palette work was already inside #8's ~14 h; the reserved regions are data descriptors and CSS ratio boxes. **The ~114 h total in §11 stands.** If it proves otherwise the build stops and reports rather than absorbing it quietly.
 
-> **Merge action, still outstanding:** the per-floor palettes and the three fixed aspect ratios belong permanently in **`ART-BIBLE.md`** (the visual authority), not here. They are recorded in this scope document first only because the build is concurrently editing `ART-BIBLE.md` in its own worktree. **Propagate them at merge**, along with the five register corrections the plan surfaced.
+> **Merge action — DONE 2026-09-08.** the per-floor palettes and the three fixed aspect ratios belong permanently in **`ART-BIBLE.md`** (the visual authority), not here. They were recorded here first only because the build was concurrently editing `ART-BIBLE.md` in its own worktree. **`ART-BIBLE.md` §4 now carries both** — the five shipped palettes with their measured contrast ratios, and the three locked aspect ratios with the reasoning for each. The register corrections went to `FINDINGS.md` (G5, G8, G51, B1, S1, S4a, plus new rows G55 and G56), the window minimum to `UI-DESIGN.md` §14, and the licence fact to `ART-BIBLE.md` §11.
 
 ---
 

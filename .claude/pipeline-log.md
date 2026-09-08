@@ -19,6 +19,47 @@ Format per entry:
 
 ---
 
+## 2026-09-08 — visual-identity (#8 screens-restyle + #16 typeface; B1, G5, G8-shown, S1, S4a; G55, G56) [branch `agentic/visual-identity`, **merged to `main` 2026-09-08**]
+- Verdict: **PASS** (after 1 fix round). 1913 → **2149 tests**, 87 files. 9 commits. **No file under `src/game`/`src/llm` modified; `components.ts`, `component-model.ts`, `log-model.ts`, `format.ts`, `tokens.css` and `rendererSource.test.ts` byte-unchanged.**
+- **Why it exists:** the author bought look-and-feel into v1 (`SHIP-SCOPE.md` §11), then defined it in two directives (§11.1): *"each floor has a distinct font color, and background color with a certain level of texture, we can use the atmospheric css option in conjunction"*, and *"we want placeholders for where scenery and enemy images and character image would be"*.
+- Fix rounds: **1** (two vacuous guards, both found by the test-agent, neither by the build agent's own 83 mutations).
+- Build-agent deviations: enemy art region placed in `renderSheet` rather than the out-of-scope `battle-action` branch (test-agent agreed); `src/dev/exclusion.test.ts` edited against AC-16, additively, on orchestrator instruction; `src/dev/observable.test.ts` gained a threaded seed argument the plan's AC did not anticipate; the developer art-slot caption was **dropped rather than built** (see G55).
+- Test failures before fixes: **two guards that proved nothing** — see below.
+- Plan open-questions: 4, all answered in Appendix A (the author answered Q1 with a directive that exceeded the options offered; the orchestrator settled Q2 settings-subset, Q3 960×640, Q4 placeholder prose).
+- Manual engineer fixes: none. **One orchestrator action was required at merge:** `npm install` — the unit added `jsdom` as a devDependency, and on `main` two test files silently failed to run (`85 files / 2103 passed / 2 errors`) until it was installed. **Worth knowing: a missing devDependency reads as a mostly-green suite**, not as a red one.
+
+### ⭐ CATALOGUE ENTRY 9 — a guard that checks only ONE end of a two-ended coupling
+
+**Both fix-round failures were the same defect wearing two hats**, and neither was caught by 83 build-agent mutations — because a mutation campaign aimed at the side the test *does* watch will never reveal the side it doesn't.
+
+1. **The floor-texture coupling was guarded on the CSS side only.** `styleDiscipline.test.ts` proved a `[data-texture='fog']` rule exists; nothing proved `theme.ts` writes an attribute *named* `data-texture`. Renaming all three of its outputs left **86 files / 2126 tests green, typecheck green, build green** — with the unit's entire headline feature dead: no floor painting, high contrast no longer removing texture, reduced motion inert, and `:root:not([data-motion='full'])` permanently true. A comment in `theme.ts` asserted `styleDiscipline` covered this. It covered half.
+2. **The reduced-motion check proved a rule's BODY and never its SCOPE.** Slicing the stylesheet from the first `[data-motion='reduce']` yielded 7,233 characters of unrelated CSS in which `.void-texture` and `.void-button` coincidentally appear, so deleting the real rule left the file at 24/0. Only `.beat` bit, and only by luck.
+
+**The rule:** when a guard's subject is a **join between two files**, the test must name **both** sides explicitly — and the way to find out whether it does is **to break the side nobody is looking at.** Deriving the expectation from the module under test reproduces the blindness, because *a renamed module agrees with itself*; derive it from the other side. The fix (`theme.test.ts`) runs the coupling **forward** (every `[data-x='v']` any stylesheet selects on must be producible by the appliers, across 5 floors × 18 settings combinations) and **backward** (every attribute name written must be selected on somewhere). The asymmetry is deliberate and the test-agent independently ruled it sound: names backward, name-plus-value forward, because `data-motion='system'` correctly has no rule of its own — the media query resolves it.
+
+**This also retires a piece of received wisdom:** "the build agent mutation-tested everything" is not evidence of coverage. 83 mutations, all red, and both of these survived underneath.
+
+### The sourcemap finding (G55) — a dev-only branch in a shipping module is not hidden
+
+The build agent built a developer-only caption on the art frames, its own control test correctly failed, and then it **deleted the feature rather than the test.** Reason: `vite.config.ts` sets `sourcemap: true`, so every `.map` carries `sourcesContent` — the full text of every module in the graph. Rollup does eliminate the branch from the executed chunk, but `screens.ts` ships, so the branch stayed readable in `dist/assets/*.js.map`. G54's own standard — *"a cheat panel recoverable from a shipped `.map` is shipped"* — condemned it. **The test-agent did not accept this on reasoning:** it planted a marked DEV branch in `screens.ts`, ran a real production build, and measured **0 hits in `.js`, 1 hit in `.js.map`**. The replacement is a structural ban on `import.meta.env.DEV` in any shipping module, detector proven red on 4 shapes and green on 4 look-alikes. **This constrains every future unit** — "just hide it behind a DEV check" is not available in a file that ships.
+
+### An assertion that could never have been satisfied
+
+`distFont.test.ts` swept production chunks for the needle `'art slot'`. `art-slots.ts` legitimately emits `unknown art slot:` and `no art slot:` in its own error strings, so **the needle is in every correct build** — the assertion could not have passed against any working code. Found by the build agent itself, unprompted, while fixing something else. Related to catalogue entry 1 (an invariant over an empty collection) but inverted: *a prohibition over a set that always contains the thing.*
+
+### What worked
+
+- **The orchestrator's checkpoint commit saved the unit.** The first build agent was killed mid-sentence by a session limit with 16 files uncommitted and nothing on the branch. Committing that state as an explicit WIP before handing to a fresh agent cost one command and preserved a long run of work. **The second agent was given a written inventory of what was already done and told not to redo it** — it redid none of it.
+- **The test-agent's independence paid for itself twice.** It re-derived contrast with its own WCAG implementation rather than trusting the unit's, and it verified the sourcemap argument by measurement rather than accepting a plausible rationale. Both held. It also flagged an overstatement in the build agent's own header comment (*"every expectation derived from the stylesheets"* — several are hand-written literals) while noting this makes the test **stronger**, not weaker.
+- **Both agents reported honestly what a test cannot see.** The build agent's report has a standing section for it, and the test-agent's list of ten manual checks is ordered most-likely-wrong-first.
+
+### For the retro
+
+- **Ask whether the build agent should be required to mutate the side its guard does *not* watch** whenever a test's subject spans two files. This is the second time a coupling defect has been found only by the test-agent (the first: `#0c`'s helpers-pinned/call-sites-unwatched, catalogue entry 4).
+- **A devDependency added in a worktree does not exist on `main` after merge**, and the resulting suite reads as green with an error count. Worth a line in the merge checklist: run `npm install` before believing a post-merge test result.
+
+---
+
 ## 2026-09-07 — debug-state (the F3 state panel; work item #19; G54) [branch `agentic/debug-state`, **merged to `main` 2026-09-07**]
 - Verdict: **PASS** (after 1 fix round + 1 post-pass addendum). 1700 → **1913 tests**. 11 commits. **No file under `src/game`/`src/llm` modified; no existing test file touched in the entire unit.**
 - **Why it exists:** the author asked for it directly — *"things that make us do a long run won't be tested now, to avoid wasting time testing multiple times in long runs."* Every deferred play-test became a preset button.
