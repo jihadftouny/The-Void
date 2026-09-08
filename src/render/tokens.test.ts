@@ -5,14 +5,20 @@ import { basename, dirname, join } from 'node:path';
 import {
   PALETTE,
   FLOOR_THEMES,
+  FLOOR_SCOPED_VARS,
+  HIGH_CONTRAST,
   ENTRANCE_ALTERNATIVE_WHITE,
   SPACE,
   TYPE,
+  FONT_MONO,
   floorTheme,
   themeVars,
   hexToRgb,
   relativeLuminance,
   contrastRatio,
+  blendHex,
+  compositeGround,
+  primaryFontFamily,
 } from './tokens.ts';
 
 // Ordering of this file matters, and is deliberate:
@@ -278,11 +284,335 @@ describe('themeVars', () => {
     expect(new Set(accents).size).toBe(5);
   });
 
-  it('changes ONLY the accent between floors — everything else is floor-independent', () => {
-    const a = themeVars(0);
-    const b = themeVars(4);
-    const differing = Object.keys(a).filter((k) => a[k] !== b[k]);
-    expect(differing).toEqual(['--void-accent']);
+  // ⚠ SUPERSEDED 2026-09-07 by `visual-identity`. This test used to read:
+  //
+  //     const differing = Object.keys(a).filter((k) => a[k] !== b[k]);
+  //     expect(differing).toEqual(['--void-accent']);
+  //
+  // and it was correct for the design it was written against — one near-black ground, one
+  // accent per floor. The author's direction ("each floor has a distinct font color, and
+  // background color with a certain level of texture") replaces that design with five
+  // environments, so the old assertion now states the opposite of the requirement.
+  //
+  // It is REPLACED, not deleted, and deliberately made stronger rather than looser: it
+  // enumerates exactly which names are allowed to move, so a token that quietly BECOMES
+  // floor-dependent fails here, and so does a floor-scoped token that quietly stops
+  // changing. `expect(differing.length).toBeGreaterThan(1)` would have been the lazy edit
+  // and would have caught neither.
+  it('never changes a token OUTSIDE the floor-scoped list', () => {
+    // The half that protects the rest of the interface. Every ORDERED pair, not just 0 and 4:
+    // a token that happened to hold the same value at the two ends of the descent would look
+    // floor-independent to a single comparison and drift in the middle.
+    const allowed = new Set(FLOOR_SCOPED_VARS);
+    for (let i = 0; i < FLOOR_THEMES.length; i += 1) {
+      for (let j = 0; j < FLOOR_THEMES.length; j += 1) {
+        if (i === j) continue;
+        const a = themeVars(i);
+        const b = themeVars(j);
+        const leaked = Object.keys(a)
+          .filter((k) => a[k] !== b[k] && !allowed.has(k))
+          .sort();
+        expect(
+          leaked,
+          `floors ${i} and ${j}: ${leaked.join(', ')} became floor-dependent without being ` +
+            'declared floor-scoped — the spacing, type and role colours must not move underfoot',
+        ).toEqual([]);
+      }
+    }
+  });
+
+  it('and every name on the floor-scoped list really does move on some pair', () => {
+    // The half that stops the list becoming a rubber stamp. A name listed as floor-scoped
+    // that holds the same value on all five floors is a token that silently stopped marking
+    // the descent — which is precisely the regression the superseded test used to catch.
+    const keys = new Set(Object.keys(themeVars(0)));
+    for (const name of FLOOR_SCOPED_VARS) {
+      expect(keys.has(name), `${name} is listed as floor-scoped but themeVars never emits it`).toBe(
+        true,
+      );
+      const values = new Set(FLOOR_THEMES.map((_, place) => themeVars(place)[name]));
+      expect(
+        values.size,
+        `${name} holds one value on all five floors — it is not floor-scoped at all`,
+      ).toBeGreaterThan(1);
+    }
+  });
+
+  it('and the ground, the ink and the accent are DIFFERENT on all five floors', () => {
+    // Stronger than "moves on some pair" for the three that carry the whole identity: the
+    // author's direction is a distinct font colour and background colour PER FLOOR, so five
+    // distinct values is the requirement, not four plus a repeat.
+    for (const name of ['--void-bg', '--void-ink', '--void-accent']) {
+      const values = FLOOR_THEMES.map((_, place) => themeVars(place)[name]);
+      expect(new Set(values).size, `${name}: ${values.join(', ')}`).toBe(5);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// THE FIVE ENVIRONMENTS (author direction, 2026-09-07). Five ink/ground pairings is five
+// chances to ship something unreadable, and legibility is the one thing that cannot be
+// traded for atmosphere. Everything below derives its threshold from WCAG — 4.5:1 for
+// ordinary text and UI, 7:1 for comfortable body reading — and its measurement from the
+// SHIPPED token values. Nothing here is a number read off the implementation and pasted
+// back in; that would be a gate that passes by construction.
+//
+// The pre-existing accent gate above measures against `PALETTE.bg`, which is now the BOOT
+// ground — the frame CSS paints before any script runs. It still guards that frame, so it
+// stays. What follows is the operative gate: each floor against its own environment.
+// ---------------------------------------------------------------------------
+
+/** WCAG 2.x AA for text and UI components. */
+const AA = 4.5;
+/** WCAG 2.x AAA for body text — the standard the original palette already held itself to. */
+const AAA = 7;
+
+describe('blendHex composites by hand-checkable arithmetic', () => {
+  it('is the identity at the two ends', () => {
+    expect(blendHex('#ffffff', '#000000', 0)).toBe('#000000');
+    expect(blendHex('#ffffff', '#000000', 1)).toBe('#ffffff');
+  });
+
+  it('half of white over black is #808080 — 0.5*255 = 127.5, which rounds to 128 = 0x80', () => {
+    expect(blendHex('#ffffff', '#000000', 0.5)).toBe('#808080');
+  });
+
+  it('blends each channel independently', () => {
+    // r: 0.25*255 + 0.75*0   = 63.75 -> 64  = 0x40
+    // g: 0.25*0   + 0.75*0   = 0            = 0x00
+    // b: 0.25*0   + 0.75*255 = 191.25 -> 191 = 0xbf
+    expect(blendHex('#ff0000', '#0000ff', 0.25)).toBe('#4000bf');
+  });
+
+  it('clamps a nonsense alpha instead of throwing, so the gate can still judge colours', () => {
+    expect(blendHex('#ffffff', '#000000', 2)).toBe('#ffffff');
+    expect(blendHex('#ffffff', '#000000', -1)).toBe('#000000');
+    expect(blendHex('#ffffff', '#000000', Number.NaN)).toBe('#000000');
+  });
+});
+
+describe('the atmosphere is ON — the control, before anything is measured against it', () => {
+  // A "texture off" assertion is worthless if the texture was never on. This block is that
+  // control, and it is deliberately first: everything below it is only meaningful because
+  // these pass.
+  it('every floor really carries a texture, at a non-zero peak alpha', () => {
+    expect(FLOOR_THEMES.length).toBe(5);
+    for (const floor of FLOOR_THEMES) {
+      expect(floor.texture.opacity, `${floor.name} has no atmosphere`).toBeGreaterThan(0);
+      expect(floor.texture.opacity).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('and the texture visibly CHANGES the surface text is read against', () => {
+    for (const floor of FLOOR_THEMES) {
+      expect(
+        compositeGround(floor),
+        `${floor.name}: the composite equals the bare ground, so the texture paints nothing`,
+      ).not.toBe(floor.bg);
+    }
+  });
+
+  it('four textures ADD light (so they cost contrast) and the True Void SUBTRACTS it', () => {
+    // The direction is the meaning, not a detail: fog, static, ash and the sacred glow all
+    // lie on top of the ground and make it paler, which is precisely why the gate has to run
+    // against the composite. The True Void's is a vignette in pure black — absence, not
+    // destruction — so it is the one floor where the atmosphere makes text easier to read.
+    for (const floor of FLOOR_THEMES) {
+      const bare = relativeLuminance(floor.bg);
+      const composited = relativeLuminance(compositeGround(floor));
+      if (floor.texture.kind === 'absence') {
+        expect(composited, `${floor.name} should be darkened by its texture`).toBeLessThan(bare);
+      } else {
+        expect(composited, `${floor.name} should be lightened by its texture`).toBeGreaterThan(bare);
+      }
+    }
+    // ...and exactly one floor is the subtracting one, so the branch above cannot be vacuous.
+    expect(FLOOR_THEMES.filter((f) => f.texture.kind === 'absence')).toHaveLength(1);
+  });
+});
+
+describe('every floor is legible in its own environment', () => {
+  /** The worse of "text on the bare ground" and "text on the ground plus its atmosphere". */
+  const worstAgainstGround = (colour: string, floor: (typeof FLOOR_THEMES)[number]): number =>
+    Math.min(contrastRatio(colour, floor.bg), contrastRatio(colour, compositeGround(floor)));
+
+  it('body ink clears AAA on the ground AND on the textured composite', () => {
+    for (const floor of FLOOR_THEMES) {
+      const ratio = worstAgainstGround(floor.ink, floor);
+      expect(
+        ratio,
+        `place ${floor.place} (${floor.name}): ink ${floor.ink} on ${floor.bg} / ` +
+          `${compositeGround(floor)} is ${ratio.toFixed(2)}:1, under the ${AAA}:1 body gate`,
+      ).toBeGreaterThanOrEqual(AAA);
+    }
+  });
+
+  it('body ink clears AAA on both panel surfaces too', () => {
+    // Most of the game's text sits on a panel, not on the bare ground — rows, buttons, the
+    // HUD sidebar. A gate that only checked the ground would be checking the emptiest part
+    // of the screen.
+    for (const floor of FLOOR_THEMES) {
+      for (const surface of [floor.panel, floor.panelRaised]) {
+        expect(
+          contrastRatio(floor.ink, surface),
+          `${floor.name}: ink on ${surface}`,
+        ).toBeGreaterThanOrEqual(AAA);
+      }
+    }
+  });
+
+  it('dimmed ink clears AA on every surface it is used on', () => {
+    for (const floor of FLOOR_THEMES) {
+      for (const surface of [floor.bg, floor.panel, floor.panelRaised]) {
+        expect(
+          contrastRatio(floor.inkDim, surface),
+          `${floor.name}: dim ink ${floor.inkDim} on ${surface}`,
+        ).toBeGreaterThanOrEqual(AA);
+      }
+    }
+  });
+
+  it('the accent clears AA on the ground AND on the composite — the focus ring rides on it', () => {
+    // S4c: focus visibility must not regress. The ring is `--void-accent`, drawn over
+    // whatever the floor is painting, so the textured composite is the surface that matters.
+    for (const floor of FLOOR_THEMES) {
+      const ratio = worstAgainstGround(floor.accent, floor);
+      expect(
+        ratio,
+        `place ${floor.place} (${floor.name}): accent ${floor.accent} is ${ratio.toFixed(2)}:1`,
+      ).toBeGreaterThanOrEqual(AA);
+    }
+  });
+
+  it('and harm still reads as harm on all five floors', () => {
+    // `--void-harm` and `--void-heal` are deliberately floor-INDEPENDENT, which means they
+    // were never re-checked against four new grounds. A damage number nobody can read on
+    // floor 3 is a rules bug wearing a palette's clothes.
+    for (const floor of FLOOR_THEMES) {
+      for (const role of [PALETTE.harm, PALETTE.heal, PALETTE.foe]) {
+        expect(
+          Math.min(contrastRatio(role, floor.bg), contrastRatio(role, floor.panel)),
+          `${floor.name}: ${role}`,
+        ).toBeGreaterThanOrEqual(AA);
+      }
+    }
+  });
+});
+
+describe('the five environments are genuinely distinguishable', () => {
+  it('no two floors share a ground, an ink, or a texture', () => {
+    expect(new Set(FLOOR_THEMES.map((f) => f.bg)).size).toBe(5);
+    expect(new Set(FLOOR_THEMES.map((f) => f.ink)).size).toBe(5);
+    expect(new Set(FLOOR_THEMES.map((f) => f.texture.kind)).size).toBe(5);
+  });
+
+  it('and no two grounds are merely nominally different', () => {
+    // Five near-blacks can all be distinct hex strings and still look identical. The rule,
+    // borrowed from the pale-floors argument above: any two grounds must differ by at least
+    // 1.25x in LINEAR light, or sit on opposite sides of neutral in temperature. A WCAG
+    // contrast ratio is the wrong metric here — every pair of near-blacks scores ~1.0 on it,
+    // so it would call this test green whatever the values were.
+    const temperature = (hex: string): number => {
+      const { r, b } = hexToRgb(hex);
+      return Math.sign(r - b);
+    };
+    for (let i = 0; i < FLOOR_THEMES.length; i += 1) {
+      for (let j = i + 1; j < FLOOR_THEMES.length; j += 1) {
+        const a = FLOOR_THEMES[i]!;
+        const b = FLOOR_THEMES[j]!;
+        const la = relativeLuminance(a.bg);
+        const lb = relativeLuminance(b.bg);
+        const lightness = Math.max(la, lb) / Math.min(la, lb);
+        const separated = lightness >= 1.25 || temperature(a.bg) !== temperature(b.bg);
+        expect(
+          separated,
+          `${a.name} (${a.bg}) and ${b.name} (${b.bg}) are ${lightness.toFixed(3)}x apart in ` +
+            'light and the same temperature — the descent stops being visible here',
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('the Angelic Underground is the only WARM ground — the one floor that is not a lie', () => {
+    // WORLD.md §6 [LOCKED]: floor 4 reveals where every other stage distorts, and the angels
+    // are real. Warm against four cold grounds is that fact, in the palette.
+    const warm = FLOOR_THEMES.filter((f) => {
+      const { r, b } = hexToRgb(f.bg);
+      return r > b;
+    });
+    expect(warm.map((f) => f.name)).toEqual(['Angelic Underground']);
+  });
+
+  it('the True Void is the darkest ground by a wide margin — absence, not destruction', () => {
+    const byLight = [...FLOOR_THEMES].sort(
+      (a, b) => relativeLuminance(a.bg) - relativeLuminance(b.bg),
+    );
+    expect(byLight[0]!.name).toBe('True Void');
+    // Not merely darkest: less than half the light of the next floor down the list, so the
+    // last descent reads as something being taken away rather than a shade adjustment.
+    expect(
+      relativeLuminance(byLight[1]!.bg) / relativeLuminance(byLight[0]!.bg),
+    ).toBeGreaterThan(2);
+  });
+
+  it('the Ash City is the palest ground — the ash is over everything', () => {
+    const byLight = [...FLOOR_THEMES].sort(
+      (a, b) => relativeLuminance(b.bg) - relativeLuminance(a.bg),
+    );
+    expect(byLight[0]!.name).toBe('Ash City');
+  });
+});
+
+describe('high contrast defeats every floor, on all five', () => {
+  // The five environments are bold on purpose. That is only a safe thing to ship if the
+  // player can switch them off, so this is a real accessibility feature and it is gated as
+  // one. `settings-model.test.ts` proves `settingsVars` actually EMITS these values and
+  // zeroes the texture; this proves the values are worth emitting.
+  it('white on black beats every floor’s own body ratio', () => {
+    const hc = contrastRatio(HIGH_CONTRAST.ink, HIGH_CONTRAST.bg);
+    for (const floor of FLOOR_THEMES) {
+      const normal = Math.min(
+        contrastRatio(floor.ink, floor.bg),
+        contrastRatio(floor.ink, compositeGround(floor)),
+      );
+      expect(hc, `${floor.name}: high contrast is not an improvement`).toBeGreaterThan(normal);
+    }
+    // ...and it is the theoretical maximum, so no floor could ever beat it by accident.
+    expect(hc).toBeCloseTo(21, 2);
+  });
+
+  it('and raises the dimmed ink, the faint ink and the rules as well', () => {
+    for (const floor of FLOOR_THEMES) {
+      expect(
+        contrastRatio(HIGH_CONTRAST.inkDim, HIGH_CONTRAST.panel),
+        `${floor.name}: dimmed ink`,
+      ).toBeGreaterThan(contrastRatio(floor.inkDim, floor.panel));
+    }
+    // The faint ink is documented as "deliberately below AA — decorative only" in normal
+    // mode. In high contrast it must stop being decorative and clear AA.
+    expect(contrastRatio(PALETTE.inkFaint, PALETTE.panel)).toBeLessThan(AA);
+    expect(contrastRatio(HIGH_CONTRAST.inkFaint, HIGH_CONTRAST.panel)).toBeGreaterThanOrEqual(AA);
+    // Panel borders are what tell a panel from the page. At 1px they need to be seen.
+    expect(contrastRatio(HIGH_CONTRAST.rule, HIGH_CONTRAST.bg)).toBeGreaterThan(
+      contrastRatio(PALETTE.rule, PALETTE.bg),
+    );
+    expect(contrastRatio(HIGH_CONTRAST.ruleStrong, HIGH_CONTRAST.bg)).toBeGreaterThan(
+      contrastRatio(HIGH_CONTRAST.rule, HIGH_CONTRAST.bg),
+    );
+  });
+
+  it('and every floor’s accent gets MORE legible, not less', () => {
+    // The accent survives high contrast (the floor name carries the state, per UI-DESIGN
+    // §11; the colour is reinforcement). It must not be the one thing that got worse.
+    for (const floor of FLOOR_THEMES) {
+      const before = Math.min(
+        contrastRatio(floor.accent, floor.bg),
+        contrastRatio(floor.accent, compositeGround(floor)),
+      );
+      const after = contrastRatio(floor.accent, HIGH_CONTRAST.bg);
+      expect(after, `${floor.name}: accent`).toBeGreaterThan(before);
+      expect(after).toBeGreaterThanOrEqual(AA);
+    }
   });
 });
 
@@ -303,7 +633,19 @@ describe('the scales are ordered', () => {
       expect(values[i]).toBeGreaterThan(values[i - 1]!);
     }
   });
+
+  it('and nothing in the game is set below 11px', () => {
+    // The floor, asserted at the SINGLE SOURCE rather than screen by screen: `styleDiscipline
+    // .test.ts` separately forbids any `font-size` in any stylesheet from carrying a px
+    // literal, so every size the game paints comes from this scale. The two together are what
+    // make "no text below a minimum size" a fact instead of a habit.
+    const smallest = Math.min(
+      ...[TYPE.xs, TYPE.sm, TYPE.md, TYPE.base, TYPE.lg, TYPE.xl, TYPE.xxl].map(px),
+    );
+    expect(smallest).toBeGreaterThanOrEqual(11);
+  });
 });
+
 
 // ---------------------------------------------------------------------------
 // The token layer's one real seam: CSS names a custom property as a STRING, and nothing
@@ -433,5 +775,107 @@ describe('every --void-* custom property the CSS reads is one the theme writes',
     // comment is not a redefinition. Neither may fail the build.
     const commented = '/* --void-accent: #fff; is written by theme.ts */\n.a { color: red; }';
     expect([...commented.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(DECLARATION)]).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// THE TYPEFACE COUPLING (PLAN.md #16) AND ITS LICENCE. The family name is a bare string
+// written in two files that nothing links: `FONT_MONO` in tokens.ts, and
+// `@font-face { font-family: ... }` in fonts.css. Misspell either and the browser falls back
+// to the system monospace SILENTLY — no type error, no runtime error, and the game simply
+// looks different on every machine, which is the entire problem bundling a face solves.
+//
+// These sit at the END of the file because they read the stylesheets through `SRC_ROOT` /
+// `shippingCss`, declared above. A `describe` body runs at COLLECTION time, so placing them
+// higher would hit the temporal dead zone and fail the file with a ReferenceError.
+// ---------------------------------------------------------------------------
+
+describe('the bundled face is wired to the font stack', () => {
+  const FONTS_CSS = readFileSync(join(SRC_ROOT, 'render', 'fonts.css'), 'utf8');
+  const declared = [...shippingCss(join(SRC_ROOT, 'render', 'fonts.css')).matchAll(
+    /@font-face\s*\{[^}]*?font-family:\s*(['"])([^'"]+)\1/g,
+  )].map((m) => m[2] as string);
+
+  it('parses a family out of every @font-face (or the comparison below reads nothing)', () => {
+    // Four faces: regular, medium, bold, and a regular italic.
+    expect(declared.length, 'no @font-face family parsed out of fonts.css').toBe(4);
+    expect(FONTS_CSS).toContain('woff2');
+  });
+
+  it('the first family in FONT_MONO EQUALS the family fonts.css declares', () => {
+    const primary = primaryFontFamily(FONT_MONO);
+    for (const family of declared) {
+      expect(
+        family,
+        `fonts.css declares "${family}" but the font stack asks for "${primary}" — every ` +
+          'glyph in the game would render in the system monospace instead',
+      ).toBe(primary);
+    }
+    expect(primary).toBe('JetBrains Mono');
+  });
+
+  it('and the parser really finds the first family, in each spelling a stack can take', () => {
+    // Non-vacuity for `primaryFontFamily`: a parser that returned the empty string for
+    // everything would make the equality above pass whenever the CSS was also empty.
+    expect(primaryFontFamily('"JetBrains Mono", monospace')).toBe('JetBrains Mono');
+    expect(primaryFontFamily("'JetBrains Mono',monospace")).toBe('JetBrains Mono');
+    expect(primaryFontFamily('  ui-monospace , monospace ')).toBe('ui-monospace');
+    expect(primaryFontFamily('monospace')).toBe('monospace');
+  });
+
+  it('every face loads a woff2 by a RELATIVE url — an absolute one breaks under file://', () => {
+    // The packaged build loads `dist/desktop.html` off disk. `url(/assets/…)` resolves to the
+    // filesystem ROOT there and 404s on every machine, so the game ships with no typeface and
+    // no error. `distFont.test.ts` proves the same thing about the EMITTED css; this proves it
+    // about the source, where the mistake is actually made.
+    const urls = [...shippingCss(join(SRC_ROOT, 'render', 'fonts.css')).matchAll(
+      /url\(\s*(['"]?)([^'")]+)\1\s*\)/g,
+    )].map((m) => m[2] as string);
+    expect(urls.length, 'no url() found in fonts.css').toBe(4);
+    for (const url of urls) {
+      expect(url.startsWith('/'), `${url} is an absolute path`).toBe(false);
+      expect(url.endsWith('.woff2'), `${url} is not a woff2`).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// THE LICENCE (PLAN.md #14 calls licensing a release blocker, and `ART-BIBLE.md` §11's
+// "verified free to bundle" cited a table row rather than a licence file until this unit).
+// ---------------------------------------------------------------------------
+
+describe('the bundled font ships with its licence', () => {
+  const REPO_ROOT = join(SRC_ROOT, '..');
+  const FONT_DIR = join(SRC_ROOT, 'assets', 'fonts', 'jetbrains-mono');
+
+  it('the OFL text is in the tree, beside the fonts it covers', () => {
+    const ofl = readFileSync(join(FONT_DIR, 'OFL.txt'), 'utf8');
+    expect(
+      ofl,
+      'src/assets/fonts/jetbrains-mono/OFL.txt no longer contains the licence text — a ' +
+        'licence CLAIM with no licence file is an assertion, not a fact',
+    ).toContain('SIL OPEN FONT LICENSE Version 1.1');
+    // The two clauses that make bundling legal at all: redistribution with software, and
+    // the requirement that this notice travel with it.
+    expect(ofl).toContain('Copyright');
+    expect(ofl.length).toBeGreaterThan(2000);
+  });
+
+  it('and the four faces it covers are really there', () => {
+    const faces = readdirSync(FONT_DIR).filter((n) => n.endsWith('.woff2'));
+    expect(faces.length, 'the vendored woff2 files are gone').toBe(4);
+    for (const face of faces) {
+      expect(face.startsWith('jetbrains-mono-'), face).toBe(true);
+    }
+  });
+
+  it('THIRD-PARTY-NOTICES.md names the font, its licence and where the text lives', () => {
+    const notices = readFileSync(join(REPO_ROOT, 'THIRD-PARTY-NOTICES.md'), 'utf8');
+    expect(notices).toContain('JetBrains Mono');
+    expect(notices).toContain('SIL Open Font License');
+    expect(
+      notices,
+      'the notices file does not point at the licence text it is summarising',
+    ).toContain('src/assets/fonts/jetbrains-mono/OFL.txt');
   });
 });

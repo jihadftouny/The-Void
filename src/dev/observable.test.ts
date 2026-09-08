@@ -103,7 +103,7 @@ describe('the grace ending, from the verdict-grace jump', () => {
       state = result.state;
     }
     expect(summary.endingType).toBe('grace');
-    expect(runSummaryView(summary, state.player, null).headline).toBe(
+    expect(runSummaryView(summary, state.player, null, bundle.meta.runSeed).headline).toBe(
       'Found worthy. The descent ends in grace.',
     );
   });
@@ -167,7 +167,7 @@ describe('the damnation ending, from the ending-damnation jump', () => {
       body: ending.body,
     });
     const summary = foldRunEvents(bundle.meta.runSummary, result.events, result.state);
-    expect(runSummaryView(summary, result.state.player, null).headline).toBe(
+    expect(runSummaryView(summary, result.state.player, null, bundle.meta.runSeed).headline).toBe(
       'The Hollow unmade. The descent ends in damnation.',
     );
   });
@@ -175,7 +175,7 @@ describe('the damnation ending, from the ending-damnation jump', () => {
 
 describe('the death summary, from the ending-death jump', () => {
   const rowsOf = (bundle: JumpBundle) =>
-    runSummaryView(bundle.meta.runSummary, bundle.state.player, null);
+    runSummaryView(bundle.meta.runSummary, bundle.state.player, null, bundle.meta.runSeed);
 
   it('lands on the game-over screen', () => {
     const bundle = preset('ending-death');

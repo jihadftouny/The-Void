@@ -109,6 +109,14 @@ async function createWindow() {
   win = new BrowserWindow({
     width: 1100,
     height: 820,
+    // THE MINIMUM WINDOW SIZE — 960x640 (docs/UI-DESIGN.md §14, number chosen 2026-09-07).
+    // §14 decided that a minimum must exist and no number was ever picked, so "the layout's
+    // design target" was a target nothing enforced and nothing was designed against. This is
+    // that number, and the layout is built to it: below this the HUD column, the narration,
+    // the combat log and the choice row stop being able to coexist. Enforcing it in the
+    // window means the unusable sizes simply cannot be reached by dragging.
+    minWidth: 960,
+    minHeight: 640,
     backgroundColor: '#0a0a0c',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

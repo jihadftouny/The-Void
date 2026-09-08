@@ -451,7 +451,19 @@ describe('the renderer applies the shipped/developer level policy', () => {
 // 4. THE PLAYER SEES NOTHING. Logging is a developer surface.
 // =========================================================================================
 
-const PLAYER_ELEMENTS = ['narrationEl', 'logEl', 'statusEl', 'noticeEl', 'sheetEl', 'titleEl'];
+// ADDITIVE, `visual-identity` 2026-09-08: `floorEl` is the persistent floor tag, and it is
+// the most log-adjacent player-facing element in the game — it is written on every engine
+// step, from inside the same `retheme()` that runs beside the step's own logging. A log line
+// must not be able to reach it either.
+const PLAYER_ELEMENTS = [
+  'narrationEl',
+  'logEl',
+  'statusEl',
+  'noticeEl',
+  'sheetEl',
+  'titleEl',
+  'floorEl',
+];
 
 describe('no log line can reach the screen', () => {
   it('no log call mentions any player-facing element', () => {

@@ -14,6 +14,8 @@ import {
   chestReveal,
   isRunOver,
   runSummaryView,
+  SEED_ROW_LABEL,
+  hubMenu,
   fallbackNarration,
   potionControl,
 } from './view-model.ts';
@@ -503,6 +505,10 @@ describe('isRunOver — exhaustive over every phase', () => {
 });
 
 describe('runSummaryView — the factual record of a finished run', () => {
+  // A HAND-PICKED seed, written here and nowhere else, so the row asserted below can only
+  // pass if the projection really carries the number it was given. Never read back from the
+  // implementation — the digits of pi are as arbitrary as it gets.
+  const SEED = 314159;
   const won: RunSummary = {
     ...emptyRunSummary(),
     bossKills: ['kingpin', 'reflection'],
@@ -520,9 +526,9 @@ describe('runSummaryView — the factual record of a finished run', () => {
   };
 
   it('states each of the three outcomes in player words', () => {
-    const grace = runSummaryView({ ...won, endingType: 'grace' }, snapshot, null);
-    const damned = runSummaryView({ ...won, endingType: 'damnation' }, snapshot, null);
-    const dead = runSummaryView({ ...emptyRunSummary(), maxAct: 2 }, snapshot, null);
+    const grace = runSummaryView({ ...won, endingType: 'grace' }, snapshot, null, SEED);
+    const damned = runSummaryView({ ...won, endingType: 'damnation' }, snapshot, null, SEED);
+    const dead = runSummaryView({ ...emptyRunSummary(), maxAct: 2 }, snapshot, null, SEED);
     expect(grace.headline).toContain('grace');
     expect(damned.headline).toContain('damnation');
     // The third case must NOT claim either ending.
@@ -536,7 +542,7 @@ describe('runSummaryView — the factual record of a finished run', () => {
   });
 
   it('reports depth, bosses BY NAME, and spares', () => {
-    const view = runSummaryView(won, snapshot, unlocked);
+    const view = runSummaryView(won, snapshot, unlocked, SEED);
     const values = view.rows.map((r) => r.value).join(' | ');
     expect(values).toContain('Act 4 of 5');
     // BOSSES.kingpin.name / BOSSES.reflection.name, from boss.ts.
@@ -546,7 +552,7 @@ describe('runSummaryView — the factual record of a finished run', () => {
   });
 
   it('names newly unlocked classes and relics, and prints no internal id', () => {
-    const view = runSummaryView(won, snapshot, unlocked);
+    const view = runSummaryView(won, snapshot, unlocked, SEED);
     const text = [view.headline, ...view.rows.map((r) => `${r.label} ${r.value}`)].join(' | ');
     expect(text).toContain('Neuromancer');
     expect(text).toContain('Overclock Chip'); // relics.json name, not `overclock-chip`
@@ -574,20 +580,171 @@ describe('runSummaryView — the factual record of a finished run', () => {
   });
 
   it('handles a run that unlocked nothing, and one that never left the threshold', () => {
-    const nothing = runSummaryView(emptyRunSummary(), snapshot, null);
+    const nothing = runSummaryView(emptyRunSummary(), snapshot, null, SEED);
     expect(nothing.rows.some((r) => r.label === 'Newly unlocked')).toBe(false);
     expect(nothing.rows.find((r) => r.label === 'Depth reached')?.value).toMatch(/threshold/);
     expect(nothing.rows.find((r) => r.label === 'Bosses felled')?.value).toBe('none');
     // And a run with no player at all (quit before creation) must not throw.
-    expect(() => runSummaryView(emptyRunSummary(), null, null)).not.toThrow();
+    expect(() => runSummaryView(emptyRunSummary(), null, null, SEED)).not.toThrow();
   });
 
   it('is PURE — it mutates neither the summary nor the unlock record', () => {
     const summaryBefore = JSON.parse(JSON.stringify(won)) as RunSummary;
     const unlockedBefore = JSON.parse(JSON.stringify(unlocked)) as NewlyUnlocked;
-    runSummaryView(won, snapshot, unlocked);
+    runSummaryView(won, snapshot, unlocked, SEED);
     expect(won).toEqual(summaryBefore);
     expect(unlocked).toEqual(unlockedBefore);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G8, the DISPLAY half. The seed was generated, saved and shown to nobody, so a bug report
+// could never name the run it came from. `runSummaryView` is where it surfaces.
+//
+// Every expectation below is a number this file chose. Nothing here is read back out of the
+// implementation, which is the only way an assertion about a value can mean anything.
+// ---------------------------------------------------------------------------
+
+describe('the finished run reports its seed (G8)', () => {
+  const summary: RunSummary = { ...emptyRunSummary(), maxAct: 3 };
+
+  it('is labelled the word the plan names — "Seed"', () => {
+    // Written from the plan (AC-11: "a row labelled `Seed`"), not copied off the constant.
+    // Every other assertion in this block reads the label THROUGH `SEED_ROW_LABEL`, so
+    // without this one the word itself is unpinned and could drift to anything.
+    expect(SEED_ROW_LABEL).toBe('Seed');
+  });
+
+  it('shows the seed it was handed, as its decimal digits', () => {
+    const view = runSummaryView(summary, snapshot, null, 314159);
+    const row = view.rows.find((r) => r.label === SEED_ROW_LABEL);
+    expect(row, 'the run summary has no seed row — that is G8, unfixed').toBeDefined();
+    expect(row?.value).toBe('314159');
+  });
+
+  it('and a DIFFERENT seed produces a different row — not a constant dressed as a value', () => {
+    // Without this, `value: '314159'` hard-coded in the projector passes the test above.
+    const a = runSummaryView(summary, snapshot, null, 314159);
+    const b = runSummaryView(summary, snapshot, null, 2718281828);
+    expect(a.rows.find((r) => r.label === SEED_ROW_LABEL)?.value).toBe('314159');
+    expect(b.rows.find((r) => r.label === SEED_ROW_LABEL)?.value).toBe('2718281828');
+  });
+
+  it('shows it on every outcome, including a run that ended at the threshold', () => {
+    // A row that only appears on a WON run is missing from exactly the reports that need it:
+    // a crash and a death are what testers file.
+    for (const s of [
+      { ...emptyRunSummary(), endingType: 'grace' } as RunSummary,
+      { ...emptyRunSummary(), endingType: 'damnation' } as RunSummary,
+      emptyRunSummary(),
+    ]) {
+      const view = runSummaryView(s, null, null, 777);
+      expect(view.rows.find((r) => r.label === SEED_ROW_LABEL)?.value).toBe('777');
+    }
+  });
+
+  it('and 0 is shown as "0", not dropped as falsy', () => {
+    // Seed 0 is a legal seed. An `if (seed)` guard would silently omit the one run whose
+    // report says "seed 0" — and 0 is exactly the seed a fixed-seed debugging session uses.
+    const view = runSummaryView(summary, snapshot, null, 0);
+    expect(view.rows.find((r) => r.label === SEED_ROW_LABEL)?.value).toBe('0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G5 / GAME-DESIGN.md §19.4 — "Abandon the descent" gets a confirmation AND moves.
+//
+// The independent truth these assertions are written against is §19.4's own words: it
+// "currently sits third, directly under 'Continue the descent', and one click permanently
+// destroys a 45-90 minute permadeath run", and the ruling is "confirm ... Also move it,
+// because the adjacency is what causes the misclick".
+// ---------------------------------------------------------------------------
+
+describe('the hub menu cannot end a run in one click (G5)', () => {
+  /** Every menu input a set of items would dispatch. The `screen`/`mode` rows dispatch none. */
+  const dispatched = (mode: 'menu' | 'confirm-abandon'): string[] =>
+    hubMenu(mode)
+      .items.filter((i) => i.action.kind === 'dispatch')
+      .map((i) => (i.action as { input: { choice: string } }).input.choice);
+
+  it('the plain menu dispatches NO quit at all', () => {
+    expect(dispatched('menu')).not.toContain('quit');
+    // Non-vacuity: the menu really does dispatch things, so "no quit" is a statement about
+    // the quit and not about an empty list.
+    expect(dispatched('menu')).toContain('continue');
+    expect(dispatched('menu').length).toBeGreaterThan(1);
+  });
+
+  it('and the row that LOOKS destructive switches mode instead', () => {
+    const abandon = hubMenu('menu').items.find((i) => i.label === 'Abandon the descent');
+    expect(abandon, 'the abandon row is gone entirely').toBeDefined();
+    expect(abandon?.action.kind).toBe('mode');
+    expect((abandon?.action as { mode: string }).mode).toBe('confirm-abandon');
+  });
+
+  it('Abandon is LAST, and not adjacent to Continue — §19.4 moves it, not just guards it', () => {
+    const labels = hubMenu('menu').items.map((i) => i.label);
+    const abandon = labels.indexOf('Abandon the descent');
+    const cont = labels.indexOf('Continue the descent');
+    expect(abandon, 'no abandon row').toBeGreaterThan(-1);
+    expect(cont, 'no continue row').toBeGreaterThan(-1);
+    expect(abandon, 'Abandon is not the last row').toBe(labels.length - 1);
+    // §19.4: it sat THIRD, directly under Continue, and the adjacency is the cause.
+    expect(Math.abs(abandon - cont), 'Abandon is still adjacent to Continue').toBeGreaterThan(1);
+    expect(abandon, 'Abandon is still in the top group').toBeGreaterThan(2);
+  });
+
+  it('and it is separated by a rule, so the eye sees the group boundary too', () => {
+    const items = hubMenu('menu').items;
+    expect(items[items.length - 1]?.separated).toBe(true);
+    expect(items.filter((i) => i.separated === true)).toHaveLength(1);
+  });
+
+  it('the confirmation dispatches quit EXACTLY once, and offers exactly one way out', () => {
+    const view = hubMenu('confirm-abandon');
+    expect(dispatched('confirm-abandon').filter((c) => c === 'quit')).toHaveLength(1);
+    // Exactly one cancel: a row that returns to the plain menu.
+    const cancels = view.items.filter(
+      (i) => i.action.kind === 'mode' && (i.action as { mode: string }).mode === 'menu',
+    );
+    expect(cancels, 'the confirmation has no single cancel').toHaveLength(1);
+    // ...and nothing else. Two rows, no third option to misread under stress.
+    expect(view.items).toHaveLength(2);
+  });
+
+  it('and it NAMES what is lost rather than asking "are you sure?"', () => {
+    const prompt = hubMenu('confirm-abandon').prompt ?? '';
+    expect(prompt.length, 'the confirmation has no prompt').toBeGreaterThan(40);
+    // The three things a permadeath run loses, each named in the player's own terms.
+    expect(prompt).toMatch(/cannot be resumed|ends here/);
+    expect(prompt.toLowerCase()).toContain('carried');
+    expect(prompt.toLowerCase()).toContain('floor');
+  });
+
+  it('the plain menu has no prompt — a question with no decision under it is noise', () => {
+    expect(hubMenu('menu').prompt).toBeNull();
+  });
+
+  it('routes to inventory, the character sheet and settings', () => {
+    const screens = hubMenu('menu')
+      .items.filter((i) => i.action.kind === 'screen')
+      .map((i) => (i.action as { screen: string }).screen);
+    expect(screens).toContain('inventory');
+    expect(screens).toContain('sheet');
+    expect(screens).toContain('settings');
+  });
+
+  it('and still offers the bargain — §22.23 deletes it with #2, not here', () => {
+    expect(hubMenu('menu').items.map((i) => i.label)).toContain('Seek a bargain');
+    expect(dispatched('menu')).toContain('seek-deal');
+  });
+
+  it('every item carries a non-empty label, in both modes', () => {
+    for (const mode of ['menu', 'confirm-abandon'] as const) {
+      const items = hubMenu(mode).items;
+      expect(items.length, `${mode} has no items`).toBeGreaterThan(1);
+      for (const item of items) expect(item.label.trim().length).toBeGreaterThan(0);
+    }
   });
 });
 

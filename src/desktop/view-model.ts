@@ -10,7 +10,7 @@
 // vector. `characterSheet` emits no karma field, and `dealView` deliberately drops
 // the deal's `pool` (a `standard | tempting | grace` tell derived from karma). The
 // UI shows a deal only as cost -> reward. Asserted by the view-model tests.
-import type { GameState, Phase } from '../game/game.ts';
+import type { GameState, GameInput, Phase } from '../game/game.ts';
 import type { Player } from '../game/player.ts';
 import type { RunSummary, NewlyUnlocked } from '../game/unlockStore.ts';
 import type { Inventory } from '../game/inventory.ts';
@@ -475,6 +475,9 @@ export interface RunSummaryView {
   rows: RunSummaryRow[];
 }
 
+/** The seed row's label. One string, so the renderer and its guard cannot disagree on it. */
+export const SEED_ROW_LABEL = 'Seed';
+
 /** The player-facing depth phrase. `maxAct` 0 means the run never got past the threshold. */
 function depthText(maxAct: number): string {
   return maxAct <= 0 ? 'You never left the threshold.' : `Act ${maxAct} of 5`;
@@ -499,6 +502,7 @@ export function runSummaryView(
   summary: RunSummary,
   player: Player | null,
   newlyUnlocked: NewlyUnlocked | null,
+  seed: number,
 ): RunSummaryView {
   const headline =
     summary.endingType === 'grace'
@@ -527,6 +531,12 @@ export function runSummaryView(
     ...(newlyUnlocked?.relics ?? []).map((id) => getCatalogItemById(id)?.name ?? id),
   ];
   if (unlocked.length > 0) rows.push({ label: 'Newly unlocked', value: unlocked.join(', ') });
+  // G8, THE DISPLAY HALF. The run seed was generated, saved (since G19) and never shown to
+  // anybody — so a tester who hit a bug had no way to say WHICH run it happened in, and the
+  // one number that would reproduce it exactly was sitting in the renderer, unrendered.
+  // Shown as a plain decimal string, unconditionally: a row that appears only on some runs
+  // is a row a bug report can be missing. Making it ENTERABLE is #1.11's half, not this one's.
+  rows.push({ label: SEED_ROW_LABEL, value: String(seed) });
   return { headline, rows };
 }
 
@@ -567,4 +577,105 @@ export function fallbackNarration(
 export function potionControl(player: Player | null): ButtonModel {
   const pots = player?.pots ?? 0;
   return buttonModel('Potion', { disabled: pots <= 0, hint: `(${pots})` });
+}
+
+// ===== The hub menu — G5 / GAME-DESIGN.md §19.4 ============================
+
+/**
+ * Which hub screen a menu row routes to. These are RENDER-LAYER modes, not engine phases:
+ * the engine is still sitting at `main-menu` behind every one of them.
+ */
+export type HubScreen = 'inventory' | 'sheet' | 'settings';
+
+/** Which face of the hub is on screen: the command list, or the abandon confirmation. */
+export type HubMode = 'menu' | 'confirm-abandon';
+
+/**
+ * What pressing a hub row does. Exactly three shapes, and the split is load-bearing:
+ * only `dispatch` reaches the engine, so "can this row end the run?" is answerable by
+ * looking at the model rather than by reading the renderer.
+ */
+export type HubItemAction =
+  | { kind: 'dispatch'; input: Extract<GameInput, { kind: 'menu' }> }
+  | { kind: 'screen'; screen: HubScreen }
+  | { kind: 'mode'; mode: HubMode };
+
+export interface HubItem {
+  label: string;
+  action: HubItemAction;
+  /** True for the row that destroys the run. CSS uses it; nothing else may. */
+  destructive?: boolean;
+  /** True where a rule separates this row from the one above (the §19.4 "move it"). */
+  separated?: boolean;
+}
+
+export interface HubMenuView {
+  /** The confirmation question, naming what is lost. `null` on the ordinary menu. */
+  prompt: string | null;
+  items: HubItem[];
+}
+
+/**
+ * THE HUB, AS A MODEL — the whole of G5's fix, decided in a pure function.
+ *
+ * `GAME-DESIGN.md` §19.4, verbatim: "Abandon the descent" *"currently sits third, directly
+ * under 'Continue the descent', and one click permanently destroys a 45–90 minute permadeath
+ * run"*. The ruling is two-part and BOTH parts are here, because §19.4 says so explicitly:
+ * *"Also move it, because the adjacency is what causes the misclick — a confirmation alone
+ * treats the symptom."*
+ *
+ * 1. **It moved.** It is last, below every safe row, and separated by a rule.
+ * 2. **It confirms.** In `'menu'` mode NO row dispatches `quit` at all — the destructive row
+ *    switches MODE. The quit input exists in exactly one place in the whole game: the
+ *    confirmation's own accept row. That is why `screensSource.test.ts` can assert that the
+ *    string `'quit'` does not occur in `game.ts` at all, which is a far stronger statement
+ *    than "the renderer asks first".
+ *
+ * NOT here, and deliberately: the save-slot overwrite confirmation §19.4 names in the same
+ * breath. There are no save slots yet (N3), and a confirmation for a thing that cannot happen
+ * is the "control that controls nothing" this project keeps re-cutting itself on.
+ *
+ * "Seek a bargain" is still here. §22.23 deletes it when bargains become random descent
+ * events, and that lands with #2 — at which point it is one row removed from this list.
+ */
+export function hubMenu(mode: HubMode): HubMenuView {
+  if (mode === 'confirm-abandon') {
+    return {
+      // Names what is lost, in the player's own terms. A confirmation that only says "are you
+      // sure?" makes the player guess at the stakes, which is the same misclick one dialog later.
+      prompt:
+        'Abandon this descent? The run ends here and cannot be resumed — the character, ' +
+        'everything carried, and every floor reached are gone.',
+      items: [
+        {
+          label: 'Yes — abandon the descent',
+          action: { kind: 'dispatch', input: { kind: 'menu', choice: 'quit' } },
+          destructive: true,
+        },
+        { label: 'No — keep descending', action: { kind: 'mode', mode: 'menu' } },
+      ],
+    };
+  }
+  return {
+    prompt: null,
+    items: [
+      {
+        label: 'Continue the descent',
+        action: { kind: 'dispatch', input: { kind: 'menu', choice: 'continue' } },
+      },
+      {
+        label: 'Seek a bargain',
+        action: { kind: 'dispatch', input: { kind: 'menu', choice: 'seek-deal' } },
+      },
+      { label: 'Inventory', action: { kind: 'screen', screen: 'inventory' } },
+      { label: 'Character sheet', action: { kind: 'screen', screen: 'sheet' } },
+      { label: 'Settings', action: { kind: 'screen', screen: 'settings' } },
+      {
+        label: 'Abandon the descent',
+        action: { kind: 'mode', mode: 'confirm-abandon' },
+        destructive: true,
+        separated: true,
+      },
+    ],
+  };
 }

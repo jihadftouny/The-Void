@@ -10,7 +10,9 @@
 the author's, keeping the option to sell it later open.
 
 **A `THIRD-PARTY` (or `NOTICE`) file is required regardless of price**, shipping the licences of
-everything redistributed:
+everything redistributed. **That file now exists: `THIRD-PARTY-NOTICES.md` at the repo root**,
+opened by #16 (2026-09-07) and to be **completed by #14** — only the typeface row below is
+discharged; every other row is named there with its licence text still to be copied in.
 
 | Component | Licence |
 |---|---|
@@ -18,7 +20,7 @@ everything redistributed:
 | Electron | MIT |
 | node-llama-cpp / llama.cpp | MIT |
 | Kaplay | MIT |
-| **JetBrains Mono** | SIL Open Font Licence — ⏸ **not bundled yet** (`PLAN.md` #16; `tokens.ts` still uses the OS monospace stack) |
+| **JetBrains Mono** | SIL Open Font Licence 1.1 — ✅ **BUNDLED 2026-09-07** (`PLAN.md` #16). Four Latin WOFF2 faces (400/500/700 normal + 400 italic, 87 KB) in `src/assets/fonts/jetbrains-mono/`, declared in `src/render/fonts.css`, first family in `tokens.ts`'s `FONT_MONO`. **The licence text itself ships beside them at `src/assets/fonts/jetbrains-mono/OFL.txt`** and is summarised in `THIRD-PARTY-NOTICES.md`. ⚠ Until this landed, "verified free to bundle" was a citation loop — `ART-BIBLE.md` §11 cited this table, and this table asserted the licence name with **no licence text anywhere in the repo**. It has now been read. `tokens.test.ts` asserts all three artefacts stay present |
 | **Generated art + music** | ⚠ **UNVERIFIED — see `FINDINGS.md` S3.** Terms for commercial redistribution of Gemini image output and Lyria audio output are recorded nowhere, and art and music terms can differ. **Check before release.** |
 
 **Also required:** fill in `package.json` — `license`, `author`, `description`, `repository`, and a

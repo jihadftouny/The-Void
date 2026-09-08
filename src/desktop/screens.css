@@ -1,0 +1,249 @@
+/* PER-SCREEN IDENTITY, keyed on ONE attribute (PLAN.md #8 `screens-restyle`).
+ *
+ * `renderChoices` sets `document.body.dataset.screen = screenKey(awaiting, screen)` — a single
+ * added line in a file that cannot be imported and is therefore expensive to change — and
+ * every per-screen treatment lives here, in CSS, selected off `[data-screen='…']`. The
+ * alternative was a per-screen restructuring of the renderer, which is the same visual result
+ * bought with the one kind of change this codebase has the least ability to test.
+ *
+ * `screenKey` is PURE and unit-tested (`settings-model.test.ts`), including the part that
+ * matters: the render-layer mode wins over the engine's `awaiting`, because the engine is
+ * still sitting at `main-menu` behind the inventory, the character sheet, the settings screen
+ * and the abandon confirmation — keying on `awaiting` alone would style all four as the hub.
+ *
+ * THE VISUAL LANGUAGE is UI-DESIGN.md §5's "elevated terminal", and PLAN.md's own line for
+ * it: the austere typographic UI is the Memorians' FILE ON YOU. Flat, ruled, monospace, wide
+ * tracking, zero ornament, zero radius. The colour comes entirely from the floor.
+ *
+ * NO COLOUR LITERAL and NO px FONT SIZE below — enforced by `styleDiscipline.test.ts`.
+ */
+
+/* ---------------------------------------------------------------------------------------
+ * THE TITLE — a wordmark screen. No art, no subtitle, no version string: two thin rules and
+ * the name of the game in the floor-1 accent.
+ * --------------------------------------------------------------------------------------- */
+
+[data-screen='title'] #title,
+[data-screen='resume'] #title,
+[data-screen='content-warning'] #title {
+  padding: var(--void-space-6) 0;
+  border-top: var(--void-rule-hair) solid var(--void-rule-strong);
+  border-bottom: var(--void-rule-hair) solid var(--void-rule-strong);
+}
+
+[data-screen='title'] .choices,
+[data-screen='resume'] .choices {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* ---------------------------------------------------------------------------------------
+ * THE CONTENT WARNING (FINDINGS.md S1). Given the whole column and read at the body measure:
+ * it is the first prose in the game and it is the author's own voice, so it is set as prose
+ * rather than as an interface element.
+ * --------------------------------------------------------------------------------------- */
+
+.content-warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-4);
+  width: 100%;
+}
+
+.content-warning-title {
+  font-size: var(--void-type-lg);
+  letter-spacing: var(--void-track-widest);
+  color: var(--void-accent);
+}
+
+.content-warning-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-4);
+  padding-bottom: var(--void-space-4);
+  border-bottom: var(--void-rule-hair) solid var(--void-rule);
+  line-height: 1.75;
+  color: var(--void-ink);
+}
+
+.content-warning-body p { margin: 0; }
+
+/* One control, full width, unmissable. Never a fight to get past. */
+.content-warning .void-button {
+  width: 100%;
+  padding: var(--void-space-3) var(--void-space-4);
+}
+
+/* ---------------------------------------------------------------------------------------
+ * THE HUB — a vertical command list in a panel, the terminal idiom, rather than free-floating
+ * centred buttons. Abandon is LAST and sits below a rule (GAME-DESIGN.md §19.4: the
+ * adjacency to "Continue the descent" is what causes the misclick, so a confirmation alone
+ * would treat the symptom).
+ * --------------------------------------------------------------------------------------- */
+
+[data-screen='main-menu'] .choices,
+[data-screen='confirm-abandon'] .choices {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* The floor's own reserved region. Capped by width so the 16:9 shape cannot swallow the hub
+ * at the minimum window height; the height follows the ratio, as it must. */
+[data-screen='main-menu'] .void-art-slot,
+[data-screen='confirm-abandon'] .void-art-slot {
+  max-width: 440px;
+  margin: 0 auto var(--void-space-2);
+}
+
+.hub-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-2);
+  width: 100%;
+  padding: var(--void-space-3);
+  border: var(--void-rule-hair) solid var(--void-rule);
+  background: var(--void-panel);
+}
+
+.hub-menu .void-button {
+  width: 100%;
+  text-align: left;
+  padding: var(--void-space-3) var(--void-space-4);
+}
+
+/* The rule that MOVES Abandon out of the top group, visually as well as in the order. */
+.hub-menu .void-button.is-separated {
+  margin-top: var(--void-space-4);
+  border-top: var(--void-rule-hair) solid var(--void-rule-strong);
+  padding-top: var(--void-space-4);
+}
+
+/* Destructive rows read as harm. The colour REINFORCES a label that already says
+ * "Abandon the descent" — it is never the only channel (S4a). */
+.hub-menu .void-button.is-destructive { color: var(--void-harm); }
+
+/* The confirmation's question. Appended unconditionally and collapsed when empty, the idiom
+ * `#log`, `#notice` and `.chips` already use — a branch that does not exist cannot be
+ * inverted. */
+.hub-prompt {
+  width: 100%;
+  margin: 0;
+  padding: var(--void-space-4);
+  border: var(--void-rule-hair) solid var(--void-harm);
+  color: var(--void-ink);
+  line-height: 1.7;
+}
+.hub-prompt:empty { display: none; }
+
+/* ---------------------------------------------------------------------------------------
+ * THE SETTINGS SCREEN (FINDINGS.md B1). One group per preference, each a labelled row of
+ * options; only the three that control something that exists (recorded deviation from
+ * UI-DESIGN.md §12).
+ * --------------------------------------------------------------------------------------- */
+
+.settings-screen {
+  gap: var(--void-space-5);
+}
+
+.settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-2);
+  padding-bottom: var(--void-space-4);
+  border-bottom: var(--void-rule-hair) solid var(--void-rule);
+}
+
+.settings-row-label {
+  margin: 0;
+  font-size: var(--void-type-md);
+  letter-spacing: var(--void-track-widest);
+  color: var(--void-ink);
+}
+
+.settings-row-help {
+  margin: 0;
+  font-size: var(--void-type-sm);
+  line-height: 1.6;
+  color: var(--void-ink-dim);
+}
+
+.settings-row-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--void-space-2);
+}
+
+/* The chosen option. `aria-pressed` carries the same fact to a screen reader, so the visual
+ * state and the announced state are one attribute and cannot drift apart. */
+.settings-row-options .void-button.is-selected {
+  color: var(--void-accent);
+  border-color: var(--void-accent);
+}
+
+/* ---------------------------------------------------------------------------------------
+ * THE RECORD SCREENS — inventory, character sheet, end-of-run summary. All three are the
+ * same object: a ruled panel of labelled rows. The file the Memorians keep on you.
+ * --------------------------------------------------------------------------------------- */
+
+[data-screen='inventory'] .vm-screen,
+[data-screen='sheet'] .vm-screen,
+[data-screen='game-over'] .vm-screen {
+  padding: var(--void-space-4);
+  border: var(--void-rule-hair) solid var(--void-rule);
+  background: var(--void-panel);
+}
+
+.vm-screen h3 {
+  padding-bottom: var(--void-space-1);
+  border-bottom: var(--void-rule-hair) solid var(--void-rule);
+  letter-spacing: var(--void-track-widest);
+  text-transform: uppercase;
+}
+
+.run-summary h3 {
+  border-bottom-color: var(--void-accent);
+  color: var(--void-accent);
+}
+
+/* ---------------------------------------------------------------------------------------
+ * THE SMALL SCREENS — name entry, class select, the stat roll, the chest, the draft, the
+ * deal, the rest. Aligned to one column and one spacing rhythm rather than restyled apart.
+ * --------------------------------------------------------------------------------------- */
+
+[data-screen='enter-name'] .choices,
+[data-screen='choose-class'] .choices,
+[data-screen='draft-pick'] .choices,
+[data-screen='deal-decision'] .choices,
+[data-screen='rest-decision'] .choices {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+[data-screen='enter-name'] .choices input {
+  width: 100%;
+  letter-spacing: var(--void-track-wide);
+}
+
+[data-screen='choose-class'] .void-button,
+[data-screen='draft-pick'] .void-button,
+[data-screen='deal-decision'] .void-button,
+[data-screen='rest-decision'] .void-button {
+  width: 100%;
+  text-align: left;
+  padding: var(--void-space-3) var(--void-space-4);
+}
+
+/* The stat roll and the chest reveal read as a printed line of record, not as chatter. */
+[data-screen='accept-or-reroll-stats'] .stats-line,
+[data-screen='continue'] .stats-line {
+  padding-bottom: var(--void-space-2);
+  border-bottom: var(--void-rule-hair) solid var(--void-rule);
+  letter-spacing: var(--void-track-widest);
+  text-transform: uppercase;
+}
+
+/* A draft option is a CARD: the choice reshapes the run, so it gets a header rule and room
+ * to be read rather than a row in a list. */
+.draft-card {
+  border-left: var(--void-rule-heavy) solid var(--void-accent);
+}
