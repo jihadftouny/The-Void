@@ -12,6 +12,9 @@
  * This is a RE-POINT, not a redesign: the layout is unchanged, only its values now come
  * from the token table. Redesigning these screens is `screens-restyle`'s job.
  */
+/* FONTS FIRST. `@font-face` must be declared before the rules that ask for the family, or
+ * the first paint asks for a family the browser has not been told about yet. */
+@import '../render/fonts.css';
 @import '../render/tokens.css';
 @import '../render/components.css';
 

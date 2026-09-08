@@ -1,0 +1,29 @@
+{
+  "note": "THE THREE RESERVED ART REGIONS. No art exists yet and none is generated, bought or downloaded by this unit — these are EMPTY reserved regions. The durable decision recorded here is the ASPECT RATIO, not the picture: whatever shape a region is, is the shape every future piece of art must be drawn to, and changing it after the art exists means the art is redrawn. Adding art later must be a change to `source` in this file and nothing else. See docs/ART-BIBLE.md §3 and §4b.",
+  "slots": [
+    {
+      "id": "scenery",
+      "label": "Scenery",
+      "ratioW": 16,
+      "ratioH": 9,
+      "why": "16:9 is not a preference — docs/ART-BIBLE.md §3 already LOCKS the five floor backdrops at 16:9 with a deep-shadow bottom third. Any other shape here would invalidate an art brief that predates this unit, so the region is drawn to the spec rather than the spec to the region.",
+      "source": null
+    },
+    {
+      "id": "enemy",
+      "label": "Enemy",
+      "ratioW": 3,
+      "ratioH": 4,
+      "why": "Upright, because the subject is a standing figure and a wide frame would crop it or strand it in empty air. 3:4 is the SHALLOWEST upright ratio that still reads as a portrait: at the 960x640 minimum window it leaves the combat log and the choices their full width beside it, where 2:3 or 9:16 would not.",
+      "source": null
+    },
+    {
+      "id": "character",
+      "label": "Character",
+      "ratioW": 1,
+      "ratioH": 1,
+      "why": "Square, and it is the one ratio here forced by the layout rather than chosen for the subject. The player portrait lives in the fixed 220px HUD column; at the 960x640 minimum an upright 3:4 bust would be 293px tall and push HP, XP and the condition chips off the screen. A square bust reserves real space without costing the vitals. It also tells the art brief something true: this is a chest-up crop, not a full figure.",
+      "source": null
+    }
+  ]
+}

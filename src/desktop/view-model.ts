@@ -499,6 +499,7 @@ export function runSummaryView(
   summary: RunSummary,
   player: Player | null,
   newlyUnlocked: NewlyUnlocked | null,
+  seed: number,
 ): RunSummaryView {
   const headline =
     summary.endingType === 'grace'

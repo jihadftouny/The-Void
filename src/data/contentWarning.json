@@ -1,0 +1,12 @@
+{
+  "status": "PLACEHOLDER PROSE — NOT THE AUTHOR'S WORDS. Replaced in docs/PLAN.md #13.",
+  "note": "The POLICY is decided and shipped (docs/CONTENT-WARNING.md): shown at the start of every fresh run, never on resume, always dismissible. The WORDS are the author's alone and land in #13. What is written below is a stand-in with the right shape, length and rhythm, written to CONTENT-WARNING.md's guidance — it covers what the game is about, who wrote it and why, that it is a survivor's story, and a line for anyone who should not play it right now — and it deliberately does NOT enumerate mechanics as content descriptors, because GAME-DESIGN.md §13's rule is that the theme is never named or metered inside the game. Editing this file is the whole of the rewrite: nothing in the renderer needs to change.",
+  "title": "Before you begin",
+  "body": [
+    "The Void is a game about a condition that takes a person apart, and about whether anything is left afterwards. You play it as a descent — five floors down, and a way back up if you earn one.",
+    "It was written out of lived experience rather than research. That is why the game never names the thing it is about and never puts a number on it. You are meant to feel it and be unable to point at it.",
+    "It is a survivor's story, and that is built into the structure rather than offered as consolation. Something real and good is waiting further down. The best ending is being made whole, and it is reachable.",
+    "If you are in the worst of it right now, this may not be the week to play it. That is not a judgement about you. The game will keep. Close it, come back whenever you want, and begin again."
+  ],
+  "acknowledge": "I understand — begin the descent"
+}
