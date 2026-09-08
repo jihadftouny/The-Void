@@ -154,17 +154,29 @@ window.addEventListener('error', (ev) =>
 // to the system monospace with no error anywhere — the game simply looks different on every
 // machine. A COUNT is the only observable. `fonts: 0` in a real run means bundling failed,
 // and the duration says whether `font-display: block` held the first paint.
+//
+// The try/catch is not ceremony: `document.fonts` is a property access at MODULE SCOPE, and
+// this file's module scope is the boot path. An environment without the font API would throw
+// here and take the whole game down before anything rendered — for a diagnostic. Catching it
+// keeps a missing API a logged warning instead of a black window, which is the same shape
+// `readLogLevelOverride` above already uses for `localStorage`.
 const fontTimer = startTimer();
-void document.fonts.ready
-  .then((set) => {
-    log.info('render', 'fonts ready', { ms: fontTimer.stop(), fonts: set.size });
-  })
-  .catch((err: unknown) =>
-    log.error('render', 'fonts never became ready', {
-      ms: fontTimer.stop(),
-      message: err instanceof Error ? err.message : String(err),
-    }),
-  );
+try {
+  void document.fonts.ready
+    .then((set) => {
+      log.info('render', 'fonts ready', { ms: fontTimer.stop(), fonts: set.size });
+    })
+    .catch((err: unknown) =>
+      log.error('render', 'fonts never became ready', {
+        ms: fontTimer.stop(),
+        message: err instanceof Error ? err.message : String(err),
+      }),
+    );
+} catch (err) {
+  log.error('render', 'the font loading API is unavailable', {
+    message: err instanceof Error ? err.message : String(err),
+  });
+}
 window.addEventListener('unhandledrejection', (ev) =>
   log.error('error', 'unhandled rejection', { reason: String(ev.reason) }),
 );
@@ -788,6 +800,11 @@ function start(): void {
   runSummary = emptyRunSummary();
   runApplied = false;
   lastNewlyUnlocked = null;
+  // A fresh run starts on the plain game view, whatever screen the last one ended on. Set
+  // rather than assumed: `renderChoices` routes the settings screen ahead of the phase
+  // switch, so a stale `'settings'` here would put the settings screen where the title
+  // belongs the moment the warning is acknowledged.
+  screen = 'game';
   narrationEl.innerHTML = '';
   logEl.replaceChildren();
   retheme();
