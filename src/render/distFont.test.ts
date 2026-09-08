@@ -183,6 +183,17 @@ describe('the reserved art regions ship no words', () => {
     // sweep would fire on the one place the marking is wanted. The behavioural half — an
     // empty slot renders no text at all — is in `screens.test.ts`, and the CSS half — the
     // slot rules declare no `content:` — is in `styleDiscipline.test.ts`.
+    //
+    // ⚠ `.js` ONLY, AND THE ASYMMETRY IS DELIBERATE — recorded because it is the same
+    // narrowing this unit refused elsewhere, and the next reader deserves the reason rather
+    // than having to re-derive it. What is being asked here is "could this WORD reach the
+    // screen", and only an executed chunk can put a word on screen; `screens.ts`'s own
+    // explanatory comment contains the string `IMAGE HERE`, so a sourcemap sweep would fire
+    // on the prose explaining why the words are absent. That is the opposite of the developer
+    // caption, where the question was "is this CODE in the build at all" and the `.map` was a
+    // real answer — which is why the caption was deleted rather than swept narrowly. The
+    // structural guarantee here is elsewhere anyway: `buildArtSlot` creates no text node on
+    // any path, and `exclusion.test.ts` forbids a DEV branch in any shipping module.
     for (const needle of ['IMAGE HERE', 'image here', 'coming soon', 'not yet implemented']) {
       expect(
         filesContaining(prod, needle).filter((f) => f.endsWith('.js')),
