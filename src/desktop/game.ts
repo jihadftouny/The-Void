@@ -38,19 +38,31 @@ import {
   chestReveal,
   isRunOver,
   runSummaryView,
+  hubMenu,
   fallbackNarration,
   potionControl,
 } from './view-model.ts';
-import type { ItemView } from './view-model.ts';
+import type { ItemView, HubItemAction, HubMode, HubScreen } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
 import { resolveLogLevel } from '../log/level.ts';
 import { SLOW_MS, levelForDuration, startTimer } from '../log/timing.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 // The shared render foundation (M-UI2 `ui-foundation`).
-import { applyTheme } from '../render/theme.ts';
+import { applyTheme, applySettings } from '../render/theme.ts';
+import { floorTagText, screenKey, type Settings } from '../render/settings-model.ts';
+import { loadSettings, saveSettings } from '../storage/settingsStorage.ts';
 import { buttonModel, rowModel, conditionChips } from '../render/component-model.ts';
 import { appendButton, appendRow, appendLogLine, chip, picker } from '../render/components.ts';
 import { logLines, startsNewBattle } from '../render/log-model.ts';
+// The two new screens and the three reserved art regions. They live in their own module
+// because THIS file cannot be imported (Electron IPC at module scope — G51), so everything
+// lifted out of it becomes testable for real instead of by reading source text.
+import {
+  CONTENT_WARNING,
+  buildArtSlotById,
+  buildContentWarning,
+  buildSettingsScreen,
+} from './screens.ts';
 
 // `totalMs` is the main process's own measurement of the generation (`llm.mjs` computed
 // it already and used to throw it away). Optional because an older main process would not
@@ -80,6 +92,7 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return el as T;
 };
 const titleEl = $('title');
+const floorEl = $('floor');
 const statusEl = $('status');
 const noticeEl = $('notice');
 const narrationEl = $('narration');
@@ -134,6 +147,24 @@ log.info('game', 'renderer booted', {
 window.addEventListener('error', (ev) =>
   log.error('error', 'window error', { message: ev.message, source: ev.filename, line: ev.lineno }),
 );
+
+// THE PACKAGED-BUILD DIAGNOSTIC FOR THE BUNDLED TYPEFACE (principle 7, and PLAN.md #16's
+// whole risk). The failure this exists for is silent by nature: if the four woff2 faces do
+// not reach `dist/`, or their urls resolve wrongly under `file://`, the browser falls back
+// to the system monospace with no error anywhere — the game simply looks different on every
+// machine. A COUNT is the only observable. `fonts: 0` in a real run means bundling failed,
+// and the duration says whether `font-display: block` held the first paint.
+const fontTimer = startTimer();
+void document.fonts.ready
+  .then((set) => {
+    log.info('render', 'fonts ready', { ms: fontTimer.stop(), fonts: set.size });
+  })
+  .catch((err: unknown) =>
+    log.error('render', 'fonts never became ready', {
+      ms: fontTimer.stop(),
+      message: err instanceof Error ? err.message : String(err),
+    }),
+  );
 window.addEventListener('unhandledrejection', (ev) =>
   log.error('error', 'unhandled rejection', { reason: String(ev.reason) }),
 );
@@ -154,6 +185,17 @@ if (unlockLoad.lost !== undefined) {
 } else {
   log.info('unlocks', 'unlock store loaded', { source: unlockLoad.source });
 }
+// THE PLAYER'S PREFERENCES — render-layer only, and deliberately NOT part of the save
+// envelope: a run played at large text is the same run, so putting text size in the run save
+// would make two players' saves incompatible over a preference. Loaded once, here, so the
+// very first `retheme()` below already paints at the size and contrast the player chose.
+let settings: Settings = loadSettings();
+log.info('settings', 'preferences loaded', {
+  textScale: settings.textScale,
+  motion: settings.motion,
+  contrast: settings.contrast,
+});
+
 let runSeed = Date.now() >>> 0;
 let state: GameState = createGame(runSeed, snapshotUnlocks(unlockStore));
 let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
@@ -216,14 +258,29 @@ window.void.onStatus((s) => {
 });
 
 /**
- * Re-tint the whole UI for the floor the player is currently on. The accent is a RUNTIME
- * switch (`state.place`, 0..4), so descending re-colours every panel, chip, bar and focus
- * ring at once with no reload and no per-floor CSS class. Called at boot and after every
- * engine step, because a step is the only thing that can change the floor. `applyTheme`
- * clamps `place`, so this can never throw mid-render.
+ * Re-paint the whole UI for the floor the player is currently on.
+ *
+ * The FLOOR IS THE VISUAL SYSTEM (author direction, 2026-09-07): each of the five owns its
+ * ground, its panels, its body ink and its texture, not merely an accent. All of it is a
+ * RUNTIME switch keyed on `state.place` (0..4), so descending re-paints every surface at
+ * once with no reload and no per-floor CSS class. Called at boot and after every engine step,
+ * because a step is the only thing that can change the floor. `applyTheme` clamps `place`, so
+ * this can never throw mid-render.
+ *
+ * ⚠ THE CALL ORDER IS LOAD-BEARING, and reversing it is the whole defect: `applySettings`
+ * deliberately overwrites nine of the names `applyTheme` just wrote. Theme LAST would clobber
+ * the player's text size and high-contrast ink on every single engine step — the setting
+ * would appear to work once and silently revert on the next click.
+ *
+ * The floor TAG is written here too, and unconditionally. S4a's rule is that the accent may
+ * never be the only carrier of any state, so the floor's NAME is always on screen — title
+ * screen included, where it truthfully names where the descent begins. There is no branch to
+ * invert, which is the chips-helper lesson applied.
  */
 function retheme(): void {
   applyTheme(document.documentElement, state.place);
+  applySettings(document.documentElement, settings, state.place);
+  floorEl.textContent = floorTagText(state.place);
 }
 
 /**
@@ -282,6 +339,11 @@ function renderSheet(): void {
   line(`Act ${state.act}`);
   line(`Pots ${p.pots} · Rests ${p.restsLeft}`);
   chips(p.activeConditions);
+  // THE CHARACTER PORTRAIT'S RESERVED REGION (plan Appendix A.7). Empty today, and no art is
+  // shipped, generated or bought by this unit — what is being committed to is the SHAPE.
+  // It sits BELOW the vitals on purpose: `artSlots.json`'s own reasoning is that a portrait
+  // must not cost HP, XP and the condition chips their place at the top of a 220px column.
+  sheetEl.appendChild(buildArtSlotById('character'));
 
   if (state.phase.kind === 'battle') {
     sheetEl.appendChild(document.createElement('hr'));
@@ -289,6 +351,10 @@ function renderSheet(): void {
     line(e.fullName, 'foe');
     line(`HP ${e.hp}/${e.maxHp}`);
     chips(e.activeConditions);
+    // The ENEMY region, reserved in the battle chrome rather than inside `renderChoices`'s
+    // `battle-action` branch — that branch belongs to PLAN.md #6 and this unit does not
+    // touch it. It appears exactly when a battle is on screen, beside the foe's own vitals.
+    sheetEl.appendChild(buildArtSlotById('enemy'));
   }
 }
 
@@ -378,10 +444,22 @@ function choice(label: string, onClick: () => void): void {
   appendButton(choicesEl, buttonModel(label), onClick);
 }
 
-// Render-layer UI mode for the hub screens (NOT game state): the plain game flow, the
-// inventory/equipment screen, or the full character sheet. Only reachable from the hub;
-// reset to 'game' whenever a real engine action is dispatched.
-let screen: 'game' | 'inventory' | 'sheet' = 'game';
+// Render-layer UI mode (NOT game state): the plain game flow, the inventory/equipment
+// screen, the full character sheet, the settings screen, or the abandon confirmation. The
+// engine is still sitting at its own phase behind every one of them; all five are reset to
+// 'game' whenever a real engine action is dispatched.
+type Screen = 'game' | HubScreen | 'confirm-abandon';
+let screen: Screen = 'game';
+
+/**
+ * Which render-layer screen each hub mode corresponds to. A TABLE rather than a ternary,
+ * deliberately: a two-way conditional here is one character away from making "cancel" open
+ * the confirmation and "abandon" close it, and a table's error is visible on the line itself.
+ */
+const HUB_MODE_SCREEN: Record<HubMode, Screen> = {
+  menu: 'game',
+  'confirm-abandon': 'confirm-abandon',
+};
 
 // Re-render the current phase's choices + HUD WITHOUT dispatching to the engine — used by
 // the hub screen buttons (Inventory / Character sheet / Back) and the equip/unequip actions.
@@ -520,6 +598,91 @@ function renderSheetScreen(): void {
   });
 }
 
+/**
+ * THE HUB — a command list built from the pure `hubMenu` model (G5, GAME-DESIGN.md §19.4).
+ *
+ * Every decision is the model's: which rows, in what order, which one is destructive, which
+ * one carries the rule above it, and — the point of the whole exercise — whether a row can
+ * dispatch a quit at all. In `'menu'` mode NONE can. That is why the string `'quit'` does not
+ * appear anywhere in this file, which is a far stronger guarantee than "the renderer asks
+ * first": there is no second place a one-click abandon could be reintroduced.
+ *
+ * The prompt paragraph is appended UNCONDITIONALLY and collapses when empty
+ * (`.hub-prompt:empty` in game.css), the idiom `#log`, `#notice` and `.chips` already use.
+ * A branch that does not exist cannot be inverted.
+ */
+function renderHub(): void {
+  const view = hubMenu(screen === 'confirm-abandon' ? 'confirm-abandon' : 'menu');
+
+  // The floor's own reserved region. Empty today; it carries this floor's colour and texture
+  // so it reads as part of the place rather than as a missing asset.
+  choicesEl.appendChild(buildArtSlotById('scenery'));
+
+  const prompt = document.createElement('p');
+  prompt.className = 'hub-prompt';
+  prompt.textContent = view.prompt ?? '';
+  choicesEl.appendChild(prompt);
+
+  const list = document.createElement('div');
+  list.className = 'hub-menu';
+  choicesEl.appendChild(list);
+  for (const item of view.items) {
+    const button = appendButton(list, buttonModel(item.label), () => runHubAction(item.action));
+    // `classList.toggle(name, force)` rather than an `if`: two more branches on a screen
+    // whose whole point is that it has as few as possible.
+    button.classList.toggle('is-destructive', item.destructive === true);
+    button.classList.toggle('is-separated', item.separated === true);
+  }
+}
+
+/**
+ * Perform one hub row's action. Three shapes, and the split is what makes the guarantee
+ * above checkable: only `dispatch` reaches the engine.
+ *
+ * ⚠ BOTH CONDITIONS HERE ARE PINNED BY THE TYPE SYSTEM, not by a source regex, and that is
+ * the stronger pin: `HubItemAction` is a discriminated union, so negating either one makes
+ * the narrowed member's field unreachable and `tsc --noEmit` fails the build. There is no
+ * silent inversion available.
+ */
+function runHubAction(action: HubItemAction): void {
+  if (action.kind === 'dispatch') {
+    void dispatch(action.input);
+    return;
+  }
+  screen = action.kind === 'screen' ? action.screen : HUB_MODE_SCREEN[action.mode];
+  rerender();
+}
+
+/**
+ * THE SETTINGS SCREEN (FINDINGS.md B1; `UI-DESIGN.md` §12 with this unit's recorded scope
+ * deviation — only the group that controls something that exists).
+ *
+ * Reachable from the title screen AND from the hub, which is why the route sits above the
+ * `awaiting` switch in `renderChoices` rather than inside its `main-menu` case.
+ *
+ * A change is applied IMMEDIATELY and persisted immediately: there is no Apply button and no
+ * way to leave with an unsaved preference, because the only honest test of a contrast setting
+ * is looking at the screen it changed.
+ */
+function renderSettingsScreen(): void {
+  choicesEl.appendChild(
+    buildSettingsScreen(settings, (next) => {
+      settings = next;
+      saveSettings(next);
+      retheme();
+      log.info('settings', 'preferences changed', {
+        textScale: next.textScale,
+        motion: next.motion,
+        contrast: next.contrast,
+      });
+    }),
+  );
+  choice('Back', () => {
+    screen = 'game';
+    rerender();
+  });
+}
+
 // Show a transient indicator while the narrator generates, in place of the
 // (already-cleared) choice buttons. renderChoices() clears this when done.
 function showThinking(): void {
@@ -629,16 +792,40 @@ function start(): void {
   logEl.replaceChildren();
   retheme();
   renderSheet();
-  renderChoices('title');
+  // THE CONTENT WARNING, BEFORE THE TITLE (FINDINGS.md S1; docs/CONTENT-WARNING.md owns the
+  // policy: every fresh run, never on resume, always dismissible). It is deliberately
+  // BRANCHLESS — every fresh run reaches this line, and `renderResume()` never calls
+  // `start()`, so the "not on resume" half is structural rather than a condition somebody
+  // could invert. Acknowledging it is what renders the title.
+  choicesEl.replaceChildren();
+  titleEl.style.display = 'none';
+  document.body.dataset['screen'] = 'content-warning';
+  choicesEl.appendChild(buildContentWarning(CONTENT_WARNING, () => renderChoices('title')));
 }
 
 function renderChoices(awaiting: Awaiting): void {
   choicesEl.innerHTML = '';
+  // THE ONE LINE THE WHOLE RESTYLE HANGS OFF. `screens.css` is keyed on `[data-screen='…']`,
+  // so every per-screen treatment is CSS rather than a structural rewrite of this function.
+  // `screenKey` is pure and tested; the render-layer mode wins over `awaiting` because the
+  // engine is still at `main-menu` behind the inventory, sheet, settings and confirmation.
+  document.body.dataset['screen'] = screenKey(awaiting, screen);
   titleEl.style.display = awaiting === 'title' ? 'block' : 'none';
+
+  // The settings route sits ABOVE the switch because B1 routes it from the title screen as
+  // well as the hub, and `awaiting` is a different value at those two places.
+  if (screen === 'settings') {
+    renderSettingsScreen();
+    return;
+  }
 
   switch (awaiting) {
     case 'title':
       choice('Descend into the Void', () => void dispatch({ kind: 'continue' }));
+      choice('Settings', () => {
+        screen = 'settings';
+        rerender();
+      });
       break;
     case 'enter-name': {
       const input = document.createElement('input');
@@ -686,17 +873,7 @@ function renderChoices(awaiting: Awaiting): void {
         renderSheetScreen();
         break;
       }
-      choice('Continue the descent', () => void dispatch({ kind: 'menu', choice: 'continue' }));
-      choice('Seek a bargain', () => void dispatch({ kind: 'menu', choice: 'seek-deal' }));
-      choice('Abandon the descent', () => void dispatch({ kind: 'menu', choice: 'quit' }));
-      choice('Inventory', () => {
-        screen = 'inventory';
-        rerender();
-      });
-      choice('Character sheet', () => {
-        screen = 'sheet';
-        rerender();
-      });
+      renderHub();
       break;
     case 'battle-action': {
       const p = displayPlayer(state);
@@ -779,9 +956,18 @@ function renderChoices(awaiting: Awaiting): void {
         const dv = dealView(state.phase.deal);
         const block = document.createElement('div');
         block.className = 'deal-block';
-        block.innerHTML =
-          `<div class="deal-cost">Cost: ${dv.cost}</div>` +
-          `<div class="deal-reward">Reward: ${dv.reward}</div>`;
+        // G28(b)'s family, closed at its last site: this used to interpolate the deal's own
+        // strings into `innerHTML`. Nothing generates those strings from player input TODAY,
+        // which is exactly the argument that keeps such a site alive until the day something
+        // does. Built as elements with `textContent` now, and a source guard pins that every
+        // `innerHTML` assignment in this file assigns the empty string and nothing else.
+        const cost = document.createElement('div');
+        cost.className = 'deal-cost';
+        cost.textContent = `Cost: ${dv.cost}`;
+        const reward = document.createElement('div');
+        reward.className = 'deal-reward';
+        reward.textContent = `Reward: ${dv.reward}`;
+        block.append(cost, reward);
         choicesEl.appendChild(block);
       }
       choice('Pay the price', () => void dispatch({ kind: 'deal-decision', accept: true }));
@@ -812,6 +998,9 @@ function renderChoices(awaiting: Awaiting): void {
 
 function renderResume(): void {
   titleEl.style.display = 'block';
+  // Its own `data-screen`, and NOT the content warning: S1's policy is "every fresh run",
+  // and a resumed run is not one. The warning is only reachable through `start()`.
+  document.body.dataset['screen'] = 'resume';
   narrationEl.innerHTML = '';
   const p = document.createElement('p');
   p.className = 'beat';

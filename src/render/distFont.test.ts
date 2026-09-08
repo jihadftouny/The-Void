@@ -15,12 +15,15 @@
 // It works perfectly under `npm run dev`, because the dev server has a real root. So this is a
 // defect that cannot be caught by playing the game the way it is developed.
 //
-// THE SECOND THING PROVED HERE (plan Appendix A.7.5). The art slots carry a developer-facing
-// label — the slot id and its aspect ratio — behind the same `import.meta.env.DEV` mechanism
-// as the F3 state panel. A.7 requires that the packaged-build exclusion cover it too. It is
-// proved here rather than in `src/dev/exclusion.test.ts` because that file is a guard this
-// unit is forbidden to edit; the technique is copied from it verbatim, including the
-// environment scrubbing and the DEV control that gives the absence its meaning.
+// THE SECOND THING PROVED HERE. The reserved art regions ship no words at all — no caption,
+// no slot id, no printed aspect ratio. A.7.5 offered a developer-facing label behind the F3
+// panel's `import.meta.env.DEV` mechanism; it was built, measured, and REMOVED, because
+// `screens.ts` is a shipping module and `vite.config.ts` emits sourcemaps carrying every
+// shipped module's original text — so the eliminated branch stayed fully readable in
+// `dist/assets/*.js.map`, which this project's own standard (`src/dev/exclusion.test.ts`'s
+// header: "recoverable from a shipped `.map` is shipped") counts as shipped. The reasoning
+// is recorded in full at the top of `src/desktop/screens.ts`, and the rule that replaced it
+// — a shipping module may carry no DEV branch at all — is enforced in `exclusion.test.ts`.
 //
 // ---------------------------------------------------------------------------------------
 // THE ENVIRONMENT SCRUB IS THE WHOLE GUARD, and it is copied from `exclusion.test.ts` for
@@ -79,20 +82,18 @@ function build(outSubdir: string, mode: string, nodeEnv: string | null): Emitted
 }
 
 const OUT_PROD = 'font-proof';
-const OUT_DEV = 'font-proof-dev';
 
 let prod: Emitted[] = [];
-let dev: Emitted[] = [];
 
+// ONE build, not two. A development build was spawned here as well, purely as the control
+// for a dev-only art-slot label; the label is gone (see the top of `src/desktop/screens.ts`),
+// and a build nothing asserts against is a build nobody should pay for on every test run.
 beforeAll(() => {
   prod = build(OUT_PROD, 'production', null);
-  dev = build(OUT_DEV, 'development', 'development');
 }, 300_000);
 
 afterAll(() => {
-  for (const dir of [OUT_PROD, OUT_DEV]) {
-    rmSync(path.join(ROOT, 'dist', dir), { recursive: true, force: true });
-  }
+  rmSync(path.join(ROOT, 'dist', OUT_PROD), { recursive: true, force: true });
 });
 
 const cssOf = (emitted: readonly Emitted[]): Emitted[] => emitted.filter((e) => e.file.endsWith('.css'));
@@ -161,73 +162,20 @@ describe('the bundled typeface survives the real build', () => {
 });
 
 // =========================================================================================
-// A.7.5 — the art slots' DEVELOPER LABEL is absent from the packaged build.
+// A.7.5 — an empty art region prints NOTHING in the packaged build.
 //
-// Same three-part shape as `src/dev/exclusion.test.ts`: a control that proves the marker CAN
-// be bundled, the assertion that it is not, and a non-vacuity check that the needle is not
-// stale. Without the control, "the marker is in no file" is satisfied by a marker that was
-// deleted, renamed, or never written.
+// The behavioural half (an empty slot creates no text node at all, in any build) is in
+// `src/desktop/screens.test.ts`, where there is a document to render into; the CSS half (no
+// slot rule declares a `content:` with characters in it) is in `styleDiscipline.test.ts`.
+// This is the third: that nothing in the SHIPPED bundle carries the words that make an empty
+// region read as a missing asset rather than as atmosphere.
+//
+// NON-VACUITY comes from the first test in this file, which proves `filesContaining` can find
+// a string that IS in the bundle. Without that anchor a sweep for absent strings would pass
+// just as well against a reader that returns nothing.
 // =========================================================================================
 
-describe('the art slots ship no developer label', () => {
-  // ⚠ THE NEEDLE IS READ OUT OF THE SHIPPING SOURCE, not imported from it. Importing the
-  // constant would mean this file holds a copy that keeps passing after the real one is
-  // renamed — a guard watching a door that has moved. Reading the literal makes a rename fail
-  // the anchor below instead of quietly emptying every sweep.
-  const SCREENS = readFileSync(path.join(ROOT, 'src/desktop/screens.ts'), 'utf8');
-  const declared = /const DEV_LABEL_CLASS = '([^']+)'/.exec(SCREENS);
-  const ART_DEV_LABEL_CLASS = declared?.[1] ?? '';
-
-  it('the needle is the string the code actually uses (or this guard has gone stale)', () => {
-    expect(
-      declared,
-      'screens.ts no longer declares `const DEV_LABEL_CLASS = \'…\'` — every sweep below ' +
-        'would search for the empty string and pass vacuously',
-    ).not.toBeNull();
-    expect(ART_DEV_LABEL_CLASS.length).toBeGreaterThan(8);
-    // ...and it really is behind the same mechanism as the F3 panel.
-    expect(SCREENS, 'the dev label is not behind an import.meta.env.DEV guard').toMatch(
-      /if\s*\(\s*import\.meta\.env\.DEV\s*\)/,
-    );
-    expect(SCREENS, 'the dev-label guard is NEGATED — the label would ship').not.toMatch(
-      /if\s*\(\s*!\s*import\.meta\.env\.DEV\s*\)/,
-    );
-    // The guard must sit BEFORE the only use of the class, or the label is built outside it.
-    const guard = SCREENS.search(/if\s*\(\s*import\.meta\.env\.DEV\s*\)/);
-    const use = SCREENS.search(/className\s*=\s*DEV_LABEL_CLASS/);
-    expect(use, 'nothing applies the dev-label class').toBeGreaterThan(-1);
-    expect(guard, 'the label is applied outside the DEV guard').toBeLessThan(use);
-  });
-
-  it('THE CONTROL: a development build DOES contain the label marker in a JS chunk', () => {
-    const hits = filesContaining(dev, ART_DEV_LABEL_CLASS);
-    expect(
-      hits,
-      'the DEV build does not contain the label either — the production assertion below ' +
-        'would be measuring a bundler that never included it',
-    ).not.toEqual([]);
-    expect(hits.some((f) => f.endsWith('.js')), `marker only in ${hits.join(', ')}`).toBe(true);
-  });
-
-  it('THE ASSERTION: the production build contains it in NO file — sourcemaps included', () => {
-    expect(
-      filesContaining(prod, ART_DEV_LABEL_CLASS),
-      'the developer art-slot label is in the packaged build — a shipped game would print ' +
-        'slot ids and aspect ratios on screen, which is what "looks like missing assets" is',
-    ).toEqual([]);
-  });
-
-  it('...and no other trace of the label reaches a production chunk', () => {
-    // A second needle from the other end of the same block, in case the class name were
-    // renamed but the label text left behind.
-    for (const needle of ['art slot', 'aspect ratio']) {
-      expect(
-        filesContaining(prod, needle).filter((f) => f.endsWith('.js')),
-        `'${needle}' reached a production chunk`,
-      ).toEqual([]);
-    }
-  });
-
+describe('the reserved art regions ship no words', () => {
   it('and no unfinished-software wording reaches a shipped chunk', () => {
     // The words that make an empty region read as a missing asset rather than as atmosphere.
     // Deliberately NOT a sweep for the token "PLACEHOLDER": `contentWarning.json` marks its

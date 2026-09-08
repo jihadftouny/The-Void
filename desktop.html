@@ -8,19 +8,38 @@
     <link rel="stylesheet" href="/src/desktop/game.css" />
   </head>
   <body>
+    <!-- THE ATMOSPHERE. One element, painted entirely by CSS from the `data-texture` and
+         `--void-texture-*` values `theme.ts` writes for the current floor — fog, static,
+         ash, glow or the True Void's vignette. It sits behind everything, takes no clicks,
+         and says nothing to a screen reader. Reduced motion and high contrast both turn it
+         off; the contrast gate in tokens.test.ts measures body ink against the surface it
+         actually produces, not against the bare ground. -->
+    <div id="atmosphere" class="void-texture" aria-hidden="true"></div>
     <main id="game">
       <aside id="sheet"></aside>
       <section id="stage">
-        <h1 id="title">THE VOID</h1>
-        <p id="status" class="status">starting…</p>
-        <!-- Boot notices the player must not miss (an unlock store recovered from
-             backup, or lost). Empty by default; game.css collapses an empty one. -->
-        <div id="notice" class="notice" role="status"></div>
-        <div id="narration" class="narration" aria-live="polite"></div>
-        <!-- The combat log (G18): the mechanical record of a fight, plain by default and
-             expandable to the dice. Empty outside battle, and collapsed when empty. -->
-        <div id="log" class="log" aria-label="combat log"></div>
-        <div id="choices" class="choices"></div>
+        <!-- The persistent header band (UI-DESIGN.md §11 / FINDINGS.md S4a). Left: the floor
+             tag, always visible, naming where you are IN WORDS — the accent may never be the
+             only carrier of any state, so a colourblind player and a screen reader both get
+             the floor here. Right: the model status line, demoted to quiet furniture. -->
+        <header class="chrome">
+          <span id="floor" class="floor-tag"></span>
+          <p id="status" class="status">starting…</p>
+        </header>
+        <!-- The reading column: a measure the narration is comfortable to read at, which is
+             also the surface #13's prose gets written into. Every id below is unchanged —
+             game.ts looks all of them up at module scope. -->
+        <div id="column" class="column">
+          <h1 id="title">THE VOID</h1>
+          <!-- Boot notices the player must not miss (an unlock store recovered from
+               backup, or lost). Empty by default; game.css collapses an empty one. -->
+          <div id="notice" class="notice" role="status"></div>
+          <div id="narration" class="narration" aria-live="polite"></div>
+          <!-- The combat log (G18): the mechanical record of a fight, plain by default and
+               expandable to the dice. Empty outside battle, and collapsed when empty. -->
+          <div id="log" class="log" aria-label="combat log"></div>
+          <div id="choices" class="choices"></div>
+        </div>
       </section>
     </main>
     <script type="module" src="/src/desktop/game.ts"></script>

@@ -162,15 +162,41 @@ export type { SettingsField };
 // must read as deliberate framed atmosphere rather than as a missing asset.
 // ---------------------------------------------------------------------------------------
 
-/**
- * The developer-facing label's class. ⚠ Kept module-LOCAL and never exported, so that the
- * production build's dead-code elimination has nothing to hold on to: an exported binding
- * from a non-entry module is usually shaken out too, but "usually" is not the standard for
- * something the packaged-build exclusion test has to be able to prove. `distFont.test.ts`
- * reads this literal out of this file rather than importing it, which also means the needle
- * cannot silently go stale.
- */
-const DEV_LABEL_CLASS = 'void-art-devlabel';
+// ---------------------------------------------------------------------------------------
+// ⚠ THERE IS NO DEVELOPER LABEL ON AN ART SLOT, AND THAT IS A DECISION. RECORDED HERE
+// BECAUSE THE OBVIOUS THING TO DO IS ADD ONE BACK.
+//
+// Plan Appendix A.7.5 offers one: "If you want a developer-facing label showing the slot id
+// and ratio, put it behind the same dev-only mechanism as the F3 panel — and then the
+// packaged-build exclusion test must cover it too." It was built that way, and then removed,
+// because the second half of that sentence cannot be honoured from inside this file.
+//
+// WHAT WENT WRONG, measured rather than reasoned about. `vite.config.ts` sets
+// `sourcemap: true`, so every emitted `.map` carries `sourcesContent` — the ORIGINAL,
+// pre-bundling text of every module in the graph. `screens.ts` is in that graph, because the
+// content warning and the settings screen ship. So while Rollup really does eliminate an
+// `import.meta.env.DEV` branch from the executed chunk, the branch's SOURCE stays fully
+// readable in `dist/assets/*.js.map`. Confirmed by running the real bundler: with the label
+// present, its class and its inline styling were both found in the production sourcemap.
+//
+// WHY THAT IS DISQUALIFYING RATHER THAN A FOOTNOTE. `src/dev/exclusion.test.ts` states this
+// project's own standard in its header: "a cheat panel recoverable from a shipped `.map` is
+// shipped". By that standard the label was shipped. The only ways to keep it were to narrow
+// the sweep to `.js` files — which is how a guard quietly stops guarding, and is exactly the
+// move this codebase has written down as a defect four times — or to move the label into
+// `src/dev/` behind its own dynamic import, which would mean a second exception in the
+// import-direction scan that currently reads "no file outside the dev directory imports it,
+// except the renderer".
+//
+// WHAT WAS ACTUALLY LOST: a caption reading `scenery 16:9`, in a development build, naming
+// two values that are one `cat src/data/artSlots.json` away. A.7.5 makes it optional.
+//
+// THE RULE THAT REPLACES IT, and it is stronger than the label was useful: a shipping module
+// may not carry an `import.meta.env.DEV` branch at all. Dev-only code lives under `src/dev/`
+// and is reached by a dynamic import from `game.ts` — the F3 panel's mechanism — which keeps
+// it out of the module graph entirely, sourcemap included. `src/dev/exclusion.test.ts`
+// enforces that, with the detector proven red.
+// ---------------------------------------------------------------------------------------
 
 /**
  * One reserved art region.
@@ -185,7 +211,9 @@ const DEV_LABEL_CLASS = 'void-art-devlabel';
  *    floor's palette and texture — no placeholder text, no cross-hatching, no printed
  *    dimensions. An empty region carrying floor 4's warm glow is part of the aesthetic; a
  *    grey box reading "IMAGE HERE" is unfinished software, and the difference is the whole
- *    point of doing this now.
+ *    point of doing this now. This function creates NO text node on any path, in any build,
+ *    so that promise holds by construction rather than by dead-code elimination — see the
+ *    note above on why the developer label was removed.
  *  - NEVER BREAK THE SCREEN. No source is the NORMAL state today, not an error: it does not
  *    throw, does not log, and leaves no hole.
  *  - SAY NOTHING TO A SCREEN READER while it is empty. An empty decorative frame announced as
@@ -219,19 +247,6 @@ export function buildArtSlot(slot: ArtSlot): HTMLElement {
   }
 
   figure.appendChild(frame);
-
-  // THE ONE DEVELOPER AFFORDANCE, behind the same mechanism as the F3 state panel:
-  // `vite build` replaces `import.meta.env.DEV` with the literal `false` and Rollup removes
-  // the branch, so no shipped chunk contains the class, the text, or this element. Proved by
-  // running the real bundler in `distFont.test.ts`, with a development-build control — an
-  // absence with no control behind it proves nothing.
-  if (import.meta.env.DEV) {
-    const devLabel = document.createElement('span');
-    devLabel.className = DEV_LABEL_CLASS;
-    devLabel.textContent = `${slot.id} ${slot.ratioW}:${slot.ratioH}`;
-    frame.appendChild(devLabel);
-  }
-
   return figure;
 }
 

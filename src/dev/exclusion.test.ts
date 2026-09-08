@@ -520,3 +520,81 @@ describe('the guard files themselves exist where the runner will collect them', 
     }
   });
 });
+
+// =========================================================================================
+// ADDED BY `visual-identity` (2026-09-08) — ADDITIVE ONLY; nothing above is changed.
+//
+// THE RULE, AND THE MEASUREMENT BEHIND IT. A dev-only branch inside a SHIPPING module does
+// not really leave the packaged build. `vite.config.ts` sets `sourcemap: true`, so every
+// emitted `.map` carries `sourcesContent` — the original, pre-bundling text of every module
+// in the graph. Rollup does eliminate an `import.meta.env.DEV` branch from the executed
+// chunk, and its SOURCE stays fully readable in `dist/assets/*.js.map`.
+//
+// Measured, not reasoned about: `visual-identity` built a developer caption for the reserved
+// art regions exactly that way — behind `import.meta.env.DEV`, inside `src/desktop/screens.ts`
+// — and the real bundler put both its class name and its inline styling in the production
+// sourcemap. By the standard stated at the top of THIS file ("a cheat panel recoverable from
+// a shipped `.map` is shipped") the caption was shipped. It was removed rather than kept with
+// a narrowed sweep, and this guard is what stops the next one being written.
+//
+// THE ONE EXEMPTION is `src/desktop/game.ts`, whose DEV branch contains a DYNAMIC IMPORT and
+// nothing else. That is the whole point of the panel's mechanism: the imported module never
+// enters the production module graph, so neither its code nor its source text is anywhere in
+// the build — which is precisely what the bundler proof at the top of this file measures.
+// The direction scan above already pins that this file is the only importer.
+// =========================================================================================
+
+describe('no shipping module hides code behind a DEV branch', () => {
+  /** Every `import.meta.env` reference in a source, ignoring comments. */
+  function devBranches(source: string): number {
+    return (stripComments(source).match(/import\s*\.\s*meta\s*\.\s*env/g) ?? []).length;
+  }
+
+  it('the detector fires on the shapes a DEV branch is written in, and not on prose', () => {
+    for (const source of [
+      'if (import.meta.env.DEV) { mount(); }',
+      'const dev = import.meta.env.DEV;',
+      'if (import.meta.env.MODE === "development") { mount(); }',
+      'export const D = import . meta . env . DEV;',
+    ]) {
+      expect(devBranches(source), source).toBe(1);
+    }
+    for (const source of [
+      '// never put import.meta.env.DEV in a shipping module',
+      '/* import.meta.env.DEV */ const x = 1;',
+      'const dev = location.protocol === "http:";',
+      'import { panel } from "./panel.ts";',
+    ]) {
+      expect(devBranches(source), source).toBe(0);
+    }
+  });
+
+  it('only the renderer carries one, and its body is the dynamic import', () => {
+    const files = sourceFiles().filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.testutil.ts'));
+    expect(files.length, 'no shipping sources scanned — this guard reads nothing').toBeGreaterThan(50);
+    const offenders: string[] = [];
+    for (const rel of files) {
+      if (rel.startsWith('src/dev/')) continue;
+      if (rel === 'src/desktop/game.ts') continue;
+      const count = devBranches(readFileSync(path.join(ROOT, rel), 'utf8'));
+      if (count > 0) offenders.push(`${rel} (${count})`);
+    }
+    expect(
+      offenders,
+      'a shipping module hides code behind a DEV branch. Rollup drops the code and the ' +
+        'sourcemap keeps the TEXT, so it is readable in the packaged build. Put it under ' +
+        'src/dev/ and reach it with a dynamic import from game.ts, as the F3 panel does',
+    ).toEqual([]);
+  });
+
+  it('...and the renderer really does carry one (or the exemption guards nothing)', () => {
+    const renderer = readFileSync(path.join(ROOT, 'src/desktop/game.ts'), 'utf8');
+    expect(devBranches(renderer), 'the renderer has no DEV branch — the panel gate is gone')
+      .toBeGreaterThan(0);
+    expect(
+      devBranches(renderer),
+      'the renderer has grown a SECOND DEV branch. The exemption is for the panel gate ' +
+        'alone, and a second one is code whose source ships in the map',
+    ).toBe(1);
+  });
+});

@@ -26,7 +26,7 @@ import {
   type ContentWarning,
 } from './screens.ts';
 import warningData from '../data/contentWarning.json';
-import { ART_SLOTS, artSlot } from '../render/art-slots.ts';
+import { ART_SLOTS } from '../render/art-slots.ts';
 import { DEFAULT_SETTINGS, SETTINGS_ROWS, type Settings } from '../render/settings-model.ts';
 import { log, type LogEntry } from '../log/logger.ts';
 
@@ -251,9 +251,6 @@ describe('the settings screen is native buttons carrying their own state', () =>
 // THE THREE RESERVED ART REGIONS (plan Appendix A.7). No art exists and none is shipped.
 // =========================================================================================
 
-/** The dev-only label class, read out of the shipping source rather than imported. */
-const DEV_LABEL = 'void-art-devlabel';
-
 describe('a reserved art region holds its shape whether or not art ever arrives', () => {
   it('reserves the committed ratio, and no pixel size at all', () => {
     for (const slot of ART_SLOTS) {
@@ -291,29 +288,30 @@ describe('a reserved art region holds its shape whether or not art ever arrives'
     }
   });
 
-  it('SHOWS NO WORDS in the shipped path — no "IMAGE HERE", no printed dimensions', () => {
+  it('SHOWS NO WORDS — no "IMAGE HERE", no printed dimensions, in ANY build', () => {
     // A.7.5, the requirement most likely to be got wrong: a grey box reading IMAGE HERE in a
-    // released game reads as unfinished software. The dev-only label is removed first, which
-    // is exactly what `vite build` does to it; the control below proves the removal did
-    // something, and `distFont.test.ts` proves the real bundler agrees.
+    // released game reads as unfinished software.
+    //
+    // ⚠ ASSERTED UNCONDITIONALLY, and that is the point. An earlier version of this builder
+    // had a developer caption behind `import.meta.env.DEV`, so this test had to strip it
+    // first and needed a control to prove the strip removed something — a whole apparatus
+    // whose only job was to describe what the bundler would do later. The caption is gone
+    // (see the note at the top of `screens.ts`: its source survived in the production
+    // sourcemap), so the promise now holds by construction: this builder creates no text node
+    // on any path. Vitest runs as a DEV build, so if any conditional caption came back, this
+    // is the test it would fail.
+    expect(import.meta.env.DEV, 'this file is not running as a dev build, so a dev-only ' +
+      'caption could be reintroduced without this test seeing it').toBe(true);
     for (const slot of ART_SLOTS) {
       const figure = buildArtSlot(slot);
-      for (const label of [...figure.querySelectorAll(`.${DEV_LABEL}`)]) label.remove();
       expect((figure.textContent ?? '').trim(), `${slot.id} prints text`).toBe('');
       expect(figure.querySelectorAll('svg, canvas'), `${slot.id} draws a placeholder`)
         .toHaveLength(0);
+      // ...and the frame really was built, so "no text" is a statement about the region
+      // rather than about an empty element.
+      expect(figure.querySelectorAll('.void-art-frame'), `${slot.id} has no frame`)
+        .toHaveLength(1);
     }
-  });
-
-  it('THE CONTROL: under a dev build the label IS there (or the sweep above removed nothing)', () => {
-    // Vitest sets `import.meta.env.DEV`, so this file runs the dev branch. Without this, the
-    // assertion above passes just as well against a slot that never had a label to remove —
-    // and would keep passing if the whole atmospheric frame were replaced by an empty div.
-    expect(import.meta.env.DEV, 'this test is not running as a dev build').toBe(true);
-    const figure = buildArtSlot(artSlot('scenery'));
-    const label = figure.querySelector(`.${DEV_LABEL}`);
-    expect(label, 'the dev label is gone — the sweep above now proves nothing').not.toBeNull();
-    expect(label?.textContent).toBe('scenery 16:9');
   });
 
   it('says nothing to a screen reader while it is empty, and speaks once it is not', () => {

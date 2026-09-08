@@ -1,0 +1,215 @@
+/* THE FIVE FLOOR ENVIRONMENTS, AS PAINT — and the three reserved art regions that borrow them.
+ *
+ * The author's direction (2026-09-07): "each floor has a distinct font color, and background
+ * color with a certain level of texture, we can use the atmospheric css option in
+ * conjunction". So the floor is not an accent on a fixed ground — it is a whole environment,
+ * and THE DESCENT IS VISIBLE.
+ *
+ * ---------------------------------------------------------------------------------------
+ * HOW THIS FILE STAYS INSIDE THE CONTRAST GATE, which is the one thing atmosphere may never
+ * be traded against.
+ *
+ * `tokens.test.ts` gates every floor's body ink against the TEXTURED COMPOSITE — the ground
+ * with `FloorTexture.ink` composited over it at `FloorTexture.opacity` — not against the bare
+ * ground, because the atmosphere sits BEHIND body text and a check that ignored it would be
+ * measuring a screen nobody sees. That gate is only honest if the paint below never exceeds
+ * the alpha it assumes. Two rules keep that true, and both are structural rather than
+ * careful:
+ *
+ *   1. THE ONLY ALPHA IS `opacity: var(--void-texture-opacity)` on the layer itself. Every
+ *      gradient stop is either the flat `--void-texture-ink` or `transparent`, so the densest
+ *      point any pattern can reach is exactly the token, and everywhere else is lighter.
+ *      Compositing two fully-opaque layers still yields fully opaque — stacking cannot push
+ *      it past the peak.
+ *   2. NOTHING ANIMATES OPACITY OR COLOUR. The motion below moves `background-position` only,
+ *      so a floor's worst-case surface is the same at every frame of the animation. An
+ *      opacity keyframe would make the measured ratio true only at one instant.
+ *
+ * HIGH CONTRAST REMOVES THIS ENTIRELY — `settingsVars` forces the opacity token to 0, and the
+ * rule at the bottom hides the layer outright. Both, deliberately: one is the value the gate
+ * measures, the other is what a reader sees. The atmosphere is GONE, not dimmed.
+ *
+ * REDUCED MOTION STOPS EVERY MOVING THING, from the OS signal by default and from the
+ * player's own override in either direction.
+ *
+ * ART-BIBLE.md rule 4 governs here as much as in the prose: floor 2's register is mirrors,
+ * doubles, static and signal. Degradation is a TEXTURE, not a diagnosis. Nothing below
+ * flickers, strobes or pulses; the fastest thing in the file takes six seconds to move three
+ * pixels.
+ * --------------------------------------------------------------------------------------- */
+
+/* The layer itself. Painted by the `[data-texture='…']` rules below; `theme.ts` writes that
+ * attribute from `FLOOR_THEMES[place].texture.kind`, a TS-to-CSS string coupling neither the
+ * compiler nor the runtime can see — `styleDiscipline.test.ts` asserts every kind has a rule. */
+.void-texture {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--void-texture-opacity);
+}
+
+/* The full-screen instance. Behind everything, and invisible to a screen reader. */
+#atmosphere {
+  position: fixed;
+  z-index: 0;
+}
+
+/* FOG — the Undercity. Low, uneven, rising off the ground: ART-BIBLE §4 is explicit that the
+ * green "is what is in the water and the air, not what is on the signs", so the toxicity
+ * lives here and never in the chrome. */
+[data-texture='fog'] .void-texture {
+  background:
+    radial-gradient(120% 70% at 18% 108%, var(--void-texture-ink), transparent 62%),
+    radial-gradient(95% 62% at 86% 96%, var(--void-texture-ink), transparent 66%);
+  background-size: 160% 160%, 150% 150%;
+  animation: void-fog-drift 96s ease-in-out infinite alternate;
+}
+
+/* STATIC — the Entrance to the Void. Mirrors, doubles, signal. A scanline grid, fine enough
+ * to read as interference rather than as stripes. */
+[data-texture='static'] .void-texture {
+  background:
+    repeating-linear-gradient(0deg, var(--void-texture-ink) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, var(--void-texture-ink) 0 1px, transparent 1px 9px);
+  animation: void-static-crawl 6s steps(3) infinite;
+}
+
+/* ASH — the Ash City. The fire has settled already; this is what is left over everything, at
+ * two shallow angles so it never reads as a weave. */
+[data-texture='ash'] .void-texture {
+  background:
+    repeating-linear-gradient(24deg, var(--void-texture-ink) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-63deg, var(--void-texture-ink) 0 1px, transparent 1px 11px);
+  animation: void-ash-settle 120s linear infinite;
+}
+
+/* GLOW — the Angelic Underground. The one stage that reveals rather than distorts, and the
+ * only atmosphere in the game that ADDS light: lit from within, not from any sky. */
+[data-texture='glow'] .void-texture {
+  background: radial-gradient(72% 58% at 50% 4%, var(--void-texture-ink), transparent 72%);
+  background-size: 130% 130%;
+  animation: void-glow-breathe 70s ease-in-out infinite alternate;
+}
+
+/* ABSENCE — the True Void. The only texture that SUBTRACTS: a vignette in pure black eating
+ * the edges, so the interface is visibly smaller than it was. Negative space and things
+ * missing, which is what ART-BIBLE rule 3 asks for and the opposite of gore or ruin.
+ * It does not move. Absence does not move. */
+[data-texture='absence'] .void-texture {
+  background: radial-gradient(118% 104% at 50% 46%, transparent 34%, var(--void-texture-ink));
+}
+
+@keyframes void-fog-drift {
+  from { background-position: 0% 100%, 100% 100%; }
+  to { background-position: 12% 88%, 88% 84%; }
+}
+@keyframes void-static-crawl {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 0 3px, 9px 0; }
+}
+@keyframes void-ash-settle {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 140px 420px, -180px 380px; }
+}
+@keyframes void-glow-breathe {
+  from { background-position: 50% 0%; }
+  to { background-position: 50% 12%; }
+}
+
+/* ---------------------------------------------------------------------------------------
+ * THE THREE RESERVED ART REGIONS (plan Appendix A.7). No art exists and none ships.
+ *
+ * The reservation is a RATIO, written inline by `buildArtSlot` from the data, never a pixel
+ * height — so the region scales with the window and holds its shape all the way down to the
+ * 960x640 minimum, instead of being right at one size and wrong everywhere else. `max-width`
+ * is what keeps a 16:9 region from swallowing the hub and a 3:4 one from pushing the vitals
+ * out of the HUD column; it caps the box WITHOUT touching the ratio, because the height
+ * follows the width.
+ *
+ * They must read as DELIBERATE, not missing. An empty slot is a framed region carrying this
+ * floor's own colour and texture — the same `.void-texture` element the full-screen layer
+ * uses, so a slot on floor 4 cannot fail to carry floor 4's light. No caption, no cross, no
+ * dimensions, no "TODO": a grey box reading IMAGE HERE in a released game is what unfinished
+ * software looks like, and avoiding that is the entire reason for doing this before the art
+ * exists rather than after.
+ * --------------------------------------------------------------------------------------- */
+
+.void-art-slot {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  border: var(--void-rule-hair) solid var(--void-rule);
+  background: var(--void-panel);
+}
+
+.void-art-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* An inner edge, so the region reads as a frame around something rather than as a blank
+ * panel someone forgot to fill. */
+.void-art-frame::after {
+  content: '';
+  position: absolute;
+  inset: var(--void-space-2);
+  border: var(--void-rule-hair) solid var(--void-rule-strong);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.void-art-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ⚠ THE DEVELOPER LABEL IS DELIBERATELY NOT STYLED HERE, and that absence is load-bearing.
+ * `buildArtSlot` gives it its whole appearance inline, inside the `import.meta.env.DEV`
+ * branch, so the element, its class and its styling are removed together by the bundler. A
+ * rule in this file would ship — CSS has no dead-code elimination — and the class name would
+ * then sit in a production stylesheet forever, which would put the strongest form of the
+ * packaged-build assertion ("this string is in NO emitted file") permanently out of reach.
+ * `styleDiscipline.test.ts` asserts no stylesheet mentions it. */
+
+/* ---------------------------------------------------------------------------------------
+ * S4b — MOTION. The OS is honoured by default; the player can override it in EITHER
+ * direction, because a player whose OS setting is wrong for them needs a way to say so.
+ * `settings-model.ts`'s `motionEnabled` is the same rule for the script side.
+ * --------------------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) .void-texture,
+  :root:not([data-motion='full']) .narration .beat,
+  :root:not([data-motion='full']) .void-button {
+    animation: none;
+    transition: none;
+  }
+}
+
+[data-motion='reduce'] .void-texture,
+[data-motion='reduce'] .narration .beat,
+[data-motion='reduce'] .void-button {
+  animation: none;
+  transition: none;
+}
+
+/* ---------------------------------------------------------------------------------------
+ * S4c — HIGH CONTRAST. `settingsVars` has already forced the texture opacity to 0, which is
+ * the value the contrast gate measures; this removes the element as well, so nothing can
+ * reintroduce a wash through a later rule. Belt and braces on the one setting that exists to
+ * make the bold floors safe.
+ * --------------------------------------------------------------------------------------- */
+
+[data-contrast='high'] .void-texture {
+  display: none;
+}
+
+[data-contrast='high'] .void-art-frame::after {
+  opacity: 1;
+}

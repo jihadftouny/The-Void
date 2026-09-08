@@ -1,64 +1,166 @@
-/* The desktop game shell's own layout (M-UI2: re-pointed at the shared design tokens).
+/* The desktop game shell's LAYOUT (PLAN.md #8 `screens-restyle`, on top of M-UI2's tokens).
  *
  * The @imports below are the whole stylesheet chain: desktop.html loads THIS file with a
- * plain <link>, so importing here keeps one predictable cascade order (base elements, then
- * shared components, then this shell's layout) and leaves desktop.html untouched — which
- * matters because `battle-screen` and `screens-restyle` will both need to edit it later.
+ * plain <link>, so importing here keeps one predictable cascade order and leaves desktop.html
+ * carrying no style decisions of its own.
  *
- * NO COLOUR LITERAL may appear below. Every value is a --void-* custom property written
- * from src/render/tokens.ts. This file previously carried its OWN :root palette, which is
- * exactly the drift the token layer exists to prevent; that block is gone.
+ * NO COLOUR LITERAL and NO px FONT SIZE may appear below. Every colour is a --void-* custom
+ * property written from src/render/tokens.ts, and every font-size reads a --void-type-* step
+ * so the player's text-size setting can move all of them at once. Both rules are enforced by
+ * `src/render/styleDiscipline.test.ts` rather than asked for in a comment — this file used to
+ * carry five px literals (13/15/12/14/12), which is precisely why the rule is now a test.
  *
- * This is a RE-POINT, not a redesign: the layout is unchanged, only its values now come
- * from the token table. Redesigning these screens is `screens-restyle`'s job.
+ * WHAT CHANGED HERE, and why it is layout rather than decoration:
+ *   - A PERSISTENT HEADER BAND. The floor tag lives in it, always visible, naming where you
+ *     are in words (UI-DESIGN.md §11 / FINDINGS.md S4a: the accent may never be the only
+ *     carrier of any state). The model status line moved into it too, demoted to furniture.
+ *   - A READING COLUMN. Narration and every screen are capped at a measure. This is the
+ *     single highest-value reading change available, and it is the surface #13's prose gets
+ *     written into rather than retro-fitted onto.
+ *   - THE ATMOSPHERE LAYER sits behind all of it (src/render/atmosphere.css).
+ *
+ * DESIGNED AND ENFORCED TO A MINIMUM WINDOW OF 960x640 (UI-DESIGN.md §14 decided a minimum
+ * must exist; the number was chosen 2026-09-07 and `electron/main.mjs` now refuses smaller).
  */
 /* FONTS FIRST. `@font-face` must be declared before the rules that ask for the family, or
  * the first paint asks for a family the browser has not been told about yet. */
 @import '../render/fonts.css';
 @import '../render/tokens.css';
+@import '../render/atmosphere.css';
 @import '../render/components.css';
+@import './screens.css';
 
 html, body { height: 100%; }
 
-#game { height: 100vh; display: grid; grid-template-columns: 220px 1fr; }
+/* Above the atmosphere. One stacking context for the whole interface, so no future rule has
+ * to guess a z-index. */
+#game {
+  position: relative;
+  z-index: 1;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+}
+
+/* ---- The HUD column -------------------------------------------------------------- */
 
 #sheet {
-  padding: 20px 16px;
+  padding: var(--void-space-5) var(--void-space-4);
   border-right: var(--void-rule-hair) solid var(--void-rule);
   background: var(--void-panel);
-  font-size: 13px;
+  font-size: var(--void-type-md);
   line-height: 1.7;
   color: var(--void-ink-dim);
+  /* At the 960x640 minimum a battle puts the player's vitals, the foe's vitals and two
+   * reserved portrait regions in one 220px column. It scrolls rather than clipping, and the
+   * portraits are BELOW their vitals so the numbers are never the thing that goes. */
+  overflow-y: auto;
 }
 /* The player's own name. Was `<b>` built by interpolating into innerHTML (G28(b)); the HUD
  * now sets every string as text, so the emphasis is a class rather than a tag. */
-#sheet .who { color: var(--void-ink); font-size: 15px; }
-#sheet hr { border: none; border-top: var(--void-rule-hair) solid var(--void-rule); margin: 10px 0; }
+#sheet .who {
+  color: var(--void-ink);
+  font-size: var(--void-type-base);
+  letter-spacing: var(--void-track-wide);
+}
+#sheet hr {
+  border: none;
+  border-top: var(--void-rule-hair) solid var(--void-rule);
+  margin: var(--void-space-3) 0;
+}
 #sheet .foe { color: var(--void-foe); }
 
 /* The condition row (G28(a)): control -> harm -> boon, wrapping in the narrow HUD column.
  * The chips themselves are styled by src/render/components.css. */
-#sheet .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+#sheet .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--void-space-1);
+  margin: var(--void-space-2) 0;
+}
 /* The row is appended unconditionally so the renderer carries no branch to invert; an empty
  * one collapses here, the same way #log:empty and #notice:empty do. */
 #sheet .chips:empty { display: none; }
 
-/* Rows: title · status · notice · narration · log · choices.
- * Only the NARRATION takes the free space (1fr); the log is capped and scrolls inside its
- * cap, so a long fight can never squeeze the prose out of the window. `#notice` and `#log`
- * are `display: none` when empty (below), which collapses both the row AND its gap — so at
- * the minimum window size the layout is exactly what it was before this row existed. */
-#stage { display: grid; grid-template-rows: auto auto auto 1fr auto auto; gap: 12px; padding: 24px; min-width: 0; }
-#title { margin: 0; letter-spacing: 0.4em; font-weight: 400; text-align: center; color: var(--void-accent); }
-.status { margin: 0; text-align: center; color: var(--void-ink-dim); font-size: 12px; }
+/* The reserved portrait regions. Capped by WIDTH, never by height: the height follows the
+ * committed ratio, so capping the width holds the shape while keeping the vitals on screen
+ * at the minimum window size. */
+#sheet .void-art-slot {
+  max-width: 140px;
+  margin: var(--void-space-3) 0 var(--void-space-2);
+}
+
+/* ---- The stage: header band, then the reading column ------------------------------- */
+
+#stage {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The header band. Floor left, status right, one rule under both. */
+.chrome {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--void-space-4);
+  padding: var(--void-space-3) var(--void-space-5);
+  border-bottom: var(--void-rule-hair) solid var(--void-rule);
+  background: var(--void-panel);
+}
+
+/* THE FLOOR TAG. Always on screen, in words. Uppercase and widest tracking is the terminal
+ * idiom; the accent REINFORCES the name, it never replaces it. */
+.floor-tag {
+  font-size: var(--void-type-xs);
+  letter-spacing: var(--void-track-widest);
+  text-transform: uppercase;
+  color: var(--void-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status {
+  margin: 0;
+  text-align: right;
+  color: var(--void-ink-dim);
+  font-size: var(--void-type-xs);
+  letter-spacing: var(--void-track-wide);
+}
 .status.error { color: var(--void-harm); }
+
+/* THE READING COLUMN. Capped at a measure and centred; everything the player reads lives
+ * inside it. Only the NARRATION takes the free space (1fr); the log is capped and scrolls
+ * inside its cap, so a long fight can never squeeze the prose out of the window. `#notice`
+ * and `#log` are `display: none` when empty, which collapses both the row AND its gap. */
+.column {
+  width: 100%;
+  max-width: 72ch;
+  margin: 0 auto;
+  padding: var(--void-space-5);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: var(--void-space-3);
+  min-width: 0;
+  min-height: 0;
+}
+
+#title {
+  margin: 0;
+  letter-spacing: var(--void-track-widest);
+  font-weight: 400;
+  text-align: center;
+  color: var(--void-accent);
+}
 
 /* The boot notice (G3): visible, but not a modal — the player can still start a run. */
 .notice {
-  padding: 8px 10px;
+  padding: var(--void-space-2) var(--void-space-3);
   border: var(--void-rule-hair) solid var(--void-harm);
   color: var(--void-ink);
-  font-size: 13px;
+  font-size: var(--void-type-md);
 }
 .notice:empty { display: none; }
 
@@ -67,50 +169,72 @@ html, body { height: 100%; }
 .log {
   max-height: 30vh;
   overflow-y: auto;
-  padding-right: 8px;
+  padding-right: var(--void-space-2);
   border-top: var(--void-rule-hair) solid var(--void-rule);
-  padding-top: 8px;
+  padding-top: var(--void-space-2);
 }
 .log:empty { display: none; }
 
-.narration { overflow-y: auto; line-height: 1.7; padding-right: 8px; }
+.narration {
+  overflow-y: auto;
+  line-height: 1.7;
+  padding-right: var(--void-space-2);
+}
 .narration .beat { margin: 0 0 1.1em; white-space: pre-wrap; animation: fade 0.4s ease; }
 .narration .beat.fallback { color: var(--void-ink-dim); font-style: italic; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
-.choices { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--void-space-3);
+  align-items: center;
+}
 .choices input {
-  padding: 12px 14px;
+  padding: var(--void-space-3) var(--void-space-4);
   background: var(--void-bg);
   border: var(--void-rule-hair) solid var(--void-rule);
   color: var(--void-ink);
   font: inherit;
   min-width: 220px;
 }
-.choices .stats-line { width: 100%; color: var(--void-ink-dim); font-size: 13px; }
+.choices .stats-line {
+  width: 100%;
+  color: var(--void-ink-dim);
+  font-size: var(--void-type-md);
+  letter-spacing: var(--void-track-wide);
+}
 .choices .thinking { color: var(--void-ink-dim); font-style: italic; }
 
 /* ---- Screen layout: inventory, deal, draft, sheet ----
- * Appearance of buttons, rows, chips, bars and pickers now belongs entirely to
- * src/render/components.css. What remains here is only this shell's LAYOUT plus the two
- * screen-specific fragments (item effect text, deal cost/reward) that have no shared
- * component yet. */
-
+ * Appearance of buttons, rows, chips, bars and pickers belongs entirely to
+ * src/render/components.css; the per-screen IDENTITY belongs to ./screens.css. What remains
+ * here is the shell's layout plus the two screen-specific fragments (item effect text, deal
+ * cost/reward) that have no shared component yet. */
 
 /* Hub screens: inventory paperdoll + backpack, and the full character sheet. */
-.vm-screen { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-.vm-screen h3 { margin: 4px 0; font-size: 14px; color: var(--void-ink); }
-.vm-effects { color: var(--void-ink-dim); font-size: 12px; }
+.vm-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-3);
+  width: 100%;
+}
+.vm-screen h3 {
+  margin: var(--void-space-1) 0;
+  font-size: var(--void-type-md);
+  color: var(--void-ink);
+}
+.vm-effects { color: var(--void-ink-dim); font-size: var(--void-type-sm); }
 
 /* Deal block: cost -> reward (never the karma pool). */
 .deal-block {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--void-space-2);
   width: 100%;
-  padding: 10px;
+  padding: var(--void-space-3);
   border: var(--void-rule-hair) solid var(--void-rule);
-  background: var(--void-bg);
+  background: var(--void-panel);
 }
 .deal-block .deal-cost { color: var(--void-harm); }
 .deal-block .deal-reward { color: var(--void-heal); }
@@ -119,6 +243,5 @@ html, body { height: 100%; }
 .draft-card {
   width: 100%;
   text-align: left;
-  padding: 10px 12px;
+  padding: var(--void-space-3) var(--void-space-4);
 }
-
