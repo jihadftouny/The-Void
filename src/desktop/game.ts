@@ -796,7 +796,7 @@ function renderChoices(awaiting: Awaiting): void {
       // G2 / GAME-DESIGN.md §22.15: a finished run gets a WRITTEN RECORD. This is the
       // FACTUAL half — outcome, depth, bosses by name, spares, unlocks by name. The Void's
       // own narrated account of your descent is G10, which belongs to PLAN.md #6.
-      const view = runSummaryView(runSummary, state.player, lastNewlyUnlocked);
+      const view = runSummaryView(runSummary, state.player, lastNewlyUnlocked, runSeed);
       const wrap = document.createElement('div');
       wrap.className = 'vm-screen run-summary';
       const head = document.createElement('h3');
