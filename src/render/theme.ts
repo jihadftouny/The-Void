@@ -22,10 +22,16 @@ export function applyTheme(root: HTMLElement, place: number): void {
     root.style.setProperty(name, value);
   }
   // The texture KIND is structural — a fog is not a vignette — so CSS has to know which one
-  // to paint, and a custom property cannot select a rule. This attribute is that hook, and
-  // `styleDiscipline.test.ts` asserts every kind in `FLOOR_THEMES` has a matching
-  // `[data-texture='…']` rule in the stylesheet: a TS-to-CSS string coupling of exactly the
-  // kind that nothing else in the toolchain can see.
+  // to paint, and a custom property cannot select a rule. This attribute is that hook.
+  //
+  // ⚠ THE COUPLING HAS TWO ENDS AND BOTH ARE GUARDED, which they were not at first.
+  // `styleDiscipline.test.ts` proves the STYLESHEET has a `[data-texture='fog']` rule for
+  // every kind in `FLOOR_THEMES`. That is only half: nothing there looks at this line, so
+  // renaming the attribute to `data-texturee` left the whole visual system dead — no floor
+  // painting any atmosphere — with the full suite, the typecheck and the build all green.
+  // `theme.test.ts` closes the other end by calling this function and reading the attribute
+  // NAMES back off a real element, checked against names derived from the stylesheets rather
+  // than from this module.
   root.dataset['texture'] = themeTextureKind(place);
 }
 
@@ -49,10 +55,18 @@ function themeTextureKind(place: number): string {
  * rather than emitting nothing, so turning high contrast back off restores the environment
  * with one write and no property removal.
  *
- * `data-motion`, `data-contrast` and `data-text` are the CSS hooks. `data-motion` carries the
- * RAW setting, not the resolved boolean, because the `system` case has to be resolved by the
+ * `data-motion` and `data-contrast` are the CSS hooks. `data-motion` carries the RAW setting,
+ * not the resolved boolean, because the `system` case has to be resolved by the
  * `prefers-reduced-motion` media query rather than by script — CSS is the only layer that can
  * see the OS signal change while the game is running.
+ *
+ * ⚠ THERE IS NO `data-text` HOOK, and there was. It was written here on every settings change
+ * and NO STYLESHEET EVER SELECTED ON IT — the text size is carried entirely by the
+ * `--void-type-*` custom properties above, which is the whole reason the scale is a token
+ * layer. An attribute nothing reads is the same species as a control that controls nothing:
+ * it looks like a working hook, so the next person wires their rule to it and cannot tell
+ * why nothing happens. `theme.test.ts` asserts that every attribute name written here is one
+ * some shipped stylesheet really selects on.
  */
 export function applySettings(root: HTMLElement, settings: Settings, place: number): void {
   const vars = settingsVars(settings, place);
@@ -61,7 +75,6 @@ export function applySettings(root: HTMLElement, settings: Settings, place: numb
   }
   root.dataset['motion'] = settings.motion;
   root.dataset['contrast'] = settings.contrast;
-  root.dataset['text'] = settings.textScale;
 }
 
 /**

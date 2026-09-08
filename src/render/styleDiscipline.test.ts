@@ -58,6 +58,60 @@ function declarations(css: string): { prop: string; value: string }[] {
   return out;
 }
 
+/**
+ * Every `selector { body }` rule, including rules nested inside an at-rule: the inner
+ * `[^{}]` classes cannot span a nested brace, so an `@media` header never matches and its
+ * CHILDREN do, which is exactly what is wanted.
+ */
+function rules(css: string): { selector: string; body: string }[] {
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+    selector: (m[1] as string).trim(),
+    body: m[2] as string,
+  }));
+}
+
+/**
+ * The INDIVIDUAL selectors — comma-split — that carry `attr`, each paired with its rule's body.
+ *
+ * ⚠ THE COMMA SPLIT IS THE WHOLE POINT, and it is here because the first version of the
+ * reduced-motion guard below did not have it and proved nothing. That version asked whether
+ * `.void-texture` appeared anywhere in the 7,000 characters of CSS following the first
+ * `[data-motion='reduce']`, which of course it did — twice, in unrelated rules — so deleting
+ * `[data-motion='reduce'] .void-texture` from the stylesheet left the suite fully green.
+ *
+ * Splitting on commas means a rule's OTHER targets cannot stand in for the one being asked
+ * about: `[data-motion='reduce'] .a, .void-texture { … }` contributes only `.a`, because the
+ * second half of that selector list does not carry the attribute at all.
+ */
+function selectorsCarrying(css: string, attr: string): { selector: string; body: string }[] {
+  const out: { selector: string; body: string }[] = [];
+  for (const rule of rules(css)) {
+    for (const part of rule.selector.split(',')) {
+      const selector = part.trim();
+      if (selector.includes(attr)) out.push({ selector, body: rule.body });
+    }
+  }
+  return out;
+}
+
+/**
+ * True when some selector carrying `attr` NAMES `target` and its rule really switches motion
+ * off. Both halves matter: a selector that names the target but sets a colour stops nothing,
+ * and a rule that sets `animation: none` on something that never moved stops nothing either.
+ */
+function stopsMotion(css: string, attr: string, target: string): boolean {
+  return selectorsCarrying(css, attr).some(
+    (r) => r.selector.includes(target) && /(?:animation|transition)\s*:\s*none/.test(r.body),
+  );
+}
+
+/** The three things in this interface that move, and therefore the three that must stop. */
+const MOVING = [
+  { target: '.beat', what: 'the narration fade' },
+  { target: '.void-button', what: 'the button transition' },
+  { target: '.void-texture', what: "the floor's atmosphere" },
+] as const;
+
 describe('the scan finds the shipping stylesheets at all', () => {
   it('reads several files and a lot of declarations', () => {
     expect(FILES.length, 'no stylesheets found — every guard below is vacuous').toBeGreaterThan(4);
@@ -260,14 +314,41 @@ describe('reduced motion has somewhere to bite, and bites there', () => {
       .toBeGreaterThan(2);
   });
 
-  it('the OS signal is honoured by default', () => {
+  it('the detector needs the target NAMED by the rule that carries the attribute', () => {
+    // The self-test the first version of this guard did not have. Case 2 is the exact shape
+    // that made it vacuous: the target exists in the stylesheet, and in a rule that stops
+    // motion, but NOT in a rule scoped by the override — so the override does not reach it.
+    const REDUCE = "[data-motion='reduce']";
+    const REAL = "[data-motion='reduce'] .void-texture { animation: none; }";
+    const ELSEWHERE = "[data-motion='reduce'] .beat { animation: none; }\n" +
+      '.void-texture { animation: none; }';
+    const SIBLING = "[data-motion='reduce'] .beat, .void-texture { animation: none; }";
+    const WRONG_PROPERTY = "[data-motion='reduce'] .void-texture { color: red; }";
+    expect(stopsMotion(REAL, REDUCE, '.void-texture'), 'the real shape is not recognised').toBe(
+      true,
+    );
+    expect(stopsMotion(ELSEWHERE, REDUCE, '.void-texture'), 'an unrelated rule stood in').toBe(
+      false,
+    );
+    expect(stopsMotion(SIBLING, REDUCE, '.void-texture'), 'a sibling selector stood in').toBe(
+      false,
+    );
+    expect(stopsMotion(WRONG_PROPERTY, REDUCE, '.void-texture'), 'a colour counted as motion')
+      .toBe(false);
+    expect(stopsMotion('', REDUCE, '.void-texture'), 'an empty stylesheet passed').toBe(false);
+  });
+
+  it('the OS signal is honoured by default, for each of the three moving things', () => {
     const block = mediaBlock();
     expect(block.length, 'there is no prefers-reduced-motion block at all').toBeGreaterThan(40);
-    expect(block, 'the OS block does not stop the narration fade').toContain('.beat');
-    expect(block, 'the OS block does not stop the button transition').toContain('.void-button');
-    expect(block, 'the OS block does not stop the atmosphere').toContain('.void-texture');
-    expect(block).toMatch(/animation\s*:\s*none/);
-    expect(block).toMatch(/transition\s*:\s*none/);
+    // Scoped to the media block AND to the selectors that carry the full-motion escape, so
+    // no rule outside the query and no sibling selector inside it can stand in.
+    for (const { target, what } of MOVING) {
+      expect(
+        stopsMotion(block, "data-motion='full'", target),
+        `an OS asking for reduced motion does not stop ${what}`,
+      ).toBe(true);
+    }
   });
 
   it('and the player can opt back IN to motion from inside it', () => {
@@ -275,22 +356,24 @@ describe('reduced motion has somewhere to bite, and bites there', () => {
     // whose OS asks for less has no way to get it, and `motionEnabled('full', true) === true`
     // becomes a promise the CSS does not keep.
     expect(mediaBlock(), 'the full-motion override is missing from the OS block').toContain(
-      "data-motion='full'",
+      ":not([data-motion='full'])",
     );
   });
 
-  it('and can force reduced motion regardless of what the OS says', () => {
-    const rules = [...ALL_CSS.matchAll(/\[data-motion='reduce'\][^{]*\{([^}]*)\}/g)];
-    expect(rules.length, "there is no [data-motion='reduce'] rule").toBeGreaterThan(0);
-    const selectors = ALL_CSS.slice(ALL_CSS.indexOf("[data-motion='reduce']"));
-    expect(selectors, 'the player override does not stop the narration fade').toContain('.beat');
-    expect(selectors, 'the player override does not stop the buttons').toContain('.void-button');
-    expect(selectors, 'the player override does not stop the atmosphere').toContain(
-      '.void-texture',
-    );
-    const body = rules.map((m) => m[1]).join(' ');
-    expect(body).toMatch(/animation\s*:\s*none/);
-    expect(body).toMatch(/transition\s*:\s*none/);
+  it('and can force reduced motion regardless of what the OS says, on all three', () => {
+    for (const { target, what } of MOVING) {
+      expect(
+        stopsMotion(ALL_CSS, "[data-motion='reduce']", target),
+        `the player's own reduced-motion setting does not stop ${what}`,
+      ).toBe(true);
+    }
+  });
+
+  it('...and the override rules really exist to be found (non-vacuity)', () => {
+    expect(
+      selectorsCarrying(ALL_CSS, "[data-motion='reduce']").length,
+      "there is no [data-motion='reduce'] selector at all",
+    ).toBeGreaterThanOrEqual(MOVING.length);
   });
 });
 
