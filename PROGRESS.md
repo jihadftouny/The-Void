@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2149 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2278 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,44 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-09 — the narration was gone, and now the pipeline can see a screen ✅
+
+**`layout-breathing-room` merged. 2149 → 2278 tests.** The author ran yesterday's build and **the
+prose had vanished** — clipped to one half-visible line mid-battle while an empty placeholder frame
+held a third of the screen.
+
+**Cause:** the reading column gave the narration the only flexible row, and the scenery frame was
+attached to the choices row, which takes what it wants first. Once the combat log filled, the
+leftover space was nothing and the *text* — not the empty box — was what disappeared. Measured in
+real Chromium: **0 px of prose at the minimum window, 4.5 px at the default**, and the *Abandon*
+button below the bottom edge. Broken at every size, not only small ones.
+
+**The author's fix, chosen over three placements offered — _"make the options on the right"_** — is
+better than any of them: the choice buttons leave the reading column for their own 260 px column, so
+~400 px of controls stop competing with the text rather than being rationed against it. The prose now
+has an eight-line floor nothing can take, and the scenery frame is capped in both directions instead
+of by width alone. **The three art aspect ratios are unchanged and explicitly not available as a fix
+for a layout problem** — they are what future backdrops get drawn to.
+
+**A second promise turned out to be false.** The 960×640 minimum window, recorded as settled two days
+earlier, was applied to the *outer* window — so the page had only ever received **947×577**. Proven
+with a real second window built without the flag, in the same process. Now corrected, and the test
+measures the page area rather than the window frame.
+
+**⭐ The lasting part is not the layout fix.** `#8` escaped a green suite and a PASS verdict because
+**every guard in that area was a source scan or a jsdom assertion, and jsdom computes no layout.**
+There is now a **layout probe**: it builds the real production page, renders it in real Chromium at
+six window sizes and two text sizes, then boots the real renderer and clicks through hub, settings
+and inventory — 56 assertions in 8.7 s. **It was written first and run against the broken layout**,
+where it failed with the numbers above, reproduced independently three times.
+
+**Hardening then found a third defect inside the probe itself:** a button collapsed to `height: 0`
+still measures **1.6 px of border** and read as visible. *"Not zero" is not "visible."* A control must
+now be at least one line of its own type tall. Recorded as **catalogue entry 10**.
+
+**Next: the author's eyes on the command list they asked for.** Six checks in `HUMAN-CHECKS.md`; two
+checks from yesterday's list are now machine-verified and struck out.
 
 ### 2026-09-08 — the game has a face, and each floor has its own ✅
 

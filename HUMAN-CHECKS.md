@@ -143,6 +143,65 @@
 > reachable, and the default text size fits outright. **Say if you would rather pay one of those
 > costs instead.**
 
+> ## 📐 From `layout-breathing-room` (merged 2026-09-09) — the narration bug is fixed, and two of the checks below are now machine-verified
+>
+> **This unit exists because the checklist above missed something.** The author ran the build and the
+> prose was gone — clipped to one half-visible line while an empty placeholder frame held a third of
+> the screen. Measured afterwards in real Chromium: **the narration was getting 0 px at the minimum
+> window and 4.5 px at the default one**, and the *Abandon the descent* button sat below the bottom
+> edge. It was broken at every window size, not just small ones.
+>
+> **The author's fix, chosen over three placements offered: _"make the options on the right."_** The
+> choice buttons now live in their own 260 px column, so ~400 px of controls no longer compete with
+> the text for vertical space. The prose has a floor of **eight lines** that nothing can take.
+>
+> ### ✅ Two checks from the `visual-identity` list are now MACHINE-VERIFIED — do not repeat them
+>
+> There is now a **layout probe** (`src/dev/layoutProbe.test.ts`, 56 assertions, 8.7 s) that renders
+> the real production page in **real Chromium** at six window sizes and two text sizes, then boots the
+> real renderer and clicks through hub, settings and inventory. It measures computed geometry, which
+> jsdom structurally cannot.
+>
+> - **#8's check 5 ("usable at 960×640")** — now asserted: nothing scrolls the page, every control is
+>   inside the window, at 960×640 / 1100×820 / 1280×720 / 1920×1080 / 1920×1200, normal and large text.
+> - **#8's check 6 ("a battle without scrolling for vitals")** — now asserted, including that a
+>   disclosure the player opens must restore every control to the window when closed.
+>
+> ⚠ **Also fixed: the 960×640 minimum was never real.** It was applied to the outer window, so the
+> page had only ever received **947×577**. `useContentSize: true` makes the documented number true.
+>
+> ### What still needs your eyes — ordered most-likely-wrong first
+>
+> - [ ] **1. The right-hand command list, at both extremes.** `npm run desktop` → **F3** → `act1-hub`.
+>       Drag the window to its smallest, then maximise it. *Failure:* the prose pane is empty or under
+>       about 8 lines at the smallest size; any menu button clipped or off-screen; the scenery frame
+>       taller than roughly a quarter of the reading column. **This is the placement you chose and
+>       nobody has seen it rendered.**
+> - [ ] **2. The level-up draft at minimum window with Large text.** **F3** → a state offering a draft
+>       pick → Settings → text size **Large** → Back → window to minimum. *Failure:* you cannot tell
+>       there is a **third** card, or the choice column shows no scrollbar. *(Measured: card 3 runs
+>       13 px past the bottom, ~93% visible, and the column scrolls. If that reads as a hidden option,
+>       say so — the fix is a wider choice column or a smaller large-text step, each with a named cost.)*
+> - [ ] **3. Focus rings inside the two new scroll containers.** Reach a battle, **Tab** through the
+>       right-hand buttons, then through the combat log's expander arrows. *Failure:* any focus outline
+>       clipped by the edge of its scrolling box, or invisible. There is 4 px of inner padding for
+>       exactly this. **A ring is a paint, not a rectangle — no test can measure it.**
+> - [ ] **4. Is the scenery frame an _establishing_ image?** Same hub screen as item 1; look at it once,
+>       cold. *Failure:* it reads as a missing asset, or your eye jumps back up past the text.
+>       **Reversal is one line** — `docs/UI-DESIGN.md` §17 names it; the frame moves to the foot of the
+>       column.
+> - [ ] **5. Is ~45 characters of prose comfortable at the minimum window?** Hub, smallest window,
+>       normal text. *(60 characters at the default window.)* *Failure:* the measure reads as cramped.
+>       The trades are a narrower choice column or a stacked layout at small sizes.
+> - [ ] **6. Screen-reader reading order.** Narrator or NVDA, walking the hub. *Failure:* the actions
+>       are announced before the prose, or the **"Choices"** landmark is not a jump target. DOM order is
+>       machine-checked; what a real screen reader does with it is not.
+>
+> **Known and deferred, not a bug to report:** with the battle action picker **open** at the minimum
+> window, some controls begin below the fold — the content is 683–788 px in a 558 px box. The column
+> scrolls and closing the picker restores everything, which is asserted. The battle screen's contents
+> belong to **`PLAN.md` #6**.
+
 > ## 🎨 From `visual-identity` (#8 + #16, merged 2026-09-08) — the game has a look now, and only your eyes can judge it
 >
 > **This is the first build where the game is meant to look like something.** Each floor now has its

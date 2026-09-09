@@ -19,6 +19,65 @@ Format per entry:
 
 ---
 
+## 2026-09-09 — layout-breathing-room (repairs the #8 escape; G57/G58 adjacent) [branch `agentic/layout-breathing-room`, **merged to `main` 2026-09-09**]
+- Verdict: **PASS** (0 fix rounds; 1 post-PASS hardening round the orchestrator asked for). 2149 → **2278 tests**, 91 files. 10 commits. **`src/game`, `src/llm`, `components.ts`, `components.css`, `log-model.ts`, `screens.ts`, `rendererSource.test.ts`, `screens.test.ts`, `art-slots.ts` byte-unchanged. No new dependency.**
+- **Why it exists:** to repair the `visual-identity` escape — the author ran the game and **the narration was gone**. See that unit's Manual-engineer-fixes line.
+- Build-agent deviations: **six, all confirmed sound by the test-agent**, including one where **the plan's own arithmetic was wrong** (AC #7 said the scenery width cap bites at 1920×1080; §2.5's 1125 px is correct, and the agent added 1920×1200 so both caps are proven).
+- Test failures before fixes: none. The two items sent back were **vacuity gaps the test-agent found in the new probe**, not failures.
+- Plan open-questions: none. Two non-blocking notes recorded for the author (the 900 px breakpoint; the 1366×768 default-window question routed to #14/N5).
+- Manual engineer fixes: none yet.
+
+### ⭐ THE ANSWER TO THE RETRO QUESTION THIS PIPELINE HAS BEEN ASKING SINCE #8
+
+The `visual-identity` record ends: *"the pipeline has no way to assert a rendered layout, and this is the first defect that needed one."* **It has one now.**
+
+`src/dev/layoutProbe.test.ts` + `scripts/layout-probe.mjs` build the real production page and render it in **real Chromium** (the repo's own Electron) at six window sizes and two text sizes, then boot the real `game.ts` behind a stub IPC bridge and **click-walk it** through hub, settings and inventory. 56 assertions, **8.7 s, no skip switch.** It measures what jsdom structurally cannot: computed geometry.
+
+**It was written FIRST and run against the broken layout**, where it failed — and the numbers were produced independently three times (plan-agent, build-agent, test-agent from a clean scratch worktree at `cab389f` with none of the unit's commits and `screenLayout` inlined rather than imported):
+
+| | measured on the unfixed tree |
+|---|---|
+| narration, 960×640 hub | **0.0 px** (needed 203) |
+| narration, default window | **4.5 px** |
+| combat log, 960×640 | **8.8 px** |
+| Abandon button | **y 663.7–713.5**, below a 640 px window |
+| page | **scrolls, 726.3 > 640** |
+
+**This is the pattern to reuse: build the probe, prove it red on the known defect, then fix.** A probe first proven against a bug it cannot see is worth nothing, and this project has been bitten by that shape repeatedly.
+
+### ⭐ CATALOGUE ENTRY 10 — "not zero" is not "visible"
+
+Found by the build agent while proving the orchestrator's *own* hardening request, and it is the sharpest instance yet of the vacuity class.
+
+The test-agent had spotted that in a battle with the picker closed, **7 of 13 controls have a zero rect and pass a strict below-the-fold check trivially** (`top 0, bottom 0` satisfies both bounds). Asked to add a presence discriminator, the build agent wrote one — and **its first mutation stayed green.** Setting `height: 0` on a `.void-button` does not produce a zero-height box: **the border survives and it measures 1.6 px**, which counted as laid out and inside the window.
+
+**A presence check is not a visibility check.** The guard now requires a control on screen to be at least **one line of its own type** tall (20.15 px normal / 24.8 px large), with the constant cross-checked against `TYPE` and `TEXT_SCALE_TABLE.large` so a type-scale change cannot silently lower the floor. Real controls measure ~45.7 px.
+
+Nine mutations, all red, each in the shape it would really occur: a 2 px sliver, a 10 px squeeze, `display: none`, a 4 px cap through the whole column, cards grown until the third begins off-screen, a card pushed down by margin, a disclosure that fails to restore on close, and a fourth card appearing.
+
+### The strict clause immediately failed on the unit's own code, and was split rather than weakened
+
+Applying *"no control may begin below the fold"* went red on `battle-open`: Run begins at **y 694.7** at default text, and **three** controls begin below the fold at large text — content 683–788 px in a 555–558 px box. Nothing in the stage layout makes that fit, and the battle screen's contents belong to **#6**.
+
+The agent split the two cases instead of loosening the rule: **`PRESENTED_OVERFLOW`** (a list the *game* presents — `draft-pick` at large text) keeps full strength and passes; **`EXPANDED_DISCLOSURE`** (something the *player* opened — `battle-open`) must scroll **and** must restore every control to the window when closed, asserted directly against the closed scenario rather than left for another test's list to imply. **A weaker standard was bounded rather than substituted** — the test-agent verified the bound is live.
+
+### A second defect found by measurement, not by reading
+
+`electron/main.mjs` applied `minWidth`/`minHeight` to the **outer** window, so the page had only ever received **947×577** — the 960×640 in `UI-DESIGN.md` §14, decided two days earlier, was never true in the running app. Proven with a **real second `BrowserWindow`** built without the flag in the same process, not a computed guess. `useContentSize: true` makes the documented number real, and the probe asserts the **content** box so it cannot drift back.
+
+### G58 fired twice more during this unit
+
+- **In the build agent's own hands:** a Python `\b` in an edit script became a literal backspace inside a regex in `electron/mainSource.test.mjs`, turning `(?!true\b)` into a pattern matching `true` itself — **a guard that silently inverted.** `sourceBytes.test.ts` caught it by byte. Repaired, and the pattern now self-tests with four inline detector assertions.
+- **Pre-existing in `PROGRESS.md` line 197**, present at the branch point: the sentence recording *that the backspace-byte trap had fired* was itself corrupted by a backspace byte. The build agent found it, correctly judged it outside its territory, and left it. **Orchestrator repaired it in `main`; all 30 tracked Markdown files now scan clean.**
+
+### For the retro
+
+- **The probe pattern is the deliverable, not the layout fix.** Ask whether any future unit that changes rendered geometry must extend it, the way `exclusion.test.ts` is now mandatory for bundle-graph changes.
+- **Two vacuity gaps in a brand-new guard, found by the test-agent and a third by the build agent under challenge.** All three were "the assertion is satisfied by something other than the thing it names". Catalogue entries 9 and 10 are the same family; consider promoting *"name what would satisfy this assertion WITHOUT the behaviour being present"* to a standing build-agent step.
+- **An agent stalled mid-unit for the second time this session** (10 min, no progress). The orchestrator's checkpoint-commit-then-resume recovered it with no lost work, as it did for #8. Worth making that an explicit orchestrator procedure rather than improvisation.
+
+---
+
 ## 2026-09-08 — visual-identity (#8 screens-restyle + #16 typeface; B1, G5, G8-shown, S1, S4a; G55, G56) [branch `agentic/visual-identity`, **merged to `main` 2026-09-08**]
 - Verdict: **PASS** (after 1 fix round). 1913 → **2149 tests**, 87 files. 9 commits. **No file under `src/game`/`src/llm` modified; `components.ts`, `component-model.ts`, `log-model.ts`, `format.ts`, `tokens.css` and `rendererSource.test.ts` byte-unchanged.**
 - **Why it exists:** the author bought look-and-feel into v1 (`SHIP-SCOPE.md` §11), then defined it in two directives (§11.1): *"each floor has a distinct font color, and background color with a certain level of texture, we can use the atmospheric css option in conjunction"*, and *"we want placeholders for where scenery and enemy images and character image would be"*.
@@ -26,7 +85,7 @@ Format per entry:
 - Build-agent deviations: enemy art region placed in `renderSheet` rather than the out-of-scope `battle-action` branch (test-agent agreed); `src/dev/exclusion.test.ts` edited against AC-16, additively, on orchestrator instruction; `src/dev/observable.test.ts` gained a threaded seed argument the plan's AC did not anticipate; the developer art-slot caption was **dropped rather than built** (see G55).
 - Test failures before fixes: **two guards that proved nothing** — see below.
 - Plan open-questions: 4, all answered in Appendix A (the author answered Q1 with a directive that exceeded the options offered; the orchestrator settled Q2 settings-subset, Q3 960×640, Q4 placeholder prose).
-- **Manual engineer fixes — ⚠ ONE PIPELINE ESCAPE, found by the author in live play on 2026-09-09, the day after merge.** **The narration was gone.** Mid-battle on floor 1 the prose was clipped to a single half-visible line while an empty decorative frame held roughly a third of the screen. **Cause:** `.column` is `grid-template-rows: auto auto 1fr auto auto`, so `#narration` is the ONLY flexible row, and the scenery slot was appended into `#choices` — an `auto` row. Six buttons (~400px) plus a 247px empty frame plus the log at `max-height: 30vh` consumed the viewport, and the flexible row collapsed to zero. **An empty placeholder outranked the prose for vertical space.** *Which agent should have caught it:* none could, as built — **every guard in this area is a source scan or a jsdom assertion, and jsdom computes no layout.** The unit's own report said so honestly ("jsdom does no layout — nothing here has been rendered at 960×640") and the test-agent made it manual check 5; the escape is that **the defect appears at NORMAL size, not only at the minimum**, so the manual check as written would not have provoked it either. Fixed in unit `layout-breathing-room` (2026-09-09), where the author chose a stronger remedy than any offered — *"make the options on the right"* — moving the buttons into their own column so they stop competing with the prose at all. **Retro question: the pipeline has no way to assert a rendered layout, and this is the first defect that needed one.**
+- **Manual engineer fixes — ⚠ ONE PIPELINE ESCAPE, found by the author in live play on 2026-09-09, the day after merge.** **The narration was gone.** Mid-battle on floor 1 the prose was clipped to a single half-visible line while an empty decorative frame held roughly a third of the screen. **Cause:** `.column` is `grid-template-rows: auto auto 1fr auto auto`, so `#narration` is the ONLY flexible row, and the scenery slot was appended into `#choices` — an `auto` row. Six buttons (~400px) plus a 247px empty frame plus the log at `max-height: 30vh` consumed the viewport, and the flexible row collapsed to zero. **An empty placeholder outranked the prose for vertical space.** *Which agent should have caught it:* none could, as built — **every guard in this area is a source scan or a jsdom assertion, and jsdom computes no layout.** The unit's own report said so honestly ("jsdom does no layout — nothing here has been rendered at 960×640") and the test-agent made it manual check 5; the escape is that **the defect appears at NORMAL size, not only at the minimum**, so the manual check as written would not have provoked it either. **FIXED and merged 2026-09-09** in unit `layout-breathing-room` (see the record above), where the author chose a stronger remedy than any offered — *"make the options on the right"* — moving the buttons into their own column so they stop competing with the prose at all. **Retro question — ANSWERED by that unit: the pipeline had no way to assert a rendered layout. It now has `src/dev/layoutProbe.test.ts`, which renders the real page in real Chromium at six window sizes.**
 - One orchestrator action was also required at merge: `npm install` — the unit added `jsdom` as a devDependency, and on `main` two test files silently failed to run (`85 files / 2103 passed / 2 errors`) until it was installed. **Worth knowing: a missing devDependency reads as a mostly-green suite**, not as a red one.
 
 ### ⭐ CATALOGUE ENTRY 9 — a guard that checks only ONE end of a two-ended coupling
