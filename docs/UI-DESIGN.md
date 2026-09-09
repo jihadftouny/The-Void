@@ -516,10 +516,32 @@ need to know the range they must hold up across.
 **THE NUMBER IS `960×640` — decided 2026-09-08, enforced in `electron/main.mjs` (#8).**
 *This section decided a minimum must exist and then never named one, which is the same as not
 having decided — nothing could be designed or tested against it.* The initial window stays
-`1100×820`. A guard pins the minimum, and 960×640 is now the size every layout must survive:
+`1100×820`. A guard pins the minimum, and 960×640 is the size every layout must survive:
 it is what forced the character portrait to be square rather than upright (`src/data/artSlots.json`),
-and it is the width the reading column and the choice row are proved against. ⚠ **jsdom does no
-layout, so nothing has actually been RENDERED at this size** — that is a standing manual check.
+and it is the width the reading column and the choice column are proved against.
+
+> **⚠ TWO CORRECTIONS — `[2026-09-09]`, `layout-breathing-room`. Both sentences that used to
+> stand here were false.**
+>
+> **1. "960×640" was the OUTER WINDOW, not the page.** `minWidth`/`minHeight` without
+> `useContentSize` constrain the window frame, so the frame and the default menu bar came out of
+> the page's share before the stylesheet saw a pixel. Measured in this Electron: the identical
+> window handed the page **947×577**. The promise above had therefore been false since the number
+> was chosen, and every layout budget in the project was computed against a size the renderer never
+> received. `electron/main.mjs` now sets **`useContentSize: true`**, so 960×640 is what the page
+> gets, and it still is after the window is squeezed as small as it will go. The opening
+> `1100×820` is a content size too, so the window is slightly larger than before.
+>
+> **2. "Nothing has actually been RENDERED at this size" is no longer true.**
+> `src/dev/layoutProbe.test.ts` renders the real production build, in the real Chromium, at this
+> size and five others, at both text sizes, on every `npm test` — and it was written and run
+> against the BROKEN layout first, where it failed with the numbers in §17. It is a test, not a
+> standing manual check. What remains manual is named in §17 and in `HUMAN-CHECKS.md`.
+>
+> ⚠ **For #14 / N5, which owns the initial window size:** on a 1366×768 laptop the default window
+> already exceeded the work area, and making `1100×820` a content size makes it exceed it by more.
+> Remembered bounds clamped to the work area is N5's decided-and-unbuilt item; it was deliberately
+> not smuggled into this unit.
 
 ## 15. Accessibility — the full commitment **[DECIDED 2026-08-26]**
 
@@ -555,3 +577,96 @@ revisited rather than quietly missed.
 
 The **reduced-motion setting** (§13) remains the player's manual control, and is unaffected — it is
 an accessibility feature, not a performance one.
+
+## 17. The stage layout **[DECIDED 2026-09-09 — `layout-breathing-room`]**
+
+**The choice buttons live in their own column, to the RIGHT of the reading column.** The author's
+own words, chosen over two alternatives: *"make the options on the right."*
+
+### What went wrong, measured rather than argued
+
+`visual-identity` merged with 2149 tests green, a clean typecheck, a clean build and a PASS verdict.
+The author then ran the game and **the narration was gone** — one half-visible line mid-battle,
+while an empty reserved art frame held a third of the screen.
+
+Measured afterwards in the project's own Electron (Chromium 130), with worst-case hub content:
+
+| Viewport | narration | combat log | Abandon button | page |
+|---|---|---|---|---|
+| 960x640 (the enforced minimum) | **0 px** | 8.8 px (its own padding) | y 664-713 — **below the window** | scrolls to 726 px |
+| 1086x783 (what the default window really gave the page) | **4.5 px** | 13.3 px | visible | — |
+
+**The mechanism.** `#choices` was a child of `#column`, sharing a grid with the prose and the log.
+Both of those are scroll containers, so their automatic minimum size is **zero**; `#choices` was
+not, so it contributed its full 608 px of content to the track sizing. **The scrollable rows lose to
+the non-scrollable one, every time.**
+
+**Why no test saw it, and this is the part worth keeping.** Every guard covering this area was a
+source scan or a jsdom assertion, and **neither computes layout**. jsdom ships no layout engine —
+every `getBoundingClientRect()` it returns is zeros — so a jsdom test cannot tell a readable column
+from a collapsed one. A source scan can prove a declaration exists; it can never prove what that
+declaration does once the cascade, the flex algorithm, the viewport height and the real typeface's
+metrics have had their say. Both kinds of guard were thorough. Both were blind.
+(`FINDINGS.md` G56's family: a guard that checks only one end of a coupling.)
+
+### The model
+
+- **Two modes, and a mode is six CSS custom properties**, so the rules that read them are written
+  once. `screenLayout(key)` in `src/render/settings-model.ts` is the pure, exhaustively-tested
+  mapping; the renderer writes it to `<body data-layout>` through one branchless funnel.
+  - **`side`** (default) — reading column + a **260 px** choice column beside it. 260 px is the
+    longest fixed label the game ships (`Neuromancer - mind and static`) plus the button's padding.
+  - **`wide`** — the seven screens where `#choices` holds a whole DOCUMENT (inventory, character
+    sheet, settings, content warning, end-of-run record) or a wordmark with two stacked buttons
+    (title, resume). The reading column is capped at 45 vh and the document takes the rest.
+- **The prose has a hard floor: eight lines** (`--void-prose-floor: 8lh`), four in `wide`. `lh` so
+  the floor is defined as LINES — change the narration's line-height and the floor follows, and an
+  unsupported unit would drop the declaration and fail the probe loudly. An EMPTY narration
+  collapses to nothing, so the floor cannot hold a hole open on the title screen.
+- **The combat log is capped AND floored** (30 vh / 3 lines; 20 vh / 2 in `wide`). It yields to the
+  prose first, and scrolls inside its cap rather than growing.
+- **The scenery is capped in BOTH directions** — 440 px wide and 22 vh tall — **with the committed
+  16:9 ratio governing inside the box.** It used to be capped by width alone, and a width cap caps
+  nothing in the direction that is running out: 440 px of width is 247 px of height whatever the
+  window is. The ratio itself is untouched and still comes from `artSlots.json` (`ART-BIBLE.md` §4).
+- **Below 900 px the stage stacks** and the scenery is hidden. Derived from the MEASURE, not from a
+  device: below `W - 552 < 360` the reading column cannot keep ~40 characters beside the choices.
+  Unreachable in the shipped desktop build (the window minimum is 960 wide); it exists for
+  `CLAUDE.md` principle 6 and is measured at 800x600 so it is not dead code.
+
+### Three deliberate one-line reversals
+
+Each is recorded because the obvious thing to do later is to change it and wonder what else breaks.
+
+| To change | Move this one thing | And this |
+|---|---|---|
+| The scenery to the FOOT of the column | the `<div id="scenery">` line in `desktop.html`, below `#log` | swap two entries in `skeleton.test.ts`'s order assertion |
+| The stacking breakpoint | the `899px` literal in `game.css` | `STACK_BELOW` in `layoutProbe.test.ts` |
+| The prose floor | `--void-prose-floor` in `game.css` | `PROSE_LINES` in `layoutProbe.test.ts` |
+
+**The scenery is ABOVE the prose**, as an establishing shot: `ART-BIBLE.md` §3 specifies the floor
+backdrops as 16:9 with a deep-shadow bottom third — an image drawn to sit *over* text — and at the
+foot of the column a short beat would leave the frame floating under empty space.
+
+### What is measured, and what is still a human's job
+
+**Measured, on every `npm test`,** by `src/dev/layoutProbe.test.ts`: the real production build of
+the page, with the real built stylesheet and the real bundled typeface, in the real Chromium the
+game ships inside, at 960x640 / 1100x820 / 1280x720 / 1920x1080 / 1920x1200 / 800x600, at both text
+sizes, over twelve screens with worst-case content — plus a real-boot walk that clicks the actual
+renderer from the content warning to the abandon confirmation. Every threshold is arithmetic on the
+type scale, done in the test file. It costs about nine seconds and **has no skip switch**.
+
+**Still a human's job** (`HUMAN-CHECKS.md`): whether the frame above the prose *reads* as an
+establishing image, whether the right-hand command list *feels* right, whether 45 characters of
+measure at the minimum window is comfortable, whether a focus ring is fully visible inside a scroll
+container (a paint, not a rectangle), and a real screen reader's reading order.
+
+### One measured limit, recorded rather than smoothed over
+
+At **960x640 with LARGE text**, three draft cards carrying 90-character labels put the third at
+y 479-653 — 13 px past the fold. Widening the choice column takes the width straight out of a
+reading measure that is already 45 characters; shrinking the large step is the regression the
+text-size setting exists to prevent. So the draft takes the standard the open Cast list already
+set — first control visible, box inside the window, scrollable — and a separate assertion pins that
+the **default** text size must still fit outright.

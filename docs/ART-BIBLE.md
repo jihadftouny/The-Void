@@ -303,9 +303,23 @@ what stops finished art from being invalidated by a later re-layout.
 
 | Slot | Ratio | Why this shape |
 |---|---|---|
-| **Scenery** | **16:9** | Not a preference — §3 already LOCKS the five floor backdrops at 16:9 with a deep-shadow bottom third. The region was drawn to the existing brief rather than the brief bent to the region. Capped at 440px |
+| **Scenery** | **16:9** | Not a preference — §3 already LOCKS the five floor backdrops at 16:9 with a deep-shadow bottom third. The region was drawn to the existing brief rather than the brief bent to the region. **Capped at 440px wide AND 22vh tall, with the ratio governing inside the box** — corrected 2026-09-09, see below |
 | **Enemy** | **3:4** | Upright, because the subject is a standing figure. The shallowest upright ratio that still reads as a portrait: at the 140px HUD cap that is 187px, where 2:3 (210px) and 9:16 (249px) would crowd the vitals. The same shape survives the move to #6's battle screen |
 | **Character** | **1:1** | Forced by the layout, not chosen for the subject: the HUD column caps slots at 140px, and the 47px an upright bust would add costs HP, XP and the condition chips their place. **It also tells the art brief something true — this is a chest-up crop, not a full figure** |
+
+> **⚠ A WIDTH CAP IS NOT A CAP — `[2026-09-09]`, `layout-breathing-room`.** The scenery region
+> shipped capped by width alone, and that is what starved the narration. **440px of width is 247px
+> of height whatever the window is**, so at the 960×640 minimum the frame took 247 of the reading
+> column's 550 and the prose got nothing. A cap on the axis that is not running out caps nothing.
+>
+> **The ratio was NOT touched, and must not be.** The fix caps the BOX in both directions and lets
+> the committed 16:9 govern inside it: Chromium transfers a `max-height` back through
+> `aspect-ratio` to the width, so the frame measures 250×141 at the minimum window, 321×181 at the
+> default one, and 440×248 once the viewport passes 1125px tall — the same shape at every size.
+> **Changing a ratio to solve a layout problem is not available**: the ratio is the commitment
+> future art is drawn to, which is the whole point of §4. `styleDiscipline.test.ts` now requires
+> any height cap on an art region to be a viewport-relative unit, and the layout probe measures
+> the real ratio at six window sizes.
 
 Slots are **data** (`src/data/artSlots.json`), so adding art later is a change to one `source` field
 and nothing else — never a layout-code change. Each renders as an atmospheric framed region carrying

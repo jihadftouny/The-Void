@@ -6,7 +6,7 @@
       "label": "Scenery",
       "ratioW": 16,
       "ratioH": 9,
-      "why": "16:9 is not a preference — docs/ART-BIBLE.md §3 already LOCKS the five floor backdrops at 16:9 with a deep-shadow bottom third. Any other shape here would invalidate an art brief that predates this unit, so the region is drawn to the spec rather than the spec to the region. It ships on the hub, which is the floor's own screen, capped at 440px wide by screens.css so a 16:9 region cannot swallow the column at the 960x640 minimum; the height still follows the ratio, as it must.",
+      "why": "16:9 is not a preference — docs/ART-BIBLE.md §3 already LOCKS the five floor backdrops at 16:9 with a deep-shadow bottom third. Any other shape here would invalidate an art brief that predates this unit, so the region is drawn to the spec rather than the spec to the region. It ships on the hub, which is the floor's own screen, mounted in the READING column above the prose as an establishing shot. CORRECTED 2026-09-09: it used to be capped by WIDTH ALONE (in screens.css), and that starved the narration - 440px of width is 247px of height whatever the window is, so at the 960x640 minimum the frame took 247 of the reading column's 550 and the prose measured zero pixels. The cap now lives with the container (#scenery .void-art-slot in game.css) and caps BOTH directions, 440px wide and 22vh tall, with this ratio governing inside the box. THE RATIO ITSELF IS UNCHANGED AND IS NOT AVAILABLE AS A FIX for a layout problem: it is the commitment every future backdrop is drawn to.",
       "source": null
     },
     {
