@@ -194,7 +194,7 @@ long runs."*
 - **The plan's own proof was found broken before any code was written:** building in "development
   mode" alone produces a **byte-identical** bundle to production, so the control would never have
   been true and the assertion resting on it would have proved nothing.
-- ⭐ **The backspace-byte trap fired LIVE** — a script turned `` into a literal control byte while
+- ⭐ **The backspace-byte trap fired LIVE** — a script turned `\b` into a literal control byte while
   writing a guard, which would have made that guard **inert from birth**. The byte scan added three
   units ago caught it. *The trap is neither hypothetical nor historical.*
 - **A new failure shape for the catalogue:** seven decisions were extracted so they could be tested,
