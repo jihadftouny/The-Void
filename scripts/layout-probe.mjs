@@ -23,13 +23,18 @@
 //   3. `disable-gpu`. There is no guarantee of a GPU on a build machine, and software
 //      rasterisation produces identical LAYOUT (layout is not a paint).
 //   4. A resize is not complete when `setContentSize` returns. The page is polled until
-//      `innerWidth`/`innerHeight` actually report the new size, then given two animation
-//      frames, and the loop FAILS LOUDLY on a timeout rather than measuring a stale layout.
+//      `innerWidth`/`innerHeight` actually report the new size, and the loop FAILS LOUDLY on
+//      a timeout rather than measuring a stale layout. It does NOT wait on an animation
+//      frame: measured here, a frame in a window that is never shown costs about
+//      three quarters of a second, because nothing is asking the compositor for one. Layout
+//      is computed on demand when geometry is read, so a forced `getBoundingClientRect()` is
+//      both exact and instant — no measurement below depends on anything being painted.
 // ---------------------------------------------------------------------------------------
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 function arg(name) {
   const at = process.argv.indexOf(name);
@@ -37,6 +42,7 @@ function arg(name) {
   return process.argv[at + 1];
 }
 
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = arg('--dist');
 const OUT = arg('--out');
 
@@ -73,6 +79,14 @@ app.disableHardwareAcceleration();
 const USER_DATA = path.join(DIST, 'userData');
 fs.mkdirSync(USER_DATA, { recursive: true });
 app.setPath('userData', USER_DATA);
+
+// ⚠ THE PROBE MUST OUTLIVE ITS OWN WINDOWS. Electron quits the app by default once the last
+// window closes, and each phase below destroys its window before the next one opens. The
+// close is synchronous but the default quit is not, so the first `await` after a phase let
+// the app exit — silently, with status 0 and no result file. Measured: phases A and B ran to
+// completion and the process was gone before phase C could start. An empty handler is the
+// documented way to opt out.
+app.on('window-all-closed', () => {});
 
 /** Console output from the page, so a driver that threw says why instead of vanishing. */
 const consoleLines = [];
@@ -114,8 +128,15 @@ async function resize(win, width, height) {
          tries += 1;
          if (Math.abs(window.innerWidth - ${width}) <= ${SIZE_TOLERANCE} &&
              Math.abs(window.innerHeight - ${height}) <= ${SIZE_TOLERANCE}) {
-           requestAnimationFrame(() => requestAnimationFrame(() =>
-             resolve({ ok: true, width: window.innerWidth, height: window.innerHeight })));
+           // A forced layout read rather than two animation frames. In a window that is
+           // never shown an animation frame costs ~0.75s (no compositor is asking for
+           // frames), and nothing here needs a PAINT: the page has already reported the new
+           // viewport, and reading geometry flushes layout synchronously.
+           // (No backticks in here -- this whole block is inside a template literal.)
+           setTimeout(() => {
+             document.body.getBoundingClientRect();
+             resolve({ ok: true, width: window.innerWidth, height: window.innerHeight });
+           }, 0);
            return;
          }
          if (tries > 300) {
@@ -230,6 +251,53 @@ function phaseB() {
   return { options, before, after, control };
 }
 
+/**
+ * PHASE C -- THE REAL RENDERER, BOOTED AND WALKED.
+ *
+ * Phase A measures pages the PROBE assembles. This one measures the page the GAME assembles:
+ * `dist/desktop.html` with a stub IPC bridge, the real `src/desktop/game.ts` running, and a
+ * click walk from the content warning to the abandon confirmation. It is the other end of
+ * every coupling phase A can only mirror -- the hub menu's wrapper, the reserved region's
+ * mounting and clearing, the settings path that moves the prose floor -- and it is also where
+ * the renderer's OWN log output is collected, so its instrumentation can be asserted rather
+ * than assumed.
+ *
+ * At the DEFAULT window size, deliberately: this is the size a player actually opens.
+ */
+async function phaseC() {
+  const logs = [];
+  const collect = (_event, entry) => logs.push(entry);
+  ipcMain.on('probe:log', collect);
+
+  const win = watch(
+    new BrowserWindow({
+      show: false,
+      useContentSize: true,
+      width: 1100,
+      height: 820,
+      webPreferences: {
+        preload: path.join(HERE, 'layout-probe-preload.cjs'),
+        contextIsolation: true,
+        sandbox: false,
+        backgroundThrottling: false,
+      },
+    }),
+  );
+  await win.loadFile(path.join(DIST, 'desktop.html'));
+  await resize(win, 1100, 820);
+
+  const walk = fs.readFileSync(path.join(HERE, 'layout-probe-walk.js'), 'utf8');
+  let result;
+  try {
+    result = await win.webContents.executeJavaScript(walk, true);
+  } catch (err) {
+    fail(`the real-boot walk failed: ${String(err && err.message ? err.message : err)}`);
+  }
+  ipcMain.removeListener('probe:log', collect);
+  win.destroy();
+  return { ...result, logs };
+}
+
 app.whenReady().then(async () => {
   try {
     const result = {
@@ -237,6 +305,7 @@ app.whenReady().then(async () => {
       electron: process.versions.electron,
       phaseA: await phaseA(),
       minWindow: phaseB(),
+      phaseC: await phaseC(),
     };
     fs.writeFileSync(OUT, JSON.stringify(result, null, 2));
     app.exit(0);

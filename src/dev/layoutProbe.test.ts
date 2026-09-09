@@ -180,10 +180,43 @@ interface SizeGroup {
   actual: { width: number; height: number };
   reports: Report[];
 }
+/** One measurement taken during the real-boot walk. */
+interface WalkStep {
+  step: string;
+  screen: string;
+  layout: string;
+  viewport: { width: number; height: number };
+  narration: Box & {
+    beats: number;
+    fallbacks: number;
+    characters: number;
+    fontSize: number;
+    lineHeight: number;
+  };
+  column: Pane;
+  choices: Pane & { controls: number; labels: string[] };
+  scenery: { inWrapper: number; inPage: number; box: Box | null; ratio: number | null };
+  buttons: Box[];
+  page: { scrollHeight: number; clientHeight: number };
+  focusOrder: string[];
+  hubMenuRows: number;
+  hubPromptVisible: boolean;
+  documentPanels: number;
+}
+
+/** A structured log entry as the renderer emitted it. */
+interface LogEntry {
+  level: string;
+  category: string;
+  message: string;
+  data?: unknown;
+}
+
 interface ProbeResult {
   chrome: string;
   electron: string;
   phaseA: SizeGroup[];
+  phaseC: { steps: WalkStep[]; fontLoaded: boolean; fontCount: number; logs: LogEntry[] };
   minWindow: {
     options: Record<string, unknown>;
     before: { content: number[]; window: number[] };
@@ -936,5 +969,294 @@ describe('the enforced minimum is the size the PAGE receives, not the window fra
       'the game window does not set useContentSize, so 960x640 is the FRAME and the page ' +
         'gets less — the documented minimum would be false again',
     ).toMatch(/useContentSize:\s*true/);
+  });
+});
+
+// =========================================================================================
+// 7 — THE REAL RENDERER, BOOTED AND WALKED.
+//
+// Everything above measures pages the PROBE assembles. This measures the page the GAME
+// assembles: the production `dist/desktop.html` with only a stub IPC bridge, the real
+// `src/desktop/game.ts` running, and a click walk from the content warning to the abandon
+// confirmation at the default window size.
+//
+// WHY IT IS NOT REDUNDANT. The driver in `src/dev/layoutProbe.ts` MIRRORS two structures the
+// renderer builds inline — the battle control list and the `.hub-menu` wrapper — because
+// `game.ts` calls the Electron IPC at module scope and can never be imported (G51). A mirror
+// can drift from the thing it mirrors, and a drifted mirror is a test that carefully measures
+// a page the game never shows. This is the other end of that coupling, and the two are
+// compared against each other directly below.
+//
+// It also exercises three things only a real boot can: that clearing the reserved region on
+// every render path really stops frames accumulating, that the REAL settings path moves the
+// prose floor (the floor is defined in `lh`, so an inert setting leaves it unmoved), and that
+// the renderer's own instrumentation reports the viewport and raises no layout warning.
+// =========================================================================================
+
+describe('the real renderer, booted and walked', () => {
+  const step = (name: string): WalkStep => {
+    const found = RESULT.phaseC.steps.find((s) => s.step === name);
+    if (!found) {
+      throw new Error(
+        `the walk never reached '${name}' — it got as far as ` +
+          RESULT.phaseC.steps.map((s) => s.step).join(', '),
+      );
+    }
+    return found;
+  };
+
+  it('the walk completed every step, in order', () => {
+    expect(RESULT.phaseC.steps.map((s) => s.step)).toEqual([
+      'content-warning',
+      'title',
+      'choose-class',
+      'hub',
+      'hub-large-text',
+      'settings',
+      'inventory',
+      'hub-after-re-renders',
+      'confirm-abandon',
+    ]);
+  });
+
+  it('and it is the real page: the bundled face loaded and all four weights are there', () => {
+    expect(RESULT.phaseC.fontLoaded, 'the walk measured the fallback font').toBe(true);
+    expect(RESULT.phaseC.fontCount, 'not every bundled weight reached the build').toBe(4);
+  });
+
+  it('every screen is in the stage layout the design assigns it', () => {
+    for (const [name, mode] of [
+      ['content-warning', 'wide'],
+      ['title', 'wide'],
+      ['choose-class', 'side'],
+      ['hub', 'side'],
+      ['settings', 'wide'],
+      ['inventory', 'wide'],
+      ['confirm-abandon', 'side'],
+    ] as const) {
+      expect(step(name).layout, `${name} is in the wrong stage layout`).toBe(mode);
+    }
+  });
+
+  it('the hub the RENDERER builds matches the one the probe mirrors', () => {
+    // The anti-drift check, and the reason both halves exist. If the driver's mirror of
+    // `renderHub` ever stopped matching the real one, every hub number measured above would
+    // describe a screen the game does not show.
+    const real = step('hub');
+    const mirrored = report(1100, 820, 'hub', 'normal');
+    expect(real.hubMenuRows, 'the real hub menu has a different number of rows').toBe(6);
+    expect(
+      real.choices.controls,
+      'the mirrored hub and the real hub disagree on how many controls the hub has',
+    ).toBe(mirrored.choices.controls);
+    // The menu's geometry, not just its count: same window size, same rows, same height.
+    const realMenu = (real.buttons.at(-1) as Box).bottom - (real.buttons[0] as Box).top;
+    const mirrorMenu = (mirrored.buttons.at(-1) as Box).bottom - (mirrored.buttons[0] as Box).top;
+    expect(
+      Math.abs(realMenu - mirrorMenu),
+      `the mirrored hub menu is ${mirrorMenu.toFixed(1)}px tall and the real one is ` +
+        `${realMenu.toFixed(1)}px — the mirror has drifted`,
+    ).toBeLessThan(2);
+  });
+
+  it('the hub gives real prose real room, and it is really the fallback path', () => {
+    const hub = step('hub');
+    expect(hub.narration.beats, 'the hub shows no prose at all').toBe(1);
+    expect(
+      hub.narration.fallbacks,
+      'the beat is not the fallback — the stub narrator was supposed to reject',
+    ).toBe(1);
+    expect(hub.narration.characters, 'the fallback wrote almost nothing').toBeGreaterThan(40);
+    expect(
+      hub.narration.height,
+      'the real hub starves the prose — this is the defect, in the real renderer',
+    ).toBeGreaterThanOrEqual(proseFloorPx('side', 'normal') - SLACK);
+  });
+
+  it('the reserved region is mounted exactly once, and stays that way after re-renders', () => {
+    // It is no longer a child of `#choices`, so `choicesEl.innerHTML = ''` no longer removes
+    // it. Miss one clearing path and every hub render stacks another 16:9 frame on the
+    // column until the prose is gone again. By this step the hub has been rendered four
+    // times in one session.
+    for (const name of ['hub', 'hub-after-re-renders', 'confirm-abandon']) {
+      const s = step(name);
+      expect(s.scenery.inWrapper, `${name}: the reserved region is not in the reading column`).toBe(1);
+      expect(
+        s.scenery.inPage,
+        `${name}: ${s.scenery.inPage} scenery frames in the page — they are accumulating`,
+      ).toBe(1);
+    }
+    // ...and it is gone entirely on the screens that do not own it.
+    for (const name of ['content-warning', 'title', 'settings', 'inventory']) {
+      expect(step(name).scenery.inPage, `${name} mounts a scenery frame`).toBe(0);
+    }
+  });
+
+  it('and it holds its committed ratio and its caps in the real page', () => {
+    const hub = step('hub');
+    const box = hub.scenery.box as Box;
+    expect(Math.abs((hub.scenery.ratio as number) - SCENERY_RATIO)).toBeLessThan(0.01);
+    expect(box.height).toBeLessThanOrEqual(SCENERY_CAP_VH * hub.viewport.height + SLACK);
+    expect(box.width).toBeLessThanOrEqual(SCENERY_CAP_PX + SLACK);
+    expect(box.height, 'the region collapsed in the real page').toBeGreaterThan(100);
+  });
+
+  it('THE REAL SETTINGS PATH moves the type scale, and the prose floor with it', () => {
+    // Not a faked attribute: the walk clicked Settings, clicked Large, waited for the option
+    // to report itself pressed, and clicked Back. If the setting were inert the scale would
+    // not move, and a floor defined in `lh` would not move either.
+    expect(step('hub').narration.fontSize, 'the default hub is not at the base step').toBe(
+      BASE_PX.normal,
+    );
+    expect(
+      step('hub-large-text').narration.fontSize,
+      'the Large setting did not change the type scale — the setting is inert',
+    ).toBe(BASE_PX.large);
+    expect(step('hub-large-text').narration.lineHeight).toBeCloseTo(
+      BASE_PX.large * NARRATION_LINE_HEIGHT,
+      1,
+    );
+    expect(
+      step('hub-large-text').narration.height,
+      'the prose floor did not follow the text size',
+    ).toBeGreaterThanOrEqual(proseFloorPx('side', 'large') - SLACK);
+  });
+
+  it('a document screen puts its document below the column, with the prose still readable', () => {
+    for (const name of ['inventory', 'settings']) {
+      const s = step(name);
+      expect(s.documentPanels, `${name} rendered no document panel`).toBe(1);
+      expect(s.choices.top, `${name}: the document is beside the column, not below it`)
+        .toBeGreaterThanOrEqual(s.column.bottom - SLACK);
+      expect(s.narration.height, `${name}: the prose behind the document is starved`)
+        .toBeGreaterThanOrEqual(proseFloorPx('wide', 'normal') - SLACK);
+      expect(s.choices.labels, `${name} has no way back`).toContain('Back');
+    }
+  });
+
+  it('the abandon confirmation asks its question and offers both answers', () => {
+    const s = step('confirm-abandon');
+    expect(s.hubPromptVisible, 'the confirmation shows no question').toBe(true);
+    expect(s.choices.controls, 'the confirmation does not offer exactly two answers').toBe(2);
+    for (const b of s.buttons) {
+      expect(b.bottom, 'an answer is below the fold').toBeLessThanOrEqual(
+        s.viewport.height + SLACK,
+      );
+      expect(b.top).toBeGreaterThanOrEqual(-SLACK);
+    }
+  });
+
+  it('nothing on the walk scrolls the page or the reading column', () => {
+    for (const s of RESULT.phaseC.steps) {
+      expect(
+        s.page.scrollHeight,
+        `${s.step}: the page scrolls (${s.page.scrollHeight} > ${s.page.clientHeight})`,
+      ).toBeLessThanOrEqual(s.page.clientHeight + SLACK);
+      expect(
+        s.column.scrollHeight,
+        `${s.step}: the reading column scrolls`,
+      ).toBeLessThanOrEqual(s.column.clientHeight + SLACK);
+      // The choice box itself always stays inside the window, on every screen, so whatever
+      // is inside it is reachable by scrolling that box rather than the page.
+      expect(s.choices.bottom, `${s.step}: the choice box runs past the window`)
+        .toBeLessThanOrEqual(s.viewport.height + SLACK);
+      expect(s.choices.top, `${s.step}: the choice box starts above the window`)
+        .toBeGreaterThanOrEqual(-SLACK);
+    }
+  });
+
+  it('and no ACTION list hides a control below the fold', () => {
+    // The distinction the walk has to make, and it is the same one phase A makes. On an
+    // action screen every control must be visible outright — a hidden Abandon is the defect
+    // that shipped. On a DOCUMENT screen (a 19-row inventory, the settings screen) the
+    // panel's own length legitimately exceeds the window; what matters there is that its box
+    // is inside the window and scrolls, which the check above asserts for every step.
+    const DOCUMENT_SCREENS = new Set(['inventory', 'settings', 'content-warning', 'title']);
+    for (const s of RESULT.phaseC.steps) {
+      if (DOCUMENT_SCREENS.has(s.screen)) continue;
+      expect(s.buttons.length, `${s.step} rendered no controls`).toBeGreaterThan(0);
+      for (const [i, b] of s.buttons.entries()) {
+        expect(
+          b.bottom,
+          `${s.step}: control ${i} (${s.choices.labels[i] ?? '?'}) is below the fold`,
+        ).toBeLessThanOrEqual(s.viewport.height + SLACK);
+        expect(b.top, `${s.step}: control ${i} is above the window`).toBeGreaterThanOrEqual(-SLACK);
+      }
+      expect(
+        s.choices.scrollHeight,
+        `${s.step}: an action list scrolls at the default window size`,
+      ).toBeLessThanOrEqual(s.choices.clientHeight + SLACK);
+    }
+    // Non-vacuity: some steps really were action screens with controls in them.
+    const actions = RESULT.phaseC.steps.filter((s) => !DOCUMENT_SCREENS.has(s.screen));
+    expect(actions.length, 'the walk visited no action screen').toBeGreaterThan(3);
+  });
+
+  it('and the keyboard never jumps backwards out of the prose', () => {
+    for (const s of RESULT.phaseC.steps) {
+      const lastColumn = s.focusOrder.lastIndexOf('column');
+      const firstChoices = s.focusOrder.indexOf('choices');
+      if (lastColumn < 0 || firstChoices < 0) continue;
+      expect(
+        lastColumn,
+        `${s.step}: a control comes before a focusable in the reading column`,
+      ).toBeLessThan(firstChoices);
+    }
+    // Non-vacuity for the walk's own focus data: every screen with controls reported them.
+    expect(
+      RESULT.phaseC.steps.filter((s) => s.focusOrder.includes('choices')).length,
+      'no step reported a focusable in the choices — the focus scan read nothing',
+    ).toBeGreaterThan(6);
+  });
+});
+
+// =========================================================================================
+// 8 — THE RENDERER'S OWN INSTRUMENTATION (CLAUDE.md principle 7).
+//
+// Collected from the real boot through the stub bridge's `log` channel, so these are the
+// lines a player's log file would really contain.
+// =========================================================================================
+
+describe('the renderer records the layout it produced', () => {
+  const logs = (): LogEntry[] => RESULT.phaseC.logs;
+
+  it('the log channel really carried entries (or every check here is vacuous)', () => {
+    expect(logs().length, 'the renderer forwarded no log entries at all').toBeGreaterThan(5);
+  });
+
+  it('it reports the viewport it got, as numbers', () => {
+    // A run that goes wrong on a player's machine is unexplainable without this: every
+    // layout promise the game makes is conditional on the window size, and until this unit
+    // nothing recorded it.
+    const line = logs().find((e) => e.category === 'render' && e.message === 'viewport');
+    expect(line, 'the boot never recorded the viewport').toBeDefined();
+    const data = line!.data as { width?: unknown; height?: unknown; dpr?: unknown };
+    expect(typeof data.width, 'the width is not a number').toBe('number');
+    expect(typeof data.height, 'the height is not a number').toBe('number');
+    expect(typeof data.dpr, 'the display scale is not recorded').toBe('number');
+    expect(data.width as number, 'the recorded width is not the real one').toBeGreaterThan(1000);
+    expect(line!.level).toBe('info');
+  });
+
+  it('and it raises NO layout warning anywhere on the walk', () => {
+    // ⭐ THE ONE THAT WOULD HAVE CAUGHT THE ESCAPE. On the layout that shipped, the hub in
+    // this walk had prose in a zero-height pane and a choice box past the bottom of the
+    // window — both of which `layoutWarnings` names. A clean walk is the assertion.
+    const warnings = logs().filter((e) => e.category === 'render' && e.level === 'warn');
+    expect(
+      warnings.map((w) => `${w.message}: ${JSON.stringify(w.data)}`),
+      'the renderer itself reports the layout is wrong',
+    ).toEqual([]);
+  });
+
+  it('...and the warning path is reachable at all (not merely absent)', () => {
+    // "No warnings" is worthless if nothing could ever produce one. The pure half is proved
+    // in `layout.test.ts` over the exact number patterns the defect produced; this asserts
+    // the renderer really wired that half in, so the silence above means something.
+    const source = readFileSync(path.join(ROOT, 'src/desktop/game.ts'), 'utf8');
+    expect(source, 'the renderer never computes layout warnings').toMatch(
+      /layoutWarnings\s*\(/,
+    );
+    expect(source, 'a layout warning would never be logged').toMatch(/log\.warn\('render'/);
   });
 });
