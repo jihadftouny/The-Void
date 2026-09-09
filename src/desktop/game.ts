@@ -49,7 +49,7 @@ import { SLOW_MS, levelForDuration, startTimer } from '../log/timing.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 // The shared render foundation (M-UI2 `ui-foundation`).
 import { applyTheme, applySettings } from '../render/theme.ts';
-import { floorTagText, screenKey, type Settings } from '../render/settings-model.ts';
+import { floorTagText, screenKey, screenLayout, type Settings } from '../render/settings-model.ts';
 import { loadSettings, saveSettings } from '../storage/settingsStorage.ts';
 import { buttonModel, rowModel, conditionChips } from '../render/component-model.ts';
 import { appendButton, appendRow, appendLogLine, chip, picker } from '../render/components.ts';
@@ -63,6 +63,7 @@ import {
   buildContentWarning,
   buildSettingsScreen,
 } from './screens.ts';
+import { layoutWarnings, readLayout } from './layout.ts';
 
 // `totalMs` is the main process's own measurement of the generation (`llm.mjs` computed
 // it already and used to throw it away). Optional because an older main process would not
@@ -99,6 +100,10 @@ const narrationEl = $('narration');
 const logEl = $('log');
 const choicesEl = $('choices');
 const sheetEl = $('sheet');
+// The floor's own reserved region, in the READING column rather than in the choices. Its own
+// element because the choices are cleared wholesale on every render and the scenery is not
+// part of them: it belongs beside the prose it establishes.
+const sceneryEl = $('scenery');
 
 /**
  * The developer's explicit opt-in: `localStorage['thevoid:loglevel'] = 'debug'`. Wrapped
@@ -147,6 +152,31 @@ log.info('game', 'renderer booted', {
 window.addEventListener('error', (ev) =>
   log.error('error', 'window error', { message: ev.message, source: ev.filename, line: ev.lineno }),
 );
+
+// THE SIZE OF THE WINDOW THE PLAYER ACTUALLY HAS. Every layout promise this game makes is
+// conditional on it, and until now no log line recorded it — so a report of "the narration is
+// gone" arrived with no way to tell whether the window was 1920 wide or dragged to the
+// minimum. The display scale factor is here for the same reason: it is what makes one
+// machine's pixels a different size from another's.
+log.info('render', 'viewport', {
+  width: window.innerWidth,
+  height: window.innerHeight,
+  dpr: window.devicePixelRatio,
+});
+// Resizing fires continuously while a window is dragged, so this is DEBOUNCED to the settled
+// size — an undebounced listener would write a hundred lines per drag and bury everything
+// else in the file. At `debug`: it is a developer's question, not a shipped one.
+let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    log.debug('render', 'viewport resized', {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      dpr: window.devicePixelRatio,
+    });
+  }, 250);
+});
 
 // THE PACKAGED-BUILD DIAGNOSTIC FOR THE BUNDLED TYPEFACE (principle 7, and PLAN.md #16's
 // whole risk). The failure this exists for is silent by nature: if the four woff2 faces do
@@ -627,8 +657,10 @@ function renderHub(): void {
   const view = hubMenu(screen === 'confirm-abandon' ? 'confirm-abandon' : 'menu');
 
   // The floor's own reserved region. Empty today; it carries this floor's colour and texture
-  // so it reads as part of the place rather than as a missing asset.
-  choicesEl.appendChild(buildArtSlotById('scenery'));
+  // so it reads as part of the place rather than as a missing asset. It goes in the READING
+  // column, above the prose, as an establishing shot — not into the choices, where it used to
+  // sit and where it took a third of the screen away from the narration.
+  sceneryEl.appendChild(buildArtSlotById('scenery'));
 
   const prompt = document.createElement('p');
   prompt.className = 'hub-prompt';
@@ -720,6 +752,7 @@ async function dispatch(input: GameInput): Promise<void> {
   const turnTimer = startTimer();
   try {
     choicesEl.innerHTML = '';
+    sceneryEl.replaceChildren();
     // At `debug` only — this payload carries the player's typed name on the name step, and
     // a packaged build runs at `info`. See `src/log/level.ts`.
     log.debug('ui', 'choice', { input });
@@ -815,18 +848,55 @@ function start(): void {
   // `start()`, so the "not on resume" half is structural rather than a condition somebody
   // could invert. Acknowledging it is what renders the title.
   choicesEl.replaceChildren();
+  sceneryEl.replaceChildren();
   titleEl.style.display = 'none';
-  document.body.dataset['screen'] = 'content-warning';
+  showScreen('content-warning');
   choicesEl.appendChild(buildContentWarning(CONTENT_WARNING, () => renderChoices('title')));
+}
+
+/**
+ * THE ONE PLACE THE SCREEN IS ANNOUNCED TO THE STYLESHEET. Two attributes, written together
+ * and never apart.
+ *
+ * `screens.css` is keyed on `[data-screen='…']` and `game.css` on `[data-layout='…']`, so
+ * every per-screen treatment is CSS rather than a structural rewrite of `renderChoices`.
+ * Both values are decided by PURE, tested functions; this writes them and nothing else.
+ *
+ * It is BRANCHLESS on purpose. Three call sites used to write `data-screen` by hand, and a
+ * fourth that forgot the layout attribute would leave the stage in the previous screen's
+ * geometry — a document rendered into a 260px column, or a hub with no room for its prose.
+ * There is no condition here to get wrong.
+ */
+function showScreen(key: string): void {
+  document.body.dataset['screen'] = key;
+  document.body.dataset['layout'] = screenLayout(key);
+}
+
+/**
+ * Record what the layout ACTUALLY came out as, after the screen has been built.
+ *
+ * Principle 7, and the specific failure it exists for: the narration collapsing was reported
+ * as "the narration is gone", with no numbers, from a build whose whole test suite was green.
+ * Every number that would have identified it in seconds was in the page and recorded nowhere.
+ * `readLayout` is the boundary read; `layoutWarnings` is pure and unit-tested, so the defect
+ * signature is an assertion in `layout.test.ts` rather than a hope in a comment here.
+ */
+function reportLayout(): void {
+  const report = readLayout({ narrationEl, logEl, choicesEl, sceneryEl });
+  log.debug('render', 'layout', report);
+  // The message is a CONSTANT and the problem travels in `data`: two occurrences of the same
+  // fault must be greppable as the same fault.
+  for (const warning of layoutWarnings(report)) {
+    log.warn('render', 'layout is wrong', { warning, ...report });
+  }
 }
 
 function renderChoices(awaiting: Awaiting): void {
   choicesEl.innerHTML = '';
-  // THE ONE LINE THE WHOLE RESTYLE HANGS OFF. `screens.css` is keyed on `[data-screen='…']`,
-  // so every per-screen treatment is CSS rather than a structural rewrite of this function.
-  // `screenKey` is pure and tested; the render-layer mode wins over `awaiting` because the
-  // engine is still at `main-menu` behind the inventory, sheet, settings and confirmation.
-  document.body.dataset['screen'] = screenKey(awaiting, screen);
+  // The scenery is NOT part of the choices, so clearing them does not clear it — and it must
+  // be cleared, or every re-render of the hub would stack another 16:9 frame on the column.
+  sceneryEl.replaceChildren();
+  showScreen(screenKey(awaiting, screen));
   titleEl.style.display = awaiting === 'title' ? 'block' : 'none';
 
   // The settings route sits ABOVE the switch because B1 routes it from the title screen as
@@ -1011,13 +1081,16 @@ function renderChoices(awaiting: Awaiting): void {
       break;
     }
   }
+  // AFTER the switch: the screen now holds everything it is going to hold, so this is the
+  // only point at which the measurement means anything.
+  reportLayout();
 }
 
 function renderResume(): void {
   titleEl.style.display = 'block';
-  // Its own `data-screen`, and NOT the content warning: S1's policy is "every fresh run",
-  // and a resumed run is not one. The warning is only reachable through `start()`.
-  document.body.dataset['screen'] = 'resume';
+  // Its own screen, and NOT the content warning: S1's policy is "every fresh run", and a
+  // resumed run is not one. The warning is only reachable through `start()`.
+  showScreen('resume');
   narrationEl.innerHTML = '';
   const p = document.createElement('p');
   p.className = 'beat';

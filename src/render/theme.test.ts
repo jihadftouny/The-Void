@@ -49,6 +49,7 @@ import { FLOOR_THEMES, floorTheme, themeVars } from './tokens.ts';
 import {
   DEFAULT_SETTINGS,
   motionEnabled,
+  screenLayout,
   settingsVars,
   type ContrastSetting,
   type MotionSetting,
@@ -86,11 +87,15 @@ function attributeSelectors(): { name: string; value: string; sheet: string }[] 
 }
 
 /**
- * `data-screen` is written by `src/desktop/game.ts` from the pure `screenKey`, not by either
- * applier, so it is excluded from the applier checks — and then checked on its own terms at
- * the bottom of this file rather than simply waved through.
+ * The hooks `src/desktop/game.ts` writes rather than either applier, so they are excluded
+ * from the applier checks — and then checked on their own terms at the bottom of this file
+ * rather than simply waved through.
+ *
+ * `data-screen` comes from the pure `screenKey`; `data-layout` (added 2026-09-09 by
+ * `layout-breathing-room`) from the pure `screenLayout`. Both are written by the ONE
+ * `showScreen` funnel, together, which is itself pinned in `layoutSource.test.ts`.
  */
-const OWNED_ELSEWHERE = new Set(['data-screen']);
+const OWNED_ELSEWHERE = new Set(['data-screen', 'data-layout']);
 
 /** The `data-*` attributes actually on an element, as `name=value`. */
 function attributesOn(el: HTMLElement): string[] {
@@ -399,7 +404,67 @@ describe('every data-screen rule is keyed to a value screenKey can produce', () 
     // The other end of this one lives in `screensSource.test.ts`; named here so a reader of
     // this file knows the coupling is closed rather than half-closed, which is the mistake
     // that made this whole test file necessary.
+    //
+    // ⚠ UPDATED 2026-09-09: the write goes through the `showScreen` funnel, which sets
+    // `data-screen` and `data-layout` in one statement. Nothing is loosened — `screenKey` is
+    // still pinned as the source of the value.
     const game = readFileSync(join(SRC_ROOT, 'desktop/game.ts'), 'utf8');
-    expect(game).toMatch(/dataset\['screen'\]\s*=\s*screenKey\s*\(/);
+    expect(game).toMatch(/showScreen\s*\(\s*screenKey\s*\(/);
+  });
+});
+
+// =========================================================================================
+// `data-layout` — the SECOND hook neither applier owns, and the newest half-coupling risk.
+//
+// It selects the entire stage geometry. A stylesheet keyed to `[data-layout='wideish']`, or a
+// `screenLayout` that returned a third value nothing styles, would leave a screen in whatever
+// geometry the previous one had: a document rendered into a 260px action column, or a hub
+// whose prose keeps a document screen's cap. Neither throws, and both look almost right.
+// =========================================================================================
+
+describe('every data-layout rule is keyed to a mode screenLayout can produce', () => {
+  /**
+   * The two modes, written out by hand from the design rather than imported. Importing the
+   * union from `settings-model.ts` would ask the module under test to agree with itself,
+   * which is the exact blindness the top of this file exists to remove.
+   */
+  const MODES = new Set(['side', 'wide']);
+
+  it('no stylesheet is keyed to a stage layout that can never appear', () => {
+    const unreachable = attributeSelectors()
+      .filter((s) => s.name === 'data-layout')
+      .filter((s) => !MODES.has(s.value))
+      .map((s) => `${s.sheet} -> [data-layout='${s.value}']`);
+    expect(unreachable, 'a stage-layout rule is keyed to a mode the renderer never writes')
+      .toEqual([]);
+  });
+
+  it('and there is a real rule keyed to it (non-vacuity)', () => {
+    // The `side` mode is the DEFAULT — it is the base rule and carries no attribute selector
+    // — so exactly one of the two modes is expected to appear as a selector, and it is
+    // `wide`. Asserting that specifically, because "at least one" would be satisfied by a
+    // stylesheet that had lost the document layout entirely.
+    const keyed = attributeSelectors().filter((s) => s.name === 'data-layout');
+    expect(keyed.length, 'nothing selects on the stage layout at all').toBeGreaterThan(0);
+    expect(keyed.map((s) => s.value), 'the document layout has no rules').toContain('wide');
+  });
+
+  it('the renderer writes it, through the pure helper, for every mode', () => {
+    const game = readFileSync(join(SRC_ROOT, 'desktop/game.ts'), 'utf8');
+    expect(game, 'nothing writes the stage layout — it would never change').toMatch(
+      /dataset\['layout'\]\s*=\s*screenLayout\s*\(/,
+    );
+    // ...and the mode the stylesheet is keyed to is one the pure function really returns.
+    // Derived from the CSS side, so a `screenLayout` renamed to produce `'document'` fails
+    // here rather than silently leaving every document screen in the action geometry.
+    for (const mode of ['side', 'wide']) {
+      expect(
+        [...MODES].includes(screenLayout(mode === 'wide' ? 'inventory' : 'main-menu')),
+      ).toBe(true);
+    }
+    expect(screenLayout('inventory'), 'a document screen is not in the document layout').toBe(
+      'wide',
+    );
+    expect(screenLayout('main-menu'), 'the hub is not in the action layout').toBe('side');
   });
 });

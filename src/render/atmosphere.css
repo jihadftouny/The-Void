@@ -122,9 +122,17 @@
  * The reservation is a RATIO, written inline by `buildArtSlot` from the data, never a pixel
  * height — so the region scales with the window and holds its shape all the way down to the
  * 960x640 minimum, instead of being right at one size and wrong everywhere else. `max-width`
- * is what keeps a 16:9 region from swallowing the hub and a 3:4 one from pushing the vitals
- * out of the HUD column; it caps the box WITHOUT touching the ratio, because the height
- * follows the width.
+ * is what keeps a 3:4 region from pushing the vitals out of the HUD column; it caps the box
+ * WITHOUT touching the ratio, because the height follows the width.
+ *
+ * CORRECTED 2026-09-09 (`layout-breathing-room`): a width cap ALONE was not enough for the
+ * hub's 16:9 region, and believing it was is what starved the narration. 440px of width is
+ * 247px of height whatever the window is, so at the 960x640 minimum the frame took 247 of
+ * the reading column's 550 and the prose got nothing. Capping only the width caps nothing in
+ * the direction that is running out. The scenery region is therefore capped by HEIGHT as
+ * well, in `game.css`, where Chromium transfers the cap back through the `aspect-ratio` to
+ * the width -- so the box shrinks and the committed ratio is still untouched. No rule in
+ * THIS file changed: the ratio has always come from the data, and it still does.
  *
  * They must read as DELIBERATE, not missing. An empty slot is a framed region carrying this
  * floor's own colour and texture — the same `.void-texture` element the full-screen layer

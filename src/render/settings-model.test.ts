@@ -24,13 +24,18 @@ import {
   motionEnabled,
   parseSettings,
   screenKey,
+  screenLayout,
   serializeSettings,
   settingsVars,
+  WIDE_SCREENS,
   type ContrastSetting,
+  type LayoutMode,
   type MotionSetting,
   type Settings,
   type TextScale,
 } from './settings-model.ts';
+import type { Awaiting } from '../game/game.ts';
+import type { HubScreen } from '../desktop/view-model.ts';
 import {
   FLOOR_THEMES,
   HIGH_CONTRAST,
@@ -493,5 +498,79 @@ describe('the settings rows describe controls that actually control something', 
         expect(option.label, 'an option shows its raw value to the player').not.toBe(option.value);
       }
     }
+  });
+});
+
+// =========================================================================================
+// THE STAGE LAYOUT MODE (`layout-breathing-room`, 2026-09-09).
+//
+// WHY THIS TABLE IS WRITTEN OUT IN FULL, and typed as an EXHAUSTIVE `Record`. The mapping is
+// a design decision — which screens put the choices in a 260px column beside the prose, and
+// which ones hand `#choices` the width because it is holding a whole document. A test that
+// asked `screenLayout` to agree with `WIDE_SCREENS` would be asking the implementation to
+// agree with itself, and would have accepted any classification at all.
+//
+// The `Record` type is the second half of the guard: its key type is every `Awaiting` member
+// the engine can produce, plus every render-layer screen, so ADDING A SCREEN fails to compile
+// this file until somebody decides which side of the line it falls on. That is deliberately a
+// build failure rather than a silent default — an unclassified screen would render, look
+// almost right, and quietly get the wrong prose floor.
+// =========================================================================================
+
+describe('every screen is classified into one of the two stage layouts', () => {
+  // Transcribed from the plan's own table (§2.6), not read back from the code.
+  const EXPECTED: Record<
+    Awaiting | HubScreen | 'confirm-abandon' | 'resume' | 'content-warning',
+    LayoutMode
+  > = {
+    // `wide`: a document, or a wordmark with two stacked buttons.
+    title: 'wide',
+    resume: 'wide',
+    'content-warning': 'wide',
+    inventory: 'wide',
+    sheet: 'wide',
+    settings: 'wide',
+    'game-over': 'wide',
+    // `side`: a short list of actions, beside prose that keeps its floor.
+    'enter-name': 'side',
+    'choose-class': 'side',
+    'accept-or-reroll-stats': 'side',
+    'main-menu': 'side',
+    'confirm-abandon': 'side',
+    'battle-action': 'side',
+    continue: 'side',
+    'draft-pick': 'side',
+    'deal-decision': 'side',
+    'rest-decision': 'side',
+  };
+
+  it('maps every one of them exactly as the design says', () => {
+    for (const [key, mode] of Object.entries(EXPECTED)) {
+      expect(screenLayout(key), `${key} is drawn in the wrong stage layout`).toBe(mode);
+    }
+  });
+
+  it('and the table really covers both modes, in the numbers the design states', () => {
+    // Non-vacuity with teeth: a `screenLayout` that returned `'side'` for everything would
+    // pass a table that happened to be all-`side`, so the counts are asserted too.
+    const modes = Object.values(EXPECTED);
+    expect(modes.filter((m) => m === 'wide').length, 'the document screens moved').toBe(7);
+    expect(modes.filter((m) => m === 'side').length, 'the action screens moved').toBe(10);
+    expect(modes.length, 'a screen key was dropped from the table').toBe(17);
+  });
+
+  it('an unknown key is `side` — the mode that guarantees the prose its floor', () => {
+    expect(screenLayout('a-screen-that-does-not-exist-yet')).toBe('side');
+    expect(screenLayout('')).toBe('side');
+  });
+
+  it('and `WIDE_SCREENS` holds exactly the seven the table calls wide', () => {
+    // The forward direction (code -> table) as well as the backward one above, so a key
+    // added to the set without a home in the table fails here. G56's rule: name both ends.
+    const wideInTable = Object.entries(EXPECTED)
+      .filter(([, mode]) => mode === 'wide')
+      .map(([key]) => key)
+      .sort();
+    expect([...WIDE_SCREENS].sort()).toEqual(wideInTable);
   });
 });

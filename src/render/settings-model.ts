@@ -191,6 +191,52 @@ export function screenKey(awaiting: string, screen: string): string {
 }
 
 /**
+ * Which of the two stage layouts a screen is drawn in. PURE, beside `screenKey`, for the
+ * same reason: the mapping is a decision, and a decision belongs in a tested function
+ * rather than in a condition inside the one file no test can import.
+ *
+ *  - `side`  — the reading column and the choice column stand SIDE BY SIDE. The prose keeps
+ *              a guaranteed floor of eight lines because the buttons no longer compete with
+ *              it for vertical space. This is the default, and it is what fixed the defect
+ *              this unit exists for: the choices used to live INSIDE the reading column, and
+ *              a six-row hub menu starved the narration to zero pixels at the minimum window.
+ *  - `wide`  — the reading column is capped and the choice area takes the rest, because on
+ *              these seven screens `#choices` is not a row of buttons at all: it is a whole
+ *              DOCUMENT (the inventory, the character sheet, the settings screen, the content
+ *              warning, the end-of-run record) or a wordmark with two stacked buttons (title,
+ *              resume). A 260px column would be the wrong shape for every one of them.
+ */
+export type LayoutMode = 'side' | 'wide';
+
+/**
+ * The seven screens that render a document rather than a short list of actions.
+ *
+ * A SET rather than a chain of `||`, and exported so the test can assert the mapping over an
+ * exhaustive table of every screen key the game can produce — adding a new `Awaiting` member
+ * fails to compile that table until somebody classifies it.
+ */
+export const WIDE_SCREENS: ReadonlySet<string> = new Set([
+  'title',
+  'resume',
+  'content-warning',
+  'inventory',
+  'sheet',
+  'settings',
+  'game-over',
+]);
+
+/**
+ * The layout mode for a screen key (the value `screenKey` produces).
+ *
+ * Unknown keys are `side`, deliberately: `side` is the mode that guarantees the prose its
+ * floor, so a screen nobody remembered to classify still gets a readable narration rather
+ * than a capped one.
+ */
+export function screenLayout(key: string): LayoutMode {
+  return WIDE_SCREENS.has(key) ? 'wide' : 'side';
+}
+
+/**
  * The persistent floor tag — `UI-DESIGN.md` §11 and `FINDINGS.md` S4a, which is the rule that
  * the accent may never be the only carrier of any state. THE NAME CARRIES THE MEANING; the
  * colour is reinforcement. A colourblind player and a screen reader both get the floor here.

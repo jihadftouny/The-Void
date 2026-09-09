@@ -700,6 +700,33 @@ const DECLARATION = /(?:^|[{;])\s*(--void-[a-zA-Z0-9-]+)\s*:/gm;
 /** Matches a `var(--void-*)` READ, anywhere — deliberately unanchored. */
 const REFERENCE = /var\(\s*(--void-[a-zA-Z0-9-]+)/g;
 
+/**
+ * THE ONE CLASS OF `--void-*` PROPERTY THAT IS NOT A TOKEN, named exhaustively.
+ *
+ * Added by `layout-breathing-room` (2026-09-09). `game.css` drives its two stage layouts by
+ * redeclaring six properties per mode -- that is the entire mechanism: one set of rules reads
+ * them, and a mode is a change of six values rather than a second copy of the layout.
+ *
+ * They cannot live in `tokens.ts`, and the reason is not convenience. `themeVars` is a flat,
+ * global table written onto `<html>`; these are per-MODE values that differ between
+ * `[data-layout='side']` and `[data-layout='wide']` on the same page at the same moment. A
+ * token that has two values at once is not a token.
+ *
+ * ⚠ WHY THIS IS AN ALLOW-LIST OF EXACT NAMES AND NOT A PATTERN. `--void-layout-*` as a prefix
+ * rule would wave through `--void-layout-typo` and every future misspelling with it, which is
+ * how an exception quietly becomes a hole. Every name here is checked BOTH ways by the test
+ * below: each must really be declared in `game.css`, and none may collide with a real token.
+ */
+const LAYOUT_PROPERTIES = new Set([
+  '--void-choices-w',
+  '--void-layout-cols',
+  '--void-layout-rows',
+  '--void-column-max',
+  '--void-prose-floor',
+  '--void-log-cap',
+  '--void-log-floor',
+]);
+
 describe('every --void-* custom property the CSS reads is one the theme writes', () => {
   const files = stylesheetsUnder(SRC_ROOT);
   const defined = new Set(Object.keys(themeVars(0)));
@@ -715,6 +742,7 @@ describe('every --void-* custom property the CSS reads is one the theme writes',
       for (const match of shippingCss(file).matchAll(REFERENCE)) {
         references += 1;
         const name = match[1]!;
+        if (LAYOUT_PROPERTIES.has(name)) continue; // declared in game.css, not a token
         if (!defined.has(name)) missing.push(`${basename(file)} -> ${name}`);
       }
     }
@@ -730,10 +758,63 @@ describe('every --void-* custom property the CSS reads is one the theme writes',
     const declarations: string[] = [];
     for (const file of files) {
       for (const match of shippingCss(file).matchAll(DECLARATION)) {
+        if (LAYOUT_PROPERTIES.has(match[1]!)) continue; // a stage-layout value, not a token
         declarations.push(`${basename(file)} -> ${match[1]!}`);
       }
     }
     expect(declarations, `token(s) redefined in CSS: ${declarations.join(', ')}`).toEqual([]);
+  });
+
+  // =======================================================================================
+  // THE EXCEPTION IS BOUNDED AT BOTH ENDS. Two exemptions were just carved into the guards
+  // above, so the exempt set itself is now under guard: every name in it must really be a
+  // declared stage-layout value, and none of them may be a token. Without these, the
+  // allow-list could rot into a licence to redeclare anything.
+  // =======================================================================================
+
+  it('every exempted property is really DECLARED, in game.css and nowhere else', () => {
+    const declaredIn = new Map<string, Set<string>>();
+    for (const file of files) {
+      for (const match of shippingCss(file).matchAll(DECLARATION)) {
+        const name = match[1]!;
+        if (!declaredIn.has(name)) declaredIn.set(name, new Set());
+        declaredIn.get(name)!.add(basename(file));
+      }
+    }
+    for (const name of LAYOUT_PROPERTIES) {
+      expect(
+        declaredIn.has(name),
+        `${name} is exempted from the token guards and declared by no stylesheet — the ` +
+          'exemption list has rotted, and it is now a licence to redeclare a real token',
+      ).toBe(true);
+      expect([...declaredIn.get(name)!], `${name} is declared outside game.css`).toEqual([
+        'game.css',
+      ]);
+    }
+  });
+
+  it('and none of them collides with a token the theme writes', () => {
+    // If one ever did, the CSS declaration would silently beat `theme.ts` on that name —
+    // exactly the drift the guard above exists to prevent, smuggled in through the exemption.
+    for (const name of LAYOUT_PROPERTIES) {
+      expect(
+        defined.has(name),
+        `${name} is BOTH a theme token and an exempted layout value — the CSS declaration ` +
+          'would silently override what theme.ts writes',
+      ).toBe(false);
+    }
+    expect(LAYOUT_PROPERTIES.size).toBe(7);
+  });
+
+  it('...and a misspelling of one is NOT exempt (the exemption is by exact name)', () => {
+    // The shape a prefix rule would have waved through. `--void-prose-flor` reads as nothing,
+    // so the prose floor silently disappears; it must still be caught as an unknown property.
+    for (const typo of ['--void-prose-flor', '--void-layout-col', '--void-choices-width']) {
+      expect(LAYOUT_PROPERTIES.has(typo), `${typo} is treated as a known layout value`).toBe(
+        false,
+      );
+      expect(defined.has(typo), `${typo} resolves as a token`).toBe(false);
+    }
   });
 
   // The regexes above are the load-bearing part of this guard, and the first version of the

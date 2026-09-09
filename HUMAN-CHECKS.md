@@ -89,6 +89,60 @@
 >       restart, and confirm the class select is back to the Enforcer alone.
 
 
+> ## 📐 From `layout-breathing-room` (merged 2026-09-09) — the narration is back, and three things only your eyes can settle
+
+> **What happened, plainly.** The build you ran after `visual-identity` had **no readable
+> narration**: at the smallest window the game allows, the prose pane was measured at **zero
+> pixels**, the combat log at 8.8, and the **Abandon** button sat 24 pixels *below the bottom of the
+> window*. At the default window the prose got 4.5 pixels — one half-line. The choice buttons were
+> inside the reading column and were taking all of its height.
+>
+> **What changed.** You chose *"make the options on the right"*, and that is what shipped: the
+> buttons now stand in their own 260-pixel column beside the reading column, so they no longer
+> compete with the prose for vertical space. The prose has a guaranteed floor of **eight lines**,
+> the combat log has a floor as well as a cap, and the reserved scenery frame is now capped by
+> height as well as width. Separately, the enforced 960×640 minimum turned out to be the size of the
+> *window frame*, not of the page — the page was really getting 947×577 — so that is fixed too.
+>
+> **What is now machine-checked, so you do not have to.** A new test renders the real production
+> page in the real Chromium the game ships inside, at six window sizes and both text sizes, over
+> twelve screens, on every test run — plus a walk that clicks the actual game from the content
+> warning through to the abandon confirmation. It was written against the broken build first and
+> failed with the numbers above. Checks 5 and 6 in the `visual-identity` list are therefore mostly
+> answered now; what is left below is only what a measurement genuinely cannot settle.
+>
+> - [ ] **A. Does the right-hand command list FEEL right?** `npm run desktop`, reach the hub (or
+>       press **F3** → `act1-hub`). Drag the window to its minimum, then to full screen. **This is
+>       the placement you chose and nobody has seen it yet.** Does the eye go to the prose first?
+>       Does the menu read as a list of things to do rather than as a sidebar?
+> - [ ] **B. Does the scenery frame read as an ESTABLISHING image above the prose?** It sits at the
+>       top of the reading column, image-then-text, the way a visual novel reads. **The reversal is
+>       one line** if you would rather it sat at the foot of the column — say so and it moves
+>       (`UI-DESIGN.md` §17 names the exact line).
+> - [ ] **C. Is 45 characters of prose comfortable at the minimum window?** That is the measure the
+>       reading column has at 960 wide once the choice column takes its 260 — about a phone's width.
+>       Readable, not luxurious. At the default window it is 60 characters. **If it reads as cramped,
+>       the trade is a narrower choice column or a stacked layout at small sizes** — both are real
+>       options, neither is free.
+> - [ ] **D. Is the focus ring fully visible inside the new scroll containers?** Tab through the
+>       right-hand buttons and, during a battle, through the combat log's expanders. Both now live
+>       inside boxes that can scroll, and an outline drawn flush against the edge of a scrolling box
+>       gets clipped. There is 4px of inner padding for exactly this. **A ring is a paint, not a
+>       rectangle — no test can see it.** (This extends check 8 in the `visual-identity` list; do
+>       them together, using **F3** to reach all five floors.)
+> - [ ] **E. Screen-reader reading order.** The choices are now a landmark named *"Choices"*, and
+>       they come after the prose and the log in the page, so the tab order runs prose → log →
+>       actions. **The landmark is an improvement worth confirming**; the ordering is machine-checked
+>       but a real screen reader's behaviour is not. (Fold into check 9 of the `visual-identity`
+>       list.)
+>
+> **One measured limit you may want to rule on.** At the smallest window **with Large text**, three
+> level-up draft cards with the longest labels the game can produce do not all fit — the third sits
+> just below the fold and the column scrolls to reach it. Widening the choice column would take the
+> width out of the reading measure; shrinking the large text step would defeat the setting. It is
+> reachable, and the default text size fits outright. **Say if you would rather pay one of those
+> costs instead.**
+
 > ## 🎨 From `visual-identity` (#8 + #16, merged 2026-09-08) — the game has a look now, and only your eyes can judge it
 >
 > **This is the first build where the game is meant to look like something.** Each floor now has its
@@ -118,20 +172,36 @@
 >       zero and a tailed lowercase `l`. Repeat on `npm run desktop:pack` if you can.
 > - [ ] **5. Is it usable at the new 960×640 minimum?** Drag the window as small as it goes — it
 >       should stop there. Walk title → content warning → name → class → stat roll → hub → inventory
->       → sheet → a battle. **Failure: any clipped or unreachable control**, or the choice row
->       vanishing. Nothing headless can see layout; this has never been rendered.
+>       → sheet → a battle. **Failure: any clipped or unreachable control**, or the choice column
+>       vanishing.
+>       ⚠ **UPDATED 2026-09-09 (`layout-breathing-room`).** *"Nothing headless can see layout; this
+>       has never been rendered"* was true when written, and it is why this check existed — and it
+>       is why the defect it was meant to catch shipped anyway, because nobody got to it in time.
+>       **It is rendered now, on every test run**, at this size and five others, in the real
+>       Chromium. Also fixed: the window minimum used to apply to the window FRAME, so the page was
+>       really getting 947×577 rather than 960×640. What is left here is a sanity pass with your own
+>       hands — the machine checks the geometry, you check that it is usable.
 > - [ ] **6. A battle at minimum size.** **Failure: you must scroll the left column to see your HP
 >       or the enemy's HP**, above the two empty framed regions. (The sheet scrolls by design —
->       needing to scroll for the *vitals* is what counts as broken.)
+>       needing to scroll for the *vitals* is what counts as broken.) ⚠ This one is still entirely
+>       yours: the layout probe measures the stage, not the 220px HUD column.
 > - [ ] **7. Do the empty art regions read as deliberate?** On the hub and in a battle. **Failure:
 >       any of them reads as a missing image** — a grey void, a box unrelated to the floor's colour,
 >       or anything with words in it. They are meant to look like framing, not like absence.
 > - [ ] **8. Focus ring on all five floors.** Tab through the buttons, using **F3** to jump floors.
 >       **Failure: on any floor the focused button is not obviously findable.** ⚠ **Test floor 2
 >       hardest** — its accent clears the standard by only 0.24, the tightest margin in the palette.
+>       ⚠ **EXTENDED 2026-09-09:** the buttons and the combat log's expanders now sit inside boxes
+>       that can scroll, and an outline drawn flush against the edge of a scrolling box is clipped by
+>       it. There is 4px of inner padding on both columns for exactly this reason, and **whether it
+>       is enough is a paint rather than a rectangle — no test can measure it.** Do this together
+>       with check D in the `layout-breathing-room` block above.
 > - [ ] **9. Screen-reader spot pass** (NVDA or Narrator) on the content warning and settings.
 >       **Failure: the empty art regions get announced at all**, or a settings option does not say
->       whether it is on.
+>       whether it is on. ⚠ **EXTENDED 2026-09-09:** the choices are now a `<section>` landmark named
+>       *"Choices"*, which should give a screen reader a place to jump to — **confirm that reads as
+>       an improvement**. The reading order (prose → log → actions) is machine-checked from the page
+>       structure, but what a real screen reader does with it is not.
 > - [ ] **10. Accept or reject the look.** The wordmark, the reading column, the hub as a command
 >       list, the floor tag, whether five floors feel like a descent rather than five themes, and the
 >       **placeholder content-warning words** (those are yours to write in #13). **Irreducibly your

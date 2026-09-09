@@ -26,19 +26,38 @@
           <span id="floor" class="floor-tag"></span>
           <p id="status" class="status">starting…</p>
         </header>
-        <!-- The reading column: a measure the narration is comfortable to read at, which is
-             also the surface #13's prose gets written into. Every id below is unchanged —
-             game.ts looks all of them up at module scope. -->
-        <div id="column" class="column">
-          <h1 id="title">THE VOID</h1>
-          <!-- Boot notices the player must not miss (an unlock store recovered from
-               backup, or lost). Empty by default; game.css collapses an empty one. -->
-          <div id="notice" class="notice" role="status"></div>
-          <div id="narration" class="narration" aria-live="polite"></div>
-          <!-- The combat log (G18): the mechanical record of a fight, plain by default and
-               expandable to the dice. Empty outside battle, and collapsed when empty. -->
-          <div id="log" class="log" aria-label="combat log"></div>
-          <div id="choices" class="choices"></div>
+        <!-- THE STAGE BODY: two columns, and the split is the whole point of this element.
+             The choices used to live INSIDE the reading column, so a six-row hub menu and a
+             16:9 art frame competed with the prose for the same vertical space — and won,
+             because both scroll panes collapse to nothing while a non-scrolling sibling
+             keeps its full height. Measured before the fix: the narration got 0 px at the
+             960x640 minimum and 4.5 px at the default window, and Abandon sat at y 664-713
+             in a 640 px window. `src/dev/layoutProbe.test.ts` measures all of it for real. -->
+        <div id="stage-body" class="stage-body">
+          <!-- The reading column: a measure the narration is comfortable to read at, which is
+               also the surface #13's prose gets written into. Every id below is unchanged —
+               game.ts looks all of them up at module scope. -->
+          <div id="column" class="column">
+            <h1 id="title">THE VOID</h1>
+            <!-- Boot notices the player must not miss (an unlock store recovered from
+                 backup, or lost). Empty by default; game.css collapses an empty one. -->
+            <div id="notice" class="notice" role="status"></div>
+            <!-- The floor's reserved region, mounted by the hub. ESTABLISHING POSITION: above
+                 the prose, the way a visual novel reads — the image sets the place and the eye
+                 never jumps back up past text. To move it to the FOOT of the column, move this
+                 ONE line below #log and flip the order assertion in skeleton.test.ts. It is
+                 deliberately NOT aria-hidden: the slot manages its own, and a future <img alt>
+                 inside it must stay announced. -->
+            <div id="scenery" class="scenery"></div>
+            <div id="narration" class="narration" aria-live="polite"></div>
+            <!-- The combat log (G18): the mechanical record of a fight, plain by default and
+                 expandable to the dice. Empty outside battle, and collapsed when empty. -->
+            <div id="log" class="log" aria-label="combat log"></div>
+          </div>
+          <!-- The choices: a region landmark, and AFTER the column in the DOM so the tab order
+               follows the reading order — prose, then the log, then the things you can do.
+               From 900px up it sits BESIDE the column rather than below it. -->
+          <section id="choices" class="choices" aria-label="Choices"></section>
         </div>
       </section>
     </main>

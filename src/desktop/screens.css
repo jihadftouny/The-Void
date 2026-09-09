@@ -31,12 +31,6 @@
   border-bottom: var(--void-rule-hair) solid var(--void-rule-strong);
 }
 
-[data-screen='title'] .choices,
-[data-screen='resume'] .choices {
-  flex-direction: column;
-  align-items: stretch;
-}
-
 /* ---------------------------------------------------------------------------------------
  * THE CONTENT WARNING (FINDINGS.md S1). Given the whole column and read at the body measure:
  * it is the first prose in the game and it is the author's own voice, so it is set as prose
@@ -81,19 +75,15 @@
  * would treat the symptom).
  * --------------------------------------------------------------------------------------- */
 
-[data-screen='main-menu'] .choices,
-[data-screen='confirm-abandon'] .choices {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-/* The floor's own reserved region. Capped by width so the 16:9 shape cannot swallow the hub
- * at the minimum window height; the height follows the ratio, as it must. */
-[data-screen='main-menu'] .void-art-slot,
-[data-screen='confirm-abandon'] .void-art-slot {
-  max-width: 440px;
-  margin: 0 auto var(--void-space-2);
-}
+/* THE HUB'S RESERVED REGION USED TO BE CAPPED HERE, BY WIDTH ALONE -- and that was the
+ * defect. A 440px-wide 16:9 frame is 247px tall whatever the window is, so at the 960x640
+ * minimum it took 247 of the 550px the column had, and the prose got what was left: nothing.
+ * Capping only the width caps nothing in the direction that was running out.
+ *
+ * The cap now lives with the CONTAINER (`#scenery .void-art-slot` in game.css), capped by
+ * width AND by 22vh of height, with the committed 16:9 ratio governing inside the box. The
+ * per-screen `flex-direction: column` rules that stood here are gone too: `.choices` IS a
+ * column now, and eight rules restating that were eight places for the two to disagree. */
 
 .hub-menu {
   display: flex;
@@ -209,15 +199,6 @@
  * THE SMALL SCREENS — name entry, class select, the stat roll, the chest, the draft, the
  * deal, the rest. Aligned to one column and one spacing rhythm rather than restyled apart.
  * --------------------------------------------------------------------------------------- */
-
-[data-screen='enter-name'] .choices,
-[data-screen='choose-class'] .choices,
-[data-screen='draft-pick'] .choices,
-[data-screen='deal-decision'] .choices,
-[data-screen='rest-decision'] .choices {
-  flex-direction: column;
-  align-items: stretch;
-}
 
 [data-screen='enter-name'] .choices input {
   width: 100%;
