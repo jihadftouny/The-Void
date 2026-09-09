@@ -491,3 +491,231 @@ describe('the reserved art regions print nothing and reserve by ratio', () => {
     );
   });
 });
+
+// =========================================================================================
+// ADDED BY `layout-breathing-room` (2026-09-09) — ADDITIVE ONLY; nothing above is changed.
+//
+// THE DEFECT THESE GUARD AGAINST, stated once. The choices used to live inside the reading
+// column, and a width-only cap on the hub's 16:9 art frame let it take 247 px of a 550 px
+// column whatever the window was. The narration measured ZERO PIXELS at the enforced minimum.
+// `src/dev/layoutProbe.test.ts` measures the result for real, in real Chromium; what a source
+// scan can add is the STRUCTURE the measurement depends on — that the mode really is one set
+// of properties, that the caps really are relative, and that visual order really is DOM order.
+// =========================================================================================
+
+describe('the stage layout is one set of properties, defined in every mode', () => {
+  /** The six properties that ARE the mode. Transcribed from the design, not read back. */
+  const MODE_PROPERTIES = [
+    '--void-layout-cols',
+    '--void-layout-rows',
+    '--void-column-max',
+    '--void-prose-floor',
+    '--void-log-cap',
+    '--void-log-floor',
+  ];
+
+  const gameCss = (): string => {
+    const sheet = SHEETS.find((s) => s.name === 'game.css');
+    expect(sheet, 'game.css is not among the scanned stylesheets').toBeDefined();
+    return sheet!.css;
+  };
+
+  /** The body of the first `@media (max-width: 899px)` block, braces balanced. */
+  const stackedBlock = (): string => {
+    const css = gameCss();
+    const start = css.search(/@media\s*\(\s*max-width\s*:\s*899px\s*\)/);
+    if (start < 0) return '';
+    const open = css.indexOf('{', start);
+    let depth = 0;
+    for (let i = open; i < css.length; i += 1) {
+      if (css[i] === '{') depth += 1;
+      else if (css[i] === '}') {
+        depth -= 1;
+        if (depth === 0) return css.slice(open, i);
+      }
+    }
+    return '';
+  };
+
+  it('the base mode declares all six, on the stage body', () => {
+    // A mode that declared only some of them would inherit the rest from whatever the last
+    // screen was: a document rendered into a 260px action column, or a hub whose prose keeps
+    // a document screen's 45vh cap. Nothing throws and it looks almost right.
+    // The breakpoint's block is removed first: `rules()` sees a rule nested inside an
+    // at-rule with its bare selector, so `.stage-body` legitimately matches twice and the
+    // BASE one is the one outside the media query.
+    const base = selectorsCarrying(gameCss().replace(stackedBlock(), ''), '.stage-body').filter(
+      (r) => r.selector === '.stage-body',
+    );
+    expect(base.length, 'there is no base .stage-body rule at all').toBe(1);
+    for (const property of MODE_PROPERTIES) {
+      expect(base[0]!.body, `the base stage layout does not define ${property}`).toContain(
+        `${property}:`,
+      );
+    }
+    expect(base[0]!.body, 'the choice column has no width').toContain('--void-choices-w:');
+  });
+
+  it('the document mode redeclares all six', () => {
+    const wide = selectorsCarrying(gameCss(), "[data-layout='wide']");
+    expect(wide.length, 'nothing styles the document layout').toBeGreaterThan(0);
+    const body = wide.map((r) => r.body).join('\n');
+    for (const property of MODE_PROPERTIES) {
+      expect(body, `the document layout does not define ${property}`).toContain(`${property}:`);
+    }
+  });
+
+  it('and so does the stacked fallback, inside its own breakpoint', () => {
+    const block = stackedBlock();
+    expect(block.length, 'there is no 899px breakpoint at all').toBeGreaterThan(60);
+    for (const property of MODE_PROPERTIES) {
+      expect(block, `the stacked fallback does not define ${property}`).toContain(`${property}:`);
+    }
+  });
+
+  it('the stacked fallback hides the scenery, SELECTOR-SCOPED inside the breakpoint', () => {
+    // The `selectorsCarrying` idiom rather than a substring, for the reason that idiom exists:
+    // a `display: none` somewhere in 7,000 characters of CSS that merely CONTAINS the word
+    // proves nothing about whether the rule is scoped to the breakpoint.
+    const scoped = selectorsCarrying(stackedBlock(), '#scenery');
+    expect(
+      scoped.some((r) => /display\s*:\s*none/.test(r.body)),
+      'the scenery is not hidden in the stacked fallback — a 16:9 frame would take the ' +
+        'height the prose and the controls both need at that width',
+    ).toBe(true);
+    // ...and it is NOT hidden outside the breakpoint, or the hub would never show it at all.
+    const outside = selectorsCarrying(gameCss().replace(stackedBlock(), ''), '#scenery');
+    expect(
+      outside.some((r) => /^\s*display\s*:\s*none\s*;?\s*$/.test(r.body)),
+      'the scenery is hidden unconditionally — the floor never gets its establishing frame',
+    ).toBe(false);
+  });
+
+  it('the prose and the log floors are read, not hard-coded at their use sites', () => {
+    const css = gameCss();
+    expect(css, 'the narration does not read the prose floor').toMatch(
+      /\.narration\s*\{[^}]*min-height:\s*var\(--void-prose-floor\)/,
+    );
+    expect(css, 'the log does not read its floor').toMatch(
+      /\.log\s*\{[^}]*min-height:\s*var\(--void-log-floor\)/,
+    );
+    expect(css, 'the log does not read its cap').toMatch(
+      /\.log\s*\{[^}]*max-height:\s*var\(--void-log-cap\)/,
+    );
+  });
+
+  it('an EMPTY narration is collapsed, so a prose floor cannot hold a hole open', () => {
+    // The other polarity of the floor. Without this the title screen and the content warning
+    // would each carry 200 px of empty space where prose is not.
+    expect(gameCss(), 'an empty narration keeps its floor').toMatch(
+      /\.narration:empty\s*\{[^}]*min-height:\s*0/,
+    );
+  });
+});
+
+describe('the reserved art regions are capped in a way that SCALES', () => {
+  const artRules = (): { selector: string; body: string }[] =>
+    rules(ALL_CSS).filter((r) => r.selector.includes('void-art'));
+
+  it('any height cap on an art region is relative, never a fixed length', () => {
+    // A `max-height: 140px` is right at one window size and wrong at every other — and a
+    // width-only cap is what let a 16:9 frame take 247 px of a 550 px column at the minimum
+    // window, whatever the window was. The cap has to move with the viewport.
+    for (const rule of artRules()) {
+      for (const d of declarations(rule.body)) {
+        if (d.prop !== 'max-height') continue;
+        expect(
+          d.value,
+          `${rule.selector} caps an art region at a fixed height — it will be wrong at ` +
+            'every window size but one',
+        ).toMatch(/\d\s*(?:vh|vw|vmin|vmax|%)/);
+        expect(d.value, `${rule.selector} caps in px/em/rem`).not.toMatch(/\d\s*(?:px|em|rem)/);
+      }
+    }
+  });
+
+  it('...and there IS such a cap to check (non-vacuity)', () => {
+    // Without this, "no absolute height cap" is satisfied by having no cap at all — which is
+    // precisely the state the scenery shipped in.
+    const caps = artRules().flatMap((r) =>
+      declarations(r.body).filter((d) => d.prop === 'max-height'),
+    );
+    expect(
+      caps.length,
+      'no art region is capped by height at all — a 16:9 frame grows without limit',
+    ).toBeGreaterThan(0);
+  });
+
+  it('and none of them pins a height or a min-height (the ratio is the reservation)', () => {
+    // Restated from the guard above with `min-height` included: a floor on an art slot would
+    // stop the height cap being able to shrink it.
+    for (const rule of artRules()) {
+      for (const d of declarations(rule.body)) {
+        if (d.prop !== 'height' && d.prop !== 'min-height') continue;
+        expect(d.value, `${rule.selector} pins ${d.prop}`).not.toMatch(/\d\s*(px|em|rem|vh)/);
+      }
+    }
+  });
+
+  it('the scenery is capped through its CONTAINER, not through a per-screen rule', () => {
+    // It used to be capped by `[data-screen='main-menu'] .void-art-slot`, which meant every
+    // new screen that mounted one had to remember to cap it too. Keyed on the container, a
+    // future screen inherits the cap by putting the region in the right place.
+    expect(ALL_CSS, 'the scenery region is not capped through its container').toMatch(
+      /#scenery\s+\.void-art-slot\s*\{[^}]*max-height:\s*\d+vh/,
+    );
+    expect(ALL_CSS, 'the scenery region lost its width cap').toMatch(
+      /#scenery\s+\.void-art-slot\s*\{[^}]*max-width:/,
+    );
+  });
+});
+
+describe('visual order is DOM order, so the keyboard follows the reading order', () => {
+  it('no stylesheet reorders anything with the flex order property', () => {
+    // `order: -1` on the choices would put them visually first while leaving them last in the
+    // tab order — the two would disagree and only a sighted mouse user would be unaffected.
+    for (const sheet of SHEETS) {
+      for (const d of declarations(sheet.css)) {
+        expect(d.prop, `${sheet.name} reorders an element visually`).not.toBe('order');
+      }
+    }
+  });
+
+  it('and no flex or grid direction is reversed', () => {
+    for (const sheet of SHEETS) {
+      for (const d of declarations(sheet.css)) {
+        if (d.prop !== 'flex-direction' && d.prop !== 'flex-flow') continue;
+        expect(
+          d.value,
+          `${sheet.name} reverses a flex direction — visual order would stop matching DOM order`,
+        ).not.toMatch(/-reverse/);
+      }
+    }
+  });
+
+  it('the detectors fire on the shapes they forbid (or they guard nothing)', () => {
+    expect(declarations('.a { order: -1; }').some((d) => d.prop === 'order')).toBe(true);
+    expect(declarations('.a{order:2}').some((d) => d.prop === 'order')).toBe(true);
+    expect(
+      declarations('.a { flex-direction: column-reverse; }').some((d) => /-reverse/.test(d.value)),
+    ).toBe(true);
+    expect(
+      declarations('.a { flex-flow: row-reverse wrap; }').some((d) => /-reverse/.test(d.value)),
+    ).toBe(true);
+    // ...and not on the compliant forms this codebase actually uses.
+    expect(
+      declarations('.a { flex-direction: column; }').some((d) => /-reverse/.test(d.value)),
+    ).toBe(false);
+    expect(declarations('.a { border-top: 1px solid red; }').some((d) => d.prop === 'order')).toBe(
+      false,
+    );
+  });
+
+  it('...over a surface that really does lay things out in flex (non-vacuity)', () => {
+    const directions = SHEETS.flatMap((s) =>
+      declarations(s.css).filter((d) => d.prop === 'flex-direction'),
+    );
+    expect(directions.length, 'nothing sets a flex direction — this guard swept nothing')
+      .toBeGreaterThan(3);
+  });
+});

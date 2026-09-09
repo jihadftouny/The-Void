@@ -14,9 +14,10 @@
  *   - A PERSISTENT HEADER BAND. The floor tag lives in it, always visible, naming where you
  *     are in words (UI-DESIGN.md §11 / FINDINGS.md S4a: the accent may never be the only
  *     carrier of any state). The model status line moved into it too, demoted to furniture.
- *   - A READING COLUMN. Narration and every screen are capped at a measure. This is the
- *     single highest-value reading change available, and it is the surface #13's prose gets
- *     written into rather than retro-fitted onto.
+ *   - A READING COLUMN, capped at a measure. This is the single highest-value reading change
+ *     available, and it is the surface #13's prose gets written into rather than retro-fitted
+ *     onto. `layout-breathing-room` took the CHOICES OUT of it (2026-09-09): while they were
+ *     inside, a six-row menu starved the prose to zero pixels at the minimum window.
  *   - THE ATMOSPHERE LAYER sits behind all of it (src/render/atmosphere.css).
  *
  * DESIGNED AND ENFORCED TO A MINIMUM WINDOW OF 960x640 (UI-DESIGN.md §14 decided a minimum
@@ -94,7 +95,9 @@ html, body { height: 100%; }
 
 #stage {
   display: grid;
-  grid-template-rows: auto 1fr;
+  /* `minmax(0, 1fr)` and not `1fr`: a grid track's automatic minimum size is its CONTENT,
+   * so a plain `1fr` row silently grows past the window when the stage body is tall. */
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
 }
@@ -131,20 +134,142 @@ html, body { height: 100%; }
 }
 .status.error { color: var(--void-harm); }
 
-/* THE READING COLUMN. Capped at a measure and centred; everything the player reads lives
- * inside it. Only the NARRATION takes the free space (1fr); the log is capped and scrolls
- * inside its cap, so a long fight can never squeeze the prose out of the window. `#notice`
- * and `#log` are `display: none` when empty, which collapses both the row AND its gap. */
-.column {
-  width: 100%;
-  max-width: 72ch;
-  margin: 0 auto;
-  padding: var(--void-space-5);
+/* =========================================================================================
+ * THE STAGE BODY -- the reading column and the choice column, and the reason this unit exists.
+ *
+ * WHAT WENT WRONG BEFORE. The choices lived INSIDE the reading column, as one row of a grid
+ * whose other rows were the prose and the combat log. Both of those are scroll containers, so
+ * their automatic minimum size is ZERO; `#choices` was not, so it contributed its full
+ * content height -- a six-row hub menu plus a 16:9 art frame, 608px of it -- to the track
+ * sizing. The scrollable rows lose to the non-scrollable one, every time. Measured in real
+ * Chromium: the narration got 0px at the 960x640 minimum and 4.5px at the default window, the
+ * log got 8.8px (its own padding), Abandon sat at y 664-713 in a 640px window, and the page
+ * scrolled to 726px. The whole suite was green.
+ *
+ * THE FIX IS STRUCTURAL, not a tweak to a number: the buttons leave the reading column
+ * entirely and stand beside it, so the two no longer compete for the same vertical space.
+ * `src/dev/layoutProbe.test.ts` re-measures all of it in real Chromium on every `npm test`.
+ *
+ * THE MODE IS A SET OF CUSTOM PROPERTIES with exactly two value sets, so the rules that read
+ * them are written ONCE and a mode is a change of six numbers rather than a second layout.
+ * `screenLayout()` in `settings-model.ts` decides which; the renderer writes it to
+ * `<body data-layout>` through one funnel.
+ * ========================================================================================= */
+.stage-body {
+  /* 260px = the longest fixed label the game ships ("Neuromancer -- mind and static", 29
+   * characters at the md step, uppercase, tracked) plus the button's padding and borders. At
+   * the large text setting the label wraps to two lines inside the button, which is correct. */
+  --void-choices-w: 260px;
+  --void-layout-cols: minmax(0, 1fr) var(--void-choices-w);
+  --void-layout-rows: minmax(0, 1fr);
+  --void-column-max: none;
+  /* EIGHT LINES OF PROSE, GUARANTEED. `lh` -- the element's own line height -- so the floor is
+   * defined as LINES: change `.narration`'s line-height and the floor moves with it, and a
+   * browser that did not support the unit would drop the declaration and fail the probe
+   * loudly rather than quietly shipping a starved column. Eight lines holds a whole short
+   * beat without scrolling; six reads as a caption. */
+  --void-prose-floor: 8lh;
+  --void-log-cap: 30vh;
+  --void-log-floor: 3lh;
+
   display: grid;
-  grid-template-rows: auto auto 1fr auto auto;
+  grid-template-columns: var(--void-layout-cols);
+  grid-template-rows: var(--void-layout-rows);
+  column-gap: var(--void-space-5);
+  row-gap: var(--void-space-3);
+  /* 20px here plus the 4px inner padding on each column below = the 24px the shell had. The
+   * inner 4px is what gives a focus ring room to draw inside a scroll container. */
+  padding: calc(var(--void-space-5) - var(--void-space-1));
+  width: 100%;
+  /* The measure and the choice column travel together and stay centred on a wide desktop. */
+  max-width: calc(72ch + var(--void-space-5) + var(--void-choices-w) + 2 * var(--void-space-5));
+  margin: 0 auto;
+  min-height: 0;
+}
+
+/* DOCUMENT SCREENS. `#choices` is not a row of buttons here -- it is the inventory, the
+ * character sheet, the settings screen, the content warning or the end-of-run record, and a
+ * 260px column is the wrong shape for every one of them. The reading column is capped
+ * instead and the document takes the rest; the prose keeps a smaller floor because it is
+ * context on these screens rather than the thing being read. */
+[data-layout='wide'] .stage-body {
+  --void-layout-cols: minmax(0, 1fr);
+  --void-layout-rows: auto minmax(0, 1fr);
+  --void-column-max: 45vh;
+  --void-prose-floor: 4lh;
+  --void-log-cap: 20vh;
+  --void-log-floor: 2lh;
+}
+
+/* THE STACKED FALLBACK. Below 900px the reading column could not keep ~40 characters beside
+ * a 260px choice column (W - 552 < 360 at the base step). Derived from the MEASURE, not from
+ * a device.
+ *
+ * Unreachable in the shipped desktop build, whose window minimum is 960 wide -- it is here for
+ * CLAUDE.md principle 6 (a narrower or mobile path later), and it is MEASURED at 800x600 by
+ * the layout probe so it is not dead code that has never been rendered. To move the
+ * breakpoint, change the one `899px` literal here and the constant in the probe. */
+@media (max-width: 899px) {
+  .stage-body {
+    --void-layout-cols: minmax(0, 1fr);
+    --void-layout-rows: auto minmax(0, 1fr);
+    --void-column-max: 45vh;
+    --void-prose-floor: 4lh;
+    --void-log-cap: 20vh;
+    --void-log-floor: 2lh;
+  }
+  /* The establishing frame is the first thing to go when there is no room for it: at this
+   * width the prose and the controls both need the height more than the atmosphere does. */
+  #scenery {
+    display: none;
+  }
+}
+
+/* THE READING COLUMN. Everything the player reads lives inside it, at a comfortable measure.
+ *
+ * FLEX, NOT GRID, and the reason is load-bearing: a flex column drops the GAP of a
+ * `display: none` child, while an explicit grid track keeps its gap even when the row is
+ * empty -- up to 48px of empty space on a screen with no notice, no scenery and no log. Flex
+ * also gives the priority order the design wants under pressure: the floors are hard, the
+ * log yields first, then the prose, and only then does the column scroll. */
+.column {
+  display: flex;
+  flex-direction: column;
   gap: var(--void-space-3);
+  /* Room for a focus ring to draw INSIDE a scroll container -- an outline on a child flush
+   * against the edge of an `overflow: auto` box is clipped. */
+  padding: var(--void-space-1);
   min-width: 0;
   min-height: 0;
+  max-height: var(--void-column-max);
+  /* A LAST RESORT, not the design. The probe asserts this never actually scrolls at or above
+   * the enforced 960x640 minimum; reaching it means the floors no longer fit the window. */
+  overflow-y: auto;
+}
+
+/* THE FLOOR'S RESERVED REGION, above the prose as an establishing shot. `flex: none` so it
+ * never shrinks: it is the one element here whose shape is a commitment. */
+.scenery {
+  flex: none;
+}
+.scenery:empty {
+  display: none;
+}
+
+/* CAPPED IN BOTH DIRECTIONS, WITH THE COMMITTED RATIO GOVERNING INSIDE THE BOX.
+ *
+ * THE RATIO IS NOT NEGOTIABLE (docs/ART-BIBLE.md 4): 16:9 is what future backdrops are drawn
+ * to, so it is the BOX that is capped and never the shape. `width: auto` inside this block
+ * wrapper is what makes the height cap work -- Chromium transfers it back through
+ * `aspect-ratio` to the width, so a 22vh cap yields 250x141 at the minimum window and
+ * 306x172 at the default one. The width cap takes over above 1125px of viewport height.
+ *
+ * The wrapper matters too: the same box as a DIRECT flex item collapses to a few pixels. */
+#scenery .void-art-slot {
+  width: auto;
+  max-width: 440px;
+  max-height: 22vh;
+  margin: 0 auto;
 }
 
 #title {
@@ -164,10 +289,15 @@ html, body { height: 100%; }
 }
 .notice:empty { display: none; }
 
-/* The combat log (G18). Capped and scrollable so a long fight cannot push the narration
- * off screen; the line/expander styling itself lives in src/render/components.css. */
+/* The combat log (G18). Capped AND floored: it scrolls inside its cap so a long fight cannot
+ * push the narration off screen, and it keeps a floor so a busy screen cannot squeeze it to
+ * nothing -- it measured 8.8px, its own padding, before this unit. It yields to the prose
+ * first (`flex: 0 1 auto`), which is the priority the design wants under pressure. The
+ * line/expander styling itself lives in src/render/components.css. */
 .log {
-  max-height: 30vh;
+  flex: 0 1 auto;
+  min-height: var(--void-log-floor);
+  max-height: var(--void-log-cap);
   overflow-y: auto;
   padding-right: var(--void-space-2);
   border-top: var(--void-rule-hair) solid var(--void-rule);
@@ -175,20 +305,43 @@ html, body { height: 100%; }
 }
 .log:empty { display: none; }
 
+/* THE PROSE. It takes the free space AND keeps a hard floor, which is the whole fix: the
+ * floor is what the choice column used to eat. Long prose scrolls INSIDE this pane rather
+ * than growing it, so a twelve-line beat cannot push the log or the controls off screen. */
 .narration {
+  flex: 1 1 auto;
+  min-height: var(--void-prose-floor);
   overflow-y: auto;
   line-height: 1.7;
   padding-right: var(--void-space-2);
+}
+/* An EMPTY pane takes no space at all. It stays in the tree rather than being hidden, because
+ * it is the `aria-live` region and a screen reader must keep watching it. Without this, the
+ * title screen and the content warning would carry a 200px hole where prose is not. */
+.narration:empty {
+  min-height: 0;
+  flex: 0 0 0;
 }
 .narration .beat { margin: 0 0 1.1em; white-space: pre-wrap; animation: fade 0.4s ease; }
 .narration .beat.fallback { color: var(--void-ink-dim); font-style: italic; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
+/* THE CHOICE COLUMN. A vertical list of actions, stretched to the column width -- which is
+ * also why the per-screen `flex-direction: column` overrides that used to live in
+ * screens.css are gone: a column IS the base now, and eight rules that restated it were
+ * eight places for the two to disagree. */
 .choices {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--void-space-3);
-  align-items: center;
+  padding: var(--void-space-1);
+  min-width: 0;
+  min-height: 0;
+  /* The picker lists and the document screens can outgrow the window; they scroll in their
+   * own box rather than pushing the page. The probe asserts the FIRST control stays visible
+   * and the box stays inside the viewport, so nothing is ever unreachable. */
+  overflow-y: auto;
 }
 .choices input {
   padding: var(--void-space-3) var(--void-space-4);
