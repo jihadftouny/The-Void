@@ -46,7 +46,13 @@ const OUT = arg('--out');
  *   960x640   the enforced minimum, and the size the whole design is budgeted against
  *   1100x820  the size the game opens at
  *   1280x720  a common laptop working area
- *   1920x1080 a full-screen desktop, where the WIDTH caps have to start biting
+ *   1920x1080 a full-screen desktop
+ *   1920x1200 a 16:10 desktop — the ONLY size here at which the scenery's WIDTH cap governs
+ *             instead of its height cap, and it is here for exactly that reason. The height
+ *             cap is 22vh and the committed ratio is 16:9, so the width the height cap
+ *             implies is 0.22 * H * 16/9; that only reaches the 440 px width cap at
+ *             H >= 1125. At 1080 the height cap still governs (237.6 tall, 422.4 wide), so
+ *             a suite that stopped at 1080 could never prove the second cap does anything.
  *   800x600   below the enforced minimum: unreachable in the shipped build, and the only
  *             place the stacked fallback can be exercised, so it is tested here or nowhere
  */
@@ -55,6 +61,7 @@ const SIZES = [
   [1100, 820],
   [1280, 720],
   [1920, 1080],
+  [1920, 1200],
   [800, 600],
 ];
 
@@ -88,7 +95,16 @@ function fail(message) {
 /**
  * Resize, then WAIT FOR THE PAGE TO AGREE. `setContentSize` is asynchronous from the
  * renderer's point of view, so measuring straight afterwards measures the previous layout.
+ *
+ * ⚠ THE TOLERANCE IS TWO PIXELS, AND IT IS NOT SLOP. A content size is expressed in
+ * device-independent pixels, and on a display with a fractional scale factor the requested
+ * size need not land on a whole number of physical ones — asking for 1086 CSS pixels on a
+ * 1.25x display produced 1088 here. Two pixels cannot be confused with a size that has not
+ * changed yet (the sizes measured are hundreds of pixels apart), and the size the page
+ * ACTUALLY reports is carried through to the result so the assertions judge the real one.
  */
+const SIZE_TOLERANCE = 2;
+
 async function resize(win, width, height) {
   win.setContentSize(width, height);
   const settled = await win.webContents.executeJavaScript(
@@ -96,7 +112,8 @@ async function resize(win, width, height) {
        let tries = 0;
        const tick = () => {
          tries += 1;
-         if (window.innerWidth === ${width} && window.innerHeight === ${height}) {
+         if (Math.abs(window.innerWidth - ${width}) <= ${SIZE_TOLERANCE} &&
+             Math.abs(window.innerHeight - ${height}) <= ${SIZE_TOLERANCE}) {
            requestAnimationFrame(() => requestAnimationFrame(() =>
              resolve({ ok: true, width: window.innerWidth, height: window.innerHeight })));
            return;
@@ -138,6 +155,23 @@ async function phaseA() {
     'typeof window.__voidLayoutProbe === "object" && Array.isArray(window.__voidLayoutProbe.scenarios)',
   );
   if (!ready) fail('the probe driver did not install itself on the page');
+
+  // THE BUNDLED FACE, FETCHED BEFORE ANYTHING IS MEASURED — and it has to be asked for
+  // explicitly. A web font is only fetched when some text actually needs it, and the probe
+  // page starts completely empty, so `document.fonts.ready` resolves immediately having
+  // loaded nothing. Measuring then would produce the SYSTEM monospace's metrics: every
+  // character width, every wrap point and therefore every height in the result would belong
+  // to a typeface the game does not ship. `45 characters of measure` is a JetBrains Mono
+  // fact or it is not a fact at all.
+  const fonts = await win.webContents.executeJavaScript(
+    `Promise.all([
+       document.fonts.load('400 15px "JetBrains Mono"'),
+       document.fonts.load('500 15px "JetBrains Mono"'),
+       document.fonts.load('700 15px "JetBrains Mono"'),
+       document.fonts.load('italic 400 15px "JetBrains Mono"'),
+     ]).then(() => document.fonts.ready).then((set) => set.size)`,
+  );
+  if (fonts < 1) fail('no bundled face loaded — every measurement would be the fallback font’s');
   const scenarios = await win.webContents.executeJavaScript('window.__voidLayoutProbe.scenarios');
 
   const out = [];

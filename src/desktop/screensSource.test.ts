@@ -322,8 +322,10 @@ describe('a fresh run shows the content warning before the title (S1)', () => {
     expect(resume, 'the resume path now shows the content warning').not.toMatch(
       /buildContentWarning/,
     );
+    // ⚠ UPDATED by `layout-breathing-room`, same reason: written through the funnel, so both
+    // the screen key and the stage layout move together. The key is still pinned literally.
     expect(resume, 'the resume screen has no data-screen of its own').toMatch(
-      /dataset\['screen'\]\s*=\s*'resume'/,
+      /showScreen\s*\(\s*'resume'\s*\)/,
     );
   });
 });
@@ -381,13 +383,20 @@ describe('the restyle hook is written on every render', () => {
     // The whole `screens.css` surface is keyed off this one attribute. Handing it `awaiting`
     // alone would style the inventory, the sheet, the settings screen and the abandon
     // confirmation all as the hub, because the engine is still at `main-menu` behind them.
+    //
+    // ⚠ UPDATED by `layout-breathing-room`: the attribute is no longer written here. It goes
+    // through the `showScreen` funnel, which writes `data-screen` AND `data-layout` together
+    // — a call site that set only the first would leave the stage in the previous screen's
+    // geometry. The INTENT is unchanged and nothing is loosened: `screenKey`'s two arguments
+    // are still pinned by name and by order. `layoutSource.test.ts` owns the other half (that
+    // `showScreen`'s body writes both attributes, and that no other line writes either).
     expect(body, 'the data-screen hook is gone — every per-screen rule stops matching').toMatch(
-      /dataset\['screen'\]\s*=\s*screenKey\s*\(\s*awaiting\s*,\s*screen\s*\)/,
+      /showScreen\s*\(\s*screenKey\s*\(\s*awaiting\s*,\s*screen\s*\)\s*\)/,
     );
   });
 
   it('and it is set BEFORE the screen is built, not after', () => {
-    const hook = body.search(/dataset\['screen'\]/);
+    const hook = body.search(/showScreen\s*\(/);
     const sw = body.search(/switch\s*\(\s*awaiting\s*\)/);
     expect(hook).toBeGreaterThan(-1);
     expect(hook).toBeLessThan(sw);
