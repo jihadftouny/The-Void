@@ -87,6 +87,13 @@ const SCENERY_RATIO = 16 / 9;
 const BASE_PX = { normal: 15, large: 18 } as const;
 type Scale = keyof typeof BASE_PX;
 
+/**
+ * The step a CONTROL is set at — `.void-button { font-size: var(--void-type-md) }`. Asserted
+ * against the scale below, like the base step, so a change to the scale cannot silently move
+ * the minimum size a control is allowed to be.
+ */
+const CONTROL_PX = { normal: 13, large: 16 } as const;
+
 /** A rounding allowance of one pixel: sub-pixel layout means 204 can measure 203.9844. */
 const SLACK = 1;
 
@@ -374,6 +381,10 @@ describe('the probe really ran, against the real build', () => {
       'the large text step moved — every large-text threshold here is now wrong',
     ).toBe(`${BASE_PX.large}px`);
     expect(TEXT_SCALE_TABLE.normal.base).toBe(TYPE.base);
+    expect(TYPE.md, 'the control type step moved').toBe(`${CONTROL_PX.normal}px`);
+    expect(TEXT_SCALE_TABLE.large.md, 'the large control type step moved').toBe(
+      `${CONTROL_PX.large}px`,
+    );
   });
 
   it('a real production build was emitted and its entry script was swapped exactly once', () => {
@@ -683,28 +694,183 @@ describe('every control is reachable at the enforced minimum window', () => {
   const ALL_VISIBLE = ['hub', 'confirm-abandon', 'battle', 'choose-class', 'title'];
 
   /**
-   * The screens whose choice list can legitimately outgrow a 640px window, where the standard
-   * is REACHABILITY rather than "it all fits": the first control visible, the box inside the
-   * viewport, and the rest scrollable into reach.
+   * A list the GAME PRESENTS that outgrows the window. The standard here is stricter than
+   * "reachable": **no control may BEGIN off-screen.** A card may run past the bottom edge;
+   * none may start below it, because a control that starts below the fold is invisible until
+   * the player scrolls, and a screen that opens on apparently-nothing is this unit's own
+   * defect one screen along.
    *
-   * ⚠ `draft-pick` AT LARGE TEXT IS HERE BECAUSE THE PROBE MEASURED IT, and the measurement
-   * is worth recording. Three draft cards carrying 90-character labels, in a 260px column at
-   * the large text setting, put the third card at y479-653 in a 640px window — 13px past the
-   * fold. The plan expected all three to fit; they do not, and this is what the alternatives
-   * would have cost:
+   * ⚠ `draft-pick` AT LARGE TEXT IS HERE BECAUSE THE PROBE MEASURED IT. Three draft cards
+   * carrying 90-character labels, in a 260px column at the large text setting, put the third
+   * card at y479-653 in a 640px window — 13px past the fold, and **93% of it visible**, which
+   * is precisely what makes the concession defensible: the player sees almost the whole card
+   * and has an obvious reason to scroll. The alternatives cost more:
    *   - a wider choice column takes the width straight out of the reading measure, which at
    *     960px is already 45 characters;
    *   - tighter padding or a smaller step at the large setting is precisely the regression
    *     the text-size setting exists to prevent — the large setting that is not large.
-   * So it takes the standard the open Cast list already established. What is NOT relaxed:
-   * at the DEFAULT text size all three cards must still fit outright, which is asserted
-   * separately below, so this exception cannot quietly widen into the normal case.
+   * What is NOT relaxed: at the DEFAULT text size all three cards must still fit outright,
+   * asserted separately below, so this exception cannot quietly widen into the normal case.
    */
-  const REACHABLE_BY_SCROLL: readonly { scenario: string; scale: Scale }[] = [
-    { scenario: 'battle-open', scale: 'normal' },
-    { scenario: 'battle-open', scale: 'large' },
+  const PRESENTED_OVERFLOW: readonly { scenario: string; scale: Scale }[] = [
     { scenario: 'draft-pick', scale: 'large' },
   ];
+
+  /**
+   * A disclosure the PLAYER expanded, which is a different thing and gets a different rule.
+   *
+   * Opening the Cast list is a deliberate act with a one-click undo, and it adds six controls
+   * to a column that was already full. Measured at 960x640: with the list open, Run begins at
+   * y695 at the default text size, and three controls begin below the fold at the large one.
+   * Nothing in the stage layout can make 788px of content fit in 555px, and the battle
+   * screen's own contents belong to `docs/PLAN.md` #6, not to this unit.
+   *
+   * ⚠ SO THE GUARANTEE IS NAMED AT BOTH ENDS, and neither half is taken on trust: the list
+   * scrolls so everything is reachable, AND **the collapsed state restores every control to
+   * the window** — which is asserted directly below against the `battle` scenario, not merely
+   * assumed because it appears in another list.
+   */
+  const EXPANDED_DISCLOSURE: readonly {
+    scenario: string;
+    collapsed: string;
+    scale: Scale;
+  }[] = [
+    { scenario: 'battle-open', collapsed: 'battle', scale: 'normal' },
+    { scenario: 'battle-open', collapsed: 'battle', scale: 'large' },
+  ];
+
+  /**
+   * ⚠ A CONTROL WITH NO HEIGHT PASSES EVERY FOLD CHECK FOR FREE, and that is the failure mode
+   * this whole unit exists to catch.
+   *
+   * A rect of `top 0, bottom 0` satisfies "at or below the top of the window" and "at or above
+   * the bottom" simultaneously — so a button that collapsed to nothing would be counted as
+   * comfortably visible. The battle screen legitimately contains seven such controls (the
+   * skills inside a closed Cast list and the item inside a closed Use-item list, both
+   * `display: none`), so they cannot simply be banned; they have to be DISTINGUISHED.
+   *
+   * `laidOut` is the discriminator, and `genuinelyHidden` is the other half of it: an element
+   * with no box at all is absent, while an element that still has a WIDTH and no height is a
+   * laid-out control that collapsed. The choice column stretches its children, so any control
+   * the browser really laid out has a width of well over 200px — a collapsed one keeps that
+   * width and loses its height, which is exactly the shape below that is refused.
+   */
+  const laidOut = (b: Box): boolean => b.height > 0;
+  const genuinelyHidden = (b: Box): boolean => b.height === 0 && b.width === 0;
+
+  /**
+   * How many controls each screen puts on the page, and how many it deliberately hides.
+   *
+   * DERIVED BY HAND from the builders, not read off a run:
+   *   hub / confirm-abandon  `hubMenu` returns 6 rows in menu mode and 2 in confirmation mode.
+   *   battle                 Fight + the Cast toggle + Spare + the Use-item toggle + Potion +
+   *                          Run = 6 on screen; 6 skills and 1 item sit inside the two closed
+   *                          picker lists = 7 hidden.
+   *   battle-open            the same 13, with the Cast list open, so 12 on screen and 1 left
+   *                          inside the still-closed Use-item list.
+   *   choose-class           the five class rows.
+   *   draft-pick             three cards (the "Choose one" line is a div, not a control).
+   *   settings               `SETTINGS_ROWS` is 3 + 3 + 2 options, plus Back = 9.
+   *   inventory / game-over  the rows are label/value spans; only Back / Descend again.
+   *   content-warning        exactly one control, by policy — never a fight to get past.
+   *   title / resume         two stacked buttons.
+   *
+   * This is the check that catches a control DISAPPEARING, which the zero-height
+   * discriminator alone cannot: a `display: none` on a real button is indistinguishable from
+   * a legitimately hidden picker entry by its rect, and only the count tells them apart.
+   */
+  const EXPECTED_CONTROLS: Readonly<Record<string, { visible: number; hidden: number }>> = {
+    hub: { visible: 6, hidden: 0 },
+    'confirm-abandon': { visible: 2, hidden: 0 },
+    battle: { visible: 6, hidden: 7 },
+    'battle-open': { visible: 12, hidden: 1 },
+    'choose-class': { visible: 5, hidden: 0 },
+    'draft-pick': { visible: 3, hidden: 0 },
+    inventory: { visible: 1, hidden: 0 },
+    settings: { visible: 9, hidden: 0 },
+    'content-warning': { visible: 1, hidden: 0 },
+    title: { visible: 2, hidden: 0 },
+    resume: { visible: 2, hidden: 0 },
+    'game-over': { visible: 1, hidden: 0 },
+  };
+
+  it('a control is either laid out or genuinely absent — never zero-sized and counted as fine', () => {
+    const offenders: string[] = [];
+    for (const [scenario, expected] of Object.entries(EXPECTED_CONTROLS)) {
+      for (const scale of SCALES) {
+        const r = report(960, 640, scenario, scale);
+        const visible = r.buttons.filter(laidOut);
+        const absent = r.buttons.filter((b) => !laidOut(b));
+        if (visible.length !== expected.visible) {
+          offenders.push(
+            `${scenario}/${scale}: ${visible.length} controls on screen, expected ` +
+              `${expected.visible} — one has disappeared or one has appeared`,
+          );
+        }
+        if (absent.length !== expected.hidden) {
+          offenders.push(
+            `${scenario}/${scale}: ${absent.length} controls with no box, expected ` +
+              `${expected.hidden}`,
+          );
+        }
+        for (const [i, b] of r.buttons.entries()) {
+          if (genuinelyHidden(b)) continue;
+          if (!laidOut(b)) {
+            offenders.push(
+              `${scenario}/${scale} control ${i}: ${b.width.toFixed(0)}px wide and ` +
+                `${b.height.toFixed(0)}px tall — a laid-out control that collapsed, which every ` +
+                'fold check below would have counted as comfortably visible',
+            );
+            continue;
+          }
+          // ⚠ A PRESENCE CHECK IS NOT ENOUGH, and this was found by mutation rather than by
+          // reading. `height: 0` on a `.void-button` does NOT produce a zero-height box: the
+          // border survives, so the control measures 2px and counts as "laid out and inside
+          // the window". A 2px control is as unusable as a 4.5px narration, and it is the
+          // same defect family. So a control that is on screen must be at least ONE LINE of
+          // its own type tall — the smallest height at which its label can exist at all.
+          const floor = CONTROL_PX[scale] * BODY_LINE_HEIGHT;
+          if (b.height < floor - SLACK) {
+            offenders.push(
+              `${scenario}/${scale} control ${i}: ${b.height.toFixed(1)}px tall, less than the ` +
+                `${floor.toFixed(1)}px one line of its own text needs — it is collapsed`,
+            );
+          }
+        }
+      }
+    }
+    expect(offenders, 'the control census does not match the design').toEqual([]);
+  });
+
+  it('...and the census really is measuring boxes of both kinds (non-vacuity)', () => {
+    // Without this, the discriminators above could both be broken and every count could be
+    // satisfied by a page where nothing has a box at all.
+    const battle = report(960, 640, 'battle', 'normal');
+    expect(battle.buttons.filter(laidOut).length, 'no control is laid out anywhere')
+      .toBeGreaterThan(0);
+    expect(
+      battle.buttons.filter((b) => !laidOut(b)).length,
+      'the closed pickers hide nothing — the discriminator has nothing to tell apart',
+    ).toBeGreaterThan(0);
+    // The discriminators themselves, on the three shapes they must separate.
+    expect(laidOut({ top: 10, right: 236, bottom: 56, left: 10, width: 226, height: 46 })).toBe(true);
+    expect(genuinelyHidden({ top: 0, right: 0, bottom: 0, left: 0, width: 0, height: 0 })).toBe(true);
+    const collapsed = { top: 10, right: 236, bottom: 10, left: 10, width: 226, height: 0 };
+    expect(laidOut(collapsed), 'a collapsed control counts as laid out').toBe(false);
+    expect(genuinelyHidden(collapsed), 'a collapsed control counts as absent').toBe(false);
+    // ...and the SLIVER, which is neither of the two above and is the shape a mutation
+    // actually produces: `height: 0` leaves the border behind, so the box is 2px tall.
+    const sliver = { top: 10, right: 236, bottom: 12, left: 10, width: 226, height: 2 };
+    expect(laidOut(sliver), 'a 2px control is not laid out by the presence test').toBe(true);
+    expect(
+      sliver.height < CONTROL_PX.normal * BODY_LINE_HEIGHT - SLACK,
+      'the one-line floor does not catch a 2px control',
+    ).toBe(true);
+    // The real controls clear it comfortably, so the floor is not near the working values.
+    for (const b of report(960, 640, 'hub', 'normal').buttons) {
+      expect(b.height).toBeGreaterThan(CONTROL_PX.normal * BODY_LINE_HEIGHT);
+    }
+  });
 
   it('no button is clipped or below the fold, at either text size', () => {
     const offenders: string[] = [];
@@ -713,10 +879,14 @@ describe('every control is reachable at the enforced minimum window', () => {
         const r = report(960, 640, scenario, scale);
         expect(r.buttons.length, `${scenario}/${scale} rendered no controls`).toBeGreaterThan(0);
         for (const [i, b] of r.buttons.entries()) {
-          if (b.top < -SLACK || b.bottom > 640 + SLACK) {
+          // A control with no box is judged by the census above, which is the only check that
+          // can tell a legitimately hidden picker entry from a collapsed one. Judging it here
+          // would pass it for free: `0 >= -1` and `0 <= 641` are both true.
+          if (!laidOut(b)) continue;
+          if (b.top < -SLACK || b.bottom > r.viewport.height + SLACK) {
             offenders.push(
               `${scenario}/${scale} control ${i}: ${b.top.toFixed(0)}..${b.bottom.toFixed(0)} ` +
-                'is outside a 640px window',
+                `is outside a ${r.viewport.height}px window`,
             );
           }
         }
@@ -732,29 +902,84 @@ describe('every control is reachable at the enforced minimum window', () => {
     ).toEqual([]);
   });
 
-  it('a list that legitimately outgrows the window is still fully reachable', () => {
-    // The requirement here is not "it all fits" — it is "nothing is unreachable". The first
-    // control must be visible so the player can see where the list begins, the box must stay
-    // inside the window so the scrollbar is on screen, and it must really scroll.
-    for (const { scenario, scale } of REACHABLE_BY_SCROLL) {
-      const where = `${scenario}/${scale}`;
-      const r = report(960, 640, scenario, scale);
-      const first = r.buttons[0] as Box;
-      expect(first.top, `${where}: the first control is above the window`).toBeGreaterThanOrEqual(
-        -SLACK,
-      );
-      expect(first.bottom, `${where}: the first control is clipped`).toBeLessThanOrEqual(
-        r.viewport.height + SLACK,
-      );
-      expect(r.choices.bottom, `${where}: the choice box overflows the window`).toBeLessThanOrEqual(
-        r.viewport.height + SLACK,
-      );
-      expect(
-        r.choices.scrollHeight,
-        `${where}: the list fits, so this case no longer tests reachability — move it back ` +
-          'to the strict list rather than leaving a case here that proves nothing',
-      ).toBeGreaterThan(r.choices.clientHeight);
+  /** First control visible, box inside the window, and it really scrolls. */
+  function assertReachable(scenario: string, scale: Scale): Report {
+    const where = `${scenario}/${scale}`;
+    const r = report(960, 640, scenario, scale);
+    const first = r.buttons.filter(laidOut)[0] as Box;
+    expect(first, `${where}: no control is laid out at all`).toBeDefined();
+    expect(first.top, `${where}: the first control is above the window`).toBeGreaterThanOrEqual(
+      -SLACK,
+    );
+    expect(first.bottom, `${where}: the first control is clipped`).toBeLessThanOrEqual(
+      r.viewport.height + SLACK,
+    );
+    expect(r.choices.bottom, `${where}: the choice box overflows the window`).toBeLessThanOrEqual(
+      r.viewport.height + SLACK,
+    );
+    expect(
+      r.choices.scrollHeight,
+      `${where}: the list fits, so this case no longer tests reachability — move it back ` +
+        'to the strict list rather than leaving a case here that proves nothing',
+    ).toBeGreaterThan(r.choices.clientHeight);
+    return r;
+  }
+
+  it('a list the GAME presents may overflow, but no control may BEGIN off-screen', () => {
+    // ⭐ THE CLAUSE THAT MAKES THE CONCESSION DEFENSIBLE, and it was missing. "The first
+    // control is visible and the rest scroll into reach" is satisfied by a list whose second
+    // card is 5% visible. What makes the measured case acceptable is that the overflowing
+    // card is 93% visible. Nothing pinned that until now.
+    for (const { scenario, scale } of PRESENTED_OVERFLOW) {
+      const r = assertReachable(scenario, scale);
+      for (const [i, b] of r.buttons.entries()) {
+        if (!laidOut(b)) continue;
+        expect(
+          b.top,
+          `${scenario}/${scale} control ${i}: begins at y${b.top.toFixed(0)} in a ` +
+            `${r.viewport.height}px window — it is entirely off-screen until scrolled to`,
+        ).toBeLessThanOrEqual(r.viewport.height);
+        expect(
+          b.top,
+          `${scenario}/${scale} control ${i}: begins above the window`,
+        ).toBeGreaterThanOrEqual(-SLACK);
+      }
     }
+    expect(PRESENTED_OVERFLOW.length, 'this guard covers nothing').toBeGreaterThan(0);
+  });
+
+  it('an expanded disclosure stays reachable, and COLLAPSING it restores every control', () => {
+    // The other half of the rule, and the half that would otherwise be assumed. A player who
+    // opened the Cast list pushed six controls down themselves and can undo it with one
+    // click; the guarantee is that the undo really works, asserted here against the collapsed
+    // scenario rather than left to another test's list to imply.
+    for (const { scenario, collapsed, scale } of EXPANDED_DISCLOSURE) {
+      const open = assertReachable(scenario, scale);
+      const shut = report(960, 640, collapsed, scale);
+
+      // Collapsed: every control laid out, fully inside the window, and nothing scrolls.
+      for (const [i, b] of shut.buttons.entries()) {
+        if (!laidOut(b)) continue;
+        expect(
+          b.top,
+          `${collapsed}/${scale} control ${i} begins off-screen with the list CLOSED — the ` +
+            'undo does not restore the column',
+        ).toBeLessThanOrEqual(shut.viewport.height);
+        expect(b.bottom, `${collapsed}/${scale} control ${i} is below the fold when closed`)
+          .toBeLessThanOrEqual(shut.viewport.height + SLACK);
+      }
+      expect(
+        shut.choices.scrollHeight,
+        `${collapsed}/${scale}: the column still scrolls with the list closed`,
+      ).toBeLessThanOrEqual(shut.choices.clientHeight + SLACK);
+
+      // ...and the expansion is really what made the difference (or this proves nothing).
+      expect(
+        open.buttons.filter(laidOut).length,
+        `${scenario}/${scale}: opening the list added no controls`,
+      ).toBeGreaterThan(shut.buttons.filter(laidOut).length);
+    }
+    expect(EXPANDED_DISCLOSURE.length, 'this guard covers nothing').toBeGreaterThan(0);
   });
 
   it('and the draft still fits OUTRIGHT at the default text size', () => {
@@ -762,8 +987,13 @@ describe('every control is reachable at the enforced minimum window', () => {
     // setting alone; if the default size ever needs it too, that is a design change and it
     // must fail here rather than pass quietly.
     const r = report(960, 640, 'draft-pick', 'normal');
-    expect(r.buttons.length, 'the draft rendered no cards').toBeGreaterThanOrEqual(3);
+    expect(r.buttons.filter(laidOut).length, 'the draft rendered no cards').toBe(3);
     for (const [i, b] of r.buttons.entries()) {
+      expect(laidOut(b), `draft card ${i} has no box — it would pass this check for free`).toBe(
+        true,
+      );
+      expect(b.top, `draft card ${i} begins below the fold at the default text size`)
+        .toBeLessThanOrEqual(r.viewport.height);
       expect(b.bottom, `draft card ${i} is below the fold at the default text size`)
         .toBeLessThanOrEqual(r.viewport.height + SLACK);
     }
