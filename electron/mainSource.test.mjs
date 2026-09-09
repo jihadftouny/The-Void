@@ -706,3 +706,95 @@ describe('no measurement is interpolated into a message', () => {
     }
   });
 });
+
+// =========================================================================================
+// ADDED BY `layout-breathing-room` (2026-09-09) — ADDITIVE ONLY.
+//
+// THE WINDOW'S SIZE CONSTRAINTS APPLY TO THE PAGE, NOT TO THE FRAME.
+//
+// `docs/UI-DESIGN.md` §14 promises that "960x640 is the size every layout must survive", and
+// until this unit that promise was false. `minWidth`/`minHeight` without `useContentSize`
+// constrain the OUTER WINDOW, so the frame and the default menu bar came out of the page's
+// share before the stylesheet saw a pixel: measured in this Electron, the identical window
+// hands the page 947x577. Every layout budget in the project was computed against a number
+// the renderer never received.
+//
+// ⚠ WHY THE GUARD READS THE ONE OBJECT LITERAL AND NOT THE FILE. `expect(MAIN).toMatch(...)`
+// would be satisfied by the word appearing anywhere — in a second `BrowserWindow` built for
+// something else, or in a variable that is never passed. The three options are load-bearing
+// TOGETHER: a minimum that constrains a different box than the one it is written for is not
+// a minimum. So they are asserted inside the same literal, which is the only place they mean
+// what they say. `src/dev/layoutProbe.test.ts` owns the other end — it builds a window with
+// this exact option set in a real Electron and measures what the content box reports, before
+// and after a squeeze, against a control built without the flag.
+// =========================================================================================
+
+describe('the game window sizes the PAGE, not the frame (UI-DESIGN.md §14)', () => {
+  /** The `new BrowserWindow({ ... })` argument literal, braces balanced. */
+  const windowOptions = () => {
+    const at = MAIN.indexOf('new BrowserWindow({');
+    expect(at, 'main.mjs no longer builds a BrowserWindow').toBeGreaterThan(-1);
+    const open = MAIN.indexOf('{', at);
+    let depth = 0;
+    for (let i = open; i < MAIN.length; i += 1) {
+      if (MAIN[i] === '{') depth += 1;
+      else if (MAIN[i] === '}') {
+        depth -= 1;
+        if (depth === 0) return MAIN.slice(open, i + 1);
+      }
+    }
+    return '';
+  };
+
+  it('the literal is really found, and it is really the game window (the anchor)', () => {
+    const options = windowOptions();
+    expect(options.length, 'the window options could not be read').toBeGreaterThan(80);
+    expect(options, 'this is not the game window — it has no preload').toMatch(/preload/);
+    expect(
+      MAIN.match(/new BrowserWindow\(\{/g).length,
+      'main.mjs builds more than one window — this guard now reads only the first, and the ' +
+        'assertions below may be pinning the wrong one',
+    ).toBe(1);
+  });
+
+  it('the minimum and the content-size flag are in the SAME literal', () => {
+    // Together or not at all. A `useContentSize` on some other window, or a minimum written
+    // for a box nobody sizes, is the shape this defect already took once.
+    const options = windowOptions();
+    expect(options, 'the window has no minimum width').toMatch(/minWidth:\s*960/);
+    expect(options, 'the window has no minimum height').toMatch(/minHeight:\s*640/);
+    expect(
+      options,
+      'the game window does not set useContentSize, so 960x640 is the FRAME and the page ' +
+        'gets less than the documented minimum — the promise in UI-DESIGN.md §14 is false ' +
+        'again, and every layout budget is computed against a size the renderer never sees',
+    ).toMatch(/useContentSize:\s*true/);
+  });
+
+  it('and it is not switched off or made conditional', () => {
+    // The lookahead excludes the one value that is allowed. Without it this pattern matches
+    // `true` itself and the guard fails on correct code, which is how a guard gets deleted.
+    const NOT_LITERAL_TRUE = /useContentSize:\s*(?!true\b)[A-Za-z_$][\w$]*/;
+    const options = windowOptions();
+    expect(options, 'useContentSize is set to false').not.toMatch(/useContentSize:\s*false/);
+    expect(
+      options,
+      'useContentSize is behind a flag or a variable — the minimum would mean one thing on ' +
+        'some machines and another on others',
+    ).not.toMatch(NOT_LITERAL_TRUE);
+
+    // The detector, proved on the shapes it is meant to catch and the one it must not.
+    expect(NOT_LITERAL_TRUE.test('{ useContentSize: SOME_FLAG }')).toBe(true);
+    expect(NOT_LITERAL_TRUE.test('{ useContentSize: process.env.X }')).toBe(true);
+    expect(NOT_LITERAL_TRUE.test('{ useContentSize: true }')).toBe(false);
+    expect(/useContentSize:\s*false/.test('{ useContentSize: false }')).toBe(true);
+  });
+
+  it('the opening size is still the one that was chosen, and still above the minimum', () => {
+    const options = windowOptions();
+    expect(options).toMatch(/width:\s*1100/);
+    expect(options).toMatch(/height:\s*820/);
+    expect(Number(/\bwidth:\s*(\d+)/.exec(options)[1])).toBeGreaterThan(960);
+    expect(Number(/\bheight:\s*(\d+)/.exec(options)[1])).toBeGreaterThan(640);
+  });
+});

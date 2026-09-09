@@ -113,10 +113,30 @@ async function createWindow() {
     // §14 decided that a minimum must exist and no number was ever picked, so "the layout's
     // design target" was a target nothing enforced and nothing was designed against. This is
     // that number, and the layout is built to it: below this the HUD column, the narration,
-    // the combat log and the choice row stop being able to coexist. Enforcing it in the
+    // the combat log and the choice column stop being able to coexist. Enforcing it in the
     // window means the unusable sizes simply cannot be reached by dragging.
     minWidth: 960,
     minHeight: 640,
+    // ⭐ AND 960x640 IS THE SIZE THE PAGE GETS — which, until 2026-09-09, it was not.
+    //
+    // Without this flag every size above is the OUTER WINDOW: the frame and the default menu
+    // bar come out of the page's share before the stylesheet sees a pixel. Measured on this
+    // machine, in this Electron: the identical window without `useContentSize` hands the page
+    // 947x577. So the documented promise — "960x640 is the size every layout must survive" —
+    // was false by 13x63 px, and every layout budget computed against it was computed against
+    // a number the renderer never received. With the flag, `getContentSize()` reports exactly
+    // [960, 640] and still does after the window is squeezed as small as it will go.
+    //
+    // The opening 1100x820 becomes a CONTENT size too, so the window is a little larger than
+    // it was. ⚠ Noted for docs/PLAN.md #14 / N5, which owns the initial size and remembered
+    // bounds: on a 1366x768 laptop the default window already exceeded the work area, and
+    // this makes it exceed it by more. Clamping to the work area is N5's decided-and-unbuilt
+    // item, deliberately not smuggled in here.
+    //
+    // `src/dev/layoutProbe.test.ts` proves all three halves of this in a real Electron: that
+    // the option holds the content box at the minimum, that WITHOUT it the page gets less,
+    // and that this file really passes it inside the same literal that carries the minimum.
+    useContentSize: true,
     backgroundColor: '#0a0a0c',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
