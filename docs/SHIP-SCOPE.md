@@ -289,6 +289,40 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 
 ---
 
+## 12. The second amendment — boss agents and rest spots join v1 *(2026-09-10, the author's call)*
+
+**An interview before #2 and #6 settled the open design questions — and pulled two things into v1.** Under §2.2 new work must be priced against the deadline, not absorbed. This is that pricing.
+
+### What was added
+
+- **Boss agents with run-memory (`PLAN.md` #11)** — previously parked at **v2.0**. Bosses pick their own actions from the moves the engine allows, remember your karma and the acts behind it, can be talked to in free text, and the floor-4 executioner gets built. The author chose this **over deferring it**, which was recommended under §2.1 — its absence does not make the game lie, leave a run unfinishable, or stop it being a product. **Decided with the cost stated;** see `GAME-DESIGN.md` §22.29. **Estimated 35–45 h**, its own unit after #6.
+- **Rest spots** — rest becomes a place you find while descending, and the one truly calm moment in the game, with a narrated vignette of the place and your condition (§22.26). It rides the same event machinery #2 already builds for bargains. **Estimated +4–6 h inside #2.**
+
+**Not a spending change.** Boss agents run on the local model; nothing here costs money, so plan rule 2 and §5.2's $0 line are untouched. v2.0 is gated on `f5` because it is the first release *allowed to spend* — #11 was parked there by bundling, not by money.
+
+### The honest arithmetic
+
+| | h |
+|---|---|
+| remaining before this amendment (#2, #6, block 4, block 5) | 64 |
+| **NEW** — #11 boss agents | ~35–45 |
+| **NEW** — rest spots, inside #2 | ~4–6 |
+| **remaining now** | **~103–115** |
+
+**Against the deadline:** `b2` is due **31 Dec**. From 10 Sep that is ~16 weeks at 8 h/week ≈ **128 h of capacity**. **Slack falls from ~64 h to roughly 13–25 h.**
+
+**It still fits. But the margin is now thin enough that one unit going badly would consume it**, where before it would not have. Two things make that real rather than theoretical: this session has already seen two agent stalls and one pipeline escape, and #11 is the least-understood unit in the plan — nobody has yet built a boss that selects its own actions.
+
+### What gives first if it runs over
+
+§6's cut ladder is pre-armed for exactly this. **If #11 overruns, the cheapest honest fallback is the narrator-judged talk field** the author was offered and did not choose: the text field ships, the narrator decides whether what you typed earned one of the engine's four outcomes, and run-memory lands later. That keeps "you can talk to the thing wearing your face" in v1 at a fraction of the cost. **It is recorded here so that falling back is a pre-agreed step, not a scramble** — but it is the author's to trigger, not the pipeline's.
+
+### Order
+
+**#2 first** — it is #6's hard prerequisite, and it now also carries rest spots and bargain frequency. **Then #6. Then #11**, which needs #6's battle screen to talk inside. Block 4 (the author's prose, now including the per-floor lore briefs rest spots narrate from) can run alongside, since it is the author's hands and not the pipeline's.
+
+---
+
 *Companion board: the **Plan v3 Mission Board** (lane V) — a personal planning document, kept
 outside this repository and deliberately not tracked here. Register of defects: `FINDINGS.md`.
 Work order: `PLAN.md`.*

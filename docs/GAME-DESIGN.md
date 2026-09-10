@@ -1844,3 +1844,85 @@ This number decides how long floor 5 runs before the Hollow is offered. §22 had
 **Scope:** NOT v1 (fails all three §2.1 gate questions — the current behaviour makes the game too easy, which v1 already accepts). **Lands with #2's floor/encounter work**, where the event tables live. Until then the button stays and v1's "expected to feel too easy" note covers it. Frequency/act-weighting of the event = #2 balance numbers.
 
 **Rejected:** once-per-hub-visit and once-per-floor rationing (both keep the shop-counter frame and need anti-farm bookkeeping); removing only the net-positive template (fixes G52's symptom, keeps the frame).
+
+
+### 22.24 The five floors' open numbers — settled by the author *(2026-09-10, interview before #2)*
+
+§8 decided *how* each floor works and left the magnitudes open. The author settled them:
+
+| Floor | Question §8 left open | Ruling |
+|---|---|---|
+| **2** | how often an encounter is illusory ("a seeded fraction") | **about one fight in three** |
+| **2** | how an illusion is seen through (§8 listed "a Study/Discern action, *or* passively each round" without choosing) | **a passive Wisdom roll only.** No Study action |
+| **3** | how hard the attrition bites | **a slow weight** — noticeable, manageable with care. Not a squeeze, not flavour-only |
+| **4** | how much heavier floor-4 karma counts ("double, or some N > 1") | **double** |
+| **5** | how unreliable the corrupted kit is | **seeded per run** — each skill gets one corrupted form on arrival; learnable within the run, different the next |
+
+**Rejected on floor 2:** the Study action (the recommended option was *both* — passive plus Study). The author chose the simplest form. **Consequence, recorded so nobody discovers it by accident:** with illusions in a third of fights and Wisdom as the *only* counter, **a low-Wisdom build has no counterplay on floor 2 at all.** See §22.27 for how that is handled.
+
+**Rejected on floor 5:** fixed-forever corruption (becomes a second moveset after a few runs and stops being unsettling) and random-every-use (purest, but hardest to play well on the least-seen floor in the game).
+
+### 22.25 Bargains: several per floor, and they NEVER heal *(2026-09-10)*
+
+**Frequency: several per floor**, as random events during the descent (§22.23's mechanism). Temptation is a constant pressure rather than an occasional event, so karma moves faster through bargains.
+
+**No bargain restores health, at any price.** Healing lives in consumables (§22.6) and rest (§22.26). This closes **G52** at the root rather than by pricing: the original exploit was a bargain template netting +4 HP for nothing, and at several bargains per floor *any* healing bargain — even a costly one — would quietly become the game's main healing source.
+
+**Rejected:** healing at a real price (the recommended option — on-theme for a sacrifice economy, but the author preferred a clean separation); keeping today's healing bargains.
+
+> **⚠ This corrects §22.23**, whose *"Scope: NOT v1"* line is **stale**. It was true when written; it stopped being true when `SHIP-SCOPE.md` §11 moved #2 into v1 on 2026-09-07. **Bargains-as-events ships in v1, with #2.**
+
+### 22.26 Rest becomes a place you find — and the only truly calm moment in the game *(2026-09-10)*
+
+**The author's principle, in their words: *"the rest is the only moment in the game where things are truly calm."*** Rest is sanctuary — the one place the Void does not reach you. Every other screen is pressure; this one is not. **The contrast is the point**, and it constrains everything below.
+
+**Access — rest spots are places you find while descending**, arriving as events the way bargains do, rather than a counted resource spent from the hub.
+
+- **Working assumption, stated so it can be overruled:** found rest spots **replace** the carried `restsLeft` counter. You do not bank rests; you rest when the descent gives you somewhere to. **Scarcity comes from how often a spot is found**, which is a balance number owned by #2's re-run. §18.1's *"taking one is a decision rather than a habit"* is preserved by scarcity rather than by a counter.
+- **There is no trade-off once you arrive.** A rest that makes you choose is not calm. You rest.
+- **Mechanics are otherwise §18.1 unchanged:** a rest restores **HP and skill charges**; floor 3 still dampens the healing (§8, §22.24).
+
+**Content — what a rest spot tells you:**
+
+- **The place and its lore** — where you are and what it means, the floor's world a little at a time. This is **the game's main lore channel**, which it currently lacks.
+- **Your character's condition** — wounds, what you carry, how the descent is wearing on you. ⚠ **Karma is hidden by design, so a rest may REFLECT who you are becoming but must never STATE it.** A merciful character and a desecrator rest differently — different tone, different detail — with no number ever shown. The narrator already receives karma in its prompt; this is the same rule the boss agents follow (§22.29).
+
+**Rejected content threads**, both because they would make rest uneasy: a fragment of your past being extracted, and the Void speaking in the quiet. **Also withdrawn** — the orchestrator's first per-floor sketches that made rest uneasy (reflections talking while you sleep, a sanctuary that records you, a dark only slightly thinner). They contradict the principle.
+
+**Two consequences of "truly calm", recorded deliberately:**
+
+- **Floor 3** keeps its dampened healing — that is a number, confirmed in §22.24 — but the **tone stays calm**. Quiet grief, not grief that will not let you rest. Calm and incomplete recovery coexist.
+- **Floor 5 gets calm too.** Only the damned reach it, and they still get one quiet moment. **This is intended**, not an oversight.
+
+**This gives the scenery frame a real job** (`ART-BIBLE.md` §4): a rest spot is exactly the establishing image the 16:9 region was built for.
+
+**Where the words come from:** the narrator generates each vignette live from a **per-floor lore brief**, so the vignettes are cheap and never repeat exactly. **The briefs are the author's to write**, in block 4 (#13-lite) — the narrator describes; the author decides what is true.
+
+### 22.27 Balance target: tough but fair — and the Wisdom gap waits for evidence *(2026-09-10)*
+
+**Target: a careful player reaches an ending about one run in three.** This is the original stance, and it is what #2's re-run tunes toward — replacing the invalidated 32.9% (G11: measured on a character that never equipped found loot).
+
+**The Wisdom gap is deliberately NOT pre-decided.** Floor 2's rulings (§22.24) mean a low-Wisdom build has no counter to illusions. If that stops a class reaching the target, something must give — but **the author ruled: *"we discuss later, let's see after the tests."***
+
+**So #2's balance re-run MUST report win rate PER CLASS, and must NOT tune anything to close a gap on its own.** It brings the numbers back to the author. The three remedies on the table — strengthen that class elsewhere, accept it as a real build trade-off, or soften floor 2 for low-Wisdom builds — are the author's to choose once there is evidence.
+
+### 22.28 The battle screen is the framed stage, as designed *(2026-09-10)*
+
+`UI-DESIGN.md` §1 stands: **the enemy on a large framed stage in the centre, your stat box bottom-left, the action menu bottom-right**, a ticker for the latest combat line. It was reconfirmed because `layout-breathing-room` (2026-09-09) had just put the hub's choices in a right-hand column, and the two needed reconciling. They are compatible — the battle actions still sit on the right — and **battles now look distinct from exploring**, which is intended.
+
+The **enemy art region moves from the HUD to the centre stage**. Its locked **3:4** upright ratio was chosen for exactly this: a standing figure on a stage (`ART-BIBLE.md` §4).
+
+**Rejected:** carrying the hub's two-column stage into battle — cheaper and consistent, but it gives the enemy far less presence, which was the whole point of putting a creature on screen.
+
+### 22.29 Boss agents move into v1 *(2026-09-10 — the author's call, made with the cost stated)*
+
+**The author chose full boss agents with run-memory for the first release**, over deferring them (recommended, per the §2.1 v1 gate) or a cheaper narrator-judged talk field. This is **`PLAN.md` #11**, previously parked at **v2.0**.
+
+- **Memory: your karma and the acts behind it** — who you spared, what you desecrated, which bargains you took. All already recorded as plain data, so it is cheap and fast, and it is what makes a boss's line land. **Rejected:** a narrated whole-run summary (grows through the run and slows every boss turn) and cross-boss memory of your conversations (new run-long state).
+- **Talk** is as §20 decided: free text, **engine-defined outcomes only** (pause · reveal a weakness · drop a mechanic · accept a surrender), free, **one concession per fight** (§22.7 / B4c).
+- **It includes the floor-4 executioner**, which does not exist in code (M12 shipped four combat bosses, not five).
+- **It is a unit of its own, sequenced after #6** — not part of the battle screen's 12 h.
+
+**Why the v2.0 placement does not block this:** v2.0 is gated on milestone `f5` because it is *the first release allowed to cost money* (plan rule 2). **Boss agents cost nothing** — they run on the local model already installed. They were parked in v2.0 by bundling, not by money, so **pulling them forward does not break the $0 rule.**
+
+**The cost, stated plainly:** an estimated **35–45 h** (the plan agent will firm it up). See `SHIP-SCOPE.md` §12 for what it does to the schedule.
