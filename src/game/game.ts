@@ -558,6 +558,9 @@ function resolvePostVictory(state: GameState, finish: Finish): StepResult {
  */
 const DEFAULT_SPARE_ACTIONS: readonly KarmaAction[] = ['spareWeighted'];
 
+/** What a kill records when the ⚖ family declares no `onKill` list — the uniform cruelty. */
+const DEFAULT_KILL_ACTIONS: readonly KarmaAction[] = ['killWeighted'];
+
 /** The floor boss id for acts 1–3 (act 4 is the verdict gate; act 5 is the Hollow). */
 const BOSS_BY_ACT: Record<number, BossId> = { 1: 'kingpin', 2: 'reflection', 3: 'sin' };
 
@@ -663,7 +666,8 @@ function continueJourney(
  * is resolved by `resolveDealDecision`.
  */
 function openDeal(state: GameState, rng: Rng, finish: Finish): StepResult {
-  const deal = buildDeal(state.karma, state.act, rng);
+  // PLAN.md #2: the FLOOR picks the pool on floor 4 (tempting for everyone), keyed on `place`.
+  const deal = buildDeal(state.karma, floorOf(state), rng);
   return finish({ kind: 'deal', deal }, [
     {
       kind: 'deal-offer',
@@ -751,8 +755,14 @@ function resolveBattleRound(
     case 'player-won': {
       // A moral (⚖) kill records cruelty; a plain enemy (and every boss) records nothing.
       // Karma is an INPUT only here (the first EFFECT is the act-4 verdict gate).
+      //
+      // PLAN.md #2 / §22.22: `onKill` is a LIST, folded in order in THIS one step, exactly as
+      // `onSpare` is — killing The Judged records cruelty AND desecration (`killSacred`).
       const karma = enemy.karmaWeighted
-        ? recordOnFloor(state, state.karma, getFamily(enemy.familyId)?.onKill ?? 'killWeighted')
+        ? (getFamily(enemy.familyId)?.onKill ?? DEFAULT_KILL_ACTIONS).reduce(
+            (k, action) => recordOnFloor(state, k, action),
+            state.karma,
+          )
         : state.karma;
       // M12: a floor-boss win (acts 1–3, non-final, boss present) schedules an act advance once
       // any earned level-ups drain (`resolvePostVictory`). The Hollow (final) routes to the

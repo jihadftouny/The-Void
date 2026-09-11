@@ -18,7 +18,8 @@
 // exercised only by its unit test". BOTH halves of that are now false, and leaving
 // them would invite someone to "restore" a dead module):
 //   · a spare  -> game.ts folds the ⚖ family's `onSpare` LIST, in order, in one step.
-//   · a kill   -> game.ts records the ⚖ family's `onKill`.
+//   · a kill   -> game.ts folds the ⚖ family's `onKill` LIST (The Judged: cruelty AND
+//                 `killSacred`, PLAN.md #2 / §22.22).
 //   · a deal   -> deal.ts's `applyDeal`, for the four karma-shifting costs
 //                 (desecrate / greed / offering / whisper).
 // The first EFFECT is the act-4 verdict gate (`boss.ts computeVerdict`), plus the
@@ -58,7 +59,11 @@ export type KarmaAction =
   | 'desecrateShrine'
   | 'honorDead'
   | 'embraceWhisper'
-  | 'seeThroughIllusion';
+  | 'seeThroughIllusion'
+  // PLAN.md #2 / GAME-DESIGN §22.22: the FIFTH action §9 implied and never had — killing The
+  // Judged is desecration as well as cruelty. Named for the act (a sacred thing killed), not for
+  // shrines, which is why `desecrateShrine` could not be reused.
+  | 'killSacred';
 
 /**
  * The action -> signed-delta table. Provisional M1 magnitudes: their only job now is
@@ -74,6 +79,8 @@ export const KARMA_DELTAS: Record<KarmaAction, Partial<KarmaState>> = {
   honorDead: { reverenceDesecration: 1 },
   embraceWhisper: { clarityDelusion: -1 },
   seeThroughIllusion: { clarityDelusion: 1 },
+  // #2 balance placeholder, like every magnitude here: -1, the same size as `killWeighted`.
+  killSacred: { reverenceDesecration: -1 },
 };
 
 /** A fresh, neutral karma vector — every axis at 0. */

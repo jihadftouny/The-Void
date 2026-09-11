@@ -45,6 +45,7 @@ import { generateItem } from './rarityGen.ts';
 import { pick, type Rng } from './rng.ts';
 import { type KarmaState, recordKarmaWeighted } from './karma.ts';
 import { pickUp } from './equipment.ts';
+import { floorModifiers, type FloorId } from './floors.ts';
 import dealsData from '../data/deals.json';
 
 /** Which offer pool the altar draws from, chosen by karma (see `selectPool`). */
@@ -155,8 +156,15 @@ const KARMA_COST_ACTION = {
  * (`restraintGreed <= -GREED_TH` OR `reverenceDesecration <= -DESECRATION_TH`) is tempted with
  * `tempting`; everyone else gets `standard`. This is the karma READ (thresholds are M15
  * placeholders); it adds no karma EFFECT.
+ *
+ * PLAN.md #2, floor 4 (GAME-DESIGN §8's floor-gated temptations): a floor whose data names a
+ * `bargainPool` overrides the ledger — on floor 4 EVERYONE is offered the `tempting` pool, the
+ * reverent included, because the reckoning is where temptation is decisive. `floor` omitted (or
+ * any floor without the override) ⇒ exactly the karma rule above.
  */
-export function selectPool(karma: KarmaState): Pool {
+export function selectPool(karma: KarmaState, floor?: FloorId): Pool {
+  const override = floor === undefined ? null : floorModifiers(floor).bargainPool;
+  if (override) return override;
   if (karma.reverenceDesecration >= REVERENCE_TH) return 'grace';
   if (karma.restraintGreed <= -GREED_TH || karma.reverenceDesecration <= -DESECRATION_TH) {
     return 'tempting';
@@ -182,12 +190,13 @@ function realizeReward(spec: DealRewardSpec, rng: Rng): DealReward {
 }
 
 /**
- * Build a sacrifice deal — PURE, seeded. Reads `karma` (via `selectPool`) to pick the pool,
- * then draws in the documented order. `act` is currently unused by the placeholder tables but
- * kept for the M8/M10 per-Act deal expansion. Never mutates karma.
+ * Build a sacrifice deal — PURE, seeded. Reads `karma` and the FLOOR (via `selectPool`) to pick
+ * the pool, then draws in the documented order. Never mutates karma. (PLAN.md #2: the second
+ * parameter was an unused `act`; it is now the floor the bargain found the player on, keyed on
+ * `place` by the caller — `floorOf(state)`.)
  */
-export function buildDeal(karma: KarmaState, _act: number, rng: Rng): SacrificeDeal {
-  const pool = selectPool(karma);
+export function buildDeal(karma: KarmaState, floor: FloorId, rng: Rng): SacrificeDeal {
+  const pool = selectPool(karma, floor);
   const templates = TEMPLATES[pool];
   if (!templates || templates.length === 0) throw new Error(`buildDeal: empty pool ${pool}`);
   const template = pick(rng, templates);

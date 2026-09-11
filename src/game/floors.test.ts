@@ -25,7 +25,8 @@ import { generateEnemy, type Enemy } from './enemy.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createBattle, openBattle, type BattleState } from './battle.ts';
 import { fireTrigger, fireFloorTriggers } from './relicEffects.ts';
-import { createKarma } from './karma.ts';
+import { createKarma, KARMA_DELTAS } from './karma.ts';
+import { buildDeal, selectPool } from './deal.ts';
 import { makeCondition } from './condition.ts';
 import { mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
@@ -356,5 +357,68 @@ describe('floor-4 karma counts double, with no new state (AC-15)', () => {
       }
     }
     expect(killed).toBe(1); // non-vacuity: a kill really happened
+  });
+});
+
+// ------- AC-16 / AC-17: floor 4's temptation and the fifth karma action --------------------
+
+describe('floor 4 offers the tempting pool to everyone (AC-16)', () => {
+  const NEUTRAL = createKarma();
+  const REVERENT = { ...createKarma(), reverenceDesecration: 5 };
+  const GREEDY = { ...createKarma(), restraintGreed: -5 };
+
+  it('on floor 4, a neutral, a reverent and a greedy ledger all draw from tempting', () => {
+    for (const k of [NEUTRAL, REVERENT, GREEDY]) {
+      expect(selectPool(k, 4)).toBe('tempting');
+      expect(buildDeal(k, 4, mulberry32(11)).pool).toBe('tempting');
+    }
+  });
+
+  it('on floor 1 the same three ledgers draw standard, grace, tempting (today’s rule)', () => {
+    expect(buildDeal(NEUTRAL, 1, mulberry32(11)).pool).toBe('standard');
+    expect(buildDeal(REVERENT, 1, mulberry32(11)).pool).toBe('grace');
+    expect(buildDeal(GREEDY, 1, mulberry32(11)).pool).toBe('tempting');
+    // ...and with no floor at all, the karma rule alone (every pre-#2 caller).
+    expect(selectPool(REVERENT)).toBe('grace');
+  });
+});
+
+describe('killing The Judged is cruelty AND desecration, in one step (AC-17, §22.22)', () => {
+  function killed(familyId: string, place: number) {
+    const family = getFamily(familyId)!;
+    const enemy = { ...frozenEnemy(), familyId: family.id, karmaWeighted: true, hp: 1, armorClass: 1 };
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = { ...battleState(player(), enemy, place), rngState: seed };
+      const r = step(s, { kind: 'battle-action', action: 'fight' });
+      if (r.state.phase.kind === 'battle-victory') return r.state.karma;
+    }
+    throw new Error('no seed killed the 1-HP enemy');
+  }
+
+  it('The Judged on floor 4: mercy -2 AND reverence -2 (killWeighted + killSacred, each x2)', () => {
+    expect(killed('theJudged', 3)).toEqual({ ...createKarma(), mercyCruelty: -2, reverenceDesecration: -2 });
+  });
+
+  it('The Judged off floor 4 (x1): mercy -1 AND reverence -1', () => {
+    expect(killed('theJudged', 2)).toEqual({ ...createKarma(), mercyCruelty: -1, reverenceDesecration: -1 });
+  });
+
+  it('CONTROL: any other weighted family records cruelty alone', () => {
+    expect(killed('gangers', 2)).toEqual({ ...createKarma(), mercyCruelty: -1 });
+  });
+
+  it('killSacred is -1 reverence, the size of killWeighted', () => {
+    expect(KARMA_DELTAS.killSacred).toEqual({ reverenceDesecration: -1 });
+  });
+});
+
+describe('the engine opens a floor-4 bargain from the tempting pool, through step (AC-16)', () => {
+  it('a neutral ledger standing on floor 4 is offered tempting; on floor 1, standard', () => {
+    for (const [place, pool] of [[3, 'tempting'], [0, 'standard']] as const) {
+      const base = battleState(player(), frozenEnemy(), place);
+      const hub: GameState = { ...base, phase: { kind: 'main-menu' } };
+      const r = step(hub, { kind: 'menu', choice: 'seek-deal' });
+      expect(r.state.phase.kind === 'deal' && r.state.phase.deal.pool, `place ${place}`).toBe(pool);
+    }
   });
 });

@@ -6,7 +6,7 @@
     "floor": 1,
     "karmaWeighted": true,
     "onSpare": ["spareWeighted"],
-    "onKill": "killWeighted",
+    "onKill": ["killWeighted"],
     "theme": {
       "statBias": { "STR": 1 },
       "skills": ["gangShiv", "gangStomp"],
@@ -60,7 +60,7 @@
     "floor": 1,
     "karmaWeighted": true,
     "onSpare": ["spareWeighted"],
-    "onKill": "killWeighted",
+    "onKill": ["killWeighted"],
     "theme": {
       "skills": ["desperateSwing"],
       "behaviorNote": "near-civilian; barely a threat — provisional, M10 floor hooks"
@@ -122,7 +122,7 @@
     "floor": 3,
     "karmaWeighted": true,
     "onSpare": ["spareWeighted"],
-    "onKill": "killWeighted",
+    "onKill": ["killWeighted"],
     "theme": {
       "skills": ["drainingSob", "heavyHeart"],
       "behaviorNote": "saps the player's resources — provisional, M10 floor hooks"
@@ -135,7 +135,7 @@
     "floor": 3,
     "karmaWeighted": true,
     "onSpare": ["spareWeighted"],
-    "onKill": "killWeighted",
+    "onKill": ["killWeighted"],
     "theme": {
       "statBias": { "STR": 2 },
       "skills": ["furiousBlow", "wrathSmash"],
@@ -149,7 +149,7 @@
     "floor": 3,
     "karmaWeighted": true,
     "onSpare": ["spareWeighted"],
-    "onKill": "killWeighted",
+    "onKill": ["killWeighted"],
     "theme": {
       "skills": ["creepingFear", "paralyzingDread"],
       "behaviorNote": "inflicts fear / weakness — provisional, M10 floor hooks"
@@ -162,7 +162,7 @@
     "floor": 3,
     "karmaWeighted": true,
     "onSpare": ["spareWeighted"],
-    "onKill": "killWeighted",
+    "onKill": ["killWeighted"],
     "theme": {
       "skills": ["deadeningTouch", "numbingCold"],
       "behaviorNote": "deadens the player's actions — provisional, M10 floor hooks"
@@ -175,7 +175,7 @@
     "floor": 3,
     "karmaWeighted": true,
     "onSpare": ["spareWeighted"],
-    "onKill": "killWeighted",
+    "onKill": ["killWeighted"],
     "theme": {
       "statBias": { "CHA": 2 },
       "skills": ["sinfulWhisper", "covetousStrike", "wrathfulLash"],
@@ -226,10 +226,10 @@
     "floor": 4,
     "karmaWeighted": true,
     "onSpare": ["spareWeighted", "honorDead"],
-    "onKill": "killWeighted",
+    "onKill": ["killWeighted", "killSacred"],
     "theme": {
       "skills": ["sorrowfulGaze"],
-      "behaviorNote": "non-hostile souls awaiting judgement; a spare is mercy AND honours the dead (§9 + §22.22). The kill half — desecration — is NOT wired: it needs a fifth KarmaAction and belongs with #2's floor-4 work."
+      "behaviorNote": "non-hostile souls awaiting judgement; a spare is mercy AND honours the dead (§9 + §22.22), and a kill is cruelty AND desecration (the fifth KarmaAction, killSacred — PLAN.md #2)."
     }
   },
   {
@@ -288,7 +288,7 @@
     "floor": 5,
     "karmaWeighted": true,
     "onSpare": ["spareWeighted"],
-    "onKill": "killWeighted",
+    "onKill": ["killWeighted"],
     "theme": {
       "skills": ["echoedStrike", "echoedHex"],
       "behaviorNote": "your past kills, returned — provisional, M10 floor hooks"

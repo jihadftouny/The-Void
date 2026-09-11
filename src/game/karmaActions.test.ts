@@ -188,7 +188,7 @@ function karmaDelta(before: KarmaState, after: KarmaState): KarmaState {
 // =============================================================================================
 
 describe('the balance constants #10a must not touch', () => {
-  it('KARMA_DELTAS is exactly the shipped table, all eight actions', () => {
+  it('KARMA_DELTAS is exactly the shipped table, all nine actions', () => {
     const EXPECTED: Record<KarmaAction, Partial<KarmaState>> = {
       spareWeighted: { mercyCruelty: 1 },
       killWeighted: { mercyCruelty: -1 },
@@ -198,6 +198,8 @@ describe('the balance constants #10a must not touch', () => {
       honorDead: { reverenceDesecration: 1 },
       embraceWhisper: { clarityDelusion: -1 },
       seeThroughIllusion: { clarityDelusion: 1 },
+      // PLAN.md #2 / §22.22: the fifth action §9 implied — killing The Judged is desecration.
+      killSacred: { reverenceDesecration: -1 },
     };
     expect(KARMA_DELTAS).toEqual(EXPECTED);
   });
@@ -1135,6 +1137,8 @@ interface RunRecord {
   spares: number;
   /** PLAN.md #2: illusions seen through on floor 2 — each records `seeThroughIllusion`. */
   dispels: number;
+  /** PLAN.md #2: The Judged killed, and the floor it happened on (place 3 counts double). */
+  judgedKillPlaces: number[];
 }
 
 /** Play one run to its terminal state through the real `step`, recording what it did. */
@@ -1144,9 +1148,14 @@ function playRun(seed: number, classId: PlayerClass, policy: SimPolicy, guard = 
   let dealOffers = 0;
   let spares = 0;
   let dispels = 0;
+  const judgedKillPlaces: number[] = [];
   let steps = 0;
   while (r.awaiting !== 'game-over' && steps < guard) {
+    const phase = r.state.phase;
+    const facing = phase.kind === 'battle' ? phase.battle.enemy.familyId : null;
+    const place = r.state.place;
     r = step(r.state, policy(r));
+    if (facing === 'theJudged' && r.state.phase.kind === 'battle-victory') judgedKillPlaces.push(place);
     steps += 1;
     for (const e of r.events) {
       if (e.kind === 'verdict') verdict = e.outcome;
@@ -1156,7 +1165,7 @@ function playRun(seed: number, classId: PlayerClass, policy: SimPolicy, guard = 
     }
   }
   expect(steps, `run ${classId}/${seed} hit the step guard`).toBeLessThan(guard);
-  return { seed, classId, karma: r.state.karma, verdict, dealOffers, spares, dispels };
+  return { seed, classId, karma: r.state.karma, verdict, dealOffers, spares, dispels, judgedKillPlaces };
 }
 
 function batch(seeds: number[], classes: PlayerClass[], policy: (c: PlayerClass) => SimPolicy) {
@@ -1252,19 +1261,25 @@ describe('the balance anchor cannot see this unit', () => {
     expect(PENITENT.reduce((a, r) => a + r.dealOffers, 0)).toBeGreaterThan(0);
   });
 
-  it('under the heuristic policy reverence and restraint never move; clarity moves ONLY by dispels', () => {
-    // The sharpest statement of #10a's inertness: reverence and restraint stay exactly 0 across
-    // every heuristic run. `mercyCruelty` moves (kills) and always did.
+  it('under the heuristic policy restraint never moves; reverence and clarity move ONLY by #2', () => {
+    // The sharpest statement of #10a's inertness: restraint stays exactly 0 across every
+    // heuristic run. `mercyCruelty` moves (kills) and always did.
+    //
+    // PLAN.md #2 moved REVERENCE on purpose too: killing The Judged now records `killSacred`
+    // (-1, x2 on floor 4), so reverence is EXACTLY that — the sum over this run's Judged kills of
+    // -1 x the floor weight (floor 4 = place 3 doubles; written from the ruling, not the data).
     //
     // PLAN.md #2 changed the clarity half ON PURPOSE: floor 2's illusions are met by EVERY
     // policy, and seeing through one records `seeThroughIllusion` (+1 clarity, x1 on floor 2).
     // So clarity is no longer 0 — it is EXACTLY the number of dispels the run saw, which pins
     // it to that one cause rather than letting any other path move it.
     for (const r of HEURISTIC) {
-      expect(r.karma.reverenceDesecration, `${r.classId}/${r.seed}`).toBe(0);
+      const sacred = r.judgedKillPlaces.reduce((a, place) => a - (place === 3 ? 2 : 1), 0);
+      expect(r.karma.reverenceDesecration, `${r.classId}/${r.seed}`).toBe(sacred);
       expect(r.karma.restraintGreed, `${r.classId}/${r.seed}`).toBe(0);
       expect(r.karma.clarityDelusion, `${r.classId}/${r.seed}`).toBe(r.dispels);
     }
+    expect(HEURISTIC.reduce((a, r) => a + r.judgedKillPlaces.length, 0)).toBeGreaterThan(0);
     // Non-vacuity: the sweep really met and saw through illusions.
     expect(HEURISTIC.reduce((a, r) => a + r.dispels, 0)).toBeGreaterThan(0);
   });

@@ -5,7 +5,7 @@ import {
   familiesForAct,
   availableFamiliesForAct,
 } from './enemyFamily.ts';
-import { type KarmaAction } from './karma.ts';
+import { KARMA_DELTAS, type KarmaAction } from './karma.ts';
 
 // The oracle sets below are hand-listed from the plan's Design (§ "The 24 families")
 // and GAME-DESIGN §9 — NOT read back from the loader — so the roster is checked against
@@ -128,13 +128,41 @@ describe('the karma seam — mercy↔cruelty everywhere, plus reverence on The J
     }
   });
 
-  it('every ⚖ family still kills as cruelty — §9\'s desecration half is NOT wired here', () => {
-    // §22.22 / A.2: killing The Judged should record desecration, but there is no desecration
-    // action that is not named for shrines, so it needs a fifth KarmaAction — a design
-    // addition, not a wiring. Pinned so the gap is a decision on record, not an oversight.
+  // PLAN.md #2 (AC-17): §9's DESECRATION half is now wired through the fifth action,
+  // `killSacred`. Hand-listed, like EXPECTED_ON_SPARE, so the data is checked against intent.
+  const EXPECTED_ON_KILL: Record<string, readonly KarmaAction[]> = {
+    gangers: ['killWeighted'],
+    fixers: ['killWeighted'],
+    grief: ['killWeighted'],
+    rage: ['killWeighted'],
+    dread: ['killWeighted'],
+    numbness: ['killWeighted'],
+    sevenSins: ['killWeighted'],
+    theJudged: ['killWeighted', 'killSacred'],
+    echoesOfYou: ['killWeighted'],
+  };
+
+  it('every ⚖ family kills as cruelty, and killing The Judged is ALSO desecration (AC-17)', () => {
+    let checked = 0;
     for (const f of FAMILIES) {
       if (!f.karmaWeighted) continue;
-      expect(f.onKill, f.id).toBe('killWeighted');
+      checked += 1;
+      expect(f.onKill, f.id).toEqual(EXPECTED_ON_KILL[f.id]);
+      // Cruelty stays FIRST — desecration is added, not substituted (the §22.22 reading).
+      expect(f.onKill?.[0], f.id).toBe('killWeighted');
+    }
+    expect(checked).toBe(9);
+  });
+
+  it('every id in every onSpare / onKill list resolves to a real KarmaAction', () => {
+    // The family guard, extended to `onKill` now that it is a list: a typo in data would
+    // otherwise record NOTHING (KARMA_DELTAS[typo] is undefined) and fail silently.
+    const known = new Set(Object.keys(KARMA_DELTAS));
+    for (const f of FAMILIES) {
+      for (const a of [...(f.onSpare ?? []), ...(f.onKill ?? [])]) {
+        expect(known.has(a), `${f.id}: ${a}`).toBe(true);
+      }
+      if (f.onKill !== undefined) expect(Array.isArray(f.onKill), f.id).toBe(true);
     }
   });
 });

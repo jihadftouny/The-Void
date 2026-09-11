@@ -197,6 +197,7 @@
 //   floor 3: heals x50%, one charge drained per battle      S2   player weaker from floor 3
 //   floor 4: karma earned there counts double               S2   NONE on these runs
 //   floor 2: a third of fights are illusions (A.1)          S3   predicted WEAKER — was WRONG
+//   floor 4: tempting pool for all; Judged kill = desecr.   S4   NONE on these runs
 //
 //  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
 //     | step 12) so that every later rules change is measured against a player who uses what
@@ -243,6 +244,14 @@
 //     | that kills everything. Nothing was softened or retuned (A.1 forbids it); this is the
 //     | author's evidence, and `docs/BALANCE-REPORT.md` carries the per-class and per-Wisdom
 //     | tables it feeds.
+//  S4 | FLOOR 4's TEMPTATION and the FIFTH karma action: every floor-4 bargain comes from the
+//     | `tempting` pool whatever the ledger, and killing The Judged records `killSacred` (-1
+//     | reverence) beside cruelty (§22.22). RNG-free both.
+//     | EXPECTED (before measuring): NO MOVEMENT here — the heuristic never opens a deal, and a
+//     | Judged kill only lowers a verdict ledger that is already cast-down for all six runs.
+//     | OBSERVED: all six rows BYTE-IDENTICAL. The 500-run guard is unchanged at 0.602; only its
+//     | ending mix moves (grace 4 -> 2, damnation 297 -> 299) — reverence carries x3 in the
+//     | verdict, so two clarity-tipped ledgers tip back.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`

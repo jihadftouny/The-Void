@@ -31,10 +31,10 @@
 // `recordKarma`). A reader that applied only the first entry would look perfect and do half the
 // job; `karmaActions.test.ts` asserts that one Judged spare moves BOTH axes in one step.
 //
-// NOT DONE, deliberately (§22.22, A.2): §9's other half — killing The Judged records
-// DESECRATION — stays unbuilt. The shipped data records cruelty, and there is no desecration
-// action that is not named for shrines, so it needs a FIFTH `KarmaAction`: a design addition,
-// not a wiring. It belongs with #2's floor-4 work. `onKill` therefore stays a single action.
+// DONE by PLAN.md #2 (§22.22's companion half): killing The Judged records DESECRATION as well
+// as cruelty, through the fifth `KarmaAction`, `killSacred`. `onKill` is therefore a LIST too,
+// folded in order in one step exactly like `onSpare`; every other ⚖ family carries
+// `["killWeighted"]`, the same behaviour as before.
 
 import enemyFamiliesData from '../data/enemyFamilies.json';
 import { type Stats } from './character.ts';
@@ -74,8 +74,11 @@ export interface EnemyFamily {
    * (§22.22). Default when absent: the uniform mercy action alone, `['spareWeighted']`.
    */
   onSpare?: readonly KarmaAction[];
-  /** Karma action a KILL records for this ⚖ family (default cruelty: 'killWeighted'). */
-  onKill?: KarmaAction;
+  /**
+   * The karma actions a KILL records for this ⚖ family, applied IN ORDER within one `step`.
+   * Default when absent: `['killWeighted']` (cruelty). The Judged: cruelty and `killSacred`.
+   */
+  onKill?: readonly KarmaAction[];
   theme: FamilyTheme;
 }
 
