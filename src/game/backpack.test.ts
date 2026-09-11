@@ -52,8 +52,8 @@ const LEGENDARY: ItemInstance = {
 };
 const GREED_FOR_LEGENDARY: SacrificeDeal = { pool: 'tempting', cost: { kind: 'greed' }, reward: { kind: 'item', instance: LEGENDARY } };
 
-function atDeal(player: Player, deal: SacrificeDeal, rngState = 5): GameState {
-  return { ...hub(player, rngState), phase: { kind: 'deal', deal } };
+function atDeal(player: Player, deal: SacrificeDeal, rngState = 5, place = 0): GameState {
+  return { ...hub(player, rngState, place), phase: { kind: 'deal', deal } };
 }
 
 // ------- §22.6: no potions, a starting kit ------------------------------------------------
@@ -268,5 +268,135 @@ describe('the discard phase is plain data — it saves and resumes', () => {
     const decoded = decodeSave(encodeSave(open.state));
     expect(decoded).toEqual(open.state);
     expect(step(decoded!, { kind: 'discard', index: 2 })).toEqual(step(open.state, { kind: 'discard', index: 2 }));
+  });
+});
+
+
+// ------- FIX ROUND 1, F3: a pack OVER the cap (a v8 save) -----------------------------------
+
+describe('F3 — a pack over the cap stays in the discard, MARKING, until the reward fits', () => {
+  // v8 had no cap and the v8 -> v9 migration never throws a player's items away, so a migrated
+  // pack can hold 14. The reward needs 14 - 11 = 3 items gone: 14 - 3 + 1 = 12 once it lands.
+  const fourteen = (): Player => withPack(hero({ hp: 11 }), trinkets(14));
+  const discard = (s: GameState, index: number) => step(s, { kind: 'discard', index });
+
+  it('each discard MARKS an item and removes nothing, until three are marked; then all at once', () => {
+    const p = fourteen();
+    const s = atDeal(p, GREED_FOR_LEGENDARY);
+    const open = step(s, { kind: 'deal-decision', accept: true });
+    expect(open.state.phase).toEqual({ kind: 'deal-discard', deal: GREED_FOR_LEGENDARY });
+
+    const one = discard(open.state, 2);
+    expect(one.state.phase).toEqual({ kind: 'deal-discard', deal: GREED_FOR_LEGENDARY, leaving: [2] });
+    expect(one.events).toEqual([{ kind: 'deal-needs-room', reward: 'Legendary mainHand' }]);
+    expect(one.state.player).toEqual(p); // nothing removed
+    expect(one.state.karma).toEqual(s.karma); // nothing paid
+
+    const two = discard(one.state, 5);
+    expect(two.state.phase).toEqual({ kind: 'deal-discard', deal: GREED_FOR_LEGENDARY, leaving: [2, 5] });
+    expect(two.state.player).toEqual(p);
+
+    const done = discard(two.state, 9);
+    expect(done.state.phase.kind).toBe('main-menu');
+    const names = done.state.player!.inventory.backpack.map((i) => i.rolled?.name);
+    const kept = Array.from({ length: 14 }, (_, i) => `Ring ${i}`).filter((_, i) => ![2, 5, 9].includes(i));
+    expect(names).toEqual([...kept, 'Legendary mainHand']);
+    expect(names).toHaveLength(12);
+    expect(done.state.karma).toEqual({ ...createKarma(), restraintGreed: -1 }); // greed, x1 on floor 1
+    expect(done.events).toEqual([
+      { kind: 'item-discarded', name: 'Ring 2', rarity: 'Common' },
+      { kind: 'item-discarded', name: 'Ring 5', rarity: 'Common' },
+      { kind: 'item-discarded', name: 'Ring 9', rarity: 'Common' },
+      { kind: 'deal-taken', cost: 'a cache, stripped bare', reward: 'Legendary mainHand' },
+    ]);
+  });
+
+  it('the reward is never lost to a room count, and no step claims a payable price was unaffordable', () => {
+    // The shipped bug: discard one of 14 -> 13 -> no room -> "deal-unaffordable" to a player who
+    // could pay, and the bargain gone. Every event of the whole sequence is checked.
+    let r = step(atDeal(fourteen(), GREED_FOR_LEGENDARY), { kind: 'deal-decision', accept: true });
+    const events = [...r.events];
+    for (const index of [0, 1, 2]) {
+      r = discard(r.state, index);
+      events.push(...r.events);
+    }
+    expect(events.some((e) => e.kind === 'deal-unaffordable')).toBe(false);
+    expect(events.at(-1)).toMatchObject({ kind: 'deal-taken' });
+    expect(r.state.player!.inventory.backpack).toContainEqual(LEGENDARY);
+  });
+
+  it('backing out AFTER marking is still exactly refusing — nothing marked is lost', () => {
+    const s = atDeal(fourteen(), GREED_FOR_LEGENDARY, 31);
+    const refused = step(s, { kind: 'deal-decision', accept: false });
+    const marked = discard(discard(step(s, { kind: 'deal-decision', accept: true }).state, 2).state, 5);
+    const backedOut = step(marked.state, { kind: 'deal-decision', accept: false });
+    expect(backedOut.state).toEqual(refused.state); // rng, karma, player (all 14), phase
+    expect(backedOut.events).toEqual(refused.events);
+    expect(backedOut.state.player!.inventory.backpack).toHaveLength(14);
+  });
+
+  it('marking an item twice, or a bad index, is a rejected no-op', () => {
+    const one = discard(step(atDeal(fourteen(), GREED_FOR_LEGENDARY), { kind: 'deal-decision', accept: true }).state, 2);
+    for (const index of [2, 14, -1, 1.5]) {
+      expect(discard(one.state, index).state, String(index)).toBe(one.state);
+    }
+  });
+
+  it('an OFFERING price counts the item it takes: 14 items need only two marked', () => {
+    // itemsTakenBy(offering) = 1, so the shortfall is 14 - 1 - 11 = 2.
+    const offering: SacrificeDeal = { pool: 'standard', cost: { kind: 'offering' }, reward: { kind: 'item', instance: LEGENDARY } };
+    const open = step(atDeal(fourteen(), offering), { kind: 'deal-decision', accept: true });
+    expect(open.state.phase.kind).toBe('deal-discard');
+    const one = discard(open.state, 13);
+    expect(one.state.phase.kind).toBe('deal-discard');
+    const done = discard(one.state, 12);
+    expect(done.state.phase.kind).toBe('main-menu');
+    // 14 - 2 marked - 1 offered (the FIRST item, Ring 0) + 1 reward = 12.
+    const names = done.state.player!.inventory.backpack.map((i) => i.rolled?.name);
+    expect(names).toHaveLength(12);
+    expect(names).not.toContain('Ring 0');
+    expect(names.at(-1)).toBe('Legendary mainHand');
+  });
+
+  it('a state parked MID-MARKING saves and resumes identically', () => {
+    const one = discard(step(atDeal(fourteen(), GREED_FOR_LEGENDARY), { kind: 'deal-decision', accept: true }).state, 2);
+    const decoded = decodeSave(encodeSave(one.state));
+    expect(decoded).toEqual(one.state);
+    expect(discard(decoded!, 7)).toEqual(discard(one.state, 7));
+  });
+});
+
+// ------- FIX ROUND 1, F5: floor 4's double karma on the DISCARD path -------------------------
+
+describe('F5 — a floor-4 bargain counts double whichever way it completes', () => {
+  // greed = lootGreedily = restraint -1 (KARMA_DELTAS, read as a spec); floor 4's karmaMultiplier
+  // is 2 (floors.json, the author's ruling) -> -2. The discard path must not be a cheaper price.
+  const FLOOR_4 = 3; // place 3 is floor 4
+
+  it('with room: -2', () => {
+    const r = step(atDeal(withPack(hero(), trinkets(11)), GREED_FOR_LEGENDARY, 5, FLOOR_4), { kind: 'deal-decision', accept: true });
+    expect(r.state.karma).toEqual({ ...createKarma(), restraintGreed: -2 });
+  });
+
+  it('through the full-pack discard: -2 as well', () => {
+    const open = step(atDeal(withPack(hero(), trinkets(12)), GREED_FOR_LEGENDARY, 5, FLOOR_4), { kind: 'deal-decision', accept: true });
+    expect(open.state.phase.kind).toBe('deal-discard');
+    const r = step(open.state, { kind: 'discard', index: 0 });
+    expect(r.events.at(-1)).toMatchObject({ kind: 'deal-taken' });
+    expect(r.state.karma).toEqual({ ...createKarma(), restraintGreed: -2 });
+  });
+
+  it('...and through a MULTI-item discard (a pack over the cap): -2, and a desecration -4', () => {
+    const desecrate: SacrificeDeal = { pool: 'tempting', cost: { kind: 'desecrate' }, reward: { kind: 'item', instance: LEGENDARY } };
+    for (const [deal, expected] of [
+      [GREED_FOR_LEGENDARY, { restraintGreed: -2 }],
+      [desecrate, { reverenceDesecration: -4 }], // desecrateShrine -2, x2
+    ] as const) {
+      let r = step(atDeal(withPack(hero(), trinkets(13)), deal, 5, FLOOR_4), { kind: 'deal-decision', accept: true });
+      r = step(r.state, { kind: 'discard', index: 0 });
+      expect(r.state.phase.kind).toBe('deal-discard'); // 13 - 11 = 2 to go
+      r = step(r.state, { kind: 'discard', index: 1 });
+      expect(r.state.karma).toEqual({ ...createKarma(), ...expected });
+    }
   });
 });

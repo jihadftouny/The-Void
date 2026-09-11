@@ -865,6 +865,30 @@ describe('dealDiscardView — the full-pack bargain screen (plan Appendix A.3)',
     expect(v.refuse).toBe(DEAL_DISCARD_REFUSE);
   });
 
+  it('F3: a pack OVER the cap says how many must go, and names — and drops — what is marked', () => {
+    // 14 loose items and an item reward: roomShortfall = 14 - 11 = 3 before any mark.
+    const many: Player = {
+      ...snapshot,
+      inventory: {
+        ...snapshot.inventory,
+        backpack: Array.from({ length: 14 }, (_, i) => ({
+          defId: 'gen:Common:ring',
+          rolled: { name: `Ring ${i}`, rarity: 'Common' as const, slot: 'ring' as const, kind: 'trinket' as const, effects: [] },
+        })),
+      },
+    };
+    const none = dealDiscardView(many, deal);
+    expect(none.prompt).toBe('Your pack is full. Leave 3 things behind to take Legendary mainHand.');
+    expect(none.leave).toHaveLength(14);
+    const one = dealDiscardView(many, deal, [2]);
+    expect(one.prompt).toBe('Your pack is full. Leave 2 more things behind to take Legendary mainHand. Leaving: Ring 2.');
+    expect(one.leave.map((r) => r.index)).toEqual([0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    const two = dealDiscardView(many, deal, [2, 5]);
+    expect(two.prompt).toBe('Your pack is full. Leave 1 more thing behind to take Legendary mainHand. Leaving: Ring 2, Ring 5.');
+    // A full pack of exactly 12 reads as it always did (one item, "something").
+    expect(dealDiscardView(packed, deal).prompt).toBe('Your pack is full. Leave something behind to take Legendary mainHand.');
+  });
+
   it('the rows sit behind one disclosure, named for what it asks', () => {
     expect(dealDiscardView(packed, deal).choose).toBe(DEAL_DISCARD_CHOOSE);
     expect(DEAL_DISCARD_CHOOSE).toBe('Choose what to leave');

@@ -627,6 +627,15 @@ describe('the policy, branch by branch (expected inputs derived from AC-26)', ()
     expect(policy(sr({ ...hubWith(usables(BACKPACK_CAPACITY)), phase: { kind: 'deal-discard', deal } }))).toEqual({ kind: 'deal-decision', accept: false });
   });
 
+  it('F3: over the cap, it never re-picks an item already marked to leave', () => {
+    const deal: SacrificeDeal = { pool: 'standard', cost: { kind: 'offering' }, reward: { kind: 'skillCharge', amount: 2 } };
+    // Common helmet at 0 (the worst), Rare ring at 1; the helmet is already marked.
+    const pack = [rolled('helmet', 'Common'), rolled('ring', 'Rare'), ...usables(12)];
+    const res = sr({ ...hubWith(pack), phase: { kind: 'deal-discard', deal, leaving: [0] } });
+    expect(policy(res)).toEqual({ kind: 'discard', index: 1 });
+    expect(discardChoice(pack, [0, 1])).toBe(-1); // only usables left unmarked
+  });
+
   it('a found rest has only one answer: continue', () => {
     expect(policy(sr({ ...hubWith([]), phase: { kind: 'rest' } }))).toEqual({ kind: 'continue' });
   });

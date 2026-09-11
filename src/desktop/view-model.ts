@@ -28,7 +28,7 @@ import { spareAvailable } from '../game/battle.ts';
 import { resolveInstanceDef, equip, unequip } from '../game/equipment.ts';
 import { effectiveChargeCost } from '../game/equipEffects.ts';
 import { playerArmorClass } from '../game/defense.ts';
-import { describeCost, describeReward } from '../game/deal.ts';
+import { describeCost, describeReward, roomShortfall } from '../game/deal.ts';
 import { describeDraftOption } from '../game/draft.ts';
 import { summarizeLoot } from '../game/loot.ts';
 import { CLASSES } from '../game/classKit.ts';
@@ -407,7 +407,10 @@ export interface DealDiscardView {
   cost: string;
   /** The disclosure the leave rows sit in — `DEAL_DISCARD_CHOOSE`. */
   choose: string;
-  /** One row per backpack item, in pack order; `index` is the `discard` input's argument. */
+  /**
+   * One row per backpack item NOT already marked to leave, in pack order; `index` is the
+   * `discard` input's argument (the real, unchanged pack index — marking removes nothing).
+   */
   leave: { index: number; label: string }[];
   /** The way out — `DEAL_DISCARD_REFUSE`, dispatched as `deal-decision` accept false. */
   refuse: string;
@@ -420,16 +423,33 @@ export interface DealDiscardView {
  * the player's), plus one way out that declines the bargain. Like `dealView`, it never carries
  * the karma-derived pool.
  */
-export function dealDiscardView(player: Player, deal: SacrificeDeal): DealDiscardView {
+export function dealDiscardView(
+  player: Player,
+  deal: SacrificeDeal,
+  leaving: readonly number[] = [],
+): DealDiscardView {
   const dv = dealView(deal);
+  // FIX ROUND 1, F3: a pack over the cap (a v8 save) needs more than one item gone. The count
+  // is read from the engine's own `roomShortfall` on the pack as it would be without the marked
+  // items, so the screen and the rule cannot disagree about how many are still needed.
+  const pack = player.inventory.backpack;
+  const kept = { ...player, inventory: { ...player.inventory, backpack: pack.filter((_, i) => !leaving.includes(i)) } };
+  const still = roomShortfall(kept, deal);
+  const marked = leaving.map((i) => (pack[i] ? displayItem(pack[i]).name : '')).filter((n) => n !== '');
+  const noun = still === 1 ? 'thing' : 'things';
+  const ask =
+    marked.length === 0
+      ? still <= 1
+        ? `Your pack is full. Leave something behind to take ${dv.reward}.`
+        : `Your pack is full. Leave ${still} ${noun} behind to take ${dv.reward}.`
+      : `Your pack is full. Leave ${still} more ${noun} behind to take ${dv.reward}.`;
   return {
-    prompt: `Your pack is full. Leave something behind to take ${dv.reward}.`,
+    prompt: marked.length > 0 ? `${ask} Leaving: ${marked.join(', ')}.` : ask,
     cost: dv.cost,
     choose: DEAL_DISCARD_CHOOSE,
-    leave: player.inventory.backpack.map((item, index) => ({
-      index,
-      label: `Leave ${displayItem(item).name}`,
-    })),
+    leave: pack
+      .map((item, index) => ({ index, label: `Leave ${displayItem(item).name}` }))
+      .filter((row) => !leaving.includes(row.index)),
     refuse: DEAL_DISCARD_REFUSE,
   };
 }

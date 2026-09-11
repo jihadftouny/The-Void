@@ -341,10 +341,11 @@ export const ALL_CLASSES: readonly PlayerClass[] = [
  * piece of loose GEAR (anything with a slot), first one on ties; usables are never chosen. -1
  * when the pack holds no gear at all.
  */
-export function discardChoice(backpack: readonly ItemInstance[]): number {
+export function discardChoice(backpack: readonly ItemInstance[], skip: readonly number[] = []): number {
   let best = -1;
   let bestRank = Infinity;
   backpack.forEach((item, i) => {
+    if (skip.includes(i)) return; // already marked to leave (a pack over the cap, F3)
     const def = resolveInstanceDef(item);
     if (!def || def.slot === null) return;
     const rank = RARITY_RANK[def.rarity];
@@ -529,7 +530,8 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
     case 'deal-discard': {
       // Appendix A.3: the bargain needs room. Leave the worst gear; with none, back out (which is
       // exactly refusing the bargain) rather than throw a heal away.
-      const drop = res.state.player ? discardChoice(res.state.player.inventory.backpack) : -1;
+      const marked = phase.kind === 'deal-discard' ? (phase.leaving ?? []) : [];
+      const drop = res.state.player ? discardChoice(res.state.player.inventory.backpack, marked) : -1;
       return drop >= 0 ? { kind: 'discard', index: drop } : { kind: 'deal-decision', accept: false };
     }
     case 'rest':

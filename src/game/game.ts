@@ -94,7 +94,9 @@ export type Phase =
   // PLAN.md #2, Appendix A.3: the deal was ACCEPTED with a full backpack and an item reward, so
   // the pack is open for a discard. Nothing has been paid. Discarding completes the deal in ONE
   // step; backing out (`deal-decision`, accept false) is exactly refusing it.
-  | { kind: 'deal-discard'; deal: SacrificeDeal }
+  // `leaving` (FIX ROUND 1, F3): the backpack indices MARKED to leave so far, when one item is
+  // not enough room (a v8 pack over the cap). Marks remove nothing; absent until a second is needed.
+  | { kind: 'deal-discard'; deal: SacrificeDeal; leaving?: number[] }
   | { kind: 'chest'; loot: ItemInstance[] }
   | { kind: 'act-outro'; newAct: number }
   // M9: a level-up presents a seeded draft of 3; the picked option is applied on draft-pick.
@@ -421,7 +423,7 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
       // two cannot drift apart — no cheaper path, and no dearer one.
       if (input.kind === 'deal-decision' && !input.accept) return declineDeal(finish);
       if (input.kind !== 'discard') return noop;
-      return discardForDeal(state, phase.deal, input.index, finish, noop);
+      return discardForDeal(state, phase.deal, phase.leaving ?? [], input.index, finish, noop);
     }
 
     case 'chest': {
@@ -944,7 +946,12 @@ function validBackpackIndex(player: Player, index: number): boolean {
 
 /** The player with backpack item `index` removed — PURE. */
 function withoutItem(player: Player, index: number): Player {
-  const backpack = player.inventory.backpack.filter((_, i) => i !== index);
+  return withoutItems(player, [index]);
+}
+
+/** The player with every backpack index in `indices` removed — PURE; indices are pre-removal. */
+function withoutItems(player: Player, indices: readonly number[]): Player {
+  const backpack = player.inventory.backpack.filter((_, i) => !indices.includes(i));
   return { ...player, inventory: { slots: { ...player.inventory.slots }, backpack } };
 }
 
@@ -972,41 +979,52 @@ function discardAtHub(
 /**
  * Complete a full-pack bargain by leaving item `index` behind — ATOMIC (plan Appendix A.3.1/3).
  *
- * Discard, pay, place and record happen in THIS ONE step, computed on a copy and committed only
- * when every part succeeded. If anything fails between them — the cost no longer affordable, the
- * reward still without room — the step returns the ORIGINAL player and ledger with a
- * `deal-unaffordable`: the discard is not applied either, so there is no state in which the
- * item is gone and the bargain not taken, and none in which the price is paid and the reward
- * not placed. (With the shipped costs neither failure is reachable: only an item-freeing cost
- * could depend on the pack, and such a cost never needs room. The branch keeps the step total.)
+ * Discard, pay, place and record happen in ONE step, computed on a copy and committed only when
+ * every part succeeded — so there is no state in which an item is gone and the bargain not taken,
+ * and none in which the price is paid and the reward not placed.
+ *
+ * WHEN ONE ITEM IS NOT ENOUGH (FIX ROUND 1, F3): a pack already over the cap — a v8 save can
+ * hold one; v8 had no cap — needs more than one item gone. The step then STAYS in the discard,
+ * MARKING the item (`leaving`) and removing NOTHING, until the marked items make the room; only
+ * then does it commit, dropping every marked item at once. Because nothing is removed until
+ * that moment, backing out at ANY point is still exactly refusing (A.3.2) — the reward is never
+ * lost to a room count, and no message claims a price was unaffordable when it was not. (It
+ * used to discard one, find no room, and report "deal-unaffordable" to a player who could pay.)
+ *
+ * The one failure left after the room check is a price that marking made unpayable — a relic
+ * price whose relic was marked to leave. It is reported as exactly that, with the original
+ * player and ledger kept: nothing is dropped, nothing is paid.
  */
 function discardForDeal(
   state: GameState,
   deal: SacrificeDeal,
+  leaving: readonly number[],
   index: number,
   finish: Finish,
   noop: StepResult,
 ): StepResult {
   const player = requirePlayer(state);
-  if (!validBackpackIndex(player, index)) return noop;
-  const dropped = summarizeLoot(player.inventory.backpack[index]!);
-  const result = applyDeal(
-    withoutItem(player, index),
-    state.karma,
-    deal,
-    floorModifiers(floorOf(state)).karmaMultiplier,
-  );
+  if (!validBackpackIndex(player, index) || leaving.includes(index)) return noop;
+  const marked = [...leaving, index];
+  const trial = withoutItems(player, marked);
+  if (needsRoom(trial, deal)) {
+    return finish({ kind: 'deal-discard', deal, leaving: marked }, [
+      { kind: 'deal-needs-room', reward: describeReward(deal.reward) },
+    ]);
+  }
+  const result = applyDeal(trial, state.karma, deal, floorModifiers(floorOf(state)).karmaMultiplier);
   if (result.outcome !== 'taken') {
     return finish({ kind: 'main-menu' }, [
       { kind: 'deal-unaffordable', cost: describeCost(deal.cost) },
     ]);
   }
+  const dropped: GameEvent[] = marked.map((i) => {
+    const item = summarizeLoot(player.inventory.backpack[i]!);
+    return { kind: 'item-discarded', name: item.name, rarity: item.rarity };
+  });
   return finish(
     { kind: 'main-menu' },
-    [
-      { kind: 'item-discarded', name: dropped.name, rarity: dropped.rarity },
-      { kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) },
-    ],
+    [...dropped, { kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
     { player: result.player, karma: result.karma },
   );
 }

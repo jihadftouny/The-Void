@@ -1043,6 +1043,21 @@ describe('migration v8 -> v9 (PLAN.md #2)', () => {
     expect(r.state.player!.stats.STR).toBe(s.player!.stats.STR + 1);
   });
 
+  it('F3: a v8 pack of FOURTEEN parked on an item bargain keeps every item, and the reward still lands', () => {
+    // v8 had no cap. The migration keeps all fourteen (no potion fits: 12 - 14 < 0 draughts),
+    // the v8 bargain with a still-valid reward is kept, and paying takes three marks to make room.
+    const fourteen = Array.from({ length: 14 }, (_, i) => ({ defId: 'gen:Common:ring', rolled: { name: `Ring ${i}`, rarity: 'Common' as const, slot: 'ring' as const, kind: 'trinket' as const, effects: [] } }));
+    const reward = { kind: 'item', instance: { defId: 'gen:Legendary:mainHand', rolled: { name: 'Legendary mainHand', rarity: 'Legendary', slot: 'mainHand', kind: 'weapon', effects: [] } } };
+    const s = decode(v8Save({ pots: 6, backpack: fourteen, phase: { kind: 'deal', deal: { pool: 'tempting', cost: { kind: 'greed' }, reward } } }))!;
+    expect(s.player!.inventory.backpack).toHaveLength(14);
+    let r = step(s, { kind: 'deal-decision', accept: true });
+    expect(r.state.phase.kind).toBe('deal-discard');
+    for (const index of [0, 1, 2]) r = step(r.state, { kind: 'discard', index });
+    expect(r.events.at(-1)).toEqual({ kind: 'deal-taken', cost: 'a cache, stripped bare', reward: 'Legendary mainHand' });
+    expect(r.state.player!.inventory.backpack).toHaveLength(12);
+    expect(r.state.player!.inventory.backpack.at(-1)).toEqual(reward.instance);
+  });
+
   it('a v1 save walks the WHOLE ladder to v9 — potions included', () => {
     const modern = midRunState(SEED);
     const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;

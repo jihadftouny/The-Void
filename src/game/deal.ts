@@ -289,8 +289,19 @@ function itemsTakenBy(player: Player, cost: DealCost): number {
  * `deal-discard` phase). Backing out of that discard is exactly refusing the deal.
  */
 export function needsRoom(player: Player, deal: SacrificeDeal): boolean {
-  if (deal.reward.kind !== 'item') return false;
-  return player.inventory.backpack.length - itemsTakenBy(player, deal.cost) >= BACKPACK_CAPACITY;
+  return roomShortfall(player, deal) > 0;
+}
+
+/**
+ * HOW MANY backpack items must go before this deal's reward fits — PURE; 0 when none must (or
+ * the reward is not an item). One for a full pack. MORE than one only for a pack already OVER
+ * `BACKPACK_CAPACITY` — which a v8 save can hold (v8 had no cap, and the v8 -> v9 migration
+ * never throws a player's items away). FIX ROUND 1, F3: the discard step used to assume one.
+ */
+export function roomShortfall(player: Player, deal: SacrificeDeal): number {
+  if (deal.reward.kind !== 'item') return 0;
+  const afterCost = player.inventory.backpack.length - itemsTakenBy(player, deal.cost);
+  return Math.max(0, afterCost - (BACKPACK_CAPACITY - 1));
 }
 
 /**
