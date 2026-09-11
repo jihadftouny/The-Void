@@ -67,6 +67,8 @@ import { type Player, type PlayerClass } from './player.ts';
 import { type GameEvent } from './gameEvent.ts';
 import { formatEvent } from '../render/format.ts';
 import { describeEvent } from '../llm/narrate.ts';
+import { ALL_TONE_WORDS } from '../llm/tone.ts';
+import { restBrief } from './restBrief.ts';
 import { dealView } from '../desktop/view-model.ts';
 
 // =============================================================================================
@@ -744,8 +746,11 @@ describe('the reverence axis moves in BOTH directions now', () => {
 // exactly the event #10a newly made carry a second axis.
 // =============================================================================================
 
+// STEMS, not words (PLAN.md #2): the list used to read `mercy` / `restraint` / `delusion`, so
+// "merciful", "restrained" and "deluded" — the adjectives a tone channel would reach for first —
+// all passed it. The plan's own mutation (put "merciful" in TONE_WORDS) was GREEN until this.
 const AXIS_VOCABULARY =
-  /karma|nature|mercy|cruel|greed|restraint|reveren|desecration|clarity|delusion/i;
+  /karm|nature|merc(?:y|i)|cruel|greed|restrain|reveren|desecration|clarity|delu(?:sion|d)/i;
 
 /** Every string a deal reaches a human or the model through. */
 function surfacesOf(deal: SacrificeDeal): string[] {
@@ -967,6 +972,108 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
     expect(seen.some((e) => e.kind === 'spared')).toBe(true);
     const AXIS_KEYS = /mercyCruelty|restraintGreed|reverenceDesecration|clarityDelusion/;
     expect(JSON.stringify(seen)).not.toMatch(AXIS_KEYS);
+  });
+
+  // ---- PLAN.md #2 (AC-24): the rule reaches the floors' new surfaces ----------------------
+  //
+  // The descent added nine event kinds and the first karma-to-prompt channel (the rest scene's
+  // tone words). Every one of them is held to the SAME word list, with the same single
+  // structural exclusion (authored proper nouns), and nothing else.
+
+  it('the TONE vocabulary obeys the rule — the one channel that is derived FROM the ledger', () => {
+    expect(ALL_TONE_WORDS.length).toBe(8);
+    for (const w of ALL_TONE_WORDS) expect(w, w).not.toMatch(AXIS_VOCABULARY);
+  });
+
+  it('the word list catches the INFLECTED forms a tone word would take, and spares the act verb', () => {
+    for (const w of ['merciful', 'Merciless', 'cruelty', 'greedy', 'restrained', 'reverent', 'deluded', 'delusional', 'karmic', 'nature']) {
+      expect(w, w).toMatch(AXIS_VOCABULARY);
+    }
+    // The verb names the ACT (§7's line) and stays legal; the tone words are clean by design.
+    for (const w of ['desecrate', 'gentle', 'hungry', 'hushed', 'clear-eyed', 'mercenary']) {
+      expect(w, w).not.toMatch(AXIS_VOCABULARY);
+    }
+  });
+
+  /** Item names are authored proper nouns too ("Clarity Draught", §22.13) — same exclusion. */
+  function neutralizeFloorNouns(e: GameEvent): GameEvent {
+    const n = neutralizeProperNouns(e);
+    return 'name' in n ? { ...n, name: NEUTRAL_NAME } : n;
+  }
+  function floorSurfaces(e: GameEvent): string[] {
+    const n = neutralizeFloorNouns(e);
+    return [JSON.stringify(n), formatEvent(n), describeEvent(n)];
+  }
+
+  type FloorKind =
+    | 'rest-found'
+    | 'rest-taken'
+    | 'illusion-dispelled'
+    | 'illusion-struck'
+    | 'floor-drain'
+    | 'skills-warped'
+    | 'loot-left-behind'
+    | 'deal-needs-room'
+    | 'item-discarded';
+
+  it('every event kind the floors added — one of each, every template scanned', () => {
+    // Mapped over the kind union, so each sample must have its kind's real shape.
+    const ONE_OF_EACH: { [K in FloorKind]: Extract<GameEvent, { kind: K }> } = {
+      'rest-found': { kind: 'rest-found', floor: 2, place: restBrief(2).place, briefId: 'floor-2', woundsClosed: true, conditionsEased: true },
+      'rest-taken': { kind: 'rest-taken', hpRestored: 9, hp: 30, maxHp: 30 },
+      'illusion-dispelled': { kind: 'illusion-dispelled', natural: 14, modifier: 1, total: 15, dc: 13 },
+      'illusion-struck': { kind: 'illusion-struck' },
+      'floor-drain': { kind: 'floor-drain', resource: 'skillCharge', amount: 1 },
+      'skills-warped': { kind: 'skills-warped', count: 4 },
+      'loot-left-behind': { kind: 'loot-left-behind', name: 'Mirror Shard', rarity: 'Rare' },
+      'deal-needs-room': { kind: 'deal-needs-room', reward: 'a Rare ring' },
+      'item-discarded': { kind: 'item-discarded', name: 'Mirror Shard', rarity: 'Common' },
+    };
+    expect(Object.keys(ONE_OF_EACH)).toHaveLength(9);
+    for (const e of Object.values(ONE_OF_EACH)) {
+      for (const s of floorSurfaces(e)) expect(s, e.kind).not.toMatch(AXIS_VOCABULARY);
+    }
+  });
+
+  it('every such event REAL runs emit — through the shipped step, across floors 1..5', () => {
+    // Played, not hand-written: the payloads (rest places, left-behind item names, dispel
+    // numbers) are whatever the engine really produced. Deterministic seeds; the loop stops
+    // once every kind the descent reliably produces has been seen.
+    const MUST_SEE: readonly FloorKind[] = [
+      'rest-found',
+      'rest-taken',
+      'illusion-dispelled',
+      'illusion-struck',
+      'floor-drain',
+      'skills-warped',
+      'loot-left-behind',
+    ];
+    const FLOOR_KINDS = new Set<string>([...MUST_SEE, 'deal-needs-room', 'item-discarded']);
+    const swept: GameEvent[] = [];
+    const seenKinds = new Set<string>();
+    for (let seed = 1; seed <= 30 && !MUST_SEE.every((k) => seenKinds.has(k)); seed += 1) {
+      for (const classId of ALL_CLASSES) {
+        const policy = heuristicPolicy(classId);
+        let r = newRunAtHub(seed, classId);
+        for (let n = 0; r.awaiting !== 'game-over' && n < 20_000; n += 1) {
+          r = step(r.state, policy(r));
+          for (const e of r.events) {
+            seenKinds.add(e.kind);
+            if (FLOOR_KINDS.has(e.kind)) {
+              swept.push(e);
+            }
+          }
+        }
+      }
+    }
+    for (const k of MUST_SEE) expect(seenKinds.has(k), `no real run emitted '${k}'`).toBe(true);
+    for (const e of swept) {
+      for (const s of floorSurfaces(e)) expect(s, e.kind).not.toMatch(AXIS_VOCABULARY);
+    }
+    // The item-name exclusion is not a silent no-op: it reached the rendered sentence.
+    const left = swept.find((e) => e.kind === 'loot-left-behind')!;
+    expect(formatEvent(neutralizeFloorNouns(left))).toContain(NEUTRAL_NAME);
+    expect(describeEvent(neutralizeFloorNouns(left))).toContain(NEUTRAL_NAME);
   });
 });
 

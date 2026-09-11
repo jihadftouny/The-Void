@@ -4,6 +4,11 @@
 // seed of the N2 `src/llm` runtime; it will grow, e.g. grammar-constrained choices).
 import type { GameEvent } from '../game/gameEvent.ts';
 import type { GameState } from '../game/game.ts';
+import type { Player } from '../game/player.ts';
+import { restBrief } from '../game/restBrief.ts';
+import { floorOf } from '../game/floors.ts';
+import { summarizeLoot } from '../game/loot.ts';
+import { karmaTone } from './tone.ts';
 
 export const VOID_PERSONA =
   'You are the Void — the narrator of a dark, dreamlike descent RPG about ' +
@@ -370,6 +375,84 @@ export function runSummary(memory: StoryMemory): string {
   return parts.length ? `Across this descent you have ${parts.join(' and ')}.` : '';
 }
 
+// ---- The rest scene (PLAN.md #2, GAME-DESIGN.md §22.26) -----------------------------------
+//
+// A found rest is "the only moment in the game where things are truly calm", and the game's
+// main LORE channel. For a step whose events include `rest-found`, the prompt gains a SCENE
+// block after the facts: where you are (the floor's rest brief — marked placeholder lore,
+// #13's to write), how you are (a condition brief with NO digits), and a TONE line of manner
+// words from the hidden ledger (`tone.ts`) — then an instruction that forbids stating what the
+// tone reflects. What reaches the model is only ever safe to say aloud; what no test can prove
+// is whether the model obeys "reflect, never state" (HUMAN-CHECKS, the manual rest-tone check).
+//
+// The block is NOT a fact: `facts` (and therefore `StoryMemory.beats` and the model-failure
+// fallback) stay fact-only, so the tone can never be printed by the engine, carried into later
+// prompts, or shown to the player verbatim.
+
+/** The four HP bands the condition brief may name — a word, never a number. */
+export function hpBand(hp: number, maxHp: number): 'unhurt' | 'scratched' | 'wounded' | 'near death' {
+  const ratio = maxHp > 0 ? hp / maxHp : 0;
+  if (ratio >= 1) return 'unhurt';
+  if (ratio >= 0.7) return 'scratched';
+  if (ratio >= 0.35) return 'wounded';
+  return 'near death';
+}
+
+/** At most this many carried item names reach the scene (a small model needs a lean prompt). */
+const MAX_CARRIED_NAMES = 6;
+
+/**
+ * "How you are" — the character's condition in words, with NO digit anywhere. PURE.
+ * The band is read AFTER the rest (the state the step returns); whether wounds or conditions
+ * were there to ease comes from the `rest-found` event, which knew the character on arrival.
+ */
+export function conditionBrief(
+  player: Player,
+  found: { woundsClosed: boolean; conditionsEased: boolean },
+): string {
+  const carried = [player.inventory.slots.mainHand, ...player.inventory.backpack]
+    .filter((i): i is NonNullable<typeof i> => i !== null && i !== undefined)
+    .slice(0, MAX_CARRIED_NAMES)
+    // No digit may reach the model (VOID_PERSONA: "never … numbers"), and the legacy gear
+    // carries placeholder names with a trailing index ("Jaaj Sword 1", #13's to rename) — so a
+    // bare number is dropped from a carried name. The player's own screens still show it whole.
+    .map((i) => summarizeLoot(i).name.replace(/\s*\d+/g, '').trim())
+    .filter((name) => name.length > 0);
+  const parts = [
+    `You are ${hpBand(player.hp, player.maxHp)}.`,
+    found.woundsClosed ? 'Your wounds close.' : 'There was nothing to close.',
+    found.conditionsEased ? 'What afflicted you has eased.' : 'Nothing afflicts you.',
+    carried.length > 0 ? `You carry ${carried.join(', ')}.` : 'You carry nothing.',
+  ];
+  return parts.join(' ');
+}
+
+/** The instruction that closes the scene block — the "reflect, never state" rule, in words. */
+export const REST_SCENE_INSTRUCTION =
+  'Describe the place and the character\'s state in three to five calm sentences. This is the ' +
+  'only quiet moment in the descent — nothing threatens, nothing watches. Let the tone words ' +
+  'colour your description only; never name, judge or explain what kind of person the ' +
+  'character is, never say what they are becoming, and never repeat the tone words themselves.';
+
+/**
+ * The scene block for a step that found a rest spot, or null for any other step. PURE and
+ * deterministic: the whole brief goes in (the model varies the words; the engine picks none).
+ */
+export function restScene(events: readonly GameEvent[], state: GameState): string | null {
+  const found = events.find((e) => e.kind === 'rest-found');
+  if (!found || found.kind !== 'rest-found' || !state.player) return null;
+  const brief = restBrief(floorOf({ place: found.floor - 1 }));
+  const tone = karmaTone(state.karma);
+  const lines = [
+    `Where you are: ${brief.place}.`,
+    ...brief.lore,
+    `How you are: ${conditionBrief(state.player, found)}`,
+  ];
+  if (tone.length > 0) lines.push(`Tone: ${tone.join(', ')}.`);
+  lines.push(REST_SCENE_INSTRUCTION);
+  return lines.join('\n');
+}
+
 /**
  * Build the narration prompt for the events that just occurred, optionally
  * prefixed with continuity from `memory` (a one-line run summary + recent
@@ -399,11 +482,16 @@ export function buildNarrationPrompt(
       context += `Recent moments (oldest first):\n- ${memory.beats.join('\n- ')}\n`;
     if (context) context += '\n';
   }
+  // PLAN.md #2: a found rest replaces the generic closing instruction with its scene block.
+  // Every other step's prompt is byte-for-byte what it was (a test holds it to that).
+  const scene = restScene(events, state);
   const user =
     context +
     `Act ${state.act}, ${floor}. What just happened:\n- ` +
     facts.join('\n- ') +
-    `\n\nNarrate this new moment in 2-4 vivid second-person sentences. ` +
-    `Stay consistent with what came before; do not repeat earlier narration.`;
+    (scene === null
+      ? `\n\nNarrate this new moment in 2-4 vivid second-person sentences. ` +
+        `Stay consistent with what came before; do not repeat earlier narration.`
+      : `\n\n${scene}`);
   return { system: VOID_PERSONA, user, facts };
 }

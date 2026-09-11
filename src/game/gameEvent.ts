@@ -70,8 +70,20 @@ export type NarrativeEvent =
    * A rest spot, found on the descent and taken at once (GAME-DESIGN.md §22.26). `place` is the
    * floor's placeholder place line from `restBriefs.json`; `briefId` names the brief the
    * narrator's scene block is built from. Always followed by `rest-taken` in the same step.
+   * `woundsClosed` / `conditionsEased`: whether the character arrived hurt / afflicted — facts
+   * only this step knows (the state after it is already rested), which the narrator's condition
+   * brief needs to say "your wounds close" rather than "there was nothing to close". Booleans,
+   * never numbers.
    */
-  | { kind: 'rest-found'; floor: number; place: string; briefId: string; text?: string }
+  | {
+      kind: 'rest-found';
+      floor: number;
+      place: string;
+      briefId: string;
+      woundsClosed: boolean;
+      conditionsEased: boolean;
+      text?: string;
+    }
   /** Floor 5: every owned skill took on a corrupted form (`count` of them) on arrival. */
   | { kind: 'skills-warped'; count: number; text?: string }
   /**

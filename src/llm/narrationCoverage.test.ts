@@ -187,7 +187,7 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   },
   'game-over': { kind: 'game-over', xp: 42 },
   // PLAN.md #2 (narrative)
-  'rest-found': { kind: 'rest-found', floor: 1, place: 'a dry stairwell', briefId: 'floor-1' },
+  'rest-found': { kind: 'rest-found', floor: 1, place: 'a dry stairwell', briefId: 'floor-1', woundsClosed: true, conditionsEased: false },
   'skills-warped': { kind: 'skills-warped', count: 3 },
   'deal-needs-room': { kind: 'deal-needs-room', reward: 'Rare armor' },
   'item-discarded': { kind: 'item-discarded', name: 'Common ring', rarity: 'Common' },

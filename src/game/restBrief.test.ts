@@ -7,7 +7,7 @@ import { FLOOR_IDS } from './floors.ts';
 
 /** WORLD.md §0's reserved words, and the hidden-karma axis vocabulary (GAME-DESIGN §7). */
 const RESERVED = /\bhollow|made whole/i;
-const AXIS = /karma|nature|mercy|cruel|greed|restraint|reveren|desecrat|clarity|delusion/i;
+const AXIS = /karm|nature|merc(?:y|i)|cruel|greed|restrain|reveren|desecrat|clarity|delu(?:sion|d)/i;
 
 describe('restBriefs.json — one calm brief per floor', () => {
   it('every floor 1..5 has a place line and two to four lore lines', () => {

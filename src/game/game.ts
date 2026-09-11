@@ -867,7 +867,14 @@ function takeRest(state: GameState, player: Player, rng: Rng, finish: Finish): S
   return finish(
     { kind: 'rest' },
     [
-      { kind: 'rest-found', floor, place: brief.place, briefId: brief.id },
+      {
+        kind: 'rest-found',
+        floor,
+        place: brief.place,
+        briefId: brief.id,
+        woundsClosed: player.hp < player.maxHp,
+        conditionsEased: player.activeConditions.length > 0,
+      },
       { kind: 'rest-taken', hpRestored, hp, maxHp: rested.maxHp },
     ],
     { player: rested },
