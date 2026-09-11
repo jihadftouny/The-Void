@@ -58,8 +58,11 @@ describe('the found rest spot (§22.26) — calm, with the scenery frame, and on
 describe('the full-pack bargain (Appendix A.3) — each row discards ITS item, and backing out refuses', () => {
   const arm = caseArm(bodyOf('function renderChoices('), 'deal-discard');
 
-  it('builds from the pure dealDiscardView, never by hand', () => {
+  it('builds from the pure dealDiscardView, never by hand — with the phase’s own marks (F3)', () => {
     expect(arm).toMatch(/dealDiscardView\s*\(/);
+    // Dropping the third argument would offer an already-marked item again (a dead click) and
+    // hide how many are still needed.
+    expect(arm).toMatch(/dealDiscardView\(\s*p,\s*state\.phase\.deal,\s*state\.phase\.leaving\s*\?\?\s*\[\]\s*\)/);
   });
 
   it('the rows sit inside ONE closed disclosure (A.3.4: nothing below the fold at 960x640)', () => {

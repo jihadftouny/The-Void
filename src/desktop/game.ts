@@ -1083,7 +1083,7 @@ function renderChoices(awaiting: Awaiting): void {
       // rows sit in a closed list, as Cast does: twelve of them cannot fit a 640px window.
       const p = state.player;
       if (state.phase.kind === 'deal-discard' && p) {
-        const view = dealDiscardView(p, state.phase.deal);
+        const view = dealDiscardView(p, state.phase.deal, state.phase.leaving ?? []);
         const block = document.createElement('div');
         block.className = 'deal-block';
         const ask = document.createElement('div');
