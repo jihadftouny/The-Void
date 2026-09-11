@@ -144,9 +144,6 @@ export type CombatEvent =
   | { kind: 'self-sacrifice'; amount: number; ofMaxHp: boolean; text?: string }
   | { kind: 'lifesteal'; amount: number; text?: string }
   | { kind: 'detonate'; consumed: number; bonusDamage: number; text?: string }
-  | { kind: 'potion-drunk'; healedTo: number; text?: string }
-  | { kind: 'potion-unavailable'; text?: string }
-  | { kind: 'potion-blocked'; text?: string }
   | { kind: 'fled'; text?: string }
   | { kind: 'escape-failed'; damage: number; text?: string }
   | { kind: 'escape-impossible'; text?: string }
@@ -156,7 +153,6 @@ export type CombatEvent =
   | {
       kind: 'victory';
       xpGained: number;
-      extraRest: boolean;
       /** Found loot this kill dropped into the backpack (M7). Empty when the drop gate failed. */
       loot: readonly { defId: string; name: string; rarity: Rarity }[];
       text?: string;
@@ -176,7 +172,33 @@ export type CombatEvent =
   /** Kingpin: the crew dealt `amount` extra damage to the player this round. */
   | { kind: 'boss-minion-damage'; amount: number; text?: string }
   /** Reflection: the boss read an over-used tactic; the player's next attack is disadvantaged. */
-  | { kind: 'boss-adapt'; text?: string };
+  | { kind: 'boss-adapt'; text?: string }
+  // ---- PLAN.md #2 floor mechanics (only the floor that carries the mechanic emits these) ----
+  /**
+   * Floor 3's slow weight took `amount` of the player's skill charges as the battle opened.
+   * Emitted only when something was actually taken (0 charges in hand ⇒ no event). The
+   * `resource` is named so a later floor effect can drain something else with no new kind.
+   */
+  | { kind: 'floor-drain'; resource: 'skillCharge'; amount: number; text?: string }
+  /**
+   * Floor 2: the player's action would have hurt the enemy, and it passed through — the enemy
+   * is an illusion. Pushed right after the `attack` / `skill-cast` / `consumable-used` it
+   * voids. Deliberately carries nothing: the illusion is not NAMED until it is seen through.
+   */
+  | { kind: 'illusion-struck'; text?: string }
+  /**
+   * Floor 2: the passive Wisdom roll saw through the illusion and the fight ends — no XP, no
+   * loot. Carries the roll (`natural + modifier = total` vs `dc`) because this is the ONE
+   * moment the mechanic may show its dice; a FAILED roll emits nothing, since saying so would
+   * name the illusion before the player has seen through it.
+   */
+  | { kind: 'illusion-dispelled'; natural: number; modifier: number; total: number; dc: number; text?: string }
+  /**
+   * The backpack is full (`BACKPACK_CAPACITY`), so found loot — a victory drop or a chest item —
+   * stays where it fell. A combat event because the victory block emits it; the chest path
+   * emits it from `game.ts` too.
+   */
+  | { kind: 'loot-left-behind'; name: string; rarity: Rarity; text?: string };
 
 /** Every event `kind` string (handy for exhaustiveness / test assertions). */
 export type CombatEventKind = CombatEvent['kind'];

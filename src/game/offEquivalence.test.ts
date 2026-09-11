@@ -188,6 +188,143 @@
 // at ONE win in a hundred, so the "no class stuck at ~0%" assertion is one unlucky seed from
 // failing for a reason that has nothing to do with the class.
 // ---------------------------------------------------------------------------------------------
+// #2 `floor-mechanics` RULE LEDGER — one row per commit that moves these numbers, each with its
+// direction WRITTEN DOWN BEFORE MEASURING (the #0a discipline). `balance.test.ts`'s 500-run
+// heuristic win rate is quoted alongside, because six runs are a fingerprint, not a sample.
+//
+//   RULE / POLICY CHANGED                                  STEP  DIRECTION ON THESE RUNS
+//   the sim gears up at the hub + heals with found items    S1   PLAYER MUCH STRONGER
+//   floor 3: heals x50%, one charge drained per battle      S2   player weaker from floor 3
+//   floor 4: karma earned there counts double               S2   NONE on these runs
+//   floor 2: a third of fights are illusions (A.1)          S3   predicted WEAKER — was WRONG
+//   floor 4: tempting pool for all; Judged kill = desecr.   S4   NONE on these runs
+//   floor 5: every owned skill warped on arrival            S5   stream moves; ~neutral
+//   bargains + rests are found; no rest counter; no heals   S6   predicted DOWN (plan §7)
+//   potions fold into a 2-item kit; the pack holds 12       S7   predicted MUCH DOWN (§7)
+//   the sim counts each floor; a DC seam for the report     S8   NONE — no rule, no policy
+//   TUNING T1: rest weight 2 -> 1 on floors 2-5             T1   predicted DOWN
+//   TUNING T2: enemy HP xp divisor 8 -> 6                   T2   predicted DOWN (floors 2+)
+//   TUNING T3: the Hollow gate 500 -> 600 XP                T3   predicted DOWN (floor 5)
+//
+//  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
+//     | step 12) so that every later rules change is measured against a player who uses what
+//     | it finds. The heuristic now (a) equips found gear at every hub visit through the same
+//     | pure `equip` the UI's Equip button calls, outside `step` (`sim.ts` `gearUpAtHub`: an
+//     | empty slot takes anything, an occupied one only a strictly higher rarity), and (b) heals
+//     | with a found `healSelf` consumable at <= 35% HP once potions run out. The ENGINE IS
+//     | UNTOUCHED: `finalRngState` below applies the same gear-up, so the lock still measures
+//     | "these inputs, this engine".
+//     | EXPECTED (plan §7, written before any run): PLAYER MUCH STRONGER — the old 32.9%
+//     | headline described a character that never equipped anything, and every empty paperdoll
+//     | slot now fills. OBSERVED: wins 0/6 -> 3/6 (three damnation endings), avg level 54/6 ->
+//     | 104/6, floors cleared 13/6 -> 20/6; the 500-run guard 0.126 -> 0.580 (Scavver 0.84,
+//     | Enforcer 0.67, Neuromancer/Hollow 0.48, Penitent 0.43). That is far ABOVE the one-in-three
+//     | target, which is the point: #2's re-run now tunes a real game DOWN toward it instead of a
+//     | gearless one up.
+//  S2 | THE FLOOR HOOK (`floors.ts` + `floors.json`), with its two numeric floors live. Floor 3:
+//     | every dampenable heal (rest, consumable, relic healSelf, mend, lifesteal) is floored at
+//     | 50%, and one skill charge is drained at every battle open — RNG-free both, so only the
+//     | DECISIONS they change can move a draw. Floor 4: karma is recorded x2.
+//     | EXPECTED (written before measuring): runs that die before floor 3 are BYTE-IDENTICAL;
+//     | runs that reach floor 3 get weaker (fewer casts, smaller rests). Floor 4's weight moves
+//     | nothing here: the heuristic never spares or takes deals, so its ledger only ever falls,
+//     | the verdict is cast-down either way, and the Sin's axis is read on floor 3, before it.
+//     | OBSERVED: Enforcer seed 3 is BYTE-IDENTICAL (rngState 4155263102) — it dies in its
+//     | first floor-3 fight before any drained charge changes a decision, a useful control. The
+//     | other five move; Hollow seed 2 turns a damnation into an act-4 death; wins 3/6 -> 2/6.
+//     | The 500-run guard 0.580 -> 0.556, in the predicted direction.
+//  S3 | FLOOR 2's ILLUSIONS (plan Appendix A.1, CONFIRMED: real damage from the illusion, none
+//     | from you, seeing through ends the fight with no XP and no loot). One extra draw builds
+//     | every floor-2 random battle (the illusion roll, last); one d20 per round against an
+//     | illusion (the passive Wisdom roll); `seeThroughIllusion` finally fires.
+//     | EXPECTED (written before measuring): PLAYER WEAKER — a third of floor 2 becomes rounds
+//     | of real damage for no reward.
+//     | OBSERVED, and the prediction was WRONG: all six runs now WIN (six damnations, 2/6 ->
+//     | 6/6), and the 500-run guard RISES 0.556 -> 0.602, with 4 heuristic runs reaching GRACE.
+//     | Diagnosed rather than accepted (PRINCIPLES §A4), over 300 heuristic runs, floor 2 only:
+//     | an illusion lasts 2.28 rounds and costs 0.63 HP (612 of 617 seen through, 3 fled, 2
+//     | died inside one), while a REAL floor-2 fight lasts 3.80 rounds and costs 1.69 HP. The
+//     | roll rate matches the DC derivation (P = 0.40 at WIS 10 -> 2.5 rolls). So at these
+//     | numbers an illusion is CHEAPER than the fight it replaces; its cost is TEMPO (no XP, so
+//     | floor 2 takes more encounters — more chests, rests and gear), and each dispel adds a
+//     | point of clarity, which the generous verdict (§22.16) can tip into grace even for a run
+//     | that kills everything. Nothing was softened or retuned (A.1 forbids it); this is the
+//     | author's evidence, and `docs/BALANCE-REPORT.md` carries the per-class and per-Wisdom
+//     | tables it feeds.
+//  S4 | FLOOR 4's TEMPTATION and the FIFTH karma action: every floor-4 bargain comes from the
+//     | `tempting` pool whatever the ledger, and killing The Judged records `killSacred` (-1
+//     | reverence) beside cruelty (§22.22). RNG-free both.
+//     | EXPECTED (before measuring): NO MOVEMENT here — the heuristic never opens a deal, and a
+//     | Judged kill only lowers a verdict ledger that is already cast-down for all six runs.
+//     | OBSERVED: all six rows BYTE-IDENTICAL. The 500-run guard is unchanged at 0.602; only its
+//     | ending mix moves (grace 4 -> 2, damnation 297 -> 299) — reverence carries x3 in the
+//     | verdict, so two clarity-tipped ledgers tip back.
+//  S5 | FLOOR 5's WARPED KIT: arriving at the True Void rolls one corrupted form per owned
+//     | skill (N `pick` draws, in pool order) and `resolveSkill` applies it after any upgrade.
+//     | EXPECTED (before measuring): every run that reaches floor 5 moves — all six here do —
+//     | because the arrival adds draws; the direction is roughly NEUTRAL, since the four
+//     | placeholder templates cut both ways (warped +cost +damage, bleeding +HP price +damage,
+//     | dulled -cost -damage, static a new element and a weaken).
+//     | OBSERVED: all six rngStates move and all six still win (levels shuffle 138/6 -> 140/6);
+//     | the 500-run guard is unchanged at 0.602 with floor-5 deaths 4 -> 4. Neutral, as predicted.
+//  S6 | THE DESCENT'S EVENTS (§22.23, §22.25, §22.26). The encounter table is `floors.json`'s
+//     | per-floor weights (battle 6 : chest 2 : rest 2 : bargain 2) — still ONE draw — so a
+//     | bargain FINDS the run (the heuristic accepts any not paid in hp / maxHp) and a rest spot
+//     | is taken the moment it is found. `restsLeft`, the rest decision and the victory's
+//     | extra-rest draw are gone (one FEWER draw per victory — every later draw moves up by
+//     | one), and no bargain heals any more (`deals.json` rewritten per the plan).
+//     | EXPECTED — the plan's §7, written before any measurement: rests "found rather than
+//     | banked" push DOWN (a third of encounters used to be rest nodes, 1-in-6 are now), while
+//     | accepted bargains push UP (stats, charges, rolled gear); net DOWN, and every stream moves.
+//     | OBSERVED: all six rows move (wins 6/6 -> 2/6: the three Enforcers now die on floor 4 and
+//     | Hollow seed 3 dies on floor 1 at step 16). The 500-run guard 0.602 -> 0.580, and act-1
+//     | deaths 48 -> 66 of 500 (share 0.24 -> 0.31): the lost early rests bite hardest on floor
+//     | 1, where the pack is still empty. Still well above the one-in-three target overall.
+//  S7 | §22.6's FOLD-IN and §22.17's CAPACITY. The six free full-heal potions, the Potion action
+//     | and `pots` are gone; a fresh character carries a Void Draught (a full heal) and a Suture
+//     | Kit (4 HP) instead, and every further heal is found. The backpack holds twelve: a full
+//     | pack leaves loot behind, and a bargain's item reward opens a discard (plan Appendix A.3;
+//     | the sim sheds its lowest-rarity gear, through `step`). RNG-free, except that the decisions
+//     | move — no draw is added or removed by the rules themselves.
+//     | EXPECTED — the plan's §7, written before any measurement: "six free full heals become
+//     | one-and-a-half found ones" — PLAYER MUCH WEAKER, and hardest on floor 1, before anything
+//     | has dropped.
+//     | OBSERVED: the three Enforcers now die on floors 1-3 (seed 3 at step 52); both Hollow
+//     | damnations hold and Hollow seed 3 is BYTE-IDENTICAL (it dies at step 16, before it could
+//     | ever have drunk — a control). The 500-run guard 0.580 -> 0.404, and act-1 deaths 66 ->
+//     | 121 of 500 (share 0.31 -> 0.41): exactly where predicted. Per class: Scavver 0.70,
+//     | Enforcer 0.46, Hollow 0.35, Penitent 0.30, Neuromancer 0.21 — the low-HP classes feel it.
+//  S8 | MEASUREMENT ONLY (plan step 12): per-floor counters and the starting Wisdom on every
+//     | `RunResult`, their sums in the report, and `StepOptions` threaded through the sim so the
+//     | report can measure `ILLUSION_DC` at 11 / 13 / 15 without editing it.
+//     | EXPECTED (before measuring): NOTHING MOVES — no engine rule and no policy decision
+//     | changed, and the shipped path passes no options.
+//     | OBSERVED: all six rows, all six rngStates and the aggregate BYTE-IDENTICAL. (The new
+//     | fields are measurement of the same event stream and are kept out of the lock — see
+//     | `LockedRecord` below.)
+//  T1 | THE TUNING PASS (plan step 14, AC-28) — global knobs only; ILLUSION_DC and every
+//  T2 | per-class number frozen. Landed as ONE re-baseline, because the three were chosen
+//  T3 | together against the report's 2,500-run baseline (seeds 1..500 x 5 classes, which
+//     | measured 0.411 after S8, ABOVE the [0.25, 0.35] band) and are ledgered one by one in
+//     | `docs/BALANCE-REPORT.md`'s tuning ledger (`TUNING_LEDGER`): T1 the rest weight on floors
+//     | 2-5 (`floors.json`), 2 -> 1: 0.411 -> 0.345. T2 `ENEMY_HP_XP_DIV` 8 -> 6: 0.345 -> 0.321.
+//     | T3 `HOLLOW_GATE_XP` 500 -> 600: 0.321 -> 0.306. None adds or removes a draw: the
+//     | encounter pick is still one draw (only the weight table moved), `randInt` consumes one
+//     | draw whatever its range, and the gate is a comparison.
+//     | EXPECTED on these six rows (written before measuring them): every run that reaches floor 2
+//     | MOVES (T1 re-maps every floor-2+ encounter draw). The two floor-1 deaths are candidates
+//     | for BYTE-IDENTITY — floor 1's table is untouched and T3 is floor 5 only — but only if T2
+//     | never raised an enemy's HP before they died: Hollow seed 3 (level 1, dead at step 16)
+//     | should hold; Enforcer seed 3 (level 3, so it DID pass xp 6, where floor(xp/6) first
+//     | exceeds floor(xp/8)) may move.
+//     | OBSERVED: BOTH floor-1 deaths BYTE-IDENTICAL — Enforcer seed 3 too (rngState 2504613783
+//     | unchanged: no enemy it fought was generated at an xp where the two divisors disagree
+//     | on the HP). The four floor-2+ runs all move, and two of them move UP (Enforcer seed 1
+//     | now dies on floor 4 instead of 2; Enforcer seed 2 now wins) while both Hollow damnations
+//     | become deaths (floors 3 and 4): wins 2/6 -> 1/6. Six runs are a fingerprint, not a sample
+//     | — the 2,500-run baseline moved 0.411 -> 0.306, in the predicted direction, and act-1
+//     | death share 0.389 -> 0.332 (deaths moved LATER, as intended).
+// ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
 // (outcome, act, level, floors, step count, cause), the FINAL RNG ACCUMULATOR of a full run
@@ -201,9 +338,10 @@ import { fileURLToPath } from 'node:url';
 import { createGame, step, awaitingFor } from './game.ts';
 import type { GameState, GameInput } from './game.ts';
 import type { GameEvent } from './gameEvent.ts';
-import { simulateRun, simulateBatch, heuristicPolicy } from './sim.ts';
-import type { RunResult } from './sim.ts';
+import { simulateRun, simulateBatch, heuristicPolicy, gearUpAtHub } from './sim.ts';
+import type { AggregateReport, RunResult } from './sim.ts';
 import type { PlayerClass } from './player.ts';
+import { stripComments } from '../log/sourceScan.testutil.ts';
 
 /**
  * Play a seeded run to its terminal state and return the FINAL RNG accumulator. Mirrors
@@ -218,6 +356,8 @@ function finalRngState(seed: number, classId: PlayerClass): number {
   let events: GameEvent[] = [];
   let steps = 0;
   while (awaiting !== 'game-over' && steps < 200_000) {
+    // #2 S1: the sim's hub gear-up, exactly as `runToTerminal` applies it.
+    if (awaiting === 'main-menu') state = gearUpAtHub(state);
     const input: GameInput = policy({ state, events, awaiting });
     const res = step(state, input);
     state = res.state;
@@ -228,30 +368,60 @@ function finalRngState(seed: number, classId: PlayerClass): number {
   return state.rngState;
 }
 
+/**
+ * What the lock freezes: a run's OUTCOME record. PLAN.md #2 step 12 added per-floor counters and
+ * the starting Wisdom to `RunResult` (and their sums to the report); those are the sim's
+ * MEASUREMENT of the same event stream — they cannot move unless the stream (locked here by the
+ * outcome and the final RNG accumulator) does — so they are left out of the lock rather than
+ * frozen twice, and `sim.test.ts` proves them against events counted by hand. Step 12 changed
+ * no engine rule and no policy, so every row below must survive it byte-for-byte.
+ */
+type LockedRecord = Omit<RunResult, 'startingWis' | 'perFloor'>;
+function lockedOf(r: RunResult): LockedRecord {
+  const { startingWis, perFloor, ...locked } = r;
+  void startingWis;
+  void perFloor;
+  return locked;
+}
+function lockedReport(r: AggregateReport): unknown {
+  const { perFloor, perClearedFloor, perWisBucket, perClass, ...locked } = r;
+  void perFloor;
+  void perClearedFloor;
+  void perWisBucket;
+  const classes: Record<string, unknown> = {};
+  for (const [id, stats] of Object.entries(perClass)) {
+    const { perFloor: classFloors, ...rest } = stats;
+    void classFloors;
+    classes[id] = rest;
+  }
+  return { ...locked, perClass: classes };
+}
+
 /** The frozen run records. MEASURED, not derived — see the file header. */
+// #2 T1-T3: four rows moved (every run that reached floor 2); both floor-1 deaths held.
 // #0c: ALL SIX rows moved, and every one of them was expected to — the catalog gate shifts
 // every draw after a run's first successful loot drop, and each of these runs takes a drop
 // early. NO row is byte-identical this time, and that absence is itself consistent with the
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
-const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 318, cause: 'The Counselor', rngState: 254850083 },
-  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 354, cause: 'Ancient Sif', rngState: 2902498858 },
-  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 10, floorsCleared: 2, steps: 322, cause: 'The Cruelty', rngState: 1262756637 },
-  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 8, floorsCleared: 2, steps: 272, cause: 'Cursed Nameless Dread', rngState: 2861286560 },
-  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 383, cause: 'Ravenous The Counselor', rngState: 559403469 },
-  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 2, floorsCleared: 0, steps: 92, cause: 'Armored Punk', rngState: 1233366143 },
+const GOLDEN_RUNS: readonly (LockedRecord & { rngState: number })[] = [
+  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 15, floorsCleared: 3, steps: 368, cause: 'The Counselor', rngState: 3654640621 },
+  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 25, floorsCleared: 4, steps: 459, cause: 'unmade the Hollow (damnation)', rngState: 3857371310 },
+  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 52, cause: 'Reinforced Electro-Core Drone', rngState: 2504613783 },
+  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 6, floorsCleared: 2, steps: 195, cause: 'Warped Smouldering Cinder', rngState: 3083415351 },
+  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 325, cause: 'Whispering Refrain', rngState: 2974016355 },
+  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 16, cause: 'Intoxicated Punk', rngState: 1951871910 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
   it('replays 3 seeds x 2 classes to the exact same terminal record', () => {
     for (const golden of GOLDEN_RUNS) {
-      const runOnly: RunResult = {
+      const runOnly: LockedRecord = {
         seed: golden.seed, classId: golden.classId, outcome: golden.outcome,
         diedAtAct: golden.diedAtAct, finalAct: golden.finalAct, finalLevel: golden.finalLevel,
         floorsCleared: golden.floorsCleared, steps: golden.steps, cause: golden.cause,
       };
-      expect(simulateRun(golden.seed, { classId: golden.classId })).toEqual(runOnly);
+      expect(lockedOf(simulateRun(golden.seed, { classId: golden.classId }))).toEqual(runOnly);
     }
   });
 
@@ -263,28 +433,28 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
 
   it('folds a fixed-seed batch into the exact same aggregate report', () => {
     const report = simulateBatch({ seeds: [1, 2, 3], classes: ['Enforcer', 'Hollow'] });
-    expect(report).toEqual({
+    expect(lockedReport(report)).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 0,
+      wins: 1,
       grace: 0,
-      damnation: 0,
-      deaths: 6,
-      winRate: 0 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 12+11+10+8+11+2 = 54, floors
-      // 3+3+2+2+3+0 = 13. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 54 / 6,
-      avgFloorsCleared: 13 / 6,
-      deathByAct: { 1: 1, 2: 0, 3: 2, 4: 3, 5: 0 },
+      damnation: 1,
+      deaths: 5,
+      winRate: 1 / 6,
+      // Summed from the GOLDEN_RUNS rows above: levels 15+25+3+6+11+1 = 61, floors
+      // 3+4+0+2+3+0 = 12. Written as the fraction so the two stay visibly tied together.
+      avgLevel: 61 / 6,
+      avgFloorsCleared: 12 / 6,
+      deathByAct: { 1: 2, 2: 0, 3: 1, 4: 2, 5: 0 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 33 / 3, avgFloorsCleared: 8 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 2, 5: 0 },
+          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
+          winRate: 1 / 3, avgLevel: 43 / 3, avgFloorsCleared: 7 / 3,
+          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 0 },
         },
         Hollow: {
           runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 21 / 3, avgFloorsCleared: 5 / 3,
+          winRate: 0 / 3, avgLevel: 18 / 3, avgFloorsCleared: 5 / 3,
           deathByAct: { 1: 1, 2: 0, 3: 1, 4: 1, 5: 0 },
         },
       },
@@ -299,28 +469,81 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
 // call Math.random() or Date.now() inside src/game".
 // ---------------------------------------------------------------------------------------------
 
-describe('the logic core contains no unseeded randomness and no clock', () => {
-  it('no shipping file under src/game CALLS Math.random or Date.now', () => {
-    const dir = fileURLToPath(new URL('.', import.meta.url));
-    const offenders: string[] = [];
-    for (const name of readdirSync(dir)) {
-      if (!name.endsWith('.ts') || name.endsWith('.test.ts')) continue;
-      const lines = readFileSync(join(dir, name), 'utf8').split('\n');
-      lines.forEach((line, i) => {
-        // Skip comment lines — several modules DOCUMENT the prohibition by naming it.
-        const trimmed = line.trim();
-        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
-        if (/\bMath\s*\.\s*random\s*\(/.test(line) || /\bDate\s*\.\s*now\s*\(/.test(line)) {
-          offenders.push(`${name}:${i + 1}`);
-        }
-      });
+// FIX ROUND 1, F6: this ban used to read src/game only, while AC-4 relied on it for src/llm too
+// (`purity.test.ts` polices logging imports, never `Math`) — so `Math.random()` and `Date.now()`
+// planted in `src/llm/tone.ts` passed all 2,506 tests. src/llm is the other pure core: the
+// narration prompt must be reproducible from the state, or a replayed run tells a different story.
+
+/** The calls that read a clock or an unseeded generator, in any spacing. */
+const IMPURE: readonly RegExp[] = [
+  /\bMath\s*\.\s*random\s*\(/,
+  /\bDate\s*\.\s*now\s*\(/,
+  /\bnew\s+Date\s*\(/,
+  /\bperformance\s*\.\s*now\s*\(/,
+  /\bcrypto\s*\.\s*(?:getRandomValues|randomUUID)\s*\(/,
+];
+
+/** The offending lines of one source, comments stripped (modules DOCUMENT the ban by naming it). */
+function impureCalls(source: string, rel: string): string[] {
+  return stripComments(source)
+    .split('\n')
+    .flatMap((line, i) => (IMPURE.some((p) => p.test(line)) ? [`${rel}:${i + 1}`] : []));
+}
+
+/** Every shipping `.ts` under a core, recursively, as core-relative posix paths. */
+function shippingSources(core: 'game' | 'llm'): string[] {
+  const root = fileURLToPath(new URL(`../${core}/`, import.meta.url));
+  const out: string[] = [];
+  const walk = (dir: string, prefix: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) walk(join(dir, entry.name), `${prefix}${entry.name}/`);
+      else if (entry.name.endsWith('.ts') && !/\.test\.ts$|\.testutil\.ts$/.test(entry.name)) {
+        out.push(`${core}/${prefix}${entry.name}`);
+      }
     }
+  };
+  walk(root, '');
+  return out;
+}
+
+describe('the pure cores contain no unseeded randomness and no clock — src/game AND src/llm', () => {
+  const files = [...shippingSources('game'), ...shippingSources('llm')];
+
+  it('no shipping file in either core reads a clock or an unseeded generator', () => {
+    const src = fileURLToPath(new URL('../', import.meta.url));
+    const offenders = files.flatMap((rel) => impureCalls(readFileSync(join(src, rel), 'utf8'), rel));
     expect(offenders).toEqual([]);
   });
 
-  it('scans a non-trivial number of files (so an empty sweep cannot pass vacuously)', () => {
-    const dir = fileURLToPath(new URL('.', import.meta.url));
-    const shipping = readdirSync(dir).filter((n) => n.endsWith('.ts') && !n.endsWith('.test.ts'));
-    expect(shipping.length).toBeGreaterThan(30);
+  it('the sweep reads a real set in BOTH cores (so an empty sweep cannot pass vacuously)', () => {
+    expect(files.filter((f) => f.startsWith('game/')).length).toBeGreaterThan(30);
+    // src/llm is small, so its members are NAMED rather than counted.
+    for (const must of ['llm/narrate.ts', 'llm/tone.ts', 'game/rng.ts', 'game/game.ts']) {
+      expect(files, `${must} is outside the sweep`).toContain(must);
+    }
+  });
+
+  it('the detector fires on each shape a violation really takes — and not on the prose naming it', () => {
+    for (const code of [
+      'const r = Math.random();',
+      'const r = Math .random ();',
+      'seed = Date.now() >>> 0;',
+      'const t = new Date().getTime();',
+      'const t0 = performance.now();',
+      'crypto.getRandomValues(buf);',
+      'const id = crypto.randomUUID();',
+      '  return rng() + Math.random() * 0;',
+    ]) {
+      expect(impureCalls(code, 'x.ts'), code).toEqual(['x.ts:1']);
+    }
+    for (const clean of [
+      '// No Math.random / Date.now here.',
+      '/* never Date.now() in the core */ const x = 1;',
+      '/**\n * no Math.random(), ever — a JSDoc block, as the modules write it\n */\nconst x = 1;',
+      'const r = rng();',
+      'const d = dateOfBirth(now);',
+    ]) {
+      expect(impureCalls(clean, 'x.ts'), clean).toEqual([]);
+    }
   });
 });

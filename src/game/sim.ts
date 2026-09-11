@@ -13,11 +13,32 @@
 //  - Serializable plain-data state: `RunResult` / `ClassStats` / `AggregateReport` are flat
 //    plain data; the harness only reads/serializes plain `GameState`.
 //
-// SCOPE: this unit is PURE-ADDITIVE. It measures winnability of the CURRENT build; it tunes no
-// balance constant and edits no existing source file. The run fights with STARTING GEAR the
-// whole way — the `step` controller's `GameInput` union has no equip action, so found loot lands
-// in the backpack unused. The measured win-rate is therefore a LOWER BOUND (real players equip
-// found loot). Promoting equip to a step input is a later follow-up, out of scope here.
+// SCOPE: it measures winnability of the CURRENT build and tunes no balance constant.
+//
+// EQUIPMENT IS MODELLED (PLAN.md #2, FINDINGS.md G48/G11). The run used to fight with STARTING
+// GEAR the whole way — `step` has no equip input, so found loot landed in the backpack unused and
+// the old 32.9% headline described a character who never equipped anything. The sim now gears up
+// at every hub visit through `gearUpAtHub`, which calls the SAME pure `equip` the UI's Equip
+// button calls, OUTSIDE `step`, exactly as the UI does. ⚠ RECORDED DEVIATION from "every state
+// change goes through `step`" (CLAUDE.md principle 1), inherited from `view-model.ts`'s
+// `equipFromBackpack` and retired with it when #1.1 makes equip a step input. It stays
+// deterministic: the gear-up is a pure function of the state, so a sim run still replays from
+// `seed + inputs + the same gear-up rule`.
+//
+// It also HEALS WITH FOUND CONSUMABLES (a `healSelf` item from the backpack at ≤ 35% HP) — since
+// PLAN.md #2 folded potions into consumables (§22.6), the only in-battle heal there is.
+//
+// And it MANAGES A FULL BACKPACK (§22.17, twelve slots) the way a careful player would, through
+// `step`'s `discard` input: at the hub, and when a bargain's reward needs room (Appendix A.3), it
+// leaves the LOWEST-RARITY loose gear behind and keeps every usable; with nothing but usables
+// it backs out of the bargain instead of throwing a heal away.
+//
+// It COUNTS WHAT EACH FLOOR COST (PLAN.md #2, AC-27). Every run carries per-floor counters —
+// encounters, rounds, rests, bargains offered and taken, illusions met / seen through / the
+// rounds and HP spent inside them, heals used, loot left behind — tallied by the pure
+// `tallyStep` from each step's events and the states on either side of it, never from inside
+// the engine. And a run can be played under injected `StepOptions` (the measurement seam in
+// `game.ts`), which is how the report measures `ILLUSION_DC` sensitivity without editing it.
 
 import {
   createGame,
@@ -25,12 +46,19 @@ import {
   awaitingFor,
   type GameState,
   type GameInput,
+  type StepOptions,
   type StepResult,
 } from './game.ts';
+import { FLOOR_IDS, floorOf, type FloorId } from './floors.ts';
+import { type GameEvent } from './gameEvent.ts';
 import { type PlayerClass } from './player.ts';
 import { spareAvailable, type BattleState, type BattleAction } from './battle.ts';
 import { hasControlCondition } from './condition.ts';
 import { resolveSkill, type SkillId } from './skill.ts';
+import { equip, resolveInstanceDef } from './equipment.ts';
+import { getCatalogItemById, type ItemInstance } from './item.ts';
+import { canCarry } from './inventory.ts';
+import { type Rarity } from './weapon.ts';
 import { type DraftOption } from './draft.ts';
 import { effectiveMaxHp } from './statEffects.ts';
 import { type RunUnlocks } from './unlockStore.ts';
@@ -60,6 +88,168 @@ export interface RunResult {
   steps: number;
   /** A short player-facing cause string (the felling enemy, or the ending reached). */
   cause: string;
+  /**
+   * The character's ROLLED Wisdom score (`stats.WIS`, before gear) as first seen at the hub —
+   * the per-Wisdom-bucket table's key (§22.27: Wisdom is rolled uniformly across classes, so
+   * floor 2's gap is per roll as well as per class). `null` only for a run that never reached
+   * the hub with a character (a hand-built state that starts and ends in one battle).
+   */
+  startingWis: number | null;
+  /** What each floor cost this run (PLAN.md #2). A floor never reached is all zeros. */
+  perFloor: Record<FloorId, FloorCounters>;
+}
+
+/**
+ * One floor's counters — for ONE run, or SUMMED over a batch (the same shape either way, so the
+ * aggregate is a plain field-wise sum). Every field is a count of something `step` emitted or a
+ * difference of two states it returned; nothing is read from inside the engine.
+ */
+export interface FloorCounters {
+  /** Runs that set foot on the floor (0/1 for one run). */
+  reached: number;
+  /** Runs that CONCLUDED the floor: its `act-outro`, or an ending reached on it. */
+  cleared: number;
+  /** Runs that died on the floor (a `defeat`). */
+  died: number;
+  /** `step` calls made on the floor with a character — the floor-length (G9) measure. */
+  steps: number;
+  /** Encounters met: battles, chests, found rests, bargains, and the floor's boss. */
+  encounters: number;
+  /** Battle rounds fought (every `battle-action` the run answered). */
+  rounds: number;
+  /** Rest spots found (`rest-found`). */
+  rests: number;
+  /** Bargains that found the run (`deal-offer`). */
+  bargainsOffered: number;
+  /** Bargains struck (`deal-taken`). */
+  bargainsTaken: number;
+  /** Battles opened against an ILLUSORY enemy (floor 2). */
+  illusionsMet: number;
+  /** Illusions seen through (`illusion-dispelled`). */
+  illusionsDispelled: number;
+  /** Rounds fought inside illusory battles. */
+  illusionRounds: number;
+  /** HP lost inside illusory battles — net per round (a round that healed counts 0). */
+  illusionHpLost: number;
+  /** Runs that died inside an illusory battle. */
+  diedInIllusion: number;
+  /** Healing consumables used (a `consumable-used` whose item heals). */
+  healsUsed: number;
+  /** Items a full pack left behind (`loot-left-behind`). */
+  lootLeftBehind: number;
+}
+
+/** A fresh counter set, every field zero. */
+export function emptyFloorCounters(): FloorCounters {
+  return {
+    reached: 0,
+    cleared: 0,
+    died: 0,
+    steps: 0,
+    encounters: 0,
+    rounds: 0,
+    rests: 0,
+    bargainsOffered: 0,
+    bargainsTaken: 0,
+    illusionsMet: 0,
+    illusionsDispelled: 0,
+    illusionRounds: 0,
+    illusionHpLost: 0,
+    diedInIllusion: 0,
+    healsUsed: 0,
+    lootLeftBehind: 0,
+  };
+}
+
+/** Floors 1..5, every counter zero. */
+export function emptyPerFloor(): Record<FloorId, FloorCounters> {
+  return {
+    1: emptyFloorCounters(),
+    2: emptyFloorCounters(),
+    3: emptyFloorCounters(),
+    4: emptyFloorCounters(),
+    5: emptyFloorCounters(),
+  };
+}
+
+/** Field-wise sum of two counter sets. */
+function addCounters(a: FloorCounters, b: FloorCounters): FloorCounters {
+  const out = emptyFloorCounters();
+  for (const key of Object.keys(out) as (keyof FloorCounters)[]) out[key] = a[key] + b[key];
+  return out;
+}
+
+/** The events that mark an ENCOUNTER being met (one per encounter). */
+const ENCOUNTER_KINDS: ReadonlySet<GameEvent['kind']> = new Set([
+  'encounter-start',
+  'chest-found',
+  'rest-found',
+  'deal-offer',
+  'boss-encounter',
+  'final-battle-begins',
+]);
+
+/** Does this catalog consumable heal? (a `healSelf` use — the same test the policy makes) */
+function isHealingItem(defId: string): boolean {
+  return (getCatalogItemById(defId)?.use ?? []).some((a) => a.kind === 'healSelf');
+}
+
+/** Is `res` a started battle against an illusory enemy? */
+function inIllusoryBattle(res: StepResult): boolean {
+  const phase = res.state.phase;
+  return phase.kind === 'battle' && phase.battle.enemy.illusory === true;
+}
+
+/** The player's HP as a step left it — the battle copy while a fight is on, else the state's. */
+function hpAfter(res: StepResult): number {
+  const phase = res.state.phase;
+  const hp = phase.kind === 'battle' ? phase.battle.player.hp : (res.state.player?.hp ?? 0);
+  return Math.max(0, hp);
+}
+
+/**
+ * Fold ONE step into a run's per-floor counters — PURE (returns a new record; the input is not
+ * touched). `pre` is what the policy answered, `post` what `step` returned. The step is
+ * attributed to the floor it was TAKEN on (`floorOf(pre.state)`), so a floor's `act-outro`
+ * counts toward the floor it concludes, not the one it opens.
+ */
+export function tallyStep(
+  counters: Record<FloorId, FloorCounters>,
+  pre: StepResult,
+  post: StepResult,
+): Record<FloorId, FloorCounters> {
+  if (!pre.state.player) return counters; // character creation: not on any floor yet
+  const floor = floorOf(pre.state);
+  const c: FloorCounters = { ...counters[floor] };
+  const events = post.events;
+  const count = (kind: GameEvent['kind']): number => events.filter((e) => e.kind === kind).length;
+
+  c.reached = 1;
+  c.steps += 1;
+  c.encounters += events.filter((e) => ENCOUNTER_KINDS.has(e.kind)).length;
+  c.rests += count('rest-found');
+  c.bargainsOffered += count('deal-offer');
+  c.bargainsTaken += count('deal-taken');
+  c.lootLeftBehind += count('loot-left-behind');
+  c.illusionsDispelled += count('illusion-dispelled');
+  c.healsUsed += events.filter((e) => e.kind === 'consumable-used' && isHealingItem(e.itemId)).length;
+  if (count('act-outro') > 0 || count('ending') > 0) c.cleared = 1;
+  // A battle OPENED this step against an illusion (the roll happens as the encounter is built).
+  if (count('encounter-start') > 0 && inIllusoryBattle(post)) c.illusionsMet += 1;
+
+  const fighting = pre.awaiting === 'battle-action';
+  if (fighting) c.rounds += 1;
+  const illusory = fighting && inIllusoryBattle(pre);
+  if (illusory) {
+    c.illusionRounds += 1;
+    const before = pre.state.phase.kind === 'battle' ? pre.state.phase.battle.player.hp : 0;
+    c.illusionHpLost += Math.max(0, before - hpAfter(post));
+  }
+  if (count('defeat') > 0) {
+    c.died = 1;
+    if (illusory) c.diedInIllusion = 1;
+  }
+  return { ...counters, [floor]: c };
 }
 
 /** Per-class aggregate figures. */
@@ -74,6 +264,34 @@ export interface ClassStats {
   avgFloorsCleared: number;
   /** Deaths keyed by the act they occurred in (1..5). */
   deathByAct: Record<number, number>;
+  /** Every run's per-floor counters, summed (PLAN.md #2). */
+  perFloor: Record<FloorId, FloorCounters>;
+}
+
+/**
+ * The starting-Wisdom buckets of AC-27: `low` ≤ 9 · `mid` 10–13 · `high` ≥ 14 (the rolled
+ * score, so modifiers −1 or worse · −0/+1 · +2 or better against floor 2's DC).
+ */
+export type WisBucket = 'low' | 'mid' | 'high';
+export const WIS_BUCKETS: readonly WisBucket[] = ['low', 'mid', 'high'];
+
+/** The bucket a rolled Wisdom score falls in. */
+export function wisBucket(wis: number): WisBucket {
+  if (wis <= 9) return 'low';
+  if (wis <= 13) return 'mid';
+  return 'high';
+}
+
+/** One Wisdom bucket's figures. */
+export interface WisBucketStats {
+  runs: number;
+  wins: number;
+  deaths: number;
+  /** Deaths on floor 2 (the illusions' floor). */
+  floor2Deaths: number;
+  winRate: number;
+  /** floor2Deaths / deaths — the share of this bucket's deaths that floor 2 took (0 if none). */
+  floor2DeathShare: number;
 }
 
 /** The whole-batch aggregate. */
@@ -89,7 +307,23 @@ export interface AggregateReport {
   avgFloorsCleared: number;
   deathByAct: Record<number, number>;
   perClass: Record<PlayerClass, ClassStats>;
+  /** Every run's per-floor counters, summed across classes (PLAN.md #2). */
+  perFloor: Record<FloorId, FloorCounters>;
+  /**
+   * The same sums over only the runs that CLEARED each floor — a whole floor's length and
+   * resources, never truncated by a death on it (the G9 floor-length measure, AC-22's
+   * bargains-per-completed-floor).
+   */
+  perClearedFloor: Record<FloorId, FloorCounters>;
+  /** Win rate and floor-2 death share by starting Wisdom (runs with no character are skipped). */
+  perWisBucket: Record<WisBucket, WisBucketStats>;
 }
+
+/**
+ * A hub-time move the sim makes OUTSIDE `step` — the recorded deviation above. PURE: a function
+ * of the state alone, so a run is still exactly reproducible.
+ */
+export type HubPrep = (state: GameState) => GameState;
 
 /** The five playable classes, in a fixed canonical order (for the report roster). */
 export const ALL_CLASSES: readonly PlayerClass[] = [
@@ -101,6 +335,79 @@ export const ALL_CLASSES: readonly PlayerClass[] = [
 ];
 
 // ------- The policies --------------------------------------------------------
+
+/**
+ * Which backpack item a careful player leaves behind to make room — PURE: the LOWEST-RARITY
+ * piece of loose GEAR (anything with a slot), first one on ties; usables are never chosen. -1
+ * when the pack holds no gear at all.
+ */
+export function discardChoice(backpack: readonly ItemInstance[], skip: readonly number[] = []): number {
+  let best = -1;
+  let bestRank = Infinity;
+  backpack.forEach((item, i) => {
+    if (skip.includes(i)) return; // already marked to leave (a pack over the cap, F3)
+    const def = resolveInstanceDef(item);
+    if (!def || def.slot === null) return;
+    const rank = RARITY_RANK[def.rarity];
+    if (rank < bestRank) {
+      best = i;
+      bestRank = rank;
+    }
+  });
+  return best;
+}
+
+/** Rarity as a rank, so "better" is a comparison: Common < Rare < Legendary. */
+const RARITY_RANK: Record<Rarity, number> = { Common: 0, Rare: 1, Legendary: 2 };
+
+/**
+ * Gear up at the hub — PURE, deterministic, and OUTSIDE `step` (see the header's deviation).
+ *
+ * THE RULE, the plan's (AC-26): walk the backpack in index order; a piece of gear goes on if its
+ * slot is EMPTY, or if it OUTRANKS what is equipped there by rarity (strictly — an equal-rarity
+ * item never displaces, so the walk cannot loop). A displaced item returns to the backpack, as
+ * the UI's swap does. Repeats until a full pass equips nothing.
+ *
+ * ⚠ KNOWN, NOT FIXED HERE (GAME-DESIGN.md §22.20, `equipment.ts`'s known-gap block): a generated
+ * weapon swings the unarmed die plus its flat bonus, so a COMMON generated mainHand is a
+ * downgrade from a starting weapon. "Strictly outranks" means a Common drop never displaces
+ * starting gear (whose rarity is Common or better), which is the only protection the rarity rule
+ * can give; #1 owns the real fix.
+ */
+export function gearUpAtHub(state: GameState): GameState {
+  if (state.phase.kind !== 'main-menu' || !state.player) return state;
+  let inventory = state.player.inventory;
+  let changed = true;
+  let guard = 0;
+  while (changed && guard < 64) {
+    changed = false;
+    guard += 1;
+    for (let i = 0; i < inventory.backpack.length; i += 1) {
+      const item = inventory.backpack[i]!;
+      const def = resolveInstanceDef(item);
+      if (!def || def.slot === null) continue;
+      const current = inventory.slots[def.slot];
+      const currentDef = current ? resolveInstanceDef(current) : undefined;
+      const better =
+        !current || (currentDef !== undefined && RARITY_RANK[def.rarity] > RARITY_RANK[currentDef.rarity]);
+      if (!better) continue;
+      const r = equip(inventory, i);
+      if (!r.ok) continue;
+      inventory = r.inventory;
+      changed = true;
+      break; // indices shifted — restart the walk
+    }
+  }
+  if (inventory === state.player.inventory) return state;
+  return { ...state, player: { ...state.player, inventory } };
+}
+
+/** The backpack index of the first item whose `use` heals, or -1 — the sim's only in-battle heal (§22.6). */
+function healingConsumableIndex(backpack: readonly { defId: string }[]): number {
+  return backpack.findIndex((item) =>
+    (getCatalogItemById(item.defId)?.use ?? []).some((a) => a.kind === 'healSelf'),
+  );
+}
 
 /**
  * Pick the highest-priority draft offer, first match wins (deterministic): a `stat` on CON,
@@ -136,14 +443,14 @@ function chooseBattleAction(battle: BattleState, merciful: boolean): BattleActio
   // path. The base policy never spares (a spare forfeits the kill XP the act gates require).
   if (merciful && !battle.boss && spareAvailable(battle)) return 'spare';
 
-  // Under a control condition (stun/freeze/sleep) the player cannot act: a potion is BLOCKED and
-  // a cast is skipped WITHOUT advancing the round — only fight/cast run the shared round that
-  // ticks the condition down. So `fight` (never `potion`/`run`, which stall) to let the round
-  // resolve and the control wear off; the player's swing is skipped but the condition ticks.
+  // Under a control condition (stun/freeze/sleep) the player cannot act: `fight` runs the shared
+  // round that ticks the condition down (the swing is skipped but the round resolves), where a
+  // `run` would stall. So fight, and let the control wear off.
   if (hasControlCondition(pl)) return 'fight';
 
-  // 1. Heal with a potion when badly hurt and one remains.
-  if (pl.pots > 0 && pl.hp <= 0.35 * cap) return 'potion';
+  // 1. Heal when badly hurt, with a found healing consumable (§22.6: there are no potions).
+  const heal = healingConsumableIndex(pl.inventory.backpack);
+  if (pl.hp <= 0.35 * cap && heal >= 0) return { kind: 'useConsumable', source: { index: heal } };
 
   // 2. Consider the best AFFORDABLE skill from the pool (deterministic; ties broken by pool
   //    order via the strict `>` comparisons below).
@@ -162,15 +469,15 @@ function chooseBattleAction(battle: BattleState, merciful: boolean): BattleActio
       bestDamage = { id, dmg: def.baseDamage };
     }
   }
-  // A heal skill when at/below half HP and no potion was spent this turn.
+  // A heal skill when at/below half HP (no consumable was used this turn).
   if (bestHeal && pl.hp <= 0.5 * cap) return { kind: 'cast', skillId: bestHeal.id };
   // A damage skill worth a charge over a plain swing.
   if (bestDamage && bestDamage.dmg >= 2 && pl.skillCharges > 0) {
     return { kind: 'cast', skillId: bestDamage.id };
   }
 
-  // 3. Flee a near-certain death when heals are exhausted and escape is possible.
-  if (pl.hp <= 0.2 * cap && pl.pots === 0 && battle.canFlee) return 'run';
+  // 3. Flee a near-certain death when no heal is left and escape is possible.
+  if (pl.hp <= 0.2 * cap && heal < 0 && battle.canFlee) return 'run';
 
   // 4. Otherwise swing.
   return 'fight';
@@ -191,10 +498,17 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
       return { kind: 'class', classId };
     case 'accept-or-reroll-stats':
       return { kind: 'stats-decision', accept: true };
-    case 'main-menu':
-      // The shipped policies never seek a deal — this is the no-sacrifice, found-loot-only
-      // baseline (the §11 load-bearing question).
+    case 'main-menu': {
+      // PLAN.md #2: there is no "seek a bargain" any more — bargains FIND the run as descent
+      // encounters, and the policy answers them at `deal-decision` below. A FULL pack first sheds
+      // its worst gear (through `step`), so the next drop is not left on the floor.
+      const inventory = res.state.player?.inventory;
+      if (inventory && !canCarry(inventory)) {
+        const drop = discardChoice(inventory.backpack);
+        if (drop >= 0) return { kind: 'discard', index: drop };
+      }
       return { kind: 'menu', choice: 'continue' };
+    }
     case 'continue':
       return { kind: 'continue' };
     case 'battle-action':
@@ -208,19 +522,21 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
         : { kind: 'continue' };
     case 'deal-decision': {
       if (phase.kind !== 'deal') return { kind: 'continue' };
-      const { cost, reward } = phase.deal;
-      // Take a clearly-beneficial deal; never pay the body (hp / maxHp).
-      const accept =
-        cost.kind !== 'hp' &&
-        cost.kind !== 'maxHp' &&
-        (reward.kind === 'item' ||
-          reward.kind === 'heal' ||
-          reward.kind === 'statPoint' ||
-          reward.kind === 'skillCharge');
-      return { kind: 'deal-decision', accept };
+      // PLAN.md #2 (AC-26): accept any bargain that does not pay with the body (hp / maxHp).
+      // Every reward is worth having now that none of them heals (§22.25).
+      const { cost } = phase.deal;
+      return { kind: 'deal-decision', accept: cost.kind !== 'hp' && cost.kind !== 'maxHp' };
     }
-    case 'rest-decision':
-      return { kind: 'rest-decision', accept: true };
+    case 'deal-discard': {
+      // Appendix A.3: the bargain needs room. Leave the worst gear; with none, back out (which is
+      // exactly refusing the bargain) rather than throw a heal away.
+      const marked = phase.kind === 'deal-discard' ? (phase.leaving ?? []) : [];
+      const drop = res.state.player ? discardChoice(res.state.player.inventory.backpack, marked) : -1;
+      return drop >= 0 ? { kind: 'discard', index: drop } : { kind: 'deal-decision', accept: false };
+    }
+    case 'rest':
+      // A found rest was taken the moment it was found (§22.26); only `continue` remains.
+      return { kind: 'continue' };
     case 'game-over':
       // Unreachable dispatch (the loop exits on this awaiting); return a valid input anyway.
       return { kind: 'continue' };
@@ -252,6 +568,8 @@ export function runToTerminal(
   initial: GameState,
   policy: SimPolicy,
   guard = 200_000,
+  prep: HubPrep = gearUpAtHub,
+  stepOptions: StepOptions = {},
 ): RunResult {
   let res: StepResult = {
     state: initial,
@@ -262,10 +580,20 @@ export function runToTerminal(
   let endingType: 'grace' | 'damnation' | null = null;
   let floorsCleared = 0;
   let lastEnemy = '';
+  let perFloor = emptyPerFloor();
+  let startingWis: number | null = null;
 
   while (res.awaiting !== 'game-over' && steps < guard) {
+    // The hub-time gear-up (outside `step`, see the header). Only ever at the hub.
+    if (res.awaiting === 'main-menu') {
+      // The ROLLED score, read at the first hub BEFORE any hub-time move touches the character.
+      if (startingWis === null && res.state.player) startingWis = res.state.player.stats.WIS;
+      res = { ...res, state: prep(res.state) };
+    }
     const input = policy(res);
-    res = step(res.state, input);
+    const pre = res;
+    res = step(res.state, input, stepOptions);
+    perFloor = tallyStep(perFloor, pre, res);
     steps++;
     for (const e of res.events) {
       if (e.kind === 'act-outro') floorsCleared++;
@@ -301,6 +629,8 @@ export function runToTerminal(
     floorsCleared,
     steps,
     cause,
+    startingWis,
+    perFloor,
   };
 }
 
@@ -311,11 +641,11 @@ export function runToTerminal(
  */
 export function simulateRun(
   seed: number,
-  opts: { classId: PlayerClass; policy?: SimPolicy; unlocks?: RunUnlocks },
+  opts: { classId: PlayerClass; policy?: SimPolicy; unlocks?: RunUnlocks; stepOptions?: StepOptions },
 ): RunResult {
   const initial = opts.unlocks ? createGame(seed, opts.unlocks) : createGame(seed);
   const policy = opts.policy ?? heuristicPolicy(opts.classId);
-  const result = runToTerminal(initial, policy);
+  const result = runToTerminal(initial, policy, undefined, undefined, opts.stepOptions);
   return { ...result, seed, classId: opts.classId };
 }
 
@@ -330,16 +660,25 @@ function emptyDeathByAct(): Record<number, number> {
  * Run `classes × seeds` (in that fixed order) and fold the results into an `AggregateReport` —
  * PURE and deterministic for a fixed `{seeds, classes}`. `winRate = (grace + damnation) / runs`;
  * `deathByAct` is keyed 1..5. Uses `opts.policy(classId)` per class when given, else
- * `heuristicPolicy(classId)`.
+ * `heuristicPolicy(classId)`. `stepOptions` is threaded through every `step` of every run —
+ * the report's measurement seam (e.g. an `ILLUSION_DC` sensitivity row); the game never sets it.
  */
 export function simulateBatch(opts: {
   seeds: number[];
   classes: PlayerClass[];
   policy?: (c: PlayerClass) => SimPolicy;
   unlocks?: RunUnlocks;
+  stepOptions?: StepOptions;
 }): AggregateReport {
   const perClass = {} as Record<PlayerClass, ClassStats>;
   const overallDeathByAct = emptyDeathByAct();
+  let overallPerFloor = emptyPerFloor();
+  let clearedPerFloor = emptyPerFloor();
+  const wisTally: Record<WisBucket, { runs: number; wins: number; deaths: number; floor2Deaths: number }> = {
+    low: { runs: 0, wins: 0, deaths: 0, floor2Deaths: 0 },
+    mid: { runs: 0, wins: 0, deaths: 0, floor2Deaths: 0 },
+    high: { runs: 0, wins: 0, deaths: 0, floor2Deaths: 0 },
+  };
   let runs = 0;
   let wins = 0;
   let grace = 0;
@@ -360,17 +699,38 @@ export function simulateBatch(opts: {
       avgLevel: 0,
       avgFloorsCleared: 0,
       deathByAct: emptyDeathByAct(),
+      perFloor: emptyPerFloor(),
     };
     let classLevelSum = 0;
     let classFloorsSum = 0;
 
     for (const seed of opts.seeds) {
-      const runOpts: { classId: PlayerClass; policy: SimPolicy; unlocks?: RunUnlocks } = {
-        classId,
-        policy,
-      };
+      const runOpts: {
+        classId: PlayerClass;
+        policy: SimPolicy;
+        unlocks?: RunUnlocks;
+        stepOptions?: StepOptions;
+      } = { classId, policy };
       if (opts.unlocks) runOpts.unlocks = opts.unlocks;
+      if (opts.stepOptions) runOpts.stepOptions = opts.stepOptions;
       const r = simulateRun(seed, runOpts);
+
+      for (const floor of FLOOR_IDS) {
+        stat.perFloor[floor] = addCounters(stat.perFloor[floor], r.perFloor[floor]);
+        if (r.perFloor[floor].cleared > 0) {
+          clearedPerFloor = { ...clearedPerFloor, [floor]: addCounters(clearedPerFloor[floor], r.perFloor[floor]) };
+        }
+      }
+      if (r.startingWis !== null) {
+        const bucket = wisTally[wisBucket(r.startingWis)];
+        bucket.runs++;
+        if (r.outcome === 'death') {
+          bucket.deaths++;
+          if (r.perFloor[2].died > 0) bucket.floor2Deaths++;
+        } else {
+          bucket.wins++;
+        }
+      }
 
       stat.runs++;
       classLevelSum += r.finalLevel;
@@ -393,6 +753,9 @@ export function simulateBatch(opts: {
     stat.avgLevel = stat.runs > 0 ? classLevelSum / stat.runs : 0;
     stat.avgFloorsCleared = stat.runs > 0 ? classFloorsSum / stat.runs : 0;
     perClass[classId] = stat;
+    for (const floor of FLOOR_IDS) {
+      overallPerFloor = { ...overallPerFloor, [floor]: addCounters(overallPerFloor[floor], stat.perFloor[floor]) };
+    }
 
     runs += stat.runs;
     wins += stat.wins;
@@ -415,5 +778,21 @@ export function simulateBatch(opts: {
     avgFloorsCleared: runs > 0 ? floorsSum / runs : 0,
     deathByAct: overallDeathByAct,
     perClass,
+    perFloor: overallPerFloor,
+    perClearedFloor: clearedPerFloor,
+    perWisBucket: {
+      low: bucketStats(wisTally.low),
+      mid: bucketStats(wisTally.mid),
+      high: bucketStats(wisTally.high),
+    },
+  };
+}
+
+/** A Wisdom bucket's tallies as rates (0 when the bucket is empty). */
+function bucketStats(t: { runs: number; wins: number; deaths: number; floor2Deaths: number }): WisBucketStats {
+  return {
+    ...t,
+    winRate: t.runs > 0 ? t.wins / t.runs : 0,
+    floor2DeathShare: t.deaths > 0 ? t.floor2Deaths / t.deaths : 0,
   };
 }

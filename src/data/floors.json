@@ -1,0 +1,45 @@
+{
+  "status": "ENCOUNTER WEIGHTS, THE FLOOR-3 HEAL PERCENT AND DRAIN ARE #2 BALANCE PLACEHOLDERS (tuned by the balance re-run: the rest weight on floors 2-5 went 2 -> 1 at tuning step T1; see docs/BALANCE-REPORT.md's tuning ledger). The illusion chance (one fight in three) and the floor-4 multiplier (double) are the AUTHOR'S RULINGS (GAME-DESIGN.md 22.24) and are not tuned. Names mirror src/render/tokens.ts.",
+  "floors": {
+    "1": {
+      "name": "Undercity",
+      "encounters": { "battle": 6, "chest": 2, "rest": 2, "bargain": 2 },
+      "effects": [],
+      "karmaMultiplier": 1
+    },
+    "2": {
+      "name": "Entrance to the Void",
+      "encounters": { "battle": 6, "chest": 2, "rest": 1, "bargain": 2 },
+      "illusionChance": { "numerator": 1, "denominator": 3 },
+      "effects": [],
+      "karmaMultiplier": 1
+    },
+    "3": {
+      "name": "Ash City",
+      "encounters": { "battle": 6, "chest": 2, "rest": 1, "bargain": 2 },
+      "effects": [
+        { "type": "healMultiplier", "params": { "pct": 50 } },
+        {
+          "type": "triggered",
+          "trigger": "startOfBattle",
+          "action": { "kind": "drainCharge", "params": { "amount": 1 } }
+        }
+      ],
+      "karmaMultiplier": 1
+    },
+    "4": {
+      "name": "Angelic Underground",
+      "encounters": { "battle": 6, "chest": 2, "rest": 1, "bargain": 2 },
+      "effects": [],
+      "karmaMultiplier": 2,
+      "bargainPool": "tempting"
+    },
+    "5": {
+      "name": "True Void",
+      "encounters": { "battle": 6, "chest": 2, "rest": 1, "bargain": 2 },
+      "effects": [],
+      "karmaMultiplier": 1,
+      "corruptsSkills": true
+    }
+  }
+}

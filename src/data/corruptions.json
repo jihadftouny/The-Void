@@ -1,0 +1,9 @@
+{
+  "status": "PLACEHOLDER — every template, suffix and magnitude here is a stand-in, to be authored in PLAN.md #13. The SHAPE is the contract (GAME-DESIGN.md 22.24): on arrival at the True Void each owned skill takes ONE corrupted form, rolled from the run's own RNG, so the kit is learnable within a run and different the next. 'Costs shift, damage types change, something is gained and something taken.'",
+  "templates": [
+    { "id": "warped", "suffix": "(warped)", "chargeDelta": 1, "damageBonus": 1, "element": "Psychic" },
+    { "id": "bleeding", "suffix": "(bleeding)", "hpCost": 1, "damageBonus": 2 },
+    { "id": "dulled", "suffix": "(dulled)", "chargeDelta": -1, "damageBonus": -1 },
+    { "id": "static", "suffix": "(static)", "element": "Electro", "addConditions": ["weak"] }
+  ]
+}

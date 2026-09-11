@@ -21,11 +21,15 @@
 // assertion is a floor the design implies, not the number that came out.
 
 import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   createGame,
   step,
   awaitingFor,
   type GameState,
+  type GameInput,
   type StepResult,
 } from './game.ts';
 import { ALL_CLASSES, heuristicPolicy, mercifulPolicy, type SimPolicy } from './sim.ts';
@@ -57,11 +61,17 @@ import {
 } from './boss.ts';
 import { HOLLOW_GATE_XP } from './progression.ts';
 import { SAVE_VERSION, encodeSave, decodeSave } from './save.ts';
-import { mulberry32 } from './rng.ts';
+import { createRng, mulberry32 } from './rng.ts';
+import { floorOf } from './floors.ts';
 import { type Player, type PlayerClass } from './player.ts';
 import { type GameEvent } from './gameEvent.ts';
 import { formatEvent } from '../render/format.ts';
 import { describeEvent } from '../llm/narrate.ts';
+import { ALL_TONE_WORDS } from '../llm/tone.ts';
+import { AXIS_VOCABULARY } from './karmaVocabulary.testutil.ts';
+import { ONE_OF_EVERY_EVENT } from './eventSamples.testutil.ts';
+import { restBrief } from './restBrief.ts';
+import { selectEncounter } from './encounter.ts';
 import { dealView } from '../desktop/view-model.ts';
 
 // =============================================================================================
@@ -106,10 +116,15 @@ function playUntil(
 
 /** A hub state whose backpack holds at least `n` items, reached only by real `step` calls. */
 function hubWithItems(seed: number, n: number): StepResult {
-  // `heuristicPolicy` never spares and never seeks a deal, so the karma vector it produces
-  // touches ONLY `mercyCruelty` (kills). Reverence/restraint/clarity are still exactly 0 here,
+  // The heuristic, but DECLINING every bargain that finds it (PLAN.md #2: bargains are descent
+  // encounters now, and the shipped heuristic accepts most of them). It never spares, so the
+  // karma vector it produces touches ONLY `mercyCruelty` (kills) — it stops long before floor 2's
+  // illusions or floor 4's Judged — and reverence/restraint/clarity are still exactly 0 here,
   // which is what lets the tests below read an absolute value rather than a delta.
-  return playUntil(seed, heuristicPolicy(CLASS), (r) => {
+  const base = heuristicPolicy(CLASS);
+  const decliner: SimPolicy = (res) =>
+    res.awaiting === 'deal-decision' ? { kind: 'deal-decision', accept: false } : base(res);
+  return playUntil(seed, decliner, (r) => {
     return (
       r.awaiting === 'main-menu' && (r.state.player?.inventory.backpack.length ?? 0) >= n
     );
@@ -117,16 +132,40 @@ function hubWithItems(seed: number, n: number): StepResult {
 }
 
 /**
- * Seek the altar through the real `step` until it offers `want`, then ACCEPT that offer.
- * Every other offer is DECLINED — which changes nothing but the rng — so the karma delta the
- * caller sees comes from exactly one accepted deal.
+ * PLAN.md #2 (G52 closed at the root, §22.23): there is NO hub input that opens a bargain any
+ * more — bargains FIND the player as a descent encounter, and that opening is tested through
+ * the real `step` in `game.test.ts` and `floors.test.ts`. This file's subject is what happens
+ * AFTER an offer exists (the karma a deal records, the pools it is drawn from), so the harness
+ * stands an offer up exactly as the engine's `openDeal` does and no further: the REAL
+ * `buildDeal` over the state's own ledger and floor, drawing from the state's own RNG stream and
+ * writing the advanced accumulator back, with the same `deal-offer` event. The ONLY hand-set
+ * thing is the phase. Every accept / decline below still goes through the real `step`.
+ */
+function summon(from: StepResult): StepResult {
+  const state = from.state;
+  if (state.phase.kind !== 'main-menu') throw new Error(`summon: not at the hub (${state.phase.kind})`);
+  const { rng, getState } = createRng(state.rngState);
+  const deal = buildDeal(state.karma, floorOf(state), rng);
+  return {
+    state: { ...state, rngState: getState(), phase: { kind: 'deal', deal } },
+    events: [
+      { kind: 'deal-offer', pool: deal.pool, cost: describeCost(deal.cost), reward: describeReward(deal.reward) },
+    ],
+    awaiting: 'deal-decision',
+  };
+}
+
+/**
+ * Stand offers up (`summon`) until one asks for `want`, then ACCEPT it through the real `step`.
+ * Every other offer is DECLINED through `step` — which changes nothing but the rng — so the
+ * karma delta the caller sees comes from exactly one accepted deal.
  */
 function seekAndAccept(from: StepResult, want: DealCost['kind'], maxSeeks = 300): StepResult {
   let r = from;
   for (let i = 0; i < maxSeeks; i += 1) {
-    r = step(r.state, { kind: 'menu', choice: 'seek-deal' });
+    r = summon(r);
     const phase = r.state.phase;
-    if (phase.kind !== 'deal') throw new Error(`seek-deal did not open a deal (${phase.kind})`);
+    if (phase.kind !== 'deal') throw new Error(`summon did not open a deal (${phase.kind})`);
     const offered = phase.deal.cost.kind;
     r = step(r.state, { kind: 'deal-decision', accept: offered === want });
     if (offered === want) return r;
@@ -142,6 +181,8 @@ function seekAndAccept(from: StepResult, want: DealCost['kind'], maxSeeks = 300)
  */
 interface SpareObservation {
   familyId: string;
+  /** The floor index (`state.place`) the spare happened on — floor 4 (place 3) counts double. */
+  place: number;
   before: KarmaState;
   after: KarmaState;
   events: GameEvent[];
@@ -157,10 +198,11 @@ function observeSpares(seed: number, classId: PlayerClass, guard = 200_000): Spa
     const before = r.state.karma;
     const phase = r.state.phase;
     const familyId = phase.kind === 'battle' ? phase.battle.enemy.familyId : null;
+    const place = r.state.place;
     r = step(r.state, policy(r));
     steps += 1;
     if (familyId !== null && r.events.some((e) => e.kind === 'spared')) {
-      out.push({ familyId, before, after: r.state.karma, events: [...r.events] });
+      out.push({ familyId, place, before, after: r.state.karma, events: [...r.events] });
     }
   }
   return out;
@@ -182,7 +224,7 @@ function karmaDelta(before: KarmaState, after: KarmaState): KarmaState {
 // =============================================================================================
 
 describe('the balance constants #10a must not touch', () => {
-  it('KARMA_DELTAS is exactly the shipped table, all eight actions', () => {
+  it('KARMA_DELTAS is exactly the shipped table, all nine actions', () => {
     const EXPECTED: Record<KarmaAction, Partial<KarmaState>> = {
       spareWeighted: { mercyCruelty: 1 },
       killWeighted: { mercyCruelty: -1 },
@@ -192,6 +234,8 @@ describe('the balance constants #10a must not touch', () => {
       honorDead: { reverenceDesecration: 1 },
       embraceWhisper: { clarityDelusion: -1 },
       seeThroughIllusion: { clarityDelusion: 1 },
+      // PLAN.md #2 / §22.22: the fifth action §9 implied — killing The Judged is desecration.
+      killSacred: { reverenceDesecration: -1 },
     };
     expect(KARMA_DELTAS).toEqual(EXPECTED);
   });
@@ -204,7 +248,9 @@ describe('the balance constants #10a must not touch', () => {
       clarityDelusion: 1,
     });
     expect(GATE_THRESHOLD).toBe(1);
-    expect(HOLLOW_GATE_XP).toBe(500);
+    // PLAN.md #2's tuning (T3) moved the Hollow gate 500 -> 600 — a balance knob this unit may
+    // touch, recorded in the report's ledger; the verdict gate above is not.
+    expect(HOLLOW_GATE_XP).toBe(600);
   });
 
   it('§22.16 holds arithmetically: every delta is an integer, so >= 1 IS "net-positive"', () => {
@@ -218,11 +264,25 @@ describe('the balance constants #10a must not touch', () => {
     for (const w of Object.values(GATE_WEIGHTS)) expect(Number.isInteger(w)).toBe(true);
   });
 
-  it('seeThroughIllusion is still DECLARED AND UNWIRED — floor 2 has nothing to hook it to', () => {
-    // Not an oversight: the only illusion seam in `src/` is `statEffects.ts`'s
-    // `illusionSightTwist`, a `return 0` stub its own test labels as #2's. Inventing a trigger
-    // here would mean inventing floor 2's mechanic. Recorded so the gap stays a decision.
+  it('seeThroughIllusion is WIRED (PLAN.md #2) — and fires only from seeing through an illusion', () => {
+    // It was the last unwired action until floor 2 existed. The delta is unchanged, and the ONE
+    // shipping site that records it is game.ts's `dispelled` branch — held by a source scan so a
+    // second, easier trigger cannot quietly appear. Its behaviour through the real `step` is in
+    // `illusion.test.ts` (a dispel moves clarity by exactly +1 on floor 2).
     expect(KARMA_DELTAS.seeThroughIllusion).toEqual({ clarityDelusion: 1 });
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const sites: string[] = [];
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.ts') || name.endsWith('.test.ts') || name === 'karma.ts') continue;
+      const src = readFileSync(join(dir, name), 'utf8');
+      const count = (src.match(/'seeThroughIllusion'/g) ?? []).length;
+      for (let i = 0; i < count; i++) sites.push(name);
+    }
+    expect(sites).toEqual(['game.ts']);
+    const game = readFileSync(join(dir, 'game.ts'), 'utf8');
+    const at = game.indexOf("'seeThroughIllusion'");
+    const branch = game.lastIndexOf('case ', at);
+    expect(game.slice(branch, branch + 20)).toMatch(/case 'dispelled'/);
   });
 });
 
@@ -247,9 +307,13 @@ describe('leaveOffering — accepting an offering deal, through the real step', 
       reverenceDesecration: 1,
       clarityDelusion: 0,
     });
-    // The cost was really paid. Without this, a free-karma implementation passes everything above.
-    expect(r.state.player!.inventory.backpack).toHaveLength(packBefore.length - 1);
-    expect(r.state.player!.inventory.backpack).toEqual(packBefore.slice(1));
+    // The cost was really paid: the FIRST item is gone. Without this, a free-karma
+    // implementation passes everything above. PLAN.md #2's placeholder standard pool pays an
+    // offering with a Rare armor (`deals.json`: offering -> itemRoll armor Rare), so the reward
+    // lands at the END of the pack — and the offered item is not among what remains.
+    const after = r.state.player!.inventory.backpack;
+    expect(after.slice(0, -1)).toEqual(packBefore.slice(1));
+    expect(after.at(-1)?.defId).toBe('gen:Rare:armor');
     expect(r.events.some((e) => e.kind === 'deal-taken')).toBe(true);
   });
 
@@ -257,15 +321,18 @@ describe('leaveOffering — accepting an offering deal, through the real step', 
     // The single most likely silent bug in this unit — `canAfford`'s old `default: return true`
     // would have made this an unlimited, cost-free reverence tap at a free, unlimited hub
     // action. Driven through `step` so it pins the SHIPPING path, not just the pure helper.
-    let r = newRunAtHub(3);
+    // PLAN.md #2: a fresh character carries §22.6's starting kit, so the empty pack this test
+    // needs is made by setting the kit aside — the ONE hand-set field, everything else is `step`.
+    const fresh = newRunAtHub(3);
+    let r = atStart({ ...fresh.state, player: { ...fresh.state.player!, inventory: { ...fresh.state.player!.inventory, backpack: [] } } });
     expect(r.state.player!.inventory.backpack).toEqual([]);
     const before = r.state.karma;
 
     let found = false;
     for (let i = 0; i < 300 && !found; i += 1) {
-      r = step(r.state, { kind: 'menu', choice: 'seek-deal' });
+      r = summon(r);
       const phase = r.state.phase;
-      if (phase.kind !== 'deal') throw new Error('seek-deal did not open a deal');
+      if (phase.kind !== 'deal') throw new Error('summon did not open a deal');
       found = phase.deal.cost.kind === 'offering';
       r = step(r.state, { kind: 'deal-decision', accept: found });
     }
@@ -332,8 +399,9 @@ describe('every cost must actually TAKE something — the rule the two hand-writ
       },
     };
   };
-  /** A reward that grants literally nothing, so it cannot mask a cost that took nothing. */
-  const NOTHING: DealReward = { kind: 'heal', amount: 0 };
+  /** A reward that grants literally nothing, so it cannot mask a cost that took nothing.
+   *  (PLAN.md #2: a zero charge refill — there is no `heal` reward to use for this any more.) */
+  const NOTHING: DealReward = { kind: 'skillCharge', amount: 0 };
 
   it('holds for every DealCost KIND (type-exhaustive)', () => {
     const costs: Record<DealCost['kind'], DealCost> = {
@@ -404,151 +472,54 @@ describe('every cost must actually TAKE something — the rule the two hand-writ
   });
 });
 
-describe('the altar cannot MINT the ledger — an ALL-ACCEPTING seeker, no combat at all', () => {
-  // THE guard finding 1 asked for, written so it can reach the defect: from a fresh hub, the
-  // ONLY input is `seek-deal` followed by accept — every kind, unconditionally. No `continue`,
-  // so no battle, no chest, no loot: every item this character ever holds was sold to it by the
-  // altar. Under the pre-fix code the ledger climbed without bound (7512 after 6000 seeks); it
-  // must now SATURATE, because every item the altar sells is paid for out of a finite,
-  // strictly-decreasing player resource.
+// ---------------------------------------------------------------------------------------------
+// PLAN.md #2 RETIRED the two describes that stood here: "the altar cannot MINT the ledger — an
+// ALL-ACCEPTING seeker, no combat at all" and "leaveOffering — the per-item bound". Both were
+// written against `seek-deal`, a FREE, UNLIMITED hub action (G52), and proved that a player
+// farming it could only buy a ledger bounded by the resources rolled at creation. GAME-DESIGN
+// §22.23 removed the tap itself: a bargain is now a descent ENCOUNTER, one draw of the floor's
+// table, so the number of bargains a run can take is the number the descent offers it —
+// several per floor (§22.25), each paid for with an encounter slot a fight or a chest or a rest
+// could have filled. The farming scenario cannot be expressed any more, and the guard below
+// states what replaced it.
+//
+// ⚠ A CONSEQUENCE, RECORDED FOR THE AUTHOR, NOT FIXED: the plan's placeholder `standard` pool
+// pays an offering with a Rare ARMOR (`offering -> itemRoll armor Rare`). That trade is
+// ITEM-NEUTRAL — the pack loses its first item and gains an armor — so each offering bargain
+// buys +1 restraint / +1 reverence (x2 on floor 4) at the price of whatever sits first in the
+// pack, and the ledger a run can buy scales with the bargains it meets rather than saturating
+// at its creation resources. §22.25 wants karma to "move faster through bargains", so this may
+// be exactly right; every magnitude in `deals.json` is #2's placeholder and #13's to author.
+// ---------------------------------------------------------------------------------------------
 
-  /** Seek and accept `n` times through the real `step`, tallying what was actually taken. */
-  function farm(from: StepResult, n: number, tally: Map<DealCost['kind'], number>) {
-    let r = from;
-    let peakPack = 0;
-    for (let i = 0; i < n; i += 1) {
-      r = step(r.state, { kind: 'menu', choice: 'seek-deal' });
-      const phase = r.state.phase;
-      if (phase.kind !== 'deal') throw new Error('seek-deal did not open a deal');
-      const kind = phase.deal.cost.kind;
-      r = step(r.state, { kind: 'deal-decision', accept: true });
-      if (r.events.some((e) => e.kind === 'deal-taken')) {
-        tally.set(kind, (tally.get(kind) ?? 0) + 1);
-      }
-      peakPack = Math.max(peakPack, r.state.player!.inventory.backpack.length);
-    }
-    return { result: r, peakPack };
-  }
-
-  const SEEKS = 600;
-
-  /** One whole free-farming session: 2 x SEEKS accepts, with the halfway ledger kept. */
-  function session(seed: number) {
-    const hub = newRunAtHub(seed);
-    const start = hub.state.player!;
-    const taken = new Map<DealCost['kind'], number>();
-    const half = farm(hub, SEEKS, taken);
-    const full = farm(half.result, SEEKS, taken);
-    return {
-      seed,
-      start,
-      taken,
-      peakPack: half.peakPack,
-      halfKarma: half.result.state.karma,
-      karma: full.result.state.karma,
-      end: full.result.state.player!,
-    };
-  }
-
-  // Six independent streams, not one — a single seed's draw order can miss a template entirely
-  // (seed 13 never draws a whisper before the pool flips), and a guard that depends on one
-  // lucky stream is a guard that stopped covering what it names.
-  const SESSIONS = [1, 2, 3, 4, 5, 6].map(session);
-
-  it('the scenario really reaches the loop — otherwise this whole describe proves nothing', () => {
-    // The hollow-test guard, made explicit. If the seeker never bought an item off the altar and
-    // never turned one into an offering, everything below would hold trivially.
-    for (const s of SESSIONS) {
-      expect(s.start.inventory.backpack, `seed ${s.seed} starts with nothing`).toEqual([]);
-      expect(s.peakPack, `seed ${s.seed}: the altar never sold it an item`).toBeGreaterThan(0);
-      expect(s.taken.get('offering') ?? 0, `seed ${s.seed}: no offering made`).toBeGreaterThan(0);
-      expect(
-        (s.taken.get('statPoint') ?? 0) + (s.taken.get('skillCharge') ?? 0),
-        `seed ${s.seed}: neither item-selling template was taken`,
-      ).toBeGreaterThan(0);
-      expect(s.karma.reverenceDesecration, `seed ${s.seed}: the mint path never ran`).toBeGreaterThan(0);
-      expect(s.taken.get('whisper') ?? 0, `seed ${s.seed}: no whisper taken`).toBeGreaterThan(0);
-    }
-    expect(SESSIONS).toHaveLength(6);
+describe('a bargain cannot be summoned — the ledger grows only with the bargains the descent offers', () => {
+  it('the hub has no bargain input: type-level, and a stray one is a rejected no-op', () => {
+    type MenuChoice = Extract<GameInput, { kind: 'menu' }>['choice'];
+    const noSeek: 'seek-deal' extends MenuChoice ? false : true = true;
+    expect(noSeek).toBe(true);
+    const hub = newRunAtHub(1);
+    const r = step(hub.state, { kind: 'menu', choice: 'seek-deal' } as unknown as GameInput);
+    expect(r.state).toBe(hub.state); // the reducer is total: an unknown menu choice changes nothing
   });
 
-  it('the mintable half of the ledger SATURATES — twice the seeks buy no more karma', () => {
-    // The sharpest form of "not farmable": doubling the effort adds nothing. Under the pre-fix
-    // code this is simply false — the ledger grew linearly with the seek count, forever.
-    for (const s of SESSIONS) {
-      expect(s.karma.reverenceDesecration, `seed ${s.seed}`).toBe(s.halfKarma.reverenceDesecration);
-      expect(s.karma.restraintGreed, `seed ${s.seed}`).toBe(s.halfKarma.restraintGreed);
-    }
-  });
-
-  it('and it is bounded by what the character actually rolled, derived by hand', () => {
-    // Every item the altar sells is bought with either ONE skill charge (`standard[1]` -> a
-    // rolled ring) or ONE CHA point above `MIN_STAT` (`grace[1]` -> mirror-shard); the only
-    // charge-GRANTING template (`standard[2]`) itself costs a CHA point and grants at most 2.
-    // So every altar item traces back to a starting charge or a CHA point, and a CHA point
-    // yields at most 2 charges:
-    //     itemsFromAltar <= startCharges + 2 * (startCHA - MIN_STAT)
-    // The backpack began empty and nothing was fought, so every offering spent an altar item,
-    // and each offering is exactly +1 reverence and +1 restraint.
-    const MIN_STAT = 1; // deal.ts's documented stat floor
-    for (const s of SESSIONS) {
-      const bound = s.start.skillCharges + 2 * (s.start.stats.CHA - MIN_STAT);
-      const offerings = s.taken.get('offering') ?? 0;
-      expect(s.karma.reverenceDesecration, `seed ${s.seed}`).toBe(offerings);
-      expect(s.karma.restraintGreed, `seed ${s.seed}`).toBe(offerings);
-      expect(s.karma.reverenceDesecration, `seed ${s.seed} bound ${bound}`).toBeLessThanOrEqual(bound);
-      expect(s.karma.mercyCruelty, `seed ${s.seed}: nothing was fought`).toBe(0);
-      // The whisper is free and repeatable (G52's shape), so clarity falls once per whisper —
-      // a COST, dragging the total ledger DOWN. The exact identity pins the sign and magnitude.
-      expect(s.karma.clarityDelusion, `seed ${s.seed}`).toBe(-(s.taken.get('whisper') ?? 0));
-    }
-  });
-
-  it('the character really paid: CHA is drained and the pack empties out', () => {
-    for (const s of SESSIONS) {
-      expect(s.end.stats.CHA, `seed ${s.seed}`).toBeLessThan(s.start.stats.CHA);
-      expect(s.end.inventory.backpack, `seed ${s.seed}: every bought item was spent`).toEqual([]);
-      // …and every other stat is untouched — only the CHA the shipped templates ask for.
-      for (const key of STAT_KEYS) {
-        if (key === 'CHA') continue;
-        expect(s.end.stats[key], `seed ${s.seed}/${key}`).toBe(s.start.stats[key]);
+  it('one accepted bargain moves the weighted ledger UP by at most 4 (x the floor multiplier)', () => {
+    // The largest upward move any shipped cost makes is the offering: +1 restraint (x1) and
+    // +1 reverence (x3) = +4 on the §7 ledger. Asserted over every template the shipped data
+    // can build, on floor 1 (x1) and floor 4 (x2), so a future template that mints faster
+    // than an offering goes red here.
+    for (const floor of [1, 4] as const) {
+      for (const karma of [createKarma(), { ...createKarma(), reverenceDesecration: 5 }, { ...createKarma(), restraintGreed: -5 }]) {
+        for (let seed = 1; seed <= 120; seed += 1) {
+          const deal = buildDeal(karma, floor, mulberry32(seed));
+          const rich = { ...newRunAtHub(7).state.player!, hp: 40, maxHp: 40, skillCharges: 5 };
+          const withItem = { ...rich, inventory: { ...rich.inventory, backpack: [{ defId: 'Jaaj Sword 1' }] } };
+          if (!canAfford(withItem, deal.cost)) continue;
+          const weight = floor === 4 ? 2 : 1;
+          const r = applyDeal(withItem, karma, deal, weight);
+          expect(designLedger(r.karma) - designLedger(karma), `${deal.pool}/${deal.cost.kind}`).toBeLessThanOrEqual(4 * weight);
+        }
       }
     }
-  });
-});
-
-describe('leaveOffering — the per-item bound (true, but NOT the farmability guard: see above)', () => {
-  it('N items buy exactly N reverence, and the N+1th offering is refused', () => {
-    // `seek-deal` is a free, unlimited hub action (FINDINGS G52), so anything it grants that is
-    // not paid for in a finite resource is farmable to any ledger the player likes. The
-    // offering's price is a backpack item, the altar never hands an item back, so the item
-    // count strictly falls and the tap runs dry. This is the bound, asserted rather than
-    // asserted-about.
-    const N = 4;
-    const hub = hubWithItems(1, N);
-    const owned = hub.state.player!.inventory.backpack.length;
-    expect(owned).toBeGreaterThanOrEqual(N);
-    const before = hub.state.karma.reverenceDesecration;
-
-    let r = hub;
-    for (let i = 0; i < owned; i += 1) r = seekAndAccept(r, 'offering');
-    expect(r.state.karma.reverenceDesecration).toBe(before + owned);
-    expect(r.state.player!.inventory.backpack).toEqual([]);
-
-    // One more time: the altar refuses, and the ledger does not move.
-    const stalled = r.state.karma;
-    let refused = false;
-    for (let i = 0; i < 300 && !refused; i += 1) {
-      r = step(r.state, { kind: 'menu', choice: 'seek-deal' });
-      const phase = r.state.phase;
-      if (phase.kind !== 'deal') throw new Error('seek-deal did not open a deal');
-      const isOffering = phase.deal.cost.kind === 'offering';
-      r = step(r.state, { kind: 'deal-decision', accept: isOffering });
-      refused = isOffering;
-    }
-    expect(refused, 'the altar never offered again — the bound proved nothing').toBe(true);
-    expect(r.events.map((e) => e.kind)).toContain('deal-unaffordable');
-    expect(r.state.karma).toEqual(stalled);
   });
 });
 
@@ -556,14 +527,18 @@ describe('embraceWhisper — accepting a whisper deal, through the real step', (
   it('moves clarity -1 and nothing else, and costs nothing material', () => {
     const hub = newRunAtHub(5);
     const player = hub.state.player!;
+    const packBefore = player.inventory.backpack; // §22.6's starting kit (PLAN.md #2)
     const r = seekAndAccept(hub, 'whisper');
 
     // KARMA_DELTAS.embraceWhisper = { clarityDelusion: -1 }. The SIGN is the assertion:
     // karma.ts's convention is positive = virtue, and heeding a whisper is the shadow pole.
     expect(r.state.karma).toEqual({ ...createKarma(), clarityDelusion: -1 });
-    expect(r.state.player!.inventory.backpack).toEqual([]);
-    expect(r.state.player!.stats).toEqual(player.stats);
+    expect(r.state.player!.inventory.backpack).toEqual(packBefore); // nothing taken from the pack
+    // Nothing material was TAKEN. The only change is the reward PLAN.md #2's standard pool pays
+    // for a whisper — +1 INT (`deals.json`: whisper -> statPoint INT; no bargain heals, §22.25).
+    expect(r.state.player!.stats).toEqual({ ...player.stats, INT: player.stats.INT + 1 });
     expect(r.state.player!.maxHp).toBe(player.maxHp);
+    expect(r.state.player!.hp).toBe(player.hp);
   });
 });
 
@@ -584,15 +559,23 @@ describe('honorDead — sparing The Judged, through the real step', () => {
     expect(otherWeighted.length).toBeGreaterThan(0); // the control set is non-empty too
   });
 
-  it('moves BOTH mercy +1 and reverence +1 in the SAME step, every time', () => {
+  // PLAN.md #2 (GAME-DESIGN §8 / §22.24): karma earned on FLOOR 4 counts DOUBLE. The multiplier
+  // is written here from the ruling — place 3 is floor 4 — not read from `floors.json`.
+  const weight = (place: number): number => (place === 3 ? 2 : 1);
+
+  it('moves BOTH mercy and reverence in the SAME step, every time (x2 on floor 4)', () => {
     for (const o of judged) {
+      const w = weight(o.place);
       expect(karmaDelta(o.before, o.after)).toEqual({
-        mercyCruelty: 1,
+        mercyCruelty: 1 * w,
         restraintGreed: 0,
-        reverenceDesecration: 1,
+        reverenceDesecration: 1 * w,
         clarityDelusion: 0,
       });
     }
+    // The Judged are a floor-4 family, so every observed Judged spare really is doubled —
+    // asserted, or the x2 above would be satisfied by a weight that is always 1.
+    expect(judged.every((o) => o.place === 3)).toBe(true);
   });
 
   it('every OTHER ⚖ family still spares as mercy alone — the family data carries the change', () => {
@@ -600,7 +583,7 @@ describe('honorDead — sparing The Judged, through the real step', () => {
     // been taught "a spare also honours the dead", this goes red.
     for (const o of otherWeighted) {
       expect(karmaDelta(o.before, o.after), o.familyId).toEqual({
-        mercyCruelty: 1,
+        mercyCruelty: 1 * weight(o.place),
         restraintGreed: 0,
         reverenceDesecration: 0,
         clarityDelusion: 0,
@@ -649,9 +632,9 @@ describe('the grace deal pool — and mirror-shard with it — is reachable now'
     // …and re-seeking really draws the grace pool's `mirror-shard` template.
     let took = false;
     for (let i = 0; i < 120 && !took; i += 1) {
-      r = step(r.state, { kind: 'menu', choice: 'seek-deal' });
+      r = summon(r);
       const phase = r.state.phase;
-      if (phase.kind !== 'deal') throw new Error('seek-deal did not open a deal');
+      if (phase.kind !== 'deal') throw new Error('summon did not open a deal');
       expect(phase.deal.pool).toBe('grace');
       const reward = phase.deal.reward;
       took = reward.kind === 'item' && reward.instance.defId === 'mirror-shard';
@@ -768,8 +751,8 @@ describe('the reverence axis moves in BOTH directions now', () => {
 // exactly the event #10a newly made carry a second axis.
 // =============================================================================================
 
-const AXIS_VOCABULARY =
-  /karma|nature|mercy|cruel|greed|restraint|reveren|desecration|clarity|delusion/i;
+// The word list is SHARED (FIX ROUND 1, F4): `karmaVocabulary.testutil.ts`, imported by every
+// karma guard, as stems — "merciful", "restrained", "deluded", "karmic" all passed the old words.
 
 /** Every string a deal reaches a human or the model through. */
 function surfacesOf(deal: SacrificeDeal): string[] {
@@ -818,7 +801,6 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
   };
   const ONE_OF_EACH_REWARD: Record<DealReward['kind'], DealReward> = {
     item: { kind: 'item', instance: { defId: 'mirror-shard' } },
-    heal: { kind: 'heal', amount: 12 },
     statPoint: { kind: 'statPoint', stat: 'STR' },
     skillCharge: { kind: 'skillCharge', amount: 2 },
   };
@@ -834,7 +816,7 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
     for (const [kind, reward] of Object.entries(ONE_OF_EACH_REWARD)) {
       expect(describeReward(reward), kind).not.toMatch(AXIS_VOCABULARY);
     }
-    expect(Object.keys(ONE_OF_EACH_REWARD)).toHaveLength(4);
+    expect(Object.keys(ONE_OF_EACH_REWARD)).toHaveLength(3); // PLAN.md #2: no heal (§22.25)
   });
 
   it('every deal the SHIPPED data can actually build, across all three pools', () => {
@@ -894,11 +876,13 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
     const hub = hubWithItems(1, 1);
     emitted.push(...seekAndAccept(hub, 'offering').events);
     emitted.push(...seekAndAccept(newRunAtHub(5), 'whisper').events);
-    let r = newRunAtHub(3);
+    // The refused offering needs an EMPTY pack — the starting kit set aside, as above.
+    const fresh3 = newRunAtHub(3);
+    let r = atStart({ ...fresh3.state, player: { ...fresh3.state.player!, inventory: { ...fresh3.state.player!.inventory, backpack: [] } } });
     for (let i = 0; i < 300; i += 1) {
-      r = step(r.state, { kind: 'menu', choice: 'seek-deal' });
+      r = summon(r);
       const phase = r.state.phase;
-      if (phase.kind !== 'deal') throw new Error('seek-deal did not open a deal');
+      if (phase.kind !== 'deal') throw new Error('summon did not open a deal');
       emitted.push(...r.events);
       const isOffering = phase.deal.cost.kind === 'offering';
       r = step(r.state, { kind: 'deal-decision', accept: isOffering });
@@ -991,6 +975,140 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
     const AXIS_KEYS = /mercyCruelty|restraintGreed|reverenceDesecration|clarityDelusion/;
     expect(JSON.stringify(seen)).not.toMatch(AXIS_KEYS);
   });
+
+  // ---- PLAN.md #2 (AC-24): the rule reaches the floors' new surfaces ----------------------
+  //
+  // The descent added nine event kinds and the first karma-to-prompt channel (the rest scene's
+  // tone words). Every one of them is held to the SAME word list, with the same single
+  // structural exclusion (authored proper nouns), and nothing else.
+
+  it('EVERY event kind — one sample of each, on all three surfaces (F4: ordinary events too)', () => {
+    // FIX ROUND 1, F4: the sweeps above cover the karma-recording steps and the floors' new
+    // kinds; "merciful" planted in the VICTORY log line and "merciless" in the victory fact line
+    // fired none of them. This one reads the type-exhaustive table narrationCoverage proves
+    // complete, so every kind — today's and any added later — is scanned by the shared list.
+    // The ONE structural exclusion, as everywhere in this block: authored proper nouns. Names
+    // become NEUTRAL_NAME, and a consumable's catalog id becomes a clean catalog item (the
+    // sample uses "Clarity Draught", which §22.13 kept on purpose) — so what is scanned is
+    // the TEMPLATE around them, which is where a leak is written.
+    const neutral = (e: GameEvent): GameEvent => {
+      const n = neutralizeFloorNouns(e);
+      return 'itemId' in n ? { ...n, itemId: 'suture-kit' } : n;
+    };
+    const kinds = Object.keys(ONE_OF_EVERY_EVENT) as GameEvent['kind'][];
+    expect(kinds.length).toBeGreaterThan(60); // the whole union, not a handful
+    for (const kind of kinds) {
+      const e = neutral(ONE_OF_EVERY_EVENT[kind] as GameEvent);
+      // The (neutralised) sample DATA is clean, so any hit below is the TEMPLATE speaking.
+      expect(JSON.stringify(e), `${kind} sample data`).not.toMatch(AXIS_VOCABULARY);
+      expect(formatEvent(e), `${kind} player log`).not.toMatch(AXIS_VOCABULARY);
+      expect(describeEvent(e), `${kind} model fact`).not.toMatch(AXIS_VOCABULARY);
+    }
+    // The substitution is not a silent no-op: it reached the rendered consumable line.
+    expect(formatEvent(neutral(ONE_OF_EVERY_EVENT['consumable-used']))).toContain('Suture Kit');
+  });
+
+  it('the TONE vocabulary obeys the rule — the one channel that is derived FROM the ledger', () => {
+    expect(ALL_TONE_WORDS.length).toBe(8);
+    for (const w of ALL_TONE_WORDS) expect(w, w).not.toMatch(AXIS_VOCABULARY);
+  });
+
+  /** Item names are authored proper nouns too ("Clarity Draught", §22.13) — same exclusion. */
+  function neutralizeFloorNouns(e: GameEvent): GameEvent {
+    const n = neutralizeProperNouns(e);
+    return 'name' in n ? { ...n, name: NEUTRAL_NAME } : n;
+  }
+  function floorSurfaces(e: GameEvent): string[] {
+    const n = neutralizeFloorNouns(e);
+    return [JSON.stringify(n), formatEvent(n), describeEvent(n)];
+  }
+
+  type FloorKind =
+    | 'rest-found'
+    | 'rest-taken'
+    | 'illusion-dispelled'
+    | 'illusion-struck'
+    | 'floor-drain'
+    | 'skills-warped'
+    | 'loot-left-behind'
+    | 'deal-needs-room'
+    | 'item-discarded';
+
+  it('every event kind the floors added — one of each, every template scanned', () => {
+    // Mapped over the kind union, so each sample must have its kind's real shape.
+    const ONE_OF_EACH: { [K in FloorKind]: Extract<GameEvent, { kind: K }> } = {
+      'rest-found': { kind: 'rest-found', floor: 2, place: restBrief(2).place, briefId: 'floor-2', woundsClosed: true, conditionsEased: true },
+      'rest-taken': { kind: 'rest-taken', hpRestored: 9, hp: 30, maxHp: 30 },
+      'illusion-dispelled': { kind: 'illusion-dispelled', natural: 14, modifier: 1, total: 15, dc: 13 },
+      'illusion-struck': { kind: 'illusion-struck' },
+      'floor-drain': { kind: 'floor-drain', resource: 'skillCharge', amount: 1 },
+      'skills-warped': { kind: 'skills-warped', count: 4 },
+      'loot-left-behind': { kind: 'loot-left-behind', name: 'Mirror Shard', rarity: 'Rare' },
+      'deal-needs-room': { kind: 'deal-needs-room', reward: 'a Rare ring' },
+      'item-discarded': { kind: 'item-discarded', name: 'Mirror Shard', rarity: 'Common' },
+    };
+    expect(Object.keys(ONE_OF_EACH)).toHaveLength(9);
+    for (const e of Object.values(ONE_OF_EACH)) {
+      for (const s of floorSurfaces(e)) expect(s, e.kind).not.toMatch(AXIS_VOCABULARY);
+    }
+  });
+
+  it('every such event REAL runs emit — through the shipped step, across floors 1..5', () => {
+    // Played, not hand-written: the payloads (rest places, left-behind item names, dispel
+    // numbers) are whatever the engine really produced. Deterministic seeds; the loop stops
+    // once every kind the descent reliably produces has been seen.
+    // `loot-left-behind` is NOT waited for here: a full pack is a late-descent event (1 run in
+    // 150 in seeds 1..30), so it vanished under a DC change and turned this red for a BALANCE
+    // reason (FIX ROUND 1). It is CONSTRUCTED below instead, through the same real step.
+    const MUST_SEE: readonly FloorKind[] = [
+      'rest-found',
+      'rest-taken',
+      'illusion-dispelled',
+      'illusion-struck',
+      'floor-drain',
+      'skills-warped',
+    ];
+    const FLOOR_KINDS = new Set<string>([...MUST_SEE, 'loot-left-behind', 'deal-needs-room', 'item-discarded']);
+    const swept: GameEvent[] = [];
+    const seenKinds = new Set<string>();
+    for (let seed = 1; seed <= 30 && !MUST_SEE.every((k) => seenKinds.has(k)); seed += 1) {
+      for (const classId of ALL_CLASSES) {
+        const policy = heuristicPolicy(classId);
+        let r = newRunAtHub(seed, classId);
+        for (let n = 0; r.awaiting !== 'game-over' && n < 20_000; n += 1) {
+          r = step(r.state, policy(r));
+          for (const e of r.events) {
+            seenKinds.add(e.kind);
+            if (FLOOR_KINDS.has(e.kind)) {
+              swept.push(e);
+            }
+          }
+        }
+      }
+    }
+    for (const k of MUST_SEE) expect(seenKinds.has(k), `no real run emitted '${k}'`).toBe(true);
+
+    // A chest found with a FULL pack, through the real step: the seed is chosen by the pure
+    // encounter pick (floor 1, a chest), so the event is guaranteed rather than hoped for.
+    const hub = newRunAtHub(4).state;
+    const full: GameState = {
+      ...hub,
+      player: { ...hub.player!, inventory: { ...hub.player!.inventory, backpack: Array.from({ length: 12 }, () => ({ defId: 'antidote' })) } },
+    };
+    let chestSeed = 0;
+    while (selectEncounter(createRng(chestSeed).rng, 1) !== 'chest') chestSeed += 1;
+    const chest = step({ ...full, rngState: chestSeed }, { kind: 'menu', choice: 'continue' });
+    expect(chest.events.some((e) => e.kind === 'loot-left-behind'), 'the constructed chest left nothing behind').toBe(true);
+    swept.push(...chest.events.filter((e) => FLOOR_KINDS.has(e.kind)));
+
+    for (const e of swept) {
+      for (const s of floorSurfaces(e)) expect(s, e.kind).not.toMatch(AXIS_VOCABULARY);
+    }
+    // The item-name exclusion is not a silent no-op: it reached the rendered sentence.
+    const left = swept.find((e) => e.kind === 'loot-left-behind')!;
+    expect(formatEvent(neutralizeFloorNouns(left))).toContain(NEUTRAL_NAME);
+    expect(describeEvent(neutralizeFloorNouns(left))).toContain(NEUTRAL_NAME);
+  });
 });
 
 // =============================================================================================
@@ -998,9 +1116,9 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
 // =============================================================================================
 
 describe('the save format is untouched by #10a', () => {
-  it('SAVE_VERSION is still 8 and a fresh game is still version 8', () => {
-    expect(SAVE_VERSION).toBe(8);
-    expect(createGame(1).version).toBe(8);
+  it('SAVE_VERSION is the current one and a fresh game carries it (#10a bumped nothing; #2 did, to 9)', () => {
+    expect(SAVE_VERSION).toBe(9);
+    expect(createGame(1).version).toBe(9);
   });
 
   it('a state parked on an OFFERING deal round-trips through encode/decode deep-equal', () => {
@@ -1011,9 +1129,9 @@ describe('the save format is untouched by #10a', () => {
     let r = hub;
     let parked: GameState | null = null;
     for (let i = 0; i < 300 && parked === null; i += 1) {
-      r = step(r.state, { kind: 'menu', choice: 'seek-deal' });
+      r = summon(r);
       const phase = r.state.phase;
-      if (phase.kind !== 'deal') throw new Error('seek-deal did not open a deal');
+      if (phase.kind !== 'deal') throw new Error('summon did not open a deal');
       if (phase.deal.cost.kind === 'offering') parked = r.state;
       else r = step(r.state, { kind: 'deal-decision', accept: false });
     }
@@ -1068,24 +1186,13 @@ function designLedger(k: KarmaState): number {
 
 /**
  * A test-local PENITENT policy: the shipped `mercifulPolicy` (so runs are exactly as strong as
- * the measured merciful baseline — the spare/skill/potion play is not re-invented here), with
- * two overrides. It seeks the altar while it still has something to give and its seek budget
- * holds, and it accepts ONLY `offering` deals — never a whisper, never a desecration. The
- * budget is what keeps a run terminating: seeking earns no XP, so an unbounded seeker never
- * advances an act.
+ * the measured merciful baseline — the spare/skill play is not re-invented here), with one
+ * override: of the bargains that FIND it on the descent (PLAN.md #2 — it can no longer seek
+ * one), it accepts ONLY `offering` deals — never a whisper, never a desecration.
  */
-function penitentPolicy(classId: PlayerClass, maxSeeks: number): SimPolicy {
+function penitentPolicy(classId: PlayerClass): SimPolicy {
   const base = mercifulPolicy(classId);
-  let seeks = 0;
   return (res) => {
-    if (res.awaiting === 'main-menu') {
-      const pack = res.state.player?.inventory.backpack.length ?? 0;
-      if (seeks < maxSeeks && pack > 0) {
-        seeks += 1;
-        return { kind: 'menu', choice: 'seek-deal' };
-      }
-      return base(res);
-    }
     if (res.awaiting === 'deal-decision') {
       const phase = res.state.phase;
       return {
@@ -1105,6 +1212,15 @@ interface RunRecord {
   verdict: 'grace' | 'cast-down' | null;
   dealOffers: number;
   spares: number;
+  /** PLAN.md #2: illusions seen through on floor 2 — each records `seeThroughIllusion`. */
+  dispels: number;
+  /** PLAN.md #2: The Judged killed, and the floor it happened on (place 3 counts double). */
+  judgedKillPlaces: number[];
+  /** PLAN.md #2: the floor (`place`) of every whisper bargain taken — -1 clarity, x2 on floor 4. */
+  whisperPlaces: number[];
+  /** The ledger AT the act-4 reckoning — what the verdict actually read. (PLAN.md #2: bargains on
+   *  floor 5 can raise the ledger after a cast-down, so the final vector is not what was judged.) */
+  karmaAtVerdict: KarmaState | null;
 }
 
 /** Play one run to its terminal state through the real `step`, recording what it did. */
@@ -1113,18 +1229,30 @@ function playRun(seed: number, classId: PlayerClass, policy: SimPolicy, guard = 
   let verdict: 'grace' | 'cast-down' | null = null;
   let dealOffers = 0;
   let spares = 0;
+  let dispels = 0;
+  const judgedKillPlaces: number[] = [];
+  const whisperPlaces: number[] = [];
+  let karmaAtVerdict: KarmaState | null = null;
   let steps = 0;
   while (r.awaiting !== 'game-over' && steps < guard) {
+    const phase = r.state.phase;
+    const facing = phase.kind === 'battle' ? phase.battle.enemy.familyId : null;
+    const offered = phase.kind === 'deal' ? phase.deal.cost.kind : null;
+    const place = r.state.place;
     r = step(r.state, policy(r));
+    if (offered === 'whisper' && r.events.some((e) => e.kind === 'deal-taken')) whisperPlaces.push(place);
+    if (r.events.some((e) => e.kind === 'verdict')) karmaAtVerdict = r.state.karma;
+    if (facing === 'theJudged' && r.state.phase.kind === 'battle-victory') judgedKillPlaces.push(place);
     steps += 1;
     for (const e of r.events) {
       if (e.kind === 'verdict') verdict = e.outcome;
       else if (e.kind === 'deal-offer') dealOffers += 1;
       else if (e.kind === 'spared') spares += 1;
+      else if (e.kind === 'illusion-dispelled') dispels += 1;
     }
   }
   expect(steps, `run ${classId}/${seed} hit the step guard`).toBeLessThan(guard);
-  return { seed, classId, karma: r.state.karma, verdict, dealOffers, spares };
+  return { seed, classId, karma: r.state.karma, verdict, dealOffers, spares, dispels, judgedKillPlaces, whisperPlaces, karmaAtVerdict };
 }
 
 function batch(seeds: number[], classes: PlayerClass[], policy: (c: PlayerClass) => SimPolicy) {
@@ -1137,7 +1265,7 @@ const SEEDS_60 = Array.from({ length: 60 }, (_, i) => i + 1);
 const SEEDS_20 = Array.from({ length: 20 }, (_, i) => i + 1);
 
 // Each batch is played ONCE and shared, so the suite pays for 320 runs rather than 800.
-const PENITENT = batch(SEEDS_60, ['Penitent', 'Enforcer'], (c) => penitentPolicy(c, 60));
+const PENITENT = batch(SEEDS_60, ['Penitent', 'Enforcer'], (c) => penitentPolicy(c));
 const HEURISTIC = batch(SEEDS_20, [...ALL_CLASSES], heuristicPolicy);
 const MERCIFUL = batch(SEEDS_20, [...ALL_CLASSES], mercifulPolicy);
 
@@ -1155,20 +1283,19 @@ describe('the headline — a penitent run finishes net-positive and is granted g
     // §22.16, asserted as a BICONDITIONAL against the hand-written weights. The penitent batch
     // supplies the positive side; the shipped `heuristicPolicy` (kills everything, spares
     // nothing) supplies the negative side, so neither half of the claim is vacuous.
-    for (const r of verdicts) {
-      expect(designLedger(r.karma) > 0, `penitent ${r.classId}/${r.seed}`).toBe(
-        r.verdict === 'grace',
-      );
+    //
+    // PLAN.md #2: judged on the ledger AT THE RECKONING (`karmaAtVerdict`), which is what the
+    // verdict read. The final ledger is no longer that number: bargains find a cast-down run on
+    // floor 5 too, and an offering there raises it after the judgement was made. And the
+    // heuristic now ACCEPTS bargains (offerings included), so it is no longer guaranteed to be
+    // the negative side — the non-vacuity is asserted on the pooled verdicts instead.
+    const all = [...verdicts, ...HEURISTIC.filter((r) => r.verdict !== null)];
+    for (const r of all) {
+      expect(designLedger(r.karmaAtVerdict!) > 0, `${r.classId}/${r.seed}`).toBe(r.verdict === 'grace');
     }
-    const cruelVerdicts = HEURISTIC.filter((r) => r.verdict !== null);
-    for (const r of cruelVerdicts) {
-      expect(designLedger(r.karma) > 0, `heuristic ${r.classId}/${r.seed}`).toBe(
-        r.verdict === 'grace',
-      );
-    }
-    expect(verdicts.some((r) => designLedger(r.karma) > 0)).toBe(true);
-    expect(cruelVerdicts.length).toBeGreaterThanOrEqual(3);
-    expect(cruelVerdicts.every((r) => designLedger(r.karma) <= 0)).toBe(true);
+    expect(all.some((r) => r.verdict === 'grace' && designLedger(r.karmaAtVerdict!) > 0)).toBe(true);
+    expect(all.some((r) => r.verdict === 'cast-down' && designLedger(r.karmaAtVerdict!) <= 0)).toBe(true);
+    expect(all.length).toBeGreaterThanOrEqual(6);
   });
 
   it('a run can now END with a POSITIVE reverence axis — the ledger nothing could produce before', () => {
@@ -1201,13 +1328,13 @@ describe('the headline — a penitent run finishes net-positive and is granted g
 //    counters are broken.
 // =============================================================================================
 
-describe('the balance anchor cannot see this unit', () => {
-  it('the shipped heuristic policy never opens a deal and never spares', () => {
-    // `sim.ts`: `main-menu` always answers `continue` ("the shipped policies never seek a
-    // deal"), and `chooseBattleAction` reaches `'spare'` only under `if (merciful && …)`. So
-    // `buildDeal` is never called (deals.json unread) and `game.ts`'s `spared` branch never
-    // runs (enemyFamilies.json's onSpare unread) — the two data files this unit edits.
-    expect(HEURISTIC.reduce((a, r) => a + r.dealOffers, 0)).toBe(0);
+// PLAN.md #2 retired #10a's "the balance anchor cannot see this unit" claim ON PURPOSE: it held
+// because the shipped heuristic never opened a deal, and bargains now FIND every policy as a
+// descent encounter (§22.23) — that is G48's own fix (the sim reaches the deal family). What is
+// kept is the positive-control shape: each policy really does what its label says.
+describe('bargains find every policy now; the controls still hold', () => {
+  it('the shipped heuristic MEETS bargains (G48) and still never spares', () => {
+    expect(HEURISTIC.reduce((a, r) => a + r.dealOffers, 0)).toBeGreaterThan(0);
     expect(HEURISTIC.reduce((a, r) => a + r.spares, 0)).toBe(0);
     expect(HEURISTIC.length).toBe(100); // the sweep really ran
   });
@@ -1216,19 +1343,19 @@ describe('the balance anchor cannot see this unit', () => {
     expect(MERCIFUL.reduce((a, r) => a + r.spares, 0)).toBeGreaterThan(0);
   });
 
-  it('POSITIVE CONTROL — the penitent policy DOES open deals', () => {
+  it('POSITIVE CONTROL — the penitent policy DOES meet deals', () => {
     expect(PENITENT.reduce((a, r) => a + r.dealOffers, 0)).toBeGreaterThan(0);
   });
 
-  it('under the heuristic policy the three axes this unit touches never move at all', () => {
-    // The sharpest statement of inertness: reverence, restraint and clarity stay exactly 0
-    // across every heuristic run, so no draw is added, no outcome flips, and the win-rate the
-    // anchor measures cannot move. `mercyCruelty` moves (kills) and always did.
+  it('under the heuristic, clarity moves ONLY by dispels and whispers — never by an illusion it did not see through', () => {
+    // Clarity has exactly two engine inputs: +1 per illusion seen through (floor 2, x1) and -1
+    // per whisper heeded. Counted from the run's own events, so the identity pins both.
+    // Dispels happen on floor 2 (x1); a whisper on floor 4 (place 3) counts double.
     for (const r of HEURISTIC) {
-      expect(r.karma.reverenceDesecration, `${r.classId}/${r.seed}`).toBe(0);
-      expect(r.karma.restraintGreed, `${r.classId}/${r.seed}`).toBe(0);
-      expect(r.karma.clarityDelusion, `${r.classId}/${r.seed}`).toBe(0);
+      const whispered = r.whisperPlaces.reduce((a, place) => a + (place === 3 ? 2 : 1), 0);
+      expect(r.karma.clarityDelusion, `${r.classId}/${r.seed}`).toBe(r.dispels - whispered);
     }
+    expect(HEURISTIC.reduce((a, r) => a + r.dispels, 0)).toBeGreaterThan(0);
   });
 });
 

@@ -4,6 +4,11 @@
 // seed of the N2 `src/llm` runtime; it will grow, e.g. grammar-constrained choices).
 import type { GameEvent } from '../game/gameEvent.ts';
 import type { GameState } from '../game/game.ts';
+import type { Player } from '../game/player.ts';
+import { restBrief } from '../game/restBrief.ts';
+import { floorOf } from '../game/floors.ts';
+import { summarizeLoot } from '../game/loot.ts';
+import { karmaTone } from './tone.ts';
 
 export const VOID_PERSONA =
   'You are the Void — the narrator of a dark, dreamlike descent RPG about ' +
@@ -22,7 +27,7 @@ const FLOORS = [
 /**
  * One short factual clause describing an event, or '' if it needs no narration.
  *
- * TOTAL over the `GameEvent` union — every one of its 63 kinds has an explicit case, and
+ * TOTAL over the `GameEvent` union — every one of its kinds (counted in `narrationCoverage.test.ts`) has an explicit case, and
  * the `default:` branch is a compile-time exhaustiveness check (G13). Before that check,
  * 34 kinds fell through a silent `default: return ''`, including `skill-cast`: the
  * player's own class action never reached the model, so on a cast round the only
@@ -43,9 +48,10 @@ const FLOORS = [
  * `src/data/story.json`, and is #13's): terse, second person for the player, "The enemy"
  * for the foe, no karma, and never the player's name (G47 / §22.1, WORLD.md §8).
  * `WORLD.md` §0 also reserves two words — *hollow* and *made whole* — so no fact literal
- * added here may spend them. (Two PRE-EXISTING lines below do: `chest-loot`'s "it is
- * hollow" and `rest-full`'s "already whole". Those are FINDINGS.md C1 and belong to #13;
- * they are left exactly as they shipped rather than silently rewritten here.)
+ * added here may spend them. (One PRE-EXISTING line below does: `chest-loot`'s "it is
+ * hollow". That is FINDINGS.md C1 and belongs to #13; it is left exactly as it shipped rather
+ * than silently rewritten here. Its sibling — the "already whole" line of the full-HP rest
+ * event — left with that event in PLAN.md #2.)
  */
 export function describeEvent(e: GameEvent): string {
   switch (e.kind) {
@@ -80,8 +86,6 @@ export function describeEvent(e: GameEvent): string {
       return `${e.subject === 'player' ? 'You' : 'The enemy'} suffer(s) ${e.amount} ${e.conditionType} damage.`;
     case 'player-unable-to-act':
       return `You cannot act — ${e.conditionType} holds you.`;
-    case 'potion-drunk':
-      return `You drink a potion; warmth returns.`;
     case 'fled':
       return `You break away into the dark.`;
     case 'escape-failed':
@@ -92,12 +96,8 @@ export function describeEvent(e: GameEvent): string {
       return `The enemy falls. You are still standing.`;
     case 'defeat':
       return `Your strength gives out.`;
-    case 'rest-lore':
-      return `You rest, and a fragment surfaces: "${e.loreText}"`;
     case 'rest-taken':
       return `You rest; some wounds close.`;
-    case 'rest-full':
-      return `You are already whole; rest brings only quiet.`;
     case 'deal-offer':
       return `An altar in the dark offers ${e.reward}, and demands ${e.cost} in return.`;
     case 'deal-taken':
@@ -109,8 +109,10 @@ export function describeEvent(e: GameEvent): string {
     case 'chest-found':
       return `You find a cache half-buried in the dark.`;
     case 'chest-loot':
+      // PLAN.md #2: "find", not "take" — a FULL pack leaves the item in the cache, and the
+      // `loot-left-behind` fact beside this says so. "take" would be a lie in that case.
       return e.loot.length > 0
-        ? `You pry it open and take ${e.loot.map((l) => l.name).join(', ')}.`
+        ? `You pry it open and find ${e.loot.map((l) => l.name).join(', ')}.`
         : `You pry it open, but it is hollow.`;
     case 'level-up':
       return `Something in you hardens; you are stronger than before.`;
@@ -201,13 +203,34 @@ export function describeEvent(e: GameEvent): string {
       // fallback — replace the line below, and nothing else, with:
       //     return `Something new settles into you.`;
       return `You take what the descent offers: ${e.option}.`;
-    case 'rest-declined':
-      // Narrated even though G13 does not name it: it is the SOLE event of its step, so
-      // with the G42 fix silence here would leave the previous beat stale on screen while
-      // the player had in fact chosen to press on. See the silence block below.
-      return `You press on without resting.`;
-    case 'no-rests':
-      return `There is no rest left in you.`;
+
+    // ---- PLAN.md #2: the floor mechanics, the found rest, the full-pack bargain -------
+    // Engine facts under the same three-part rule: observable, written from the event's own
+    // fields, no enum id. No numbers (VOID_PERSONA forbids them and none is needed), no karma,
+    // no reserved word (WORLD.md §0) — held to that by the reserved-word and hidden-karma
+    // guards, which cover every fact literal.
+
+    case 'floor-drain':
+      // Floor 3's charge bleed at battle open. The amount is the log's to show.
+      return `Something in this place takes a little of your strength.`;
+    case 'illusion-struck':
+      // Floor 2. Says what the player SAW — the blow met nothing — without naming an illusion
+      // the player has not yet seen through.
+      return `Your blow passes through it.`;
+    case 'illusion-dispelled':
+      return `It was never there.`;
+    case 'loot-left-behind':
+      return `You cannot carry ${e.name}; you leave it.`;
+    case 'rest-found':
+      // The scene itself (the place, the character's condition, the tone) is the scene block
+      // `buildNarrationPrompt` appends for this step; this fact line only anchors it.
+      return `You find somewhere to rest: ${e.place}.`;
+    case 'skills-warped':
+      return `Your skills no longer feel like your own.`;
+    case 'deal-needs-room':
+      return `Your pack is full; to take ${e.reward}, you must leave something behind.`;
+    case 'item-discarded':
+      return `You leave ${e.name} behind.`;
 
     // ---- G13: DELIBERATE SILENCE — seventeen kinds that return '' on purpose ----------
     //
@@ -222,14 +245,13 @@ export function describeEvent(e: GameEvent): string {
     // there. For a rejected input that is exactly correct (nothing happened, so the
     // narration should not change). For anything that actually happened it would be a lie
     // on screen. So: if a kind means something HAPPENED, it must get a fact line above,
-    // even if the register never named it. That is why `rest-declined`, `no-rests`,
-    // `shield-gained`, `shield-absorbed` and `revive` are narrated.
+    // even if the register never named it. That is why `shield-gained`, `shield-absorbed`
+    // and `revive` are narrated (as the declined-rest and no-rest-left events were, until
+    // PLAN.md #2 removed the rest decision they reported).
 
     // Rejected inputs — the player asked for something they could not do, so NOTHING
     // happened. Silence is correct, and leaving the previous beat on screen is correct.
     case 'cast-unavailable':
-    case 'potion-unavailable':
-    case 'potion-blocked':
     case 'spare-unavailable':
     case 'consumable-unavailable':
       return '';
@@ -353,6 +375,84 @@ export function runSummary(memory: StoryMemory): string {
   return parts.length ? `Across this descent you have ${parts.join(' and ')}.` : '';
 }
 
+// ---- The rest scene (PLAN.md #2, GAME-DESIGN.md §22.26) -----------------------------------
+//
+// A found rest is "the only moment in the game where things are truly calm", and the game's
+// main LORE channel. For a step whose events include `rest-found`, the prompt gains a SCENE
+// block after the facts: where you are (the floor's rest brief — marked placeholder lore,
+// #13's to write), how you are (a condition brief with NO digits), and a TONE line of manner
+// words from the hidden ledger (`tone.ts`) — then an instruction that forbids stating what the
+// tone reflects. What reaches the model is only ever safe to say aloud; what no test can prove
+// is whether the model obeys "reflect, never state" (HUMAN-CHECKS, the manual rest-tone check).
+//
+// The block is NOT a fact: `facts` (and therefore `StoryMemory.beats` and the model-failure
+// fallback) stay fact-only, so the tone can never be printed by the engine, carried into later
+// prompts, or shown to the player verbatim.
+
+/** The four HP bands the condition brief may name — a word, never a number. */
+export function hpBand(hp: number, maxHp: number): 'unhurt' | 'scratched' | 'wounded' | 'near death' {
+  const ratio = maxHp > 0 ? hp / maxHp : 0;
+  if (ratio >= 1) return 'unhurt';
+  if (ratio >= 0.7) return 'scratched';
+  if (ratio >= 0.35) return 'wounded';
+  return 'near death';
+}
+
+/** At most this many carried item names reach the scene (a small model needs a lean prompt). */
+const MAX_CARRIED_NAMES = 6;
+
+/**
+ * "How you are" — the character's condition in words, with NO digit anywhere. PURE.
+ * The band is read AFTER the rest (the state the step returns); whether wounds or conditions
+ * were there to ease comes from the `rest-found` event, which knew the character on arrival.
+ */
+export function conditionBrief(
+  player: Player,
+  found: { woundsClosed: boolean; conditionsEased: boolean },
+): string {
+  const carried = [player.inventory.slots.mainHand, ...player.inventory.backpack]
+    .filter((i): i is NonNullable<typeof i> => i !== null && i !== undefined)
+    .slice(0, MAX_CARRIED_NAMES)
+    // No digit may reach the model (VOID_PERSONA: "never … numbers"), and the legacy gear
+    // carries placeholder names with a trailing index ("Jaaj Sword 1", #13's to rename) — so a
+    // bare number is dropped from a carried name. The player's own screens still show it whole.
+    .map((i) => summarizeLoot(i).name.replace(/\s*\d+/g, '').trim())
+    .filter((name) => name.length > 0);
+  const parts = [
+    `You are ${hpBand(player.hp, player.maxHp)}.`,
+    found.woundsClosed ? 'Your wounds close.' : 'There was nothing to close.',
+    found.conditionsEased ? 'What afflicted you has eased.' : 'Nothing afflicts you.',
+    carried.length > 0 ? `You carry ${carried.join(', ')}.` : 'You carry nothing.',
+  ];
+  return parts.join(' ');
+}
+
+/** The instruction that closes the scene block — the "reflect, never state" rule, in words. */
+export const REST_SCENE_INSTRUCTION =
+  'Describe the place and the character\'s state in three to five calm sentences. This is the ' +
+  'only quiet moment in the descent — nothing threatens, nothing watches. Let the tone words ' +
+  'colour your description only; never name, judge or explain what kind of person the ' +
+  'character is, never say what they are becoming, and never repeat the tone words themselves.';
+
+/**
+ * The scene block for a step that found a rest spot, or null for any other step. PURE and
+ * deterministic: the whole brief goes in (the model varies the words; the engine picks none).
+ */
+export function restScene(events: readonly GameEvent[], state: GameState): string | null {
+  const found = events.find((e) => e.kind === 'rest-found');
+  if (!found || found.kind !== 'rest-found' || !state.player) return null;
+  const brief = restBrief(floorOf({ place: found.floor - 1 }));
+  const tone = karmaTone(state.karma);
+  const lines = [
+    `Where you are: ${brief.place}.`,
+    ...brief.lore,
+    `How you are: ${conditionBrief(state.player, found)}`,
+  ];
+  if (tone.length > 0) lines.push(`Tone: ${tone.join(', ')}.`);
+  lines.push(REST_SCENE_INSTRUCTION);
+  return lines.join('\n');
+}
+
 /**
  * Build the narration prompt for the events that just occurred, optionally
  * prefixed with continuity from `memory` (a one-line run summary + recent
@@ -382,11 +482,16 @@ export function buildNarrationPrompt(
       context += `Recent moments (oldest first):\n- ${memory.beats.join('\n- ')}\n`;
     if (context) context += '\n';
   }
+  // PLAN.md #2: a found rest replaces the generic closing instruction with its scene block.
+  // Every other step's prompt is byte-for-byte what it was (a test holds it to that).
+  const scene = restScene(events, state);
   const user =
     context +
     `Act ${state.act}, ${floor}. What just happened:\n- ` +
     facts.join('\n- ') +
-    `\n\nNarrate this new moment in 2-4 vivid second-person sentences. ` +
-    `Stay consistent with what came before; do not repeat earlier narration.`;
+    (scene === null
+      ? `\n\nNarrate this new moment in 2-4 vivid second-person sentences. ` +
+        `Stay consistent with what came before; do not repeat earlier narration.`
+      : `\n\n${scene}`);
   return { system: VOID_PERSONA, user, facts };
 }

@@ -79,7 +79,11 @@ export type EffectActionKind =
   | 'revive'
   | 'cure'
   | 'flee'
-  | 'reroll';
+  | 'reroll'
+  // PLAN.md #2 (floor 3's slow weight): take `params.amount` skill charges from the owner,
+  // never below 0. Generic — a relic could carry it — but shipped only on floor 3's
+  // `startOfBattle` trigger (`floors.json`).
+  | 'drainCharge';
 
 /**
  * A data-described action, applied RNG-free by the effect pipeline (relicEffects.ts /
@@ -108,7 +112,12 @@ export type PassiveEffectType =
   | 'dotTickMultiplier'
   | 'chargePerTurn'
   | 'damageDealtMultiplier'
-  | 'cannotHeal';
+  | 'cannotHeal'
+  // PLAN.md #2 (floor 3's slow weight): every dampenable heal is scaled by `params.pct` percent.
+  // Folded by `floors.ts` `floorModifiers`; `computeEquipModifiers` deliberately IGNORES it on
+  // gear for now (its sibling `cannotHeal` is the only heal flag a relic ships), so a relic that
+  // carried it would do nothing until a unit wires the gear half and tests it.
+  | 'healMultiplier';
 
 /**
  * A plain-data effect descriptor (M6 discriminated union). Passive variants carry a

@@ -36,6 +36,7 @@ import { heuristicPolicy } from '../game/sim.ts';
 import { runSummaryView, spareOffered } from '../desktop/view-model.ts';
 import { formatEvent } from '../render/format.ts';
 import { describeEvent } from '../llm/narrate.ts';
+import { AXIS_VOCABULARY } from '../game/karmaVocabulary.testutil.ts';
 
 /** The four axes as a delta, so a karma assertion is a CHANGE and never a state of the world. */
 function karmaDelta(before: KarmaState, after: KarmaState): KarmaState {
@@ -234,10 +235,11 @@ describe('sparing The Judged on floor 4', () => {
     expect(spareOffered(opened(bundle).state)).toBe(true);
   });
 
-  it('the spare moves BOTH axes in ONE step — mercy and reverence', () => {
+  it('the spare moves BOTH axes in ONE step — mercy and reverence, doubled on floor 4', () => {
     // Derived from the data as a spec: theJudged declares
     // `onSpare: ["spareWeighted", "honorDead"]`, and `KARMA_DELTAS` maps those to
-    // {mercyCruelty: +1} and {reverenceDesecration: +1}. Folded, that is +1 / +1.
+    // {mercyCruelty: +1} and {reverenceDesecration: +1}. Folded, that is +1 / +1 — and PLAN.md
+    // #2 (GAME-DESIGN §8, §22.24) makes karma earned on floor 4 count DOUBLE: +2 / +2.
     const family = getFamily('theJudged')!;
     expect(family.onSpare).toEqual(['spareWeighted', 'honorDead']);
     expect(KARMA_DELTAS.spareWeighted).toEqual({ mercyCruelty: 1 });
@@ -247,9 +249,9 @@ describe('sparing The Judged on floor 4', () => {
     const open = opened(bundle);
     const spared = step(open.state, { kind: 'battle-action', action: 'spare' });
     expect(karmaDelta(open.state.karma, spared.state.karma)).toEqual({
-      mercyCruelty: 1,
+      mercyCruelty: 2,
       restraintGreed: 0,
-      reverenceDesecration: 1,
+      reverenceDesecration: 2,
       clarityDelusion: 0,
     });
     expect(spared.state.phase.kind).toBe('main-menu');
@@ -299,8 +301,9 @@ describe('the Hollow gate on floor 5', () => {
   const isFinalBattle = (state: GameState): boolean =>
     state.phase.kind === 'battle' && state.phase.final;
 
-  it('the boundary is HOLLOW_GATE_XP, read as a spec: 499 no, 500 yes', () => {
-    expect(HOLLOW_GATE_XP).toBe(500);
+  it('the boundary is HOLLOW_GATE_XP, read as a spec: 599 no, 600 yes', () => {
+    // PLAN.md #2's tuning (T3) moved the gate 500 -> 600; docs/BALANCE-REPORT.md's ledger says why.
+    expect(HOLLOW_GATE_XP).toBe(600);
     expect(isFinalBattle(continueAt(HOLLOW_GATE_XP - 1).state)).toBe(false);
     expect(isFinalBattle(continueAt(HOLLOW_GATE_XP).state)).toBe(true);
   });
@@ -388,10 +391,21 @@ describe('the act-5 no-flee rule, from the hollow-fight jump', () => {
 // and 12 more HP — correct engine behaviour, not a leak. Bounding the lockstep at `act < 3`
 // keeps the comparison sound; acts 1 and 2 contain no karma read at all, and still give
 // ~180 steps and several hundred events.
+//
+// ⚠ PLAN.md #2 ADDED ONE KARMA READ TO ACTS 1-2, and it is a sanctioned one: bargains FIND the
+// player as descent encounters now (§22.23), and `selectPool` reads the ledger to pick the pool
+// an offer is drawn from. A neutral control would be offered the `standard` pool while the
+// distinctive vector (reverence 13) is offered `grace`, and the two runs would part at the first
+// bargain — correct engine behaviour, not a leak (the pool is never shown). So the CONTROL is a
+// quiet vector in the SAME pool band (reverence 3, the `grace` threshold; no axis at a
+// distinctive value). Nothing the heuristic does in acts 1-2 lowers reverence (it can only take
+// grace offerings, which raise it), so both runs stay in that band, the one read agrees, and
+// the lockstep comparison stays sound.
 // =========================================================================================
 
-const AXIS_VOCABULARY =
-  /karma|nature|mercy|cruel|greed|restraint|reveren|desecration|clarity|delusion/i;
+// The word list is SHARED (FIX ROUND 1, F4) — `src/game/karmaVocabulary.testutil.ts`. This copy
+// used to be the OLD word list, so "merciful" in the victory log line and "merciless" in the
+// victory fact line passed this sweep over every event of a real run.
 
 /** Proper nouns are AUTHORED CONTENT and collide with the vocabulary on purpose (§9). */
 const NEUTRAL_NAME = 'Foe';
@@ -441,8 +455,10 @@ describe('a karma vector set from the panel never reaches the player', () => {
     return { events, rendered, skeletons, steps, finalKarma: result.state.karma };
   }
 
+  /** The same pool band as DISTINCTIVE (reverence >= 3 -> grace), with no distinctive value. */
+  const QUIET: KarmaState = { mercyCruelty: 1, restraintGreed: 1, reverenceDesecration: 3, clarityDelusion: 1 };
   const distinctive = play(DISTINCTIVE, 200);
-  const control = play(createKarma(), 200);
+  const control = play(QUIET, 200);
 
   it('the sweep saw a real run, not a handful of menu clicks (non-vacuity)', () => {
     expect(distinctive.events.length, 'fewer than 50 events — the sweep proves little').toBeGreaterThan(50);
@@ -557,12 +573,19 @@ describe('momentum decays across a battle boundary, and by how much', () => {
     expect(spared.state.phase.kind).toBe('main-menu');
     banked.push(spared.state.player!.momentum ?? 0);
 
-    // Walk the hub until the next battle opens, and read what it opened with.
+    // Walk the hub until the next battle opens, and read what it opened with. (PLAN.md #2: a
+    // bargain may find the player on the way — refused, which changes nothing but the rng.)
     let state = spared.state;
     let steps = 0;
     while (state.phase.kind !== 'battle' && steps < 60) {
       const awaiting = awaitingFor(state.phase);
-      state = step(state, awaiting === 'main-menu' ? { kind: 'menu', choice: 'continue' } : { kind: 'continue' }).state;
+      const input =
+        awaiting === 'main-menu'
+          ? ({ kind: 'menu', choice: 'continue' } as const)
+          : awaiting === 'deal-decision'
+            ? ({ kind: 'deal-decision', accept: false } as const)
+            : ({ kind: 'continue' } as const);
+      state = step(state, input).state;
       steps += 1;
     }
     expect(state.phase.kind, 'no second battle within 60 steps — the sweep proved nothing').toBe(

@@ -710,7 +710,7 @@ describe('the player-facing projectors are byte-identical, and carry no telemetr
   const EVENTS: readonly GameEvent[] = [
     { kind: 'encounter-start', enemyName: 'Rust Chorister' },
     { kind: 'escape-failed', damage: 4 },
-    { kind: 'victory', xpGained: 5, extraRest: false, loot: [] },
+    { kind: 'victory', xpGained: 5, loot: [] },
     { kind: 'defeat' },
   ];
 

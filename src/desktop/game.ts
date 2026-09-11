@@ -12,6 +12,7 @@ import type { PlayerClass } from '../game/player.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import type { ActiveCondition } from '../game/condition.ts';
+import { floorOf } from '../game/floors.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun, type RunMeta, type SavedRun } from './persist.ts';
 import {
@@ -40,7 +41,7 @@ import {
   runSummaryView,
   hubMenu,
   fallbackNarration,
-  potionControl,
+  dealDiscardView,
 } from './view-model.ts';
 import type { ItemView, HubItemAction, HubMode, HubScreen } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
@@ -379,7 +380,6 @@ function renderSheet(): void {
   line(`HP ${p.hp}/${p.maxHp}`);
   line(`XP ${p.xp}`);
   line(`Act ${state.act}`);
-  line(`Pots ${p.pots} · Rests ${p.restsLeft}`);
   chips(p.activeConditions);
   // THE CHARACTER PORTRAIT'S RESERVED REGION (plan Appendix A.7). Empty today, and no art is
   // shipped, generated or bought by this unit — what is being committed to is the SHAPE.
@@ -422,11 +422,11 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
   //
   // ⚠ THE COST, and why it is the right trade. Leaving the pane alone turns a step with no
   // fact from BLANK into STALE — the previous beat stays up. That is CORRECT for a rejected
-  // input (`cast-unavailable`, `potion-blocked`, …): nothing happened, so the narration
+  // input (`cast-unavailable`, `spare-unavailable`, …): nothing happened, so the narration
   // should not change. It would be a lie for anything that did happen, which is why the
   // deliberate-silence list in src/llm/narrate.ts is curated rather than "everything the
-  // register did not name", and why `rest-declined`, `no-rests`, `shield-gained`,
-  // `shield-absorbed` and `revive` are narrated even though G13 never named them. If you
+  // register did not name", and why `shield-gained`, `shield-absorbed` and `revive` are
+  // narrated even though G13 never named them. If you
   // add a silent case there, you are choosing to leave the previous beat on screen here.
   if (!prompt) return;
   // Show ONLY the current moment: replace the narration area each turn rather
@@ -575,6 +575,20 @@ function renderInventoryScreen(): void {
         rerender();
       });
     }
+    // PLAN.md #2: leave an item behind — an ENGINE input (`discard`), so the run still replays
+    // from seed + inputs. Stepped here rather than through `dispatch` because a discard is not
+    // a narrated beat: the inventory screen stays up, the run autosaves, and the move is logged
+    // at the boundary. A refused discard (a stale index) returns the same state and saves nothing.
+    appendButton(row, buttonModel('Discard'), () => {
+      const r = step(state, { kind: 'discard', index: b.index });
+      if (r.state !== state) {
+        state = r.state;
+        runSummary = foldRunEvents(runSummary, r.events, r.state);
+        saveRun(state, memory, runMeta());
+        log.info('inventory', 'item discarded', { index: b.index, defId: b.item.defId });
+      }
+      rerender();
+    });
   }
 
   choicesEl.appendChild(wrap);
@@ -782,6 +796,12 @@ async function dispatch(input: GameInput): Promise<void> {
       hp: state.player?.hp ?? null,
       maxHp: state.player?.maxHp ?? null,
       act: state.act,
+      // PLAN.md #2: the floor the step left the run on (keyed on `place`, as the rules are —
+      // the act counter alone cannot tell an ascent's floor 5 from a descent's), and whether
+      // the fight on screen is an illusion — the one fact a bug report about floor 2 needs and
+      // the player is deliberately not shown. Developer surface only (principle 7).
+      floor: floorOf(state),
+      illusory: state.phase.kind === 'battle' && state.phase.battle.enemy.illusory === true,
       summary: {
         maxAct: runSummary.maxAct,
         bossKills: runSummary.bossKills.length,
@@ -994,13 +1014,8 @@ function renderChoices(awaiting: Awaiting): void {
           }
         });
       }
-      // The Potion button carries its remaining count, and is INERT at zero — a disabled
-      // ButtonModel gets no click handler at all, so it cannot dispatch a step that resolves
-      // nothing. (The other two refusals — full HP, and the Void Pact relic — stay engine
-      // decisions, and the combat log now reports them.)
-      appendButton(choicesEl, potionControl(p), () =>
-        void dispatch({ kind: 'battle-action', action: 'potion' }),
-      );
+      // PLAN.md #2 / §22.6: no Potion button — healing in battle is a found consumable, in the
+      // Use-item picker above like every other item.
       choice('Run', () => void dispatch({ kind: 'battle-action', action: 'run' }));
       break;
     }
@@ -1061,9 +1076,39 @@ function renderChoices(awaiting: Awaiting): void {
       choice('Refuse', () => void dispatch({ kind: 'deal-decision', accept: false }));
       break;
     }
-    case 'rest-decision':
-      choice('Rest here', () => void dispatch({ kind: 'rest-decision', accept: true }));
-      choice('Press on', () => void dispatch({ kind: 'rest-decision', accept: false }));
+    case 'deal-discard': {
+      // PLAN.md #2, Appendix A.3: the bargain was accepted with a FULL pack. Nothing is paid
+      // yet. One row per item to leave behind (the engine completes the bargain in that one
+      // step), and one way out, which is exactly refusing it. Text only, never markup. The
+      // rows sit in a closed list, as Cast does: twelve of them cannot fit a 640px window.
+      const p = state.player;
+      if (state.phase.kind === 'deal-discard' && p) {
+        const view = dealDiscardView(p, state.phase.deal, state.phase.leaving ?? []);
+        const block = document.createElement('div');
+        block.className = 'deal-block';
+        const ask = document.createElement('div');
+        ask.className = 'deal-reward';
+        ask.textContent = view.prompt;
+        const cost = document.createElement('div');
+        cost.className = 'deal-cost';
+        cost.textContent = `Cost: ${view.cost}`;
+        block.append(ask, cost);
+        choicesEl.appendChild(block);
+        picker(choicesEl, view.choose, (list) => {
+          for (const row of view.leave) {
+            appendButton(list, buttonModel(row.label), () => void dispatch({ kind: 'discard', index: row.index }));
+          }
+        });
+        choice(view.refuse, () => void dispatch({ kind: 'deal-decision', accept: false }));
+      }
+      break;
+    }
+    case 'rest':
+      // PLAN.md #2 (§22.26): a FOUND rest spot — the rest has already happened, so there is no
+      // choice to make, only the calm. The floor's scenery region gets its real job here (the
+      // establishing image of the one quiet place), exactly as the hub mounts it.
+      sceneryEl.appendChild(buildArtSlotById('scenery'));
+      choice('Continue', () => void dispatch({ kind: 'continue' }));
       break;
     case 'game-over': {
       // G2 / GAME-DESIGN.md §22.15: a finished run gets a WRITTEN RECORD. This is the

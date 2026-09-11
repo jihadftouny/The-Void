@@ -3,50 +3,55 @@
 // LOAD-BEARING PRINCIPLES honored here:
 //  - Pure logic / render split: no Kaplay, DOM, or canvas imports; nothing printed.
 //    `buildRandomBattle` returns a fresh BattleState and never mutates its input.
-//  - Deterministic seeded RNG: every decision (encounter type, enemy-type pick,
-//    lore pick, rest heal) threads the injected `Rng`; no Math.random / Date.now.
-//  - Data-driven content: lore is read by Act from the M2 lore loader; the enemy
-//    pool is the M8 per-floor family roster (src/data/enemyFamilies.json) with
-//    seeded elite affixes — adding content never edits this encounter code.
+//  - Deterministic seeded RNG: every decision (encounter type, enemy-type pick, the floor-2
+//    illusion roll, rest heal) threads the injected `Rng`; no Math.random / Date.now.
+//  - Data-driven content: the per-floor encounter weights are `src/data/floors.json`
+//    (PLAN.md #2); the enemy pool is the M8 per-floor family roster
+//    (src/data/enemyFamilies.json) with seeded elite affixes — adding content never edits
+//    this encounter code. (The old `lore.json` pick is gone: a rest now narrates the floor's
+//    rest brief, `restBrief.ts`.)
 //
 // Ported from `GameLogic.randomEncounter` / `randomBattle` / `takeRest` and
 // `Lore.java`. Faithful draw order preserved for reproducibility.
 
-import { pick, randInt, type Rng } from './rng.ts';
+import { pick, randInt, weightedPick, type Rng } from './rng.ts';
 import { generateEnemy } from './enemy.ts';
 import { availableFamiliesForAct } from './enemyFamily.ts';
 import { rollAffix, applyAffix } from './enemyAffix.ts';
 import { createBattle, type BattleState } from './battle.ts';
-import { getLore, type LoreEntry } from './lore.ts';
 import { type Player } from './player.ts';
 import { rollChestLoot } from './loot.ts';
 import { type ItemInstance } from './item.ts';
-
-/** The kinds of encounter the descent can present. */
-export type EncounterType = 'battle' | 'rest' | 'chest';
-
-/**
- * The weighted 6-slot encounter table (M7): 3 Battle : 2 Rest : 1 Chest — the chest/cache is
- * a 1/6 slot layered onto the Java 3:2 Battle:Rest split. The chest weight is an M15 balance
- * placeholder (part of the ~50/50 found-loot vs sacrifice-deal split).
- */
-export const ENCOUNTER_TABLE: readonly EncounterType[] = [
-  'battle',
-  'battle',
-  'battle',
-  'rest',
-  'rest',
-  'chest',
-];
+import {
+  floorDef,
+  floorModifiers,
+  FLOOR_ENCOUNTERS,
+  type FloorEncounter,
+  type FloorId,
+} from './floors.ts';
 
 /**
- * Pick the next encounter type via one rng draw: `randInt(rng, 6)` indexes the 6-slot table
- * `[B,B,B,R,R,C]`, so draws in [0,0.5) yield 'battle', [0.5,0.8333) yield 'rest', and
- * [0.8333,1) yield 'chest' — a 3:2:1 split.
+ * The kinds of encounter the descent can present. PLAN.md #2: `bargain` joins them — bargains
+ * FIND the player as descent events (GAME-DESIGN §22.23, §22.25: several per floor), and the
+ * on-demand bargain hub action is gone.
  */
-export function selectEncounter(rng: Rng): EncounterType {
-  const index = randInt(rng, ENCOUNTER_TABLE.length);
-  return ENCOUNTER_TABLE[index] ?? 'battle';
+export type EncounterType = FloorEncounter;
+
+/**
+ * Pick the next encounter for the floor via ONE rng draw — `weightedPick` over that floor's
+ * `floors.json` weights, walked in the fixed `FLOOR_ENCOUNTERS` order (battle, chest, rest,
+ * bargain). One draw, exactly as the old fixed 6-slot table took, so the draw COUNT of an
+ * encounter step is unchanged; which type a value lands on now follows the floor's weights.
+ * Keyed on the floor the caller passes (`floorOf(state)`), never on the act.
+ */
+export function selectEncounter(rng: Rng, floor: FloorId): EncounterType {
+  const weights = floorDef(floor).encounters;
+  return (
+    weightedPick(
+      rng,
+      FLOOR_ENCOUNTERS.map((kind) => [kind, weights[kind]] as const),
+    ) ?? 'battle'
+  );
 }
 
 /**
@@ -82,30 +87,25 @@ export function buildRandomBattle(
   rng: Rng,
   available?: ReadonlySet<string>,
   availableAffixes?: ReadonlySet<string>,
+  floor?: FloorId,
 ): BattleState {
   const family = pick(rng, availableFamiliesForAct(act, available));
   let enemy = generateEnemy({ act, family, playerXp: player.xp }, rng);
   const affix = rollAffix(rng, availableAffixes);
   if (affix) enemy = applyAffix(enemy, affix);
+  // PLAN.md #2, floor 2 (§22.24: "about one fight in three"): ONE draw, LAST, and only on a floor
+  // whose data carries an `illusionChance` — `randInt(rng, denominator) < numerator`. Last, so
+  // every other floor keeps its exact pre-#2 draw order; `floor` omitted (every pre-#2 caller)
+  // draws nothing. Keyed on the floor the caller passes (`floorOf(state)`), never on `act`.
+  const chance = floor === undefined ? null : floorModifiers(floor).illusionChance;
+  if (chance && randInt(rng, chance.denominator) < chance.numerator) {
+    enemy = { ...enemy, illusory: true };
+  }
   // G12: the ambush bonus is BATTLE-scoped, passed as an opening advantage, instead of being
   // stamped onto the player as `advantageDisadvantage: 1`. That stamp was persisted to the hub
   // player by `game.ts`, so every later fight — including every floor boss and the final
   // Hollow — inherited a +1 to hit it was never meant to have.
   return createBattle(player, enemy, act, { openingAdvantage: 1 });
-}
-
-/**
- * Pick a lore entry for a rest in the given Act — PURE. Draws `randInt(rng, n)`
- * where `n = min(selectableCount, entries.length)`. Faithful to Java `Lore`: Act 1
- * uses `nextInt(3)` (all three entries reachable) while Acts 2-4 use `nextInt(2)`
- * (their third entry is never selectable). Returns undefined for an Act with no lore.
- */
-export function selectLore(act: number, rng: Rng): LoreEntry | undefined {
-  const lore = getLore(act);
-  if (!lore || lore.entries.length === 0) return undefined;
-  const count = Math.min(lore.selectableCount, lore.entries.length);
-  const index = randInt(rng, count);
-  return lore.entries[index];
 }
 
 /**

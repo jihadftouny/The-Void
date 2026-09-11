@@ -43,8 +43,10 @@ import { type EquipSlot, type ItemInstance, getAllRelics } from './item.ts';
 import { type Rarity } from './weapon.ts';
 import { generateItem } from './rarityGen.ts';
 import { pick, type Rng } from './rng.ts';
-import { type KarmaState, recordKarma } from './karma.ts';
+import { type KarmaState, recordKarmaWeighted } from './karma.ts';
 import { pickUp } from './equipment.ts';
+import { BACKPACK_CAPACITY } from './inventory.ts';
+import { floorModifiers, type FloorId } from './floors.ts';
 import dealsData from '../data/deals.json';
 
 /** Which offer pool the altar draws from, chosen by karma (see `selectPool`). */
@@ -54,9 +56,8 @@ export type Pool = 'standard' | 'tempting' | 'grace';
  * What the deal takes FROM the player.
  *
  * `offering` is a MATERIAL cost that also shifts karma: it gives up the first item in the
- * backpack. It costs a real, finite, non-regenerating resource on purpose — `seek-deal` is a
- * free, unlimited hub action, so a karma GAIN with no material price would be farmable to any
- * ledger the player liked. `whisper`, like `desecrate` and `greed`, costs karma alone.
+ * backpack. It costs a real resource on purpose — a karma GAIN with no material price would be
+ * the cheapest way to buy a verdict. `whisper`, like `desecrate` and `greed`, costs karma alone.
  */
 export type DealCost =
   | { kind: 'hp'; amount: number }
@@ -69,10 +70,17 @@ export type DealCost =
   | { kind: 'greed' }
   | { kind: 'whisper' };
 
-/** What the deal GIVES the player (the reward item is rolled at build time). */
+/**
+ * What the deal GIVES the player (the reward item is rolled at build time).
+ *
+ * PLAN.md #2 / GAME-DESIGN.md §22.25: NO BARGAIN HEALS, AT ANY PRICE — and that is enforced BY
+ * TYPE: there is no `heal` member, so a healing reward cannot be authored in `deals.json`
+ * (the loader's spec type has none either) or built in code. Healing lives in consumables
+ * (§22.6) and found rest (§22.26). This closes G52 at the root: at several bargains per floor,
+ * any healing bargain — even a costly one — would quietly become the game's main heal.
+ */
 export type DealReward =
   | { kind: 'item'; instance: ItemInstance }
-  | { kind: 'heal'; amount: number }
   | { kind: 'statPoint'; stat: StatKey }
   | { kind: 'skillCharge'; amount: number };
 
@@ -86,10 +94,9 @@ export interface SacrificeDeal {
 // ------- Data template shapes (deals.json) -----------------------------------
 
 /** A reward as authored in data — an item to ROLL, a fixed relic, or a flat effect. */
-type DealRewardSpec =
+export type DealRewardSpec =
   | { kind: 'itemRoll'; slot: EquipSlot; rarity: Rarity }
   | { kind: 'item'; defId: string }
-  | { kind: 'heal'; amount: number }
   | { kind: 'statPoint'; stat: StatKey }
   | { kind: 'skillCharge'; amount: number };
 
@@ -102,36 +109,24 @@ interface DealTemplate {
  * The authored offer table, grouped by pool. APPEND-ONLY by convention: `buildDeal` picks with
  * `pick` (`items[floor(x*len)]`), so inserting a template renumbers every scripted-rng test.
  *
- * ⚠ #2 BALANCE PLACEHOLDERS — every number in `deals.json` is one, and the two templates #10a
- * appended are no exception. They set HOW CHEAPLY A RUN CAN BUY BACK REVERENCE, which matters
- * more than the other magnitudes now that §22.16 makes grace generous (`GATE_THRESHOLD` 1 over
- * integer deltas ⇒ ANY net-positive ledger earns it). #2 owns the real values:
+ * ⚠ #2 BALANCE PLACEHOLDERS — every number in `deals.json` is one, and every reward was rewritten
+ * by PLAN.md #2 under GAME-DESIGN §22.25: NO BARGAIN HEALS (the `heal` reward kind no longer
+ * exists, so none can be authored). The table is now:
+ *   standard  hp 6 -> 2 charges · 1 charge -> a Common ring · 1 CHA -> 2 charges ·
+ *             an offering -> a Rare armor · a whisper -> +1 INT
+ *   tempting  desecrate -> +1 STR · greed -> a Legendary weapon · 6 max HP -> a Rare amulet ·
+ *             a whisper -> a Rare ring
+ *   grace     5 HP -> a Rare weapon · 1 CHA -> mirror-shard · an offering -> 3 charges
  *
- *  - `offering` → `heal 6`. Costs the first backpack item; grants at most 6 HP, capped at maxHp.
- *
- *    ⚠ CORRECTION (fix round 1). This comment used to read *"NOT farmable: … the altar hands back
- *    no item"*, and that was FALSE — as was the plan's load-bearing justification, *"an item cost
- *    bounds it to what the run actually found."* The altar hands an item back in TWO shipped
- *    templates: `standard[1]` (`skillCharge 1` → a rolled ring) and `grace[1]` (`statPoint CHA` →
- *    `mirror-shard`). Both of those costs were, until this round, silently free at the floor —
- *    `canAfford` returned `true` unconditionally for them while `withStat` clamps at `MIN_STAT`
- *    and the charge subtraction clamps at 0 — so the altar was an UNBOUNDED item source, and
- *    #10a's offering turned unbounded items into an unbounded ledger. Measured before the fix:
- *    6000 free seeks from a fresh hub, no combat at all, produced a weighted ledger of **7512**
- *    against `GATE_THRESHOLD` 1. `canAfford` now refuses a cost that cannot actually be paid, so
- *    every item the altar sells is bought with a strictly-decreasing player resource.
- *
- *    What is true now, and is the bound the test asserts: the ledger a run can buy from the menu
- *    is bounded by the finite resources it rolled at creation (stat points above `MIN_STAT`, and
- *    skill charges) — it SATURATES instead of climbing. It is still far above `GATE_THRESHOLD`,
- *    and that residue is G52 (the altar is free and unlimited) and #2's to bound; it is recorded,
- *    not papered over.
- *  - `whisper` → `heal 4`. Costs no material thing (only a point of delusion) and IS repeatable,
- *    exactly like the shipped `desecrate`/`greed` templates. Deliberately a HEAL and nothing
- *    else: `standard[0]` (cost 8 HP → heal 12, a net +4) already makes HP unbounded at the altar
- *    (**FINDINGS G52**), so a heal reward adds NO capability the altar does not already have. An
- *    `item` / `statPoint` / `skillCharge` reward would have made those unbounded from the hub for
- *    the first time — a NEW fountain — so none of them is used here.
+ * HISTORY, kept because it is why the guards exist. Under #10a the altar was a FREE, UNLIMITED hub
+ * action (G52), and a cost that took nothing (a stat at its floor, charges not in hand) was
+ * "affordable" — 6000 free visits from a fresh hub minted a weighted ledger of 7512 against
+ * `GATE_THRESHOLD` 1. `canAfford` now refuses a cost that cannot actually be paid, and PLAN.md #2
+ * removed the tap itself (§22.23): a bargain is a descent ENCOUNTER, so the ledger a run can buy
+ * grows only with the bargains the descent offers it. ⚠ Recorded for the author: the standard
+ * pool's offering is ITEM-NEUTRAL (an item for a Rare armor), so each offering bargain buys +1
+ * restraint / +1 reverence at the price of whatever sits first in the pack — §22.25's "karma
+ * moves faster through bargains", in placeholder numbers.
  */
 const TEMPLATES = dealsData as unknown as Record<Pool, readonly DealTemplate[]>;
 
@@ -155,8 +150,15 @@ const KARMA_COST_ACTION = {
  * (`restraintGreed <= -GREED_TH` OR `reverenceDesecration <= -DESECRATION_TH`) is tempted with
  * `tempting`; everyone else gets `standard`. This is the karma READ (thresholds are M15
  * placeholders); it adds no karma EFFECT.
+ *
+ * PLAN.md #2, floor 4 (GAME-DESIGN §8's floor-gated temptations): a floor whose data names a
+ * `bargainPool` overrides the ledger — on floor 4 EVERYONE is offered the `tempting` pool, the
+ * reverent included, because the reckoning is where temptation is decisive. `floor` omitted (or
+ * any floor without the override) ⇒ exactly the karma rule above.
  */
-export function selectPool(karma: KarmaState): Pool {
+export function selectPool(karma: KarmaState, floor?: FloorId): Pool {
+  const override = floor === undefined ? null : floorModifiers(floor).bargainPool;
+  if (override) return override;
   if (karma.reverenceDesecration >= REVERENCE_TH) return 'grace';
   if (karma.restraintGreed <= -GREED_TH || karma.reverenceDesecration <= -DESECRATION_TH) {
     return 'tempting';
@@ -172,8 +174,6 @@ function realizeReward(spec: DealRewardSpec, rng: Rng): DealReward {
       return { kind: 'item', instance: generateItem(rng, { slot: spec.slot, rarity: spec.rarity }) };
     case 'item':
       return { kind: 'item', instance: { defId: spec.defId } };
-    case 'heal':
-      return { kind: 'heal', amount: spec.amount };
     case 'statPoint':
       return { kind: 'statPoint', stat: spec.stat };
     case 'skillCharge':
@@ -182,12 +182,13 @@ function realizeReward(spec: DealRewardSpec, rng: Rng): DealReward {
 }
 
 /**
- * Build a sacrifice deal — PURE, seeded. Reads `karma` (via `selectPool`) to pick the pool,
- * then draws in the documented order. `act` is currently unused by the placeholder tables but
- * kept for the M8/M10 per-Act deal expansion. Never mutates karma.
+ * Build a sacrifice deal — PURE, seeded. Reads `karma` and the FLOOR (via `selectPool`) to pick
+ * the pool, then draws in the documented order. Never mutates karma. (PLAN.md #2: the second
+ * parameter was an unused `act`; it is now the floor the bargain found the player on, keyed on
+ * `place` by the caller — `floorOf(state)`.)
  */
-export function buildDeal(karma: KarmaState, _act: number, rng: Rng): SacrificeDeal {
-  const pool = selectPool(karma);
+export function buildDeal(karma: KarmaState, floor: FloorId, rng: Rng): SacrificeDeal {
+  const pool = selectPool(karma, floor);
   const templates = TEMPLATES[pool];
   if (!templates || templates.length === 0) throw new Error(`buildDeal: empty pool ${pool}`);
   const template = pick(rng, templates);
@@ -271,6 +272,38 @@ export function canAfford(player: Player, cost: DealCost): boolean {
   }
 }
 
+/** How many backpack items paying `cost` removes (an offering gives up one; so does a relic). */
+function itemsTakenBy(player: Player, cost: DealCost): number {
+  if (cost.kind === 'offering') return player.inventory.backpack.length > 0 ? 1 : 0;
+  if (cost.kind === 'relic') return firstRelicIndex(player) >= 0 ? 1 : 0;
+  return 0;
+}
+
+/**
+ * Would taking this deal need the player to make ROOM first? — PURE (plan Appendix A.3).
+ *
+ * True only when the reward is an ITEM and the backpack, AFTER the cost is paid, would already
+ * hold `BACKPACK_CAPACITY` items. A cost that itself gives up an item (an offering, a relic)
+ * frees the slot its reward needs, so it never needs room. The author's ruling: accepting such
+ * a deal OPENS THE PACK for a discard first — the reward is never lost (`game.ts`'s
+ * `deal-discard` phase). Backing out of that discard is exactly refusing the deal.
+ */
+export function needsRoom(player: Player, deal: SacrificeDeal): boolean {
+  return roomShortfall(player, deal) > 0;
+}
+
+/**
+ * HOW MANY backpack items must go before this deal's reward fits — PURE; 0 when none must (or
+ * the reward is not an item). One for a full pack. MORE than one only for a pack already OVER
+ * `BACKPACK_CAPACITY` — which a v8 save can hold (v8 had no cap, and the v8 -> v9 migration
+ * never throws a player's items away). FIX ROUND 1, F3: the discard step used to assume one.
+ */
+export function roomShortfall(player: Player, deal: SacrificeDeal): number {
+  if (deal.reward.kind !== 'item') return 0;
+  const afterCost = player.inventory.backpack.length - itemsTakenBy(player, deal.cost);
+  return Math.max(0, afterCost - (BACKPACK_CAPACITY - 1));
+}
+
 /**
  * Recompute the derived stat mods after a stat change (maxHp/AC deliberately NOT re-derived).
  * G20: the stat is floored at `MIN_STAT`, so the unbounded `statPoint` cost cannot walk an
@@ -286,6 +319,14 @@ function withStat(player: Player, stat: StatKey, delta: number): Player {
  * returns the new player + karma and an outcome. When the cost is unaffordable NOTHING changes
  * (`outcome: 'unaffordable'`).
  *
+ * PLAN.md #2, Appendix A.3 — THE PRICE IS NEVER CHARGED BEFORE THE REWARD IS PLACED: when the
+ * reward is an item and the backpack could not hold it (`needsRoom`), NOTHING changes either
+ * (`outcome: 'no-room'`) — not the HP, not the ledger, not the pack. The check runs BEFORE any
+ * cost is paid, and because this function is pure there is no moment in which a half-taken
+ * bargain exists: it returns the whole new player or the original one. The engine never reaches
+ * this outcome through `step` (it opens the discard first); it is the backstop that makes the
+ * ordering a property of the function, not of its caller.
+ *
  * POLICY (matches level-up): a stat cost/reward recomputes `mods` only — maxHp/AC are NOT
  * retroactively re-derived (M15 placeholder, documented). A purely-karmic cost (desecrate /
  * greed / whisper) records the real karma action and pays no HP/stat; an `offering` records its
@@ -297,9 +338,14 @@ export function applyDeal(
   player: Player,
   karma: KarmaState,
   deal: SacrificeDeal,
-): { player: Player; karma: KarmaState; outcome: 'taken' | 'unaffordable' } {
+  // PLAN.md #2: the floor's karma multiplier — a bargain paid on floor 4 counts double. Default 1.
+  karmaWeight = 1,
+): { player: Player; karma: KarmaState; outcome: 'taken' | 'unaffordable' | 'no-room' } {
   if (!canAfford(player, deal.cost)) {
     return { player, karma, outcome: 'unaffordable' };
+  }
+  if (needsRoom(player, deal)) {
+    return { player, karma, outcome: 'no-room' };
   }
 
   let next = player;
@@ -335,17 +381,17 @@ export function applyDeal(
       // recorded the karma without taking the item would be free reverence.
       const backpack = next.inventory.backpack.slice(1);
       next = { ...next, inventory: { slots: { ...next.inventory.slots }, backpack } };
-      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.offering);
+      nextKarma = recordKarmaWeighted(nextKarma, KARMA_COST_ACTION.offering, karmaWeight);
       break;
     }
     case 'desecrate':
-      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.desecrate);
+      nextKarma = recordKarmaWeighted(nextKarma, KARMA_COST_ACTION.desecrate, karmaWeight);
       break;
     case 'greed':
-      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.greed);
+      nextKarma = recordKarmaWeighted(nextKarma, KARMA_COST_ACTION.greed, karmaWeight);
       break;
     case 'whisper':
-      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.whisper);
+      nextKarma = recordKarmaWeighted(nextKarma, KARMA_COST_ACTION.whisper, karmaWeight);
       break;
   }
 
@@ -353,9 +399,6 @@ export function applyDeal(
   switch (deal.reward.kind) {
     case 'item':
       next = { ...next, inventory: pickUp(next.inventory, deal.reward.instance) };
-      break;
-    case 'heal':
-      next = { ...next, hp: Math.min(next.hp + deal.reward.amount, next.maxHp) };
       break;
     case 'statPoint':
       next = withStat(next, deal.reward.stat, 1);
@@ -415,8 +458,6 @@ export function describeReward(reward: DealReward): string {
   switch (reward.kind) {
     case 'item':
       return reward.instance.rolled?.name ?? reward.instance.defId;
-    case 'heal':
-      return `${reward.amount} HP restored`;
     case 'statPoint':
       return `+1 ${reward.stat}`;
     case 'skillCharge':

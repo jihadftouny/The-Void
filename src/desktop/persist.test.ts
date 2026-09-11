@@ -47,7 +47,7 @@ describe('persist (desktop save/load)', () => {
     // one lets a call site forget the meta-progression fields, and that omission IS G19.
     const state = createGame(12345);
     let memory = createStoryMemory();
-    memory = rememberBeat(memory, [{ kind: 'victory', xpGained: 5, extraRest: false, loot: [] }]);
+    memory = rememberBeat(memory, [{ kind: 'victory', xpGained: 5, loot: [] }]);
     const m = meta({ runSeed: 12345, runSummary: { ...emptyRunSummary(), maxAct: 3, spareCount: 2 } });
     saveRun(state, memory, m);
     const loaded = loadRun();
@@ -640,5 +640,68 @@ describe('persist reports what it did (principle 7)', () => {
       expect(e.message, `"${e.message}" contains a digit`).toMatch(/^[^0-9]*$/);
       expect(e.message, `"${e.message}" contains an interpolation`).toMatch(/^[^$]*$/);
     }
+  });
+});
+
+// =========================================================================================
+// PLAN.md #2 — the v8 -> v9 SAVE MIGRATION, with the committed real save as its ORACLE (AC-7).
+//
+// The fixture is a v8 state written by the game BEFORE this unit: six potions, a banked rest,
+// a nine-slot paperdoll, an all-`gen:*` backpack of five, parked on the old "Rest here?" phase.
+// "A save from today must still load" is asserted on THAT file, through the real `loadRun`.
+// Every expected value below is derived from the fixture's own fields and the migration's
+// written rules (`save.ts` `upgrade8to9`), never read back from a decode.
+// =========================================================================================
+
+describe('AC-7 — a save from before PLAN.md #2 loads, through loadRun', () => {
+  beforeEach(() => {
+    installMemoryLocalStorage().set('thevoid:run', V1_ENVELOPE);
+  });
+
+  type RawPlayer = Record<string, unknown> & {
+    pots: number;
+    restsLeft: number;
+    inventory: { backpack: unknown[]; slots: unknown };
+  };
+  const raw = JSON.parse(V1_ENVELOPE) as {
+    state: { version: number; player: RawPlayer; phase: Record<string, unknown> };
+  };
+
+  it('(e) the fixture really IS v8, with the fields the migration must fold (non-vacuity)', () => {
+    // If a regenerated fixture lost these, every assertion below would pass by comparing
+    // nothing to nothing.
+    expect(raw.state.version).toBe(8);
+    expect(raw.state.player.pots).toBe(6);
+    expect(raw.state.player.restsLeft).toBe(1);
+    expect(raw.state.phase).toEqual({ kind: 'rest', restOffered: true });
+    expect(raw.state.player.inventory.backpack).toHaveLength(5);
+  });
+
+  it('(a) loads as version 9: potions became Void Draughts, the rest counter is gone, the rest has no decision', () => {
+    const loaded = loadRun();
+    expect(loaded, 'the real pre-#2 save no longer loads').not.toBeNull();
+    const s = loaded!.state;
+    expect(s.version).toBe(9);
+    const p = s.player! as unknown as Record<string, unknown>;
+    expect('pots' in p).toBe(false);
+    expect('restsLeft' in p).toBe(false);
+    // 6 potions, 5 items in a 12-slot pack: room 7, so min(6, 7) = 6 draughts, appended.
+    const before = raw.state.player.inventory.backpack;
+    const after = s.player!.inventory.backpack;
+    expect(after.slice(0, 5)).toEqual(before);
+    expect(after.slice(5)).toEqual(Array.from({ length: 6 }, () => ({ defId: 'void-draught' })));
+    // Every OTHER player field is exactly the fixture's.
+    const { pots: _p, restsLeft: _r, inventory: _i, ...rest } = raw.state.player;
+    void _p;
+    void _r;
+    void _i;
+    const { inventory: _j, ...migratedRest } = s.player!;
+    void _j;
+    expect(migratedRest).toEqual(rest);
+    expect(s.player!.inventory.slots).toEqual(raw.state.player.inventory.slots);
+    // The phase lost its decision, and continuing returns to the hub.
+    expect(s.phase).toEqual({ kind: 'rest' });
+    expect(awaitingFor(s.phase)).toBe('rest');
+    expect(step(s, { kind: 'continue' }).state.phase).toEqual({ kind: 'main-menu' });
   });
 });

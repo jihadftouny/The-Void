@@ -127,6 +127,15 @@ const EXPECTED: Readonly<Record<string, Expectation>> = {
   'battle-open': { mode: 'side', prose: true, scenery: false },
   'choose-class': { mode: 'side', prose: true, scenery: false },
   'draft-pick': { mode: 'side', prose: true, scenery: false },
+  // PLAN.md #2: the found rest spot carries the floor's scenery (§22.26), as the hub does;
+  // the bargain and the full-pack bargain (Appendix A.3) are short action lists beside prose.
+  rest: { mode: 'side', prose: true, scenery: true },
+  'deal-decision': { mode: 'side', prose: true, scenery: false },
+  'deal-discard': { mode: 'side', prose: true, scenery: false },
+  'deal-discard-open': { mode: 'side', prose: true, scenery: false },
+  // Fix round 2: the marking state (a pack over the cap, two marked) — the same screen, fuller.
+  'deal-discard-marked': { mode: 'side', prose: true, scenery: false },
+  'deal-discard-marked-open': { mode: 'side', prose: true, scenery: false },
   inventory: { mode: 'wide', prose: true, scenery: false },
   settings: { mode: 'wide', prose: true, scenery: false },
   'content-warning': { mode: 'wide', prose: false, scenery: false },
@@ -445,7 +454,8 @@ describe('the probe really ran, against the real build', () => {
     const r = report(960, 640, 'hub', 'normal');
     expect(r.narration.beats, 'the hub scenario rendered no prose').toBe(1);
     expect(r.log.lines, 'the hub scenario rendered no combat log').toBe(60);
-    expect(r.choices.controls, 'the hub menu has no rows').toBe(6);
+    // PLAN.md #2: five rows — the "Seek a bargain" row left with §22.23.
+    expect(r.choices.controls, 'the hub menu has no rows').toBe(5);
     expect(
       r.narration.scrollHeight,
       'the beat is short enough to fit its floor — it is not a worst case',
@@ -566,7 +576,7 @@ describe('the narration always has room to be read', () => {
 // =========================================================================================
 
 describe('the reserved scenery region is capped in BOTH directions, and keeps its ratio', () => {
-  it('it is really mounted on the hub, and nowhere else', () => {
+  it('it is really mounted on the hub and the rest spot, and nowhere else', () => {
     for (const [width, height] of AT_OR_ABOVE_MIN) {
       for (const scenario of SCENARIOS) {
         const r = report(width, height, scenario, 'normal');
@@ -691,7 +701,22 @@ describe('every control is reachable at the enforced minimum window', () => {
    * nothing to scroll. This is the strict standard, and it covers everything the player meets
    * repeatedly — the hub, the abandon confirmation, a battle, class select, the title.
    */
-  const ALL_VISIBLE = ['hub', 'confirm-abandon', 'battle', 'choose-class', 'title'];
+  const ALL_VISIBLE = [
+    'hub',
+    'confirm-abandon',
+    'battle',
+    'choose-class',
+    'title',
+    // PLAN.md #2: met on every floor — several bargains and a rest or two per floor — so they
+    // get the strict standard. Appendix A.3.4 says it of the full-pack bargain in so many words:
+    // nothing below the fold, at 960x640, at large text.
+    'rest',
+    'deal-decision',
+    'deal-discard',
+    // Fix round 2: the marking state too — the longer prompt and its "Leaving:" line must not
+    // push the two controls below the fold (A.3.4), at either text size.
+    'deal-discard-marked',
+  ];
 
   /**
    * A list the GAME PRESENTS that outgrows the window. The standard here is stricter than
@@ -737,6 +762,13 @@ describe('every control is reachable at the enforced minimum window', () => {
   }[] = [
     { scenario: 'battle-open', collapsed: 'battle', scale: 'normal' },
     { scenario: 'battle-open', collapsed: 'battle', scale: 'large' },
+    // PLAN.md #2, Appendix A.3: twelve leave rows and the refusal — 13 controls of at least one
+    // line each plus their gaps cannot fit a 640px window at either text size, which is WHY the
+    // rows sit in a closed list. The player opens it with one click and closes it with another.
+    { scenario: 'deal-discard-open', collapsed: 'deal-discard', scale: 'normal' },
+    { scenario: 'deal-discard-open', collapsed: 'deal-discard', scale: 'large' },
+    { scenario: 'deal-discard-marked-open', collapsed: 'deal-discard-marked', scale: 'normal' },
+    { scenario: 'deal-discard-marked-open', collapsed: 'deal-discard-marked', scale: 'large' },
   ];
 
   /**
@@ -762,16 +794,29 @@ describe('every control is reachable at the enforced minimum window', () => {
    * How many controls each screen puts on the page, and how many it deliberately hides.
    *
    * DERIVED BY HAND from the builders, not read off a run:
-   *   hub / confirm-abandon  `hubMenu` returns 6 rows in menu mode and 2 in confirmation mode.
-   *   battle                 Fight + the Cast toggle + Spare + the Use-item toggle + Potion +
-   *                          Run = 6 on screen; 6 skills and 1 item sit inside the two closed
-   *                          picker lists = 7 hidden.
-   *   battle-open            the same 13, with the Cast list open, so 12 on screen and 1 left
+   *   hub / confirm-abandon  `hubMenu` returns 5 rows in menu mode (Continue, Inventory,
+   *                          Character sheet, Settings, Abandon — PLAN.md #2 removed "Seek a
+   *                          bargain") and 2 in confirmation mode.
+   *   battle                 Fight + the Cast toggle + Spare + the Use-item toggle + Run = 5 on
+   *                          screen (PLAN.md #2 removed the Potion button, §22.6); 6 skills and
+   *                          1 item sit inside the two closed picker lists = 7 hidden.
+   *   battle-open            the same 12, with the Cast list open, so 11 on screen and 1 left
    *                          inside the still-closed Use-item list.
    *   choose-class           the five class rows.
    *   draft-pick             three cards (the "Choose one" line is a div, not a control).
    *   settings               `SETTINGS_ROWS` is 3 + 3 + 2 options, plus Back = 9.
-   *   inventory / game-over  the rows are label/value spans; only Back / Descend again.
+   *   inventory              the rows are label/value spans, plus Back — and PLAN.md #2 gave
+   *                          each of the fixture's 15 backpack rows a Discard: 1 + 15 = 16.
+   *   game-over              the rows are label/value spans; only Descend again.
+   *   rest                   one Continue — the rest has already happened (§22.26).
+   *   deal-decision          Pay the price + Refuse = 2 (the block above them is text).
+   *   deal-discard           A.3: the "Choose what to leave" toggle + the refusal = 2 on screen;
+   *                          one leave row per slot of the FULL pack (BACKPACK_CAPACITY = 12)
+   *                          inside the closed list = 12 hidden.
+   *   deal-discard-open      the same 14 with the list open: 14 on screen, none hidden.
+   *   deal-discard-marked    fix round 2 — a pack of 15 with 2 marked: the toggle + the refusal
+   *                          = 2 on screen; 15 - 2 marked = 13 leave rows hidden in the list.
+   *   deal-discard-marked-open  the same 15 with the list open: 15 on screen, none hidden.
    *   content-warning        exactly one control, by policy — never a fight to get past.
    *   title / resume         two stacked buttons.
    *
@@ -780,13 +825,19 @@ describe('every control is reachable at the enforced minimum window', () => {
    * a legitimately hidden picker entry by its rect, and only the count tells them apart.
    */
   const EXPECTED_CONTROLS: Readonly<Record<string, { visible: number; hidden: number }>> = {
-    hub: { visible: 6, hidden: 0 },
+    hub: { visible: 5, hidden: 0 },
     'confirm-abandon': { visible: 2, hidden: 0 },
-    battle: { visible: 6, hidden: 7 },
-    'battle-open': { visible: 12, hidden: 1 },
+    battle: { visible: 5, hidden: 7 },
+    'battle-open': { visible: 11, hidden: 1 },
     'choose-class': { visible: 5, hidden: 0 },
     'draft-pick': { visible: 3, hidden: 0 },
-    inventory: { visible: 1, hidden: 0 },
+    inventory: { visible: 16, hidden: 0 },
+    rest: { visible: 1, hidden: 0 },
+    'deal-decision': { visible: 2, hidden: 0 },
+    'deal-discard': { visible: 2, hidden: 12 },
+    'deal-discard-open': { visible: 14, hidden: 0 },
+    'deal-discard-marked': { visible: 2, hidden: 13 },
+    'deal-discard-marked-open': { visible: 15, hidden: 0 },
     settings: { visible: 9, hidden: 0 },
     'content-warning': { visible: 1, hidden: 0 },
     title: { visible: 2, hidden: 0 },
@@ -1151,7 +1202,7 @@ describe('tab order follows reading order', () => {
     expect(order.filter((r) => r === 'column').length, 'the reading column has no focusables').toBeGreaterThan(
       3,
     );
-    expect(order.filter((r) => r === 'choices').length).toBeGreaterThanOrEqual(6);
+    expect(order.filter((r) => r === 'choices').length).toBeGreaterThanOrEqual(5);
   });
 });
 
@@ -1274,7 +1325,7 @@ describe('the real renderer, booted and walked', () => {
     // describe a screen the game does not show.
     const real = step('hub');
     const mirrored = report(1100, 820, 'hub', 'normal');
-    expect(real.hubMenuRows, 'the real hub menu has a different number of rows').toBe(6);
+    expect(real.hubMenuRows, 'the real hub menu has a different number of rows').toBe(5);
     expect(
       real.choices.controls,
       'the mirrored hub and the real hub disagree on how many controls the hub has',

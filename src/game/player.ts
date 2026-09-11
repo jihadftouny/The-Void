@@ -27,7 +27,7 @@ import { type ActiveCondition } from './condition.ts';
 import { CLASSES, type PlayerClass } from './classKit.ts';
 import { type SkillUpgrade } from './skill.ts';
 import { type Inventory } from './inventory.ts';
-import { inventoryWithGear } from './equipment.ts';
+import { inventoryWithGear, pickUp } from './equipment.ts';
 
 /** The five playable classes (defined with the class roster in `classKit.ts`). */
 export type { PlayerClass } from './classKit.ts';
@@ -43,8 +43,6 @@ export type { PlayerClass } from './classKit.ts';
  */
 export interface Player extends Character {
   classId: PlayerClass;
-  restsLeft: number;
-  pots: number;
   proficiency: number;
   advantageDisadvantage: number;
   /** Tibia-style paperdoll + backpack — the authoritative equipped-gear store (M5). */
@@ -91,20 +89,30 @@ export interface Player extends Character {
    * plain data so it round-trips through a mid-battle save, and 0/absent for a normal run.
    */
   shield?: number;
+  /**
+   * PLAN.md #2, floor 5: skill id -> corruption template id (`corruptions.json`), rolled ONCE per
+   * owned skill on arrival at the True Void from the run's own RNG, and read by `resolveSkill`.
+   * OPTIONAL and additive: absent before floor 5 (JSON drops it), so no save before floor 5
+   * changes shape. Skills drafted AFTER arrival are not in it (the ruling says "on arrival").
+   */
+  corruptedSkills?: Record<string, string>;
 }
 
-/** Fixed game-start scalars (Java `GameLogic.startGame` / `Player` init). */
-const STARTING_RESTS = 1;
+/** Fixed game-start scalars (Java `GameLogic.startGame` / `Player` init). PLAN.md #2 deleted
+ *  the starting rest count with the banked counter: rests are found on the descent (§22.26). */
 /**
- * M15 BALANCE: starting healing potions, 2 → 6. Each potion is a full heal (battle.ts), so
- * this is the cleanest early-survivability lever. The sim is a no-equipment LOWER BOUND — a
- * fresh character has only its ≈7–14 base HP and no found/equipped gear, so it needs a deeper
- * heal reserve to survive the un-levelled front of the descent; 6 potions lifts the baseline
- * win-rate into range and pulls Act-1 deaths below 40% of the total. [NEEDS-HUMAN M15: 6 is
- * generous for REAL play (equipment + found potions make the true run easier than the sim) —
- * confirm the "tough-but-fair" feel in a play-test; trim toward 3–4 if real play is too soft.]
+ * GAME-DESIGN.md §22.6 (A1b): POTIONS FOLD INTO CONSUMABLES — there is no separate potion
+ * resource, no Potion button and no `pots` counter. A fresh character carries this small kit in
+ * its BACKPACK instead (the old kit was SIX free full heals); every further heal is FOUND — a
+ * drop or a chest — and competes with gear for the backpack's twelve slots (§22.17).
+ *
+ * Derivation of the starting value (plan §4.5): the drop table yields a heal on roughly
+ * 0.5 x 0.45 x 0.5 ≈ 11% of victories, plus chests; one full heal (Void Draught, 100% of max HP)
+ * and one 4-HP Suture Kit keep the un-levelled front of floor 1 survivable while making the
+ * second heal a find. ⚠ #2 BALANCE PLACEHOLDER, sim-tuned within [0, 3] items; a per-class kit
+ * is one data edit away. Ids resolve in `consumables.json` (a test holds them to it).
  */
-const STARTING_POTS = 6;
+export const STARTING_CONSUMABLES: readonly string[] = ['void-draught', 'suture-kit'];
 const PROFICIENCY = 2;
 const MAX_SKILL_CHARGES = 5;
 
@@ -147,14 +155,16 @@ export function createPlayer(args: {
   return {
     ...base,
     classId: args.classId,
-    restsLeft: STARTING_RESTS,
-    pots: STARTING_POTS,
     proficiency: PROFICIENCY,
     advantageDisadvantage: 0,
     // Seed the class starting gear into the paperdoll slots (M5): weapon -> mainHand,
     // armor -> armor. No starting shield (unchanged). These slots are now the live combat
     // path, so a fresh character's damage/AC are unchanged from M4 (same starting gear).
-    inventory: inventoryWithGear({ mainHand: def.weaponId, armor: def.armorId }),
+    // …and §22.6's starting kit goes into the backpack (the potions it replaces are gone).
+    inventory: STARTING_CONSUMABLES.reduce(
+      (inv, defId) => pickUp(inv, { defId }),
+      inventoryWithGear({ mainHand: def.weaponId, armor: def.armorId }),
+    ),
     resistances: ELEMENTS.map(() => 0),
     activeConditions: [],
     // M9 lean start: only the class's core skills; the rest of `def.kit` is drafted later.

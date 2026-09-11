@@ -32,11 +32,10 @@ export type NarrativeEvent =
       text?: string;
     }
   | { kind: 'encounter-start'; enemyName: string; text?: string }
-  | { kind: 'rest-lore'; title: string; loreText: string; text?: string }
+  // PLAN.md #2: the four decision-era rest events (the lore fragment, "already full", "declined",
+  // "none left") are gone with the rest DECISION and the banked counter (§22.26); a found rest
+  // emits `rest-found` then this.
   | { kind: 'rest-taken'; hpRestored: number; hp: number; maxHp: number; text?: string }
-  | { kind: 'rest-full'; text?: string }
-  | { kind: 'rest-declined'; text?: string }
-  | { kind: 'no-rests'; text?: string }
   // ---- M7 sacrifice-deal encounter (replaces the gold shop) ----
   | { kind: 'deal-offer'; pool: Pool; cost: string; reward: string; text?: string }
   | { kind: 'deal-taken'; cost: string; reward: string; text?: string }
@@ -65,7 +64,35 @@ export type NarrativeEvent =
    */
   | { kind: 'verdict'; outcome: 'grace' | 'cast-down'; text?: string }
   | { kind: 'ending'; endingType: 'grace' | 'damnation'; header: string; body: string; text?: string }
-  | { kind: 'game-over'; xp: number; text?: string };
+  | { kind: 'game-over'; xp: number; text?: string }
+  // ---- PLAN.md #2: rest as a found place, the warped kit, and the full-pack bargain ----
+  /**
+   * A rest spot, found on the descent and taken at once (GAME-DESIGN.md §22.26). `place` is the
+   * floor's placeholder place line from `restBriefs.json`; `briefId` names the brief the
+   * narrator's scene block is built from. Always followed by `rest-taken` in the same step.
+   * `woundsClosed` / `conditionsEased`: whether the character arrived hurt / afflicted — facts
+   * only this step knows (the state after it is already rested), which the narrator's condition
+   * brief needs to say "your wounds close" rather than "there was nothing to close". Booleans,
+   * never numbers.
+   */
+  | {
+      kind: 'rest-found';
+      floor: number;
+      place: string;
+      briefId: string;
+      woundsClosed: boolean;
+      conditionsEased: boolean;
+      text?: string;
+    }
+  /** Floor 5: every owned skill took on a corrupted form (`count` of them) on arrival. */
+  | { kind: 'skills-warped'; count: number; text?: string }
+  /**
+   * A bargain was accepted with a FULL backpack and an item reward (plan Appendix A.3): the pack
+   * opens so the player can leave something behind. Nothing has been paid yet.
+   */
+  | { kind: 'deal-needs-room'; reward: string; text?: string }
+  /** An item was left behind to make room for a bargain's reward (A.3). */
+  | { kind: 'item-discarded'; name: string; rarity: Rarity; text?: string };
 
 /** The full game event stream: combat events plus narrative events. */
 export type GameEvent = CombatEvent | NarrativeEvent;

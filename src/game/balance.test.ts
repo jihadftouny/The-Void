@@ -17,6 +17,8 @@ import { weaponForSlot, UNARMED } from './equipment.ts';
 import { mulberry32 } from './rng.ts';
 import { STAT_KEYS, type Stats } from './character.ts';
 import { simulateBatch, heuristicPolicy, ALL_CLASSES } from './sim.ts';
+import { FLOOR_IDS } from './floors.ts';
+import { HOLLOW_GATE_XP } from './progression.ts';
 
 // ------- Anchor 1: Act-1 hits-to-kill --------------------------------------------------------
 
@@ -172,7 +174,7 @@ describe('M15 anchor — a fresh Act-1 enemy takes ~3-4 Fight actions to kill', 
 // ------- Anchor 2: winnability regression guard ----------------------------------------------
 
 describe('M15 anchor — the baseline sim is winnable and deaths are not bunched at Act 1', () => {
-  it('overall win-rate > 0.12 AND Act-1 death share < 0.55 (heuristic policy, seeds 1..100 × 5)', () => {
+  it('overall win-rate in (0.20, 0.40) AND Act-1 death share < 0.55 (heuristic policy, seeds 1..100 × 5)', () => {
     const seeds = Array.from({ length: 100 }, (_, i) => i + 1);
     const report = simulateBatch({
       seeds,
@@ -182,7 +184,18 @@ describe('M15 anchor — the baseline sim is winnable and deaths are not bunched
 
     // Directional thresholds derived from the target (win band 25-35%, deaths spread): a weaker,
     // stable guard that both FAIL against the pre-M15 build (0% win, 98% Act-1 deaths).
-    expect(report.winRate).toBeGreaterThan(0.12);
+    //
+    // THE WIN FLOOR IS 0.20 (FIX ROUND 1; it was 0.12). 0.12 was sized for the gearless sim, and
+    // at the tuned build it waved through a DEATH TRAP: illusions that can never be seen through
+    // drop this sample to 12.8% and still passed. 0.20 is derived from the band, not a run: the
+    // band's floor (0.25) less 2.5 standard errors of a 500-run proportion near the one-in-three
+    // aim (sqrt(0.3 x 0.7 / 500) = 0.0205; 0.25 - 0.051 = 0.199). So a build inside the band
+    // does not fail by sampling noise, and one well under it does.
+    expect(report.winRate).toBeGreaterThan(0.2);
+    // ...AND A CEILING OF 0.40 (fix round 2), derived the same way from the band's TOP: 0.35 plus
+    // 2.5 standard errors (0.35 + 0.051 = 0.401). Without it a regression that makes the game far
+    // too easy — the direction #2's tuning spent three knobs correcting — would pass unseen.
+    expect(report.winRate).toBeLessThan(0.4);
 
     const act1Share = report.deaths > 0 ? (report.deathByAct[1] ?? 0) / report.deaths : 1;
     expect(act1Share).toBeLessThan(0.55);
@@ -191,5 +204,37 @@ describe('M15 anchor — the baseline sim is winnable and deaths are not bunched
     for (const c of ALL_CLASSES) {
       expect(report.perClass[c].wins).toBeGreaterThan(0);
     }
+  });
+
+  it('AC-29 — the Hollow gate is no longer pinned to this floor by coincidence', () => {
+    // It WAS: §22.21 lowered HOLLOW_GATE_XP 600 -> 500 only so this file's old > 0.12 floor would
+    // pass (the sim then fought with starting gear; the floor is now 0.20). PLAN.md #2's re-run measured a real game
+    // well above that floor and moved it back to 600 on its own evidence — tuning step T3 in
+    // docs/BALANCE-REPORT.md's ledger (`TUNING_LEDGER`, scripts/balance-claims.ts). This test
+    // pins the value so a move is a decision someone ledgers, not a drift.
+    expect(HOLLOW_GATE_XP).toBe(600);
+  });
+});
+
+// ------- AC-22: bargains find the run several times per floor ---------------------------------
+
+describe('AC-22 — bargains arrive several times per completed floor', () => {
+  it('over 500 heuristic runs, the mean deal-offer count per completed floor lies in [2, 6]', () => {
+    // The band is the plan's (AC-22). Read through the encounter weights: a bargain is 2 of
+    // 11-12 weights (about one encounter in six), so [2, 6] offers is what a floor of about 12
+    // to 36 encounters yields — the report states the measured floor lengths beside it. Counted over CLEARED floors only, so a death partway down a
+    // floor cannot drag the mean below what a whole floor offers.
+    const seeds = Array.from({ length: 100 }, (_, i) => i + 1);
+    const report = simulateBatch({ seeds, classes: [...ALL_CLASSES] });
+    let offers = 0;
+    let cleared = 0;
+    for (const f of FLOOR_IDS) {
+      offers += report.perClearedFloor[f].bargainsOffered;
+      cleared += report.perClearedFloor[f].cleared;
+    }
+    expect(cleared).toBeGreaterThan(500); // non-vacuity: hundreds of whole floors measured
+    const mean = offers / cleared;
+    expect(mean).toBeGreaterThanOrEqual(2);
+    expect(mean).toBeLessThanOrEqual(6);
   });
 });

@@ -150,18 +150,6 @@ export function formatEvent(e: GameEvent): string {
       return `You drain ${e.amount} HP.`;
     case 'detonate':
       return `You detonate ${e.consumed} affliction(s) for ${e.bonusDamage} damage.`;
-    case 'potion-drunk':
-      return `You drink a potion — restored to ${e.healedTo} HP.`;
-    case 'potion-unavailable':
-      // THREE causes share this one event (battle.ts): no potions left, already at full
-      // HP, and the Void Pact relic's `cannotHeal`. The old line — "No potions left to
-      // drink." — is FALSE for two of the three, and G18 is what puts it on screen. This
-      // sentence is true of all three, because it reports the outcome rather than guessing
-      // the cause. (Folding potions into consumables, §22.6, is #2's; splitting the event
-      // into three would change `GameState`'s event vocabulary, which this unit must not.)
-      return `Nothing comes of reaching for a potion.`;
-    case 'potion-blocked':
-      return `You cannot drink a potion right now.`;
     case 'fled':
       return `You escape into the Void.`;
     case 'escape-failed':
@@ -173,10 +161,9 @@ export function formatEvent(e: GameEvent): string {
     case 'spare-unavailable':
       return `This one cannot be spared.`;
     case 'victory': {
-      const rest = e.extraRest ? ', and you find a place to rest' : '';
       const loot =
         e.loot.length > 0 ? ` You scavenge ${e.loot.map((l) => l.name).join(', ')}.` : '';
-      return `Victory! +${e.xpGained} XP${rest}.${loot}`;
+      return `Victory! +${e.xpGained} XP.${loot}`;
     }
     case 'defeat':
       return `You have fallen.`;
@@ -202,6 +189,17 @@ export function formatEvent(e: GameEvent): string {
       return `The crew strikes you for ${e.amount} damage.`;
     case 'boss-adapt':
       return `Your foe reads your pattern — your next strike falters.`;
+    // --- PLAN.md #2 floor mechanics ---
+    case 'floor-drain':
+      return `This place drains ${e.amount} skill charge${e.amount === 1 ? '' : 's'} from you.`;
+    case 'illusion-struck':
+      return `Your blow passes through it — nothing is there.`;
+    case 'illusion-dispelled':
+      // The one roll of the mechanic the player is shown (a FAILED roll emits nothing, or it
+      // would name the illusion early). Formats the engine's numbers; recomputes none.
+      return `You see through the illusion — Wisdom ${e.total} vs ${e.dc}. It was never there.`;
+    case 'loot-left-behind':
+      return `Your pack is full — you leave ${e.name} behind.`;
 
     // --- narrative events ---
     case 'title':
@@ -214,16 +212,8 @@ export function formatEvent(e: GameEvent): string {
       return `${e.name} the ${e.classId} — ${e.maxHp} HP, AC ${e.armorClass}.`;
     case 'encounter-start':
       return `${e.enemyName} emerges from the dark.`;
-    case 'rest-lore':
-      return `${e.title}\n${e.loreText}`;
     case 'rest-taken':
       return `You rest and recover ${e.hpRestored} HP (now ${hpText(e.hp, e.maxHp)}).`;
-    case 'rest-full':
-      return `You are already at full health.`;
-    case 'rest-declined':
-      return `You press on without resting.`;
-    case 'no-rests':
-      return `You have no rest remaining.`;
     case 'deal-offer':
       return `The altar offers ${e.reward} — the price is ${e.cost}.`;
     case 'deal-taken':
@@ -261,6 +251,15 @@ export function formatEvent(e: GameEvent): string {
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'game-over':
       return `Game over. Final XP: ${e.xp}.`;
+    // --- PLAN.md #2: the found rest, the warped kit, the full-pack bargain ---
+    case 'rest-found':
+      return `You find a place to rest: ${e.place}.`;
+    case 'skills-warped':
+      return `Your skills twist into something else (${e.count} changed).`;
+    case 'deal-needs-room':
+      return `Your pack is full. Leave something behind to take ${e.reward}.`;
+    case 'item-discarded':
+      return `You leave ${e.name} behind.`;
   }
 }
 

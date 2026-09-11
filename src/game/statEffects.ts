@@ -181,14 +181,11 @@ export function initiativeOrderTwist(_char: Conditioned): 0 {
   return 0; // no-op until M4
 }
 
-/**
- * Lucid/Clouded ILLUSION-SIGHT (floor-2, M10). Lucid should reveal illusory enemies /
- * false choices, Clouded should hide truth. No illusion system exists yet, so this is a
- * no-op: the ± WIS portion (resistances) is already live via `effectiveResistances`.
- */
-export function illusionSightTwist(_char: Conditioned): 0 {
-  return 0; // no-op until M10
-}
+// PLAN.md #2: the Lucid/Clouded ILLUSION-SIGHT stub that used to sit here is DELETED — floor 2
+// now exists, and Lucid/Clouded reach it with no special case: the passive Wisdom roll against an
+// illusory enemy (`battle.ts` step 0) reads `effectiveMods(player).WIS`, which already carries the
+// augment's ±2 stat. Deleted rather than re-labelled for G16's reason; its old name is kept out of
+// this comment so `statEffects.test.ts`'s source scan can hold the deletion.
 
 // G16: the third twist hook — Emboldened/Cowed DEAL-QUALITY — USED TO LIVE HERE and is
 // DELETED, not re-labelled. It was a no-op behind a comment claiming it was "pending M7", and
@@ -196,7 +193,7 @@ export function illusionSightTwist(_char: Conditioned): 0 {
 // a milestone that has already landed is worse than an absence, because it reads as scheduled
 // work. Nothing depended on it (its only references were its own two test lines), so deletion
 // is the honest option; the ±CHA portion of Emboldened/Cowed is already live through
-// `effectiveMods`. Its two siblings above STAY — each has a named future owner (`PLAN.md` #1.6
-// for the initiative reorder, #2 for illusion-sight), which is exactly what this one lacked.
+// `effectiveMods`. Its sibling above STAYS — it has a named future owner (`PLAN.md` #1.6 for the
+// initiative reorder), which is exactly what this one lacked.
 // Its old name is deliberately NOT written here: a source scan in `statEffects.test.ts` asserts
 // the identifier appears in no shipping file, and a tombstone would defeat it.

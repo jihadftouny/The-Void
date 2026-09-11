@@ -18,7 +18,7 @@
 //
 // BALANCE (provisional, M15 — NEEDS-HUMAN): the intent is a rough ~50/50 split between FOUND
 // loot (victory drops at dropChance 0.5 + the 1/6 chest encounter) and SACRIFICE deals (the
-// player-initiated `seek-deal` altar). Act-1 dropChance is pinned at 0.5 and rarity/legendary
+// altar — player-initiated until PLAN.md #2 made bargains descent encounters). Act-1 dropChance is pinned at 0.5 and rarity/legendary
 // weight rises by Act. These numbers are not play-tested; removing gold + adding found loot
 // shifts progression pacing (recorded, not tuned here).
 //

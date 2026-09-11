@@ -336,17 +336,18 @@ describe('bossPostRound — Reflection adapts after a repeated tactic', () => {
   });
 
   it('tallies each action SEPARATELY: no single action reaching the threshold ⇒ no adapt', () => {
-    // fight ×2 and potion ×2 — neither key reaches 3, so the boss never adapts.
+    // fight ×2 and run ×2 — neither key reaches 3, so the boss never adapts. (PLAN.md #2: was
+    // fight/potion; the potion action is gone, §22.6.)
     const enemy = generateEnemy({ act: 2, type: BOSSES.reflection.name, playerXp: 0 }, mulberry32(1));
     const boss: BossState = { bossId: 'reflection', round: 0, adapted: false, actionTally: {} };
     let battle: BattleState = createBattle(makePlayer(), enemy, 2, { boss });
-    for (const a of ['fight', 'potion', 'fight', 'potion'] as const) {
+    for (const a of ['fight', 'run', 'fight', 'run'] as const) {
       const r = bossPostRound(battle, a);
       expect(r.events.some((e) => e.kind === 'boss-adapt')).toBe(false);
       battle = r.battle;
     }
     expect(battle.boss?.adapted).not.toBe(true);
-    expect(battle.boss?.actionTally).toEqual({ fight: 2, potion: 2 });
+    expect(battle.boss?.actionTally).toEqual({ fight: 2, run: 2 });
   });
 });
 

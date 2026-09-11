@@ -59,6 +59,27 @@ export interface Enemy extends Character {
   karmaWeighted: boolean;
   /** M8: the applied elite affix id, or absent when the enemy carries no affix. */
   affixId?: string;
+  /**
+   * PLAN.md #2, floor 2 ("the fracture"): this enemy is NOT THERE. It attacks for real, but no
+   * damage from any source reaches it (`damageEnemy`), so the fight can end only when the
+   * player's passive Wisdom roll sees through it (`dispelled` — no XP, no loot), or in flight
+   * or death. OPTIONAL and additive: absent on every real enemy, so JSON drops it and neither a
+   * save nor a non-illusory battle changes shape. Set only by `buildRandomBattle` on a floor
+   * whose data carries an `illusionChance`; a boss is never built through it.
+   */
+  illusory?: true;
+}
+
+/**
+ * Apply `amount` damage to an enemy — PURE, RNG-free, floored at 0. THE ONE PLACE an illusion's
+ * immunity lives (PLAN.md #2): an `illusory` enemy is returned UNCHANGED, whatever hit it —
+ * the player's blow, a cast, a relic proc, a thrown consumable. A 0-or-negative amount is also a
+ * no-op. Every enemy-HP loss in the round goes through here or through the tick guard beside it
+ * in `battle.ts`.
+ */
+export function damageEnemy(enemy: Enemy, amount: number): Enemy {
+  if (amount <= 0 || enemy.illusory) return enemy;
+  return { ...enemy, hp: Math.max(enemy.hp - amount, 0) };
 }
 
 const ENEMY_ARMOR_CLASS = 10;
@@ -87,9 +108,16 @@ const ENEMY_MAX_SKILL_CHARGES = 2;
  *    regardless of its argument (see rng.ts), so the draw order/count — and thus save-byte
  *    reproducibility — is unchanged; only the resulting HP magnitude moves. Recorded per the
  *    "override the plan + record the deviation" rule.
+ *  - `ENEMY_HP_XP_DIV` 8 -> 6 (PLAN.md #2 TUNING, T2). The reason the divisor was loosened
+ *    above — "static starting-gear damage" could not keep pace — no longer holds: the sim now
+ *    equips the gear it finds (G48), so part of that loosening is taken back. The term is
+ *    `floor(playerXp / 6)`, so a fresh act-1 enemy (xp 0) is untouched — the hits-to-kill anchor
+ *    does not move — and the added HP lands where the XP is: floors 2-5. Draw-count safe, as
+ *    above. Measured effect on the report's 2,500-run baseline: 0.345 -> 0.321, and floor-1
+ *    deaths barely move (573 -> 576). `docs/BALANCE-REPORT.md`'s tuning ledger carries the row.
  */
 export const ENEMY_BASE_HP = 10;
-export const ENEMY_HP_XP_DIV = 8;
+export const ENEMY_HP_XP_DIV = 6;
 export const ENEMY_HP_RAND_DIV = 4;
 
 /**

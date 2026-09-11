@@ -17,7 +17,9 @@ import {
   SEED_ROW_LABEL,
   hubMenu,
   fallbackNarration,
-  potionControl,
+  dealDiscardView,
+  DEAL_DISCARD_REFUSE,
+  DEAL_DISCARD_CHOOSE,
 } from './view-model.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { createGame, step } from '../game/game.ts';
@@ -68,7 +70,7 @@ describe('displayPlayer (desktop view-model)', () => {
     // that differs from the undamaged snapshot's hp.
     const damaged = { ...battle, player: { ...battle.player, hp: 3 } };
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 0,
       player: snapshot,
       act: 1,
@@ -85,7 +87,7 @@ describe('displayPlayer (desktop view-model)', () => {
 
   it('returns the snapshot object outside battle', () => {
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 0,
       player: snapshot,
       act: 1,
@@ -107,7 +109,7 @@ describe('displayPlayer (desktop view-model)', () => {
 // existing helper above; only `player`/`phase` vary across the cases below.
 function hub(player: Player | null): GameState {
   return {
-    version: 8,
+    version: 9,
     rngState: 0,
     player,
     act: 1,
@@ -151,6 +153,20 @@ describe('castOptions (battle Cast picker)', () => {
   it('is empty for a player with no skills', () => {
     expect(castOptions({ ...snapshot, skillPool: [] })).toEqual([]);
   });
+
+  it('shows floor 5’s warped form — its name and its cost (PLAN.md #2, AC-18)', () => {
+    // corruptions.json: warped = +1 cost; dulled = -1 cost. heavyStrike 2 -> 3, brace 1 -> 0.
+    // At 2 charges the warped Heavy Strike is no longer affordable, exactly as the engine rules.
+    const warped: Player = {
+      ...snapshot,
+      skillCharges: 2,
+      corruptedSkills: { heavyStrike: 'warped', brace: 'dulled' },
+    };
+    expect(castOptions(warped)).toEqual([
+      { skillId: 'heavyStrike', name: 'Heavy Strike (warped)', chargeCost: 3, affordable: false },
+      { skillId: 'brace', name: 'Brace (dulled)', chargeCost: 0, affordable: true },
+    ]);
+  });
 });
 
 describe('consumableOptions (battle Use-item picker)', () => {
@@ -166,7 +182,16 @@ describe('consumableOptions (battle Use-item picker)', () => {
   });
 
   it('is empty for an empty backpack', () => {
-    expect(consumableOptions(snapshot)).toEqual([]);
+    const empty: Player = { ...snapshot, inventory: { ...snapshot.inventory, backpack: [] } };
+    expect(consumableOptions(empty)).toEqual([]);
+  });
+
+  it('a fresh character’s starting kit (§22.6, PLAN.md #2) is what the picker offers first', () => {
+    // consumables.json: void-draught "Void Draught", suture-kit "Suture Kit", both Common.
+    expect(consumableOptions(snapshot)).toEqual([
+      { index: 0, name: 'Void Draught', rarity: 'Common' },
+      { index: 1, name: 'Suture Kit', rarity: 'Common' },
+    ]);
   });
 });
 
@@ -201,14 +226,15 @@ describe('spareOffered (battle Spare gate)', () => {
 });
 
 describe('displayItem / describeInventory (inventory screen)', () => {
-  it("shows the fresh Enforcer's paperdoll gear, empty elsewhere, empty backpack", () => {
+  it("shows the fresh Enforcer's paperdoll gear, empty elsewhere, and the starting kit", () => {
     const view = describeInventory(snapshot);
     const bySlot = Object.fromEntries(view.slots.map((s) => [s.slot, s.item]));
     expect(bySlot.mainHand?.name).toBe('Jaaj Sword 1');
     expect(bySlot.armor?.name).toBe('Jooj Armor 1');
     expect(bySlot.helmet).toBeNull();
     expect(bySlot.offHand).toBeNull();
-    expect(view.backpack).toEqual([]);
+    // PLAN.md #2 / §22.6: potions folded into consumables — the kit rides in the backpack.
+    expect(view.backpack.map((b) => b.item.name)).toEqual(['Void Draught', 'Suture Kit']);
   });
 
   it('projects a rolled item by its rolled name/rarity/kind/slot', () => {
@@ -228,8 +254,10 @@ describe('displayItem / describeInventory (inventory screen)', () => {
 });
 
 describe('equipFromBackpack / unequipSlot (pure action-mapping)', () => {
-  // Fresh Enforcer, then pick up a second armor into the backpack (index 0).
-  const withLooseArmor: Player = { ...snapshot, inventory: pickUp(snapshot.inventory, { defId: 'Jaaj Armor 1' }) };
+  // Fresh Enforcer with its starting kit set aside (PLAN.md #2), then pick up a second armor into
+  // the backpack (index 0).
+  const bare: Player = { ...snapshot, inventory: { ...snapshot.inventory, backpack: [] } };
+  const withLooseArmor: Player = { ...bare, inventory: pickUp(bare.inventory, { defId: 'Jaaj Armor 1' }) };
   const state = hub(withLooseArmor);
 
   it('swaps the equipped armor: new armor in slot, displaced armor back to backpack', () => {
@@ -316,11 +344,12 @@ describe('characterSheet', () => {
 });
 
 describe('dealView (cost -> reward only, pool hidden)', () => {
-  // Hand-derived: describeCost({hp,3}) === "3 HP"; describeReward({heal,5}) === "5 HP restored".
-  const deal: SacrificeDeal = { pool: 'grace', cost: { kind: 'hp', amount: 3 }, reward: { kind: 'heal', amount: 5 } };
+  // Hand-derived: describeCost({hp,3}) === "3 HP"; describeReward({skillCharge,2}) === "2 skill
+  // charges". (PLAN.md #2: no bargain heals any more, so the fixture's reward is a charge.)
+  const deal: SacrificeDeal = { pool: 'grace', cost: { kind: 'hp', amount: 3 }, reward: { kind: 'skillCharge', amount: 2 } };
 
   it('renders the cost and reward text', () => {
-    expect(dealView(deal)).toEqual({ cost: '3 HP', reward: '5 HP restored' });
+    expect(dealView(deal)).toEqual({ cost: '3 HP', reward: '2 skill charges' });
   });
 
   it('never leaks the karma-derived pool (key or value)', () => {
@@ -469,8 +498,8 @@ describe('isRunOver — exhaustive over every phase', () => {
     { kind: 'main-menu' },
     { kind: 'battle', battle: buildRandomBattle(snapshot, 1, createRng(3).rng), started: true, final: false },
     { kind: 'battle-victory', final: false },
-    { kind: 'rest', restOffered: true },
-    { kind: 'deal', deal: { pool: 'standard', cost: { kind: 'hp', amount: 1 }, reward: { kind: 'heal', amount: 1 } } },
+    { kind: 'rest' },
+    { kind: 'deal', deal: { pool: 'standard', cost: { kind: 'hp', amount: 1 }, reward: { kind: 'skillCharge', amount: 1 } } },
     { kind: 'chest', loot: [] },
     { kind: 'act-outro', newAct: 2 },
     { kind: 'level-up-draft', offers: [] },
@@ -669,10 +698,10 @@ describe('the hub menu cannot end a run in one click (G5)', () => {
 
   it('the plain menu dispatches NO quit at all', () => {
     expect(dispatched('menu')).not.toContain('quit');
-    // Non-vacuity: the menu really does dispatch things, so "no quit" is a statement about
-    // the quit and not about an empty list.
-    expect(dispatched('menu')).toContain('continue');
-    expect(dispatched('menu').length).toBeGreaterThan(1);
+    // Non-vacuity: the menu really does dispatch something, so "no quit" is a statement about
+    // the quit and not about an empty list. (PLAN.md #2: exactly one dispatch now — Continue —
+    // since the bargain row left with §22.23.)
+    expect(dispatched('menu')).toEqual(['continue']);
   });
 
   it('and the row that LOOKS destructive switches mode instead', () => {
@@ -734,9 +763,18 @@ describe('the hub menu cannot end a run in one click (G5)', () => {
     expect(screens).toContain('settings');
   });
 
-  it('and still offers the bargain — §22.23 deletes it with #2, not here', () => {
-    expect(hubMenu('menu').items.map((i) => i.label)).toContain('Seek a bargain');
-    expect(dispatched('menu')).toContain('seek-deal');
+  it('and no longer offers a bargain — §22.23 deleted it with #2 (bargains find YOU)', () => {
+    expect(hubMenu('menu').items.map((i) => i.label)).not.toContain('Seek a bargain');
+    expect(dispatched('menu')).not.toContain('seek-deal');
+    // The hub is the five rows the plan re-derives (AC-30): Continue, Inventory, Character
+    // sheet, Settings, Abandon.
+    expect(hubMenu('menu').items.map((i) => i.label)).toEqual([
+      'Continue the descent',
+      'Inventory',
+      'Character sheet',
+      'Settings',
+      'Abandon the descent',
+    ]);
   });
 
   it('every item carries a non-empty label, in both modes', () => {
@@ -761,7 +799,7 @@ describe('fallbackNarration', () => {
     // `prompt.user.split('\n\n')[0]`, which is that recap.
     const past: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Rust Choir' }];
     const memory = rememberBeat(rememberBeat(createStoryMemory(), past), [
-      { kind: 'victory', xpGained: 5, extraRest: false, loot: [] },
+      { kind: 'victory', xpGained: 5, loot: [] },
     ]);
     const now: GameEvent[] = [
       {
@@ -801,23 +839,65 @@ describe('fallbackNarration', () => {
 // The Potion button: a press under a control condition used to do nothing at all.
 // ---------------------------------------------------------------------------
 
-describe('potionControl', () => {
-  it('carries the remaining count, and is live while any remain', () => {
-    const model = potionControl({ ...snapshot, pots: 3 });
-    expect(model).toEqual({ label: 'Potion', disabled: false, hint: '(3)' });
+describe('dealDiscardView — the full-pack bargain screen (plan Appendix A.3)', () => {
+  const deal: SacrificeDeal = {
+    pool: 'tempting',
+    cost: { kind: 'greed' },
+    reward: { kind: 'item', instance: { defId: 'gen:Legendary:mainHand', rolled: { name: 'Legendary mainHand', rarity: 'Legendary', slot: 'mainHand', kind: 'weapon', effects: [] } } },
+  };
+  const packed: Player = {
+    ...snapshot,
+    inventory: { ...snapshot.inventory, backpack: [{ defId: 'void-draught' }, { defId: 'Jaaj Sword 1' }] },
+  };
+
+  it('names the reward that needs room and the price NOT yet paid', () => {
+    const v = dealDiscardView(packed, deal);
+    expect(v.prompt).toBe('Your pack is full. Leave something behind to take Legendary mainHand.');
+    expect(v.cost).toBe('a cache, stripped bare');
   });
 
-  it('is DISABLED at zero — and a disabled button gets no handler at all', () => {
-    // `actionButton` attaches the click listener only on the enabled branch, so "disabled"
-    // means inert, not merely grey: a stray press cannot dispatch a step that resolves
-    // nothing. Asserted on the model, which is the half that decides it.
-    expect(potionControl({ ...snapshot, pots: 0 })).toEqual({
-      label: 'Potion', disabled: true, hint: '(0)',
-    });
+  it('offers one row per backpack item, carrying its real index, and one way out', () => {
+    const v = dealDiscardView(packed, deal);
+    expect(v.leave).toEqual([
+      { index: 0, label: 'Leave Void Draught' },
+      { index: 1, label: 'Leave Jaaj Sword 1' },
+    ]);
+    expect(v.refuse).toBe(DEAL_DISCARD_REFUSE);
   });
 
-  it('is disabled before a player exists', () => {
-    expect(potionControl(null).disabled).toBe(true);
+  it('F3: a pack OVER the cap says how many must go, and names — and drops — what is marked', () => {
+    // 14 loose items and an item reward: roomShortfall = 14 - 11 = 3 before any mark.
+    const many: Player = {
+      ...snapshot,
+      inventory: {
+        ...snapshot.inventory,
+        backpack: Array.from({ length: 14 }, (_, i) => ({
+          defId: 'gen:Common:ring',
+          rolled: { name: `Ring ${i}`, rarity: 'Common' as const, slot: 'ring' as const, kind: 'trinket' as const, effects: [] },
+        })),
+      },
+    };
+    const none = dealDiscardView(many, deal);
+    expect(none.prompt).toBe('Your pack is full. Leave 3 things behind to take Legendary mainHand.');
+    expect(none.leave).toHaveLength(14);
+    const one = dealDiscardView(many, deal, [2]);
+    expect(one.prompt).toBe('Your pack is full. Leave 2 more things behind to take Legendary mainHand. Leaving: Ring 2.');
+    expect(one.leave.map((r) => r.index)).toEqual([0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    const two = dealDiscardView(many, deal, [2, 5]);
+    expect(two.prompt).toBe('Your pack is full. Leave 1 more thing behind to take Legendary mainHand. Leaving: Ring 2, Ring 5.');
+    // A full pack of exactly 12 reads as it always did (one item, "something").
+    expect(dealDiscardView(packed, deal).prompt).toBe('Your pack is full. Leave something behind to take Legendary mainHand.');
+  });
+
+  it('the rows sit behind one disclosure, named for what it asks', () => {
+    expect(dealDiscardView(packed, deal).choose).toBe(DEAL_DISCARD_CHOOSE);
+    expect(DEAL_DISCARD_CHOOSE).toBe('Choose what to leave');
+  });
+
+  it('never carries the karma-derived pool', () => {
+    const v = dealDiscardView(packed, deal);
+    expect(JSON.stringify(v).toLowerCase()).not.toContain('tempting');
+    expect(JSON.stringify(v).toLowerCase()).not.toContain('pool');
   });
 });
 

@@ -281,11 +281,12 @@ describe('Void Pact — +50% damage and cannot heal', () => {
     expect(a.state.enemy.hp).toBe(24); // 30 - floor(4 * 1.5) = 30 - 6
   });
 
-  it('blocks the potion heal site', () => {
-    const player = makePlayer({ amulet: { defId: 'void-pact' } }, { hp: 3, pots: 2 });
-    const r = resolveRound(createBattle(player, makeEnemy(), 1), 'potion', seqRng([]));
-    expect(r.events).toEqual([{ kind: 'potion-unavailable' }]);
-    expect(r.state.player.hp).toBe(3); // no heal
+  it('blocks a consumable heal site (the Void Draught that replaced the potion, §22.6)', () => {
+    const base = makePlayer({ amulet: { defId: 'void-pact' } }, { hp: 3 });
+    const player = { ...base, inventory: { ...base.inventory, backpack: [{ defId: 'void-draught' }] } };
+    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
+    expect(r.events).toEqual([{ kind: 'consumable-used', itemId: 'void-draught' }]);
+    expect(r.state.player.hp).toBe(3); // no heal — the draught is spent for nothing
   });
 });
 

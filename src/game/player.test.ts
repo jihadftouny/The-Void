@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createPlayer, rollStartStats } from './player.ts';
+import { createPlayer, rollStartStats, STARTING_CONSUMABLES } from './player.ts';
+import { getCatalogItemById } from './item.ts';
 import { STAT_KEYS, type Stats } from './character.ts';
 import { mulberry32 } from './rng.ts';
 import { getWeaponByName } from './weapon.ts';
@@ -71,8 +72,10 @@ describe('createPlayer — Enforcer', () => {
 
   it('has the fixed game-start scalar defaults', () => {
     expect('gold' in player).toBe(false); // M7: gold retired
-    expect(player.restsLeft).toBe(1);
-    expect(player.pots).toBe(6); // M15: STARTING_POTS 2 -> 6
+    expect('restsLeft' in player).toBe(false); // PLAN.md #2: rests are found, never banked (22.26)
+    expect('pots' in player).toBe(false); // PLAN.md #2 / §22.6: potions folded into consumables
+    // ...replaced by the starting kit, in the backpack (plan §4.5's placeholder).
+    expect(player.inventory.backpack).toEqual([{ defId: 'void-draught' }, { defId: 'suture-kit' }]);
     expect(player.proficiency).toBe(2);
     expect(player.advantageDisadvantage).toBe(0);
     expect(player.xp).toBe(0);
@@ -95,7 +98,7 @@ describe('createPlayer — Enforcer', () => {
     expect(player.resistances).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 
-  it('has a full 9-slot paperdoll: starting gear seeded, the other 7 null, empty backpack', () => {
+  it('has a full 9-slot paperdoll: starting gear seeded, the other 7 null, the starting kit packed', () => {
     // The nine equip slots from item.ts, independently listed.
     const expectedSlots = [
       'helmet',
@@ -116,7 +119,12 @@ describe('createPlayer — Enforcer', () => {
       if (seeded.has(slot)) expect(cell).not.toBeNull();
       else expect(cell).toBeNull();
     }
-    expect(player.inventory.backpack).toEqual([]);
+    // PLAN.md #2 / §22.6: potions folded into consumables — a fresh backpack holds the kit
+    // (plan §4.5: one full heal and one 4-HP kit), and every id resolves in the catalog.
+    expect(player.inventory.backpack).toEqual([{ defId: 'void-draught' }, { defId: 'suture-kit' }]);
+    for (const id of STARTING_CONSUMABLES) {
+      expect(getCatalogItemById(id)?.use?.length, id).toBeGreaterThan(0);
+    }
   });
 });
 

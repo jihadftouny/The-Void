@@ -39,13 +39,10 @@ describe('CombatEvent JSON round-trip', () => {
     { kind: 'condition-skip', subject: 'player', conditionType: 'freeze' },
     { kind: 'condition-applied', subject: 'player', conditionType: 'freeze' },
     { kind: 'condition-expired', subject: 'player', conditionType: 'bleed' },
-    { kind: 'potion-drunk', healedTo: 30 },
-    { kind: 'potion-unavailable' },
-    { kind: 'potion-blocked' },
     { kind: 'fled' },
     { kind: 'escape-failed', damage: 2 },
     { kind: 'escape-impossible' },
-    { kind: 'victory', xpGained: 3, extraRest: true, loot: [] },
+    { kind: 'victory', xpGained: 3, loot: [] },
     { kind: 'defeat' },
   ];
 

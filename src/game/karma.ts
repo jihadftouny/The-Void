@@ -18,17 +18,19 @@
 // exercised only by its unit test". BOTH halves of that are now false, and leaving
 // them would invite someone to "restore" a dead module):
 //   · a spare  -> game.ts folds the ⚖ family's `onSpare` LIST, in order, in one step.
-//   · a kill   -> game.ts records the ⚖ family's `onKill`.
+//   · a kill   -> game.ts folds the ⚖ family's `onKill` LIST (The Judged: cruelty AND
+//                 `killSacred`, PLAN.md #2 / §22.22).
 //   · a deal   -> deal.ts's `applyDeal`, for the four karma-shifting costs
 //                 (desecrate / greed / offering / whisper).
 // The first EFFECT is the act-4 verdict gate (`boss.ts computeVerdict`), plus the
 // Sin's identity and bonus HP (`pickIndulgedAxis`) and the altar's offer pool
 // (`deal.ts selectPool`).
 //
-// STILL UNWIRED, deliberately: `seeThroughIllusion`. It needs floor 2's illusions,
-// and the only illusion seam in the engine is `statEffects.ts`'s
-// `illusionSightTwist` — a `return 0` stub its own test labels as #2's. Inventing a
-// trigger for it would mean inventing floor 2's mechanic.
+//   · seeing through an illusion -> game.ts's `dispelled` branch records
+//                 `seeThroughIllusion` (PLAN.md #2, floor 2) — the last of the eight to be
+//                 wired, and it fires from nowhere else.
+//   · every engine write goes through game.ts's `recordOnFloor`, which weights it by the
+//     floor's `karmaMultiplier` (`recordKarmaWeighted`): floor 4 counts double.
 //
 // EVERY MAGNITUDE BELOW IS A #2 BALANCE PLACEHOLDER. §22.5 ruled WIRE and explicitly
 // rejected re-weighting; the numbers are re-run with #2's balance pass.
@@ -48,7 +50,7 @@ export interface KarmaState {
   clarityDelusion: number;
 }
 
-/** A named karma-weighted action. Seven of the eight are wired; see the header. */
+/** A named karma-weighted action. All of them are wired; see the header. */
 export type KarmaAction =
   | 'spareWeighted'
   | 'killWeighted'
@@ -57,7 +59,11 @@ export type KarmaAction =
   | 'desecrateShrine'
   | 'honorDead'
   | 'embraceWhisper'
-  | 'seeThroughIllusion';
+  | 'seeThroughIllusion'
+  // PLAN.md #2 / GAME-DESIGN §22.22: the FIFTH action §9 implied and never had — killing The
+  // Judged is desecration as well as cruelty. Named for the act (a sacred thing killed), not for
+  // shrines, which is why `desecrateShrine` could not be reused.
+  | 'killSacred';
 
 /**
  * The action -> signed-delta table. Provisional M1 magnitudes: their only job now is
@@ -73,6 +79,8 @@ export const KARMA_DELTAS: Record<KarmaAction, Partial<KarmaState>> = {
   honorDead: { reverenceDesecration: 1 },
   embraceWhisper: { clarityDelusion: -1 },
   seeThroughIllusion: { clarityDelusion: 1 },
+  // #2 balance placeholder, like every magnitude here: -1, the same size as `killWeighted`.
+  killSacred: { reverenceDesecration: -1 },
 };
 
 /** A fresh, neutral karma vector — every axis at 0. */
@@ -91,11 +99,34 @@ export function createKarma(): KarmaState {
  * result is unbounded (clamping deferred to M14).
  */
 export function recordKarma(karma: KarmaState, action: KarmaAction): KarmaState {
+  return recordKarmaWeighted(karma, action, 1);
+}
+
+/**
+ * Record a karma action with every delta multiplied by an integer `weight` — PURE.
+ *
+ * PLAN.md #2 / GAME-DESIGN.md §8 + §22.24: karma earned on floor 4 counts DOUBLE. The weight is
+ * the floor's `karmaMultiplier` (`floors.ts`), and `game.ts`'s `recordOnFloor` is the only
+ * engine caller. No new state — only weighted deltas while on floor 4, as §8 rules.
+ *
+ * WHY A SEPARATE FUNCTION rather than a third `weight = 1` parameter on `recordKarma` (the
+ * plan's wording, deliberately not followed): `recordKarma` is folded with
+ * `actions.reduce(recordKarma, karma)`, and `Array.prototype.reduce` passes the element INDEX
+ * as the callback's third argument. A defaulted third parameter would silently become the
+ * weight — the FIRST action of every fold multiplied by 0, the second by 1, the third by 2 —
+ * and TypeScript would accept it, because an index is a number. Keeping `recordKarma` at two
+ * parameters makes that trap impossible to fall into.
+ */
+export function recordKarmaWeighted(
+  karma: KarmaState,
+  action: KarmaAction,
+  weight: number,
+): KarmaState {
   const delta = KARMA_DELTAS[action];
   return {
-    mercyCruelty: karma.mercyCruelty + (delta.mercyCruelty ?? 0),
-    restraintGreed: karma.restraintGreed + (delta.restraintGreed ?? 0),
-    reverenceDesecration: karma.reverenceDesecration + (delta.reverenceDesecration ?? 0),
-    clarityDelusion: karma.clarityDelusion + (delta.clarityDelusion ?? 0),
+    mercyCruelty: karma.mercyCruelty + (delta.mercyCruelty ?? 0) * weight,
+    restraintGreed: karma.restraintGreed + (delta.restraintGreed ?? 0) * weight,
+    reverenceDesecration: karma.reverenceDesecration + (delta.reverenceDesecration ?? 0) * weight,
+    clarityDelusion: karma.clarityDelusion + (delta.clarityDelusion ?? 0) * weight,
   };
 }

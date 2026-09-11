@@ -14,7 +14,8 @@
 //
 // Ported from `GameLogic` (startGame -> checkAct -> gameLoop -> encounters -> battle
 // -> progression -> finalBattle -> ending). Confirmed faithful/cleaned choices:
-//  - Menu option 2 (`seek-deal`) opens the sacrifice-deal encounter (replaces the gold shop).
+//  - The sacrifice-deal encounter replaces the gold shop. PLAN.md #2: it is no longer a menu
+//    option — bargains FIND the player as a descent encounter (§22.23), like a found rest.
 //  - Level-up raises maxHp but does not heal; the final boss gets no auto-advantage.
 //  - The ending shows only on a win; death goes to game-over.
 //  - Name/class confirm loops and per-round continue gates are dropped (events carry
@@ -22,7 +23,7 @@
 
 import { createRng, type Rng } from './rng.ts';
 import { type Stats } from './character.ts';
-import { createKarma, recordKarma, type KarmaAction, type KarmaState } from './karma.ts';
+import { createKarma, recordKarmaWeighted, type KarmaAction, type KarmaState } from './karma.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
 import {
@@ -31,7 +32,10 @@ import {
   openBattle,
   type BattleState,
   type BattleAction,
+  type RoundRules,
 } from './battle.ts';
+import { dampenHeal, floorModifiers, floorOf, ILLUSION_DC } from './floors.ts';
+import { rollCorruptions } from './corruption.ts';
 import { createBattle } from './battle.ts';
 import { generateBoss, bossPostRound, computeVerdict, type BossId } from './boss.ts';
 import {
@@ -39,16 +43,18 @@ import {
   buildChestLoot,
   computeRestHeal,
   selectEncounter,
-  selectLore,
 } from './encounter.ts';
+import { restBrief } from './restBrief.ts';
 import {
   buildDeal,
   applyDeal,
   canAfford,
   describeCost,
   describeReward,
+  needsRoom,
   type SacrificeDeal,
 } from './deal.ts';
+import { canCarry } from './inventory.ts';
 import { summarizeLoot } from './loot.ts';
 import {
   applyLevelUpHp,
@@ -82,8 +88,15 @@ export type Phase =
   | { kind: 'main-menu' }
   | { kind: 'battle'; battle: BattleState; started: boolean; final: boolean }
   | { kind: 'battle-victory'; final: boolean }
-  | { kind: 'rest'; restOffered: boolean }
+  // PLAN.md #2 (§22.26): a FOUND rest spot, already taken — there is no decision to make.
+  | { kind: 'rest' }
   | { kind: 'deal'; deal: SacrificeDeal }
+  // PLAN.md #2, Appendix A.3: the deal was ACCEPTED with a full backpack and an item reward, so
+  // the pack is open for a discard. Nothing has been paid. Discarding completes the deal in ONE
+  // step; backing out (`deal-decision`, accept false) is exactly refusing it.
+  // `leaving` (FIX ROUND 1, F3): the backpack indices MARKED to leave so far, when one item is
+  // not enough room (a v8 pack over the cap). Marks remove nothing; absent until a second is needed.
+  | { kind: 'deal-discard'; deal: SacrificeDeal; leaving?: number[] }
   | { kind: 'chest'; loot: ItemInstance[] }
   | { kind: 'act-outro'; newAct: number }
   // M9: a level-up presents a seeded draft of 3; the picked option is applied on draft-pick.
@@ -97,7 +110,9 @@ export type Phase =
 
 /** The full, serializable game state. */
 export interface GameState {
-  version: 8;
+  /** The save format — `SAVE_VERSION` (PLAN.md #2 bumped 8 -> 9: potions and the banked rest
+   *  counter left the player, and the rest phase lost its decision; see `save.ts` `upgrade8to9`). */
+  version: 9;
   /** mulberry32 accumulator — the serializable RNG state; JSON round-trips it. */
   rngState: number;
   player: Player | null;
@@ -142,7 +157,11 @@ export type Awaiting =
   | 'battle-action'
   | 'draft-pick'
   | 'deal-decision'
-  | 'rest-decision'
+  // PLAN.md #2, A.3: choose what to leave behind for a bargain's reward (or back out = refuse).
+  | 'deal-discard'
+  // PLAN.md #2: the found rest spot — the rest has already happened; only `continue` remains.
+  // Its own value (not `continue`) so the renderer can give the one calm screen its scenery.
+  | 'rest'
   | 'game-over';
 
 /** The input the player (via the UI) supplies to `step`. */
@@ -151,11 +170,29 @@ export type GameInput =
   | { kind: 'name'; name: string }
   | { kind: 'class'; classId: PlayerClass }
   | { kind: 'stats-decision'; accept: boolean }
-  | { kind: 'menu'; choice: 'continue' | 'seek-deal' | 'quit' }
+  // PLAN.md #2 / G52: the hub cannot summon a bargain any more; bargains find you (§22.23).
+  | { kind: 'menu'; choice: 'continue' | 'quit' }
   | { kind: 'battle-action'; action: BattleAction }
   | { kind: 'draft-pick'; index: number }
   | { kind: 'deal-decision'; accept: boolean }
-  | { kind: 'rest-decision'; accept: boolean };
+  // PLAN.md #2: leave backpack item `index` behind. At the hub it is a plain discard; in the
+  // `deal-discard` phase it is the room a bargain's reward needs (A.3). Either way it is an
+  // ENGINE input, so a run still replays from `seed + inputs` (CLAUDE.md principle 1).
+  | { kind: 'discard'; index: number };
+
+/**
+ * Rule overrides for a `step` — a MEASUREMENT seam, never set by the game (PLAN.md #2).
+ *
+ * The balance report measures how sensitive the win rate is to floor 2's `ILLUSION_DC`
+ * (§22.27: the author chooses the Wisdom-gap remedy from evidence). Editing the frozen constant
+ * to take that measurement would be exactly the move the ruling forbids, and a module-level
+ * setter would be global mutable state in a pure core. So the DC can be INJECTED per call, as
+ * plain data: the sim threads it through every `step` of a run, and the shipped renderer never
+ * passes anything. Absent ⇒ the shipped constant. Pure and deterministic either way.
+ */
+export interface StepOptions {
+  illusionDc?: number;
+}
 
 /** What `step` returns: the next state, the ordered events, and the next Awaiting. */
 export interface StepResult {
@@ -172,7 +209,7 @@ export interface StepResult {
  */
 export function createGame(seed: number, unlocks?: RunUnlocks): GameState {
   const state: GameState = {
-    version: 8,
+    version: 9,
     rngState: seed >>> 0,
     player: null,
     act: 1,
@@ -202,9 +239,11 @@ export function awaitingFor(phase: Phase): Awaiting {
     case 'battle-victory':
       return 'continue';
     case 'rest':
-      return phase.restOffered ? 'rest-decision' : 'continue';
+      return 'rest';
     case 'deal':
       return 'deal-decision';
+    case 'deal-discard':
+      return 'deal-discard';
     case 'chest':
       return 'continue';
     case 'act-outro':
@@ -239,7 +278,7 @@ function substituteName(text: string, name: string): string {
  * state. If `input` does not match what the current phase awaits, the state is
  * returned unchanged with no events (the reducer is total). Never mutates `state`.
  */
-export function step(state: GameState, input: GameInput): StepResult {
+export function step(state: GameState, input: GameInput, options: StepOptions = {}): StepResult {
   const { rng, getState } = createRng(state.rngState);
   const noop: StepResult = { state, events: [], awaiting: awaitingFor(state.phase) };
 
@@ -311,14 +350,20 @@ export function step(state: GameState, input: GameInput): StepResult {
     }
 
     case 'main-menu': {
+      // PLAN.md #2: leaving an item behind is a hub action, and an engine one.
+      if (input.kind === 'discard') return discardAtHub(state, input.index, finish, noop);
       if (input.kind !== 'menu') return noop;
       const player = requirePlayer(state);
       if (input.choice === 'quit') {
         return finish({ kind: 'game-over' }, [{ kind: 'game-over', xp: player.xp }]);
       }
-      if (input.choice === 'seek-deal') {
-        return openDeal(state, rng, finish);
-      }
+      // PLAN.md #2: the menu has exactly two choices now. Anything else — the removed bargain
+      // choice from a stale renderer, a typo through the engine API — is REFUSED rather than read
+      // as `continue`
+      // (the reducer is total: an input it does not expect returns the state unchanged). It used
+      // to fall through to the encounter draw, which would have let a removed action still move
+      // the run.
+      if (input.choice !== 'continue') return noop;
       // 'continue' — Java continueJourney: checkAct first, else an encounter.
       return continueJourney(state, player, rng, finish);
     }
@@ -328,11 +373,13 @@ export function step(state: GameState, input: GameInput): StepResult {
         if (input.kind !== 'continue') return noop;
         // M6: fire startOfBattle relic triggers as the battle becomes active. Off-equivalent
         // (same battle, no events) for a player with no startOfBattle relics equipped.
-        const opened = openBattle(phase.battle);
+        // PLAN.md #2: and the FLOOR's startOfBattle triggers (floor 3's charge bleed) — keyed on
+        // `state.place`, never the act counter.
+        const opened = openBattle(phase.battle, floorOf(state));
         return finish({ ...phase, battle: opened.battle, started: true }, opened.events);
       }
       if (input.kind !== 'battle-action') return noop;
-      return resolveBattleRound(state, phase, input.action, rng, finish);
+      return resolveBattleRound(state, phase, input.action, rng, finish, roundRules(state, options));
     }
 
     case 'battle-victory': {
@@ -361,17 +408,22 @@ export function step(state: GameState, input: GameInput): StepResult {
     }
 
     case 'rest': {
-      if (!phase.restOffered) {
-        if (input.kind !== 'continue') return noop;
-        return finish({ kind: 'main-menu' }, []);
-      }
-      if (input.kind !== 'rest-decision') return noop;
-      return resolveRestDecision(state, input.accept, rng, finish);
+      // The rest was taken when the spot was found (`takeRest`); continuing returns to the hub.
+      if (input.kind !== 'continue') return noop;
+      return finish({ kind: 'main-menu' }, []);
     }
 
     case 'deal': {
       if (input.kind !== 'deal-decision') return noop;
       return resolveDealDecision(state, phase.deal, input.accept, finish);
+    }
+
+    case 'deal-discard': {
+      // A.3.2: backing out DECLINES the bargain through the very function refusing uses, so the
+      // two cannot drift apart — no cheaper path, and no dearer one.
+      if (input.kind === 'deal-decision' && !input.accept) return declineDeal(finish);
+      if (input.kind !== 'discard') return noop;
+      return discardForDeal(state, phase.deal, phase.leaving ?? [], input.index, finish, noop);
     }
 
     case 'chest': {
@@ -385,9 +437,22 @@ export function step(state: GameState, input: GameInput): StepResult {
       // this phase was entered (continueJourney); continuing goes straight to the act intro.
       if (input.kind !== 'continue') return noop;
       const intro = getActIntro(phase.newAct) ?? { header: '', body: '' };
-      return finish({ kind: 'act-intro', newAct: phase.newAct }, [
+      const events: GameEvent[] = [
         { kind: 'act-intro', act: phase.newAct, header: intro.header, body: intro.body },
-      ]);
+      ];
+      // PLAN.md #2, floor 5 (§22.24): ARRIVING on a floor that warps the kit — keyed on the
+      // floor being entered (`place` is already the new floor here), never the act counter —
+      // rolls one corrupted form per owned skill, in pool order (N `pick` draws, and nothing
+      // else), and says so. Once per run: a map that already exists is never re-rolled.
+      const player = state.player;
+      if (player && floorModifiers(floorOf(state)).corruptsSkills && !player.corruptedSkills) {
+        const corruptedSkills = rollCorruptions(player.skillPool, rng);
+        events.push({ kind: 'skills-warped', count: Object.keys(corruptedSkills).length });
+        return finish({ kind: 'act-intro', newAct: phase.newAct }, events, {
+          player: { ...player, corruptedSkills },
+        });
+      }
+      return finish({ kind: 'act-intro', newAct: phase.newAct }, events);
     }
 
     case 'level-up-draft': {
@@ -426,7 +491,7 @@ export function step(state: GameState, input: GameInput): StepResult {
       // G43: EVERY act intro now returns to the hub, act 5 included. Act 5 used to hard-wire
       // the Hollow to floor ENTRY here — and `main-menu` is the only phase that calls
       // `continueJourney`, which is the only caller of `buildRandomBattle`, `buildChestLoot`
-      // and `selectLore`. So the True Void had no random battles, no chests, no rests, no
+      // and (then) the lore pick. So the True Void had no random battles, no chests, no rests, no
       // sacrifice-deals and no lore at all: an exhaustive walk of ~17.7 M probed transitions
       // from 418 act-5 entries produced ZERO act-5 hub states. Five of 24 families, five of
       // the 13 bespoke name tables and the `reach-act-5` feat were dead as a result. The
@@ -475,6 +540,27 @@ type Finish = (
   patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>>,
 ) => StepResult;
 
+/**
+ * The rules a battle round on the current floor is resolved under — the floor's heal percentage
+ * and the illusion DC (injected by the balance sim, else the shipped constant). PURE.
+ */
+function roundRules(state: GameState, options: StepOptions): RoundRules {
+  return {
+    healPct: floorModifiers(floorOf(state)).healPct,
+    illusionDc: options.illusionDc ?? ILLUSION_DC,
+  };
+}
+
+/**
+ * Record a karma action AS EARNED ON THE CURRENT FLOOR — the ONE funnel every engine karma write
+ * goes through (PLAN.md #2). Floor 4 counts double (GAME-DESIGN.md §8, §22.24): the floor's
+ * `karmaMultiplier` weights the deltas. No new state — the verdict (`computeVerdict`) reads the
+ * same four numbers it always did; only what floor 4 adds to them is heavier.
+ */
+function recordOnFloor(state: GameState, karma: KarmaState, action: KarmaAction): KarmaState {
+  return recordKarmaWeighted(karma, action, floorModifiers(floorOf(state)).karmaMultiplier);
+}
+
 function requirePlayer(state: GameState): Player {
   if (!state.player) throw new Error('step: player is required in this phase but is null');
   return state.player;
@@ -518,6 +604,9 @@ function resolvePostVictory(state: GameState, finish: Finish): StepResult {
  * mercy action, exactly as before §22.22 made the seam plural.
  */
 const DEFAULT_SPARE_ACTIONS: readonly KarmaAction[] = ['spareWeighted'];
+
+/** What a kill records when the ⚖ family declares no `onKill` list — the uniform cruelty. */
+const DEFAULT_KILL_ACTIONS: readonly KarmaAction[] = ['killWeighted'];
 
 /** The floor boss id for acts 1–3 (act 4 is the verdict gate; act 5 is the Hollow). */
 const BOSS_BY_ACT: Record<number, BossId> = { 1: 'kingpin', 2: 'reflection', 3: 'sin' };
@@ -576,13 +665,16 @@ function continueJourney(
       { kind: 'final-battle-begins', enemyName: enemy.fullName },
     ]);
   }
-  const encounter = selectEncounter(rng);
+  // PLAN.md #2: the floor's own weights (floors.json), keyed on `place` — battle, chest, a
+  // found rest, or a bargain that finds the player (§22.23, §22.25).
+  const encounter = selectEncounter(rng, floorOf(state));
   if (encounter === 'battle') {
     // M13 gradual reveal: restrict the family/affix draws to the run's frozen unlock snapshot.
     // Absent snapshot ⇒ both sets are `undefined` ⇒ byte-identical to a pre-M13 draw.
     const families = state.unlocks ? new Set(state.unlocks.families) : undefined;
     const affixes = state.unlocks ? new Set(state.unlocks.affixes) : undefined;
-    const battle = buildRandomBattle(player, state.act, rng, families, affixes);
+    // PLAN.md #2: the floor rides along for the illusion roll (floor 2), keyed on `place`.
+    const battle = buildRandomBattle(player, state.act, rng, families, affixes, floorOf(state));
     return finish({ kind: 'battle', battle, started: false, final: false }, [
       { kind: 'encounter-start', enemyName: battle.enemy.fullName },
     ]);
@@ -591,39 +683,45 @@ function continueJourney(
     // A chest/cache: roll its guaranteed loot, pick every item up into the backpack, then
     // show the reveal. `continue` from the chest phase returns to the hub.
     const loot = buildChestLoot(rng, state.act);
+    // PLAN.md #2: a FULL backpack (§22.17) leaves what it cannot hold — the reveal still shows
+    // what the chest held, and `loot-left-behind` says what stayed in it.
     let inventory = player.inventory;
-    for (const item of loot) inventory = pickUp(inventory, item);
+    const leftBehind: GameEvent[] = [];
+    for (const item of loot) {
+      if (canCarry(inventory)) {
+        inventory = pickUp(inventory, item);
+      } else {
+        const left = summarizeLoot(item);
+        leftBehind.push({ kind: 'loot-left-behind', name: left.name, rarity: left.rarity });
+      }
+    }
     const nextPlayer: Player = { ...player, inventory };
     return finish(
       { kind: 'chest', loot },
       [
         { kind: 'chest-found' },
         { kind: 'chest-loot', loot: loot.map(summarizeLoot) },
+        ...leftBehind,
       ],
       { player: nextPlayer },
     );
   }
-  // Rest: show lore, then offer a rest if any remain.
-  const lore = selectLore(state.act, rng);
-  const events: GameEvent[] = [];
-  if (lore) {
-    events.push({ kind: 'rest-lore', title: lore.title, loreText: lore.text });
+  if (encounter === 'bargain') {
+    return openDeal(state, rng, finish);
   }
-  if (player.restsLeft >= 1) {
-    return finish({ kind: 'rest', restOffered: true }, events);
-  }
-  events.push({ kind: 'no-rests' });
-  return finish({ kind: 'rest', restOffered: false }, events);
+  return takeRest(state, player, rng, finish);
 }
 
 /**
- * The sacrifice-deal encounter (menu option 2, `seek-deal`) — an altar/stranger offers a
- * reward for a cost paid from the player. `buildDeal` reads the karma vector (for the pool)
- * and rolls any reward item, so the offer is fully determined here; the take/leave decision
- * is resolved by `resolveDealDecision`.
+ * The sacrifice-deal encounter — an altar/stranger offers a reward for a cost paid from the
+ * player. PLAN.md #2: reached ONLY as a descent encounter (`continueJourney`'s `bargain` draw);
+ * the hub can no longer summon one, which closes G52 at the root (§22.23). `buildDeal` reads the
+ * karma vector and the floor (floor 4 tempts everyone) and rolls any reward item, so the offer is
+ * fully determined here; the take/leave decision is resolved by `resolveDealDecision`.
  */
 function openDeal(state: GameState, rng: Rng, finish: Finish): StepResult {
-  const deal = buildDeal(state.karma, state.act, rng);
+  // PLAN.md #2: the FLOOR picks the pool on floor 4 (tempting for everyone), keyed on `place`.
+  const deal = buildDeal(state.karma, floorOf(state), rng);
   return finish({ kind: 'deal', deal }, [
     {
       kind: 'deal-offer',
@@ -640,8 +738,9 @@ function resolveBattleRound(
   action: BattleAction,
   rng: Rng,
   finish: Finish,
+  rules: RoundRules,
 ): StepResult {
-  const round = resolveRound(phase.battle, action, rng);
+  const round = resolveRound(phase.battle, action, rng, rules);
   const events: GameEvent[] = [...round.events];
   let battle = round.state;
   let status = round.status;
@@ -680,6 +779,16 @@ function resolveBattleRound(
       return finish({ ...phase, battle }, events);
     case 'fled':
       return finish({ kind: 'main-menu' }, events, { player: battle.player });
+    case 'dispelled':
+      // PLAN.md #2, floor 2: the passive Wisdom roll saw through an illusion. The fight ends
+      // with NO reward (plan Appendix A.1 — "a pure cost": the illusion's attacks were real, the
+      // player's were not, and seeing through pays nothing but the clarity nudge). The player's
+      // battle state carries to the hub, as on any exit. `seeThroughIllusion` goes through the
+      // floor funnel like every karma write (x1 on floor 2).
+      return finish({ kind: 'main-menu' }, events, {
+        player: battle.player,
+        karma: recordOnFloor(state, state.karma, 'seeThroughIllusion'),
+      });
     case 'spared':
       // Mercy: end the encounter with no rewards. Record the spare on the karma vector. The
       // actions are data-sourced from the family (the karma seam), defaulting to the uniform
@@ -691,16 +800,23 @@ function resolveBattleRound(
       // site the behavioural test watches.
       return finish({ kind: 'main-menu' }, events, {
         player: battle.player,
+        // PLAN.md #2: each entry is weighted by the floor (floor 4 counts double).
         karma: (getFamily(enemy.familyId)?.onSpare ?? DEFAULT_SPARE_ACTIONS).reduce(
-          recordKarma,
+          (k, action) => recordOnFloor(state, k, action),
           state.karma,
         ),
       });
     case 'player-won': {
       // A moral (⚖) kill records cruelty; a plain enemy (and every boss) records nothing.
       // Karma is an INPUT only here (the first EFFECT is the act-4 verdict gate).
+      //
+      // PLAN.md #2 / §22.22: `onKill` is a LIST, folded in order in THIS one step, exactly as
+      // `onSpare` is — killing The Judged records cruelty AND desecration (`killSacred`).
       const karma = enemy.karmaWeighted
-        ? recordKarma(state.karma, getFamily(enemy.familyId)?.onKill ?? 'killWeighted')
+        ? (getFamily(enemy.familyId)?.onKill ?? DEFAULT_KILL_ACTIONS).reduce(
+            (k, action) => recordOnFloor(state, k, action),
+            state.karma,
+          )
         : state.karma;
       // M12: a floor-boss win (acts 1–3, non-final, boss present) schedules an act advance once
       // any earned level-ups drain (`resolvePostVictory`). The Hollow (final) routes to the
@@ -719,66 +835,52 @@ function resolveBattleRound(
 }
 
 /**
- * Resolve a rest — PURE apart from the single `computeRestHeal` draw.
+ * A FOUND rest spot, taken at once — PURE apart from the single `computeRestHeal` draw.
  *
- * G27 + G31: a rest now CURES every active condition and REFILLS skill charges, alongside the
- * HP heal it always did.
+ * PLAN.md #2 / GAME-DESIGN.md §22.26 ("the rest is the only moment in the game where things are
+ * truly calm"): rest is a PLACE the descent gives you, not a counted resource spent from the
+ * hub. The banked rest counter, the per-victory extra-rest draw and the rest decision are all gone. Arriving
+ * IS resting — "a rest that makes you choose is not calm" (plan Appendix A.2, accepted) — and it
+ * happens even at full health, because it still refills the skill charges and clears conditions.
+ * Scarcity comes from how often a spot is found (`floors.json`'s `rest` weight).
  *
- *  - **G27.** `fracture` carries `maxTurns: 100` with the comment *"needs a rest"* — but
- *    `resolveRestDecision` never touched `activeConditions`, and `game.ts` writes the battle
- *    player back to the hub, so a floor-1 Ganger's `gangStomp` put the player on attack
- *    disadvantage for the ENTIRE RUN with no in-game remedy (measured: still active after 99
- *    rounds; the only data-side cure, `warding-charm`, is battle-only and unobtainable).
- *  - **G31.** Charges were never restored either, contradicting `GAME-DESIGN.md` §18.1
- *    (*"A rest restores HP **and** skill charges"*): a 493-step run taking six rests ended on
- *    ZERO charges, so the whole class-skill system was one-shot per run.
+ * The mechanics are §18.1's, unchanged in substance:
+ *  - **G27.** Every active condition is cleared — `fracture` still needs a rest to go.
+ *  - **G31.** Skill charges are refilled.
+ *  - The HP heal is the one `computeRestHeal` draw, dampened on floor 3 (`healPct`), capped at
+ *    `maxHp`. Conditions go BEFORE the heal, so the cap is never a max depressed by a condition
+ *    the rest is removing.
  *
- * DEVIATION FROM THE REGISTER, deliberate. G31's literal wording says to restore charges
- * *"including the `rest-full` early-return branch"* — but that branch consumes NO rest, so a
- * full-HP player could refill charges at every rest node for free, forever. Worse, G27 makes
- * resting at full HP genuinely valuable (it is now the only fracture cure), so the branch's
- * premise is gone. Implemented instead: `rest-full` fires only when there is NOTHING to gain
- * — full HP **and** full charges **and** no conditions. Otherwise the rest is taken and paid
- * for. That satisfies both G27 and G31 and closes the exploit.
- *
- * Conditions are cleared BEFORE the heal, so the cap is the true `maxHp` rather than a max
- * depressed by a `sick`/Frail condition the rest is about to remove. ALL conditions go,
- * buffs included: they are 2-turn combat effects and a rest is a reset. The `rest-taken`
- * event keeps its existing shape — no new event kind.
- *
- * DOCUMENTED DRAW-ORDER CHANGE: a full-HP player who is fractured or short of charges now
- * takes the rest, and therefore now consumes the `computeRestHeal` draw it used to skip.
+ * Emits `rest-found` (the floor, the brief's place line and id — the narrator's scene block is
+ * built from the brief) and then `rest-taken`, in its existing shape. The phase is `rest`, so
+ * the renderer shows the calm screen and `continue` returns to the hub.
  */
-function resolveRestDecision(
-  state: GameState,
-  accept: boolean,
-  rng: Rng,
-  finish: Finish,
-): StepResult {
-  const player = requirePlayer(state);
-  if (!accept) {
-    return finish({ kind: 'main-menu' }, [{ kind: 'rest-declined' }]);
-  }
-  const nothingToGain =
-    player.hp >= player.maxHp &&
-    player.skillCharges >= player.maxSkillCharges &&
-    player.activeConditions.length === 0;
-  if (nothingToGain) {
-    // Nothing a rest could do: no roll, no rest consumed (faithful to Java's full-HP case).
-    return finish({ kind: 'main-menu' }, [{ kind: 'rest-full' }]);
-  }
-  const hpRestored = computeRestHeal(player.xp, rng);
+function takeRest(state: GameState, player: Player, rng: Rng, finish: Finish): StepResult {
+  const floor = floorOf(state);
+  const brief = restBrief(floor);
+  const hpRestored = dampenHeal(computeRestHeal(player.xp, rng), floorModifiers(floor).healPct);
   const hp = Math.min(player.hp + hpRestored, player.maxHp);
-  const healed: Player = {
+  const rested: Player = {
     ...player,
     hp,
     activeConditions: [],
     skillCharges: player.maxSkillCharges,
-    restsLeft: player.restsLeft - 1,
   };
-  return finish({ kind: 'main-menu' }, [{ kind: 'rest-taken', hpRestored, hp, maxHp: healed.maxHp }], {
-    player: healed,
-  });
+  return finish(
+    { kind: 'rest' },
+    [
+      {
+        kind: 'rest-found',
+        floor,
+        place: brief.place,
+        briefId: brief.id,
+        woundsClosed: player.hp < player.maxHp,
+        conditionsEased: player.activeConditions.length > 0,
+      },
+      { kind: 'rest-taken', hpRestored, hp, maxHp: rested.maxHp },
+    ],
+    { player: rested },
+  );
 }
 
 /**
@@ -795,18 +897,134 @@ function resolveDealDecision(
   finish: Finish,
 ): StepResult {
   const player = requirePlayer(state);
-  if (!accept) {
-    return finish({ kind: 'main-menu' }, [{ kind: 'deal-declined' }]);
-  }
+  if (!accept) return declineDeal(finish);
   if (!canAfford(player, deal.cost)) {
     return finish({ kind: 'main-menu' }, [
       { kind: 'deal-unaffordable', cost: describeCost(deal.cost) },
     ]);
   }
-  const result = applyDeal(player, state.karma, deal);
+  // PLAN.md #2, Appendix A.3: an item reward with a FULL pack opens the pack for a discard.
+  // NOTHING is paid here — not HP, not the ledger, not an item. The deal completes (or is
+  // refused) in the NEXT step, from the `deal-discard` phase. Affordability is checked first,
+  // so a bargain the player could never pay never asks them to throw anything away.
+  if (needsRoom(player, deal)) {
+    return finish({ kind: 'deal-discard', deal }, [
+      { kind: 'deal-needs-room', reward: describeReward(deal.reward) },
+    ]);
+  }
+  const result = applyDeal(
+    player,
+    state.karma,
+    deal,
+    floorModifiers(floorOf(state)).karmaMultiplier,
+  );
   return finish(
     { kind: 'main-menu' },
     [{ kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
+    { player: result.player, karma: result.karma },
+  );
+}
+
+/**
+ * Refuse a bargain — the ONE definition, shared by the `deal` phase's "Refuse" and the
+ * `deal-discard` phase's back-out (plan Appendix A.3.2).
+ *
+ * WHAT REFUSING DOES, stated explicitly as the ruling asks: NOTHING but return to the hub. No
+ * karma action is recorded for a refusal (`KARMA_DELTAS` has none, by design — only what you DO
+ * is read into your nature), no HP, stat, charge or item changes hands, and no random draw is
+ * taken. Backing out of the discard runs this same function from the same unpaid state, so it
+ * produces the identical next state — a test holds the two deep-equal, rng included.
+ */
+function declineDeal(finish: Finish): StepResult {
+  return finish({ kind: 'main-menu' }, [{ kind: 'deal-declined' }]);
+}
+
+/** Is `index` a real backpack slot? Rejects non-integers, NaN and out-of-range (the G45 lesson). */
+function validBackpackIndex(player: Player, index: number): boolean {
+  return Number.isInteger(index) && index >= 0 && index < player.inventory.backpack.length;
+}
+
+/** The player with backpack item `index` removed — PURE. */
+function withoutItem(player: Player, index: number): Player {
+  return withoutItems(player, [index]);
+}
+
+/** The player with every backpack index in `indices` removed — PURE; indices are pre-removal. */
+function withoutItems(player: Player, indices: readonly number[]): Player {
+  const backpack = player.inventory.backpack.filter((_, i) => !indices.includes(i));
+  return { ...player, inventory: { slots: { ...player.inventory.slots }, backpack } };
+}
+
+/**
+ * Leave backpack item `index` behind at the hub — PURE, RNG-free (PLAN.md #2). An ENGINE input,
+ * not a render-layer mutation, so the run still replays from `seed + inputs`. A bad index is a
+ * rejected no-op.
+ */
+function discardAtHub(
+  state: GameState,
+  index: number,
+  finish: Finish,
+  noop: StepResult,
+): StepResult {
+  const player = requirePlayer(state);
+  if (!validBackpackIndex(player, index)) return noop;
+  const dropped = summarizeLoot(player.inventory.backpack[index]!);
+  return finish(
+    { kind: 'main-menu' },
+    [{ kind: 'item-discarded', name: dropped.name, rarity: dropped.rarity }],
+    { player: withoutItem(player, index) },
+  );
+}
+
+/**
+ * Complete a full-pack bargain by leaving item `index` behind — ATOMIC (plan Appendix A.3.1/3).
+ *
+ * Discard, pay, place and record happen in ONE step, computed on a copy and committed only when
+ * every part succeeded — so there is no state in which an item is gone and the bargain not taken,
+ * and none in which the price is paid and the reward not placed.
+ *
+ * WHEN ONE ITEM IS NOT ENOUGH (FIX ROUND 1, F3): a pack already over the cap — a v8 save can
+ * hold one; v8 had no cap — needs more than one item gone. The step then STAYS in the discard,
+ * MARKING the item (`leaving`) and removing NOTHING, until the marked items make the room; only
+ * then does it commit, dropping every marked item at once. Because nothing is removed until
+ * that moment, backing out at ANY point is still exactly refusing (A.3.2) — the reward is never
+ * lost to a room count, and no message claims a price was unaffordable when it was not. (It
+ * used to discard one, find no room, and report "deal-unaffordable" to a player who could pay.)
+ *
+ * The one failure left after the room check is a price that marking made unpayable — a relic
+ * price whose relic was marked to leave. It is reported as exactly that, with the original
+ * player and ledger kept: nothing is dropped, nothing is paid.
+ */
+function discardForDeal(
+  state: GameState,
+  deal: SacrificeDeal,
+  leaving: readonly number[],
+  index: number,
+  finish: Finish,
+  noop: StepResult,
+): StepResult {
+  const player = requirePlayer(state);
+  if (!validBackpackIndex(player, index) || leaving.includes(index)) return noop;
+  const marked = [...leaving, index];
+  const trial = withoutItems(player, marked);
+  if (needsRoom(trial, deal)) {
+    return finish({ kind: 'deal-discard', deal, leaving: marked }, [
+      { kind: 'deal-needs-room', reward: describeReward(deal.reward) },
+    ]);
+  }
+  const result = applyDeal(trial, state.karma, deal, floorModifiers(floorOf(state)).karmaMultiplier);
+  if (result.outcome !== 'taken') {
+    return finish({ kind: 'main-menu' }, [
+      { kind: 'deal-unaffordable', cost: describeCost(deal.cost) },
+    ]);
+  }
+  const dropped: GameEvent[] = marked.map((i) => {
+    const item = summarizeLoot(player.inventory.backpack[i]!);
+    return { kind: 'item-discarded', name: item.name, rarity: item.rarity };
+  });
+  return finish(
+    { kind: 'main-menu' },
+    [...dropped, { kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
     { player: result.player, karma: result.karma },
   );
 }

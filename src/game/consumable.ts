@@ -12,14 +12,14 @@
 //  - Serializable plain-data state: the item is removed from the plain `backpack` array.
 //
 // TURN COST (orchestrator resolution): using a consumable costs the player's action for the
-// round and grants the enemy NO free turn — byte-identical to the existing `potion` action.
-// [NEEDS-HUMAN M15: should consumable/potion use grant the enemy a turn?]
+// round and grants the enemy NO free turn — as the retired potion action did (PLAN.md #2 folded
+// potions into consumables, §22.6). [NEEDS-HUMAN M15: should using an item grant the enemy a turn?]
 
 import { type Player } from './player.ts';
 import { type Enemy } from './enemy.ts';
 import { type CombatEvent } from './combatEvent.ts';
 import { getCatalogItemById } from './item.ts';
-import { applyEffectAction } from './relicEffects.ts';
+import { applyEffectAction, type TriggerContext } from './relicEffects.ts';
 
 /** Which consumable to use: a backpack slot index (the authoritative loose-item store). */
 export interface ConsumableSource {
@@ -37,6 +37,8 @@ export interface ConsumableResult {
   fled: boolean;
   /** A `reroll` action fired (Lodestone / illusion tools): the reroll target lands in M7/M9. */
   reroll: boolean;
+  /** PLAN.md #2: a damaging action passed through an illusory enemy (`battle.ts` says so). */
+  voided: boolean;
 }
 
 /**
@@ -51,6 +53,9 @@ export function applyConsumable(
   player: Player,
   enemy: Enemy,
   source: ConsumableSource,
+  // PLAN.md #2: the floor's heal percentage (floor 3 dampens a Void Draught like any heal).
+  // Omitted ⇒ `{}`, exactly the context every action was applied with before.
+  ctx: TriggerContext = {},
 ): ConsumableResult {
   const instance = player.inventory.backpack[source.index];
   const def = instance ? getCatalogItemById(instance.defId) : undefined;
@@ -63,6 +68,7 @@ export function applyConsumable(
       consumed: false,
       fled: false,
       reroll: false,
+      voided: false,
     };
   }
 
@@ -73,15 +79,17 @@ export function applyConsumable(
   const events: CombatEvent[] = [{ kind: 'consumable-used', itemId: def.id }];
   let fled = false;
   let reroll = false;
+  let voided = false;
 
   for (const action of use) {
-    const out = applyEffectAction(action, p, e, {});
+    const out = applyEffectAction(action, p, e, ctx);
     p = out.self;
     e = out.other;
     events.push(...out.events);
     if (out.fled) fled = true;
     if (out.reroll) reroll = true;
+    if (out.voided) voided = true;
   }
 
-  return { player: p, enemy: e, events, consumed: true, fled, reroll };
+  return { player: p, enemy: e, events, consumed: true, fled, reroll, voided };
 }

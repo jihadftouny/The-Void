@@ -14,7 +14,6 @@ import {
   effectiveMaxHp,
   effectiveResistances,
   initiativeOrderTwist,
-  illusionSightTwist,
   type Conditioned,
 } from './statEffects.ts';
 import { makeCondition, type ActiveCondition, type ConditionType } from './condition.ts';
@@ -182,11 +181,11 @@ describe('purity', () => {
 });
 
 describe('deferred-twist no-op hooks are wired and currently inert', () => {
-  it('initiative/illusion/deal-quality all return 0 even with their augment active', () => {
+  it('the initiative twist returns 0 even with its augment active', () => {
     expect(initiativeOrderTwist(withCond('quick'))).toBe(0);
     expect(initiativeOrderTwist(withCond('slow'))).toBe(0);
-    expect(illusionSightTwist(withCond('wise'))).toBe(0);
-    expect(illusionSightTwist(withCond('fool'))).toBe(0);
+    // PLAN.md #2: the illusion-sight lines are GONE with their stub — floor 2's passive Wisdom
+    // roll reads `effectiveMods` and is tested behaviourally in `illusion.test.ts`.
     // G16: the two `dealQualityTwist` lines that used to sit here are GONE with the function.
     // It was a no-op commented "no-op until M7" — and M7 shipped. Its siblings stay because
     // each has a named future owner; this one only had a stale promise.
@@ -220,8 +219,16 @@ describe('G16 — dealQualityTwist is gone from the shipping code', () => {
     expect(hits).toEqual([]);
   });
 
-  it('its two SIBLINGS stay — each has a named future owner, which is what it lacked', () => {
+  it('its sibling stays — it has a named future owner, which is what it lacked', () => {
     expect(typeof statEffects.initiativeOrderTwist).toBe('function'); // PLAN.md #1.6
-    expect(typeof statEffects.illusionSightTwist).toBe('function'); // PLAN.md #2
+  });
+
+  it('the illusion-sight stub is gone too — floor 2 replaced it with a real roll (PLAN.md #2)', () => {
+    expect('illusionSightTwist' in statEffects).toBe(false);
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const shipping = readdirSync(dir).filter((n) => n.endsWith('.ts') && !n.endsWith('.test.ts'));
+    const hits = shipping.filter((n) => readFileSync(join(dir, n), 'utf8').includes('illusionSightTwist'));
+    expect(hits).toEqual([]);
+    expect(shipping.length).toBeGreaterThan(30); // non-vacuity: the scan read the directory
   });
 });

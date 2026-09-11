@@ -52,7 +52,7 @@ function summaryOf(partial: Partial<RunSummary>): RunSummary {
   return { ...emptyRunSummary(), ...partial };
 }
 
-const victoryEvent: GameEvent = { kind: 'victory', xpGained: 0, extraRest: false, loot: [] };
+const victoryEvent: GameEvent = { kind: 'victory', xpGained: 0, loot: [] };
 
 // ------- Front-load default --------------------------------------------------
 
@@ -311,7 +311,7 @@ describe('foldRunEvents over a full driven step loop', () => {
       advantageDisadvantage: 1,
     };
     const start: GameState = {
-      version: 8,
+      version: 9,
       rngState: 4242,
       player,
       act: 1,

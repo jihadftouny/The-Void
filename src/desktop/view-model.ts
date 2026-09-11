@@ -28,13 +28,12 @@ import { spareAvailable } from '../game/battle.ts';
 import { resolveInstanceDef, equip, unequip } from '../game/equipment.ts';
 import { effectiveChargeCost } from '../game/equipEffects.ts';
 import { playerArmorClass } from '../game/defense.ts';
-import { describeCost, describeReward } from '../game/deal.ts';
+import { describeCost, describeReward, roomShortfall } from '../game/deal.ts';
 import { describeDraftOption } from '../game/draft.ts';
 import { summarizeLoot } from '../game/loot.ts';
 import { CLASSES } from '../game/classKit.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import { BOSSES } from '../game/boss.ts';
-import { buttonModel, type ButtonModel } from '../render/component-model.ts';
 
 /**
  * The player to DISPLAY on the sheet: during a battle the live combatant
@@ -388,6 +387,73 @@ export function dealView(deal: SacrificeDeal): DealView {
   return { cost: describeCost(deal.cost), reward: describeReward(deal.reward) };
 }
 
+/** The label on the full-pack screen's way out — which is exactly refusing the bargain (A.3.2). */
+export const DEAL_DISCARD_REFUSE = 'Keep everything — refuse the bargain';
+
+/**
+ * The label of the disclosure that holds the leave rows. A.3.4: the screen must fit the 960x640
+ * minimum at the large text setting with NOTHING below the fold — and twelve leave rows plus the
+ * way out cannot (thirteen stacked controls in a 640px window). So the rows sit inside a closed
+ * list the player opens, exactly as the battle screen's Cast and Use-item lists do: two controls
+ * on arrival, and the layout probe holds the opened list to the expanded-disclosure rule.
+ */
+export const DEAL_DISCARD_CHOOSE = 'Choose what to leave';
+
+/** The full-pack bargain screen: what the bargain asks, and one way to make room per item. */
+export interface DealDiscardView {
+  /** Says the pack is full and names the reward that needs the room. */
+  prompt: string;
+  /** The price, which is NOT yet paid (A.3.3) — shown so the choice is made knowing it. */
+  cost: string;
+  /** The disclosure the leave rows sit in — `DEAL_DISCARD_CHOOSE`. */
+  choose: string;
+  /**
+   * One row per backpack item NOT already marked to leave, in pack order; `index` is the
+   * `discard` input's argument (the real, unchanged pack index — marking removes nothing).
+   */
+  leave: { index: number; label: string }[];
+  /** The way out — `DEAL_DISCARD_REFUSE`, dispatched as `deal-decision` accept false. */
+  refuse: string;
+}
+
+/**
+ * Project the `deal-discard` phase (plan Appendix A.3) — PURE. The author's ruling: accepting a
+ * bargain with a full pack OPENS THE PACK so the player can leave something behind first; the
+ * reward is never lost. Every backpack item is offered (gear and usables alike — the choice is
+ * the player's), plus one way out that declines the bargain. Like `dealView`, it never carries
+ * the karma-derived pool.
+ */
+export function dealDiscardView(
+  player: Player,
+  deal: SacrificeDeal,
+  leaving: readonly number[] = [],
+): DealDiscardView {
+  const dv = dealView(deal);
+  // FIX ROUND 1, F3: a pack over the cap (a v8 save) needs more than one item gone. The count
+  // is read from the engine's own `roomShortfall` on the pack as it would be without the marked
+  // items, so the screen and the rule cannot disagree about how many are still needed.
+  const pack = player.inventory.backpack;
+  const kept = { ...player, inventory: { ...player.inventory, backpack: pack.filter((_, i) => !leaving.includes(i)) } };
+  const still = roomShortfall(kept, deal);
+  const marked = leaving.map((i) => (pack[i] ? displayItem(pack[i]).name : '')).filter((n) => n !== '');
+  const noun = still === 1 ? 'thing' : 'things';
+  const ask =
+    marked.length === 0
+      ? still <= 1
+        ? `Your pack is full. Leave something behind to take ${dv.reward}.`
+        : `Your pack is full. Leave ${still} ${noun} behind to take ${dv.reward}.`
+      : `Your pack is full. Leave ${still} more ${noun} behind to take ${dv.reward}.`;
+  return {
+    prompt: marked.length > 0 ? `${ask} Leaving: ${marked.join(', ')}.` : ask,
+    cost: dv.cost,
+    choose: DEAL_DISCARD_CHOOSE,
+    leave: pack
+      .map((item, index) => ({ index, label: `Leave ${displayItem(item).name}` }))
+      .filter((row) => !leaving.includes(row.index)),
+    refuse: DEAL_DISCARD_REFUSE,
+  };
+}
+
 /** A level-up draft card (its offer index + a readable label). */
 export interface DraftCard {
   index: number;
@@ -447,6 +513,7 @@ const RUN_OVER: Record<Phase['kind'], boolean> = {
   'battle-victory': false,
   rest: false,
   deal: false,
+  'deal-discard': false,
   chest: false,
   'act-outro': false,
   'level-up-draft': false,
@@ -562,22 +629,6 @@ export function fallbackNarration(
   return facts.length > 0 ? facts.join(' ') : '(the Void is silent)';
 }
 
-/**
- * The Potion button — PURE. Carries the remaining count as a hint, and is DISABLED at zero.
- *
- * It used to be an unconditional `choice('Potion', …)`. At 0 potions, at full HP, or under
- * the Void Pact relic, pressing it dispatched a whole engine step that resolved nothing: the
- * button looked live, the turn did not advance, and (until this unit) the one event it emitted
- * was rendered nowhere at all. A disabled `ButtonModel` gets NO click handler from
- * `actionButton`, so it is inert as well as greyed — a stray press cannot dispatch.
- *
- * Only the count is gated here. "Already at full HP" and the `cannotHeal` relic are still
- * engine refusals; the log now says so (`potion-unavailable`), which it never could before.
- */
-export function potionControl(player: Player | null): ButtonModel {
-  const pots = player?.pots ?? 0;
-  return buttonModel('Potion', { disabled: pots <= 0, hint: `(${pots})` });
-}
 
 // ===== The hub menu — G5 / GAME-DESIGN.md §19.4 ============================
 
@@ -635,8 +686,8 @@ export interface HubMenuView {
  * breath. There are no save slots yet (N3), and a confirmation for a thing that cannot happen
  * is the "control that controls nothing" this project keeps re-cutting itself on.
  *
- * "Seek a bargain" is still here. §22.23 deletes it when bargains become random descent
- * events, and that lands with #2 — at which point it is one row removed from this list.
+ * The on-demand bargain row is GONE (PLAN.md #2, §22.23): bargains are random descent events
+ * that find the player, so the hub has nothing to summon them with.
  */
 export function hubMenu(mode: HubMode): HubMenuView {
   if (mode === 'confirm-abandon') {
@@ -662,10 +713,6 @@ export function hubMenu(mode: HubMode): HubMenuView {
       {
         label: 'Continue the descent',
         action: { kind: 'dispatch', input: { kind: 'menu', choice: 'continue' } },
-      },
-      {
-        label: 'Seek a bargain',
-        action: { kind: 'dispatch', input: { kind: 'menu', choice: 'seek-deal' } },
       },
       { label: 'Inventory', action: { kind: 'screen', screen: 'inventory' } },
       { label: 'Character sheet', action: { kind: 'screen', screen: 'sheet' } },

@@ -64,11 +64,18 @@ function runInputs(
 
 describe('SAVE_VERSION', () => {
   it('mirrors the current GameState.version', () => {
-    // Derived from game.ts: createGame stamps version 7 (M9 bumped 6 -> 7, level-up draft).
-    expect(SAVE_VERSION).toBe(8);
+    // Derived from game.ts: createGame stamps the current version. PLAN.md #2 bumped 8 -> 9
+    // (potions and the banked rest counter left the player; the rest phase lost its decision).
+    expect(SAVE_VERSION).toBe(9);
     expect(createGame(SEED).version).toBe(SAVE_VERSION);
   });
 });
+
+/** A state with the fresh-character starting kit (PLAN.md #2) taken back out of the backpack. */
+function withoutKit(s: GameState): GameState {
+  if (!s.player) return s;
+  return { ...s, player: { ...s.player, inventory: { ...s.player.inventory, backpack: [] } } };
+}
 
 const ZERO_KARMA = {
   mercyCruelty: 0,
@@ -109,8 +116,9 @@ describe('migration v2 -> v3 (legacy equipped ids -> paperdoll slots)', () => {
     expect('equippedArmorId' in mp).toBe(false);
     expect(migrated!.version).toBe(SAVE_VERSION);
     // Modern midRunState seeds the SAME starting gear into slots, so the migrated v2 save
-    // deep-equals the modern v3 state.
-    expect(migrated).toEqual(modern);
+    // deep-equals the modern state — minus the starting kit PLAN.md #2 put in every fresh
+    // backpack (§22.6), which a legacy save built with an empty inventory cannot have carried.
+    expect(migrated).toEqual(withoutKit(modern));
   });
 
   it('migrates equippedShieldId into the offHand slot', () => {
@@ -147,8 +155,8 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     expect(migrated!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
     expect(migrated!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
-    // Deep-equals the modern state, which seeds the same gear into slots.
-    expect(migrated).toEqual(modern);
+    // Deep-equals the modern state, which seeds the same gear into slots (minus the kit, as above).
+    expect(migrated).toEqual(withoutKit(modern));
   });
 
   it('migrates a v1 title save with a null player (nothing to inject into slots)', () => {
@@ -165,8 +173,8 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     expect(migrated).toEqual(modern);
   });
 
-  it('rejects a future version 9 save without throwing', () => {
-    const s = { ...createGame(SEED), version: 9 };
+  it('rejects a future version 10 save without throwing', () => {
+    const s = { ...createGame(SEED), version: 10 };
     expect(() => decodeSave(JSON.stringify(s))).not.toThrow();
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
@@ -195,13 +203,13 @@ describe('round-trip', () => {
     expect(decoded).toEqual(m);
   });
 
-  it('preserves the M13 optional `unlocks` snapshot (version stays 8)', () => {
+  it('preserves the M13 optional `unlocks` snapshot (no version bump of its own)', () => {
     // A state carrying the additive run-start snapshot round-trips unchanged — no version bump.
     const s = createGame(SEED, {
       families: ['gangers', 'securityDrones'],
       affixes: ['ravenous', 'ancient'],
     });
-    expect(s.version).toBe(8);
+    expect(s.version).toBe(SAVE_VERSION);
     const decoded = decodeSave(encodeSave(s));
     expect(decoded).toEqual(s);
     expect(decoded!.unlocks).toEqual({
@@ -870,8 +878,8 @@ describe('#0a legacy-save guard: a save written before this unit still loads and
   // behaviour when absent. That is the whole basis for not bumping `SAVE_VERSION`, so it is
   // asserted rather than assumed: a save with neither key must decode and tick as before.
 
-  it('SAVE_VERSION is unchanged by this unit', () => {
-    expect(SAVE_VERSION).toBe(8);
+  it('SAVE_VERSION was unchanged by #0a (it stood at 8 until PLAN.md #2 bumped it to 9)', () => {
+    expect(SAVE_VERSION).toBe(9);
   });
 
   it('a battle saved with NO playerAdvantage decodes, and reads as "no standing modifier"', () => {
@@ -914,5 +922,155 @@ describe('#0a legacy-save guard: a save written before this unit still loads and
     expect(ticked.events).toEqual([
       { kind: 'condition-damage', subject: 'player', conditionType: 'bleed', amount: 1 },
     ]);
+  });
+});
+
+// =========================================================================================
+// PLAN.md #2 — the v8 -> v9 migration's rules, each on a hand-built v8 save (AC-7 b-d).
+// The committed REAL save is the oracle in `persist.test.ts`; these pin the edges it cannot.
+// =========================================================================================
+
+describe('migration v8 -> v9 (PLAN.md #2)', () => {
+  /** A v8-shaped save built from a modern one: the retired fields put back, version 8. */
+  function v8Save(opts: {
+    pots?: number;
+    restsLeft?: number;
+    backpack?: ItemInstance[];
+    phase?: unknown;
+  }): Record<string, unknown> {
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    const player = old.player as Record<string, unknown>;
+    player.pots = opts.pots ?? 6;
+    player.restsLeft = opts.restsLeft ?? 1;
+    if (opts.backpack) (player.inventory as Record<string, unknown>).backpack = opts.backpack;
+    if (opts.phase) old.phase = opts.phase;
+    old.version = 8;
+    return old;
+  }
+  const decode = (o: unknown) => decodeSave(JSON.stringify(o));
+
+  it('(b) a save parked on a rest OFFER migrates to the found-rest phase; continue returns to the hub', () => {
+    const s = decode(v8Save({ phase: { kind: 'rest', restOffered: true } }))!;
+    expect(s.phase).toEqual({ kind: 'rest' });
+    expect(step(s, { kind: 'continue' }).state.phase.kind).toBe('main-menu');
+  });
+
+  it('(c) ...and one parked on a rest with none left migrates the same way', () => {
+    const s = decode(v8Save({ phase: { kind: 'rest', restOffered: false } }))!;
+    expect(s.phase).toEqual({ kind: 'rest' });
+  });
+
+  it('(d) a fresh v9 state round-trips deep-equal (nothing to migrate)', () => {
+    const fresh = midRunState(SEED);
+    expect(fresh.version).toBe(9);
+    expect(decode(JSON.parse(encodeSave(fresh)))).toEqual(fresh);
+  });
+
+  it('potions fill only the room there is: 10 items + 6 potions -> 2 draughts (12 is the cap)', () => {
+    const ten = Array.from({ length: 10 }, () => ({ defId: 'antidote' }));
+    const s = decode(v8Save({ pots: 6, backpack: ten }))!;
+    expect(s.player!.inventory.backpack).toHaveLength(12);
+    expect(s.player!.inventory.backpack.slice(10)).toEqual([
+      { defId: 'void-draught' },
+      { defId: 'void-draught' },
+    ]);
+  });
+
+  it('no potions, no draughts; the counters are deleted either way', () => {
+    const s = decode(v8Save({ pots: 0, backpack: [] }))!;
+    expect(s.player!.inventory.backpack).toEqual([]);
+    const p = s.player! as unknown as Record<string, unknown>;
+    expect('pots' in p || 'restsLeft' in p).toBe(false);
+  });
+
+  it('a save made MID-BATTLE folds the battle combatant too (it is written back at the end)', () => {
+    const base = midRunState(SEED);
+    const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(SEED));
+    const battle = createBattle({ ...base.player!, inventory: { ...base.player!.inventory, backpack: [] } }, enemy, 1);
+    const modernBattle: GameState = { ...base, phase: { kind: 'battle', battle, started: true, final: false } };
+    const old = JSON.parse(encodeSave(modernBattle)) as Record<string, unknown>;
+    const fighterRaw = ((old.phase as Record<string, unknown>).battle as Record<string, unknown>)
+      .player as Record<string, unknown>;
+    for (const p of [old.player as Record<string, unknown>, fighterRaw]) {
+      p.pots = 3;
+      p.restsLeft = 2;
+    }
+    old.version = 8;
+    const s = decode(old)!;
+    expect(s.phase.kind).toBe('battle');
+    const fighter = (s.phase as unknown as { battle: { player: Record<string, unknown> & { inventory: { backpack: unknown[] } } } })
+      .battle.player;
+    expect('pots' in fighter || 'restsLeft' in fighter).toBe(false);
+    expect(fighter.inventory.backpack).toEqual([
+      { defId: 'void-draught' },
+      { defId: 'void-draught' },
+      { defId: 'void-draught' },
+    ]);
+  });
+
+  // A v8 bargain exactly as v8's own `deals.json` built it: its first standard row, 8 HP for a
+  // 12-HP heal. v8 autosaved every step, so a save parked on this screen is a real file.
+  const V8_HEAL_DEAL = {
+    kind: 'deal',
+    deal: { pool: 'standard', cost: { kind: 'hp', amount: 8 }, reward: { kind: 'heal', amount: 12 } },
+  };
+
+  it('a save parked on a HEALING bargain returns to the hub — nothing charged, nothing lost', () => {
+    const old = v8Save({ phase: V8_HEAL_DEAL });
+    const s = decode(old)!;
+    expect(s.phase).toEqual({ kind: 'main-menu' });
+    // The character is the v8 one, folded — the price was never paid (hp untouched).
+    expect(s.player!.hp).toBe((old.player as { hp: number }).hp);
+    expect(s.karma).toEqual(old.karma);
+    // ...and the run goes on from the hub, through the real step.
+    expect(step(s, { kind: 'menu', choice: 'continue' }).state).not.toBe(s);
+  });
+
+  it('...the same for a heal bargain priced in anything (the REWARD decides, not the cost)', () => {
+    for (const cost of [{ kind: 'offering' }, { kind: 'whisper' }]) {
+      const s = decode(v8Save({ phase: { kind: 'deal', deal: { pool: 'grace', cost, reward: { kind: 'heal', amount: 6 } } } }))!;
+      expect(s.phase, cost.kind).toEqual({ kind: 'main-menu' });
+    }
+  });
+
+  it('a v8 bargain with a reward that still exists is KEPT, and still pays out through step', () => {
+    const deal = { pool: 'standard', cost: { kind: 'skillCharge', amount: 1 }, reward: { kind: 'statPoint', stat: 'STR' } };
+    const s = decode(v8Save({ phase: { kind: 'deal', deal } }))!;
+    expect(s.phase).toEqual({ kind: 'deal', deal });
+    const r = step(s, { kind: 'deal-decision', accept: true });
+    expect(r.events.map((e) => e.kind)).toEqual(['deal-taken']);
+    expect(r.state.player!.stats.STR).toBe(s.player!.stats.STR + 1);
+  });
+
+  it('F3: a v8 pack of FOURTEEN parked on an item bargain keeps every item, and the reward still lands', () => {
+    // v8 had no cap. The migration keeps all fourteen (no potion fits: 12 - 14 < 0 draughts),
+    // the v8 bargain with a still-valid reward is kept, and paying takes three marks to make room.
+    const fourteen = Array.from({ length: 14 }, (_, i) => ({ defId: 'gen:Common:ring', rolled: { name: `Ring ${i}`, rarity: 'Common' as const, slot: 'ring' as const, kind: 'trinket' as const, effects: [] } }));
+    const reward = { kind: 'item', instance: { defId: 'gen:Legendary:mainHand', rolled: { name: 'Legendary mainHand', rarity: 'Legendary', slot: 'mainHand', kind: 'weapon', effects: [] } } };
+    const s = decode(v8Save({ pots: 6, backpack: fourteen, phase: { kind: 'deal', deal: { pool: 'tempting', cost: { kind: 'greed' }, reward } } }))!;
+    expect(s.player!.inventory.backpack).toHaveLength(14);
+    let r = step(s, { kind: 'deal-decision', accept: true });
+    expect(r.state.phase.kind).toBe('deal-discard');
+    for (const index of [0, 1, 2]) r = step(r.state, { kind: 'discard', index });
+    expect(r.events.at(-1)).toEqual({ kind: 'deal-taken', cost: 'a cache, stripped bare', reward: 'Legendary mainHand' });
+    expect(r.state.player!.inventory.backpack).toHaveLength(12);
+    expect(r.state.player!.inventory.backpack.at(-1)).toEqual(reward.instance);
+  });
+
+  it('a v1 save walks the WHOLE ladder to v9 — potions included', () => {
+    const modern = midRunState(SEED);
+    const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
+    delete old.karma;
+    const player = old.player as Record<string, unknown>;
+    delete player.inventory;
+    player.equippedWeaponId = 'Jaaj Sword 1';
+    player.equippedArmorId = 'Jooj Armor 1';
+    player.pots = 2;
+    player.restsLeft = 1;
+    old.version = 1;
+    const s = decode(old)!;
+    expect(s.version).toBe(9);
+    expect(s.player!.inventory.backpack).toEqual([{ defId: 'void-draught' }, { defId: 'void-draught' }]);
   });
 });

@@ -19,6 +19,16 @@
 // A control character can never be legitimate in this codebase's source: tabs and newlines
 // are whitespace we allow, and everything else is either a mangled escape or a paste
 // accident. So the rule is absolute and needs no exceptions list.
+//
+// THE MARKDOWN DOCS ARE SCANNED TOO (FINDINGS.md G58, added by `floor-mechanics`). A literal
+// backspace was written into `docs/FINDINGS.md` on 2026-09-09 while recording G57 — the same
+// Python `\b` escape, collapsing a regex word-boundary in a quoted pattern into the byte it
+// names — and it was found by eye, because no `.md` file was in this scan. Docs are not
+// cosmetic here: the build agents read `FINDINGS.md`, `CLAUDE.md`, `PLAN.md`,
+// `GAME-DESIGN.md` and the `.claude/` agent definitions AS DOCTRINE, so a corrupted pattern,
+// threshold or identifier in one of them is an instruction to a future builder. The walk is
+// over the FILESYSTEM, not `git ls-files`, on purpose: a mangled escape is written by an edit
+// before it is committed, and that is exactly when this should go red.
 // ---------------------------------------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
@@ -87,7 +97,34 @@ function sourceFiles(): string[] {
   return out;
 }
 
-describe('no source file contains a control character', () => {
+/** Markdown directories walked RECURSIVELY. The repo root is walked for `*.md` NON-recursively
+ *  (so `worktrees/`, `node_modules/` and `.legacy/` are never entered). */
+const DOC_ROOTS = ['docs', '.claude'];
+
+/** Every Markdown doc we author, as repo-relative posix paths (G58). */
+function markdownFiles(): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(ROOT, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith('.md')) out.push(entry.name);
+  }
+  const walk = (dir: string, prefix: string): void => {
+    for (const entry of readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue;
+      const rel = `${prefix}${entry.name}`;
+      if (entry.isDirectory()) walk(path.join(dir, entry.name), `${rel}/`);
+      else if (entry.name.endsWith('.md')) out.push(rel);
+    }
+  };
+  for (const root of DOC_ROOTS) walk(root, `${root}/`);
+  return out;
+}
+
+/** Everything the byte scan reads: authored source, build config, and the Markdown doctrine. */
+function scannedFiles(): string[] {
+  return [...sourceFiles(), ...markdownFiles()];
+}
+
+describe('no source file or Markdown doc contains a control character', () => {
   it('scans a real, non-trivial set of files (or it proves nothing)', () => {
     const files = sourceFiles();
     expect(files.length, 'no source files found — this scan is reading nothing').toBeGreaterThan(90);
@@ -101,9 +138,37 @@ describe('no source file contains a control character', () => {
     }
   });
 
+  it('scans the Markdown doctrine too — the files the build agents obey (G58)', () => {
+    const docs = markdownFiles();
+    expect(docs.length, 'the Markdown walk found almost nothing — it is policing an empty set')
+      .toBeGreaterThanOrEqual(15);
+    // The ones an agent reads as instructions, named, so a walk that silently stopped reaching
+    // the root or `docs/` cannot pass by finding fifteen files somewhere else.
+    for (const doc of [
+      'CLAUDE.md',
+      'PROGRESS.md',
+      'docs/FINDINGS.md',
+      'docs/PLAN.md',
+      'docs/GAME-DESIGN.md',
+      '.claude/agents/build-agent.md',
+    ]) {
+      expect(docs, `${doc} is outside the byte scan`).toContain(doc);
+    }
+    // ...and they are in the list the scan actually reads, not only in a helper it bypasses.
+    expect(scannedFiles()).toEqual(expect.arrayContaining(['docs/FINDINGS.md', 'CLAUDE.md']));
+    for (const f of docs) {
+      expect(readFileSync(path.join(ROOT, f), 'utf8').length, `${f} read as empty`).toBeGreaterThan(0);
+    }
+  });
+
   it('finds none, anywhere', () => {
     const offenders: string[] = [];
-    for (const rel of sourceFiles()) {
+    // The anchors are asserted on the SAME list this loop reads, so the loop cannot quietly
+    // go back to scanning `sourceFiles()` alone while the doc-walk test above stays green.
+    const scanned = scannedFiles();
+    expect(scanned, 'the scan no longer reads the docs').toContain('docs/FINDINGS.md');
+    expect(scanned, 'the scan no longer reads the source').toContain('src/desktop/game.ts');
+    for (const rel of scanned) {
       const source = readFileSync(path.join(ROOT, rel), 'utf8');
       for (const [i, line] of source.split('\n').entries()) {
         const m = CONTROL.exec(line);

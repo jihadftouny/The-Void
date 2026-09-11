@@ -3,9 +3,9 @@ import {
   selectEncounter,
   buildRandomBattle,
   buildChestLoot,
-  selectLore,
   computeRestHeal,
 } from './encounter.ts';
+import { floorDef, FLOOR_ENCOUNTERS, FLOOR_IDS } from './floors.ts';
 import { createPlayer } from './player.ts';
 import { step, type GameState } from './game.ts';
 import { createKarma } from './karma.ts';
@@ -23,32 +23,51 @@ function stats(): Stats {
   return { STR: 13, DEX: 13, CON: 13, INT: 13, WIS: 13, CHA: 13 };
 }
 
-describe('selectEncounter', () => {
-  it('splits the 6-slot [B,B,B,R,R,C] table by draw band', () => {
-    // randInt(rng,6) = floor(x*6): idx 0..2 -> battle ([0,0.5)), 3..4 -> rest ([0.5,0.8333)),
-    // 5 -> chest ([0.8333,1)).
-    expect(selectEncounter(scriptedRng([0.0]))).toBe('battle'); // floor(0.0)=0
-    expect(selectEncounter(scriptedRng([0.49]))).toBe('battle'); // floor(2.94)=2
-    expect(selectEncounter(scriptedRng([0.5]))).toBe('rest'); // floor(3.0)=3
-    expect(selectEncounter(scriptedRng([0.83]))).toBe('rest'); // floor(4.98)=4
-    expect(selectEncounter(scriptedRng([0.84]))).toBe('chest'); // floor(5.04)=5
-    expect(selectEncounter(scriptedRng([0.99]))).toBe('chest'); // floor(5.94)=5
+describe('selectEncounter — per-floor weights from floors.json (PLAN.md #2, AC-19)', () => {
+  it('walks the weights in the fixed order battle, chest, rest, bargain — bands derived by hand', () => {
+    // weightedPick draws r = 1 + floor(x * total) and returns the first kind whose cumulative
+    // weight reaches r. With floor 1's weights w = [battle, chest, rest, bargain] the band for
+    // each kind is [cum_prev / total, cum / total). The x values below sit inside each band.
+    const w = floorDef(1).encounters;
+    const total = w.battle + w.chest + w.rest + w.bargain;
+    const mid = (lo: number, hi: number) => (lo + hi) / 2 / total;
+    let c = 0;
+    const bands: [string, number][] = [];
+    for (const kind of FLOOR_ENCOUNTERS) {
+      bands.push([kind, mid(c, c + w[kind])]);
+      c += w[kind];
+    }
+    for (const [kind, x] of bands) expect(selectEncounter(scriptedRng([x]), 1), kind).toBe(kind);
+    expect(FLOOR_ENCOUNTERS).toEqual(['battle', 'chest', 'rest', 'bargain']);
   });
 
-  it('is weighted battle:rest:chest = 3:2:1 over many seeds (within tolerance)', () => {
+  it('takes exactly ONE draw, as the old fixed table did', () => {
+    let n = 0;
+    const base = mulberry32(9);
+    const rng: Rng = () => {
+      n += 1;
+      return base();
+    };
+    selectEncounter(rng, 3);
+    expect(n).toBe(1);
+  });
+
+  it('matches every floor’s data weights within ±2 points over 6000 draws; bargain on every floor', () => {
     const N = 6000;
-    let battles = 0;
-    let chests = 0;
-    for (let seed = 0; seed < N; seed++) {
-      const e = selectEncounter(mulberry32(seed));
-      if (e === 'battle') battles++;
-      else if (e === 'chest') chests++;
+    for (const floor of FLOOR_IDS) {
+      const w = floorDef(floor).encounters;
+      const total = FLOOR_ENCOUNTERS.reduce((a, k) => a + w[k], 0);
+      const seen: Record<string, number> = { battle: 0, chest: 0, rest: 0, bargain: 0 };
+      for (let seed = 0; seed < N; seed++) {
+        const e = selectEncounter(mulberry32(seed * 7919 + floor), floor);
+        seen[e] = (seen[e] ?? 0) + 1;
+      }
+      for (const kind of FLOOR_ENCOUNTERS) {
+        const expected = w[kind] / total;
+        expect(Math.abs((seen[kind] ?? 0) / N - expected), `floor ${floor} ${kind}`).toBeLessThan(0.02);
+      }
+      expect(seen.bargain, `floor ${floor} never offers a bargain`).toBeGreaterThan(0);
     }
-    // Expected battle 3/6 = 0.5, chest 1/6 ~ 0.1667. Allow +/- 0.03 for sampling noise.
-    expect(battles / N).toBeGreaterThan(0.47);
-    expect(battles / N).toBeLessThan(0.53);
-    expect(chests / N).toBeGreaterThan(0.14);
-    expect(chests / N).toBeLessThan(0.19);
   });
 });
 
@@ -159,7 +178,7 @@ describe('the chest encounter reached through `step` is act-aware', () => {
     const out: string[] = [];
     for (let seed = 1; seed <= seedCount; seed += 1) {
       const state: GameState = {
-        version: 8,
+        version: 9,
         rngState: seed,
         // xp 0 keeps every act gate — and act 5's Hollow gate — shut, so `continue` takes the
         // ordinary encounter path rather than walking into a boss.
@@ -190,35 +209,6 @@ describe('the chest encounter reached through `step` is act-aware', () => {
         'yield a floor-5 unique, and the chest table\'s `unique: 3` weight is dead data',
     ).toContain('hollow-regalia');
     expect(atFour).not.toContain('hollow-regalia');
-  });
-});
-
-describe('selectLore', () => {
-  // Sweep the whole [0,1) draw space finely.
-  const sweep = Array.from({ length: 100 }, (_, i) => i / 100);
-
-  it('Acts 2-4 can never return the third (index 2) entry', () => {
-    for (const act of [2, 3, 4]) {
-      for (const x of sweep) {
-        const entry = selectLore(act, scriptedRng([x]));
-        const idx = entry?.title.trim().slice(-1); // titles end in the entry index
-        expect(idx === '0' || idx === '1').toBe(true);
-      }
-    }
-  });
-
-  it('Act 1 CAN return the third entry at a high draw', () => {
-    // randInt(rng,3) with x=0.9 -> floor(2.7)=2 -> entries[2] ("...1 2").
-    const entry = selectLore(1, scriptedRng([0.9]));
-    expect(entry?.title).toBe('This is a Title 1 2');
-  });
-
-  it('Act 1 low draws return the first entry', () => {
-    expect(selectLore(1, scriptedRng([0]))?.title).toBe('This is a Title 1 0');
-  });
-
-  it('returns undefined for an Act with no lore', () => {
-    expect(selectLore(5, scriptedRng([0]))).toBeUndefined();
   });
 });
 

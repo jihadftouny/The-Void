@@ -18,6 +18,7 @@ import { type GameState } from './game.ts';
 import { createKarma } from './karma.ts';
 import { createInventory } from './inventory.ts';
 import { EQUIP_SLOTS } from './item.ts';
+import { BACKPACK_CAPACITY } from './inventory.ts';
 import { type PlayerClass } from './player.ts';
 import { levelForXp } from './progression.ts';
 
@@ -27,7 +28,7 @@ import { levelForXp } from './progression.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 /** The valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -40,6 +41,7 @@ const PHASE_KINDS: readonly string[] = [
   'battle-victory',
   'rest',
   'deal',
+  'deal-discard',
   'chest',
   'act-outro',
   'level-up-draft',
@@ -164,6 +166,10 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
       case 7:
         value = upgrade7to8(value);
         current = 8;
+        break;
+      case 8:
+        value = upgrade8to9(value);
+        current = 9;
         break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
@@ -343,6 +349,83 @@ function upgrade7to8(raw: unknown): unknown {
   const next: Record<string, unknown> = { ...raw };
   next.version = 8;
   return next;
+}
+
+/**
+ * The one consumable a v8 potion becomes (`consumables.json`: 100% of max HP — what a potion did).
+ * A literal here, not a lookup, because a migration must mean the same thing forever.
+ */
+const POTION_AS_CONSUMABLE = 'void-draught';
+
+/**
+ * Fold a v8 PLAYER record's retired fields into the v9 shape — PURE, on a shallow clone.
+ *
+ *  - `pots` (§22.6, potions fold into consumables): each potion becomes a Void Draught in the
+ *    backpack — the consumable that heals exactly what a potion healed — up to the backpack's
+ *    free room (`BACKPACK_CAPACITY`, §22.17). A potion beyond the room is dropped: a v9 pack
+ *    cannot hold more than twelve, and a save must decode into a state the engine can produce.
+ *  - `restsLeft` (§22.26, rests are found, never banked): deleted. A banked rest has no v9
+ *    meaning; the found rest spots replace it.
+ * Every other field is left exactly as it was.
+ */
+function foldV8Player(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const player: Record<string, unknown> = { ...raw };
+  const pots = typeof player.pots === 'number' && Number.isFinite(player.pots) ? Math.max(0, Math.floor(player.pots)) : 0;
+  if (isPlainObject(player.inventory) && Array.isArray((player.inventory as { backpack?: unknown }).backpack)) {
+    const inventory = player.inventory as { backpack: unknown[] } & Record<string, unknown>;
+    const room = Math.max(0, BACKPACK_CAPACITY - inventory.backpack.length);
+    const draughts = Array.from({ length: Math.min(pots, room) }, () => ({ defId: POTION_AS_CONSUMABLE }));
+    player.inventory = { ...inventory, backpack: [...inventory.backpack, ...draughts] };
+  }
+  delete player.pots;
+  delete player.restsLeft;
+  return player;
+}
+
+/**
+ * Migrate a v8 save to the v9 shape (PLAN.md #2, `floor-mechanics`) — PURE.
+ *
+ * WHAT CHANGED SHAPE, and nothing else did:
+ *  - the player lost `pots` and `restsLeft` (`foldV8Player` above) — on the hub player AND, for
+ *    a save made mid-battle, on the battle's own combatant, which is written back at battle end;
+ *  - the `rest` phase lost its decision: `{ kind: 'rest', restOffered }` becomes `{ kind: 'rest' }`
+ *    whichever way the flag pointed (a v8 save parked on "Rest here?" resumes on the found-rest
+ *    screen — the rest it would have been offered is not granted retroactively, and `continue`
+ *    returns to the hub, exactly as a found rest does);
+ *  - a `deal` phase whose reward is a HEAL — a v8 reward kind that no longer exists
+ *    (§22.25: no bargain heals, BY TYPE) — becomes the hub. v8 autosaved every step, so a save
+ *    parked on "An altar offers 12 HP" is a real file; left alone, accepting it charged the
+ *    price and granted nothing ("You pay 8 HP and take undefined"). Returning to the hub is
+ *    exactly what refusing would have done (no price, no karma, no draw), and bargains now find
+ *    the run on the descent, so nothing is lost that the next floor will not offer again. A v8
+ *    deal with any other reward is already a valid v9 deal and is kept as it stands;
+ *  - every other PLAN.md #2 addition (`Enemy.illusory`, `Player.corruptedSkills`, the
+ *    `deal-discard` phase) is OPTIONAL and additive, and cannot exist in a v8 save at all.
+ * A non-object input is returned with just the stamp so the caller's validation still runs.
+ */
+function upgrade8to9(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (isPlainObject(next.player)) next.player = foldV8Player(next.player);
+  if (isPlainObject(next.phase)) {
+    const phase = next.phase as Record<string, unknown>;
+    if (phase.kind === 'rest') {
+      next.phase = { kind: 'rest' };
+    } else if (phase.kind === 'deal' && isHealDeal(phase.deal)) {
+      next.phase = { kind: 'main-menu' };
+    } else if (phase.kind === 'battle' && isPlainObject(phase.battle)) {
+      const battle = phase.battle as Record<string, unknown>;
+      next.phase = { ...phase, battle: { ...battle, player: foldV8Player(battle.player) } };
+    }
+  }
+  next.version = 9;
+  return next;
+}
+
+/** A v8 bargain whose reward is the retired `heal` kind. */
+function isHealDeal(deal: unknown): boolean {
+  return isPlainObject(deal) && isPlainObject(deal.reward) && deal.reward.kind === 'heal';
 }
 
 // ------- Shape guard ---------------------------------------------------------

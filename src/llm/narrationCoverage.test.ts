@@ -49,146 +49,16 @@ import type { PlayerClass } from '../game/player.ts';
 import { createKarma } from '../game/karma.ts';
 import { ALL_CLASSES, heuristicPolicy, mercifulPolicy } from '../game/sim.ts';
 import type { SimPolicy } from '../game/sim.ts';
+import { ONE_OF_EVERY_EVENT, SAMPLE_STATS } from '../game/eventSamples.testutil.ts';
 
 // ---------------------------------------------------------------------------------------
 // The two compile-time-exhaustive maps
 // ---------------------------------------------------------------------------------------
 
-const STATS: Stats = { STR: 12, DEX: 11, CON: 13, INT: 10, WIS: 9, CHA: 8 };
+const STATS: Stats = SAMPLE_STATS;
 
-/**
- * One real sample per event kind, built by hand. The mapped type forces every value to BE
- * the member it is keyed by, so this cannot drift from the union: add a kind and this map
- * stops compiling.
- *
- * The enemy names and the `player-created` class here deliberately avoid WORLD.md §0's
- * reserved words, so the reserved-word guard below tests the LITERALS this unit wrote
- * rather than the fixture data.
- *
- * ⚠ Do not "improve" this by using the Hollow class or a floor-3 enemy such as "Hollow
- * Grief". Those are SANCTIONED uses of the load-bearing word — §0 names the Hollow class
- * and the Hollow Self itself — but they are interpolated data, and feeding them in here
- * would make the guard go red over something entirely correct.
- */
-const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
-  // ---- combat (37) ----
-  'enemy-skill-used': { kind: 'enemy-skill-used', skillId: 'heavyStrike', name: 'Heavy Strike' },
-  'skill-cast': {
-    kind: 'skill-cast',
-    subject: 'player',
-    skillId: 'heavyStrike',
-    name: 'Heavy Strike',
-    damage: 10,
-    damageSources: [{ kind: 'skill', amount: 10 }],
-  },
-  'cast-unavailable': { kind: 'cast-unavailable' },
-  attack: {
-    kind: 'attack',
-    subject: 'player',
-    outcome: 'hit',
-    damage: 3,
-    roll: { natural: 15, faces: [15], advDis: 0, modifier: 2, total: 17, targetAc: 13 },
-    damageSources: [{ kind: 'weapon-dice', amount: 3, label: '1d8' }],
-  },
-  advantage: { kind: 'advantage', subject: 'player' },
-  disadvantage: { kind: 'disadvantage', subject: 'enemy' },
-  'player-unable-to-act': { kind: 'player-unable-to-act', conditionType: 'stun' },
-  'condition-onset': { kind: 'condition-onset', subject: 'enemy', conditionType: 'burn' },
-  'condition-damage': {
-    kind: 'condition-damage',
-    subject: 'enemy',
-    conditionType: 'burn',
-    amount: 2,
-  },
-  'condition-heal': {
-    kind: 'condition-heal',
-    subject: 'player',
-    conditionType: 'regeneration',
-    amount: 2,
-  },
-  'condition-skip': { kind: 'condition-skip', subject: 'player', conditionType: 'sleep' },
-  'condition-applied': { kind: 'condition-applied', subject: 'enemy', conditionType: 'freeze' },
-  'condition-expired': { kind: 'condition-expired', subject: 'enemy', conditionType: 'freeze' },
-  'resource-changed': {
-    kind: 'resource-changed',
-    subject: 'player',
-    resource: 'momentum',
-    value: 3,
-  },
-  'self-sacrifice': { kind: 'self-sacrifice', amount: 4, ofMaxHp: true },
-  lifesteal: { kind: 'lifesteal', amount: 5 },
-  detonate: { kind: 'detonate', consumed: 2, bonusDamage: 6 },
-  'potion-drunk': { kind: 'potion-drunk', healedTo: 20 },
-  'potion-unavailable': { kind: 'potion-unavailable' },
-  'potion-blocked': { kind: 'potion-blocked' },
-  fled: { kind: 'fled' },
-  'escape-failed': { kind: 'escape-failed', damage: 4 },
-  'escape-impossible': { kind: 'escape-impossible' },
-  spared: { kind: 'spared', enemyName: 'Scrap Warden' },
-  'spare-unavailable': { kind: 'spare-unavailable' },
-  victory: { kind: 'victory', xpGained: 5, extraRest: true, loot: [] },
-  defeat: { kind: 'defeat' },
-  'relic-triggered': { kind: 'relic-triggered', trigger: 'onHit', action: 'dealDamage' },
-  'consumable-used': { kind: 'consumable-used', itemId: 'clarity-draught' },
-  'consumable-unavailable': { kind: 'consumable-unavailable' },
-  'shield-gained': { kind: 'shield-gained', amount: 6 },
-  'shield-absorbed': { kind: 'shield-absorbed', amount: 4 },
-  revive: { kind: 'revive', healedTo: 7 },
-  'stat-stolen': { kind: 'stat-stolen', stat: 'STR', amount: 1 },
-  'boss-summon': { kind: 'boss-summon', minions: 2 },
-  'boss-minion-damage': { kind: 'boss-minion-damage', amount: 4 },
-  'boss-adapt': { kind: 'boss-adapt' },
-  // ---- narrative (26) ----
-  title: { kind: 'title' },
-  intro: { kind: 'intro', header: 'STORY', lines: ['The capital of Absolution, 2100 . . .'] },
-  'stats-rolled': { kind: 'stats-rolled', stats: STATS },
-  'player-created': {
-    kind: 'player-created',
-    name: 'Zzyzx-Qwph',
-    classId: 'Enforcer',
-    maxHp: 12,
-    armorClass: 11,
-  },
-  'encounter-start': { kind: 'encounter-start', enemyName: 'Feral Cryo Rat' },
-  'rest-lore': { kind: 'rest-lore', title: 'A fragment', loreText: 'The lights were never on.' },
-  'rest-taken': { kind: 'rest-taken', hpRestored: 5, hp: 15, maxHp: 20 },
-  'rest-full': { kind: 'rest-full' },
-  'rest-declined': { kind: 'rest-declined' },
-  'no-rests': { kind: 'no-rests' },
-  'deal-offer': {
-    kind: 'deal-offer',
-    pool: 'standard',
-    cost: '8 HP',
-    reward: '12 HP restored',
-  },
-  'deal-taken': { kind: 'deal-taken', cost: '8 HP', reward: '12 HP restored' },
-  'deal-unaffordable': { kind: 'deal-unaffordable', cost: 'a relic' },
-  'deal-declined': { kind: 'deal-declined' },
-  'chest-found': { kind: 'chest-found' },
-  'chest-loot': {
-    kind: 'chest-loot',
-    loot: [{ defId: 'gen:Common:ring', name: 'Common ring', rarity: 'Common' }],
-  },
-  'act-outro': { kind: 'act-outro', act: 1, header: 'ACT I', body: '' },
-  'level-up': { kind: 'level-up', newLevel: 2, hpRoll: 4, newMaxHp: 16 },
-  'draft-offer': { kind: 'draft-offer', options: ['Learn Heavy Strike', '+1 STR', '+1 CON'] },
-  'draft-picked': { kind: 'draft-picked', option: '+1 STR' },
-  'act-intro': { kind: 'act-intro', act: 2, header: 'ACT II', body: '' },
-  'final-battle-begins': { kind: 'final-battle-begins', enemyName: 'The Reflection' },
-  'boss-encounter': {
-    kind: 'boss-encounter',
-    bossId: 'kingpin',
-    enemyName: 'Undercity Kingpin',
-  },
-  verdict: { kind: 'verdict', outcome: 'grace' },
-  ending: {
-    kind: 'ending',
-    endingType: 'grace',
-    header: 'ASCENSION',
-    body: 'You are judged worthy and rise from the Void, made whole.',
-  },
-  'game-over': { kind: 'game-over', xp: 42 },
-};
+/** The shared, type-exhaustive table (moved to `eventSamples.testutil.ts` in FIX ROUND 1, F4). */
+const SAMPLE = ONE_OF_EVERY_EVENT;
 
 /**
  * The classification, written out from the plan's §4.2 / §4.3 tables — INDEPENDENT of what
@@ -206,15 +76,12 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   'condition-applied': 'fact',
   'condition-damage': 'fact',
   'player-unable-to-act': 'fact',
-  'potion-drunk': 'fact',
   fled: 'fact',
   'escape-failed': 'fact',
   'escape-impossible': 'fact',
   victory: 'fact',
   defeat: 'fact',
-  'rest-lore': 'fact',
   'rest-taken': 'fact',
-  'rest-full': 'fact',
   'deal-offer': 'fact',
   'deal-taken': 'fact',
   'deal-declined': 'fact',
@@ -243,12 +110,17 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   verdict: 'fact',
   'draft-offer': 'fact',
   'draft-picked': 'fact',
-  'rest-declined': 'fact',
-  'no-rests': 'fact',
+  // --- the 8 facts PLAN.md #2 adds (floor mechanics, the found rest, the full-pack bargain) ---
+  'floor-drain': 'fact',
+  'illusion-struck': 'fact',
+  'illusion-dispelled': 'fact',
+  'loot-left-behind': 'fact',
+  'rest-found': 'fact',
+  'skills-warped': 'fact',
+  'deal-needs-room': 'fact',
+  'item-discarded': 'fact',
   // --- the 17 deliberate silences ---
   'cast-unavailable': 'silent',
-  'potion-unavailable': 'silent',
-  'potion-blocked': 'silent',
   'spare-unavailable': 'silent',
   'consumable-unavailable': 'silent',
   'condition-onset': 'silent',
@@ -289,8 +161,6 @@ const NEW_FACT_KINDS: readonly GameEventKind[] = [
   'verdict',
   'draft-offer',
   'draft-picked',
-  'rest-declined',
-  'no-rests',
 ];
 
 // ---------------------------------------------------------------------------------------
@@ -298,22 +168,31 @@ const NEW_FACT_KINDS: readonly GameEventKind[] = [
 // ---------------------------------------------------------------------------------------
 
 describe('describeEvent covers every event kind (G13)', () => {
-  it('the union really has 63 kinds', () => {
+  it('the union really has 64 kinds', () => {
     // 37 CombatEvent members + 26 NarrativeEvent members, counted by hand from the two
     // union declarations in combatEvent.ts and gameEvent.ts. The mapped type guarantees
     // SAMPLE's keys ARE the union, so this anchors the size of the thing being covered.
     // (Note the count `src/render/format.test.ts` hard-codes is 52 — its own hand-list
     // omits the 11 M3/M6 combat kinds. That is a gap in that file, not in the union.)
-    expect(ALL_KINDS).toHaveLength(37 + 26);
+    // PLAN.md #2 added 4 combat kinds (floor-drain, illusion-struck, illusion-dispelled,
+    // loot-left-behind) and 4 narrative ones (rest-found, skills-warped, deal-needs-room,
+    // item-discarded).
+    // ...and removed the four rest-DECISION kinds (rest-lore, rest-full, rest-declined,
+    // no-rests) with the decision itself (§22.26).
+    // ...and the three potion kinds (potion-drunk, potion-unavailable, potion-blocked) with the
+    // potion itself (§22.6).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 26 + 4 - 4);
   });
 
-  it('the classification is 46 facts and 17 deliberate silences', () => {
+  it('the classification is 49 facts and 15 deliberate silences', () => {
     // From the plan: 29 kinds already had a fact, G13 adds 17 more, and the other 17 are
-    // silenced on purpose. 29 + 17 + 17 = 63.
+    // silenced on purpose. 29 + 17 + 17 = 63. PLAN.md #2 removed two of the 29 (rest-lore,
+    // rest-full) and two of G13's 17 (rest-declined, no-rests), and added 8 of its own.
     const facts = ALL_KINDS.filter((k) => EXPECTED[k] === 'fact');
-    expect(facts).toHaveLength(29 + 17);
-    expect(DELIBERATELY_SILENT.size).toBe(17);
-    expect(NEW_FACT_KINDS).toHaveLength(17);
+    // ...and PLAN.md #2's potion removal took one pre-G13 fact (potion-drunk) and two silences.
+    expect(facts).toHaveLength(26 + 15 + 8);
+    expect(DELIBERATELY_SILENT.size).toBe(15);
+    expect(NEW_FACT_KINDS).toHaveLength(15);
     for (const k of NEW_FACT_KINDS) expect(EXPECTED[k]).toBe('fact');
   });
 
@@ -821,7 +700,7 @@ describe('R6 — the terminal step gives the renderer nothing to draw (G42)', ()
     // standing between the player and a blank last screen is whether the renderer clears
     // the pane before or after it discovers the prompt is null.
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 12_345,
       player: createPlayer({ name: PROBE_NAME, classId: 'Enforcer', stats: STATS }),
       act: 4,
@@ -891,7 +770,7 @@ describe('R6 — the terminal step gives the renderer nothing to draw (G42)', ()
 
 describe('buildNarrationPrompt exposes the facts it built', () => {
   const state: GameState = {
-    version: 8,
+    version: 9,
     rngState: 1,
     player: null,
     act: 2,
@@ -920,7 +799,7 @@ describe('buildNarrationPrompt exposes the facts it built', () => {
     // beat directly. Asserted here so the hook cannot regress into "whatever is in .user".
     const past: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Rust Choir' }];
     const memory = rememberBeat(rememberBeat(createStoryMemory(), past), [
-      { kind: 'victory', xpGained: 5, extraRest: false, loot: [] },
+      { kind: 'victory', xpGained: 5, loot: [] },
     ]);
     const now: GameEvent[] = [{ kind: 'boss-encounter', bossId: 'kingpin', enemyName: 'Kingpin' }];
     const p = buildNarrationPrompt(now, state, memory);

@@ -67,15 +67,35 @@ export function shouldAdvance(act: number, xp: number): boolean {
  * X(k) = 240·e^(k/8) for k kills of floor 5:
  *     k = 4 -> 396      k = 5 -> 448      k = 6 -> 508      k = 7.5 -> 610
  *
- * The first choice was 600 (k ~ 7.5, matching the ~8–11 kills floors 3 and 4 each take). It is
+ * The first choice was 600 (k ~ 7.5, to match floors 3 and 4 — #0a put them at "~8–11 kills";
+ * PLAN.md #2 MEASURED them, see below). It is
  * LOWERED to 500 (k = 6) for a measured reason, not a taste: at 600 the heuristic-policy win
  * rate over `balance.test.ts`'s 500-run sample lands on EXACTLY 0.120, which does not clear
  * that file's `> 0.12` floor. The unit's own rule for this case is to lower the CONSTANT and
  * show the re-derivation rather than weaken the guard, so this moves one step down the same
  * curve — k = 6 kills, 240·e^(0.75) ~ 508 -> 500 — which measures 0.132. `PLAN.md` #2's
- * re-run owns the final value; floor 5 is now the deadliest stretch of the descent.
+ * re-run owns the final value. (The #0a note that "floor 5 is now the deadliest stretch" was
+ * true of that unit's gearless sim; it is not true of the #2 re-run — floor 4 is.)
+ *
+ * PLAN.md #2 TUNING (T3, 500 -> 600 — back to the first derived value), for TWO reasons:
+ *  1. The only reason 500 existed is gone. It was chosen to clear `balance.test.ts`'s 0.12
+ *     floor by a coincidence of the gearless sim; the sim now equips gear and uses consumables
+ *     and wins well clear of that floor (AC-29).
+ *  2. At 600 (k ~ 7.5 kills) floor 5 is as long as floors 3 and 4 — the length first derived
+ *     for it. MEASURED (fix round 2, over the runs that cleared each floor in the report's
+ *     2,500-run baseline): floor 3 takes 7.9 kills and floor 4 7.0 — not the "~8–11" #0a
+ *     estimated, which this note repeated until then. Floor 5 at 600 measures 8.8.
+ * What floor 5 cost when T3 was applied (after T1 and T2, on the report's 2,500-run baseline):
+ * 106 deaths in 871 arrivals, about 1 in 8 — close to floor 2 (220 in 1,924, about 1 in 8.7)
+ * and well below floors 3 (1 in 5.7) and 4 (1 in 2.8). Measured effect: 0.321 -> 0.306, and
+ * floor-5 deaths 106 -> 142 (about 1 in 6.1). `docs/BALANCE-REPORT.md`'s ledger carries the row.
+ *
+ * ⚠ CORRECTED (FIX ROUND 1, F7). This note first gave the reason as "the re-run measured floor
+ * 5 as the SOFTEST floor — about one arrival in fourteen died there". That was wrong twice:
+ * the 1-in-14.9 figure (71 of 1,061) is from BEFORE T1 and T2, and even then floor 2 was softer
+ * (124 of 1,927, 1 in 15.5). The measured effects were right; the stated reason was not.
  */
-export const HOLLOW_GATE_XP = 500;
+export const HOLLOW_GATE_XP = 600;
 
 /** Whether floor 5's boss gate has opened for a player at `xp` — PURE. */
 export function hollowGateOpen(xp: number): boolean {
@@ -123,7 +143,7 @@ export function hasPendingLevelUp(player: Player): boolean {
  * Apply ONE level-up's automatic max-HP growth — PURE. Rolls a single hit die and adds the
  * CON modifier: `hpRoll = max(rollDie(hitDie.sides) + mods.CON, 1)` (floored at 1). Returns
  * the player with `level` incremented and `maxHp` raised by `hpRoll`; `hp` is UNCHANGED (no
- * heal — restored via rest/potion). The hit die stays `{quantity:1, sides}` (no per-act
+ * heal — restored by a found rest or a healing consumable). The hit die stays `{quantity:1, sides}` (no per-act
  * quantity bump), proficiency is NOT auto-grown, and stats grow ONLY via the draft. All
  * balance is an M15 placeholder. Threads the injected `Rng` (one draw); no Math.random.
  */
