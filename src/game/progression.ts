@@ -74,8 +74,16 @@ export function shouldAdvance(act: number, xp: number): boolean {
  * show the re-derivation rather than weaken the guard, so this moves one step down the same
  * curve — k = 6 kills, 240·e^(0.75) ~ 508 -> 500 — which measures 0.132. `PLAN.md` #2's
  * re-run owns the final value; floor 5 is now the deadliest stretch of the descent.
+ *
+ * PLAN.md #2 TUNING (T3, 500 -> 600 — back to the first derived value). The coincidence that
+ * pinned it is gone: the sim now equips gear and uses consumables, so the win rate no longer
+ * sits on `balance.test.ts`'s 0.12 floor (AC-29). And the re-run measured floor 5 as the
+ * SOFTEST floor of the descent — about one arrival in fourteen died there — while floors 3 and
+ * 4 each take ~8–11 kills. At 600 (k ~ 7.5 kills) the floor matches them, as first intended.
+ * Measured effect on the report's 2,500-run baseline: 0.321 -> 0.306, floor-5 deaths 106 ->
+ * 142. `docs/BALANCE-REPORT.md`'s tuning ledger carries the row.
  */
-export const HOLLOW_GATE_XP = 500;
+export const HOLLOW_GATE_XP = 600;
 
 /** Whether floor 5's boss gate has opened for a player at `xp` — PURE. */
 export function hollowGateOpen(xp: number): boolean {

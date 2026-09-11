@@ -50,7 +50,7 @@ import { createGame, type GameState, type Phase } from '../game/game.ts';
 import { createRng, type Rng } from '../game/rng.ts';
 import { createKarma, type KarmaState } from '../game/karma.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from '../game/player.ts';
-import { applyLevelUpHp, hasPendingLevelUp, levelForXp } from '../game/progression.ts';
+import { applyLevelUpHp, hasPendingLevelUp, levelForXp, HOLLOW_GATE_XP } from '../game/progression.ts';
 import { generateDraft, applyDraftOption } from '../game/draft.ts';
 import { generateEnemy } from '../game/enemy.ts';
 import { FAMILIES, getFamily } from '../game/enemyFamily.ts';
@@ -748,7 +748,9 @@ export interface DevPreset {
  *
  * Every row's expectation below is derived from a CONSTANT read as a specification, never
  * measured from a run: `ACT_XP_THRESHOLDS[5] = 240`, `GATE_WEIGHTS` x axes vs
- * `GATE_THRESHOLD = 1`, and `HOLLOW_GATE_XP = 500`.
+ * `GATE_THRESHOLD = 1`, and `HOLLOW_GATE_XP` — READ, not copied: PLAN.md #2's tuning moved the
+ * gate (500 -> 600), and a preset that copied the old number would have silently stopped
+ * opening the Hollow.
  */
 export const DEV_PRESETS: readonly DevPreset[] = [
   {
@@ -785,20 +787,20 @@ export const DEV_PRESETS: readonly DevPreset[] = [
   {
     id: 'act5-hollow-ready',
     label: 'Act 5 hub, Hollow gate open',
-    // hollowGateOpen(500) is true => the next `menu:continue` builds the Hollow.
-    spec: { act: 5, xp: 500, target: { kind: 'hub' } },
+    // hollowGateOpen(HOLLOW_GATE_XP) is true => the next `menu:continue` builds the Hollow.
+    spec: { act: 5, xp: HOLLOW_GATE_XP, target: { kind: 'hub' } },
   },
   {
     id: 'hollow-fight',
     label: 'The Hollow, in the fight',
     // Act 5 AND a boss, so `createBattle` derives `canFlee: false` twice over.
-    spec: { act: 5, xp: 500, target: { kind: 'boss', bossId: 'hollow' } },
+    spec: { act: 5, xp: HOLLOW_GATE_XP, target: { kind: 'boss', bossId: 'hollow' } },
   },
   {
     id: 'ending-damnation',
     label: 'Damnation ending',
     // A final victory: one `continue` emits the damnation ending event.
-    spec: { act: 5, xp: 500, target: { kind: 'battle-victory', final: true } },
+    spec: { act: 5, xp: HOLLOW_GATE_XP, target: { kind: 'battle-victory', final: true } },
   },
   {
     id: 'ending-death',

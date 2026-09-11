@@ -645,11 +645,13 @@ function playRecording(seed: number, classId: PlayerClass) {
   return { kinds, branch };
 }
 
-describe('G48 non-vacuity — every policy branch FIRES in real runs (fixed seeds 1..10 x all classes)', () => {
+describe('G48 non-vacuity — every policy branch FIRES in real runs (fixed seeds 1..30 x all classes)', () => {
+  // 150 runs: a full pack (loot left behind, a bargain that needs room) is a late-descent
+  // event, so the set must hold enough runs that live that long.
   const kinds = new Set<string>();
   const branch = { hubDiscard: 0, dealDiscard: 0, backOut: 0, bodyRefused: 0, heal: 0 };
   for (const classId of ALL_CLASSES) {
-    for (let seed = 1; seed <= 10; seed++) {
+    for (let seed = 1; seed <= 30; seed++) {
       const r = playRecording(seed, classId);
       r.kinds.forEach((k) => kinds.add(k));
       for (const k of Object.keys(branch) as (keyof typeof branch)[]) branch[k] += r.branch[k];
@@ -735,9 +737,15 @@ describe('StepOptions reach every step of a simulated run (the DC-sensitivity se
     expect(never.perFloor[2].illusionsMet).toBeGreaterThan(0);
     expect(never.perFloor[2].illusionsDispelled).toBe(0);
     expect(shipped.perFloor[2].illusionsDispelled).toBeGreaterThan(0);
-    // ...and a DC of 1 is met by any natural roll above the worst modifier: more dispels still.
+    // ...and at DC 1 the FIRST roll almost always succeeds: d20 + a modifier of -4 at worst
+    // (Wisdom 3) meets 1 on a natural 5+, so P >= 0.8 per round and typically 0.95. So an
+    // illusion lasts barely more than the one round the roll happens in — fewer rounds than at
+    // the shipped DC. (NOT "more dispels": nearly every illusion ends in a dispel at any DC a
+    // roll can reach, so the dispel COUNT tracks how many illusions were met, not the DC.)
     const always = simulateBatch({ seeds, classes: [...ALL_CLASSES], stepOptions: { illusionDc: 1 } });
-    expect(always.perFloor[2].illusionsDispelled).toBeGreaterThan(shipped.perFloor[2].illusionsDispelled);
+    const roundsPer = (r: typeof shipped): number => r.perFloor[2].illusionRounds / r.perFloor[2].illusionsMet;
+    expect(roundsPer(always)).toBeLessThan(1.3);
+    expect(roundsPer(always)).toBeLessThan(roundsPer(shipped));
   });
 
   it('an empty options object IS the shipped game (same report, byte for byte)', () => {

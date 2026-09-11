@@ -245,7 +245,9 @@ describe('the balance constants #10a must not touch', () => {
       clarityDelusion: 1,
     });
     expect(GATE_THRESHOLD).toBe(1);
-    expect(HOLLOW_GATE_XP).toBe(500);
+    // PLAN.md #2's tuning (T3) moved the Hollow gate 500 -> 600 — a balance knob this unit may
+    // touch, recorded in the report's ledger; the verdict gate above is not.
+    expect(HOLLOW_GATE_XP).toBe(600);
   });
 
   it('§22.16 holds arithmetically: every delta is an integer, so >= 1 IS "net-positive"', () => {

@@ -202,6 +202,9 @@
 //   bargains + rests are found; no rest counter; no heals   S6   predicted DOWN (plan §7)
 //   potions fold into a 2-item kit; the pack holds 12       S7   predicted MUCH DOWN (§7)
 //   the sim counts each floor; a DC seam for the report     S8   NONE — no rule, no policy
+//   TUNING T1: rest weight 2 -> 1 on floors 2-5             T1   predicted DOWN
+//   TUNING T2: enemy HP xp divisor 8 -> 6                   T2   predicted DOWN (floors 2+)
+//   TUNING T3: the Hollow gate 500 -> 600 XP                T3   predicted DOWN (floor 5)
 //
 //  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
 //     | step 12) so that every later rules change is measured against a player who uses what
@@ -299,6 +302,28 @@
 //     | OBSERVED: all six rows, all six rngStates and the aggregate BYTE-IDENTICAL. (The new
 //     | fields are measurement of the same event stream and are kept out of the lock — see
 //     | `LockedRecord` below.)
+//  T1 | THE TUNING PASS (plan step 14, AC-28) — global knobs only; ILLUSION_DC and every
+//  T2 | per-class number frozen. Landed as ONE re-baseline, because the three were chosen
+//  T3 | together against the report's 2,500-run baseline (seeds 1..500 x 5 classes, which
+//     | measured 0.411 after S8, ABOVE the [0.25, 0.35] band) and are ledgered one by one in
+//     | `docs/BALANCE-REPORT.md`'s tuning ledger (`TUNING_LEDGER`): T1 the rest weight on floors
+//     | 2-5 (`floors.json`), 2 -> 1: 0.411 -> 0.345. T2 `ENEMY_HP_XP_DIV` 8 -> 6: 0.345 -> 0.321.
+//     | T3 `HOLLOW_GATE_XP` 500 -> 600: 0.321 -> 0.306. None adds or removes a draw: the
+//     | encounter pick is still one draw (only the weight table moved), `randInt` consumes one
+//     | draw whatever its range, and the gate is a comparison.
+//     | EXPECTED on these six rows (written before measuring them): every run that reaches floor 2
+//     | MOVES (T1 re-maps every floor-2+ encounter draw). The two floor-1 deaths are candidates
+//     | for BYTE-IDENTITY — floor 1's table is untouched and T3 is floor 5 only — but only if T2
+//     | never raised an enemy's HP before they died: Hollow seed 3 (level 1, dead at step 16)
+//     | should hold; Enforcer seed 3 (level 3, so it DID pass xp 6, where floor(xp/6) first
+//     | exceeds floor(xp/8)) may move.
+//     | OBSERVED: BOTH floor-1 deaths BYTE-IDENTICAL — Enforcer seed 3 too (rngState 2504613783
+//     | unchanged: no enemy it fought was generated at an xp where the two divisors disagree
+//     | on the HP). The four floor-2+ runs all move, and two of them move UP (Enforcer seed 1
+//     | now dies on floor 4 instead of 2; Enforcer seed 2 now wins) while both Hollow damnations
+//     | become deaths (floors 3 and 4): wins 2/6 -> 1/6. Six runs are a fingerprint, not a sample
+//     | — the 2,500-run baseline moved 0.411 -> 0.306, in the predicted direction, and act-1
+//     | death share 0.389 -> 0.332 (deaths moved LATER, as intended).
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -371,17 +396,18 @@ function lockedReport(r: AggregateReport): unknown {
 }
 
 /** The frozen run records. MEASURED, not derived — see the file header. */
+// #2 T1-T3: four rows moved (every run that reached floor 2); both floor-1 deaths held.
 // #0c: ALL SIX rows moved, and every one of them was expected to — the catalog gate shifts
 // every draw after a run's first successful loot drop, and each of these runs takes a drop
 // early. NO row is byte-identical this time, and that absence is itself consistent with the
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
 const GOLDEN_RUNS: readonly (LockedRecord & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 2, finalAct: 2, finalLevel: 6, floorsCleared: 1, steps: 126, cause: 'The Reflection', rngState: 3674038724 },
-  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 206, cause: 'Blessed Burning Rage', rngState: 1172755742 },
+  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 15, floorsCleared: 3, steps: 368, cause: 'The Counselor', rngState: 3654640621 },
+  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 25, floorsCleared: 4, steps: 459, cause: 'unmade the Hollow (damnation)', rngState: 3857371310 },
   { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 52, cause: 'Reinforced Electro-Core Drone', rngState: 2504613783 },
-  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 465, cause: 'unmade the Hollow (damnation)', rngState: 2232781687 },
-  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 409, cause: 'unmade the Hollow (damnation)', rngState: 4207382495 },
+  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 6, floorsCleared: 2, steps: 195, cause: 'Warped Smouldering Cinder', rngState: 3083415351 },
+  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 325, cause: 'Whispering Refrain', rngState: 2974016355 },
   { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 16, cause: 'Intoxicated Punk', rngState: 1951871910 },
 ];
 
@@ -408,26 +434,26 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(lockedReport(report)).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 2,
+      wins: 1,
       grace: 0,
-      damnation: 2,
-      deaths: 4,
-      winRate: 2 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 6+9+3+23+23+1 = 65, floors
-      // 1+2+0+4+4+0 = 11. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 65 / 6,
-      avgFloorsCleared: 11 / 6,
-      deathByAct: { 1: 2, 2: 1, 3: 1, 4: 0, 5: 0 },
+      damnation: 1,
+      deaths: 5,
+      winRate: 1 / 6,
+      // Summed from the GOLDEN_RUNS rows above: levels 15+25+3+6+11+1 = 61, floors
+      // 3+4+0+2+3+0 = 12. Written as the fraction so the two stay visibly tied together.
+      avgLevel: 61 / 6,
+      avgFloorsCleared: 12 / 6,
+      deathByAct: { 1: 2, 2: 0, 3: 1, 4: 2, 5: 0 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 18 / 3, avgFloorsCleared: 3 / 3,
-          deathByAct: { 1: 1, 2: 1, 3: 1, 4: 0, 5: 0 },
+          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
+          winRate: 1 / 3, avgLevel: 43 / 3, avgFloorsCleared: 7 / 3,
+          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 0 },
         },
         Hollow: {
-          runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,
-          winRate: 2 / 3, avgLevel: 47 / 3, avgFloorsCleared: 8 / 3,
-          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0 },
+          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
+          winRate: 0 / 3, avgLevel: 18 / 3, avgFloorsCleared: 5 / 3,
+          deathByAct: { 1: 1, 2: 0, 3: 1, 4: 1, 5: 0 },
         },
       },
     });

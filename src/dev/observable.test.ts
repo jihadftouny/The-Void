@@ -300,8 +300,9 @@ describe('the Hollow gate on floor 5', () => {
   const isFinalBattle = (state: GameState): boolean =>
     state.phase.kind === 'battle' && state.phase.final;
 
-  it('the boundary is HOLLOW_GATE_XP, read as a spec: 499 no, 500 yes', () => {
-    expect(HOLLOW_GATE_XP).toBe(500);
+  it('the boundary is HOLLOW_GATE_XP, read as a spec: 599 no, 600 yes', () => {
+    // PLAN.md #2's tuning (T3) moved the gate 500 -> 600; docs/BALANCE-REPORT.md's ledger says why.
+    expect(HOLLOW_GATE_XP).toBe(600);
     expect(isFinalBattle(continueAt(HOLLOW_GATE_XP - 1).state)).toBe(false);
     expect(isFinalBattle(continueAt(HOLLOW_GATE_XP).state)).toBe(true);
   });

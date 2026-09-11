@@ -577,7 +577,7 @@ describe('entering Act 5', () => {
   });
 
   it('below the gate, the act-5 hub yields ORDINARY encounters — never the Hollow', () => {
-    expect(HOLLOW_GATE_XP).toBe(500); // the premise, restated
+    expect(HOLLOW_GATE_XP).toBe(600); // the premise, restated (PLAN.md #2 tuning T3: 500 -> 600)
     let sawBattle = false;
     let sawRest = false;
     let sawChest = false;

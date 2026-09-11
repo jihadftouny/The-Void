@@ -108,9 +108,16 @@ const ENEMY_MAX_SKILL_CHARGES = 2;
  *    regardless of its argument (see rng.ts), so the draw order/count — and thus save-byte
  *    reproducibility — is unchanged; only the resulting HP magnitude moves. Recorded per the
  *    "override the plan + record the deviation" rule.
+ *  - `ENEMY_HP_XP_DIV` 8 -> 6 (PLAN.md #2 TUNING, T2). The reason the divisor was loosened
+ *    above — "static starting-gear damage" could not keep pace — no longer holds: the sim now
+ *    equips the gear it finds (G48), so part of that loosening is taken back. The term is
+ *    `floor(playerXp / 6)`, so a fresh act-1 enemy (xp 0) is untouched — the hits-to-kill anchor
+ *    does not move — and the added HP lands where the XP is: floors 2-5. Draw-count safe, as
+ *    above. Measured effect on the report's 2,500-run baseline: 0.345 -> 0.321, and floor-1
+ *    deaths barely move (573 -> 576). `docs/BALANCE-REPORT.md`'s tuning ledger carries the row.
  */
 export const ENEMY_BASE_HP = 10;
-export const ENEMY_HP_XP_DIV = 8;
+export const ENEMY_HP_XP_DIV = 6;
 export const ENEMY_HP_RAND_DIV = 4;
 
 /**
