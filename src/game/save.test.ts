@@ -1009,6 +1009,40 @@ describe('migration v8 -> v9 (PLAN.md #2)', () => {
     ]);
   });
 
+  // A v8 bargain exactly as v8's own `deals.json` built it: its first standard row, 8 HP for a
+  // 12-HP heal. v8 autosaved every step, so a save parked on this screen is a real file.
+  const V8_HEAL_DEAL = {
+    kind: 'deal',
+    deal: { pool: 'standard', cost: { kind: 'hp', amount: 8 }, reward: { kind: 'heal', amount: 12 } },
+  };
+
+  it('a save parked on a HEALING bargain returns to the hub — nothing charged, nothing lost', () => {
+    const old = v8Save({ phase: V8_HEAL_DEAL });
+    const s = decode(old)!;
+    expect(s.phase).toEqual({ kind: 'main-menu' });
+    // The character is the v8 one, folded — the price was never paid (hp untouched).
+    expect(s.player!.hp).toBe((old.player as { hp: number }).hp);
+    expect(s.karma).toEqual(old.karma);
+    // ...and the run goes on from the hub, through the real step.
+    expect(step(s, { kind: 'menu', choice: 'continue' }).state).not.toBe(s);
+  });
+
+  it('...the same for a heal bargain priced in anything (the REWARD decides, not the cost)', () => {
+    for (const cost of [{ kind: 'offering' }, { kind: 'whisper' }]) {
+      const s = decode(v8Save({ phase: { kind: 'deal', deal: { pool: 'grace', cost, reward: { kind: 'heal', amount: 6 } } } }))!;
+      expect(s.phase, cost.kind).toEqual({ kind: 'main-menu' });
+    }
+  });
+
+  it('a v8 bargain with a reward that still exists is KEPT, and still pays out through step', () => {
+    const deal = { pool: 'standard', cost: { kind: 'skillCharge', amount: 1 }, reward: { kind: 'statPoint', stat: 'STR' } };
+    const s = decode(v8Save({ phase: { kind: 'deal', deal } }))!;
+    expect(s.phase).toEqual({ kind: 'deal', deal });
+    const r = step(s, { kind: 'deal-decision', accept: true });
+    expect(r.events.map((e) => e.kind)).toEqual(['deal-taken']);
+    expect(r.state.player!.stats.STR).toBe(s.player!.stats.STR + 1);
+  });
+
   it('a v1 save walks the WHOLE ladder to v9 — potions included', () => {
     const modern = midRunState(SEED);
     const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;

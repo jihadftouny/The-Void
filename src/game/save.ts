@@ -393,6 +393,13 @@ function foldV8Player(raw: unknown): unknown {
  *    whichever way the flag pointed (a v8 save parked on "Rest here?" resumes on the found-rest
  *    screen — the rest it would have been offered is not granted retroactively, and `continue`
  *    returns to the hub, exactly as a found rest does);
+ *  - a `deal` phase whose reward is a HEAL — a v8 reward kind that no longer exists
+ *    (§22.25: no bargain heals, BY TYPE) — becomes the hub. v8 autosaved every step, so a save
+ *    parked on "An altar offers 12 HP" is a real file; left alone, accepting it charged the
+ *    price and granted nothing ("You pay 8 HP and take undefined"). Returning to the hub is
+ *    exactly what refusing would have done (no price, no karma, no draw), and bargains now find
+ *    the run on the descent, so nothing is lost that the next floor will not offer again. A v8
+ *    deal with any other reward is already a valid v9 deal and is kept as it stands;
  *  - every other PLAN.md #2 addition (`Enemy.illusory`, `Player.corruptedSkills`, the
  *    `deal-discard` phase) is OPTIONAL and additive, and cannot exist in a v8 save at all.
  * A non-object input is returned with just the stamp so the caller's validation still runs.
@@ -405,6 +412,8 @@ function upgrade8to9(raw: unknown): unknown {
     const phase = next.phase as Record<string, unknown>;
     if (phase.kind === 'rest') {
       next.phase = { kind: 'rest' };
+    } else if (phase.kind === 'deal' && isHealDeal(phase.deal)) {
+      next.phase = { kind: 'main-menu' };
     } else if (phase.kind === 'battle' && isPlainObject(phase.battle)) {
       const battle = phase.battle as Record<string, unknown>;
       next.phase = { ...phase, battle: { ...battle, player: foldV8Player(battle.player) } };
@@ -412,6 +421,11 @@ function upgrade8to9(raw: unknown): unknown {
   }
   next.version = 9;
   return next;
+}
+
+/** A v8 bargain whose reward is the retired `heal` kind. */
+function isHealDeal(deal: unknown): boolean {
+  return isPlainObject(deal) && isPlainObject(deal.reward) && deal.reward.kind === 'heal';
 }
 
 // ------- Shape guard ---------------------------------------------------------
