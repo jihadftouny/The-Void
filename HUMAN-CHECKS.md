@@ -1,5 +1,57 @@
 # Human Checks — The Void
 
+> ## ▶️ From `floor-mechanics` (`PLAN.md` #2, 2026-09-11) — seven checks, each one F3 jump away
+>
+> The five floors now play differently, bargains and rest spots find you on the descent, potions
+> are gone, and the pack holds twelve. Everything a machine can prove is proved by tests; these are
+> the things only a person (or the real model) can judge. **Every one starts from an F3 preset**
+> (`npm run desktop`, press **F3**). For the two `rest-next-*` presets, **leave the panel's seed
+> box blank and keep the class** — the seed is what makes the first Continue find a rest.
+>
+> ⚠ The `debug-state` note below is out of date on two points: the panel now has **sixteen**
+> presets (these six are new), and the **potions and rests fields are gone** (both counters were
+> removed). Its "floor 5 takes 7 encounters" figure is also superseded: `docs/BALANCE-REPORT.md`
+> now measures ~15 encounters on a completed floor 5.
+>
+> - [ ] **1. The rest reflects who you are, and never says it** (AC-25 — the one thing no test can
+>       prove, because it is the real model's behaviour). Jump `rest-next-merciful`, press Continue
+>       once, read the rest. Then jump `rest-next-desecrating`, press Continue once, read that one.
+>       It is the **same rest in the same place** — only the hidden ledger differs. **Pass:** the two
+>       differ in tone (one gentle, one unsettled or profane), AND neither says anything about the
+>       character's nature or morality, what they are becoming, or repeats the words *gentle* /
+>       *profane* / mercy / cruelty / reverence / desecration. **Fail:** either vignette explains the
+>       character, or the two read the same.
+> - [ ] **2. Rest is truly calm — on floor 3 and on floor 5.** Floor 3: `rest-next-merciful`, one
+>       Continue. Floor 5: `act5-warped`, then Continue until a rest turns up (about one encounter in
+>       eleven there). **Pass:** nothing threatens, nothing watches, the place is described. Also look
+>       at the rest SCREEN itself (`rest-spot`): the scenery frame and one Continue — the look is yours.
+> - [ ] **3. Floor 2's illusions — punishing, but fair?** Jump `act2-illusion` and fight it. Your
+>       blows pass through; its blows are real; when your Wisdom roll breaks it, the log says
+>       *"You see through the illusion — Wisdom N vs 13"* and the fight ends with no XP and no loot
+>       (the author's ruling A.1 — a pure cost). Judge it with a low-Wisdom character too: type a
+>       different seed into the panel until the character sheet shows Wisdom 9 or lower. The
+>       numbers — per class, per starting Wisdom, and at DC 11 / 13 / 15 — are in
+>       `docs/BALANCE-REPORT.md`; **the remedy, if any, is yours** (§22.27).
+> - [ ] **4. Floor 5's warped kit reads clearly.** Jump `act5-warped`, open the character sheet and
+>       a battle's Cast list: each skill carries its warped name and cost. To see the ARRIVAL moment
+>       (*"Your skills twist into something else"*), jump `verdict-castdown` and Continue down into
+>       floor 5.
+> - [ ] **5. Floor 3's slow weight — noticeable, not cruel.** From `rest-spot`, Continue into floor 3's
+>       fights: heals are halved there and every fight opens with *"This place drains 1 skill charge
+>       from you."* Does the floor feel heavier without feeling unfair?
+> - [ ] **6. About one run in three.** The sim's careful policy now reaches an ending in 30.6% of runs
+>       (the band is 25–35%), with a wide class spread — Scavver 57%, Neuromancer and Penitent about
+>       18%. Only real play-throughs can say whether that feels "tough but fair", and whether the
+>       class spread is a build trade-off or a problem (§22.27, yours to rule). Floors measure ~13–15
+>       encounters each; minutes are an estimate.
+> - [ ] **7. The full-pack bargain (Appendix A.3).** Jump `bargain-full-pack` (twelve items, and a
+>       bargain whose reward needs room). **Pay the price** → the discard screen opens with two
+>       controls: *Choose what to leave* (opens the pack) and *Keep everything — refuse the bargain*.
+>       Leave one item → the bargain completes and only now is the price paid. Refuse → exactly as if
+>       you had refused the bargain (nothing paid, no karma moved). Check it at the 960×640 window and
+>       at the **large** text setting: nothing below the fold (the layout probe measures this; the
+>       look is yours).
+
 > ## ✅ Play-test results, 2026-09-06 (first hands-on of the #10a candidate build)
 >
 > - **THE FREEZE IS CONFIRMED FIXED ON REAL HARDWARE.** The author raced to the first encounter:
