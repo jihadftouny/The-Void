@@ -73,15 +73,24 @@ export function shouldAdvance(act: number, xp: number): boolean {
  * that file's `> 0.12` floor. The unit's own rule for this case is to lower the CONSTANT and
  * show the re-derivation rather than weaken the guard, so this moves one step down the same
  * curve — k = 6 kills, 240·e^(0.75) ~ 508 -> 500 — which measures 0.132. `PLAN.md` #2's
- * re-run owns the final value; floor 5 is now the deadliest stretch of the descent.
+ * re-run owns the final value. (The #0a note that "floor 5 is now the deadliest stretch" was
+ * true of that unit's gearless sim; it is not true of the #2 re-run — floor 4 is.)
  *
- * PLAN.md #2 TUNING (T3, 500 -> 600 — back to the first derived value). The coincidence that
- * pinned it is gone: the sim now equips gear and uses consumables, so the win rate no longer
- * sits on `balance.test.ts`'s 0.12 floor (AC-29). And the re-run measured floor 5 as the
- * SOFTEST floor of the descent — about one arrival in fourteen died there — while floors 3 and
- * 4 each take ~8–11 kills. At 600 (k ~ 7.5 kills) the floor matches them, as first intended.
- * Measured effect on the report's 2,500-run baseline: 0.321 -> 0.306, floor-5 deaths 106 ->
- * 142. `docs/BALANCE-REPORT.md`'s tuning ledger carries the row.
+ * PLAN.md #2 TUNING (T3, 500 -> 600 — back to the first derived value), for TWO reasons:
+ *  1. The only reason 500 existed is gone. It was chosen to clear `balance.test.ts`'s 0.12
+ *     floor by a coincidence of the gearless sim; the sim now equips gear and uses consumables
+ *     and wins well clear of that floor (AC-29).
+ *  2. At 600 (k ~ 7.5 kills) floor 5 is as long as floors 3 and 4, which take ~8–11 kills
+ *     each — the length first derived for it.
+ * What floor 5 cost when T3 was applied (after T1 and T2, on the report's 2,500-run baseline):
+ * 106 deaths in 871 arrivals, about 1 in 8 — close to floor 2 (220 in 1,924, about 1 in 8.7)
+ * and well below floors 3 (1 in 5.7) and 4 (1 in 2.8). Measured effect: 0.321 -> 0.306, and
+ * floor-5 deaths 106 -> 142 (about 1 in 6.1). `docs/BALANCE-REPORT.md`'s ledger carries the row.
+ *
+ * ⚠ CORRECTED (FIX ROUND 1, F7). This note first gave the reason as "the re-run measured floor
+ * 5 as the SOFTEST floor — about one arrival in fourteen died there". That was wrong twice:
+ * the 1-in-14.9 figure (71 of 1,061) is from BEFORE T1 and T2, and even then floor 2 was softer
+ * (124 of 1,927, 1 in 15.5). The measured effects were right; the stated reason was not.
  */
 export const HOLLOW_GATE_XP = 600;
 

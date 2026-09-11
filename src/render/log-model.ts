@@ -49,7 +49,7 @@ export interface LogLine {
  *
  * A REJECTED INPUT IS LOGGED, deliberately (`cast-unavailable`, `spare-unavailable`,
  * `consumable-unavailable`). `src/llm/narrate.ts`
- * SILENCES all five for the narrator, and rightly — nothing happened, so the prose should not
+ * SILENCES all three for the narrator, and rightly — nothing happened, so the prose should not
  * change. But the player pressed a button and got nothing, and the log is the only place left
  * that can tell them why. The two classifications differ here on purpose.
  */

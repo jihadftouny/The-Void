@@ -370,9 +370,11 @@ export const TUNING_LEDGER: readonly TuningStep[] = [
     from: '500',
     to: '600',
     why:
-      'Back to its first derived value (~7.5 floor-5 kills, like floors 3 and 4). It had been ' +
-      'lowered only to clear the old 0.12 guard by coincidence (AC-29); the re-run measured ' +
-      'floor 5 as the softest floor of the descent.',
+      'Back to its first derived value: ~7.5 floor-5 kills, the length of floors 3 and 4. 500 ' +
+      'existed only to clear the old 0.12 guard by a coincidence of the gearless sim, which no ' +
+      'longer binds (AC-29). When applied, floor 5 killed ~1 arrival in 8 (106 of 871) — close ' +
+      'to floor 2 (1 in 8.7), well below floors 3 (1 in 5.7) and 4 (1 in 2.8). (Corrected in fix ' +
+      'round 1: an earlier text called floor 5 "the softest floor", from pre-tuning numbers.)',
     effect: 'baseline win rate 0.321 -> 0.306; floor-5 deaths 106 -> 142',
   },
 ];

@@ -42,7 +42,7 @@ floor-1 "~3–4 hits" feel and a winnability floor.
 | --- | --- | ---: | ---: | --- | --- |
 | T1 | `floors.json` rest weight, floors 2-5 | 2 | 1 | Rest is the main heal left after the potion fold-in (§22.6) and §22.26 makes its scarcity the floor weight; it now grows scarcer with depth. Floor 1 keeps 2 — a fresh pack is nearly empty there, and floor 1 already held the most deaths. | baseline win rate 0.411 -> 0.345; act-1 death share 0.389 -> 0.350 |
 | T2 | `ENEMY_HP_XP_DIV` (`enemy.ts`) | 8 | 6 | M15 loosened it for a character who never equipped anything; the sim now equips found gear (G48), so part of that is taken back. A fresh act-1 enemy (xp 0) is untouched, so the hits-to-kill anchor does not move; the HP lands on floors 2-5. | baseline win rate 0.345 -> 0.321; floor-1 deaths 573 -> 576 |
-| T3 | `HOLLOW_GATE_XP` (`progression.ts`) | 500 | 600 | Back to its first derived value (~7.5 floor-5 kills, like floors 3 and 4). It had been lowered only to clear the old 0.12 guard by coincidence (AC-29); the re-run measured floor 5 as the softest floor of the descent. | baseline win rate 0.321 -> 0.306; floor-5 deaths 106 -> 142 |
+| T3 | `HOLLOW_GATE_XP` (`progression.ts`) | 500 | 600 | Back to its first derived value: ~7.5 floor-5 kills, the length of floors 3 and 4. 500 existed only to clear the old 0.12 guard by a coincidence of the gearless sim, which no longer binds (AC-29). When applied, floor 5 killed ~1 arrival in 8 (106 of 871) — close to floor 2 (1 in 8.7), well below floors 3 (1 in 5.7) and 4 (1 in 2.8). (Corrected in fix round 1: an earlier text called floor 5 "the softest floor", from pre-tuning numbers.) | baseline win rate 0.321 -> 0.306; floor-5 deaths 106 -> 142 |
 
 **Frozen — not moved by this tuning:**
 

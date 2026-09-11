@@ -97,12 +97,16 @@ export interface FloorModifiers {
  * through an illusion (and ends the fight with no reward).
  *
  * THE DERIVATION, from the dice rather than a run. A face f in 1..20 is uniform, so
- * P(see through) = (21 − (DC − mod)) / 20, clamped to [0, 1]:
- *   - WIS 10 (mod 0):  f >= 13 → 8/20 = 0.40 per round, expected 1/0.40 = 2.5 rounds of the
- *     enemy's real attacks before the illusion breaks;
- *   - WIS 6  (mod −2): f >= 15 → 6/20 = 0.30, ~3.3 rounds;
- *   - WIS 16 (mod +3): f >= 10 → 11/20 = 0.55, ~1.8 rounds;
+ * P(see through) = p = (21 − (DC − mod)) / 20, clamped to [0, 1]. The roll comes FIRST in each
+ * round (`resolveRound`'s step 0): a success ends the fight before the enemy acts, and each
+ * failure costs one round of the enemy's real attacks. So an illusion takes 1/p rolls (the
+ * rounds it lasts) but only (1 − p)/p rounds of enemy attacks:
+ *   - WIS 10 (mod 0):  f >= 13 → p = 8/20 = 0.40: 2.5 rolls, about 1.5 rounds of attacks;
+ *   - WIS 6  (mod −2): f >= 15 → p = 0.30: ~3.3 rolls, ~2.3 rounds of attacks;
+ *   - WIS 16 (mod +3): f >= 10 → p = 0.55: ~1.8 rolls, ~0.8 rounds of attacks;
  *   - Lucid / Clouded shift the mod by ±1 through `effectiveMods`.
+ * (Corrected in fix round 1: this said "2.5 rounds of the enemy's real attacks" at WIS 10 —
+ * that is the ROLL count; the attacks are one fewer on average, because the roll comes first.)
  *
  * ⚠ FROZEN FOR `floor-mechanics` (GAME-DESIGN.md §22.27, plan Appendix A.4). Softening floor 2
  * for low-Wisdom builds is one of the author's three remedies for the Wisdom gap, and it is the
