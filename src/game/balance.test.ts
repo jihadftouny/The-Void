@@ -174,7 +174,7 @@ describe('M15 anchor — a fresh Act-1 enemy takes ~3-4 Fight actions to kill', 
 // ------- Anchor 2: winnability regression guard ----------------------------------------------
 
 describe('M15 anchor — the baseline sim is winnable and deaths are not bunched at Act 1', () => {
-  it('overall win-rate > 0.20 AND Act-1 death share < 0.55 (heuristic policy, seeds 1..100 × 5)', () => {
+  it('overall win-rate in (0.20, 0.40) AND Act-1 death share < 0.55 (heuristic policy, seeds 1..100 × 5)', () => {
     const seeds = Array.from({ length: 100 }, (_, i) => i + 1);
     const report = simulateBatch({
       seeds,
@@ -192,6 +192,10 @@ describe('M15 anchor — the baseline sim is winnable and deaths are not bunched
     // aim (sqrt(0.3 x 0.7 / 500) = 0.0205; 0.25 - 0.051 = 0.199). So a build inside the band
     // does not fail by sampling noise, and one well under it does.
     expect(report.winRate).toBeGreaterThan(0.2);
+    // ...AND A CEILING OF 0.40 (fix round 2), derived the same way from the band's TOP: 0.35 plus
+    // 2.5 standard errors (0.35 + 0.051 = 0.401). Without it a regression that makes the game far
+    // too easy — the direction #2's tuning spent three knobs correcting — would pass unseen.
+    expect(report.winRate).toBeLessThan(0.4);
 
     const act1Share = report.deaths > 0 ? (report.deathByAct[1] ?? 0) / report.deaths : 1;
     expect(act1Share).toBeLessThan(0.55);
