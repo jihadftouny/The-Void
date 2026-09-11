@@ -201,6 +201,7 @@
 //   floor 5: every owned skill warped on arrival            S5   stream moves; ~neutral
 //   bargains + rests are found; no rest counter; no heals   S6   predicted DOWN (plan §7)
 //   potions fold into a 2-item kit; the pack holds 12       S7   predicted MUCH DOWN (§7)
+//   the sim counts each floor; a DC seam for the report     S8   NONE — no rule, no policy
 //
 //  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
 //     | step 12) so that every later rules change is measured against a player who uses what
@@ -290,6 +291,14 @@
 //     | ever have drunk — a control). The 500-run guard 0.580 -> 0.404, and act-1 deaths 66 ->
 //     | 121 of 500 (share 0.31 -> 0.41): exactly where predicted. Per class: Scavver 0.70,
 //     | Enforcer 0.46, Hollow 0.35, Penitent 0.30, Neuromancer 0.21 — the low-HP classes feel it.
+//  S8 | MEASUREMENT ONLY (plan step 12): per-floor counters and the starting Wisdom on every
+//     | `RunResult`, their sums in the report, and `StepOptions` threaded through the sim so the
+//     | report can measure `ILLUSION_DC` at 11 / 13 / 15 without editing it.
+//     | EXPECTED (before measuring): NOTHING MOVES — no engine rule and no policy decision
+//     | changed, and the shipped path passes no options.
+//     | OBSERVED: all six rows, all six rngStates and the aggregate BYTE-IDENTICAL. (The new
+//     | fields are measurement of the same event stream and are kept out of the lock — see
+//     | `LockedRecord` below.)
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
