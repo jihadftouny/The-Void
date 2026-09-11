@@ -81,8 +81,6 @@ export function describeEvent(e: GameEvent): string {
       return `${e.subject === 'player' ? 'You' : 'The enemy'} suffer(s) ${e.amount} ${e.conditionType} damage.`;
     case 'player-unable-to-act':
       return `You cannot act — ${e.conditionType} holds you.`;
-    case 'potion-drunk':
-      return `You drink a potion; warmth returns.`;
     case 'fled':
       return `You break away into the dark.`;
     case 'escape-failed':
@@ -106,8 +104,10 @@ export function describeEvent(e: GameEvent): string {
     case 'chest-found':
       return `You find a cache half-buried in the dark.`;
     case 'chest-loot':
+      // PLAN.md #2: "find", not "take" — a FULL pack leaves the item in the cache, and the
+      // `loot-left-behind` fact beside this says so. "take" would be a lie in that case.
       return e.loot.length > 0
-        ? `You pry it open and take ${e.loot.map((l) => l.name).join(', ')}.`
+        ? `You pry it open and find ${e.loot.map((l) => l.name).join(', ')}.`
         : `You pry it open, but it is hollow.`;
     case 'level-up':
       return `Something in you hardens; you are stronger than before.`;
@@ -247,8 +247,6 @@ export function describeEvent(e: GameEvent): string {
     // Rejected inputs — the player asked for something they could not do, so NOTHING
     // happened. Silence is correct, and leaving the previous beat on screen is correct.
     case 'cast-unavailable':
-    case 'potion-unavailable':
-    case 'potion-blocked':
     case 'spare-unavailable':
     case 'consumable-unavailable':
       return '';

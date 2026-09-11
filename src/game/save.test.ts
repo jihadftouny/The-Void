@@ -70,6 +70,12 @@ describe('SAVE_VERSION', () => {
   });
 });
 
+/** A state with the fresh-character starting kit (PLAN.md #2) taken back out of the backpack. */
+function withoutKit(s: GameState): GameState {
+  if (!s.player) return s;
+  return { ...s, player: { ...s.player, inventory: { ...s.player.inventory, backpack: [] } } };
+}
+
 const ZERO_KARMA = {
   mercyCruelty: 0,
   restraintGreed: 0,
@@ -109,8 +115,9 @@ describe('migration v2 -> v3 (legacy equipped ids -> paperdoll slots)', () => {
     expect('equippedArmorId' in mp).toBe(false);
     expect(migrated!.version).toBe(SAVE_VERSION);
     // Modern midRunState seeds the SAME starting gear into slots, so the migrated v2 save
-    // deep-equals the modern v3 state.
-    expect(migrated).toEqual(modern);
+    // deep-equals the modern state — minus the starting kit PLAN.md #2 put in every fresh
+    // backpack (§22.6), which a legacy save built with an empty inventory cannot have carried.
+    expect(migrated).toEqual(withoutKit(modern));
   });
 
   it('migrates equippedShieldId into the offHand slot', () => {
@@ -147,8 +154,8 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     expect(migrated!.player!.inventory.slots.mainHand).toEqual({ defId: 'Jaaj Sword 1' });
     expect(migrated!.player!.inventory.slots.armor).toEqual({ defId: 'Jooj Armor 1' });
     expect(Object.keys(migrated!.player!.inventory.slots)).toHaveLength(9);
-    // Deep-equals the modern state, which seeds the same gear into slots.
-    expect(migrated).toEqual(modern);
+    // Deep-equals the modern state, which seeds the same gear into slots (minus the kit, as above).
+    expect(migrated).toEqual(withoutKit(modern));
   });
 
   it('migrates a v1 title save with a null player (nothing to inject into slots)', () => {

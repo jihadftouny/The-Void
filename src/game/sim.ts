@@ -25,8 +25,13 @@
 // deterministic: the gear-up is a pure function of the state, so a sim run still replays from
 // `seed + inputs + the same gear-up rule`.
 //
-// It also HEALS WITH FOUND CONSUMABLES (a `healSelf` item from the backpack at ≤ 35% HP) once
-// potions are spent — the path §22.6's fold-in turns into the only in-battle heal.
+// It also HEALS WITH FOUND CONSUMABLES (a `healSelf` item from the backpack at ≤ 35% HP) — since
+// PLAN.md #2 folded potions into consumables (§22.6), the only in-battle heal there is.
+//
+// And it MANAGES A FULL BACKPACK (§22.17, twelve slots) the way a careful player would, through
+// `step`'s `discard` input: at the hub, and when a bargain's reward needs room (Appendix A.3), it
+// leaves the LOWEST-RARITY loose gear behind and keeps every usable; with nothing but usables
+// it backs out of the bargain instead of throwing a heal away.
 
 import {
   createGame,
@@ -41,7 +46,8 @@ import { spareAvailable, type BattleState, type BattleAction } from './battle.ts
 import { hasControlCondition } from './condition.ts';
 import { resolveSkill, type SkillId } from './skill.ts';
 import { equip, resolveInstanceDef } from './equipment.ts';
-import { getCatalogItemById } from './item.ts';
+import { getCatalogItemById, type ItemInstance } from './item.ts';
+import { canCarry } from './inventory.ts';
 import { type Rarity } from './weapon.ts';
 import { type DraftOption } from './draft.ts';
 import { effectiveMaxHp } from './statEffects.ts';
@@ -120,6 +126,26 @@ export const ALL_CLASSES: readonly PlayerClass[] = [
 
 // ------- The policies --------------------------------------------------------
 
+/**
+ * Which backpack item a careful player leaves behind to make room — PURE: the LOWEST-RARITY
+ * piece of loose GEAR (anything with a slot), first one on ties; usables are never chosen. -1
+ * when the pack holds no gear at all.
+ */
+export function discardChoice(backpack: readonly ItemInstance[]): number {
+  let best = -1;
+  let bestRank = Infinity;
+  backpack.forEach((item, i) => {
+    const def = resolveInstanceDef(item);
+    if (!def || def.slot === null) return;
+    const rank = RARITY_RANK[def.rarity];
+    if (rank < bestRank) {
+      best = i;
+      bestRank = rank;
+    }
+  });
+  return best;
+}
+
 /** Rarity as a rank, so "better" is a comparison: Common < Rare < Legendary. */
 const RARITY_RANK: Record<Rarity, number> = { Common: 0, Rare: 1, Legendary: 2 };
 
@@ -165,7 +191,7 @@ export function gearUpAtHub(state: GameState): GameState {
   return { ...state, player: { ...state.player, inventory } };
 }
 
-/** The backpack index of the first item whose `use` heals, or -1 (the sim's only heal source once potions are gone). */
+/** The backpack index of the first item whose `use` heals, or -1 — the sim's only in-battle heal (§22.6). */
 function healingConsumableIndex(backpack: readonly { defId: string }[]): number {
   return backpack.findIndex((item) =>
     (getCatalogItemById(item.defId)?.use ?? []).some((a) => a.kind === 'healSelf'),
@@ -206,18 +232,14 @@ function chooseBattleAction(battle: BattleState, merciful: boolean): BattleActio
   // path. The base policy never spares (a spare forfeits the kill XP the act gates require).
   if (merciful && !battle.boss && spareAvailable(battle)) return 'spare';
 
-  // Under a control condition (stun/freeze/sleep) the player cannot act: a potion is BLOCKED and
-  // a cast is skipped WITHOUT advancing the round — only fight/cast run the shared round that
-  // ticks the condition down. So `fight` (never `potion`/`run`, which stall) to let the round
-  // resolve and the control wear off; the player's swing is skipped but the condition ticks.
+  // Under a control condition (stun/freeze/sleep) the player cannot act: `fight` runs the shared
+  // round that ticks the condition down (the swing is skipped but the round resolves), where a
+  // `run` would stall. So fight, and let the control wear off.
   if (hasControlCondition(pl)) return 'fight';
 
-  // 1. Heal when badly hurt: a potion while any remain, else a found healing consumable.
-  if (pl.pots > 0 && pl.hp <= 0.35 * cap) return 'potion';
-  if (pl.hp <= 0.35 * cap) {
-    const heal = healingConsumableIndex(pl.inventory.backpack);
-    if (heal >= 0) return { kind: 'useConsumable', source: { index: heal } };
-  }
+  // 1. Heal when badly hurt, with a found healing consumable (§22.6: there are no potions).
+  const heal = healingConsumableIndex(pl.inventory.backpack);
+  if (pl.hp <= 0.35 * cap && heal >= 0) return { kind: 'useConsumable', source: { index: heal } };
 
   // 2. Consider the best AFFORDABLE skill from the pool (deterministic; ties broken by pool
   //    order via the strict `>` comparisons below).
@@ -236,15 +258,15 @@ function chooseBattleAction(battle: BattleState, merciful: boolean): BattleActio
       bestDamage = { id, dmg: def.baseDamage };
     }
   }
-  // A heal skill when at/below half HP and no potion was spent this turn.
+  // A heal skill when at/below half HP (no consumable was used this turn).
   if (bestHeal && pl.hp <= 0.5 * cap) return { kind: 'cast', skillId: bestHeal.id };
   // A damage skill worth a charge over a plain swing.
   if (bestDamage && bestDamage.dmg >= 2 && pl.skillCharges > 0) {
     return { kind: 'cast', skillId: bestDamage.id };
   }
 
-  // 3. Flee a near-certain death when heals are exhausted and escape is possible.
-  if (pl.hp <= 0.2 * cap && pl.pots === 0 && battle.canFlee) return 'run';
+  // 3. Flee a near-certain death when no heal is left and escape is possible.
+  if (pl.hp <= 0.2 * cap && heal < 0 && battle.canFlee) return 'run';
 
   // 4. Otherwise swing.
   return 'fight';
@@ -265,10 +287,17 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
       return { kind: 'class', classId };
     case 'accept-or-reroll-stats':
       return { kind: 'stats-decision', accept: true };
-    case 'main-menu':
+    case 'main-menu': {
       // PLAN.md #2: there is no "seek a bargain" any more — bargains FIND the run as descent
-      // encounters, and the policy answers them at `deal-decision` below.
+      // encounters, and the policy answers them at `deal-decision` below. A FULL pack first sheds
+      // its worst gear (through `step`), so the next drop is not left on the floor.
+      const inventory = res.state.player?.inventory;
+      if (inventory && !canCarry(inventory)) {
+        const drop = discardChoice(inventory.backpack);
+        if (drop >= 0) return { kind: 'discard', index: drop };
+      }
       return { kind: 'menu', choice: 'continue' };
+    }
     case 'continue':
       return { kind: 'continue' };
     case 'battle-action':
@@ -286,6 +315,12 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
       // Every reward is worth having now that none of them heals (§22.25).
       const { cost } = phase.deal;
       return { kind: 'deal-decision', accept: cost.kind !== 'hp' && cost.kind !== 'maxHp' };
+    }
+    case 'deal-discard': {
+      // Appendix A.3: the bargain needs room. Leave the worst gear; with none, back out (which is
+      // exactly refusing the bargain) rather than throw a heal away.
+      const drop = res.state.player ? discardChoice(res.state.player.inventory.backpack) : -1;
+      return drop >= 0 ? { kind: 'discard', index: drop } : { kind: 'deal-decision', accept: false };
     }
     case 'rest':
       // A found rest was taken the moment it was found (§22.26); only `continue` remains.

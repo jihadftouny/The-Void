@@ -34,7 +34,9 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     classId: 'Enforcer',
     stats: { STR: 16, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 },
   });
-  return { ...base, hp: 30, maxHp: 40, skillCharges: 3, ...overrides };
+  // An EMPTY backpack unless a test says otherwise: PLAN.md #2 seeds §22.6's starting kit into
+  // every fresh character, and these deal fixtures predate it (player.test.ts owns the kit).
+  return { ...base, hp: 30, maxHp: 40, skillCharges: 3, inventory: { ...base.inventory, backpack: [] }, ...overrides };
 }
 
 const NEUTRAL = createKarma();

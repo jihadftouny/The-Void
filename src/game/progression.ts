@@ -123,7 +123,7 @@ export function hasPendingLevelUp(player: Player): boolean {
  * Apply ONE level-up's automatic max-HP growth — PURE. Rolls a single hit die and adds the
  * CON modifier: `hpRoll = max(rollDie(hitDie.sides) + mods.CON, 1)` (floored at 1). Returns
  * the player with `level` incremented and `maxHp` raised by `hpRoll`; `hp` is UNCHANGED (no
- * heal — restored via rest/potion). The hit die stays `{quantity:1, sides}` (no per-act
+ * heal — restored by a found rest or a healing consumable). The hit die stays `{quantity:1, sides}` (no per-act
  * quantity bump), proficiency is NOT auto-grown, and stats grow ONLY via the draft. All
  * balance is an M15 placeholder. Threads the injected `Rng` (one draw); no Math.random.
  */

@@ -17,7 +17,8 @@ import {
   SEED_ROW_LABEL,
   hubMenu,
   fallbackNarration,
-  potionControl,
+  dealDiscardView,
+  DEAL_DISCARD_REFUSE,
 } from './view-model.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { createGame, step } from '../game/game.ts';
@@ -180,7 +181,16 @@ describe('consumableOptions (battle Use-item picker)', () => {
   });
 
   it('is empty for an empty backpack', () => {
-    expect(consumableOptions(snapshot)).toEqual([]);
+    const empty: Player = { ...snapshot, inventory: { ...snapshot.inventory, backpack: [] } };
+    expect(consumableOptions(empty)).toEqual([]);
+  });
+
+  it('a fresh character’s starting kit (§22.6, PLAN.md #2) is what the picker offers first', () => {
+    // consumables.json: void-draught "Void Draught", suture-kit "Suture Kit", both Common.
+    expect(consumableOptions(snapshot)).toEqual([
+      { index: 0, name: 'Void Draught', rarity: 'Common' },
+      { index: 1, name: 'Suture Kit', rarity: 'Common' },
+    ]);
   });
 });
 
@@ -215,14 +225,15 @@ describe('spareOffered (battle Spare gate)', () => {
 });
 
 describe('displayItem / describeInventory (inventory screen)', () => {
-  it("shows the fresh Enforcer's paperdoll gear, empty elsewhere, empty backpack", () => {
+  it("shows the fresh Enforcer's paperdoll gear, empty elsewhere, and the starting kit", () => {
     const view = describeInventory(snapshot);
     const bySlot = Object.fromEntries(view.slots.map((s) => [s.slot, s.item]));
     expect(bySlot.mainHand?.name).toBe('Jaaj Sword 1');
     expect(bySlot.armor?.name).toBe('Jooj Armor 1');
     expect(bySlot.helmet).toBeNull();
     expect(bySlot.offHand).toBeNull();
-    expect(view.backpack).toEqual([]);
+    // PLAN.md #2 / §22.6: potions folded into consumables — the kit rides in the backpack.
+    expect(view.backpack.map((b) => b.item.name)).toEqual(['Void Draught', 'Suture Kit']);
   });
 
   it('projects a rolled item by its rolled name/rarity/kind/slot', () => {
@@ -242,8 +253,10 @@ describe('displayItem / describeInventory (inventory screen)', () => {
 });
 
 describe('equipFromBackpack / unequipSlot (pure action-mapping)', () => {
-  // Fresh Enforcer, then pick up a second armor into the backpack (index 0).
-  const withLooseArmor: Player = { ...snapshot, inventory: pickUp(snapshot.inventory, { defId: 'Jaaj Armor 1' }) };
+  // Fresh Enforcer with its starting kit set aside (PLAN.md #2), then pick up a second armor into
+  // the backpack (index 0).
+  const bare: Player = { ...snapshot, inventory: { ...snapshot.inventory, backpack: [] } };
+  const withLooseArmor: Player = { ...bare, inventory: pickUp(bare.inventory, { defId: 'Jaaj Armor 1' }) };
   const state = hub(withLooseArmor);
 
   it('swaps the equipped armor: new armor in slot, displaced armor back to backpack', () => {
@@ -825,23 +838,36 @@ describe('fallbackNarration', () => {
 // The Potion button: a press under a control condition used to do nothing at all.
 // ---------------------------------------------------------------------------
 
-describe('potionControl', () => {
-  it('carries the remaining count, and is live while any remain', () => {
-    const model = potionControl({ ...snapshot, pots: 3 });
-    expect(model).toEqual({ label: 'Potion', disabled: false, hint: '(3)' });
+describe('dealDiscardView — the full-pack bargain screen (plan Appendix A.3)', () => {
+  const deal: SacrificeDeal = {
+    pool: 'tempting',
+    cost: { kind: 'greed' },
+    reward: { kind: 'item', instance: { defId: 'gen:Legendary:mainHand', rolled: { name: 'Legendary mainHand', rarity: 'Legendary', slot: 'mainHand', kind: 'weapon', effects: [] } } },
+  };
+  const packed: Player = {
+    ...snapshot,
+    inventory: { ...snapshot.inventory, backpack: [{ defId: 'void-draught' }, { defId: 'Jaaj Sword 1' }] },
+  };
+
+  it('names the reward that needs room and the price NOT yet paid', () => {
+    const v = dealDiscardView(packed, deal);
+    expect(v.prompt).toBe('Your pack is full. Leave something behind to take Legendary mainHand.');
+    expect(v.cost).toBe('a cache, stripped bare');
   });
 
-  it('is DISABLED at zero — and a disabled button gets no handler at all', () => {
-    // `actionButton` attaches the click listener only on the enabled branch, so "disabled"
-    // means inert, not merely grey: a stray press cannot dispatch a step that resolves
-    // nothing. Asserted on the model, which is the half that decides it.
-    expect(potionControl({ ...snapshot, pots: 0 })).toEqual({
-      label: 'Potion', disabled: true, hint: '(0)',
-    });
+  it('offers one row per backpack item, carrying its real index, and one way out', () => {
+    const v = dealDiscardView(packed, deal);
+    expect(v.leave).toEqual([
+      { index: 0, label: 'Leave Void Draught' },
+      { index: 1, label: 'Leave Jaaj Sword 1' },
+    ]);
+    expect(v.refuse).toBe(DEAL_DISCARD_REFUSE);
   });
 
-  it('is disabled before a player exists', () => {
-    expect(potionControl(null).disabled).toBe(true);
+  it('never carries the karma-derived pool', () => {
+    const v = dealDiscardView(packed, deal);
+    expect(JSON.stringify(v).toLowerCase()).not.toContain('tempting');
+    expect(JSON.stringify(v).toLowerCase()).not.toContain('pool');
   });
 });
 

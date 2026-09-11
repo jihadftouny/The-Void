@@ -40,7 +40,7 @@ import {
   runSummaryView,
   hubMenu,
   fallbackNarration,
-  potionControl,
+  dealDiscardView,
 } from './view-model.ts';
 import type { ItemView, HubItemAction, HubMode, HubScreen } from './view-model.ts';
 import { log, consoleSink, createRingBuffer } from '../log/logger.ts';
@@ -379,7 +379,6 @@ function renderSheet(): void {
   line(`HP ${p.hp}/${p.maxHp}`);
   line(`XP ${p.xp}`);
   line(`Act ${state.act}`);
-  line(`Pots ${p.pots}`);
   chips(p.activeConditions);
   // THE CHARACTER PORTRAIT'S RESERVED REGION (plan Appendix A.7). Empty today, and no art is
   // shipped, generated or bought by this unit — what is being committed to is the SHAPE.
@@ -422,11 +421,11 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
   //
   // ⚠ THE COST, and why it is the right trade. Leaving the pane alone turns a step with no
   // fact from BLANK into STALE — the previous beat stays up. That is CORRECT for a rejected
-  // input (`cast-unavailable`, `potion-blocked`, …): nothing happened, so the narration
+  // input (`cast-unavailable`, `spare-unavailable`, …): nothing happened, so the narration
   // should not change. It would be a lie for anything that did happen, which is why the
   // deliberate-silence list in src/llm/narrate.ts is curated rather than "everything the
-  // register did not name", and why `rest-declined`, `no-rests`, `shield-gained`,
-  // `shield-absorbed` and `revive` are narrated even though G13 never named them. If you
+  // register did not name", and why `shield-gained`, `shield-absorbed` and `revive` are
+  // narrated even though G13 never named them. If you
   // add a silent case there, you are choosing to leave the previous beat on screen here.
   if (!prompt) return;
   // Show ONLY the current moment: replace the narration area each turn rather
@@ -994,13 +993,8 @@ function renderChoices(awaiting: Awaiting): void {
           }
         });
       }
-      // The Potion button carries its remaining count, and is INERT at zero — a disabled
-      // ButtonModel gets no click handler at all, so it cannot dispatch a step that resolves
-      // nothing. (The other two refusals — full HP, and the Void Pact relic — stay engine
-      // decisions, and the combat log now reports them.)
-      appendButton(choicesEl, potionControl(p), () =>
-        void dispatch({ kind: 'battle-action', action: 'potion' }),
-      );
+      // PLAN.md #2 / §22.6: no Potion button — healing in battle is a found consumable, in the
+      // Use-item picker above like every other item.
       choice('Run', () => void dispatch({ kind: 'battle-action', action: 'run' }));
       break;
     }
@@ -1059,6 +1053,30 @@ function renderChoices(awaiting: Awaiting): void {
       }
       choice('Pay the price', () => void dispatch({ kind: 'deal-decision', accept: true }));
       choice('Refuse', () => void dispatch({ kind: 'deal-decision', accept: false }));
+      break;
+    }
+    case 'deal-discard': {
+      // PLAN.md #2, Appendix A.3: the bargain was accepted with a FULL pack. Nothing is paid
+      // yet. One row per item to leave behind (the engine completes the bargain in that one
+      // step), and one way out, which is exactly refusing it. Text only, never markup.
+      const p = state.player;
+      if (state.phase.kind === 'deal-discard' && p) {
+        const view = dealDiscardView(p, state.phase.deal);
+        const block = document.createElement('div');
+        block.className = 'deal-block';
+        const ask = document.createElement('div');
+        ask.className = 'deal-reward';
+        ask.textContent = view.prompt;
+        const cost = document.createElement('div');
+        cost.className = 'deal-cost';
+        cost.textContent = `Cost: ${view.cost}`;
+        block.append(ask, cost);
+        choicesEl.appendChild(block);
+        for (const row of view.leave) {
+          choice(row.label, () => void dispatch({ kind: 'discard', index: row.index }));
+        }
+        choice(view.refuse, () => void dispatch({ kind: 'deal-decision', accept: false }));
+      }
       break;
     }
     case 'rest':

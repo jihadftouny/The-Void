@@ -118,9 +118,6 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'self-sacrifice': { kind: 'self-sacrifice', amount: 4, ofMaxHp: true },
   lifesteal: { kind: 'lifesteal', amount: 5 },
   detonate: { kind: 'detonate', consumed: 2, bonusDamage: 6 },
-  'potion-drunk': { kind: 'potion-drunk', healedTo: 20 },
-  'potion-unavailable': { kind: 'potion-unavailable' },
-  'potion-blocked': { kind: 'potion-blocked' },
   fled: { kind: 'fled' },
   'escape-failed': { kind: 'escape-failed', damage: 4 },
   'escape-impossible': { kind: 'escape-impossible' },
@@ -212,7 +209,6 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   'condition-applied': 'fact',
   'condition-damage': 'fact',
   'player-unable-to-act': 'fact',
-  'potion-drunk': 'fact',
   fled: 'fact',
   'escape-failed': 'fact',
   'escape-impossible': 'fact',
@@ -258,8 +254,6 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   'item-discarded': 'fact',
   // --- the 17 deliberate silences ---
   'cast-unavailable': 'silent',
-  'potion-unavailable': 'silent',
-  'potion-blocked': 'silent',
   'spare-unavailable': 'silent',
   'consumable-unavailable': 'silent',
   'condition-onset': 'silent',
@@ -307,7 +301,7 @@ const NEW_FACT_KINDS: readonly GameEventKind[] = [
 // ---------------------------------------------------------------------------------------
 
 describe('describeEvent covers every event kind (G13)', () => {
-  it('the union really has 67 kinds', () => {
+  it('the union really has 64 kinds', () => {
     // 37 CombatEvent members + 26 NarrativeEvent members, counted by hand from the two
     // union declarations in combatEvent.ts and gameEvent.ts. The mapped type guarantees
     // SAMPLE's keys ARE the union, so this anchors the size of the thing being covered.
@@ -318,16 +312,19 @@ describe('describeEvent covers every event kind (G13)', () => {
     // item-discarded).
     // ...and removed the four rest-DECISION kinds (rest-lore, rest-full, rest-declined,
     // no-rests) with the decision itself (§22.26).
-    expect(ALL_KINDS).toHaveLength(37 + 4 + 26 + 4 - 4);
+    // ...and the three potion kinds (potion-drunk, potion-unavailable, potion-blocked) with the
+    // potion itself (§22.6).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 26 + 4 - 4);
   });
 
-  it('the classification is 54 facts and 17 deliberate silences', () => {
+  it('the classification is 49 facts and 15 deliberate silences', () => {
     // From the plan: 29 kinds already had a fact, G13 adds 17 more, and the other 17 are
     // silenced on purpose. 29 + 17 + 17 = 63. PLAN.md #2 removed two of the 29 (rest-lore,
     // rest-full) and two of G13's 17 (rest-declined, no-rests), and added 8 of its own.
     const facts = ALL_KINDS.filter((k) => EXPECTED[k] === 'fact');
-    expect(facts).toHaveLength(27 + 15 + 8);
-    expect(DELIBERATELY_SILENT.size).toBe(17);
+    // ...and PLAN.md #2's potion removal took one pre-G13 fact (potion-drunk) and two silences.
+    expect(facts).toHaveLength(26 + 15 + 8);
+    expect(DELIBERATELY_SILENT.size).toBe(15);
     expect(NEW_FACT_KINDS).toHaveLength(15);
     for (const k of NEW_FACT_KINDS) expect(EXPECTED[k]).toBe('fact');
   });

@@ -51,8 +51,10 @@ import {
   canAfford,
   describeCost,
   describeReward,
+  needsRoom,
   type SacrificeDeal,
 } from './deal.ts';
+import { canCarry } from './inventory.ts';
 import { summarizeLoot } from './loot.ts';
 import {
   applyLevelUpHp,
@@ -89,6 +91,10 @@ export type Phase =
   // PLAN.md #2 (§22.26): a FOUND rest spot, already taken — there is no decision to make.
   | { kind: 'rest' }
   | { kind: 'deal'; deal: SacrificeDeal }
+  // PLAN.md #2, Appendix A.3: the deal was ACCEPTED with a full backpack and an item reward, so
+  // the pack is open for a discard. Nothing has been paid. Discarding completes the deal in ONE
+  // step; backing out (`deal-decision`, accept false) is exactly refusing it.
+  | { kind: 'deal-discard'; deal: SacrificeDeal }
   | { kind: 'chest'; loot: ItemInstance[] }
   | { kind: 'act-outro'; newAct: number }
   // M9: a level-up presents a seeded draft of 3; the picked option is applied on draft-pick.
@@ -147,6 +153,8 @@ export type Awaiting =
   | 'battle-action'
   | 'draft-pick'
   | 'deal-decision'
+  // PLAN.md #2, A.3: choose what to leave behind for a bargain's reward (or back out = refuse).
+  | 'deal-discard'
   // PLAN.md #2: the found rest spot — the rest has already happened; only `continue` remains.
   // Its own value (not `continue`) so the renderer can give the one calm screen its scenery.
   | 'rest'
@@ -162,7 +170,11 @@ export type GameInput =
   | { kind: 'menu'; choice: 'continue' | 'quit' }
   | { kind: 'battle-action'; action: BattleAction }
   | { kind: 'draft-pick'; index: number }
-  | { kind: 'deal-decision'; accept: boolean };
+  | { kind: 'deal-decision'; accept: boolean }
+  // PLAN.md #2: leave backpack item `index` behind. At the hub it is a plain discard; in the
+  // `deal-discard` phase it is the room a bargain's reward needs (A.3). Either way it is an
+  // ENGINE input, so a run still replays from `seed + inputs` (CLAUDE.md principle 1).
+  | { kind: 'discard'; index: number };
 
 /**
  * Rule overrides for a `step` — a MEASUREMENT seam, never set by the game (PLAN.md #2).
@@ -226,6 +238,8 @@ export function awaitingFor(phase: Phase): Awaiting {
       return 'rest';
     case 'deal':
       return 'deal-decision';
+    case 'deal-discard':
+      return 'deal-discard';
     case 'chest':
       return 'continue';
     case 'act-outro':
@@ -332,6 +346,8 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
     }
 
     case 'main-menu': {
+      // PLAN.md #2: leaving an item behind is a hub action, and an engine one.
+      if (input.kind === 'discard') return discardAtHub(state, input.index, finish, noop);
       if (input.kind !== 'menu') return noop;
       const player = requirePlayer(state);
       if (input.choice === 'quit') {
@@ -396,6 +412,14 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
     case 'deal': {
       if (input.kind !== 'deal-decision') return noop;
       return resolveDealDecision(state, phase.deal, input.accept, finish);
+    }
+
+    case 'deal-discard': {
+      // A.3.2: backing out DECLINES the bargain through the very function refusing uses, so the
+      // two cannot drift apart — no cheaper path, and no dearer one.
+      if (input.kind === 'deal-decision' && !input.accept) return declineDeal(finish);
+      if (input.kind !== 'discard') return noop;
+      return discardForDeal(state, phase.deal, input.index, finish, noop);
     }
 
     case 'chest': {
@@ -655,14 +679,25 @@ function continueJourney(
     // A chest/cache: roll its guaranteed loot, pick every item up into the backpack, then
     // show the reveal. `continue` from the chest phase returns to the hub.
     const loot = buildChestLoot(rng, state.act);
+    // PLAN.md #2: a FULL backpack (§22.17) leaves what it cannot hold — the reveal still shows
+    // what the chest held, and `loot-left-behind` says what stayed in it.
     let inventory = player.inventory;
-    for (const item of loot) inventory = pickUp(inventory, item);
+    const leftBehind: GameEvent[] = [];
+    for (const item of loot) {
+      if (canCarry(inventory)) {
+        inventory = pickUp(inventory, item);
+      } else {
+        const left = summarizeLoot(item);
+        leftBehind.push({ kind: 'loot-left-behind', name: left.name, rarity: left.rarity });
+      }
+    }
     const nextPlayer: Player = { ...player, inventory };
     return finish(
       { kind: 'chest', loot },
       [
         { kind: 'chest-found' },
         { kind: 'chest-loot', loot: loot.map(summarizeLoot) },
+        ...leftBehind,
       ],
       { player: nextPlayer },
     );
@@ -851,12 +886,19 @@ function resolveDealDecision(
   finish: Finish,
 ): StepResult {
   const player = requirePlayer(state);
-  if (!accept) {
-    return finish({ kind: 'main-menu' }, [{ kind: 'deal-declined' }]);
-  }
+  if (!accept) return declineDeal(finish);
   if (!canAfford(player, deal.cost)) {
     return finish({ kind: 'main-menu' }, [
       { kind: 'deal-unaffordable', cost: describeCost(deal.cost) },
+    ]);
+  }
+  // PLAN.md #2, Appendix A.3: an item reward with a FULL pack opens the pack for a discard.
+  // NOTHING is paid here — not HP, not the ledger, not an item. The deal completes (or is
+  // refused) in the NEXT step, from the `deal-discard` phase. Affordability is checked first,
+  // so a bargain the player could never pay never asks them to throw anything away.
+  if (needsRoom(player, deal)) {
+    return finish({ kind: 'deal-discard', deal }, [
+      { kind: 'deal-needs-room', reward: describeReward(deal.reward) },
     ]);
   }
   const result = applyDeal(
@@ -868,6 +910,94 @@ function resolveDealDecision(
   return finish(
     { kind: 'main-menu' },
     [{ kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
+    { player: result.player, karma: result.karma },
+  );
+}
+
+/**
+ * Refuse a bargain — the ONE definition, shared by the `deal` phase's "Refuse" and the
+ * `deal-discard` phase's back-out (plan Appendix A.3.2).
+ *
+ * WHAT REFUSING DOES, stated explicitly as the ruling asks: NOTHING but return to the hub. No
+ * karma action is recorded for a refusal (`KARMA_DELTAS` has none, by design — only what you DO
+ * is read into your nature), no HP, stat, charge or item changes hands, and no random draw is
+ * taken. Backing out of the discard runs this same function from the same unpaid state, so it
+ * produces the identical next state — a test holds the two deep-equal, rng included.
+ */
+function declineDeal(finish: Finish): StepResult {
+  return finish({ kind: 'main-menu' }, [{ kind: 'deal-declined' }]);
+}
+
+/** Is `index` a real backpack slot? Rejects non-integers, NaN and out-of-range (the G45 lesson). */
+function validBackpackIndex(player: Player, index: number): boolean {
+  return Number.isInteger(index) && index >= 0 && index < player.inventory.backpack.length;
+}
+
+/** The player with backpack item `index` removed — PURE. */
+function withoutItem(player: Player, index: number): Player {
+  const backpack = player.inventory.backpack.filter((_, i) => i !== index);
+  return { ...player, inventory: { slots: { ...player.inventory.slots }, backpack } };
+}
+
+/**
+ * Leave backpack item `index` behind at the hub — PURE, RNG-free (PLAN.md #2). An ENGINE input,
+ * not a render-layer mutation, so the run still replays from `seed + inputs`. A bad index is a
+ * rejected no-op.
+ */
+function discardAtHub(
+  state: GameState,
+  index: number,
+  finish: Finish,
+  noop: StepResult,
+): StepResult {
+  const player = requirePlayer(state);
+  if (!validBackpackIndex(player, index)) return noop;
+  const dropped = summarizeLoot(player.inventory.backpack[index]!);
+  return finish(
+    { kind: 'main-menu' },
+    [{ kind: 'item-discarded', name: dropped.name, rarity: dropped.rarity }],
+    { player: withoutItem(player, index) },
+  );
+}
+
+/**
+ * Complete a full-pack bargain by leaving item `index` behind — ATOMIC (plan Appendix A.3.1/3).
+ *
+ * Discard, pay, place and record happen in THIS ONE step, computed on a copy and committed only
+ * when every part succeeded. If anything fails between them — the cost no longer affordable, the
+ * reward still without room — the step returns the ORIGINAL player and ledger with a
+ * `deal-unaffordable`: the discard is not applied either, so there is no state in which the
+ * item is gone and the bargain not taken, and none in which the price is paid and the reward
+ * not placed. (With the shipped costs neither failure is reachable: only an item-freeing cost
+ * could depend on the pack, and such a cost never needs room. The branch keeps the step total.)
+ */
+function discardForDeal(
+  state: GameState,
+  deal: SacrificeDeal,
+  index: number,
+  finish: Finish,
+  noop: StepResult,
+): StepResult {
+  const player = requirePlayer(state);
+  if (!validBackpackIndex(player, index)) return noop;
+  const dropped = summarizeLoot(player.inventory.backpack[index]!);
+  const result = applyDeal(
+    withoutItem(player, index),
+    state.karma,
+    deal,
+    floorModifiers(floorOf(state)).karmaMultiplier,
+  );
+  if (result.outcome !== 'taken') {
+    return finish({ kind: 'main-menu' }, [
+      { kind: 'deal-unaffordable', cost: describeCost(deal.cost) },
+    ]);
+  }
+  return finish(
+    { kind: 'main-menu' },
+    [
+      { kind: 'item-discarded', name: dropped.name, rarity: dropped.rarity },
+      { kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) },
+    ],
     { player: result.player, karma: result.karma },
   );
 }

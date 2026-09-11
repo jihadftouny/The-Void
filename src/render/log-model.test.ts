@@ -48,9 +48,6 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'self-sacrifice': { kind: 'self-sacrifice', amount: 2, ofMaxHp: false },
   lifesteal: { kind: 'lifesteal', amount: 3 },
   detonate: { kind: 'detonate', consumed: 1, bonusDamage: 4 },
-  'potion-drunk': { kind: 'potion-drunk', healedTo: 18 },
-  'potion-unavailable': { kind: 'potion-unavailable' },
-  'potion-blocked': { kind: 'potion-blocked' },
   fled: { kind: 'fled' },
   'escape-failed': { kind: 'escape-failed', damage: 2 },
   'escape-impossible': { kind: 'escape-impossible' },
@@ -110,14 +107,15 @@ const ALL_KINDS = Object.keys(SAMPLE) as GameEventKind[];
 // ---------------------------------------------------------------------------
 
 describe('LOG_ROUTING is total over GameEventKind', () => {
-  it('has exactly 67 entries (41 combat + 26 narrative)', () => {
+  it('has exactly 64 entries (38 combat + 26 narrative)', () => {
     // Counted by hand from the two union declarations, the same independent count
     // `narrationCoverage.test.ts` and `format.test.ts` each make separately. The
     // `Record<GameEventKind, LogRoute>` type already guarantees the KEYS are the union; this
     // anchors its SIZE, so a 64th kind cannot arrive unnoticed even if someone adds a key.
     // PLAN.md #2: +4 combat, +4 narrative.
     // ...and -4 narrative: the rest-decision kinds left with the decision (PLAN.md #2).
-    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 + 26 + 4 - 4);
+    // ...and -3 combat: the potion kinds left with the potion (§22.6).
+    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 - 3 + 26 + 4 - 4);
     expect(new Set(Object.keys(LOG_ROUTING))).toEqual(new Set(ALL_KINDS));
   });
 
@@ -138,7 +136,7 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
     }
     // non-vacuity: 37 + PLAN.md #2's three in-fight kinds (floor-drain, illusion-struck,
     // illusion-dispelled). `loot-left-behind` is a combat kind routed to the PANE.
-    expect(logged).toBe(37 + 3);
+    expect(logged).toBe(37 + 3 - 3);
   });
 
   it('every PANE-routed kind yields NO line at all', () => {
@@ -157,8 +155,7 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
     // The player pressed a button and nothing happened; the log is the only thing that can
     // say why.
     for (const kind of [
-      'cast-unavailable', 'potion-unavailable', 'potion-blocked',
-      'spare-unavailable', 'consumable-unavailable',
+      'cast-unavailable', 'spare-unavailable', 'consumable-unavailable',
     ] as const) {
       expect(LOG_ROUTING[kind], `${kind}`).toBe('log');
     }

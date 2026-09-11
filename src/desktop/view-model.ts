@@ -34,7 +34,6 @@ import { summarizeLoot } from '../game/loot.ts';
 import { CLASSES } from '../game/classKit.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import { BOSSES } from '../game/boss.ts';
-import { buttonModel, type ButtonModel } from '../render/component-model.ts';
 
 /**
  * The player to DISPLAY on the sheet: during a battle the live combatant
@@ -388,6 +387,41 @@ export function dealView(deal: SacrificeDeal): DealView {
   return { cost: describeCost(deal.cost), reward: describeReward(deal.reward) };
 }
 
+/** The label on the full-pack screen's way out — which is exactly refusing the bargain (A.3.2). */
+export const DEAL_DISCARD_REFUSE = 'Keep everything — refuse the bargain';
+
+/** The full-pack bargain screen: what the bargain asks, and one way to make room per item. */
+export interface DealDiscardView {
+  /** Says the pack is full and names the reward that needs the room. */
+  prompt: string;
+  /** The price, which is NOT yet paid (A.3.3) — shown so the choice is made knowing it. */
+  cost: string;
+  /** One row per backpack item, in pack order; `index` is the `discard` input's argument. */
+  leave: { index: number; label: string }[];
+  /** The way out — `DEAL_DISCARD_REFUSE`, dispatched as `deal-decision` accept false. */
+  refuse: string;
+}
+
+/**
+ * Project the `deal-discard` phase (plan Appendix A.3) — PURE. The author's ruling: accepting a
+ * bargain with a full pack OPENS THE PACK so the player can leave something behind first; the
+ * reward is never lost. Every backpack item is offered (gear and usables alike — the choice is
+ * the player's), plus one way out that declines the bargain. Like `dealView`, it never carries
+ * the karma-derived pool.
+ */
+export function dealDiscardView(player: Player, deal: SacrificeDeal): DealDiscardView {
+  const dv = dealView(deal);
+  return {
+    prompt: `Your pack is full. Leave something behind to take ${dv.reward}.`,
+    cost: dv.cost,
+    leave: player.inventory.backpack.map((item, index) => ({
+      index,
+      label: `Leave ${displayItem(item).name}`,
+    })),
+    refuse: DEAL_DISCARD_REFUSE,
+  };
+}
+
 /** A level-up draft card (its offer index + a readable label). */
 export interface DraftCard {
   index: number;
@@ -447,6 +481,7 @@ const RUN_OVER: Record<Phase['kind'], boolean> = {
   'battle-victory': false,
   rest: false,
   deal: false,
+  'deal-discard': false,
   chest: false,
   'act-outro': false,
   'level-up-draft': false,
@@ -562,22 +597,6 @@ export function fallbackNarration(
   return facts.length > 0 ? facts.join(' ') : '(the Void is silent)';
 }
 
-/**
- * The Potion button — PURE. Carries the remaining count as a hint, and is DISABLED at zero.
- *
- * It used to be an unconditional `choice('Potion', …)`. At 0 potions, at full HP, or under
- * the Void Pact relic, pressing it dispatched a whole engine step that resolved nothing: the
- * button looked live, the turn did not advance, and (until this unit) the one event it emitted
- * was rendered nowhere at all. A disabled `ButtonModel` gets NO click handler from
- * `actionButton`, so it is inert as well as greyed — a stray press cannot dispatch.
- *
- * Only the count is gated here. "Already at full HP" and the `cannotHeal` relic are still
- * engine refusals; the log now says so (`potion-unavailable`), which it never could before.
- */
-export function potionControl(player: Player | null): ButtonModel {
-  const pots = player?.pots ?? 0;
-  return buttonModel('Potion', { disabled: pots <= 0, hint: `(${pots})` });
-}
 
 // ===== The hub menu — G5 / GAME-DESIGN.md §19.4 ============================
 

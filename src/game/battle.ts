@@ -31,6 +31,7 @@ import { perkModifiers } from './perks.ts';
 import { effectiveMaxHp, effectiveMods } from './statEffects.ts';
 import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
 import { weaponForSlot, UNARMED, pickUp } from './equipment.ts';
+import { canCarry } from './inventory.ts';
 import { rollLootDrop, summarizeLoot } from './loot.ts';
 import { computeEquipModifiers, effectiveChargeCost, type EquipModifiers } from './equipEffects.ts';
 import { fireFloorTriggers, fireTrigger, reviveActionFor } from './relicEffects.ts';
@@ -78,14 +79,12 @@ export interface BattleState {
 }
 
 /**
- * The player's battle actions: the three string actions plus a structured `cast` (spend
- * a charge to cast a skill from the player's skillPool). The string members keep every
- * existing `'fight'|'potion'|'run'` caller valid; adding a union member breaks no
- * exhaustive switch.
+ * The player's battle actions: the string actions plus a structured `cast` (spend a charge
+ * to cast a skill from the player's skillPool) and `useConsumable`. PLAN.md #2 / §22.6: the
+ * `potion` action is GONE — healing in battle is a found consumable, used like any other.
  */
 export type BattleAction =
   | 'fight'
-  | 'potion'
   | 'run'
   | 'spare'
   | { kind: 'cast'; skillId: SkillId }
@@ -124,9 +123,9 @@ export interface RoundResult {
   /**
    * G36: did a ROUND actually happen?
    *
-   * `resolveRound` returns `status: 'ongoing'` for six NO-OP REJECTIONS as well as for a real
-   * round — `escape-impossible`, `potion-unavailable`, `potion-blocked`, `cast-unavailable`,
-   * `consumable-unavailable`, `spare-unavailable`. None of them resolves anything: no dice,
+   * `resolveRound` returns `status: 'ongoing'` for its NO-OP REJECTIONS as well as for a real
+   * round — `escape-impossible`, `cast-unavailable`, `consumable-unavailable`,
+   * `spare-unavailable` (and, until PLAN.md #2 removed the action, two potion refusals). None of them resolves anything: no dice,
    * no tick, no state change. `game.ts` gated the boss's per-round mechanic on the status
    * alone, so it fired for those too. Measured: the Run button is rendered in every battle
    * and bosses set `canFlee: false`, so NINE REJECTED "Run" PRESSES AGAINST THE ACT-1 KINGPIN
@@ -430,8 +429,6 @@ export function resolveRound(
   switch (action) {
     case 'fight':
       return resolvePlayerTurn(state, { kind: 'fight' }, rng, rules);
-    case 'potion':
-      return resolvePotion(state);
     case 'run':
       return resolveRun(state, rng);
     case 'spare':
@@ -454,7 +451,7 @@ export function spareAvailable(battle: BattleState): boolean {
 /**
  * Resolve a spare/release — PURE, ZERO rng draws, no counter-attack. Against a non-⚖
  * enemy the action is unavailable: a no-op that leaves the battle ongoing (mirrors an
- * unavailable potion), so no karma can be recorded off a non-⚖ enemy. Against a ⚖ enemy
+ * unavailable consumable), so no karma can be recorded off a non-⚖ enemy. Against a ⚖ enemy
  * it ends the encounter as `spared` (mercy) — the enemy is NOT killed (hp unchanged, no
  * XP/loot); the karma write happens one level up in game.ts, which owns the karma vector.
  */
@@ -853,7 +850,7 @@ function killAndVictory(
  * The player casts a skill from their pool — pre-guard then the shared round. If the
  * skill is unknown, not in `player.skillPool`, or the player lacks the charge, this is a
  * no-op: state unchanged, a single `cast-unavailable` event, `ongoing`, and NO rng draw
- * (mirrors an unavailable potion). Otherwise it runs `resolvePlayerTurn` as a cast.
+ * (mirrors an unavailable consumable). Otherwise it runs `resolvePlayerTurn` as a cast.
  */
 function resolveCast(state: BattleState, skillId: SkillId, rng: Rng, rules: RoundRules): RoundResult {
   const player = state.player;
@@ -896,40 +893,23 @@ function applyVictory(
   // familyId is a bare type string resolves to no family ⇒ tag undefined ⇒ the roll is
   // byte-identical to the pre-family behaviour (off-equivalence for family-less enemies).
   const drop = rollLootDrop(state.act, rng, getFamily(enemy.familyId)?.tag);
-  const inventory = drop ? pickUp(player.inventory, drop) : player.inventory;
-  const loot = drop ? [summarizeLoot(drop)] : [];
+  // PLAN.md #2: a FULL backpack (§22.17) leaves the drop where it fell — the victory reports
+  // only what was taken, and `loot-left-behind` says what was not. The drop was still ROLLED
+  // (its draws are unchanged), so a full pack moves no later draw.
+  const carried = drop !== null && canCarry(player.inventory);
+  const inventory = carried ? pickUp(player.inventory, drop) : player.inventory;
+  const loot = carried ? [summarizeLoot(drop)] : [];
   const newPlayer: Player = {
     ...player,
     xp: player.xp + xpGained,
     inventory,
   };
   events.push({ kind: 'victory', xpGained, loot });
+  if (drop !== null && !carried) {
+    const left = summarizeLoot(drop);
+    events.push({ kind: 'loot-left-behind', name: left.name, rarity: left.rarity });
+  }
   return { state: { ...state, player: newPlayer, enemy }, events, status: 'player-won', resolved: true };
-}
-
-function resolvePotion(state: BattleState): RoundResult {
-  const player = state.player;
-  if (hasControlCondition(player)) {
-    return { state, events: [{ kind: 'potion-blocked' }], status: 'ongoing', resolved: false };
-  }
-  // Void Pact's `cannotHeal` blocks the potion heal site. 0/false for a normal run, so the
-  // potion path is byte-identical (off-equivalence).
-  if (computeEquipModifiers(player.inventory).cannotHeal) {
-    return { state, events: [{ kind: 'potion-unavailable' }], status: 'ongoing', resolved: false };
-  }
-  // Heal cap is the EFFECTIVE max HP (Hardy raises it, Frail lowers it). Off-equivalent:
-  // equals the stored maxHp when no CON augment is active.
-  const cap = effectiveMaxHp(player);
-  if (player.pots > 0 && player.hp < cap) {
-    const healed: Player = { ...player, hp: cap, pots: player.pots - 1 };
-    return {
-      state: { ...state, player: healed },
-      events: [{ kind: 'potion-drunk', healedTo: cap }],
-      status: 'ongoing',
-      resolved: true,
-    };
-  }
-  return { state, events: [{ kind: 'potion-unavailable' }], status: 'ongoing', resolved: false };
 }
 
 /**
@@ -938,7 +918,7 @@ function resolvePotion(state: BattleState): RoundResult {
  * a no-op (state unchanged, `consumable-unavailable`); a `flee` consumable ends the round as
  * `fled`; a throwable that drops the enemy to 0 is a victory (rewards rolled via
  * `killAndVictory`); a self-lethal outcome (none ship today) is a defeat; otherwise `ongoing`.
- * NO enemy counter-attack — using an item costs the turn exactly like the potion action.
+ * NO enemy counter-attack — using an item costs the turn and grants the enemy nothing.
  */
 function resolveUseConsumable(
   state: BattleState,

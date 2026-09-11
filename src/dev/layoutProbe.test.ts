@@ -766,10 +766,10 @@ describe('every control is reachable at the enforced minimum window', () => {
    *   hub / confirm-abandon  `hubMenu` returns 5 rows in menu mode (Continue, Inventory,
    *                          Character sheet, Settings, Abandon — PLAN.md #2 removed "Seek a
    *                          bargain") and 2 in confirmation mode.
-   *   battle                 Fight + the Cast toggle + Spare + the Use-item toggle + Potion +
-   *                          Run = 6 on screen; 6 skills and 1 item sit inside the two closed
-   *                          picker lists = 7 hidden.
-   *   battle-open            the same 13, with the Cast list open, so 12 on screen and 1 left
+   *   battle                 Fight + the Cast toggle + Spare + the Use-item toggle + Run = 5 on
+   *                          screen (PLAN.md #2 removed the Potion button, §22.6); 6 skills and
+   *                          1 item sit inside the two closed picker lists = 7 hidden.
+   *   battle-open            the same 12, with the Cast list open, so 11 on screen and 1 left
    *                          inside the still-closed Use-item list.
    *   choose-class           the five class rows.
    *   draft-pick             three cards (the "Choose one" line is a div, not a control).
@@ -785,8 +785,8 @@ describe('every control is reachable at the enforced minimum window', () => {
   const EXPECTED_CONTROLS: Readonly<Record<string, { visible: number; hidden: number }>> = {
     hub: { visible: 5, hidden: 0 },
     'confirm-abandon': { visible: 2, hidden: 0 },
-    battle: { visible: 6, hidden: 7 },
-    'battle-open': { visible: 12, hidden: 1 },
+    battle: { visible: 5, hidden: 7 },
+    'battle-open': { visible: 11, hidden: 1 },
     'choose-class': { visible: 5, hidden: 0 },
     'draft-pick': { visible: 3, hidden: 0 },
     inventory: { visible: 1, hidden: 0 },

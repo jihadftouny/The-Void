@@ -102,17 +102,12 @@ describe('runToTerminal classifies outcomes in player terms', () => {
   });
 
   it('death: a 1-HP player facing a lethal foe dies, tagged with the act it died in', () => {
-    // FIXTURE: a 1-HP, potionless, skill-less, cannot-flee player. Any enemy hit (plain 1 on a
+    // FIXTURE: a 1-HP, heal-less, skill-less, cannot-flee player. Any enemy hit (plain 1 on a
     // non-fumble roll vs the AC-1 player) kills. The policy has no heal/skill/flee available, so
     // it swings and dies — independently, the death is tagged with the state's act (3).
-    const player = makePlayer({
-      name: 'Frail',
-      hp: 1,
-      maxHp: 1,
-      pots: 0,
-      skillPool: [],
-      armorClass: 1,
-    });
+    // (PLAN.md #2: "potionless" became an EMPTY PACK — a fresh character now carries a kit.)
+    const frail = makePlayer({ name: 'Frail', hp: 1, maxHp: 1, skillPool: [], armorClass: 1 });
+    const player = { ...frail, inventory: { ...frail.inventory, backpack: [] } };
     const enemy = {
       ...generateEnemy({ act: 3, type: 'Grunt', playerXp: 40 }, mulberry32(2)),
       skillPool: [] as string[],
@@ -148,11 +143,14 @@ const ALLOWED: Record<Awaiting, ReadonlySet<GameInput['kind']>> = {
   'enter-name': new Set(['name']),
   'choose-class': new Set(['class']),
   'accept-or-reroll-stats': new Set(['stats-decision']),
-  'main-menu': new Set(['menu']),
+  // PLAN.md #2: a hub discard is an engine input too (the policy sheds gear from a full pack).
+  'main-menu': new Set(['menu', 'discard']),
   continue: new Set(['continue']),
   'battle-action': new Set(['battle-action']),
   'draft-pick': new Set(['draft-pick']),
   'deal-decision': new Set(['deal-decision']),
+  // PLAN.md #2, Appendix A.3: make room with a discard, or back out (which is refusing).
+  'deal-discard': new Set(['discard', 'deal-decision']),
   rest: new Set(['continue']), // PLAN.md #2: a found rest is taken at once; only continue remains
   'game-over': new Set(['continue']),
 };
@@ -363,9 +361,9 @@ describe('gearUpAtHub — the rarity rule, derived from the plan (AC-26)', () =>
   });
 });
 
-describe('the heuristic heals with a found consumable once potions are gone', () => {
-  function battleAt(hp: number, pots: number, backpack: ItemInstance[]): StepResult {
-    const p = makePlayer({ hp, maxHp: 20, pots });
+describe('the heuristic heals with a found consumable (there are no potions, §22.6)', () => {
+  function battleAt(hp: number, _unused: number, backpack: ItemInstance[]): StepResult {
+    const p = makePlayer({ hp, maxHp: 20 });
     const player = { ...p, inventory: { ...p.inventory, backpack } };
     const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(3));
     const battle = createBattle(player, enemy, 1);
@@ -373,7 +371,7 @@ describe('the heuristic heals with a found consumable once potions are gone', ()
     return { state, events: [], awaiting: 'battle-action' };
   }
 
-  it('at <= 35% HP with no potions, uses the FIRST healSelf item (index derived by hand)', () => {
+  it('at <= 35% HP, uses the FIRST healSelf item (index derived by hand)', () => {
     // 7/20 = 35% exactly. Index 0 is an Antidote (cure only), index 1 a Suture Kit (healSelf 4).
     const res = battleAt(7, 0, [{ defId: 'antidote' }, { defId: 'suture-kit' }]);
     expect(heuristicPolicy('Enforcer')(res)).toEqual({

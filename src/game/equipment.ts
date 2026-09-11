@@ -35,7 +35,7 @@ import {
   type ItemInstance,
   type ItemKind,
 } from './item.ts';
-import { createInventory, type Inventory } from './inventory.ts';
+import { canCarry, createInventory, type Inventory } from './inventory.ts';
 import { getWeaponByName, type Rarity, type Weapon } from './weapon.ts';
 import { getArmorByName, type Armor } from './armor.ts';
 import { getShieldById, type Shield } from './shield.ts';
@@ -188,13 +188,24 @@ export function unequip(
 ): { inventory: Inventory; ok: boolean } {
   const item = inventory.slots[slot];
   if (!item) return { inventory, ok: false };
+  // PLAN.md #2: the unequipped item goes to the backpack, so a full one refuses the move.
+  if (!canCarry(inventory)) return { inventory, ok: false };
   const slots = { ...inventory.slots, [slot]: null };
   const backpack = [...inventory.backpack, item];
   return { inventory: { slots, backpack }, ok: true };
 }
 
-/** Append a loose item instance to the backpack — PURE (returns a new Inventory). */
+/**
+ * Append a loose item instance to the backpack — PURE (returns a new Inventory).
+ *
+ * PLAN.md #2: a FULL backpack (`BACKPACK_CAPACITY`) refuses the item and the INPUT inventory is
+ * returned unchanged (reference-equal, so a caller can tell). Every engine call site checks
+ * `canCarry` first and says what happened: a victory drop or a chest item is left behind with a
+ * `loot-left-behind` event; a bargain's reward opens the pack for a discard instead (plan
+ * Appendix A.3) — it is never silently lost.
+ */
 export function pickUp(inventory: Inventory, instance: ItemInstance): Inventory {
+  if (!canCarry(inventory)) return inventory;
   return { slots: { ...inventory.slots }, backpack: [...inventory.backpack, instance] };
 }
 

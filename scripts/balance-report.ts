@@ -224,7 +224,7 @@ const md = [
   '',
   policySection(
     'Baseline policy (no sacrifice, no spare — the found-loot-only floor)',
-    'Reasonable engine-authoritative play: potion when low, cast the best affordable skill, flee a near-certain death when heals are gone, otherwise fight. Kills every foe (a spare forfeits the kill XP the act gates require).',
+    'Reasonable engine-authoritative play: equip found gear at the hub (greedy rarity rule), drink a found healing item at <= 35% HP, cast the best affordable skill, flee a near-certain death when no heal is left, otherwise fight; take any bargain not paid in HP, and shed the worst gear when the pack is full. Kills every foe (a spare forfeits the kill XP the act gates require).',
     baseline,
   ),
   '',

@@ -208,6 +208,7 @@
 [data-screen='choose-class'] .void-button,
 [data-screen='draft-pick'] .void-button,
 [data-screen='deal-decision'] .void-button,
+[data-screen='deal-discard'] .void-button,
 [data-screen='rest'] .void-button {
   width: 100%;
   text-align: left;

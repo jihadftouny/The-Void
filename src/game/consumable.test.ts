@@ -5,7 +5,7 @@
 // pass an empty seqRng (which throws if the code draws), proving the no-draw / no-counter rule.
 
 import { describe, expect, it } from 'vitest';
-import { resolveRound, createBattle } from './battle.ts';
+import { resolveRound, createBattle, type BattleAction } from './battle.ts';
 import { createPlayer, type Player } from './player.ts';
 import { computeStatMods, type Stats } from './character.ts';
 import { type Enemy } from './enemy.ts';
@@ -132,12 +132,15 @@ describe('unavailable + potion off-equivalence', () => {
     expect(r.state.player.hp).toBe(5);
   });
 
-  it('the legacy potion action is byte-identical (heals to cap, no new events)', () => {
-    const player = makePlayer({ hp: 3, maxHp: 10, pots: 2 });
-    const r = resolveRound(createBattle(player, makeEnemy(), 1), 'potion', seqRng([]));
-    expect(r.events).toEqual([{ kind: 'potion-drunk', healedTo: 10 }]);
+  it('PLAN.md #2 / §22.6: the potion action is GONE — the Void Draught is the full heal now', () => {
+    // Type level: 'potion' is no longer a BattleAction.
+    const noPotion: 'potion' extends BattleAction ? false : true = true;
+    expect(noPotion).toBe(true);
+    // And the draught heals to cap exactly as the potion did (100% of max HP, capped).
+    const player = makePlayer({ hp: 3, maxHp: 10 }, [{ defId: 'void-draught' }]);
+    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
     expect(r.state.player.hp).toBe(10);
-    expect(r.state.player.pots).toBe(1);
+    expect(r.state.player.inventory.backpack).toEqual([]);
   });
 });
 

@@ -68,6 +68,7 @@ import {
   type ItemInstance,
 } from '../game/item.ts';
 import { equip, pickUp, resolveInstanceDef } from '../game/equipment.ts';
+import { canCarry } from '../game/inventory.ts';
 import { clampMomentum } from '../game/classKit.ts';
 import { decodeSave, encodeSave } from '../game/save.ts';
 import { emptyRunSummary, type RunSummary, type RunUnlocks } from '../game/unlockStore.ts';
@@ -101,7 +102,6 @@ export interface GrantSpec {
 export interface StateEdits {
   hp?: number;
   maxHp?: number;
-  pots?: number;
   skillCharges?: number;
   momentum?: number;
   corruption?: number;
@@ -227,6 +227,9 @@ export function grantItem(player: Player, grant: GrantSpec, rng: Rng): Player {
   }
   if (!instance) return player;
 
+  // PLAN.md #2: a FULL backpack (twelve slots) refuses the grant — and says so by returning
+  // the player unchanged, rather than "equipping" whatever already sat in the last slot.
+  if (!canCarry(player.inventory)) return player;
   let inventory = pickUp(player.inventory, instance);
   if (grant.equip) {
     const result = equip(inventory, inventory.backpack.length - 1);
@@ -244,7 +247,6 @@ export function applyPlayerEdits(player: Player, edits: StateEdits): Player {
   if (edits.hp !== undefined) next.hp = edits.hp;
   // Whatever the order the fields arrived in, HP ends up inside [1, maxHp].
   next.hp = clampInt(next.hp, 1, next.maxHp);
-  if (edits.pots !== undefined) next.pots = clampInt(edits.pots, 0, 1_000_000);
   if (edits.skillCharges !== undefined) {
     next.skillCharges = clampInt(edits.skillCharges, 0, next.maxSkillCharges);
   }
@@ -408,7 +410,6 @@ export type JumpRejection =
   | 'max-hp-invalid'
   | 'hp-out-of-range'
   | 'charges-out-of-range'
-  | 'pots-negative'
   | 'momentum-out-of-range'
   | 'corruption-negative'
   | 'karma-not-integer'
@@ -485,7 +486,6 @@ export function validateJump(bundle: JumpBundle): JumpRejection[] {
     if (player.skillCharges < 0 || player.skillCharges > player.maxSkillCharges) {
       reasons.push('charges-out-of-range');
     }
-    if (player.pots < 0) reasons.push('pots-negative');
     const momentum = player.momentum ?? 0;
     if (momentum !== clampMomentum(momentum)) reasons.push('momentum-out-of-range');
     if ((player.corruption ?? 0) < 0) reasons.push('corruption-negative');
@@ -642,7 +642,6 @@ export function parseField(text: string): number | undefined {
 export const EDITABLE_FIELDS: readonly (keyof StateEdits)[] = [
   'hp',
   'maxHp',
-  'pots',
   'skillCharges',
   'momentum',
   'corruption',

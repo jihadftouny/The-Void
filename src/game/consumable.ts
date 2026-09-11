@@ -12,8 +12,8 @@
 //  - Serializable plain-data state: the item is removed from the plain `backpack` array.
 //
 // TURN COST (orchestrator resolution): using a consumable costs the player's action for the
-// round and grants the enemy NO free turn — byte-identical to the existing `potion` action.
-// [NEEDS-HUMAN M15: should consumable/potion use grant the enemy a turn?]
+// round and grants the enemy NO free turn — as the retired potion action did (PLAN.md #2 folded
+// potions into consumables, §22.6). [NEEDS-HUMAN M15: should using an item grant the enemy a turn?]
 
 import { type Player } from './player.ts';
 import { type Enemy } from './enemy.ts';

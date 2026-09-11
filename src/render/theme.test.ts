@@ -371,6 +371,7 @@ describe('every data-screen rule is keyed to a value screenKey can produce', () 
     'battle-action',
     'draft-pick',
     'deal-decision',
+    'deal-discard', // PLAN.md #2, Appendix A.3: the full-pack bargain
     'rest', // PLAN.md #2: the found rest spot (was 'rest-decision', whose decision is gone)
     'game-over',
     'inventory',

@@ -45,6 +45,7 @@ import { generateItem } from './rarityGen.ts';
 import { pick, type Rng } from './rng.ts';
 import { type KarmaState, recordKarmaWeighted } from './karma.ts';
 import { pickUp } from './equipment.ts';
+import { BACKPACK_CAPACITY } from './inventory.ts';
 import { floorModifiers, type FloorId } from './floors.ts';
 import dealsData from '../data/deals.json';
 
@@ -271,6 +272,27 @@ export function canAfford(player: Player, cost: DealCost): boolean {
   }
 }
 
+/** How many backpack items paying `cost` removes (an offering gives up one; so does a relic). */
+function itemsTakenBy(player: Player, cost: DealCost): number {
+  if (cost.kind === 'offering') return player.inventory.backpack.length > 0 ? 1 : 0;
+  if (cost.kind === 'relic') return firstRelicIndex(player) >= 0 ? 1 : 0;
+  return 0;
+}
+
+/**
+ * Would taking this deal need the player to make ROOM first? — PURE (plan Appendix A.3).
+ *
+ * True only when the reward is an ITEM and the backpack, AFTER the cost is paid, would already
+ * hold `BACKPACK_CAPACITY` items. A cost that itself gives up an item (an offering, a relic)
+ * frees the slot its reward needs, so it never needs room. The author's ruling: accepting such
+ * a deal OPENS THE PACK for a discard first — the reward is never lost (`game.ts`'s
+ * `deal-discard` phase). Backing out of that discard is exactly refusing the deal.
+ */
+export function needsRoom(player: Player, deal: SacrificeDeal): boolean {
+  if (deal.reward.kind !== 'item') return false;
+  return player.inventory.backpack.length - itemsTakenBy(player, deal.cost) >= BACKPACK_CAPACITY;
+}
+
 /**
  * Recompute the derived stat mods after a stat change (maxHp/AC deliberately NOT re-derived).
  * G20: the stat is floored at `MIN_STAT`, so the unbounded `statPoint` cost cannot walk an
@@ -286,6 +308,14 @@ function withStat(player: Player, stat: StatKey, delta: number): Player {
  * returns the new player + karma and an outcome. When the cost is unaffordable NOTHING changes
  * (`outcome: 'unaffordable'`).
  *
+ * PLAN.md #2, Appendix A.3 — THE PRICE IS NEVER CHARGED BEFORE THE REWARD IS PLACED: when the
+ * reward is an item and the backpack could not hold it (`needsRoom`), NOTHING changes either
+ * (`outcome: 'no-room'`) — not the HP, not the ledger, not the pack. The check runs BEFORE any
+ * cost is paid, and because this function is pure there is no moment in which a half-taken
+ * bargain exists: it returns the whole new player or the original one. The engine never reaches
+ * this outcome through `step` (it opens the discard first); it is the backstop that makes the
+ * ordering a property of the function, not of its caller.
+ *
  * POLICY (matches level-up): a stat cost/reward recomputes `mods` only — maxHp/AC are NOT
  * retroactively re-derived (M15 placeholder, documented). A purely-karmic cost (desecrate /
  * greed / whisper) records the real karma action and pays no HP/stat; an `offering` records its
@@ -299,9 +329,12 @@ export function applyDeal(
   deal: SacrificeDeal,
   // PLAN.md #2: the floor's karma multiplier — a bargain paid on floor 4 counts double. Default 1.
   karmaWeight = 1,
-): { player: Player; karma: KarmaState; outcome: 'taken' | 'unaffordable' } {
+): { player: Player; karma: KarmaState; outcome: 'taken' | 'unaffordable' | 'no-room' } {
   if (!canAfford(player, deal.cost)) {
     return { player, karma, outcome: 'unaffordable' };
+  }
+  if (needsRoom(player, deal)) {
+    return { player, karma, outcome: 'no-room' };
   }
 
   let next = player;

@@ -257,7 +257,8 @@ function buildBattle(openPicker: boolean): void {
   picker(choices, 'Use item', (list) => {
     appendButton(list, buttonModel('Ash Draught', { hint: '(common)' }), () => undefined);
   });
-  appendButton(choices, buttonModel('Potion (2)'), () => undefined);
+  // PLAN.md #2 / §22.6: no Potion button — the real battle case lost it when potions folded
+  // into consumables (they are in the Use-item picker above).
   appendButton(choices, buttonModel('Run'), () => undefined);
   // Opening it through the real element the real `picker` built, rather than by hand: the
   // measured height is then the height a player's click produces.

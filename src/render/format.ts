@@ -150,18 +150,6 @@ export function formatEvent(e: GameEvent): string {
       return `You drain ${e.amount} HP.`;
     case 'detonate':
       return `You detonate ${e.consumed} affliction(s) for ${e.bonusDamage} damage.`;
-    case 'potion-drunk':
-      return `You drink a potion — restored to ${e.healedTo} HP.`;
-    case 'potion-unavailable':
-      // THREE causes share this one event (battle.ts): no potions left, already at full
-      // HP, and the Void Pact relic's `cannotHeal`. The old line — "No potions left to
-      // drink." — is FALSE for two of the three, and G18 is what puts it on screen. This
-      // sentence is true of all three, because it reports the outcome rather than guessing
-      // the cause. (Folding potions into consumables, §22.6, is #2's; splitting the event
-      // into three would change `GameState`'s event vocabulary, which this unit must not.)
-      return `Nothing comes of reaching for a potion.`;
-    case 'potion-blocked':
-      return `You cannot drink a potion right now.`;
     case 'fled':
       return `You escape into the Void.`;
     case 'escape-failed':

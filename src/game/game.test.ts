@@ -978,19 +978,22 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
   // summon (1 % 3 !== 0), which isolates the damage from the summon.
   const kingpinWithCrew = (): BossState => ({ bossId: 'kingpin', round: 0, minions: 2 });
 
-  it('the damage lands on HP: potion heals 10 -> 20, then the crew takes it to 18', () => {
+  // PLAN.md #2 / §22.6: these used the POTION as the round's RNG-free action; the potion is
+  // gone, and the Void Draught (100% of max HP, no enemy turn, no draw) takes its place. A fresh
+  // character carries one at backpack index 0 (`STARTING_CONSUMABLES`).
+  const DRAUGHT = { kind: 'battle-action', action: { kind: 'useConsumable', source: { index: 0 } } } as const;
+
+  it('the damage lands on HP: a Void Draught heals 10 -> 20, then the crew takes it to 18', () => {
     expect(KINGPIN_MINION_DAMAGE).toBe(1); // the constant behind the "2", restated
-    const player = makePlayer({ hp: 10, maxHp: 20, pots: 1 });
-    const r = step(
-      bossBattleState(kingpinWithCrew(), 1, player).state,
-      { kind: 'battle-action', action: 'potion' },
-    );
-    expect(r.events).toContainEqual({ kind: 'potion-drunk', healedTo: 20 });
+    const player = makePlayer({ hp: 10, maxHp: 20 });
+    expect(player.inventory.backpack[0]).toEqual({ defId: 'void-draught' });
+    const r = step(bossBattleState(kingpinWithCrew(), 1, player).state, DRAUGHT);
+    expect(r.events).toContainEqual({ kind: 'consumable-used', itemId: 'void-draught' });
     expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 });
     expect(r.state.phase.kind).toBe('battle');
     if (r.state.phase.kind === 'battle') {
       expect(r.state.phase.battle.player.hp).toBe(18); // 20 healed - 2 minions
-      expect(r.state.phase.battle.player.pots).toBe(0);
+      expect(r.state.phase.battle.player.inventory.backpack).toEqual([{ defId: 'suture-kit' }]);
       expect(r.state.phase.battle.boss?.minions).toBe(2); // no summon on round 1
     }
   });
@@ -998,11 +1001,8 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
   it('it goes through the GUARDED path — a shield absorbs it, exactly as in a normal round', () => {
     // This is the actual content of G29: `boss.ts` used to write `player.hp` directly, so a
     // 20-point shield absorbed NOTHING at the death `BALANCE-REPORT.md` says happens most.
-    const player = makePlayer({ hp: 10, maxHp: 20, pots: 1 });
-    const r = step(
-      bossBattleState(kingpinWithCrew(), 1, player, 3, { shield: 5 }).state,
-      { kind: 'battle-action', action: 'potion' },
-    );
+    const player = makePlayer({ hp: 10, maxHp: 20 });
+    const r = step(bossBattleState(kingpinWithCrew(), 1, player, 3, { shield: 5 }).state, DRAUGHT);
     expect(r.events).toContainEqual({ kind: 'shield-absorbed', amount: 2 });
     if (r.state.phase.kind === 'battle') {
       expect(r.state.phase.battle.player.hp).toBe(20); // the shield ate all of it
@@ -1011,9 +1011,9 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
   });
 
   it('and the once-per-battle revive intercepts a LETHAL crew tick', () => {
-    // maxHp 2 so the potion tops out at 2 and the crew's 2 is lethal. Halo Fragment heals to
+    // maxHp 2 so the draught tops out at 2 and the crew's 2 is lethal. Halo Fragment heals to
     // max(floor(2 * 25/100), 1) = max(0, 1) = 1 — the documented floor.
-    const base = makePlayer({ hp: 1, maxHp: 2, pots: 1 });
+    const base = makePlayer({ hp: 1, maxHp: 2 });
     const haloed: Player = {
       ...base,
       inventory: {
@@ -1021,10 +1021,7 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
         slots: { ...base.inventory.slots, amulet: { defId: 'halo-fragment' } },
       },
     };
-    const r = step(
-      bossBattleState(kingpinWithCrew(), 1, haloed).state,
-      { kind: 'battle-action', action: 'potion' },
-    );
+    const r = step(bossBattleState(kingpinWithCrew(), 1, haloed).state, DRAUGHT);
     expect(r.events).toContainEqual({ kind: 'revive', healedTo: 1 });
     expect(r.state.phase.kind).toBe('battle'); // survived
     if (r.state.phase.kind === 'battle') {
@@ -1035,11 +1032,8 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
 
   it('without a revive the same lethal tick ends the run — game.ts owns the death now', () => {
     // `bossPostRound` no longer decides this; it returns a number and `game.ts` resolves it.
-    const player = makePlayer({ hp: 1, maxHp: 2, pots: 1 });
-    const r = step(
-      bossBattleState(kingpinWithCrew(), 1, player).state,
-      { kind: 'battle-action', action: 'potion' },
-    );
+    const player = makePlayer({ hp: 1, maxHp: 2 });
+    const r = step(bossBattleState(kingpinWithCrew(), 1, player).state, DRAUGHT);
     expect(r.events).toContainEqual({ kind: 'defeat' });
     expect(r.state.phase.kind).toBe('game-over');
     expect(r.awaiting).toBe('game-over');
@@ -1373,8 +1367,10 @@ function decide(res: StepResult): GameInput {
         // because it drove a single seed. Fight instead — the swing is skipped, but the round
         // runs and the control wears off.
         if (!hasControlCondition(pl)) {
-          if (pl.pots > 0 && pl.hp <= pl.maxHp * 0.4) {
-            return { kind: 'battle-action', action: 'potion' };
+          // PLAN.md #2 / §22.6: a found healing consumable in place of the retired potion.
+          const heal = pl.inventory.backpack.findIndex((i) => i.defId === 'void-draught' || i.defId === 'suture-kit');
+          if (heal >= 0 && pl.hp <= pl.maxHp * 0.4) {
+            return { kind: 'battle-action', action: { kind: 'useConsumable', source: { index: heal } } };
           }
           // G43: this driver used to fight and drink and NOTHING else. With floor 5 turned
           // from a single boss into a real floor behind an XP gate, a driver that never uses
@@ -1401,6 +1397,8 @@ function decide(res: StepResult): GameInput {
       return { kind: 'deal-decision', accept: false };
     case 'rest':
       return { kind: 'continue' }; // PLAN.md #2: a found rest was taken already
+    case 'deal-discard':
+      return { kind: 'deal-decision', accept: false }; // never reached: this driver refuses deals
     case 'game-over':
       return { kind: 'continue' };
   }

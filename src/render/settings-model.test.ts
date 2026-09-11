@@ -541,6 +541,7 @@ describe('every screen is classified into one of the two stage layouts', () => {
     continue: 'side',
     'draft-pick': 'side',
     'deal-decision': 'side',
+    'deal-discard': 'side', // PLAN.md #2, Appendix A.3: a short list of actions, beside the prose
     rest: 'side', // PLAN.md #2: the found rest spot (it lost its decision)
   };
 
@@ -555,8 +556,10 @@ describe('every screen is classified into one of the two stage layouts', () => {
     // pass a table that happened to be all-`side`, so the counts are asserted too.
     const modes = Object.values(EXPECTED);
     expect(modes.filter((m) => m === 'wide').length, 'the document screens moved').toBe(7);
-    expect(modes.filter((m) => m === 'side').length, 'the action screens moved').toBe(10);
-    expect(modes.length, 'a screen key was dropped from the table').toBe(17);
+    // PLAN.md #2: +1 side screen — the full-pack bargain (`deal-discard`, Appendix A.3);
+    // `rest-decision` became `rest` (same count).
+    expect(modes.filter((m) => m === 'side').length, 'the action screens moved').toBe(11);
+    expect(modes.length, 'a screen key was dropped from the table').toBe(18);
   });
 
   it('an unknown key is `side` — the mode that guarantees the prose its floor', () => {

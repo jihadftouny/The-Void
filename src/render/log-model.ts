@@ -47,8 +47,8 @@ export interface LogLine {
  * accident of file layout; and it is `Record<GameEventKind, LogRoute>`, so a 64th kind FAILS
  * THE BUILD here and must be classified deliberately instead of silently vanishing.
  *
- * A REJECTED INPUT IS LOGGED, deliberately (`cast-unavailable`, `potion-unavailable`,
- * `potion-blocked`, `spare-unavailable`, `consumable-unavailable`). `src/llm/narrate.ts`
+ * A REJECTED INPUT IS LOGGED, deliberately (`cast-unavailable`, `spare-unavailable`,
+ * `consumable-unavailable`). `src/llm/narrate.ts`
  * SILENCES all five for the narrator, and rightly — nothing happened, so the prose should not
  * change. But the player pressed a button and got nothing, and the log is the only place left
  * that can tell them why. The two classifications differ here on purpose.
@@ -72,9 +72,6 @@ export const LOG_ROUTING: Record<GameEventKind, LogRoute> = {
   'self-sacrifice': 'log',
   lifesteal: 'log',
   detonate: 'log',
-  'potion-drunk': 'log',
-  'potion-unavailable': 'log',
-  'potion-blocked': 'log',
   fled: 'log',
   'escape-failed': 'log',
   'escape-impossible': 'log',

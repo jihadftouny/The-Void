@@ -167,12 +167,11 @@ export const STANDING_CAVEATS: readonly Caveat[] = [
       'nothing here measures them.',
   },
   {
-    id: 'two-healing-systems',
+    id: 'A1b',
     text:
-      '**Healing is deliberately over-supplied right now.** `STARTING_POTS` potions and the ' +
-      'newly-droppable consumables both ship, because `GAME-DESIGN.md` §22.6\'s fold-in ' +
-      'belongs to the balance re-run rather than to the unit that made consumables ' +
-      'obtainable. Expect the game to feel too easy until that lands.',
+      '**Potions are gone (§22.6).** Healing is a found consumable or a found rest; a fresh ' +
+      'character carries a two-item starting kit (`STARTING_CONSUMABLES`) and a twelve-slot ' +
+      'backpack (§22.17) that every heal competes for.',
   },
   {
     id: 'D9',

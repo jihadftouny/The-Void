@@ -344,11 +344,10 @@ function buildPanel(deps: PanelDeps): void {
   const live = deps.getBundle().state.player;
   const hp = numberField('hp', live?.hp ?? 1);
   const maxHp = numberField('maxHp', live?.maxHp ?? 1);
-  const pots = numberField('pots', live?.pots ?? 0);
   const charges = numberField('skillCharges', live?.skillCharges ?? 0);
   const momentum = numberField('momentum', live?.momentum ?? 0);
   const corruption = numberField('corruption', live?.corruption ?? 0);
-  playerSection.append(hp.row, maxHp.row, pots.row, charges.row, momentum.row, corruption.row);
+  playerSection.append(hp.row, maxHp.row, charges.row, momentum.row, corruption.row);
   playerSection.appendChild(
     button('Apply edits', () => {
       // `editsFrom` owns the blank-field rule: a blank box means "leave this alone", and
@@ -356,7 +355,6 @@ function buildPanel(deps: PanelDeps): void {
       const edits = editsFrom({
         hp: readNumber(hp.input),
         maxHp: readNumber(maxHp.input),
-        pots: readNumber(pots.input),
         skillCharges: readNumber(charges.input),
         momentum: readNumber(momentum.input),
         corruption: readNumber(corruption.input),

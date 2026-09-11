@@ -32,13 +32,20 @@ const face = (f: number, sides: number): number => (f - 0.5) / sides;
 // Enforcer with STR 18 -> STR mod 4 (floor((18-10)/2) = 4) and PROFICIENCY 2 (the real
 // `createPlayer` value), so its to-hit modifier is 4 + 2 = 6 (G32). Equipped Jaaj Sword 1
 // (Melee, 1d6). hp/maxHp forced to 20 for clean arithmetic; rests 1, pots 2 (M7: no gold).
+/** A player whose backpack is EMPTY — a fresh character now carries §22.6's starting kit. */
+function emptyPack<P extends { inventory: { backpack: unknown[] } }>(p: P): P {
+  return { ...p, inventory: { ...p.inventory, backpack: [] } };
+}
+
 function makePlayer(overrides: Partial<Player> = {}): Player {
   const base = createPlayer({
     name: 'Hero',
     classId: 'Enforcer',
     stats: { STR: 18, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 },
   });
-  return { ...base, hp: 20, maxHp: 20, ...overrides };
+  // An EMPTY backpack unless a test says otherwise (PLAN.md #2 seeds §22.6's starting kit into
+  // every fresh character; these fixtures predate it — player.test.ts owns the kit).
+  return { ...base, hp: 20, maxHp: 20, inventory: { ...base.inventory, backpack: [] }, ...overrides };
 }
 
 // A fixed enemy: skillPool [pyroBall], 2 charges, 0 resistances, AC 10, xp as given.
@@ -194,39 +201,10 @@ describe('resolveRound Fight — turn-skip condition blocks the player', () => {
   });
 });
 
-describe('resolveRound Potion', () => {
-  it('at hp < maxHp with pots > 0: heals to maxHp, spends one pot, no enemy turn', () => {
-    const state = createBattle(makePlayer({ hp: 10, maxHp: 20, pots: 2 }), makeEnemy(), 1);
-    const r = resolveRound(state, 'potion', scriptedRng([]));
-    expect(r.state.player.hp).toBe(20);
-    expect(r.state.player.pots).toBe(1);
-    expect(r.state.enemy.hp).toBe(30); // enemy did not act
-    expect(r.events).toEqual([{ kind: 'potion-drunk', healedTo: 20 }]);
-  });
-
-  it('at full hp: unavailable, nothing changes', () => {
-    const state = createBattle(makePlayer({ hp: 20, maxHp: 20, pots: 2 }), makeEnemy(), 1);
-    const r = resolveRound(state, 'potion', scriptedRng([]));
-    expect(r.events).toEqual([{ kind: 'potion-unavailable' }]);
-    expect(r.state.player.pots).toBe(2);
-    expect(r.state.player.hp).toBe(20);
-  });
-
-  it('with 0 pots: unavailable', () => {
-    const state = createBattle(makePlayer({ hp: 10, maxHp: 20, pots: 0 }), makeEnemy(), 1);
-    const r = resolveRound(state, 'potion', scriptedRng([]));
-    expect(r.events).toEqual([{ kind: 'potion-unavailable' }]);
-  });
-
-  it('with a control condition (stun): blocked, nothing changes', () => {
-    const state = createBattle(makePlayer({ hp: 10, maxHp: 20, pots: 2, activeConditions: [makeCondition('stun')] }), makeEnemy(), 1);
-    const r = resolveRound(state, 'potion', scriptedRng([]));
-    expect(r.events).toEqual([{ kind: 'potion-blocked' }]);
-    expect(r.state.player.hp).toBe(10);
-    expect(r.state.player.pots).toBe(2);
-  });
-});
-
+// PLAN.md #2 / GAME-DESIGN §22.6: the `potion` action and its three events are GONE — potions
+// folded into consumables. The four tests that stood here (heal to cap, unavailable at full HP
+// and at 0 pots, blocked under control) went with the action; the heal-to-EFFECTIVE-cap rule
+// they also pinned is kept below, through the consumable that replaced the potion.
 describe('resolveRound Run', () => {
   it('escapes below the flee threshold (status fled), no damage', () => {
     const state = createBattle(makePlayer({ hp: 20 }), makeEnemy(), 1);
@@ -371,19 +349,18 @@ describe('resolveRound — enemy-side condition ticking', () => {
   });
 });
 
-describe('resolveRound Potion — effectiveMaxHp cap (Frail)', () => {
+describe('a full heal caps at effectiveMaxHp (Frail) — via the Void Draught that replaced the potion', () => {
   // A Frail (sick) player heals to the REDUCED effective max HP, not the stored maxHp.
-  // stored maxHp 20; sick lowers CON by 2 (mod delta -1) -> effectiveMaxHp 19.
+  // stored maxHp 20; sick lowers CON by 2 (mod delta -1) -> effectiveMaxHp 19. The Void
+  // Draught heals 100% of that cap (consumables.json), so hp 10 -> min(10 + 19, 19) = 19.
   it('a Frail player below full heals to effectiveMaxHp (19), not stored maxHp (20)', () => {
-    const state = createBattle(
-      makePlayer({ hp: 10, maxHp: 20, pots: 2, activeConditions: [makeCondition('sick')] }),
-      makeEnemy(),
-      1,
-    );
-    const r = resolveRound(state, 'potion', scriptedRng([]));
+    const base = makePlayer({ hp: 10, maxHp: 20, activeConditions: [makeCondition('sick')] });
+    const player = { ...base, inventory: { ...base.inventory, backpack: [{ defId: 'void-draught' }] } };
+    const state = createBattle(player, makeEnemy(), 1);
+    const r = resolveRound(state, { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]));
     expect(r.state.player.hp).toBe(19);
-    expect(r.state.player.pots).toBe(1);
-    expect(r.events).toEqual([{ kind: 'potion-drunk', healedTo: 19 }]);
+    expect(r.state.player.inventory.backpack).toEqual([]); // spent
+    expect(r.events).toEqual([{ kind: 'consumable-used', itemId: 'void-draught' }]);
   });
 });
 
@@ -987,14 +964,13 @@ describe('G39 — a flee consumable cannot escape a battle that forbids fleeing'
 });
 
 describe('G36 — a rejected press resolves nothing', () => {
-  it('marks each of the six no-op rejections unresolved, and every real round resolved', () => {
+  it('marks each no-op rejection unresolved, and every real round resolved', () => {
+    // PLAN.md #2: four rejections now — the two potion refusals left with the potion (§22.6).
     const enemy = makeEnemy({ hp: 30 });
     const rejections: [string, RoundResult][] = [
       ['escape-impossible', resolveRound(createBattle(makePlayer(), enemy, 5), 'run', scriptedRng([]))],
-      ['potion-unavailable', resolveRound(createBattle(makePlayer({ pots: 0, hp: 1 }), enemy, 1), 'potion', scriptedRng([]))],
-      ['potion-blocked', resolveRound(createBattle(makePlayer({ hp: 1, activeConditions: [makeCondition('stun')] }), enemy, 1), 'potion', scriptedRng([]))],
       ['cast-unavailable', resolveRound(createBattle(makePlayer({ skillPool: [] }), enemy, 1), { kind: 'cast', skillId: 'ember' }, scriptedRng([]))],
-      ['consumable-unavailable', resolveRound(createBattle(makePlayer(), enemy, 1), { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]))],
+      ['consumable-unavailable', resolveRound(createBattle(emptyPack(makePlayer()), enemy, 1), { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]))],
       ['spare-unavailable', resolveRound(createBattle(makePlayer(), makeEnemy({ karmaWeighted: false }), 1), 'spare', scriptedRng([]))],
     ];
     for (const [name, r] of rejections) {
@@ -1005,7 +981,9 @@ describe('G36 — a rejected press resolves nothing', () => {
 
     // And the real actions ARE resolved.
     expect(resolveRound(createBattle(makePlayer(), enemy, 1), 'fight', scriptedRng([face(15, 20), 0.5, face(15, 20), face(4, 6)])).resolved).toBe(true);
-    expect(resolveRound(createBattle(makePlayer({ hp: 1 }), enemy, 1), 'potion', scriptedRng([])).resolved).toBe(true);
+    const withDraught = makePlayer({ hp: 1 });
+    const drinking = { ...withDraught, inventory: { ...withDraught.inventory, backpack: [{ defId: 'void-draught' }] } };
+    expect(resolveRound(createBattle(drinking, enemy, 1), { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([])).resolved).toBe(true);
     expect(resolveRound(createBattle(makePlayer(), enemy, 1), 'run', scriptedRng([0.1])).resolved).toBe(true);
     expect(resolveRound(createBattle(makePlayer(), makeEnemy({ karmaWeighted: true }), 1), 'spare', scriptedRng([])).resolved).toBe(true);
   });

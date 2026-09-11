@@ -227,19 +227,18 @@ describe('dispatch() renders the combat log', () => {
 // unconditional `choice('Potion', …)` that looks live and dispatches a step resolving nothing.
 // =========================================================================================
 
-describe('the battle screen builds its Potion button from potionControl', () => {
+// PLAN.md #2 / GAME-DESIGN §22.6: potions FOLDED INTO CONSUMABLES. The guard that stood here
+// ("the battle screen builds its Potion button from potionControl") retired with the button;
+// what it protected — never an unconditional heal button — is now true by absence, and held
+// so: no Potion control, and no `potion` action dispatched, anywhere in the renderer.
+describe('the battle screen has no Potion control (§22.6)', () => {
   const body = bodyOf('function renderChoices(');
 
-  it('uses the model, not a bare unconditional choice', () => {
-    expect(body, 'renderChoices no longer has a Potion control at all').toMatch(/[Pp]otion/);
-    expect(body, 'the Potion button is no longer built from potionControl').toMatch(
-      /potionControl\s*\(/,
-    );
-    // The exact defect shape, in either quote style: a `choice(...)` whose label is Potion is
-    // always enabled and always carries a handler.
-    expect(body, "the Potion button is an unconditional `choice()` again").not.toMatch(
-      /choice\s*\(\s*['"`]Potion['"`]/,
-    );
+  it('offers no Potion button and dispatches no potion action', () => {
+    expect(body, 'a Potion control came back').not.toMatch(/[Pp]otion/);
+    expect(SOURCE, 'a potion action is dispatched somewhere').not.toMatch(/action:\s*['"`]potion['"`]/);
+    // Non-vacuity: the battle case is still there, still dispatching its real actions.
+    expect(body).toMatch(/action:\s*'run'/);
   });
 });
 

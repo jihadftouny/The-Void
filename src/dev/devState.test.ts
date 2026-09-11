@@ -9,6 +9,7 @@
 // The player-facing anchors (endings, the Judged spare, the Hollow gate, the no-flee rule,
 // the karma-leak sweep) live in `observable.test.ts`, which drives the REAL `step`.
 
+import { STARTING_CONSUMABLES } from '../game/player.ts';
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   DEV_PRESETS,
@@ -272,7 +273,6 @@ describe('validateJump names exactly what is wrong', () => {
       ['rng-state-not-finite', (b) => void (b.state.rngState = Number.NaN)],
       ['act-out-of-range', (b) => void (b.state.act = 6)],
       ['max-hp-invalid', (b) => void (b.state.player!.maxHp = 0)],
-      ['pots-negative', (b) => void (b.state.player!.pots = -1)],
       ['momentum-out-of-range', (b) => void (b.state.player!.momentum = MOMENTUM_CAP + 1)],
       ['corruption-negative', (b) => void (b.state.player!.corruption = -3)],
       ['pending-invalid', (b) => void ((b.state as { pending?: unknown }).pending = 'nonsense')],
@@ -289,7 +289,7 @@ describe('validateJump names exactly what is wrong', () => {
       breakIt(bundle);
       expect(validateJump(bundle), reason).toContain(reason);
     }
-    expect(cases.length).toBe(12); // PLAN.md #2: `rests-negative` left with `restsLeft`
+    expect(cases.length).toBe(11); // PLAN.md #2: the rest and potion counters left the player
   });
 
   it('a state the ENGINE save would reject is refused, by the engine save itself', () => {
@@ -525,26 +525,25 @@ describe('parseField — BLANK and ZERO are different answers', () => {
 
   it('and the consequence, end to end: a blank form leaves the character untouched', () => {
     // The behaviour the unit actually promises, not the helper's return value.
-    const state = buildJump({ act: 3, xp: 90, edits: { pots: 4, momentum: 3 } }).state;
+    const state = buildJump({ act: 3, xp: 90, edits: { skillCharges: 4, momentum: 3 } }).state;
     const blankForm = editsFrom({
       hp: parseField(''),
       maxHp: parseField(''),
-      pots: parseField(''),
       skillCharges: parseField(''),
       momentum: parseField(''),
       corruption: parseField(''),
     });
     expect(blankForm).toEqual({});
     expect(applyEdits(state, blankForm)).toEqual(state);
-    expect(state.player!.pots).toBe(4);
+    expect(state.player!.skillCharges).toBe(4);
     expect(state.player!.momentum).toBe(3);
   });
 });
 
 describe('editsFrom — a blank field means "leave this alone"', () => {
   it('drops every undefined value rather than making it a key', () => {
-    const edits = editsFrom({ hp: 5, maxHp: undefined, pots: 0 });
-    expect(edits).toEqual({ hp: 5, pots: 0 });
+    const edits = editsFrom({ hp: 5, maxHp: undefined, corruption: 0 });
+    expect(edits).toEqual({ hp: 5, corruption: 0 });
     expect('maxHp' in edits, 'a blank field became an undefined-valued key').toBe(false);
   });
 
@@ -556,13 +555,13 @@ describe('editsFrom — a blank field means "leave this alone"', () => {
   });
 
   it('keeps ZERO, which is a real value and the one an inverted check would eat', () => {
-    expect(editsFrom({ pots: 0 }).pots).toBe(0);
+    expect(editsFrom({ corruption: 0 }).corruption).toBe(0);
   });
 
   it('covers every field the panel offers', () => {
     const all = Object.fromEntries(EDITABLE_FIELDS.map((k) => [k, 1]));
     expect(Object.keys(editsFrom(all)).sort()).toEqual([...EDITABLE_FIELDS].sort());
-    expect(EDITABLE_FIELDS).toHaveLength(6); // PLAN.md #2: `restsLeft` removed
+    expect(EDITABLE_FIELDS).toHaveLength(5); // PLAN.md #2: the rest and potion counters removed
   });
 });
 
@@ -600,7 +599,8 @@ describe('grantIntoState — a grant advances the run’s own RNG stream', () =>
     const state = buildJump({ act: 1, xp: 0 }).state;
     const result = grantIntoState(state, { catalogId: 'suture-kit' });
     expect(result.ok).toBe(true);
-    expect(result.state.player!.inventory.backpack.map((i) => i.defId)).toEqual(['suture-kit']);
+    // PLAN.md #2: a fresh character already carries §22.6's starting kit; the grant is appended.
+    expect(result.state.player!.inventory.backpack.map((i) => i.defId)).toEqual([...STARTING_CONSUMABLES, 'suture-kit']);
   });
 
   it('a ROLLED grant advances rngState; a catalog grant spends no draw', () => {
@@ -775,7 +775,7 @@ describe('grantItem', () => {
 
   it('an unresolvable catalog id grants NOTHING rather than an unresolvable instance', () => {
     const player = buildJump({ act: 1, xp: 0, grants: [{ catalogId: 'not-a-real-id' }] }).state.player!;
-    expect(player.inventory.backpack).toHaveLength(0);
+    expect(player.inventory.backpack).toHaveLength(STARTING_CONSUMABLES.length); // the kit, and nothing granted
     // ...and therefore the bundle still validates, instead of tripping 'item-unresolvable'.
     expect(validateJump(buildJump({ act: 1, xp: 0, grants: [{ catalogId: 'nope' }] }))).toEqual([]);
   });
@@ -810,7 +810,7 @@ describe('grantItem', () => {
       grants: [{ generated: { slot: 'mainHand', rarity: 'Legendary' } }],
     });
     const player = bundle.state.player!;
-    expect(player.inventory.backpack).toHaveLength(1);
+    expect(player.inventory.backpack).toHaveLength(STARTING_CONSUMABLES.length + 1);
     // The starting sword is still equipped — the grant displaced nothing.
     expect(player.inventory.slots.mainHand!.rolled).toBeUndefined();
   });
@@ -836,7 +836,7 @@ describe('grantItem', () => {
       xp: 0,
       grants: [{ generated: { slot: 'ring', rarity: 'Rare', stat: 'CON' } }],
     });
-    const rolled = bundle.state.player!.inventory.backpack[0]!.rolled!;
+    const rolled = bundle.state.player!.inventory.backpack.at(-1)!.rolled!;
     const effect = rolled.effects[0] as { type: string; params: Record<string, number> };
     expect(effect.type).toBe('bonusStat');
     expect(Object.keys(effect.params)).toEqual(['con']);
@@ -849,6 +849,7 @@ describe('grantItem', () => {
       grants: [{ catalogId: 'suture-kit' }, { catalogId: 'antidote' }],
     });
     expect(bundle.state.player!.inventory.backpack.map((i) => i.defId)).toEqual([
+      ...STARTING_CONSUMABLES,
       'suture-kit',
       'antidote',
     ]);
@@ -896,8 +897,8 @@ describe('applyPlayerEdits clamps to the invariants rather than trusting the fie
 
   it('counts cannot go negative', () => {
     const p = player();
-    expect(applyPlayerEdits(p, { pots: -1 }).pots).toBe(0);
     expect(applyPlayerEdits(p, { corruption: -1 }).corruption).toBe(0);
+    expect(applyPlayerEdits(p, { skillCharges: -1 }).skillCharges).toBe(0);
   });
 
   it('an empty edit changes nothing at all', () => {
@@ -908,7 +909,7 @@ describe('applyPlayerEdits clamps to the invariants rather than trusting the fie
   it('and never mutates its input', () => {
     const p = player();
     const before = JSON.stringify(p);
-    applyPlayerEdits(p, { hp: 1, pots: 0 });
+    applyPlayerEdits(p, { hp: 1, corruption: 0 });
     expect(JSON.stringify(p)).toBe(before);
   });
 });
@@ -939,9 +940,9 @@ describe('applyEdits writes BOTH players during a battle', () => {
 
   it('outside a battle it edits the one player there is', () => {
     const hub = buildJump({ act: 1, xp: 0 });
-    const edited = applyEdits(hub.state, { pots: 0 });
-    expect(edited.player!.pots).toBe(0);
-    expect(displayPlayer(edited)!.pots).toBe(0);
+    const edited = applyEdits(hub.state, { skillCharges: 0 });
+    expect(edited.player!.skillCharges).toBe(0);
+    expect(displayPlayer(edited)!.skillCharges).toBe(0);
   });
 
   it('with no player it is a no-op rather than a throw', () => {
@@ -952,7 +953,7 @@ describe('applyEdits writes BOTH players during a battle', () => {
   });
 
   it('the edited state still validates and still saves', () => {
-    const edited = applyEdits(inBattle().state, { hp: 1, pots: 0, momentum: 5 });
+    const edited = applyEdits(inBattle().state, { hp: 1, skillCharges: 0, momentum: 5 });
     expect(validateJump({ state: edited, memory: inBattle().memory, meta: inBattle().meta })).toEqual([]);
   });
 });

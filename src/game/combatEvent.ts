@@ -144,9 +144,6 @@ export type CombatEvent =
   | { kind: 'self-sacrifice'; amount: number; ofMaxHp: boolean; text?: string }
   | { kind: 'lifesteal'; amount: number; text?: string }
   | { kind: 'detonate'; consumed: number; bonusDamage: number; text?: string }
-  | { kind: 'potion-drunk'; healedTo: number; text?: string }
-  | { kind: 'potion-unavailable'; text?: string }
-  | { kind: 'potion-blocked'; text?: string }
   | { kind: 'fled'; text?: string }
   | { kind: 'escape-failed'; damage: number; text?: string }
   | { kind: 'escape-impossible'; text?: string }

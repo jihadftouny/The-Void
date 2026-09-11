@@ -129,9 +129,6 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'self-sacrifice': { kind: 'self-sacrifice', amount: 4, ofMaxHp: true },
   lifesteal: { kind: 'lifesteal', amount: 5 },
   detonate: { kind: 'detonate', consumed: 2, bonusDamage: 6 },
-  'potion-drunk': { kind: 'potion-drunk', healedTo: 20 },
-  'potion-unavailable': { kind: 'potion-unavailable' },
-  'potion-blocked': { kind: 'potion-blocked' },
   fled: { kind: 'fled' },
   'escape-failed': { kind: 'escape-failed', damage: 4 },
   'escape-impossible': { kind: 'escape-impossible' },
@@ -198,7 +195,8 @@ describe('formatEvent — totality over every event kind', () => {
     // (`src/llm/narrationCoverage.test.ts` counts the same 37 + 26 independently.)
     // PLAN.md #2 added 4 combat and 4 narrative kinds.
     // ...and removed the four rest-decision kinds (rest-lore, rest-full, rest-declined, no-rests).
-    expect(ALL_KINDS).toHaveLength(37 + 4 + 26 + 4 - 4);
+    // ...and the three potion kinds (§22.6).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 26 + 4 - 4);
     for (const kind of ALL_KINDS) expect(SAMPLES[kind].kind).toBe(kind);
   });
 
@@ -452,16 +450,8 @@ describe('tickConditions stamps no second-person text on an ENEMY event (G46)', 
   });
 });
 
-describe('potion-unavailable states the outcome, not one of its three causes', () => {
-  it('no longer claims the potions ran out', () => {
-    // `battle.ts` emits this event for THREE different causes: no potions left, already at
-    // full HP, and the Void Pact relic's `cannotHeal`. "No potions left to drink." was
-    // false for two of them.
-    const s = formatEvent({ kind: 'potion-unavailable' });
-    expect(s).toBe('Nothing comes of reaching for a potion.');
-    expect(s.toLowerCase()).not.toContain('no potions left');
-  });
-});
+// PLAN.md #2: "potion-unavailable states the outcome, not one of its three causes" retired with
+// the potion (§22.6) — the event, and all three of its causes, no longer exist.
 
 // ---------------------------------------------------------------------------
 // formatRollDetail — the expandable dice line (docs/UI-DESIGN.md §3).

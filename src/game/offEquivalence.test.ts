@@ -200,6 +200,7 @@
 //   floor 4: tempting pool for all; Judged kill = desecr.   S4   NONE on these runs
 //   floor 5: every owned skill warped on arrival            S5   stream moves; ~neutral
 //   bargains + rests are found; no rest counter; no heals   S6   predicted DOWN (plan §7)
+//   potions fold into a 2-item kit; the pack holds 12       S7   predicted MUCH DOWN (§7)
 //
 //  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
 //     | step 12) so that every later rules change is measured against a player who uses what
@@ -275,6 +276,20 @@
 //     | Hollow seed 3 dies on floor 1 at step 16). The 500-run guard 0.602 -> 0.580, and act-1
 //     | deaths 48 -> 66 of 500 (share 0.24 -> 0.31): the lost early rests bite hardest on floor
 //     | 1, where the pack is still empty. Still well above the one-in-three target overall.
+//  S7 | §22.6's FOLD-IN and §22.17's CAPACITY. The six free full-heal potions, the Potion action
+//     | and `pots` are gone; a fresh character carries a Void Draught (a full heal) and a Suture
+//     | Kit (4 HP) instead, and every further heal is found. The backpack holds twelve: a full
+//     | pack leaves loot behind, and a bargain's item reward opens a discard (plan Appendix A.3;
+//     | the sim sheds its lowest-rarity gear, through `step`). RNG-free, except that the decisions
+//     | move — no draw is added or removed by the rules themselves.
+//     | EXPECTED — the plan's §7, written before any measurement: "six free full heals become
+//     | one-and-a-half found ones" — PLAYER MUCH WEAKER, and hardest on floor 1, before anything
+//     | has dropped.
+//     | OBSERVED: the three Enforcers now die on floors 1-3 (seed 3 at step 52); both Hollow
+//     | damnations hold and Hollow seed 3 is BYTE-IDENTICAL (it dies at step 16, before it could
+//     | ever have drunk — a control). The 500-run guard 0.580 -> 0.404, and act-1 deaths 66 ->
+//     | 121 of 500 (share 0.31 -> 0.41): exactly where predicted. Per class: Scavver 0.70,
+//     | Enforcer 0.46, Hollow 0.35, Penitent 0.30, Neuromancer 0.21 — the low-HP classes feel it.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -325,11 +340,11 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 269, cause: 'Sif', rngState: 1101238244 },
-  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 15, floorsCleared: 3, steps: 303, cause: 'Ravenous The Counselor', rngState: 311214981 },
-  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 292, cause: 'The Counselor', rngState: 1717921316 },
-  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 450, cause: 'unmade the Hollow (damnation)', rngState: 2232781687 },
-  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 391, cause: 'unmade the Hollow (damnation)', rngState: 4207382495 },
+  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 2, finalAct: 2, finalLevel: 6, floorsCleared: 1, steps: 126, cause: 'The Reflection', rngState: 3674038724 },
+  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 206, cause: 'Blessed Burning Rage', rngState: 1172755742 },
+  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 52, cause: 'Reinforced Electro-Core Drone', rngState: 2504613783 },
+  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 465, cause: 'unmade the Hollow (damnation)', rngState: 2232781687 },
+  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 409, cause: 'unmade the Hollow (damnation)', rngState: 4207382495 },
   { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 16, cause: 'Intoxicated Punk', rngState: 1951871910 },
 ];
 
@@ -361,16 +376,16 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
       damnation: 2,
       deaths: 4,
       winRate: 2 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 11+15+12+23+23+1 = 85, floors
-      // 3+3+3+4+4+0 = 17. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 85 / 6,
-      avgFloorsCleared: 17 / 6,
-      deathByAct: { 1: 1, 2: 0, 3: 0, 4: 3, 5: 0 },
+      // Summed from the GOLDEN_RUNS rows above: levels 6+9+3+23+23+1 = 65, floors
+      // 1+2+0+4+4+0 = 11. Written as the fraction so the two stay visibly tied together.
+      avgLevel: 65 / 6,
+      avgFloorsCleared: 11 / 6,
+      deathByAct: { 1: 2, 2: 1, 3: 1, 4: 0, 5: 0 },
       perClass: {
         Enforcer: {
           runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 38 / 3, avgFloorsCleared: 9 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 3, 5: 0 },
+          winRate: 0 / 3, avgLevel: 18 / 3, avgFloorsCleared: 3 / 3,
+          deathByAct: { 1: 1, 2: 1, 3: 1, 4: 0, 5: 0 },
         },
         Hollow: {
           runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,

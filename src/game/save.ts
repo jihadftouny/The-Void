@@ -40,6 +40,7 @@ const PHASE_KINDS: readonly string[] = [
   'battle-victory',
   'rest',
   'deal',
+  'deal-discard',
   'chest',
   'act-outro',
   'level-up-draft',

@@ -314,7 +314,10 @@ describe('leaveOffering — accepting an offering deal, through the real step', 
     // The single most likely silent bug in this unit — `canAfford`'s old `default: return true`
     // would have made this an unlimited, cost-free reverence tap at a free, unlimited hub
     // action. Driven through `step` so it pins the SHIPPING path, not just the pure helper.
-    let r = newRunAtHub(3);
+    // PLAN.md #2: a fresh character carries §22.6's starting kit, so the empty pack this test
+    // needs is made by setting the kit aside — the ONE hand-set field, everything else is `step`.
+    const fresh = newRunAtHub(3);
+    let r = atStart({ ...fresh.state, player: { ...fresh.state.player!, inventory: { ...fresh.state.player!.inventory, backpack: [] } } });
     expect(r.state.player!.inventory.backpack).toEqual([]);
     const before = r.state.karma;
 
@@ -517,12 +520,13 @@ describe('embraceWhisper — accepting a whisper deal, through the real step', (
   it('moves clarity -1 and nothing else, and costs nothing material', () => {
     const hub = newRunAtHub(5);
     const player = hub.state.player!;
+    const packBefore = player.inventory.backpack; // §22.6's starting kit (PLAN.md #2)
     const r = seekAndAccept(hub, 'whisper');
 
     // KARMA_DELTAS.embraceWhisper = { clarityDelusion: -1 }. The SIGN is the assertion:
     // karma.ts's convention is positive = virtue, and heeding a whisper is the shadow pole.
     expect(r.state.karma).toEqual({ ...createKarma(), clarityDelusion: -1 });
-    expect(r.state.player!.inventory.backpack).toEqual([]);
+    expect(r.state.player!.inventory.backpack).toEqual(packBefore); // nothing taken from the pack
     // Nothing material was TAKEN. The only change is the reward PLAN.md #2's standard pool pays
     // for a whisper — +1 INT (`deals.json`: whisper -> statPoint INT; no bargain heals, §22.25).
     expect(r.state.player!.stats).toEqual({ ...player.stats, INT: player.stats.INT + 1 });
@@ -865,7 +869,9 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
     const hub = hubWithItems(1, 1);
     emitted.push(...seekAndAccept(hub, 'offering').events);
     emitted.push(...seekAndAccept(newRunAtHub(5), 'whisper').events);
-    let r = newRunAtHub(3);
+    // The refused offering needs an EMPTY pack — the starting kit set aside, as above.
+    const fresh3 = newRunAtHub(3);
+    let r = atStart({ ...fresh3.state, player: { ...fresh3.state.player!, inventory: { ...fresh3.state.player!.inventory, backpack: [] } } });
     for (let i = 0; i < 300; i += 1) {
       r = summon(r);
       const phase = r.state.phase;
