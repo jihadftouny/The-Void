@@ -7,16 +7,18 @@
 //
 //     npx vite-node scripts/balance-report.ts
 //
+// It writes TWO files: the report (`docs/BALANCE-REPORT.md`) and the inputs it was rendered from
+// (`docs/balance-report.inputs.json`). The D9 checks (`balance-report.*.test.ts`) render the whole
+// report from the inputs and re-measure each batch against them, in parallel.
+//
 // Determinism: the sample is seeds 1..N (fixed), all five classes, all-unlocked roster
-// (`createGame(seed)` with no snapshot). A fixed seed set => byte-identical report on every
-// re-run — which `balance-render.test.ts` relies on: it re-measures and requires the committed
-// document to be exactly this script's output (D9).
+// (`createGame(seed)` with no snapshot). A fixed seed set => byte-identical output on every re-run.
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { renderReport, REPORT_SEEDS } from './balance-render.ts';
-import { measureReportInput, SENSITIVITY_DCS } from './balance-measure.ts';
+import { measureReportInput, toSnapshot, SENSITIVITY_DCS } from './balance-measure.ts';
 
 const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
 
@@ -28,6 +30,9 @@ const md = renderReport(input);
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outPath = join(here, '..', 'docs', 'BALANCE-REPORT.md');
+const inputsPath = join(here, '..', 'docs', 'balance-report.inputs.json');
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, md, 'utf8');
+writeFileSync(inputsPath, toSnapshot(input), 'utf8');
 console.log(`Wrote ${outPath}`);
+console.log(`Wrote ${inputsPath}`);

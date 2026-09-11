@@ -1,20 +1,13 @@
 // The balance report's DOCUMENT (PLAN.md #2, AC-27, D9).
 //
-// Two kinds of check. (1) The renderer, fed a small REAL sample, emits every section AC-27
-// names, every standing caveat and every tuning-ledger row — from code, so a regeneration
-// cannot lose one (D9). (2) The COMMITTED `docs/BALANCE-REPORT.md` is what the generator
-// produces TODAY: its baseline per-class table and headline are re-measured here and must
-// appear in it verbatim. A hand-edited per-class number, or a balance change nobody
-// regenerated the report for, turns this red — which is the D9 lesson made mechanical: a
-// generated document is trusted BECAUSE it is generated, so it must never drift from its data.
+// The renderer, fed a small REAL sample, emits every section AC-27 names, every standing
+// caveat and every tuning-ledger row — from code, so a regeneration cannot lose one (D9). The
+// checks on the COMMITTED report live in `balance-report.*.test.ts`.
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { simulateBatch, heuristicPolicy, mercifulPolicy, ALL_CLASSES } from '../src/game/sim.ts';
 import { ILLUSION_DC } from '../src/game/floors.ts';
 import { renderReport, perClassTable, type ReportInput } from './balance-render.ts';
-import { measureReportInput } from './balance-measure.ts';
 import { STANDING_CAVEATS, TUNING_LEDGER, FROZEN_KNOBS, weakestClasses } from './balance-claims.ts';
 
 const classes = [...ALL_CLASSES];
@@ -90,40 +83,6 @@ describe('renderReport — every AC-27 section, every caveat, every ledger row',
   });
 });
 
-describe('D9 — the COMMITTED report is what the generator produces today', () => {
-  const committed = readFileSync(
-    fileURLToPath(new URL('../docs/BALANCE-REPORT.md', import.meta.url)),
-    'utf8',
-  );
-
-  it(
-    'the WHOLE document, re-measured and re-rendered, is byte-for-byte the committed one',
-    () => {
-      // FIX ROUND 1: this used to pin only the per-class table and the headline, and five
-      // hand-edits stayed green — the Wisdom row, the DC row, the callout sentence, the
-      // Wisdom-gap sentence and the deaths-by-floor table: exactly the tables the author decides
-      // from. Now every batch the report renders is re-run (~12,500 runs, ~29 s) through the
-      // SAME measurement the writer uses, and the whole text must match.
-      const fresh = renderReport(measureReportInput());
-      if (fresh !== committed) {
-        const a = fresh.split('\n');
-        const b = committed.split('\n');
-        const at = a.findIndex((line, i) => line !== b[i]);
-        expect(
-          { line: at + 1, committed: b[at] ?? '(missing)', regenerated: a[at] ?? '(missing)' },
-          'docs/BALANCE-REPORT.md is stale or hand-edited — regenerate it: npx vite-node scripts/balance-report.ts',
-        ).toBeNull();
-      }
-      expect(fresh).toBe(committed);
-    },
-    300_000,
-  );
-
-  it('carries no hand-added banner: every caveat it shows is one the generator emits', () => {
-    // The lost "⚠ INVALIDATED" banner (D9) was a blockquote added by hand. The only blockquote
-    // the generator writes is the provenance lines; anything else was typed into the output.
-    const quotes = committed.split('\n').filter((l) => l.startsWith('>'));
-    expect(quotes.length).toBeGreaterThan(0);
-    for (const q of quotes) expect(q, q).toMatch(/Generated|npx vite-node|output, and every verdict/);
-  });
-});
+// The D9 checks on the COMMITTED report moved to `balance-report.*.test.ts` (fix round 2): one
+// cheap file renders the whole document from the committed inputs, and four re-measure one
+// batch each, in parallel.

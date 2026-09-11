@@ -200,7 +200,10 @@ describe('D9 — the report cannot silently lose its caveats', () => {
     // A banner appended between render and write would be the same D9 hole one file over.
     expect(WRITER_CODE).toMatch(/const md = renderReport\(/);
     expect(WRITER_CODE).toMatch(/writeFileSync\(outPath, md, 'utf8'\)/);
-    expect(WRITER_CODE.match(/writeFileSync\(/g)).toHaveLength(1);
+    // Fix round 2: the second write is the INPUTS the report was rendered from (the D9 checks
+    // render the report from them), serialised by the same pure module — and nothing else.
+    expect(WRITER_CODE).toMatch(/writeFileSync\(inputsPath, toSnapshot\(input\), 'utf8'\)/);
+    expect(WRITER_CODE.match(/writeFileSync\(/g)).toHaveLength(2);
   });
 
   it('every caveat is non-empty, has an id, and says something a reader can act on', () => {
