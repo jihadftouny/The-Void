@@ -20,6 +20,7 @@ import { getElement } from './element.ts';
 import { applyCondition, type ActiveCondition, type ConditionType } from './condition.ts';
 import { effectiveResistances, statModDelta } from './statEffects.ts';
 import { subjectOf, type CombatEvent } from './combatEvent.ts';
+import { corruptionTemplate } from './corruption.ts';
 
 /**
  * Every skill id.
@@ -337,23 +338,48 @@ export function computeSkillDamage(
  * an un-upgraded player casts byte-identically). With an upgrade: `baseDamage + damageBonus`,
  * `chargeCost` shifted by `chargeDelta` and clamped at 0, and `addConditions` unioned onto
  * the inflicted conditions. Player-only — the enemy cast path keeps reading `SKILLS` directly.
+ *
+ * PLAN.md #2, floor 5: THEN the skill's corrupted form, if `corruptedSkills` names one for it —
+ * applied AFTER the upgrade, so a drafted +2 is warped along with the skill it improved: cost
+ * shifted by `chargeDelta` (clamped at 0), damage by `damageBonus` (clamped at 0), the element
+ * replaced, `hpCost` added, `addConditions` unioned, and the suffix appended to the NAME so the
+ * warp is visible everywhere the name is (the Cast picker, the sheet, the log). No map (every
+ * floor but 5) ⇒ the upgrade-merged def exactly as before, referential equality included.
  */
 export function resolveSkill(
-  player: { skillUpgrades?: Record<string, SkillUpgrade> },
+  player: { skillUpgrades?: Record<string, SkillUpgrade>; corruptedSkills?: Record<string, string> },
   skillId: SkillId,
 ): SkillDef {
   const base = SKILLS[skillId];
   const up = player.skillUpgrades?.[skillId];
-  if (!base || !up) return base;
-  return {
-    ...base,
-    baseDamage: base.baseDamage + (up.damageBonus ?? 0),
-    chargeCost: Math.max(0, base.chargeCost + (up.chargeDelta ?? 0)),
+  const upgraded: SkillDef =
+    !base || !up
+      ? base
+      : {
+          ...base,
+          baseDamage: base.baseDamage + (up.damageBonus ?? 0),
+          chargeCost: Math.max(0, base.chargeCost + (up.chargeDelta ?? 0)),
+          conditions:
+            up.addConditions && up.addConditions.length > 0
+              ? [...base.conditions, ...up.addConditions]
+              : base.conditions,
+        };
+  const templateId = player.corruptedSkills?.[skillId];
+  const warp = templateId === undefined ? undefined : corruptionTemplate(templateId);
+  if (!upgraded || !warp) return upgraded;
+  const warped: SkillDef = {
+    ...upgraded,
+    name: `${upgraded.name} ${warp.suffix}`,
+    chargeCost: Math.max(0, upgraded.chargeCost + (warp.chargeDelta ?? 0)),
+    baseDamage: Math.max(0, upgraded.baseDamage + (warp.damageBonus ?? 0)),
+    element: warp.element ?? upgraded.element,
     conditions:
-      up.addConditions && up.addConditions.length > 0
-        ? [...base.conditions, ...up.addConditions]
-        : base.conditions,
+      warp.addConditions && warp.addConditions.length > 0
+        ? [...upgraded.conditions, ...warp.addConditions]
+        : upgraded.conditions,
   };
+  if (warp.hpCost) warped.hpCost = (upgraded.hpCost ?? 0) + warp.hpCost;
+  return warped;
 }
 
 /**

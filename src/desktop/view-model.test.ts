@@ -151,6 +151,20 @@ describe('castOptions (battle Cast picker)', () => {
   it('is empty for a player with no skills', () => {
     expect(castOptions({ ...snapshot, skillPool: [] })).toEqual([]);
   });
+
+  it('shows floor 5’s warped form — its name and its cost (PLAN.md #2, AC-18)', () => {
+    // corruptions.json: warped = +1 cost; dulled = -1 cost. heavyStrike 2 -> 3, brace 1 -> 0.
+    // At 2 charges the warped Heavy Strike is no longer affordable, exactly as the engine rules.
+    const warped: Player = {
+      ...snapshot,
+      skillCharges: 2,
+      corruptedSkills: { heavyStrike: 'warped', brace: 'dulled' },
+    };
+    expect(castOptions(warped)).toEqual([
+      { skillId: 'heavyStrike', name: 'Heavy Strike (warped)', chargeCost: 3, affordable: false },
+      { skillId: 'brace', name: 'Brace (dulled)', chargeCost: 0, affordable: true },
+    ]);
+  });
 });
 
 describe('consumableOptions (battle Use-item picker)', () => {

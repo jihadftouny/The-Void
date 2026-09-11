@@ -198,6 +198,7 @@
 //   floor 4: karma earned there counts double               S2   NONE on these runs
 //   floor 2: a third of fights are illusions (A.1)          S3   predicted WEAKER — was WRONG
 //   floor 4: tempting pool for all; Judged kill = desecr.   S4   NONE on these runs
+//   floor 5: every owned skill warped on arrival            S5   stream moves; ~neutral
 //
 //  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
 //     | step 12) so that every later rules change is measured against a player who uses what
@@ -252,6 +253,14 @@
 //     | OBSERVED: all six rows BYTE-IDENTICAL. The 500-run guard is unchanged at 0.602; only its
 //     | ending mix moves (grace 4 -> 2, damnation 297 -> 299) — reverence carries x3 in the
 //     | verdict, so two clarity-tipped ledgers tip back.
+//  S5 | FLOOR 5's WARPED KIT: arriving at the True Void rolls one corrupted form per owned
+//     | skill (N `pick` draws, in pool order) and `resolveSkill` applies it after any upgrade.
+//     | EXPECTED (before measuring): every run that reaches floor 5 moves — all six here do —
+//     | because the arrival adds draws; the direction is roughly NEUTRAL, since the four
+//     | placeholder templates cut both ways (warped +cost +damage, bleeding +HP price +damage,
+//     | dulled -cost -damage, static a new element and a weaken).
+//     | OBSERVED: all six rngStates move and all six still win (levels shuffle 138/6 -> 140/6);
+//     | the 500-run guard is unchanged at 0.602 with floor-5 deaths 4 -> 4. Neutral, as predicted.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -302,12 +311,12 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 22, floorsCleared: 4, steps: 447, cause: 'unmade the Hollow (damnation)', rngState: 2650064866 },
-  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 336, cause: 'unmade the Hollow (damnation)', rngState: 3398875834 },
-  { seed: 3, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 22, floorsCleared: 4, steps: 392, cause: 'unmade the Hollow (damnation)', rngState: 3583123126 },
-  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 24, floorsCleared: 4, steps: 498, cause: 'unmade the Hollow (damnation)', rngState: 3289476836 },
-  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 469, cause: 'unmade the Hollow (damnation)', rngState: 2984923452 },
-  { seed: 3, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 24, floorsCleared: 4, steps: 466, cause: 'unmade the Hollow (damnation)', rngState: 130298488 },
+  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 24, floorsCleared: 4, steps: 463, cause: 'unmade the Hollow (damnation)', rngState: 2337935181 },
+  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 22, floorsCleared: 4, steps: 344, cause: 'unmade the Hollow (damnation)', rngState: 2511275376 },
+  { seed: 3, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 25, floorsCleared: 4, steps: 407, cause: 'unmade the Hollow (damnation)', rngState: 1992169501 },
+  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 475, cause: 'unmade the Hollow (damnation)', rngState: 9992392 },
+  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 22, floorsCleared: 4, steps: 410, cause: 'unmade the Hollow (damnation)', rngState: 2503699076 },
+  { seed: 3, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 24, floorsCleared: 4, steps: 461, cause: 'unmade the Hollow (damnation)', rngState: 570310567 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -338,20 +347,20 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
       damnation: 6,
       deaths: 0,
       winRate: 6 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 22+23+22+24+23+24 = 138, floors
+      // Summed from the GOLDEN_RUNS rows above: levels 24+22+25+23+22+24 = 140, floors
       // 4 x 6 = 24. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 138 / 6,
+      avgLevel: 140 / 6,
       avgFloorsCleared: 24 / 6,
       deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
       perClass: {
         Enforcer: {
           runs: 3, wins: 3, grace: 0, damnation: 3, deaths: 0,
-          winRate: 3 / 3, avgLevel: 67 / 3, avgFloorsCleared: 12 / 3,
+          winRate: 3 / 3, avgLevel: 71 / 3, avgFloorsCleared: 12 / 3,
           deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
         },
         Hollow: {
           runs: 3, wins: 3, grace: 0, damnation: 3, deaths: 0,
-          winRate: 3 / 3, avgLevel: 71 / 3, avgFloorsCleared: 12 / 3,
+          winRate: 3 / 3, avgLevel: 69 / 3, avgFloorsCleared: 12 / 3,
           deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
         },
       },

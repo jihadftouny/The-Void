@@ -91,6 +91,13 @@ export interface Player extends Character {
    * plain data so it round-trips through a mid-battle save, and 0/absent for a normal run.
    */
   shield?: number;
+  /**
+   * PLAN.md #2, floor 5: skill id -> corruption template id (`corruptions.json`), rolled ONCE per
+   * owned skill on arrival at the True Void from the run's own RNG, and read by `resolveSkill`.
+   * OPTIONAL and additive: absent before floor 5 (JSON drops it), so no save before floor 5
+   * changes shape. Skills drafted AFTER arrival are not in it (the ruling says "on arrival").
+   */
+  corruptedSkills?: Record<string, string>;
 }
 
 /** Fixed game-start scalars (Java `GameLogic.startGame` / `Player` init). */

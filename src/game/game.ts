@@ -34,6 +34,7 @@ import {
   type RoundRules,
 } from './battle.ts';
 import { dampenHeal, floorModifiers, floorOf, ILLUSION_DC } from './floors.ts';
+import { rollCorruptions } from './corruption.ts';
 import { createBattle } from './battle.ts';
 import { generateBoss, bossPostRound, computeVerdict, type BossId } from './boss.ts';
 import {
@@ -403,9 +404,22 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
       // this phase was entered (continueJourney); continuing goes straight to the act intro.
       if (input.kind !== 'continue') return noop;
       const intro = getActIntro(phase.newAct) ?? { header: '', body: '' };
-      return finish({ kind: 'act-intro', newAct: phase.newAct }, [
+      const events: GameEvent[] = [
         { kind: 'act-intro', act: phase.newAct, header: intro.header, body: intro.body },
-      ]);
+      ];
+      // PLAN.md #2, floor 5 (§22.24): ARRIVING on a floor that warps the kit — keyed on the
+      // floor being entered (`place` is already the new floor here), never the act counter —
+      // rolls one corrupted form per owned skill, in pool order (N `pick` draws, and nothing
+      // else), and says so. Once per run: a map that already exists is never re-rolled.
+      const player = state.player;
+      if (player && floorModifiers(floorOf(state)).corruptsSkills && !player.corruptedSkills) {
+        const corruptedSkills = rollCorruptions(player.skillPool, rng);
+        events.push({ kind: 'skills-warped', count: Object.keys(corruptedSkills).length });
+        return finish({ kind: 'act-intro', newAct: phase.newAct }, events, {
+          player: { ...player, corruptedSkills },
+        });
+      }
+      return finish({ kind: 'act-intro', newAct: phase.newAct }, events);
     }
 
     case 'level-up-draft': {
