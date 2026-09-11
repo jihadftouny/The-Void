@@ -43,7 +43,6 @@ export type { PlayerClass } from './classKit.ts';
  */
 export interface Player extends Character {
   classId: PlayerClass;
-  restsLeft: number;
   pots: number;
   proficiency: number;
   advantageDisadvantage: number;
@@ -100,8 +99,8 @@ export interface Player extends Character {
   corruptedSkills?: Record<string, string>;
 }
 
-/** Fixed game-start scalars (Java `GameLogic.startGame` / `Player` init). */
-const STARTING_RESTS = 1;
+/** Fixed game-start scalars (Java `GameLogic.startGame` / `Player` init). PLAN.md #2 deleted
+ *  the starting rest count with the banked counter: rests are found on the descent (§22.26). */
 /**
  * M15 BALANCE: starting healing potions, 2 → 6. Each potion is a full heal (battle.ts), so
  * this is the cleanest early-survivability lever. The sim is a no-equipment LOWER BOUND — a
@@ -154,7 +153,6 @@ export function createPlayer(args: {
   return {
     ...base,
     classId: args.classId,
-    restsLeft: STARTING_RESTS,
     pots: STARTING_POTS,
     proficiency: PROFICIENCY,
     advantageDisadvantage: 0,

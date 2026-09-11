@@ -32,11 +32,10 @@ export type NarrativeEvent =
       text?: string;
     }
   | { kind: 'encounter-start'; enemyName: string; text?: string }
-  | { kind: 'rest-lore'; title: string; loreText: string; text?: string }
+  // PLAN.md #2: the four decision-era rest events (the lore fragment, "already full", "declined",
+  // "none left") are gone with the rest DECISION and the banked counter (§22.26); a found rest
+  // emits `rest-found` then this.
   | { kind: 'rest-taken'; hpRestored: number; hp: number; maxHp: number; text?: string }
-  | { kind: 'rest-full'; text?: string }
-  | { kind: 'rest-declined'; text?: string }
-  | { kind: 'no-rests'; text?: string }
   // ---- M7 sacrifice-deal encounter (replaces the gold shop) ----
   | { kind: 'deal-offer'; pool: Pool; cost: string; reward: string; text?: string }
   | { kind: 'deal-taken'; cost: string; reward: string; text?: string }

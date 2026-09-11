@@ -56,7 +56,7 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'escape-impossible': { kind: 'escape-impossible' },
   spared: { kind: 'spared', enemyName: 'The Grieving' },
   'spare-unavailable': { kind: 'spare-unavailable' },
-  victory: { kind: 'victory', xpGained: 9, extraRest: false, loot: [] },
+  victory: { kind: 'victory', xpGained: 9, loot: [] },
   defeat: { kind: 'defeat' },
   'relic-triggered': { kind: 'relic-triggered', trigger: 'onKill', action: 'gainStat' },
   'consumable-used': { kind: 'consumable-used', itemId: 'suture-kit' },
@@ -79,11 +79,7 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'stats-rolled': { kind: 'stats-rolled', stats: STATS },
   'player-created': { kind: 'player-created', name: 'Probe', classId: 'Scavver', maxHp: 9, armorClass: 12 },
   'encounter-start': { kind: 'encounter-start', enemyName: 'Rust Choir' },
-  'rest-lore': { kind: 'rest-lore', title: 'Fragment', loreText: 'a line' },
   'rest-taken': { kind: 'rest-taken', hpRestored: 3, hp: 12, maxHp: 20 },
-  'rest-full': { kind: 'rest-full' },
-  'rest-declined': { kind: 'rest-declined' },
-  'no-rests': { kind: 'no-rests' },
   'deal-offer': { kind: 'deal-offer', pool: 'tempting', cost: '3 HP', reward: '5 HP restored' },
   'deal-taken': { kind: 'deal-taken', cost: '3 HP', reward: '5 HP restored' },
   'deal-unaffordable': { kind: 'deal-unaffordable', cost: '3 HP' },
@@ -114,13 +110,14 @@ const ALL_KINDS = Object.keys(SAMPLE) as GameEventKind[];
 // ---------------------------------------------------------------------------
 
 describe('LOG_ROUTING is total over GameEventKind', () => {
-  it('has exactly 71 entries (41 combat + 30 narrative)', () => {
+  it('has exactly 67 entries (41 combat + 26 narrative)', () => {
     // Counted by hand from the two union declarations, the same independent count
     // `narrationCoverage.test.ts` and `format.test.ts` each make separately. The
     // `Record<GameEventKind, LogRoute>` type already guarantees the KEYS are the union; this
     // anchors its SIZE, so a 64th kind cannot arrive unnoticed even if someone adds a key.
     // PLAN.md #2: +4 combat, +4 narrative.
-    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 + 26 + 4);
+    // ...and -4 narrative: the rest-decision kinds left with the decision (PLAN.md #2).
+    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 + 26 + 4 - 4);
     expect(new Set(Object.keys(LOG_ROUTING))).toEqual(new Set(ALL_KINDS));
   });
 
@@ -152,7 +149,7 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
       expect(logLines([SAMPLE[kind]]), `${kind} must not reach the log`).toEqual([]);
     }
     // 26 narrative + PLAN.md #2's four narrative kinds + `loot-left-behind`.
-    expect(paned).toBe(26 + 4 + 1);
+    expect(paned).toBe(26 + 4 + 1 - 4);
   });
 
   it('a rejected input IS logged, though the narrator stays silent about it', () => {

@@ -199,6 +199,7 @@
 //   floor 2: a third of fights are illusions (A.1)          S3   predicted WEAKER — was WRONG
 //   floor 4: tempting pool for all; Judged kill = desecr.   S4   NONE on these runs
 //   floor 5: every owned skill warped on arrival            S5   stream moves; ~neutral
+//   bargains + rests are found; no rest counter; no heals   S6   predicted DOWN (plan §7)
 //
 //  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
 //     | step 12) so that every later rules change is measured against a player who uses what
@@ -261,6 +262,19 @@
 //     | dulled -cost -damage, static a new element and a weaken).
 //     | OBSERVED: all six rngStates move and all six still win (levels shuffle 138/6 -> 140/6);
 //     | the 500-run guard is unchanged at 0.602 with floor-5 deaths 4 -> 4. Neutral, as predicted.
+//  S6 | THE DESCENT'S EVENTS (§22.23, §22.25, §22.26). The encounter table is `floors.json`'s
+//     | per-floor weights (battle 6 : chest 2 : rest 2 : bargain 2) — still ONE draw — so a
+//     | bargain FINDS the run (the heuristic accepts any not paid in hp / maxHp) and a rest spot
+//     | is taken the moment it is found. `restsLeft`, the rest decision and the victory's
+//     | extra-rest draw are gone (one FEWER draw per victory — every later draw moves up by
+//     | one), and no bargain heals any more (`deals.json` rewritten per the plan).
+//     | EXPECTED — the plan's §7, written before any measurement: rests "found rather than
+//     | banked" push DOWN (a third of encounters used to be rest nodes, 1-in-6 are now), while
+//     | accepted bargains push UP (stats, charges, rolled gear); net DOWN, and every stream moves.
+//     | OBSERVED: all six rows move (wins 6/6 -> 2/6: the three Enforcers now die on floor 4 and
+//     | Hollow seed 3 dies on floor 1 at step 16). The 500-run guard 0.602 -> 0.580, and act-1
+//     | deaths 48 -> 66 of 500 (share 0.24 -> 0.31): the lost early rests bite hardest on floor
+//     | 1, where the pack is still empty. Still well above the one-in-three target overall.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -311,12 +325,12 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 24, floorsCleared: 4, steps: 463, cause: 'unmade the Hollow (damnation)', rngState: 2337935181 },
-  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 22, floorsCleared: 4, steps: 344, cause: 'unmade the Hollow (damnation)', rngState: 2511275376 },
-  { seed: 3, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 25, floorsCleared: 4, steps: 407, cause: 'unmade the Hollow (damnation)', rngState: 1992169501 },
-  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 475, cause: 'unmade the Hollow (damnation)', rngState: 9992392 },
-  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 22, floorsCleared: 4, steps: 410, cause: 'unmade the Hollow (damnation)', rngState: 2503699076 },
-  { seed: 3, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 24, floorsCleared: 4, steps: 461, cause: 'unmade the Hollow (damnation)', rngState: 570310567 },
+  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 269, cause: 'Sif', rngState: 1101238244 },
+  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 15, floorsCleared: 3, steps: 303, cause: 'Ravenous The Counselor', rngState: 311214981 },
+  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 292, cause: 'The Counselor', rngState: 1717921316 },
+  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 450, cause: 'unmade the Hollow (damnation)', rngState: 2232781687 },
+  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 391, cause: 'unmade the Hollow (damnation)', rngState: 4207382495 },
+  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 16, cause: 'Intoxicated Punk', rngState: 1951871910 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -342,26 +356,26 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(report).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 6,
+      wins: 2,
       grace: 0,
-      damnation: 6,
-      deaths: 0,
-      winRate: 6 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 24+22+25+23+22+24 = 140, floors
-      // 4 x 6 = 24. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 140 / 6,
-      avgFloorsCleared: 24 / 6,
-      deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      damnation: 2,
+      deaths: 4,
+      winRate: 2 / 6,
+      // Summed from the GOLDEN_RUNS rows above: levels 11+15+12+23+23+1 = 85, floors
+      // 3+3+3+4+4+0 = 17. Written as the fraction so the two stay visibly tied together.
+      avgLevel: 85 / 6,
+      avgFloorsCleared: 17 / 6,
+      deathByAct: { 1: 1, 2: 0, 3: 0, 4: 3, 5: 0 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 3, grace: 0, damnation: 3, deaths: 0,
-          winRate: 3 / 3, avgLevel: 71 / 3, avgFloorsCleared: 12 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
+          winRate: 0 / 3, avgLevel: 38 / 3, avgFloorsCleared: 9 / 3,
+          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 3, 5: 0 },
         },
         Hollow: {
-          runs: 3, wins: 3, grace: 0, damnation: 3, deaths: 0,
-          winRate: 3 / 3, avgLevel: 69 / 3, avgFloorsCleared: 12 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+          runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,
+          winRate: 2 / 3, avgLevel: 47 / 3, avgFloorsCleared: 8 / 3,
+          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0 },
         },
       },
     });

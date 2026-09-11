@@ -30,7 +30,6 @@ describe('GameEvent union', () => {
     const victory: GameEvent = {
       kind: 'victory',
       xpGained: 3,
-      extraRest: false,
       loot: [],
     };
     expect(victory.kind).toBe('victory');

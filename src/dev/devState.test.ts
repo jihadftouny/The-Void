@@ -273,7 +273,6 @@ describe('validateJump names exactly what is wrong', () => {
       ['act-out-of-range', (b) => void (b.state.act = 6)],
       ['max-hp-invalid', (b) => void (b.state.player!.maxHp = 0)],
       ['pots-negative', (b) => void (b.state.player!.pots = -1)],
-      ['rests-negative', (b) => void (b.state.player!.restsLeft = -1)],
       ['momentum-out-of-range', (b) => void (b.state.player!.momentum = MOMENTUM_CAP + 1)],
       ['corruption-negative', (b) => void (b.state.player!.corruption = -3)],
       ['pending-invalid', (b) => void ((b.state as { pending?: unknown }).pending = 'nonsense')],
@@ -290,7 +289,7 @@ describe('validateJump names exactly what is wrong', () => {
       breakIt(bundle);
       expect(validateJump(bundle), reason).toContain(reason);
     }
-    expect(cases.length).toBe(13);
+    expect(cases.length).toBe(12); // PLAN.md #2: `rests-negative` left with `restsLeft`
   });
 
   it('a state the ENGINE save would reject is refused, by the engine save itself', () => {
@@ -531,7 +530,6 @@ describe('parseField — BLANK and ZERO are different answers', () => {
       hp: parseField(''),
       maxHp: parseField(''),
       pots: parseField(''),
-      restsLeft: parseField(''),
       skillCharges: parseField(''),
       momentum: parseField(''),
       corruption: parseField(''),
@@ -564,7 +562,7 @@ describe('editsFrom — a blank field means "leave this alone"', () => {
   it('covers every field the panel offers', () => {
     const all = Object.fromEntries(EDITABLE_FIELDS.map((k) => [k, 1]));
     expect(Object.keys(editsFrom(all)).sort()).toEqual([...EDITABLE_FIELDS].sort());
-    expect(EDITABLE_FIELDS).toHaveLength(7);
+    expect(EDITABLE_FIELDS).toHaveLength(6); // PLAN.md #2: `restsLeft` removed
   });
 });
 
@@ -899,7 +897,6 @@ describe('applyPlayerEdits clamps to the invariants rather than trusting the fie
   it('counts cannot go negative', () => {
     const p = player();
     expect(applyPlayerEdits(p, { pots: -1 }).pots).toBe(0);
-    expect(applyPlayerEdits(p, { restsLeft: -1 }).restsLeft).toBe(0);
     expect(applyPlayerEdits(p, { corruption: -1 }).corruption).toBe(0);
   });
 

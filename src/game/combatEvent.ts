@@ -156,7 +156,6 @@ export type CombatEvent =
   | {
       kind: 'victory';
       xpGained: number;
-      extraRest: boolean;
       /** Found loot this kill dropped into the backpack (M7). Empty when the drop gate failed. */
       loot: readonly { defId: string; name: string; rarity: Rarity }[];
       text?: string;

@@ -126,7 +126,7 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'escape-impossible': { kind: 'escape-impossible' },
   spared: { kind: 'spared', enemyName: 'Scrap Warden' },
   'spare-unavailable': { kind: 'spare-unavailable' },
-  victory: { kind: 'victory', xpGained: 5, extraRest: true, loot: [] },
+  victory: { kind: 'victory', xpGained: 5, loot: [] },
   defeat: { kind: 'defeat' },
   'relic-triggered': { kind: 'relic-triggered', trigger: 'onHit', action: 'dealDamage' },
   'consumable-used': { kind: 'consumable-used', itemId: 'clarity-draught' },
@@ -155,11 +155,7 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
     armorClass: 11,
   },
   'encounter-start': { kind: 'encounter-start', enemyName: 'Feral Cryo Rat' },
-  'rest-lore': { kind: 'rest-lore', title: 'A fragment', loreText: 'The lights were never on.' },
   'rest-taken': { kind: 'rest-taken', hpRestored: 5, hp: 15, maxHp: 20 },
-  'rest-full': { kind: 'rest-full' },
-  'rest-declined': { kind: 'rest-declined' },
-  'no-rests': { kind: 'no-rests' },
   'deal-offer': {
     kind: 'deal-offer',
     pool: 'standard',
@@ -222,9 +218,7 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   'escape-impossible': 'fact',
   victory: 'fact',
   defeat: 'fact',
-  'rest-lore': 'fact',
   'rest-taken': 'fact',
-  'rest-full': 'fact',
   'deal-offer': 'fact',
   'deal-taken': 'fact',
   'deal-declined': 'fact',
@@ -253,8 +247,6 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   verdict: 'fact',
   'draft-offer': 'fact',
   'draft-picked': 'fact',
-  'rest-declined': 'fact',
-  'no-rests': 'fact',
   // --- the 8 facts PLAN.md #2 adds (floor mechanics, the found rest, the full-pack bargain) ---
   'floor-drain': 'fact',
   'illusion-struck': 'fact',
@@ -308,8 +300,6 @@ const NEW_FACT_KINDS: readonly GameEventKind[] = [
   'verdict',
   'draft-offer',
   'draft-picked',
-  'rest-declined',
-  'no-rests',
 ];
 
 // ---------------------------------------------------------------------------------------
@@ -317,7 +307,7 @@ const NEW_FACT_KINDS: readonly GameEventKind[] = [
 // ---------------------------------------------------------------------------------------
 
 describe('describeEvent covers every event kind (G13)', () => {
-  it('the union really has 71 kinds', () => {
+  it('the union really has 67 kinds', () => {
     // 37 CombatEvent members + 26 NarrativeEvent members, counted by hand from the two
     // union declarations in combatEvent.ts and gameEvent.ts. The mapped type guarantees
     // SAMPLE's keys ARE the union, so this anchors the size of the thing being covered.
@@ -326,16 +316,19 @@ describe('describeEvent covers every event kind (G13)', () => {
     // PLAN.md #2 added 4 combat kinds (floor-drain, illusion-struck, illusion-dispelled,
     // loot-left-behind) and 4 narrative ones (rest-found, skills-warped, deal-needs-room,
     // item-discarded).
-    expect(ALL_KINDS).toHaveLength(37 + 4 + 26 + 4);
+    // ...and removed the four rest-DECISION kinds (rest-lore, rest-full, rest-declined,
+    // no-rests) with the decision itself (§22.26).
+    expect(ALL_KINDS).toHaveLength(37 + 4 + 26 + 4 - 4);
   });
 
   it('the classification is 54 facts and 17 deliberate silences', () => {
     // From the plan: 29 kinds already had a fact, G13 adds 17 more, and the other 17 are
-    // silenced on purpose. 29 + 17 + 17 = 63.
+    // silenced on purpose. 29 + 17 + 17 = 63. PLAN.md #2 removed two of the 29 (rest-lore,
+    // rest-full) and two of G13's 17 (rest-declined, no-rests), and added 8 of its own.
     const facts = ALL_KINDS.filter((k) => EXPECTED[k] === 'fact');
-    expect(facts).toHaveLength(29 + 17 + 8);
+    expect(facts).toHaveLength(27 + 15 + 8);
     expect(DELIBERATELY_SILENT.size).toBe(17);
-    expect(NEW_FACT_KINDS).toHaveLength(17);
+    expect(NEW_FACT_KINDS).toHaveLength(15);
     for (const k of NEW_FACT_KINDS) expect(EXPECTED[k]).toBe('fact');
   });
 
@@ -942,7 +935,7 @@ describe('buildNarrationPrompt exposes the facts it built', () => {
     // beat directly. Asserted here so the hook cannot regress into "whatever is in .user".
     const past: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Rust Choir' }];
     const memory = rememberBeat(rememberBeat(createStoryMemory(), past), [
-      { kind: 'victory', xpGained: 5, extraRest: false, loot: [] },
+      { kind: 'victory', xpGained: 5, loot: [] },
     ]);
     const now: GameEvent[] = [{ kind: 'boss-encounter', bossId: 'kingpin', enemyName: 'Kingpin' }];
     const p = buildNarrationPrompt(now, state, memory);

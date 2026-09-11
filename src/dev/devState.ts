@@ -102,7 +102,6 @@ export interface StateEdits {
   hp?: number;
   maxHp?: number;
   pots?: number;
-  restsLeft?: number;
   skillCharges?: number;
   momentum?: number;
   corruption?: number;
@@ -246,7 +245,6 @@ export function applyPlayerEdits(player: Player, edits: StateEdits): Player {
   // Whatever the order the fields arrived in, HP ends up inside [1, maxHp].
   next.hp = clampInt(next.hp, 1, next.maxHp);
   if (edits.pots !== undefined) next.pots = clampInt(edits.pots, 0, 1_000_000);
-  if (edits.restsLeft !== undefined) next.restsLeft = clampInt(edits.restsLeft, 0, 1_000_000);
   if (edits.skillCharges !== undefined) {
     next.skillCharges = clampInt(edits.skillCharges, 0, next.maxSkillCharges);
   }
@@ -411,7 +409,6 @@ export type JumpRejection =
   | 'hp-out-of-range'
   | 'charges-out-of-range'
   | 'pots-negative'
-  | 'rests-negative'
   | 'momentum-out-of-range'
   | 'corruption-negative'
   | 'karma-not-integer'
@@ -489,7 +486,6 @@ export function validateJump(bundle: JumpBundle): JumpRejection[] {
       reasons.push('charges-out-of-range');
     }
     if (player.pots < 0) reasons.push('pots-negative');
-    if (player.restsLeft < 0) reasons.push('rests-negative');
     const momentum = player.momentum ?? 0;
     if (momentum !== clampMomentum(momentum)) reasons.push('momentum-out-of-range');
     if ((player.corruption ?? 0) < 0) reasons.push('corruption-negative');
@@ -647,7 +643,6 @@ export const EDITABLE_FIELDS: readonly (keyof StateEdits)[] = [
   'hp',
   'maxHp',
   'pots',
-  'restsLeft',
   'skillCharges',
   'momentum',
   'corruption',

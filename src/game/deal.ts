@@ -55,9 +55,8 @@ export type Pool = 'standard' | 'tempting' | 'grace';
  * What the deal takes FROM the player.
  *
  * `offering` is a MATERIAL cost that also shifts karma: it gives up the first item in the
- * backpack. It costs a real, finite, non-regenerating resource on purpose — `seek-deal` is a
- * free, unlimited hub action, so a karma GAIN with no material price would be farmable to any
- * ledger the player liked. `whisper`, like `desecrate` and `greed`, costs karma alone.
+ * backpack. It costs a real resource on purpose — a karma GAIN with no material price would be
+ * the cheapest way to buy a verdict. `whisper`, like `desecrate` and `greed`, costs karma alone.
  */
 export type DealCost =
   | { kind: 'hp'; amount: number }
@@ -70,10 +69,17 @@ export type DealCost =
   | { kind: 'greed' }
   | { kind: 'whisper' };
 
-/** What the deal GIVES the player (the reward item is rolled at build time). */
+/**
+ * What the deal GIVES the player (the reward item is rolled at build time).
+ *
+ * PLAN.md #2 / GAME-DESIGN.md §22.25: NO BARGAIN HEALS, AT ANY PRICE — and that is enforced BY
+ * TYPE: there is no `heal` member, so a healing reward cannot be authored in `deals.json`
+ * (the loader's spec type has none either) or built in code. Healing lives in consumables
+ * (§22.6) and found rest (§22.26). This closes G52 at the root: at several bargains per floor,
+ * any healing bargain — even a costly one — would quietly become the game's main heal.
+ */
 export type DealReward =
   | { kind: 'item'; instance: ItemInstance }
-  | { kind: 'heal'; amount: number }
   | { kind: 'statPoint'; stat: StatKey }
   | { kind: 'skillCharge'; amount: number };
 
@@ -87,10 +93,9 @@ export interface SacrificeDeal {
 // ------- Data template shapes (deals.json) -----------------------------------
 
 /** A reward as authored in data — an item to ROLL, a fixed relic, or a flat effect. */
-type DealRewardSpec =
+export type DealRewardSpec =
   | { kind: 'itemRoll'; slot: EquipSlot; rarity: Rarity }
   | { kind: 'item'; defId: string }
-  | { kind: 'heal'; amount: number }
   | { kind: 'statPoint'; stat: StatKey }
   | { kind: 'skillCharge'; amount: number };
 
@@ -103,36 +108,24 @@ interface DealTemplate {
  * The authored offer table, grouped by pool. APPEND-ONLY by convention: `buildDeal` picks with
  * `pick` (`items[floor(x*len)]`), so inserting a template renumbers every scripted-rng test.
  *
- * ⚠ #2 BALANCE PLACEHOLDERS — every number in `deals.json` is one, and the two templates #10a
- * appended are no exception. They set HOW CHEAPLY A RUN CAN BUY BACK REVERENCE, which matters
- * more than the other magnitudes now that §22.16 makes grace generous (`GATE_THRESHOLD` 1 over
- * integer deltas ⇒ ANY net-positive ledger earns it). #2 owns the real values:
+ * ⚠ #2 BALANCE PLACEHOLDERS — every number in `deals.json` is one, and every reward was rewritten
+ * by PLAN.md #2 under GAME-DESIGN §22.25: NO BARGAIN HEALS (the `heal` reward kind no longer
+ * exists, so none can be authored). The table is now:
+ *   standard  hp 6 -> 2 charges · 1 charge -> a Common ring · 1 CHA -> 2 charges ·
+ *             an offering -> a Rare armor · a whisper -> +1 INT
+ *   tempting  desecrate -> +1 STR · greed -> a Legendary weapon · 6 max HP -> a Rare amulet ·
+ *             a whisper -> a Rare ring
+ *   grace     5 HP -> a Rare weapon · 1 CHA -> mirror-shard · an offering -> 3 charges
  *
- *  - `offering` → `heal 6`. Costs the first backpack item; grants at most 6 HP, capped at maxHp.
- *
- *    ⚠ CORRECTION (fix round 1). This comment used to read *"NOT farmable: … the altar hands back
- *    no item"*, and that was FALSE — as was the plan's load-bearing justification, *"an item cost
- *    bounds it to what the run actually found."* The altar hands an item back in TWO shipped
- *    templates: `standard[1]` (`skillCharge 1` → a rolled ring) and `grace[1]` (`statPoint CHA` →
- *    `mirror-shard`). Both of those costs were, until this round, silently free at the floor —
- *    `canAfford` returned `true` unconditionally for them while `withStat` clamps at `MIN_STAT`
- *    and the charge subtraction clamps at 0 — so the altar was an UNBOUNDED item source, and
- *    #10a's offering turned unbounded items into an unbounded ledger. Measured before the fix:
- *    6000 free seeks from a fresh hub, no combat at all, produced a weighted ledger of **7512**
- *    against `GATE_THRESHOLD` 1. `canAfford` now refuses a cost that cannot actually be paid, so
- *    every item the altar sells is bought with a strictly-decreasing player resource.
- *
- *    What is true now, and is the bound the test asserts: the ledger a run can buy from the menu
- *    is bounded by the finite resources it rolled at creation (stat points above `MIN_STAT`, and
- *    skill charges) — it SATURATES instead of climbing. It is still far above `GATE_THRESHOLD`,
- *    and that residue is G52 (the altar is free and unlimited) and #2's to bound; it is recorded,
- *    not papered over.
- *  - `whisper` → `heal 4`. Costs no material thing (only a point of delusion) and IS repeatable,
- *    exactly like the shipped `desecrate`/`greed` templates. Deliberately a HEAL and nothing
- *    else: `standard[0]` (cost 8 HP → heal 12, a net +4) already makes HP unbounded at the altar
- *    (**FINDINGS G52**), so a heal reward adds NO capability the altar does not already have. An
- *    `item` / `statPoint` / `skillCharge` reward would have made those unbounded from the hub for
- *    the first time — a NEW fountain — so none of them is used here.
+ * HISTORY, kept because it is why the guards exist. Under #10a the altar was a FREE, UNLIMITED hub
+ * action (G52), and a cost that took nothing (a stat at its floor, charges not in hand) was
+ * "affordable" — 6000 free visits from a fresh hub minted a weighted ledger of 7512 against
+ * `GATE_THRESHOLD` 1. `canAfford` now refuses a cost that cannot actually be paid, and PLAN.md #2
+ * removed the tap itself (§22.23): a bargain is a descent ENCOUNTER, so the ledger a run can buy
+ * grows only with the bargains the descent offers it. ⚠ Recorded for the author: the standard
+ * pool's offering is ITEM-NEUTRAL (an item for a Rare armor), so each offering bargain buys +1
+ * restraint / +1 reverence at the price of whatever sits first in the pack — §22.25's "karma
+ * moves faster through bargains", in placeholder numbers.
  */
 const TEMPLATES = dealsData as unknown as Record<Pool, readonly DealTemplate[]>;
 
@@ -180,8 +173,6 @@ function realizeReward(spec: DealRewardSpec, rng: Rng): DealReward {
       return { kind: 'item', instance: generateItem(rng, { slot: spec.slot, rarity: spec.rarity }) };
     case 'item':
       return { kind: 'item', instance: { defId: spec.defId } };
-    case 'heal':
-      return { kind: 'heal', amount: spec.amount };
     case 'statPoint':
       return { kind: 'statPoint', stat: spec.stat };
     case 'skillCharge':
@@ -365,9 +356,6 @@ export function applyDeal(
     case 'item':
       next = { ...next, inventory: pickUp(next.inventory, deal.reward.instance) };
       break;
-    case 'heal':
-      next = { ...next, hp: Math.min(next.hp + deal.reward.amount, next.maxHp) };
-      break;
     case 'statPoint':
       next = withStat(next, deal.reward.stat, 1);
       break;
@@ -426,8 +414,6 @@ export function describeReward(reward: DealReward): string {
   switch (reward.kind) {
     case 'item':
       return reward.instance.rolled?.name ?? reward.instance.defId;
-    case 'heal':
-      return `${reward.amount} HP restored`;
     case 'statPoint':
       return `+1 ${reward.stat}`;
     case 'skillCharge':

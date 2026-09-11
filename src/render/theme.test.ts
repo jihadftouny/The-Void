@@ -371,7 +371,7 @@ describe('every data-screen rule is keyed to a value screenKey can produce', () 
     'battle-action',
     'draft-pick',
     'deal-decision',
-    'rest-decision',
+    'rest', // PLAN.md #2: the found rest spot (was 'rest-decision', whose decision is gone)
     'game-over',
     'inventory',
     'sheet',

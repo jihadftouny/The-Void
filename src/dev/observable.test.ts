@@ -389,6 +389,16 @@ describe('the act-5 no-flee rule, from the hollow-fight jump', () => {
 // and 12 more HP — correct engine behaviour, not a leak. Bounding the lockstep at `act < 3`
 // keeps the comparison sound; acts 1 and 2 contain no karma read at all, and still give
 // ~180 steps and several hundred events.
+//
+// ⚠ PLAN.md #2 ADDED ONE KARMA READ TO ACTS 1-2, and it is a sanctioned one: bargains FIND the
+// player as descent encounters now (§22.23), and `selectPool` reads the ledger to pick the pool
+// an offer is drawn from. A neutral control would be offered the `standard` pool while the
+// distinctive vector (reverence 13) is offered `grace`, and the two runs would part at the first
+// bargain — correct engine behaviour, not a leak (the pool is never shown). So the CONTROL is a
+// quiet vector in the SAME pool band (reverence 3, the `grace` threshold; no axis at a
+// distinctive value). Nothing the heuristic does in acts 1-2 lowers reverence (it can only take
+// grace offerings, which raise it), so both runs stay in that band, the one read agrees, and
+// the lockstep comparison stays sound.
 // =========================================================================================
 
 const AXIS_VOCABULARY =
@@ -442,8 +452,10 @@ describe('a karma vector set from the panel never reaches the player', () => {
     return { events, rendered, skeletons, steps, finalKarma: result.state.karma };
   }
 
+  /** The same pool band as DISTINCTIVE (reverence >= 3 -> grace), with no distinctive value. */
+  const QUIET: KarmaState = { mercyCruelty: 1, restraintGreed: 1, reverenceDesecration: 3, clarityDelusion: 1 };
   const distinctive = play(DISTINCTIVE, 200);
-  const control = play(createKarma(), 200);
+  const control = play(QUIET, 200);
 
   it('the sweep saw a real run, not a handful of menu clicks (non-vacuity)', () => {
     expect(distinctive.events.length, 'fewer than 50 events — the sweep proves little').toBeGreaterThan(50);
@@ -558,12 +570,19 @@ describe('momentum decays across a battle boundary, and by how much', () => {
     expect(spared.state.phase.kind).toBe('main-menu');
     banked.push(spared.state.player!.momentum ?? 0);
 
-    // Walk the hub until the next battle opens, and read what it opened with.
+    // Walk the hub until the next battle opens, and read what it opened with. (PLAN.md #2: a
+    // bargain may find the player on the way — refused, which changes nothing but the rng.)
     let state = spared.state;
     let steps = 0;
     while (state.phase.kind !== 'battle' && steps < 60) {
       const awaiting = awaitingFor(state.phase);
-      state = step(state, awaiting === 'main-menu' ? { kind: 'menu', choice: 'continue' } : { kind: 'continue' }).state;
+      const input =
+        awaiting === 'main-menu'
+          ? ({ kind: 'menu', choice: 'continue' } as const)
+          : awaiting === 'deal-decision'
+            ? ({ kind: 'deal-decision', accept: false } as const)
+            : ({ kind: 'continue' } as const);
+      state = step(state, input).state;
       steps += 1;
     }
     expect(state.phase.kind, 'no second battle within 60 steps — the sweep proved nothing').toBe(

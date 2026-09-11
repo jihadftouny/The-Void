@@ -52,7 +52,7 @@ function summaryOf(partial: Partial<RunSummary>): RunSummary {
   return { ...emptyRunSummary(), ...partial };
 }
 
-const victoryEvent: GameEvent = { kind: 'victory', xpGained: 0, extraRest: false, loot: [] };
+const victoryEvent: GameEvent = { kind: 'victory', xpGained: 0, loot: [] };
 
 // ------- Front-load default --------------------------------------------------
 

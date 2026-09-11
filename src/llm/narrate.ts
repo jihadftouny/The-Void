@@ -43,9 +43,10 @@ const FLOORS = [
  * `src/data/story.json`, and is #13's): terse, second person for the player, "The enemy"
  * for the foe, no karma, and never the player's name (G47 / §22.1, WORLD.md §8).
  * `WORLD.md` §0 also reserves two words — *hollow* and *made whole* — so no fact literal
- * added here may spend them. (Two PRE-EXISTING lines below do: `chest-loot`'s "it is
- * hollow" and `rest-full`'s "already whole". Those are FINDINGS.md C1 and belong to #13;
- * they are left exactly as they shipped rather than silently rewritten here.)
+ * added here may spend them. (One PRE-EXISTING line below does: `chest-loot`'s "it is
+ * hollow". That is FINDINGS.md C1 and belongs to #13; it is left exactly as it shipped rather
+ * than silently rewritten here. Its sibling — the "already whole" line of the full-HP rest
+ * event — left with that event in PLAN.md #2.)
  */
 export function describeEvent(e: GameEvent): string {
   switch (e.kind) {
@@ -92,12 +93,8 @@ export function describeEvent(e: GameEvent): string {
       return `The enemy falls. You are still standing.`;
     case 'defeat':
       return `Your strength gives out.`;
-    case 'rest-lore':
-      return `You rest, and a fragment surfaces: "${e.loreText}"`;
     case 'rest-taken':
       return `You rest; some wounds close.`;
-    case 'rest-full':
-      return `You are already whole; rest brings only quiet.`;
     case 'deal-offer':
       return `An altar in the dark offers ${e.reward}, and demands ${e.cost} in return.`;
     case 'deal-taken':
@@ -201,13 +198,6 @@ export function describeEvent(e: GameEvent): string {
       // fallback — replace the line below, and nothing else, with:
       //     return `Something new settles into you.`;
       return `You take what the descent offers: ${e.option}.`;
-    case 'rest-declined':
-      // Narrated even though G13 does not name it: it is the SOLE event of its step, so
-      // with the G42 fix silence here would leave the previous beat stale on screen while
-      // the player had in fact chosen to press on. See the silence block below.
-      return `You press on without resting.`;
-    case 'no-rests':
-      return `There is no rest left in you.`;
 
     // ---- PLAN.md #2: the floor mechanics, the found rest, the full-pack bargain -------
     // Engine facts under the same three-part rule: observable, written from the event's own
@@ -250,8 +240,9 @@ export function describeEvent(e: GameEvent): string {
     // there. For a rejected input that is exactly correct (nothing happened, so the
     // narration should not change). For anything that actually happened it would be a lie
     // on screen. So: if a kind means something HAPPENED, it must get a fact line above,
-    // even if the register never named it. That is why `rest-declined`, `no-rests`,
-    // `shield-gained`, `shield-absorbed` and `revive` are narrated.
+    // even if the register never named it. That is why `shield-gained`, `shield-absorbed`
+    // and `revive` are narrated (as the declined-rest and no-rest-left events were, until
+    // PLAN.md #2 removed the rest decision they reported).
 
     // Rejected inputs — the player asked for something they could not do, so NOTHING
     // happened. Silence is correct, and leaving the previous beat on screen is correct.

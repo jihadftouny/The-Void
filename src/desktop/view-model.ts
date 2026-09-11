@@ -635,8 +635,8 @@ export interface HubMenuView {
  * breath. There are no save slots yet (N3), and a confirmation for a thing that cannot happen
  * is the "control that controls nothing" this project keeps re-cutting itself on.
  *
- * "Seek a bargain" is still here. §22.23 deletes it when bargains become random descent
- * events, and that lands with #2 — at which point it is one row removed from this list.
+ * The on-demand bargain row is GONE (PLAN.md #2, §22.23): bargains are random descent events
+ * that find the player, so the hub has nothing to summon them with.
  */
 export function hubMenu(mode: HubMode): HubMenuView {
   if (mode === 'confirm-abandon') {
@@ -662,10 +662,6 @@ export function hubMenu(mode: HubMode): HubMenuView {
       {
         label: 'Continue the descent',
         action: { kind: 'dispatch', input: { kind: 'menu', choice: 'continue' } },
-      },
-      {
-        label: 'Seek a bargain',
-        action: { kind: 'dispatch', input: { kind: 'menu', choice: 'seek-deal' } },
       },
       { label: 'Inventory', action: { kind: 'screen', screen: 'inventory' } },
       { label: 'Character sheet', action: { kind: 'screen', screen: 'sheet' } },

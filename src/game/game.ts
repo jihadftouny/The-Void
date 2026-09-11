@@ -14,7 +14,8 @@
 //
 // Ported from `GameLogic` (startGame -> checkAct -> gameLoop -> encounters -> battle
 // -> progression -> finalBattle -> ending). Confirmed faithful/cleaned choices:
-//  - Menu option 2 (`seek-deal`) opens the sacrifice-deal encounter (replaces the gold shop).
+//  - The sacrifice-deal encounter replaces the gold shop. PLAN.md #2: it is no longer a menu
+//    option — bargains FIND the player as a descent encounter (§22.23), like a found rest.
 //  - Level-up raises maxHp but does not heal; the final boss gets no auto-advantage.
 //  - The ending shows only on a win; death goes to game-over.
 //  - Name/class confirm loops and per-round continue gates are dropped (events carry
@@ -42,8 +43,8 @@ import {
   buildChestLoot,
   computeRestHeal,
   selectEncounter,
-  selectLore,
 } from './encounter.ts';
+import { restBrief } from './restBrief.ts';
 import {
   buildDeal,
   applyDeal,
@@ -85,7 +86,8 @@ export type Phase =
   | { kind: 'main-menu' }
   | { kind: 'battle'; battle: BattleState; started: boolean; final: boolean }
   | { kind: 'battle-victory'; final: boolean }
-  | { kind: 'rest'; restOffered: boolean }
+  // PLAN.md #2 (§22.26): a FOUND rest spot, already taken — there is no decision to make.
+  | { kind: 'rest' }
   | { kind: 'deal'; deal: SacrificeDeal }
   | { kind: 'chest'; loot: ItemInstance[] }
   | { kind: 'act-outro'; newAct: number }
@@ -145,7 +147,9 @@ export type Awaiting =
   | 'battle-action'
   | 'draft-pick'
   | 'deal-decision'
-  | 'rest-decision'
+  // PLAN.md #2: the found rest spot — the rest has already happened; only `continue` remains.
+  // Its own value (not `continue`) so the renderer can give the one calm screen its scenery.
+  | 'rest'
   | 'game-over';
 
 /** The input the player (via the UI) supplies to `step`. */
@@ -154,11 +158,11 @@ export type GameInput =
   | { kind: 'name'; name: string }
   | { kind: 'class'; classId: PlayerClass }
   | { kind: 'stats-decision'; accept: boolean }
-  | { kind: 'menu'; choice: 'continue' | 'seek-deal' | 'quit' }
+  // PLAN.md #2 / G52: the hub cannot summon a bargain any more; bargains find you (§22.23).
+  | { kind: 'menu'; choice: 'continue' | 'quit' }
   | { kind: 'battle-action'; action: BattleAction }
   | { kind: 'draft-pick'; index: number }
-  | { kind: 'deal-decision'; accept: boolean }
-  | { kind: 'rest-decision'; accept: boolean };
+  | { kind: 'deal-decision'; accept: boolean };
 
 /**
  * Rule overrides for a `step` — a MEASUREMENT seam, never set by the game (PLAN.md #2).
@@ -219,7 +223,7 @@ export function awaitingFor(phase: Phase): Awaiting {
     case 'battle-victory':
       return 'continue';
     case 'rest':
-      return phase.restOffered ? 'rest-decision' : 'continue';
+      return 'rest';
     case 'deal':
       return 'deal-decision';
     case 'chest':
@@ -333,9 +337,13 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
       if (input.choice === 'quit') {
         return finish({ kind: 'game-over' }, [{ kind: 'game-over', xp: player.xp }]);
       }
-      if (input.choice === 'seek-deal') {
-        return openDeal(state, rng, finish);
-      }
+      // PLAN.md #2: the menu has exactly two choices now. Anything else — the removed bargain
+      // choice from a stale renderer, a typo through the engine API — is REFUSED rather than read
+      // as `continue`
+      // (the reducer is total: an input it does not expect returns the state unchanged). It used
+      // to fall through to the encounter draw, which would have let a removed action still move
+      // the run.
+      if (input.choice !== 'continue') return noop;
       // 'continue' — Java continueJourney: checkAct first, else an encounter.
       return continueJourney(state, player, rng, finish);
     }
@@ -380,12 +388,9 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
     }
 
     case 'rest': {
-      if (!phase.restOffered) {
-        if (input.kind !== 'continue') return noop;
-        return finish({ kind: 'main-menu' }, []);
-      }
-      if (input.kind !== 'rest-decision') return noop;
-      return resolveRestDecision(state, input.accept, rng, finish);
+      // The rest was taken when the spot was found (`takeRest`); continuing returns to the hub.
+      if (input.kind !== 'continue') return noop;
+      return finish({ kind: 'main-menu' }, []);
     }
 
     case 'deal': {
@@ -458,7 +463,7 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
       // G43: EVERY act intro now returns to the hub, act 5 included. Act 5 used to hard-wire
       // the Hollow to floor ENTRY here — and `main-menu` is the only phase that calls
       // `continueJourney`, which is the only caller of `buildRandomBattle`, `buildChestLoot`
-      // and `selectLore`. So the True Void had no random battles, no chests, no rests, no
+      // and (then) the lore pick. So the True Void had no random battles, no chests, no rests, no
       // sacrifice-deals and no lore at all: an exhaustive walk of ~17.7 M probed transitions
       // from 418 act-5 entries produced ZERO act-5 hub states. Five of 24 families, five of
       // the 13 bespoke name tables and the `reach-act-5` feat were dead as a result. The
@@ -632,7 +637,9 @@ function continueJourney(
       { kind: 'final-battle-begins', enemyName: enemy.fullName },
     ]);
   }
-  const encounter = selectEncounter(rng);
+  // PLAN.md #2: the floor's own weights (floors.json), keyed on `place` — battle, chest, a
+  // found rest, or a bargain that finds the player (§22.23, §22.25).
+  const encounter = selectEncounter(rng, floorOf(state));
   if (encounter === 'battle') {
     // M13 gradual reveal: restrict the family/affix draws to the run's frozen unlock snapshot.
     // Absent snapshot ⇒ both sets are `undefined` ⇒ byte-identical to a pre-M13 draw.
@@ -660,24 +667,18 @@ function continueJourney(
       { player: nextPlayer },
     );
   }
-  // Rest: show lore, then offer a rest if any remain.
-  const lore = selectLore(state.act, rng);
-  const events: GameEvent[] = [];
-  if (lore) {
-    events.push({ kind: 'rest-lore', title: lore.title, loreText: lore.text });
+  if (encounter === 'bargain') {
+    return openDeal(state, rng, finish);
   }
-  if (player.restsLeft >= 1) {
-    return finish({ kind: 'rest', restOffered: true }, events);
-  }
-  events.push({ kind: 'no-rests' });
-  return finish({ kind: 'rest', restOffered: false }, events);
+  return takeRest(state, player, rng, finish);
 }
 
 /**
- * The sacrifice-deal encounter (menu option 2, `seek-deal`) — an altar/stranger offers a
- * reward for a cost paid from the player. `buildDeal` reads the karma vector (for the pool)
- * and rolls any reward item, so the offer is fully determined here; the take/leave decision
- * is resolved by `resolveDealDecision`.
+ * The sacrifice-deal encounter — an altar/stranger offers a reward for a cost paid from the
+ * player. PLAN.md #2: reached ONLY as a descent encounter (`continueJourney`'s `bargain` draw);
+ * the hub can no longer summon one, which closes G52 at the root (§22.23). `buildDeal` reads the
+ * karma vector and the floor (floor 4 tempts everyone) and rolls any reward item, so the offer is
+ * fully determined here; the take/leave decision is resolved by `resolveDealDecision`.
  */
 function openDeal(state: GameState, rng: Rng, finish: Finish): StepResult {
   // PLAN.md #2: the FLOOR picks the pool on floor 4 (tempting for everyone), keyed on `place`.
@@ -795,70 +796,45 @@ function resolveBattleRound(
 }
 
 /**
- * Resolve a rest — PURE apart from the single `computeRestHeal` draw.
+ * A FOUND rest spot, taken at once — PURE apart from the single `computeRestHeal` draw.
  *
- * G27 + G31: a rest now CURES every active condition and REFILLS skill charges, alongside the
- * HP heal it always did.
+ * PLAN.md #2 / GAME-DESIGN.md §22.26 ("the rest is the only moment in the game where things are
+ * truly calm"): rest is a PLACE the descent gives you, not a counted resource spent from the
+ * hub. The banked rest counter, the per-victory extra-rest draw and the rest decision are all gone. Arriving
+ * IS resting — "a rest that makes you choose is not calm" (plan Appendix A.2, accepted) — and it
+ * happens even at full health, because it still refills the skill charges and clears conditions.
+ * Scarcity comes from how often a spot is found (`floors.json`'s `rest` weight).
  *
- *  - **G27.** `fracture` carries `maxTurns: 100` with the comment *"needs a rest"* — but
- *    `resolveRestDecision` never touched `activeConditions`, and `game.ts` writes the battle
- *    player back to the hub, so a floor-1 Ganger's `gangStomp` put the player on attack
- *    disadvantage for the ENTIRE RUN with no in-game remedy (measured: still active after 99
- *    rounds; the only data-side cure, `warding-charm`, is battle-only and unobtainable).
- *  - **G31.** Charges were never restored either, contradicting `GAME-DESIGN.md` §18.1
- *    (*"A rest restores HP **and** skill charges"*): a 493-step run taking six rests ended on
- *    ZERO charges, so the whole class-skill system was one-shot per run.
+ * The mechanics are §18.1's, unchanged in substance:
+ *  - **G27.** Every active condition is cleared — `fracture` still needs a rest to go.
+ *  - **G31.** Skill charges are refilled.
+ *  - The HP heal is the one `computeRestHeal` draw, dampened on floor 3 (`healPct`), capped at
+ *    `maxHp`. Conditions go BEFORE the heal, so the cap is never a max depressed by a condition
+ *    the rest is removing.
  *
- * DEVIATION FROM THE REGISTER, deliberate. G31's literal wording says to restore charges
- * *"including the `rest-full` early-return branch"* — but that branch consumes NO rest, so a
- * full-HP player could refill charges at every rest node for free, forever. Worse, G27 makes
- * resting at full HP genuinely valuable (it is now the only fracture cure), so the branch's
- * premise is gone. Implemented instead: `rest-full` fires only when there is NOTHING to gain
- * — full HP **and** full charges **and** no conditions. Otherwise the rest is taken and paid
- * for. That satisfies both G27 and G31 and closes the exploit.
- *
- * Conditions are cleared BEFORE the heal, so the cap is the true `maxHp` rather than a max
- * depressed by a `sick`/Frail condition the rest is about to remove. ALL conditions go,
- * buffs included: they are 2-turn combat effects and a rest is a reset. The `rest-taken`
- * event keeps its existing shape — no new event kind.
- *
- * DOCUMENTED DRAW-ORDER CHANGE: a full-HP player who is fractured or short of charges now
- * takes the rest, and therefore now consumes the `computeRestHeal` draw it used to skip.
+ * Emits `rest-found` (the floor, the brief's place line and id — the narrator's scene block is
+ * built from the brief) and then `rest-taken`, in its existing shape. The phase is `rest`, so
+ * the renderer shows the calm screen and `continue` returns to the hub.
  */
-function resolveRestDecision(
-  state: GameState,
-  accept: boolean,
-  rng: Rng,
-  finish: Finish,
-): StepResult {
-  const player = requirePlayer(state);
-  if (!accept) {
-    return finish({ kind: 'main-menu' }, [{ kind: 'rest-declined' }]);
-  }
-  const nothingToGain =
-    player.hp >= player.maxHp &&
-    player.skillCharges >= player.maxSkillCharges &&
-    player.activeConditions.length === 0;
-  if (nothingToGain) {
-    // Nothing a rest could do: no roll, no rest consumed (faithful to Java's full-HP case).
-    return finish({ kind: 'main-menu' }, [{ kind: 'rest-full' }]);
-  }
-  // PLAN.md #2: floor 3 dampens the rest heal (the draw is unchanged in position).
-  const hpRestored = dampenHeal(
-    computeRestHeal(player.xp, rng),
-    floorModifiers(floorOf(state)).healPct,
-  );
+function takeRest(state: GameState, player: Player, rng: Rng, finish: Finish): StepResult {
+  const floor = floorOf(state);
+  const brief = restBrief(floor);
+  const hpRestored = dampenHeal(computeRestHeal(player.xp, rng), floorModifiers(floor).healPct);
   const hp = Math.min(player.hp + hpRestored, player.maxHp);
-  const healed: Player = {
+  const rested: Player = {
     ...player,
     hp,
     activeConditions: [],
     skillCharges: player.maxSkillCharges,
-    restsLeft: player.restsLeft - 1,
   };
-  return finish({ kind: 'main-menu' }, [{ kind: 'rest-taken', hpRestored, hp, maxHp: healed.maxHp }], {
-    player: healed,
-  });
+  return finish(
+    { kind: 'rest' },
+    [
+      { kind: 'rest-found', floor, place: brief.place, briefId: brief.id },
+      { kind: 'rest-taken', hpRestored, hp, maxHp: rested.maxHp },
+    ],
+    { player: rested },
+  );
 }
 
 /**

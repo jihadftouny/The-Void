@@ -153,7 +153,7 @@ const ALLOWED: Record<Awaiting, ReadonlySet<GameInput['kind']>> = {
   'battle-action': new Set(['battle-action']),
   'draft-pick': new Set(['draft-pick']),
   'deal-decision': new Set(['deal-decision']),
-  'rest-decision': new Set(['rest-decision']),
+  rest: new Set(['continue']), // PLAN.md #2: a found rest is taken at once; only continue remains
   'game-over': new Set(['continue']),
 };
 

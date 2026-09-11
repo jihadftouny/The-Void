@@ -445,7 +445,8 @@ describe('the probe really ran, against the real build', () => {
     const r = report(960, 640, 'hub', 'normal');
     expect(r.narration.beats, 'the hub scenario rendered no prose').toBe(1);
     expect(r.log.lines, 'the hub scenario rendered no combat log').toBe(60);
-    expect(r.choices.controls, 'the hub menu has no rows').toBe(6);
+    // PLAN.md #2: five rows — the "Seek a bargain" row left with §22.23.
+    expect(r.choices.controls, 'the hub menu has no rows').toBe(5);
     expect(
       r.narration.scrollHeight,
       'the beat is short enough to fit its floor — it is not a worst case',
@@ -762,7 +763,9 @@ describe('every control is reachable at the enforced minimum window', () => {
    * How many controls each screen puts on the page, and how many it deliberately hides.
    *
    * DERIVED BY HAND from the builders, not read off a run:
-   *   hub / confirm-abandon  `hubMenu` returns 6 rows in menu mode and 2 in confirmation mode.
+   *   hub / confirm-abandon  `hubMenu` returns 5 rows in menu mode (Continue, Inventory,
+   *                          Character sheet, Settings, Abandon — PLAN.md #2 removed "Seek a
+   *                          bargain") and 2 in confirmation mode.
    *   battle                 Fight + the Cast toggle + Spare + the Use-item toggle + Potion +
    *                          Run = 6 on screen; 6 skills and 1 item sit inside the two closed
    *                          picker lists = 7 hidden.
@@ -780,7 +783,7 @@ describe('every control is reachable at the enforced minimum window', () => {
    * a legitimately hidden picker entry by its rect, and only the count tells them apart.
    */
   const EXPECTED_CONTROLS: Readonly<Record<string, { visible: number; hidden: number }>> = {
-    hub: { visible: 6, hidden: 0 },
+    hub: { visible: 5, hidden: 0 },
     'confirm-abandon': { visible: 2, hidden: 0 },
     battle: { visible: 6, hidden: 7 },
     'battle-open': { visible: 12, hidden: 1 },
@@ -1151,7 +1154,7 @@ describe('tab order follows reading order', () => {
     expect(order.filter((r) => r === 'column').length, 'the reading column has no focusables').toBeGreaterThan(
       3,
     );
-    expect(order.filter((r) => r === 'choices').length).toBeGreaterThanOrEqual(6);
+    expect(order.filter((r) => r === 'choices').length).toBeGreaterThanOrEqual(5);
   });
 });
 
@@ -1274,7 +1277,7 @@ describe('the real renderer, booted and walked', () => {
     // describe a screen the game does not show.
     const real = step('hub');
     const mirrored = report(1100, 820, 'hub', 'normal');
-    expect(real.hubMenuRows, 'the real hub menu has a different number of rows').toBe(6);
+    expect(real.hubMenuRows, 'the real hub menu has a different number of rows').toBe(5);
     expect(
       real.choices.controls,
       'the mirrored hub and the real hub disagree on how many controls the hub has',

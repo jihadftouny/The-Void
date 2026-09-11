@@ -213,17 +213,16 @@ describe('main-menu: quit', () => {
 
 // ------- Encounters (wiring) -------------------------------------------------
 
-// Find rngStates that route the first encounter to battle / rest. selectEncounter
-// is the first draw continueJourney makes, so this predicts the reducer exactly.
-function findEncounterSeeds(): { battle: number; rest: number } {
-  let battle = -1;
-  let rest = -1;
-  for (let s = 0; s < 500 && (battle < 0 || rest < 0); s++) {
-    const enc = selectEncounter(createRng(s).rng);
-    if (enc === 'battle' && battle < 0) battle = s;
-    if (enc === 'rest' && rest < 0) rest = s;
+// Find rngStates that route the first encounter to each kind, on floor 1. selectEncounter is
+// the first draw continueJourney makes (xp 0 keeps every gate shut), so this predicts the
+// reducer exactly — the prediction reads the same pure helper, not the reducer's output.
+function findEncounterSeeds(): { battle: number; rest: number; bargain: number; chest: number } {
+  const found = { battle: -1, rest: -1, bargain: -1, chest: -1 };
+  for (let s = 0; s < 500; s++) {
+    const enc = selectEncounter(createRng(s).rng, 1);
+    if (found[enc] < 0) found[enc] = s;
   }
-  return { battle, rest };
+  return found;
 }
 
 describe('main-menu: continue -> encounter', () => {
@@ -250,151 +249,106 @@ describe('main-menu: continue -> encounter', () => {
     if (r2.state.phase.kind === 'battle') expect(r2.state.phase.started).toBe(true);
   });
 
-  it('routes to a rest, shows lore, then offers the rest', () => {
-    const player = makePlayer({ xp: 0, restsLeft: 1 });
+  it('PLAN.md #2: a found rest spot is TAKEN at once — no decision, awaiting only continue', () => {
+    const player = makePlayer({ xp: 0, hp: 3, maxHp: 30 });
     const r = step(menuState(player, seeds.rest), { kind: 'menu', choice: 'continue' });
-    expect(r.state.phase.kind).toBe('rest');
-    expect(r.awaiting).toBe('rest-decision');
-    expect(r.events.some((e) => e.kind === 'rest-lore')).toBe(true);
-  });
-
-  it('with no rests left, shows lore then a no-rests notice awaiting continue', () => {
-    const player = makePlayer({ xp: 0, restsLeft: 0 });
-    const r = step(menuState(player, seeds.rest), { kind: 'menu', choice: 'continue' });
-    expect(r.state.phase.kind).toBe('rest');
-    expect(r.awaiting).toBe('continue');
-    expect(r.events.some((e) => e.kind === 'no-rests')).toBe(true);
-    // Continuing returns to the menu.
+    expect(r.state.phase).toEqual({ kind: 'rest' });
+    expect(r.awaiting).toBe('rest');
+    expect(r.events.map((e) => e.kind)).toEqual(['rest-found', 'rest-taken']);
+    expect(r.state.player!.hp).toBeGreaterThan(3); // healed in the SAME step it was found
+    // Continuing returns to the menu, and changes nothing else.
     const r2 = step(r.state, { kind: 'continue' });
     expect(r2.state.phase.kind).toBe('main-menu');
+    expect(r2.state.player).toEqual(r.state.player);
+  });
+
+  it('PLAN.md #2: a bargain FINDS the player — continue can open a deal (§22.23)', () => {
+    const player = makePlayer({ xp: 0 });
+    const r = step(menuState(player, seeds.bargain), { kind: 'menu', choice: 'continue' });
+    expect(r.state.phase.kind).toBe('deal');
+    expect(r.awaiting).toBe('deal-decision');
+    expect(r.events.map((e) => e.kind)).toEqual(['deal-offer']);
   });
 });
 
-// ------- Rest resolution -----------------------------------------------------
+// ------- Rest — a place you find (§22.26) --------------------------------------------------
 
-describe('rest resolution', () => {
-  it('accepting at reduced HP heals within [10,10+floor(xp/4)], caps at maxHp, spends a rest', () => {
-    const player = makePlayer({ xp: 40, hp: 5, maxHp: 50, restsLeft: 1 });
-    const state: GameState = {
-      ...menuState(player, 99),
-      phase: { kind: 'rest', restOffered: true },
-    };
-    // Independently derive the heal: computeRestHeal is the first draw of this step.
-    const expectedHeal = 10 + Math.floor(createRng(99).rng() * (Math.floor(40 / 4) + 1));
-    const r = step(state, { kind: 'rest-decision', accept: true });
-    const taken = r.events.find((e) => e.kind === 'rest-taken');
-    expect(taken).toBeDefined();
-    if (taken && taken.kind === 'rest-taken') {
-      expect(taken.hpRestored).toBe(expectedHeal);
-      expect(taken.hpRestored).toBeGreaterThanOrEqual(10);
-      expect(taken.hpRestored).toBeLessThanOrEqual(20);
-      expect(taken.hp).toBe(Math.min(5 + expectedHeal, 50));
-    }
-    expect(r.state.player?.restsLeft).toBe(0);
-    expect(r.state.phase.kind).toBe('main-menu');
+describe('rest — found, taken at once, and calm whatever you arrive with', () => {
+  const restSeed = findEncounterSeeds().rest;
+
+  /** Find the rest spot from the hub (on `place`) and return that step. */
+  function rest(player: Player, place = 0): StepResult {
+    const state: GameState = { ...menuState(player, restSeed), act: place + 1, place };
+    return step(state, { kind: 'menu', choice: 'continue' });
+  }
+
+  it('heals within [10, 10 + floor(xp/4)] (the ONE draw after the encounter draw), capped at maxHp', () => {
+    // xp 40 is below the act-2 gate? No — the act-1 gate is 10 xp, so a hub at xp 40 would
+    // enter the Kingpin. The rest is therefore driven with xp 8 (gate shut): the heal is
+    // 10 + floor(x * (floor(8/4) + 1)) = 10 + floor(x * 3), x = the SECOND draw of the step.
+    const player = makePlayer({ xp: 8, hp: 5, maxHp: 50 });
+    const r = rest(player);
+    const { rng } = createRng(restSeed);
+    rng(); // the encounter draw
+    const expectedHeal = 10 + Math.floor(rng() * (Math.floor(8 / 4) + 1));
+    expect(r.events).toContainEqual({ kind: 'rest-taken', hpRestored: expectedHeal, hp: 5 + expectedHeal, maxHp: 50 });
+    expect(expectedHeal).toBeGreaterThanOrEqual(10);
+    expect(expectedHeal).toBeLessThanOrEqual(12);
   });
 
-  it('accepting with NOTHING to gain heals nothing and spends no rest', () => {
-    // Full HP, full charges, no conditions — the only case where a rest can do nothing.
-    // (Narrowed from "at full HP" by G27/G31: full HP alone is no longer enough, because a
-    // rest is now also the cure for fracture and the only refill for skill charges.)
-    const player = makePlayer({ xp: 40, hp: 50, maxHp: 50, restsLeft: 1 });
-    expect(player.skillCharges).toBe(player.maxSkillCharges);
-    expect(player.activeConditions).toEqual([]);
-    const state: GameState = {
-      ...menuState(player, 99),
-      phase: { kind: 'rest', restOffered: true },
-    };
-    const r = step(state, { kind: 'rest-decision', accept: true });
-    expect(r.events).toContainEqual({ kind: 'rest-full' });
-    expect(r.state.player?.restsLeft).toBe(1); // unchanged
-    expect(r.state.player?.hp).toBe(50);
-  });
-
-  // ------- G27 / G31 — a rest cures and refills, not just heals ---------------
-
-  it('G27/G31 — an accepted rest clears every condition AND refills skill charges', () => {
-    // The register's reproduction: rest at hp 3 / charges 0 gave hp 12 / charges 0, and a
-    // floor-1 Ganger's fracture was still active 99 rounds later.
+  it('G27/G31 — it clears every condition AND refills skill charges', () => {
     const player = makePlayer({
-      xp: 40, hp: 5, maxHp: 50, restsLeft: 1,
+      xp: 0, hp: 5, maxHp: 50,
       skillCharges: 0,
       activeConditions: [makeCondition('fracture'), makeCondition('poison')],
     });
-    const state: GameState = {
-      ...menuState(player, 99),
-      phase: { kind: 'rest', restOffered: true },
-    };
-    const r = step(state, { kind: 'rest-decision', accept: true });
+    const r = rest(player);
     expect(r.state.player?.activeConditions).toEqual([]);
     expect(r.state.player?.skillCharges).toBe(player.maxSkillCharges);
-    expect(r.state.player?.restsLeft).toBe(0); // it was paid for
-    expect(r.events.some((e) => e.kind === 'rest-taken')).toBe(true);
   });
 
-  it('G27 — a rest at FULL HP still cures, and costs a rest for doing it', () => {
-    // The exploit the register's literal wording ("restore charges including the rest-full
-    // branch") would have opened, closed: a rest that does something is always paid for.
-    const player = makePlayer({
-      xp: 40, hp: 50, maxHp: 50, restsLeft: 1,
-      activeConditions: [makeCondition('fracture')],
-    });
-    const state: GameState = {
-      ...menuState(player, 99),
-      phase: { kind: 'rest', restOffered: true },
-    };
-    const r = step(state, { kind: 'rest-decision', accept: true });
-    expect(r.state.player?.activeConditions).toEqual([]);
-    expect(r.state.player?.hp).toBe(50); // already full; the heal is capped
-    expect(r.state.player?.restsLeft).toBe(0); // NOT free
-    expect(r.events.some((e) => e.kind === 'rest-full')).toBe(false);
-  });
-
-  it('G31 — a rest at FULL HP still refills charges, and costs a rest for doing it', () => {
-    const player = makePlayer({ xp: 40, hp: 50, maxHp: 50, restsLeft: 1, skillCharges: 1 });
-    const state: GameState = {
-      ...menuState(player, 99),
-      phase: { kind: 'rest', restOffered: true },
-    };
-    const r = step(state, { kind: 'rest-decision', accept: true });
+  it('Appendix A.2 — at FULL health it still happens: charges refill, and nothing is refused', () => {
+    // "A rest that makes you choose is not calm" — there is no `rest-full` any more.
+    const player = makePlayer({ xp: 0, hp: 50, maxHp: 50, skillCharges: 1 });
+    const r = rest(player);
+    expect(r.events.map((e) => e.kind)).toEqual(['rest-found', 'rest-taken']);
+    expect(r.state.player?.hp).toBe(50); // capped
     expect(r.state.player?.skillCharges).toBe(player.maxSkillCharges);
-    expect(r.state.player?.restsLeft).toBe(0);
-    expect(r.events.some((e) => e.kind === 'rest-full')).toBe(false);
   });
 
-  it('a rest with no rests left is never offered, so the decision path cannot go negative', () => {
-    // `continueJourney` only sets `restOffered: true` when `restsLeft >= 1`, which is what
-    // keeps the `restsLeft - 1` above from ever producing a negative count. Pinned here
-    // because G27/G31 made the "take it" branch reachable in strictly more situations.
-    const player = makePlayer({ xp: 0, restsLeft: 0, hp: 1, maxHp: 50, skillCharges: 0 });
-    const r = step(menuState(player, findEncounterSeeds().rest), { kind: 'menu', choice: 'continue' });
-    expect(r.state.phase).toEqual({ kind: 'rest', restOffered: false });
-    expect(r.awaiting).toBe('continue');
+  it('rest-found names the floor, the brief’s place and its id — keyed on the FLOOR', () => {
+    const r = rest(makePlayer({ xp: 0 }), 2);
+    const found = r.events.find((e) => e.kind === 'rest-found');
+    expect(found).toMatchObject({ kind: 'rest-found', floor: 3, briefId: 'floor-3' });
+    expect(found && found.kind === 'rest-found' && found.place.length).toBeGreaterThan(0);
   });
 
-  it('declining changes nothing but returns to the menu', () => {
-    const player = makePlayer({ xp: 40, hp: 5, maxHp: 50, restsLeft: 1 });
-    const state: GameState = {
-      ...menuState(player, 99),
-      phase: { kind: 'rest', restOffered: true },
-    };
-    const r = step(state, { kind: 'rest-decision', accept: false });
-    expect(r.events).toContainEqual({ kind: 'rest-declined' });
-    expect(r.state.player?.restsLeft).toBe(1);
-    expect(r.state.player?.hp).toBe(5);
-    expect(r.state.phase.kind).toBe('main-menu');
+  it('AC-14 — on floor 3 the rest restores floor(h x 50 / 100) of the drawn heal', () => {
+    // Same seed on floor 1 and floor 3 (the encounter draw is the same one-in-weights value on
+    // both, since their weights match): h is drawn identically, and floor 3 keeps half.
+    const player = makePlayer({ xp: 8, hp: 5, maxHp: 50 });
+    const { rng } = createRng(restSeed);
+    rng();
+    const h = 10 + Math.floor(rng() * 3);
+    const one = rest(player, 0).events.find((e) => e.kind === 'rest-taken');
+    const three = rest(player, 2).events.find((e) => e.kind === 'rest-taken');
+    expect(one).toMatchObject({ hpRestored: h });
+    expect(three).toMatchObject({ hpRestored: Math.floor((h * 50) / 100) });
   });
 });
 
-// ------- Sacrifice-deal encounter (menu option: seek-deal) -------------------
+// ------- Sacrifice deal — now a descent encounter (§22.23) ---------------------------------
 
-describe('sacrifice deal (menu option: seek-deal)', () => {
-  it('opens a deal phase matching buildDeal(karma,act,rng) with the karma-read pool', () => {
-    const player = makePlayer();
-    const rngState = 12321;
-    // Independently derive the deal the reducer will build (same rng seam + neutral karma).
-    const expected = buildDeal(createKarma(), 1, createRng(rngState).rng);
-    const r = step(menuState(player, rngState), { kind: 'menu', choice: 'seek-deal' });
+describe('sacrifice deal (found on the descent, never summoned)', () => {
+  const bargainSeed = findEncounterSeeds().bargain;
+
+  it('opens a deal matching buildDeal(karma, floor, rng) from the draw after the encounter', () => {
+    const player = makePlayer({ xp: 0 });
+    // Independently derive the deal: the encounter draw first, then buildDeal's draws.
+    const { rng } = createRng(bargainSeed);
+    rng();
+    const expected = buildDeal(createKarma(), 1, rng);
+    const r = step(menuState(player, bargainSeed), { kind: 'menu', choice: 'continue' });
     expect(r.state.phase.kind).toBe('deal');
     expect(r.awaiting).toBe('deal-decision');
     if (r.state.phase.kind === 'deal') {
@@ -407,36 +361,48 @@ describe('sacrifice deal (menu option: seek-deal)', () => {
   });
 
   it('taking the deal returns to the hub and patches player + karma', () => {
-    const player = makePlayer();
-    const rngState = 12321;
-    const r = step(menuState(player, rngState), { kind: 'menu', choice: 'seek-deal' });
+    const player = makePlayer({ xp: 0 });
+    const r = step(menuState(player, bargainSeed), { kind: 'menu', choice: 'continue' });
     const r2 = step(r.state, { kind: 'deal-decision', accept: true });
     expect(r2.state.phase.kind).toBe('main-menu');
-    expect(r2.events.some((e) => e.kind === 'deal-taken')).toBe(true);
+    expect(r2.events.some((e) => e.kind === 'deal-taken' || e.kind === 'deal-unaffordable')).toBe(true);
     expect('gold' in (r2.state.player ?? {})).toBe(false);
   });
 
   it('declining leaves player and karma unchanged and returns to the hub', () => {
-    const player = makePlayer();
-    const state = menuState(player, 12321);
-    const r = step(state, { kind: 'menu', choice: 'seek-deal' });
+    const player = makePlayer({ xp: 0 });
+    const state = menuState(player, bargainSeed);
+    const r = step(state, { kind: 'menu', choice: 'continue' });
     const r2 = step(r.state, { kind: 'deal-decision', accept: false });
     expect(r2.events.some((e) => e.kind === 'deal-declined')).toBe(true);
     expect(r2.state.phase.kind).toBe('main-menu');
     expect(r2.state.player).toEqual(player);
     expect(r2.state.karma).toEqual(state.karma);
   });
+
+  it('AC-22 — the hub CANNOT summon a bargain: a stray seek-deal is a rejected no-op', () => {
+    // Type level: the menu choice is 'continue' | 'quit' — 'seek-deal' does not compile.
+    type MenuChoice = Extract<GameInput, { kind: 'menu' }>['choice'];
+    const noSeek: 'seek-deal' extends MenuChoice ? false : true = true;
+    expect(noSeek).toBe(true);
+    // Runtime: an input from an OLD renderer is refused and changes nothing (the reducer is total).
+    const state = menuState(makePlayer({ xp: 0 }), bargainSeed);
+    const r = step(state, { kind: 'menu', choice: 'seek-deal' } as unknown as GameInput);
+    expect(r.state.phase.kind).not.toBe('deal');
+  });
 });
 
 // ------- Chest encounter -----------------------------------------------------
 
 describe('chest encounter', () => {
-  // Seed 4: the first step draw is 0.9236 -> randInt(_,6)=5 -> the chest slot of
-  // [B,B,B,R,R,C]. xp 0 so no act gate fires first. The chest loot lands in the backpack.
+  // The first rngState whose encounter draw lands in floor 1's chest band (found through the
+  // pure `selectEncounter`, not the reducer). xp 0 so no act gate fires first. The chest loot
+  // lands in the backpack. (PLAN.md #2: the fixed seed 4 no longer lands on a chest — the table
+  // is floors.json's weights now, and 4 draws a bargain.)
   it('main-menu continue can open a chest, depositing rolled loot into the backpack', () => {
     const player = makePlayer({ xp: 0 });
     const before = player.inventory.backpack.length;
-    const r = step(menuState(player, 4), { kind: 'menu', choice: 'continue' });
+    const r = step(menuState(player, findEncounterSeeds().chest), { kind: 'menu', choice: 'continue' });
     expect(r.state.phase.kind).toBe('chest');
     expect(r.awaiting).toBe('continue');
     expect(r.events.some((e) => e.kind === 'chest-found')).toBe(true);
@@ -1433,8 +1399,8 @@ function decide(res: StepResult): GameInput {
       return { kind: 'draft-pick', index: 0 }; // autopick the first offer
     case 'deal-decision':
       return { kind: 'deal-decision', accept: false };
-    case 'rest-decision':
-      return { kind: 'rest-decision', accept: true };
+    case 'rest':
+      return { kind: 'continue' }; // PLAN.md #2: a found rest was taken already
     case 'game-over':
       return { kind: 'continue' };
   }

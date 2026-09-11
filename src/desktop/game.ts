@@ -379,7 +379,7 @@ function renderSheet(): void {
   line(`HP ${p.hp}/${p.maxHp}`);
   line(`XP ${p.xp}`);
   line(`Act ${state.act}`);
-  line(`Pots ${p.pots} · Rests ${p.restsLeft}`);
+  line(`Pots ${p.pots}`);
   chips(p.activeConditions);
   // THE CHARACTER PORTRAIT'S RESERVED REGION (plan Appendix A.7). Empty today, and no art is
   // shipped, generated or bought by this unit — what is being committed to is the SHAPE.
@@ -1061,9 +1061,12 @@ function renderChoices(awaiting: Awaiting): void {
       choice('Refuse', () => void dispatch({ kind: 'deal-decision', accept: false }));
       break;
     }
-    case 'rest-decision':
-      choice('Rest here', () => void dispatch({ kind: 'rest-decision', accept: true }));
-      choice('Press on', () => void dispatch({ kind: 'rest-decision', accept: false }));
+    case 'rest':
+      // PLAN.md #2 (§22.26): a FOUND rest spot — the rest has already happened, so there is no
+      // choice to make, only the calm. The floor's scenery region gets its real job here (the
+      // establishing image of the one quiet place), exactly as the hub mounts it.
+      sceneryEl.appendChild(buildArtSlotById('scenery'));
+      choice('Continue', () => void dispatch({ kind: 'continue' }));
       break;
     case 'game-over': {
       // G2 / GAME-DESIGN.md §22.15: a finished run gets a WRITTEN RECORD. This is the

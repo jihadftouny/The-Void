@@ -330,11 +330,12 @@ describe('characterSheet', () => {
 });
 
 describe('dealView (cost -> reward only, pool hidden)', () => {
-  // Hand-derived: describeCost({hp,3}) === "3 HP"; describeReward({heal,5}) === "5 HP restored".
-  const deal: SacrificeDeal = { pool: 'grace', cost: { kind: 'hp', amount: 3 }, reward: { kind: 'heal', amount: 5 } };
+  // Hand-derived: describeCost({hp,3}) === "3 HP"; describeReward({skillCharge,2}) === "2 skill
+  // charges". (PLAN.md #2: no bargain heals any more, so the fixture's reward is a charge.)
+  const deal: SacrificeDeal = { pool: 'grace', cost: { kind: 'hp', amount: 3 }, reward: { kind: 'skillCharge', amount: 2 } };
 
   it('renders the cost and reward text', () => {
-    expect(dealView(deal)).toEqual({ cost: '3 HP', reward: '5 HP restored' });
+    expect(dealView(deal)).toEqual({ cost: '3 HP', reward: '2 skill charges' });
   });
 
   it('never leaks the karma-derived pool (key or value)', () => {
@@ -483,8 +484,8 @@ describe('isRunOver — exhaustive over every phase', () => {
     { kind: 'main-menu' },
     { kind: 'battle', battle: buildRandomBattle(snapshot, 1, createRng(3).rng), started: true, final: false },
     { kind: 'battle-victory', final: false },
-    { kind: 'rest', restOffered: true },
-    { kind: 'deal', deal: { pool: 'standard', cost: { kind: 'hp', amount: 1 }, reward: { kind: 'heal', amount: 1 } } },
+    { kind: 'rest' },
+    { kind: 'deal', deal: { pool: 'standard', cost: { kind: 'hp', amount: 1 }, reward: { kind: 'skillCharge', amount: 1 } } },
     { kind: 'chest', loot: [] },
     { kind: 'act-outro', newAct: 2 },
     { kind: 'level-up-draft', offers: [] },
@@ -683,10 +684,10 @@ describe('the hub menu cannot end a run in one click (G5)', () => {
 
   it('the plain menu dispatches NO quit at all', () => {
     expect(dispatched('menu')).not.toContain('quit');
-    // Non-vacuity: the menu really does dispatch things, so "no quit" is a statement about
-    // the quit and not about an empty list.
-    expect(dispatched('menu')).toContain('continue');
-    expect(dispatched('menu').length).toBeGreaterThan(1);
+    // Non-vacuity: the menu really does dispatch something, so "no quit" is a statement about
+    // the quit and not about an empty list. (PLAN.md #2: exactly one dispatch now — Continue —
+    // since the bargain row left with §22.23.)
+    expect(dispatched('menu')).toEqual(['continue']);
   });
 
   it('and the row that LOOKS destructive switches mode instead', () => {
@@ -748,9 +749,18 @@ describe('the hub menu cannot end a run in one click (G5)', () => {
     expect(screens).toContain('settings');
   });
 
-  it('and still offers the bargain — §22.23 deletes it with #2, not here', () => {
-    expect(hubMenu('menu').items.map((i) => i.label)).toContain('Seek a bargain');
-    expect(dispatched('menu')).toContain('seek-deal');
+  it('and no longer offers a bargain — §22.23 deleted it with #2 (bargains find YOU)', () => {
+    expect(hubMenu('menu').items.map((i) => i.label)).not.toContain('Seek a bargain');
+    expect(dispatched('menu')).not.toContain('seek-deal');
+    // The hub is the five rows the plan re-derives (AC-30): Continue, Inventory, Character
+    // sheet, Settings, Abandon.
+    expect(hubMenu('menu').items.map((i) => i.label)).toEqual([
+      'Continue the descent',
+      'Inventory',
+      'Character sheet',
+      'Settings',
+      'Abandon the descent',
+    ]);
   });
 
   it('every item carries a non-empty label, in both modes', () => {
@@ -775,7 +785,7 @@ describe('fallbackNarration', () => {
     // `prompt.user.split('\n\n')[0]`, which is that recap.
     const past: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Rust Choir' }];
     const memory = rememberBeat(rememberBeat(createStoryMemory(), past), [
-      { kind: 'victory', xpGained: 5, extraRest: false, loot: [] },
+      { kind: 'victory', xpGained: 5, loot: [] },
     ]);
     const now: GameEvent[] = [
       {

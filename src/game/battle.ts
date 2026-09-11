@@ -5,7 +5,7 @@
 //    deltas to the clones, and returns a NEW BattleState plus an ordered event list
 //    and a terminal status. The input state is never mutated; nothing is printed.
 //  - Deterministic seeded RNG: every draw (enemy skill pick, condition saves, player
-//    d20 + damage, flee roll, victory extra-rest + loot) threads the injected `Rng` in a
+//    d20 + damage, flee roll, victory loot) threads the injected `Rng` in a
 //    documented order, so a round is exactly reproducible and testable.
 //  - Serializable plain-data state: BattleState is flat plain data (player, enemy,
 //    act, canFlee) that round-trips through JSON.
@@ -413,7 +413,9 @@ export function rollFlee(rng: Rng): boolean {
  * `resolvePlayerTurn`: enemy-condition-tick draws (NONE when the enemy is conditionless)
  * -> enemy to-hit d20 (1 draw, or 2 at adv/dis; M4) -> enemy skill-pick draw (ONLY on a
  * hit/crit with charges) -> player-condition-tick draws -> player d20 + damage draws
- * (Fight) or no draw (Cast) -> on victory: extra-rest draw then loot roll.
+ * (Fight) or no draw (Cast) -> on victory: the loot roll. (PLAN.md #2 deleted the victory's
+ * extra-rest draw with the banked rest counter, so every draw after a victory moved up by one — a
+ * deliberate, ledgered re-baseline in `offEquivalence.test.ts`.)
  */
 export function resolveRound(
   state: BattleState,
@@ -832,7 +834,7 @@ function withFlags(
 /**
  * Fire the `onKill` triggers (Devourer's Maw's permanent stat steal, etc.) on the player who
  * just felled the enemy, then hand off to `applyVictory` — PURE. RNG-free trigger step, so
- * the victory draw order (extra-rest then loot) is unchanged. Off-equivalent for a normal
+ * the victory draw order (the loot roll) is unchanged. Off-equivalent for a normal
  * run (no onKill trigger fires, so the player is unchanged before rewards).
  */
 function killAndVictory(
@@ -873,9 +875,10 @@ function resolveCast(state: BattleState, skillId: SkillId, rng: Rng, rules: Roun
 }
 
 /**
- * The shared victory block — PURE. Grants xp = enemy.xp, rolls the extra-rest chance
- * (`rng()*100+1 <= 25`) THEN a found-loot drop (`rollLootDrop(state.act, rng, familyTag)`) IN THAT ORDER,
- * and emits the `victory` event. Extracted so an enemy killed by its own DoT tick (before it
+ * The shared victory block — PURE. Grants xp = enemy.xp, rolls a found-loot drop
+ * (`rollLootDrop(state.act, rng, familyTag)`), and emits the `victory` event. (PLAN.md #2: the
+ * extra-rest chance that used to be drawn first is gone — rest spots are FOUND on the descent,
+ * §22.26, so there is no rest counter for a victory to feed.) Extracted so an enemy killed by its own DoT tick (before it
  * acts) awards exactly the same rewards as a kill by the player's action. M7: the old gold
  * draw is replaced by the loot roll — a non-null drop is picked up into the backpack and
  * summarized on `victory.loot`; a failed drop gate leaves the backpack untouched and
@@ -889,7 +892,6 @@ function applyVictory(
   rng: Rng,
 ): RoundResult {
   const xpGained = enemy.xp;
-  const extraRest = rng() * 100 + 1 <= 25;
   // M8+: bias the drop slot by the enemy's broad family tag. A legacy/boss enemy whose
   // familyId is a bare type string resolves to no family ⇒ tag undefined ⇒ the roll is
   // byte-identical to the pre-family behaviour (off-equivalence for family-less enemies).
@@ -899,10 +901,9 @@ function applyVictory(
   const newPlayer: Player = {
     ...player,
     xp: player.xp + xpGained,
-    restsLeft: player.restsLeft + (extraRest ? 1 : 0),
     inventory,
   };
-  events.push({ kind: 'victory', xpGained, extraRest, loot });
+  events.push({ kind: 'victory', xpGained, loot });
   return { state: { ...state, player: newPlayer, enemy }, events, status: 'player-won', resolved: true };
 }
 

@@ -266,8 +266,8 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
     case 'accept-or-reroll-stats':
       return { kind: 'stats-decision', accept: true };
     case 'main-menu':
-      // The shipped policies never seek a deal — this is the no-sacrifice, found-loot-only
-      // baseline (the §11 load-bearing question).
+      // PLAN.md #2: there is no "seek a bargain" any more — bargains FIND the run as descent
+      // encounters, and the policy answers them at `deal-decision` below.
       return { kind: 'menu', choice: 'continue' };
     case 'continue':
       return { kind: 'continue' };
@@ -282,19 +282,14 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
         : { kind: 'continue' };
     case 'deal-decision': {
       if (phase.kind !== 'deal') return { kind: 'continue' };
-      const { cost, reward } = phase.deal;
-      // Take a clearly-beneficial deal; never pay the body (hp / maxHp).
-      const accept =
-        cost.kind !== 'hp' &&
-        cost.kind !== 'maxHp' &&
-        (reward.kind === 'item' ||
-          reward.kind === 'heal' ||
-          reward.kind === 'statPoint' ||
-          reward.kind === 'skillCharge');
-      return { kind: 'deal-decision', accept };
+      // PLAN.md #2 (AC-26): accept any bargain that does not pay with the body (hp / maxHp).
+      // Every reward is worth having now that none of them heals (§22.25).
+      const { cost } = phase.deal;
+      return { kind: 'deal-decision', accept: cost.kind !== 'hp' && cost.kind !== 'maxHp' };
     }
-    case 'rest-decision':
-      return { kind: 'rest-decision', accept: true };
+    case 'rest':
+      // A found rest was taken the moment it was found (§22.26); only `continue` remains.
+      return { kind: 'continue' };
     case 'game-over':
       // Unreachable dispatch (the loop exits on this awaiting); return a valid input anyway.
       return { kind: 'continue' };

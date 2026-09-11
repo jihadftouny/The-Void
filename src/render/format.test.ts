@@ -29,7 +29,7 @@ describe('hpText', () => {
 
 describe('formatEvent — anchored player-facing strings', () => {
   it('victory carries the XP number (M7: no gold)', () => {
-    const s = formatEvent({ kind: 'victory', xpGained: 12, extraRest: false, loot: [] });
+    const s = formatEvent({ kind: 'victory', xpGained: 12, loot: [] });
     expect(s).toContain('12');
     expect(s.toLowerCase()).not.toContain('gold');
   });
@@ -137,7 +137,7 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'escape-impossible': { kind: 'escape-impossible' },
   spared: { kind: 'spared', enemyName: 'Grief' },
   'spare-unavailable': { kind: 'spare-unavailable' },
-  victory: { kind: 'victory', xpGained: 5, extraRest: true, loot: [] },
+  victory: { kind: 'victory', xpGained: 5, loot: [] },
   defeat: { kind: 'defeat' },
   'relic-triggered': { kind: 'relic-triggered', trigger: 'onHit', action: 'dealDamage' },
   'consumable-used': { kind: 'consumable-used', itemId: 'void-draught' },
@@ -160,11 +160,7 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'stats-rolled': { kind: 'stats-rolled', stats: STATS },
   'player-created': { kind: 'player-created', name: 'X', classId: 'Enforcer', maxHp: 12, armorClass: 11 },
   'encounter-start': { kind: 'encounter-start', enemyName: 'Beast' },
-  'rest-lore': { kind: 'rest-lore', title: 'T', loreText: 'L' },
   'rest-taken': { kind: 'rest-taken', hpRestored: 5, hp: 15, maxHp: 20 },
-  'rest-full': { kind: 'rest-full' },
-  'rest-declined': { kind: 'rest-declined' },
-  'no-rests': { kind: 'no-rests' },
   'deal-offer': { kind: 'deal-offer', pool: 'standard', cost: '8 HP', reward: '12 HP restored' },
   'deal-taken': { kind: 'deal-taken', cost: '8 HP', reward: '12 HP restored' },
   'deal-unaffordable': { kind: 'deal-unaffordable', cost: 'a relic' },
@@ -201,7 +197,8 @@ describe('formatEvent — totality over every event kind', () => {
     // kind quietly deleted from the union would not shrink the guarantee unnoticed.
     // (`src/llm/narrationCoverage.test.ts` counts the same 37 + 26 independently.)
     // PLAN.md #2 added 4 combat and 4 narrative kinds.
-    expect(ALL_KINDS).toHaveLength(37 + 4 + 26 + 4);
+    // ...and removed the four rest-decision kinds (rest-lore, rest-full, rest-declined, no-rests).
+    expect(ALL_KINDS).toHaveLength(37 + 4 + 26 + 4 - 4);
     for (const kind of ALL_KINDS) expect(SAMPLES[kind].kind).toBe(kind);
   });
 

@@ -71,7 +71,7 @@ describe('createPlayer — Enforcer', () => {
 
   it('has the fixed game-start scalar defaults', () => {
     expect('gold' in player).toBe(false); // M7: gold retired
-    expect(player.restsLeft).toBe(1);
+    expect('restsLeft' in player).toBe(false); // PLAN.md #2: rests are found, never banked (22.26)
     expect(player.pots).toBe(6); // M15: STARTING_POTS 2 -> 6
     expect(player.proficiency).toBe(2);
     expect(player.advantageDisadvantage).toBe(0);

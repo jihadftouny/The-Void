@@ -541,7 +541,7 @@ describe('every screen is classified into one of the two stage layouts', () => {
     continue: 'side',
     'draft-pick': 'side',
     'deal-decision': 'side',
-    'rest-decision': 'side',
+    rest: 'side', // PLAN.md #2: the found rest spot (it lost its decision)
   };
 
   it('maps every one of them exactly as the design says', () => {

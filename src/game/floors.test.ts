@@ -414,11 +414,17 @@ describe('killing The Judged is cruelty AND desecration, in one step (AC-17, §2
 
 describe('the engine opens a floor-4 bargain from the tempting pool, through step (AC-16)', () => {
   it('a neutral ledger standing on floor 4 is offered tempting; on floor 1, standard', () => {
+    // PLAN.md #2: a bargain is reached the way the game reaches it — the hub's `continue` draws
+    // the next encounter. The only hand-set field is the RNG accumulator, swept s = 1, 2, … until
+    // that draw is a bargain; the player and the (neutral) ledger are untouched.
     for (const [place, pool] of [[3, 'tempting'], [0, 'standard']] as const) {
-      const base = battleState(player(), frozenEnemy(), place);
-      const hub: GameState = { ...base, phase: { kind: 'main-menu' } };
-      const r = step(hub, { kind: 'menu', choice: 'seek-deal' });
-      expect(r.state.phase.kind === 'deal' && r.state.phase.deal.pool, `place ${place}`).toBe(pool);
+      const base = battleState(player({ xp: 0 }), frozenEnemy(), place);
+      let offered: string | null = null;
+      for (let s = 1; s <= 200 && offered === null; s++) {
+        const r = step({ ...base, rngState: s, phase: { kind: 'main-menu' } }, { kind: 'menu', choice: 'continue' });
+        if (r.state.phase.kind === 'deal') offered = r.state.phase.deal.pool;
+      }
+      expect(offered, `place ${place}`).toBe(pool);
     }
   });
 });

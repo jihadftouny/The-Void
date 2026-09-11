@@ -173,10 +173,9 @@ export function formatEvent(e: GameEvent): string {
     case 'spare-unavailable':
       return `This one cannot be spared.`;
     case 'victory': {
-      const rest = e.extraRest ? ', and you find a place to rest' : '';
       const loot =
         e.loot.length > 0 ? ` You scavenge ${e.loot.map((l) => l.name).join(', ')}.` : '';
-      return `Victory! +${e.xpGained} XP${rest}.${loot}`;
+      return `Victory! +${e.xpGained} XP.${loot}`;
     }
     case 'defeat':
       return `You have fallen.`;
@@ -225,16 +224,8 @@ export function formatEvent(e: GameEvent): string {
       return `${e.name} the ${e.classId} — ${e.maxHp} HP, AC ${e.armorClass}.`;
     case 'encounter-start':
       return `${e.enemyName} emerges from the dark.`;
-    case 'rest-lore':
-      return `${e.title}\n${e.loreText}`;
     case 'rest-taken':
       return `You rest and recover ${e.hpRestored} HP (now ${hpText(e.hp, e.maxHp)}).`;
-    case 'rest-full':
-      return `You are already at full health.`;
-    case 'rest-declined':
-      return `You press on without resting.`;
-    case 'no-rests':
-      return `You have no rest remaining.`;
     case 'deal-offer':
       return `The altar offers ${e.reward} — the price is ${e.cost}.`;
     case 'deal-taken':

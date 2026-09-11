@@ -1,0 +1,41 @@
+{
+  "status": "PLACEHOLDER LORE — NOT THE AUTHOR'S WORDS. Replaced in PLAN.md #13 (block 4). The SHAPE is the contract (GAME-DESIGN.md 22.26): one entry per floor, a place line and two to four lore lines, CALM in register on every floor, including 3 (quiet grief, not grief that will not let you rest) and 5 (the damned still get one quiet moment). The narrator describes; the author decides what is true. Written from WORLD.md section 6's stage table in register only.",
+  "floors": {
+    "1": {
+      "place": "a dry stairwell under the market",
+      "lore": [
+        "The Undercity is still solid here: concrete, old pipes, a light that works.",
+        "Someone swept this landing once, and the habit of it lingers."
+      ]
+    },
+    "2": {
+      "place": "an alcove between two mirrors that have stopped arguing",
+      "lore": [
+        "For a moment the pieces of this floor agree with one another.",
+        "Here the reflections only reflect, and ask for nothing back."
+      ]
+    },
+    "3": {
+      "place": "a cold hearth in the Ash City",
+      "lore": [
+        "The ash settles the way snow does; nothing here is burning, and nothing needs to.",
+        "Grief is quiet in this room. It sits beside you and asks for nothing.",
+        "The fire went out long ago. The warmth that is left is enough to rest by."
+      ]
+    },
+    "4": {
+      "place": "a bench outside a closed hall",
+      "lore": [
+        "The weighing goes on somewhere else; this bench is not part of it.",
+        "The light is soft here, and does not look at you."
+      ]
+    },
+    "5": {
+      "place": "a still room at the edge of everything",
+      "lore": [
+        "There is very little here, and for once that is restful.",
+        "Nothing presses. The quiet is only quiet."
+      ]
+    }
+  }
+}

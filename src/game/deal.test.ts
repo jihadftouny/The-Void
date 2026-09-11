@@ -10,7 +10,10 @@ import {
   canAfford,
   describeCost,
   type SacrificeDeal,
+  type DealReward,
+  type DealRewardSpec,
 } from './deal.ts';
+import dealsData from '../data/deals.json';
 import { createPlayer, type Player } from './player.ts';
 import { createKarma, type KarmaState } from './karma.ts';
 import { computeStatMod } from './character.ts';
@@ -72,12 +75,14 @@ describe('buildDeal — pool is the karma read; determinism', () => {
     // This is the property that keeps every scripted-rng deal test honest across a data edit:
     // it fails the moment a template is INSERTED at the head of a pool instead of appended.
     // Expected values are read off `deals.json`'s authoring order by hand, not from the loader.
-    expect(buildDeal(NEUTRAL, 1, scriptedRng([0.0])).cost).toEqual({ kind: 'hp', amount: 8 });
+    // PLAN.md #2 rewrote the pools (no heals): standard now leads with `hp 6 -> 2 charges`.
+    expect(buildDeal(NEUTRAL, 1, scriptedRng([0.0])).cost).toEqual({ kind: 'hp', amount: 6 });
     expect(
       buildDeal({ ...NEUTRAL, restraintGreed: -5 }, 1, scriptedRng([0.0])).cost,
     ).toEqual({ kind: 'desecrate' });
     expect(
-      buildDeal({ ...NEUTRAL, reverenceDesecration: 5 }, 1, scriptedRng([0.0])).cost,
+      // grace[0] now pays a ROLLED item (PLAN.md #2), so it takes generateItem's two draws too.
+      buildDeal({ ...NEUTRAL, reverenceDesecration: 5 }, 1, scriptedRng([0.0, 0.5, 0.5])).cost,
     ).toEqual({ kind: 'hp', amount: 5 });
   });
 
@@ -87,7 +92,8 @@ describe('buildDeal — pool is the karma read; determinism', () => {
     // and putting `whisper` only in `tempting` would have hidden The Delusion behind a fall the
     // player must already have taken. `pick` = items[floor(x*5)] over the 5-long standard pool:
     // x=0.7 -> index 3 (offering), x=0.9 -> index 4 (whisper). Hand-derived from the file order.
-    expect(buildDeal(NEUTRAL, 1, scriptedRng([0.7])).cost).toEqual({ kind: 'offering' });
+    // PLAN.md #2: the offering now pays a rolled Rare armor, so it takes two more draws.
+    expect(buildDeal(NEUTRAL, 1, scriptedRng([0.7, 0.5, 0.5])).cost).toEqual({ kind: 'offering' });
     expect(buildDeal(NEUTRAL, 1, scriptedRng([0.9])).cost).toEqual({ kind: 'whisper' });
   });
 });
@@ -172,7 +178,7 @@ describe('applyDeal — each cost type applies its exact effect', () => {
     const deal: SacrificeDeal = {
       pool: 'tempting',
       cost: { kind: 'relic' },
-      reward: { kind: 'heal', amount: 0 },
+      reward: { kind: 'skillCharge', amount: 0 }, // grants nothing
     };
     const r = applyDeal(p, NEUTRAL, deal);
     expect(r.outcome).toBe('taken');
@@ -185,7 +191,7 @@ describe('applyDeal — each cost type applies its exact effect', () => {
     const deal: SacrificeDeal = {
       pool: 'tempting',
       cost: { kind: 'relic' },
-      reward: { kind: 'heal', amount: 0 },
+      reward: { kind: 'skillCharge', amount: 0 }, // grants nothing
     };
     expect(canAfford(p, deal.cost)).toBe(false);
     expect(applyDeal(p, NEUTRAL, deal).outcome).toBe('unaffordable');
@@ -193,15 +199,35 @@ describe('applyDeal — each cost type applies its exact effect', () => {
 });
 
 describe('applyDeal — reward types', () => {
-  it('heal reward restores HP capped at maxHp', () => {
-    const p = makePlayer({ hp: 35, maxHp: 40 });
+  it('NO reward heals — §22.25, enforced by type and by data (AC-21, G52 at the root)', () => {
+    // Type level: `DealReward` has no `heal` member, so this alias is `never`. If a heal arm
+    // were ever added back, the assignment below would stop compiling.
+    type HealReward = Extract<DealReward, { kind: 'heal' }>;
+    type HealSpec = Extract<DealRewardSpec, { kind: 'heal' }>;
+    const noHeal: [HealReward, HealSpec] extends [never, never] ? true : false = true;
+    expect(noHeal).toBe(true);
+    // Data level: nothing in the shipped table so much as mentions a heal.
+    expect(JSON.stringify(dealsData)).not.toMatch(/"heal"/);
+    // And no pool's reward ever touches HP: every built offer, every pool, 120 seeds each.
+    for (const karma of [NEUTRAL, { ...NEUTRAL, restraintGreed: -5 }, { ...NEUTRAL, reverenceDesecration: 5 }]) {
+      for (let seed = 1; seed <= 120; seed += 1) {
+        const deal = buildDeal(karma, 1, mulberry32(seed));
+        const p = makePlayer({ hp: 10, maxHp: 40, skillCharges: 5 });
+        if (!canAfford(p, deal.cost)) continue;
+        const r = applyDeal(p, NEUTRAL, deal);
+        expect(r.player.hp, `${deal.pool}/${deal.cost.kind}`).toBeLessThanOrEqual(p.hp);
+      }
+    }
+  });
+
+  it('a skill-charge reward is capped at maxSkillCharges', () => {
+    const p = makePlayer({ skillCharges: 4, maxSkillCharges: 5 });
     const deal: SacrificeDeal = {
       pool: 'grace',
-      cost: { kind: 'skillCharge', amount: 0 },
-      reward: { kind: 'heal', amount: 20 },
+      cost: { kind: 'hp', amount: 1 },
+      reward: { kind: 'skillCharge', amount: 3 },
     };
-    const r = applyDeal(p, NEUTRAL, deal);
-    expect(r.player.hp).toBe(40); // 35 + 20 capped at 40
+    expect(applyDeal(p, NEUTRAL, deal).player.skillCharges).toBe(5); // min(4 + 3, 5)
   });
 
   it('stat-point reward raises the stat by 1 and recomputes its mod (STR 15 -> 16, +2 -> +3)', () => {
@@ -246,7 +272,7 @@ describe('applyDeal — karma-shifting costs flow through the real recordKarma',
     const deal: SacrificeDeal = {
       pool: 'tempting',
       cost: { kind: 'greed' },
-      reward: { kind: 'heal', amount: 0 },
+      reward: { kind: 'skillCharge', amount: 0 }, // grants nothing
     };
     const r = applyDeal(p, NEUTRAL, deal);
     expect(r.karma).toEqual({ ...NEUTRAL, restraintGreed: -1 }); // KARMA_DELTAS.lootGreedily
@@ -274,7 +300,7 @@ describe('applyDeal — karma-shifting costs flow through the real recordKarma',
     const deal: SacrificeDeal = {
       pool: 'standard',
       cost: { kind: 'offering' },
-      reward: { kind: 'heal', amount: 0 },
+      reward: { kind: 'skillCharge', amount: 0 }, // grants nothing
     };
     const r = applyDeal(p, NEUTRAL, deal);
     expect(r.outcome).toBe('taken');
@@ -293,12 +319,12 @@ describe('applyDeal — karma-shifting costs flow through the real recordKarma',
     const deal: SacrificeDeal = {
       pool: 'standard',
       cost: { kind: 'offering' },
-      reward: { kind: 'heal', amount: 5 },
+      reward: { kind: 'skillCharge', amount: 5 },
     };
     expect(canAfford(p, deal.cost)).toBe(false);
     const r = applyDeal(p, NEUTRAL, deal);
     expect(r.outcome).toBe('unaffordable');
-    expect(r.player).toBe(p); // nothing changed at all — not even the heal
+    expect(r.player).toBe(p); // nothing changed at all — not even the reward
     expect(r.karma).toEqual(NEUTRAL);
   });
 
@@ -309,7 +335,7 @@ describe('applyDeal — karma-shifting costs flow through the real recordKarma',
     const deal: SacrificeDeal = {
       pool: 'standard',
       cost: { kind: 'whisper' },
-      reward: { kind: 'heal', amount: 0 },
+      reward: { kind: 'skillCharge', amount: 0 }, // grants nothing
     };
     const r = applyDeal(p, NEUTRAL, deal);
     expect(r.outcome).toBe('taken');

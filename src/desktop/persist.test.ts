@@ -47,7 +47,7 @@ describe('persist (desktop save/load)', () => {
     // one lets a call site forget the meta-progression fields, and that omission IS G19.
     const state = createGame(12345);
     let memory = createStoryMemory();
-    memory = rememberBeat(memory, [{ kind: 'victory', xpGained: 5, extraRest: false, loot: [] }]);
+    memory = rememberBeat(memory, [{ kind: 'victory', xpGained: 5, loot: [] }]);
     const m = meta({ runSeed: 12345, runSummary: { ...emptyRunSummary(), maxAct: 3, spareCount: 2 } });
     saveRun(state, memory, m);
     const loaded = loadRun();
