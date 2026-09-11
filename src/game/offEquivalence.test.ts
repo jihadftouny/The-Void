@@ -305,7 +305,7 @@ import { createGame, step, awaitingFor } from './game.ts';
 import type { GameState, GameInput } from './game.ts';
 import type { GameEvent } from './gameEvent.ts';
 import { simulateRun, simulateBatch, heuristicPolicy, gearUpAtHub } from './sim.ts';
-import type { RunResult } from './sim.ts';
+import type { AggregateReport, RunResult } from './sim.ts';
 import type { PlayerClass } from './player.ts';
 
 /**
@@ -333,13 +333,41 @@ function finalRngState(seed: number, classId: PlayerClass): number {
   return state.rngState;
 }
 
+/**
+ * What the lock freezes: a run's OUTCOME record. PLAN.md #2 step 12 added per-floor counters and
+ * the starting Wisdom to `RunResult` (and their sums to the report); those are the sim's
+ * MEASUREMENT of the same event stream — they cannot move unless the stream (locked here by the
+ * outcome and the final RNG accumulator) does — so they are left out of the lock rather than
+ * frozen twice, and `sim.test.ts` proves them against events counted by hand. Step 12 changed
+ * no engine rule and no policy, so every row below must survive it byte-for-byte.
+ */
+type LockedRecord = Omit<RunResult, 'startingWis' | 'perFloor'>;
+function lockedOf(r: RunResult): LockedRecord {
+  const { startingWis, perFloor, ...locked } = r;
+  void startingWis;
+  void perFloor;
+  return locked;
+}
+function lockedReport(r: AggregateReport): unknown {
+  const { perFloor, perWisBucket, perClass, ...locked } = r;
+  void perFloor;
+  void perWisBucket;
+  const classes: Record<string, unknown> = {};
+  for (const [id, stats] of Object.entries(perClass)) {
+    const { perFloor: classFloors, ...rest } = stats;
+    void classFloors;
+    classes[id] = rest;
+  }
+  return { ...locked, perClass: classes };
+}
+
 /** The frozen run records. MEASURED, not derived — see the file header. */
 // #0c: ALL SIX rows moved, and every one of them was expected to — the catalog gate shifts
 // every draw after a run's first successful loot drop, and each of these runs takes a drop
 // early. NO row is byte-identical this time, and that absence is itself consistent with the
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
-const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
+const GOLDEN_RUNS: readonly (LockedRecord & { rngState: number })[] = [
   { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 2, finalAct: 2, finalLevel: 6, floorsCleared: 1, steps: 126, cause: 'The Reflection', rngState: 3674038724 },
   { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 206, cause: 'Blessed Burning Rage', rngState: 1172755742 },
   { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 52, cause: 'Reinforced Electro-Core Drone', rngState: 2504613783 },
@@ -351,12 +379,12 @@ const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
   it('replays 3 seeds x 2 classes to the exact same terminal record', () => {
     for (const golden of GOLDEN_RUNS) {
-      const runOnly: RunResult = {
+      const runOnly: LockedRecord = {
         seed: golden.seed, classId: golden.classId, outcome: golden.outcome,
         diedAtAct: golden.diedAtAct, finalAct: golden.finalAct, finalLevel: golden.finalLevel,
         floorsCleared: golden.floorsCleared, steps: golden.steps, cause: golden.cause,
       };
-      expect(simulateRun(golden.seed, { classId: golden.classId })).toEqual(runOnly);
+      expect(lockedOf(simulateRun(golden.seed, { classId: golden.classId }))).toEqual(runOnly);
     }
   });
 
@@ -368,7 +396,7 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
 
   it('folds a fixed-seed batch into the exact same aggregate report', () => {
     const report = simulateBatch({ seeds: [1, 2, 3], classes: ['Enforcer', 'Hollow'] });
-    expect(report).toEqual({
+    expect(lockedReport(report)).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
       wins: 2,

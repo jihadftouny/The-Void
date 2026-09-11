@@ -337,6 +337,16 @@ describe('AC-12 — the passive Wisdom roll, d20 + effective WIS mod >= 13', () 
     expect(r.state.karma).toEqual(createKarma());
     expect(r.events.some((e) => e.kind === 'illusion-dispelled')).toBe(false);
   });
+
+  it('the DC injected into STEP reaches the round (the sim threads it; the game never does)', () => {
+    // WIS 10 (mod 0) and a first face of exactly 12: short of the shipped 13, enough for 12.
+    const seed = seedWithFirstFace(12, 12);
+    const s = floorTwo(fight(hero(10), foe({ illusory: true })), seed);
+    expect(step(s, { kind: 'battle-action', action: 'fight' }).state.phase.kind).toBe('battle');
+    const at12 = step(s, { kind: 'battle-action', action: 'fight' }, { illusionDc: 12 });
+    expect(at12.state.phase.kind).toBe('main-menu');
+    expect(at12.events).toEqual([{ kind: 'illusion-dispelled', natural: 12, modifier: 0, total: 12, dc: 12 }]);
+  });
 });
 
 // ------- AC-13: a real enemy's round is untouched ------------------------------------------
