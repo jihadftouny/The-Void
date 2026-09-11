@@ -19,6 +19,49 @@ Format per entry:
 
 ---
 
+## 2026-09-11 — floor-mechanics (`PLAN.md` #2; G9, G48, G52, G57, G58 closed; G59–G61 opened) [branch `agentic/floor-mechanics`, **merged to `main` 2026-09-11**]
+- Verdict: **PASS** after **2 fix rounds** — the maximum the pipeline allows before a re-plan. 2278 → **2536 tests**, 106 files. 35 commits after one history rewrite.
+- **Why it exists:** v1 carries #2 because #6 cannot start without a floor-modifier hook (`SHIP-SCOPE.md` §11). Its magnitudes were settled in an author interview on 2026-09-10 (`GAME-DESIGN.md` §22.24–§22.29). Four silent decisions were put back to the author before the build (Appendix A); **one was overridden** — a full pack opens a discard step rather than losing the reward.
+- Build-agent deviations: moved the sim gear-up ahead of step 12, so every later rule change was measured against a player who uses what it finds (sound); two extra F3 presets to make rest narration checkable; `src/desktop/game.ts` edits landed inside two engine commits because splitting would have left red commits; a whole-document report check redesigned to commit its rendering inputs.
+- Test failures before fixes: round 1 — **two save-migration bugs that would have reached the player**, a **real karma-word leak**, four guards green when broken, and a false reason in the tuning ledger. Round 2 — five commits red on their own (reported as one), and a probe gap.
+- Plan open-questions: none formally; four silent decisions surfaced for the author, one overridden.
+- Manual engineer fixes: none yet.
+
+### ⭐ The balance re-run answered the author's question — and pointed somewhere else
+
+The author ruled (§22.27) that the Wisdom gap would be decided *after* measuring, and forbade the unit from tuning a class to close it. **Honoured exactly** — the test-agent deep-diffed every per-class export against `main` and nothing moved. Only three whole-game knobs did.
+
+**The finding:** the feared Wisdom gap is small (~3.7 points; removing illusions entirely moves no class by more than 2.5). **The real spread — Scavver 57% against Neuromancer and Penitent ~18% — is decided on floor 1**, which has no mechanic at all. And floor 4 is a separate cliff for every class. Recorded as **G59** for the author. **"Soften floor 2", one of the three remedies the author had on the table, would barely move anything.** This is the payoff of measuring before deciding: had the author pre-picked a remedy in the interview, it would most likely have been the wrong one.
+
+### ⭐ CATALOGUE ENTRY 11 — a duplicated guard that drifts
+
+The karma-word leak (round 1, F4) is a new shape. The build agent correctly strengthened the forbidden vocabulary into stems — but **`src/dev/observable.test.ts` kept its own private copy, still on the old words**, and that copy was the one sweeping *every* event. The test-agent planted "merciful" in a victory log line and "merciless" in the fact line the model reads; **no karma guard fired.** The build agent had *disclosed* the duplicate as "a known gap". **It was a hole, not a gap.**
+
+**The rule:** a guard defined in two places is two guards, and they will drift. One list, imported everywhere, with a test that fails if anyone grows a private copy. The fix does exactly that, and the final pass found the copy-detector itself still misses three copy shapes (G61 N3) — so this is not closed forever, only closed for the shapes anyone has thought of.
+
+### Two fix rounds, and why they did not trigger a re-plan
+
+Round 2's FAIL was **mechanical**: five commits red on their own (the fix sat at the branch's tip, so every commit between carried the failure — the build agent reported *one*) and one unprobed screen state. **The substance had passed.** The rule "two failed rounds means the plan is wrong" is about a build that keeps defending its approach; this one never did. Worth making that distinction explicit in the skill.
+
+The five red commits were fixed by **rewriting history on the unmerged branch** — a scripted `GIT_SEQUENCE_EDITOR` fold, a named backup ref first, and an abort-don't-hand-resolve rule. **The orchestrator independently confirmed the rewrite was content-preserving** (`git diff` against the backup empty; 36 → 35 commits). Then every commit was checked individually by extracting its tree with `git archive`, never checking out the worktree.
+
+### The suite-time cost, and how it was bought back
+
+Widening the stale-report guard to the whole document (recommended by the test-agent at "~29 s") cost **~192 s** on the author's laptop — the check ran its four batches **serially in one test** while 23 threads idled, and the laptop throttles to a quarter speed under sustained load. **Split across four files it runs in parallel: ~14 s cool, ~51–55 s hot, with the same coverage.** The redesign commits the report's rendering inputs (`docs/balance-report.inputs.json`); the test-agent then **forged the inputs and the report together so they agreed with each other but not with the game**, and the matching batch check went red every time. The split's one gap: nothing checks all four batch files exist (G61 N1).
+
+### Interruptions — four this session, no work lost
+
+A plan agent killed by a session limit seconds in; the verifier cut off mid-run when a Claude Code session exited; and two earlier stalls. **The verifier interruption is the one worth studying.** Its report file on disk was the *previous* pass's, timestamped three minutes before the first fix landed — **it looked like a result and was not one.** Caught only by dating the file against the commits. The verifier was then told to revert every mutation immediately after measuring it, so a dying session can never leave a deliberately broken file behind; it went further and ran every mutation in scratch copies. **Adopt that as standing test-agent practice.**
+
+### For the retro
+
+- **Distinguish a mechanical FAIL from a substantive one** in the two-round rule, or the next mechanical round-2 failure will trigger an unwarranted re-plan.
+- **Test-agents mutate in scratch copies, never the worktree** — this unit proved it both safer and no slower.
+- **A report file is not a result until it is dated against the commits it claims to cover.**
+- **The build agent's "known gaps" list needs the test-agent's eye**: one entry on it (the duplicate vocabulary) was the round's most serious finding.
+
+---
+
 ## 2026-09-09 — layout-breathing-room (repairs the #8 escape; G57/G58 adjacent) [branch `agentic/layout-breathing-room`, **merged to `main` 2026-09-09**]
 - Verdict: **PASS** (0 fix rounds; 1 post-PASS hardening round the orchestrator asked for). 2149 → **2278 tests**, 91 files. 10 commits. **`src/game`, `src/llm`, `components.ts`, `components.css`, `log-model.ts`, `screens.ts`, `rendererSource.test.ts`, `screens.test.ts`, `art-slots.ts` byte-unchanged. No new dependency.**
 - **Why it exists:** to repair the `visual-identity` escape — the author ran the game and **the narration was gone**. See that unit's Manual-engineer-fixes line.

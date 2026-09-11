@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2278 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2536 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,18 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-11 — #2 merged: every floor plays differently, and the Void comes to you ✅
+
+**`floor-mechanics` merged. 2278 → 2536 tests.** Each floor now has its mechanic: illusions on floor 2, halved healing and a charge drain on floor 3, doubled karma on floor 4, a warped kit on floor 5. **Bargains and rests are no longer menu buttons** — they arrive on the descent, several bargains per floor, none of which can heal. **A found rest is the one truly calm moment in the game.** A full pack lets you mark what to leave behind. Saves from before still load.
+
+**The balance re-run answered the author's deferred question, and pointed elsewhere.** Overall 30.6% — inside the one-in-three target. **The Wisdom gap the author feared is small.** The real spread is by class — **Scavver 57%, Neuromancer and Penitent ~18%** — and it is **decided on floor 1**, not floor 2. Floor 4 is a separate cliff for everyone. No class was tuned, as ruled; the two levers are the author's (`FINDINGS.md` G59).
+
+**One author-accepted number reversed:** `HOLLOW_GATE_XP` 500 → 600, which §22.21 had flagged for this re-run. The reason on record is now true — an earlier wording claimed floor 5 was the softest floor, and it was not.
+
+**It took the full two fix rounds.** Round 1 caught two save bugs that would have reached the player — an old save could charge 8 HP for nothing and print *“take undefined”* — and a real karma-word leak through a stale duplicate vocabulary list (**catalogue entry 11**). Round 2 was mechanical. **The test suite fell from ~3 minutes to ~14 seconds** once the balance check ran in parallel.
+
+**Next:** the author's eight play-checks, then **#6, the battle screen**, which can now start. ⚠ **The schedule decision `SHIP-SCOPE.md` §12 deferred to this moment — whether #11 ships as full boss agents or its cheaper fallback — is now due.**
 
 ### 2026-09-09 — the narration was gone, and now the pipeline can see a screen ✅
 
