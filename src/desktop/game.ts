@@ -12,6 +12,7 @@ import type { PlayerClass } from '../game/player.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import type { ActiveCondition } from '../game/condition.ts';
+import { floorOf } from '../game/floors.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { loadRun, saveRun, clearRun, type RunMeta, type SavedRun } from './persist.ts';
 import {
@@ -795,6 +796,12 @@ async function dispatch(input: GameInput): Promise<void> {
       hp: state.player?.hp ?? null,
       maxHp: state.player?.maxHp ?? null,
       act: state.act,
+      // PLAN.md #2: the floor the step left the run on (keyed on `place`, as the rules are —
+      // the act counter alone cannot tell an ascent's floor 5 from a descent's), and whether
+      // the fight on screen is an illusion — the one fact a bug report about floor 2 needs and
+      // the player is deliberately not shown. Developer surface only (principle 7).
+      floor: floorOf(state),
+      illusory: state.phase.kind === 'battle' && state.phase.battle.enemy.illusory === true,
       summary: {
         maxAct: runSummary.maxAct,
         bossKills: runSummary.bossKills.length,
@@ -1072,7 +1079,8 @@ function renderChoices(awaiting: Awaiting): void {
     case 'deal-discard': {
       // PLAN.md #2, Appendix A.3: the bargain was accepted with a FULL pack. Nothing is paid
       // yet. One row per item to leave behind (the engine completes the bargain in that one
-      // step), and one way out, which is exactly refusing it. Text only, never markup.
+      // step), and one way out, which is exactly refusing it. Text only, never markup. The
+      // rows sit in a closed list, as Cast does: twelve of them cannot fit a 640px window.
       const p = state.player;
       if (state.phase.kind === 'deal-discard' && p) {
         const view = dealDiscardView(p, state.phase.deal);
@@ -1086,9 +1094,11 @@ function renderChoices(awaiting: Awaiting): void {
         cost.textContent = `Cost: ${view.cost}`;
         block.append(ask, cost);
         choicesEl.appendChild(block);
-        for (const row of view.leave) {
-          choice(row.label, () => void dispatch({ kind: 'discard', index: row.index }));
-        }
+        picker(choicesEl, view.choose, (list) => {
+          for (const row of view.leave) {
+            appendButton(list, buttonModel(row.label), () => void dispatch({ kind: 'discard', index: row.index }));
+          }
+        });
         choice(view.refuse, () => void dispatch({ kind: 'deal-decision', accept: false }));
       }
       break;

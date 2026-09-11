@@ -62,6 +62,15 @@ describe('the full-pack bargain (Appendix A.3) — each row discards ITS item, a
     expect(arm).toMatch(/dealDiscardView\s*\(/);
   });
 
+  it('the rows sit inside ONE closed disclosure (A.3.4: nothing below the fold at 960x640)', () => {
+    expect(arm.match(/\bpicker\s*\(/g) ?? []).toHaveLength(1);
+    expect(arm).toMatch(/picker\(\s*choicesEl,\s*view\.choose,/);
+    // The rows are appended to the picker's LIST, never straight onto the choice column.
+    const inside = arm.slice(arm.search(/picker\(/));
+    expect(inside).toMatch(/appendButton\(\s*list,\s*buttonModel\(\s*row\.label\s*\)/);
+    expect(arm, 'a leave row is a top-level choice again').not.toMatch(/choice\(\s*row\.label/);
+  });
+
   it('each leave row dispatches `discard` with THAT row’s index — not a constant', () => {
     expect(arm).toMatch(/for\s*\(\s*const\s+row\s+of\s+view\.leave\s*\)/);
     expect(arm).toMatch(/dispatch\(\s*\{\s*kind:\s*'discard',\s*index:\s*row\.index\s*\}\s*\)/);
@@ -76,6 +85,39 @@ describe('the full-pack bargain (Appendix A.3) — each row discards ITS item, a
   it('writes text, never markup', () => {
     expect(arm).not.toMatch(/innerHTML/);
     expect(arm).toMatch(/textContent\s*=\s*view\.prompt/);
+  });
+});
+
+describe('the step-detail debug line carries the floor and the illusion flag (principle 7)', () => {
+  /** The object literal handed to `log.debug('engine', 'step detail', { ... })`. */
+  function payload(): string {
+    const at = SOURCE.search(/log\.debug\(\s*'engine',\s*'step detail',/);
+    expect(at, 'the step-detail line is gone').toBeGreaterThan(-1);
+    const open = SOURCE.indexOf('{', at);
+    let depth = 0;
+    for (let i = open; i < SOURCE.length; i += 1) {
+      if (SOURCE[i] === '{') depth += 1;
+      else if (SOURCE[i] === '}') {
+        depth -= 1;
+        if (depth === 0) return SOURCE.slice(open, i + 1);
+      }
+    }
+    throw new Error('unbalanced step-detail payload');
+  }
+
+  it('the floor is read from the STATE through floorOf — keyed on place, like the rules', () => {
+    expect(payload()).toMatch(/\bfloor:\s*floorOf\(\s*state\s*\)/);
+  });
+
+  it('illusory is the live battle enemy’s flag, and a boolean (false off a battle)', () => {
+    expect(payload()).toMatch(
+      /\billusory:\s*state\.phase\.kind\s*===\s*'battle'\s*&&\s*state\.phase\.battle\.enemy\.illusory\s*===\s*true/,
+    );
+  });
+
+  it('both are top-level fields of the payload, not baked into a message string', () => {
+    const p = payload();
+    expect(p).not.toMatch(/`[^`]*\$\{\s*floorOf/);
   });
 });
 
