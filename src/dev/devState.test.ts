@@ -42,9 +42,15 @@ import {
   validateJump,
   withUnlocks,
   EDITABLE_FIELDS,
+  REST_NEXT_SEED,
   type JumpBundle,
   type JumpRejection,
 } from './devState.ts';
+import { BACKPACK_CAPACITY } from '../game/inventory.ts';
+import { CORRUPTION_TEMPLATES } from '../game/corruption.ts';
+import { resolveSkill, type SkillId } from '../game/skill.ts';
+import { floorOf } from '../game/floors.ts';
+import { buildNarrationPrompt } from '../llm/narrate.ts';
 import { createRng } from '../game/rng.ts';
 import { createPlayer, rollStartStats } from '../game/player.ts';
 import { cumulativeXpForLevel, levelForXp } from '../game/progression.ts';
@@ -290,6 +296,26 @@ describe('validateJump names exactly what is wrong', () => {
       expect(validateJump(bundle), reason).toContain(reason);
     }
     expect(cases.length).toBe(11); // PLAN.md #2: the rest and potion counters left the player
+  });
+
+  it('PLAN.md #2: a warped-kit map must name OWNED skills and KNOWN templates', () => {
+    // Three shapes, the ways a hand-edited paste or a stale save really produces one: a skill
+    // the character does not own, a template the data never defined, and the empty-string id.
+    const owned = good().state.player!.skillPool[0]!;
+    const shapes: readonly [string, Record<string, string>][] = [
+      ['an unowned skill', { notASkillAtAll: CORRUPTION_TEMPLATES[0]!.id }],
+      ['an unknown template', { [owned]: 'no-such-template' }],
+      ['an empty template id', { [owned]: '' }],
+    ];
+    for (const [what, map] of shapes) {
+      const bundle = clone(good());
+      bundle.state.player!.corruptedSkills = map;
+      expect(validateJump(bundle), what).toContain('corruption-map-invalid');
+    }
+    // ...and a real map (every owned skill, every template known) is NOT refused.
+    const fine = clone(good());
+    fine.state.player!.corruptedSkills = { [owned]: CORRUPTION_TEMPLATES[0]!.id };
+    expect(validateJump(fine)).not.toContain('corruption-map-invalid');
   });
 
   it('a state the ENGINE save would reject is refused, by the engine save itself', () => {
@@ -640,9 +666,11 @@ describe('DEV_PRESETS', () => {
     installMemoryLocalStorage();
   });
 
-  it('has ten rows with unique ids', () => {
-    expect(DEV_PRESETS).toHaveLength(10);
-    expect(new Set(DEV_PRESETS.map((p) => p.id)).size).toBe(10);
+  it('has sixteen rows with unique ids', () => {
+    // PLAN.md #2 added six: act2-illusion, rest-spot, rest-next-merciful, rest-next-desecrating,
+    // act5-warped and bargain-full-pack (Appendix A.3).
+    expect(DEV_PRESETS).toHaveLength(16);
+    expect(new Set(DEV_PRESETS.map((p) => p.id)).size).toBe(16);
     for (const preset of DEV_PRESETS) {
       expect(preset.label.length, preset.id).toBeGreaterThan(0);
       expect(getPreset(preset.id)).toBe(preset);
@@ -656,7 +684,7 @@ describe('DEV_PRESETS', () => {
       expect(validateJump(buildJump(preset.spec)), preset.id).toEqual([]);
       checked += 1;
     }
-    expect(checked).toBe(10);
+    expect(checked).toBe(16);
   });
 
   it('every row survives the REAL saveRun -> loadRun, deep-equal in all three parts', () => {
@@ -674,7 +702,7 @@ describe('DEV_PRESETS', () => {
       expect(loaded!.meta, `${preset.id} meta`).toEqual(bundle.meta);
       checked += 1;
     }
-    expect(checked).toBe(10);
+    expect(checked).toBe(16);
   });
 
   it('...and that round trip really can fail (non-vacuity for the sweep above)', () => {
@@ -697,7 +725,7 @@ describe('DEV_PRESETS', () => {
       outcomes.add(result.outcome);
       checked += 1;
     }
-    expect(checked).toBe(10);
+    expect(checked).toBe(16);
     // "It terminated" must not be satisfiable by everything dying instantly: the table has
     // to reach all three endings between them.
     expect([...outcomes].sort()).toEqual(['damnation', 'death', 'grace']);
@@ -1078,5 +1106,80 @@ describe('devStatus', () => {
     bundle.state.player = null;
     bundle.state.phase = { kind: 'title' };
     expect(devStatus(bundle.state).level).toBe(0);
+  });
+});
+
+
+// =========================================================================================
+// PLAN.md #2 — the presets for the floors, the found rest and the full-pack bargain. Each
+// claim a preset's LABEL makes is driven through the real `step` rather than trusted.
+// =========================================================================================
+
+describe('the PLAN.md #2 presets do what their labels say', () => {
+  const bundleOf = (id: string): JumpBundle => buildJump(getPreset(id)!.spec);
+
+  it('act2-illusion: floor 2, a battle against an ILLUSORY enemy', () => {
+    const s = bundleOf('act2-illusion').state;
+    expect(floorOf(s)).toBe(2);
+    expect(s.phase.kind === 'battle' && s.phase.battle.enemy.illusory).toBe(true);
+  });
+
+  it('rest-spot: floor 3, on the rest screen, and Continue goes home', () => {
+    const s = bundleOf('rest-spot').state;
+    expect(floorOf(s)).toBe(3);
+    expect(s.phase).toEqual({ kind: 'rest' });
+    const r = step(s, { kind: 'continue' });
+    expect(r.state.phase.kind).toBe('main-menu');
+  });
+
+  it('rest-next-*: the first Continue FINDS a rest on floor 3 — the same rest for both', () => {
+    const merciful = step(bundleOf('rest-next-merciful').state, { kind: 'menu', choice: 'continue' });
+    const desecrating = step(bundleOf('rest-next-desecrating').state, { kind: 'menu', choice: 'continue' });
+    for (const r of [merciful, desecrating]) {
+      expect(r.events.map((e) => e.kind)).toEqual(['rest-found', 'rest-taken']);
+      expect(r.events[0]).toMatchObject({ kind: 'rest-found', floor: 3 });
+    }
+    // Karma draws nothing, so everything but the ledger is the same state.
+    expect({ ...merciful.state, karma: null }).toEqual({ ...desecrating.state, karma: null });
+    expect(getPreset('rest-next-merciful')!.spec.seed).toBe(REST_NEXT_SEED);
+    expect(getPreset('rest-next-desecrating')!.spec.seed).toBe(REST_NEXT_SEED);
+  });
+
+  it('...and the narrator is handed a DIFFERENT tone for each (the AC-25 manual check’s setup)', () => {
+    const tone = (id: string): string => {
+      const r = step(bundleOf(id).state, { kind: 'menu', choice: 'continue' });
+      return buildNarrationPrompt(r.events, r.state)!.user;
+    };
+    // mercyCruelty +5 -> "gentle"; reverenceDesecration -5 -> "profane" (tone.ts's table).
+    expect(tone('rest-next-merciful')).toContain('Tone: gentle.');
+    expect(tone('rest-next-desecrating')).toContain('Tone: profane.');
+  });
+
+  it('act5-warped: floor 5, one KNOWN warped form per owned skill, and the kit really reads warped', () => {
+    const p = bundleOf('act5-warped').state.player!;
+    const map = p.corruptedSkills ?? {};
+    expect(Object.keys(map).sort()).toEqual([...p.skillPool].sort());
+    const known = new Set(CORRUPTION_TEMPLATES.map((t) => t.id));
+    for (const templateId of Object.values(map)) expect(known.has(templateId)).toBe(true);
+    const first = p.skillPool[0]! as SkillId;
+    expect(resolveSkill(p, first).name).not.toBe(resolveSkill({}, first).name);
+  });
+
+  it('warpSkills is OFF by default: no other jump carries a map (every older preset unchanged)', () => {
+    for (const preset of DEV_PRESETS) {
+      if (preset.id === 'act5-warped') continue;
+      expect(buildJump(preset.spec).state.player!.corruptedSkills, preset.id).toBeUndefined();
+    }
+  });
+
+  it('bargain-full-pack: a FULL pack, an item reward, and paying the price opens the A.3 discard', () => {
+    const s = bundleOf('bargain-full-pack').state;
+    expect(s.player!.inventory.backpack).toHaveLength(BACKPACK_CAPACITY);
+    expect(s.phase.kind === 'deal' && s.phase.deal.reward.kind).toBe('item');
+    const r = step(s, { kind: 'deal-decision', accept: true });
+    expect(r.state.phase.kind).toBe('deal-discard');
+    expect(r.events.map((e) => e.kind)).toEqual(['deal-needs-room']);
+    // Nothing paid yet (A.3.3): the character is exactly as it was.
+    expect(r.state.player).toEqual(s.player);
   });
 });

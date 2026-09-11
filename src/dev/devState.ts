@@ -57,6 +57,9 @@ import { FAMILIES, getFamily } from '../game/enemyFamily.ts';
 import { AFFIXES, applyAffix } from '../game/enemyAffix.ts';
 import { createBattle } from '../game/battle.ts';
 import { generateBoss, computeVerdict, BOSSES, type BossId } from '../game/boss.ts';
+import { buildDeal, needsRoom } from '../game/deal.ts';
+import { corruptionTemplate, rollCorruptions } from '../game/corruption.ts';
+import { floorOf } from '../game/floors.ts';
 import { generateItem, type GenerateRequest } from '../game/rarityGen.ts';
 import {
   getAllConsumables,
@@ -81,7 +84,20 @@ import type { StatKey } from '../game/character.ts';
 /** Where the jump lands. Every payload-carrying variant is built by an engine function. */
 export type TargetSpec =
   | { kind: 'hub' }
-  | { kind: 'encounter'; familyId: string; affixId?: string }
+  /**
+   * `illusory` (PLAN.md #2): the enemy is one of floor 2's illusions — the same plain flag
+   * `buildRandomBattle` sets when its illusion roll lands. Only meaningful on act 2.
+   */
+  | { kind: 'encounter'; familyId: string; affixId?: string; illusory?: boolean }
+  /** PLAN.md #2: the found-rest screen, as it stands after the rest (no events — see the preset). */
+  | { kind: 'rest' }
+  /**
+   * PLAN.md #2: a bargain that has found the run, built by the engine's `buildDeal` for the
+   * floor. `needsRoom` re-draws (bounded) until the engine's own `needsRoom` holds — an item
+   * reward whose price does not itself free a slot (an offering does) — so paying the price
+   * opens the Appendix A.3 discard step.
+   */
+  | { kind: 'bargain'; needsRoom?: boolean }
   | { kind: 'boss'; bossId: BossId }
   | { kind: 'verdict' }
   | { kind: 'battle-victory'; final: boolean }
@@ -122,6 +138,12 @@ export interface JumpSpec {
   target?: TargetSpec;
   grants?: readonly GrantSpec[];
   edits?: StateEdits;
+  /**
+   * PLAN.md #2: roll floor 5's warped kit onto the character through the engine's own
+   * `rollCorruptions` — what a real arrival on floor 5 does. Off by default, so every jump
+   * that existed before it is byte-identical.
+   */
+  warpSkills?: boolean;
   /** Overrides folded onto the run record the end-of-run screen reads. */
   runSummary?: Partial<Pick<RunSummary, 'bossKills' | 'spareCount' | 'maxAct' | 'endingType'>>;
   /**
@@ -297,6 +319,8 @@ function buildPhase(
         const affix = AFFIXES.find((a) => a.id === target.affixId);
         if (affix) enemy = applyAffix(enemy, affix);
       }
+      // PLAN.md #2: the illusion flag, as the floor-2 roll would set it (no draw is spent).
+      if (target.illusory) enemy = { ...enemy, illusory: true };
       // The same opening advantage a real random encounter carries (G12: battle-scoped).
       const battle = createBattle(player, enemy, act, { openingAdvantage: 1 });
       return { kind: 'battle', battle, started: false, final: false };
@@ -315,6 +339,18 @@ function buildPhase(
       return { kind: 'ending', endingType: target.endingType };
     case 'game-over':
       return { kind: 'game-over' };
+    case 'rest':
+      // A fresh jumped character is already whole (full HP, full charges, no conditions), so
+      // this is exactly the state a found rest leaves behind.
+      return { kind: 'rest' };
+    case 'bargain': {
+      const floor = floorOf({ place: act - 1 });
+      let deal = buildDeal(karma, floor, rng);
+      for (let i = 0; target.needsRoom === true && !needsRoom(player, deal) && i < 64; i += 1) {
+        deal = buildDeal(karma, floor, rng);
+      }
+      return { kind: 'deal', deal };
+    }
   }
 }
 
@@ -342,7 +378,8 @@ function buildRunSummary(spec: JumpSpec): RunSummary {
  *   1. `rollStartStats`  — six draws, through `createPlayer`'s own contract.
  *   2. `levelTo`         — one hit-die draw plus a draft per owed level.
  *   3. each grant, in order — two draws per rolled item, none for a catalog id.
- *   4. the target's builder — an enemy, a boss, or nothing at all.
+ *   3b. `warpSkills` — one draw per owned skill (`rollCorruptions`), only when asked for.
+ *   4. the target's builder — an enemy, a boss, a bargain, or nothing at all.
  * The advanced accumulator is then sealed into `state.rngState`, exactly as `step` does, so
  * the jumped state is a valid CONTINUATION of its own stream rather than a fork of it.
  *
@@ -369,6 +406,7 @@ export function buildJump(spec: JumpSpec): JumpBundle {
     player = grantItem(player, grant, rng);
   }
   if (spec.edits) player = applyPlayerEdits(player, spec.edits);
+  if (spec.warpSkills) player = { ...player, corruptedSkills: rollCorruptions(player.skillPool, rng) };
 
   const karma = normalizeKarma(spec.karma);
   const act = spec.act;
@@ -421,6 +459,7 @@ export type JumpRejection =
   | 'run-seed-not-finite'
   | 'pending-invalid'
   | 'unlocks-malformed'
+  | 'corruption-map-invalid'
   | 'save-round-trip-failed';
 
 /** The phases in which `requirePlayer` would throw, plus every other in-run phase. */
@@ -492,6 +531,14 @@ export function validateJump(bundle: JumpBundle): JumpRejection[] {
     for (const instance of allInstances(player)) {
       if (!resolveInstanceDef(instance) && !getCatalogItemById(instance.defId)) {
         reasons.push('item-unresolvable');
+        break;
+      }
+    }
+    // PLAN.md #2: a warped-kit entry must name a skill the character OWNS and a template the
+    // data defines — anything else is a map `rollCorruptions` could never have written.
+    for (const [skillId, templateId] of Object.entries(player.corruptedSkills ?? {})) {
+      if (!player.skillPool.includes(skillId) || !corruptionTemplate(templateId)) {
+        reasons.push('corruption-map-invalid');
         break;
       }
     }
@@ -627,8 +674,7 @@ export function editsFrom(
  * THE EIGHTH MEMBER OF THE EXTRACTED SET, and it was misfiled as display-only. A BLANK box
  * means "leave this alone", and returning `0` for it instead is not a cosmetic difference:
  * `editsFrom` would then produce a key for every untouched field, so pressing "Apply edits"
- * to change one number would silently ZERO momentum, corruption, potions, rests and skill
- * charges. Blank and zero are different answers to different questions, and only a function
+ * to change one number would silently ZERO momentum, corruption and skill charges. Blank and zero are different answers to different questions, and only a function
  * that can be called with `''` can prove it knows that.
  */
 export function parseField(text: string): number | undefined {
@@ -752,6 +798,14 @@ export interface DevPreset {
  * gate (500 -> 600), and a preset that copied the old number would have silently stopped
  * opening the Hollow.
  */
+/**
+ * The seed the two `rest-next-*` presets share: from their floor-3 hub, the first Continue
+ * draws a REST. Found by searching seeds, not derived — so `devState.test.ts` asserts the
+ * claim through the real `step`, and a change to the jump's draw order that breaks it fails
+ * there, loudly, rather than silently turning the manual tone check into a battle.
+ */
+export const REST_NEXT_SEED = 10;
+
 export const DEV_PRESETS: readonly DevPreset[] = [
   {
     id: 'act1-hub',
@@ -819,6 +873,53 @@ export const DEV_PRESETS: readonly DevPreset[] = [
     // theJudged carries `onSpare: ["spareWeighted", "honorDead"]` — the reason this unit
     // exists: spare it and confirm nothing on screen says anything was scored.
     spec: { act: 4, xp: 240, target: { kind: 'encounter', familyId: 'theJudged' } },
+  },
+  // ---- PLAN.md #2: the floors, found rests, and the full-pack bargain --------------------
+  {
+    id: 'act2-illusion',
+    label: 'Floor 2, an illusion (Wisdom)',
+    // An ILLUSORY floor-2 enemy: its attacks are real, yours pass through it, and a passive
+    // Wisdom roll each round (d20 + Wisdom modifier >= ILLUSION_DC) is the only way out.
+    spec: { act: 2, xp: 10, target: { kind: 'encounter', familyId: 'mirrorSelves', illusory: true } },
+  },
+  {
+    id: 'rest-spot',
+    label: 'Floor 3, a found rest (the screen)',
+    // The calm screen itself — its look, its one Continue. A jump emits no events, so this
+    // shows the SCREEN, not a narrated rest; the two rows below give the narrated one.
+    spec: { act: 3, xp: 30, target: { kind: 'rest' } },
+  },
+  {
+    id: 'rest-next-merciful',
+    label: 'Floor 3 hub, merciful: Continue finds a rest',
+    // Seed REST_NEXT_SEED is chosen so the first Continue from this hub draws a REST (the test
+    // proves it). Karma draws nothing, so the merciful and the desecrating rows find the SAME
+    // rest — only the tone differs, which is exactly the manual check (AC-25).
+    spec: { seed: REST_NEXT_SEED, act: 3, xp: 30, karma: { mercyCruelty: 5 }, target: { kind: 'hub' } },
+  },
+  {
+    id: 'rest-next-desecrating',
+    label: 'Floor 3 hub, desecrating: Continue finds a rest',
+    spec: { seed: REST_NEXT_SEED, act: 3, xp: 30, karma: { reverenceDesecration: -5 }, target: { kind: 'hub' } },
+  },
+  {
+    id: 'act5-warped',
+    label: 'Floor 5 hub, skills warped',
+    // The warped kit a real arrival rolls, through the engine's `rollCorruptions`.
+    spec: { act: 5, xp: 240, warpSkills: true, target: { kind: 'hub' } },
+  },
+  {
+    id: 'bargain-full-pack',
+    label: 'A bargain with a full pack (A.3)',
+    // Twelve items — the two-item starting kit plus ten catalog grants, no draws — and a
+    // bargain that NEEDS ROOM (an item reward, not paid with an item), so "Pay the price"
+    // opens the discard step.
+    spec: {
+      act: 1,
+      xp: 0,
+      grants: Array.from({ length: 10 }, () => ({ catalogId: 'antidote' })),
+      target: { kind: 'bargain', needsRoom: true },
+    },
   },
 ];
 
