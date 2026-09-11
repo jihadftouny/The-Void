@@ -27,7 +27,7 @@ function hero(overrides: Partial<Player> = {}): Player {
 /** An act-outro standing on the NEW floor (advanceAct already moved `place`). */
 function arriving(newAct: number, player: Player, rngState: number): GameState {
   return {
-    version: 8,
+    version: 9,
     rngState,
     player,
     act: newAct,

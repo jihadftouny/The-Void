@@ -42,7 +42,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
 
 function menuState(player: Player, rngState: number, act = 1): GameState {
   return {
-    version: 8,
+    version: 9,
     rngState,
     player,
     act,
@@ -62,7 +62,7 @@ describe('createGame', () => {
     expect(s.act).toBe(1);
     expect(s.place).toBe(0);
     expect(s.rngState).toBe(777);
-    expect(s.version).toBe(8);
+    expect(s.version).toBe(9); // PLAN.md #2 bumped the save format 8 -> 9
     expect(awaitingFor(s.phase)).toBe('title');
   });
 
@@ -143,7 +143,7 @@ describe('character creation transitions', () => {
     // armored AC is what the HUD sees.
     const stats: Stats = { STR: 12, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 };
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 7,
       player: null,
       act: 1,
@@ -549,7 +549,7 @@ describe('entering Act 5', () => {
   /** A hub state on floor 5 at the given XP. */
   function act5Hub(xp: number, rngState = 314): GameState {
     return {
-      version: 8,
+      version: 9,
       rngState,
       player: makePlayer({ skillPool: ['heavyStrike', 'brace'], xp }),
       act: 5,
@@ -649,7 +649,7 @@ describe('win / ending path', () => {
   it('victory in the final (Hollow) battle emits the DAMNATION ending, then goes terminal', () => {
     const player = makePlayer({ name: 'Zara' });
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 1,
       player,
       act: 5,
@@ -693,7 +693,7 @@ describe('win / ending path', () => {
     const battle: BattleState = { player, enemy: boss, act: 5, canFlee: false };
     let r: StepResult = {
       state: {
-        version: 8,
+        version: 9,
         rngState: 7,
         player,
         act: 5,
@@ -762,7 +762,7 @@ function bossVictoryState(
     boss: { bossId, round: 0, ...(bossId === 'kingpin' ? { minions: 0 } : {}) },
   };
   return {
-    version: 8,
+    version: 9,
     rngState: 7,
     player,
     act,
@@ -802,7 +802,7 @@ describe('M12 act-4 verdict gate routes the two fates', () => {
     // computeVerdict({reverence:+2}) = 3×2 = 6 ≥ 1 ⇒ grace (hand-derived).
     const player = makePlayer({ name: 'Zara', xp: 1000 });
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 5,
       player,
       act: 4,
@@ -838,7 +838,7 @@ describe('M12 act-4 verdict gate routes the two fates', () => {
     // computeVerdict(all-zero) = 0 < 1 ⇒ cast-down (hand-derived).
     const player = makePlayer({ name: 'Zara', xp: 1000 });
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 5,
       player,
       act: 4,
@@ -873,7 +873,7 @@ describe('M12 act-4 verdict gate routes the two fates', () => {
   it('reverence OUTWEIGHS cruelty at the gate → grace (3×2 + 1×−4 = 2 ≥ 1)', () => {
     const player = makePlayer({ xp: 1000 });
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 5,
       player,
       act: 4,
@@ -901,7 +901,7 @@ describe('M12 off-equivalence: a normal battle invokes no boss hook', () => {
     const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(2));
     const battle: BattleState = { player, enemy: { ...enemy, hp: 50, maxHp: 50 }, act: 1, canFlee: true };
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 9,
       player,
       act: 1,
@@ -948,7 +948,7 @@ function bossBattleState(
   const battle: BattleState = { ...built, player: { ...built.player, ...patchPlayer } };
   return {
     state: {
-      version: 8,
+      version: 9,
       rngState,
       player,
       act,
@@ -1119,7 +1119,7 @@ describe('M12 Reflection adaptation drives a disadvantaged player attack', () =>
     };
     let r: StepResult = {
       state: {
-        version: 8,
+        version: 9,
         rngState: 3,
         player,
         act: 2,
@@ -1179,7 +1179,7 @@ describe('JSON round-trip determinism', () => {
 function startedBattleState(player: Player, enemy: BattleState['enemy'], rngState: number): GameState {
   const battle: BattleState = { player, enemy, act: 1, canFlee: true };
   return {
-    version: 8,
+    version: 9,
     rngState,
     player,
     act: 1,

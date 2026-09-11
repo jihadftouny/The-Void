@@ -11,7 +11,7 @@ import type { GameEvent } from '../game/gameEvent.ts';
 import { createKarma } from '../game/karma.ts';
 
 const baseState: GameState = {
-  version: 8,
+  version: 9,
   rngState: 1,
   player: null,
   act: 1,

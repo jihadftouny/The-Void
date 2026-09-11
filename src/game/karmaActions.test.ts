@@ -975,9 +975,9 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
 // =============================================================================================
 
 describe('the save format is untouched by #10a', () => {
-  it('SAVE_VERSION is still 8 and a fresh game is still version 8', () => {
-    expect(SAVE_VERSION).toBe(8);
-    expect(createGame(1).version).toBe(8);
+  it('SAVE_VERSION is the current one and a fresh game carries it (#10a bumped nothing; #2 did, to 9)', () => {
+    expect(SAVE_VERSION).toBe(9);
+    expect(createGame(1).version).toBe(9);
   });
 
   it('a state parked on an OFFERING deal round-trips through encode/decode deep-equal', () => {

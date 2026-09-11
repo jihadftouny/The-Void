@@ -269,7 +269,7 @@ describe('validateJump names exactly what is wrong', () => {
 
   it('the other named invariants are reachable too', () => {
     const cases: readonly [JumpRejection, (b: JumpBundle) => void][] = [
-      ['version-not-8', (b) => void ((b.state as { version: number }).version = 7)],
+      ['version-not-current', (b) => void ((b.state as { version: number }).version = 7)],
       ['rng-state-not-finite', (b) => void (b.state.rngState = Number.NaN)],
       ['act-out-of-range', (b) => void (b.state.act = 6)],
       ['max-hp-invalid', (b) => void (b.state.player!.maxHp = 0)],

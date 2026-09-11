@@ -178,7 +178,7 @@ describe('the chest encounter reached through `step` is act-aware', () => {
     const out: string[] = [];
     for (let seed = 1; seed <= seedCount; seed += 1) {
       const state: GameState = {
-        version: 8,
+        version: 9,
         rngState: seed,
         // xp 0 keeps every act gate — and act 5's Hollow gate — shut, so `continue` takes the
         // ordinary encounter path rather than walking into a boss.

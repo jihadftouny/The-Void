@@ -55,7 +55,7 @@ describe('runToTerminal classifies outcomes in player terms', () => {
     // verdict; computeVerdict({reverence:+2}) = weighted sum 3×2 = 6 >= 1 ⇒ grace ⇒ the grace
     // ending is terminal at act 4 (act 5 is never constructed).
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 5,
       player: makePlayer({ name: 'Grace', xp: 240 }),
       act: 4,
@@ -86,7 +86,7 @@ describe('runToTerminal classifies outcomes in player terms', () => {
     };
     const battle: BattleState = { player, enemy, act: 5, canFlee: false };
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 7,
       player,
       act: 5,
@@ -116,7 +116,7 @@ describe('runToTerminal classifies outcomes in player terms', () => {
     };
     const battle: BattleState = { player, enemy, act: 3, canFlee: false };
     const state: GameState = {
-      version: 8,
+      version: 9,
       rngState: 11,
       player,
       act: 3,
@@ -295,7 +295,7 @@ function rolled(slot: 'helmet' | 'mainHand' | 'ring', rarity: 'Common' | 'Rare' 
 function hubWith(backpack: ItemInstance[]): GameState {
   const p = makePlayer();
   return {
-    version: 8,
+    version: 9,
     rngState: 1,
     player: { ...p, inventory: { ...p.inventory, backpack } },
     act: 1,

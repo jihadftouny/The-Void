@@ -311,7 +311,7 @@ describe('foldRunEvents over a full driven step loop', () => {
       advantageDisadvantage: 1,
     };
     const start: GameState = {
-      version: 8,
+      version: 9,
       rngState: 4242,
       player,
       act: 1,

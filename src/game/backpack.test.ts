@@ -42,7 +42,7 @@ function withPack(p: Player, backpack: ItemInstance[]): Player {
 }
 
 function hub(player: Player, rngState = 1, place = 0): GameState {
-  return { version: 8, rngState, player, act: place + 1, place, karma: createKarma(), phase: { kind: 'main-menu' } };
+  return { version: 9, rngState, player, act: place + 1, place, karma: createKarma(), phase: { kind: 'main-menu' } };
 }
 
 /** A Legendary weapon the bargain pays — an item reward, so a full pack must make room. */

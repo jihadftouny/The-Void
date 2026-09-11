@@ -54,7 +54,7 @@ function frozenEnemy(overrides: Partial<Enemy> = {}): Enemy {
 function battleState(p: Player, enemy: Enemy, place: number, act = place + 1): GameState {
   const battle: BattleState = { player: p, enemy, act, canFlee: true };
   return {
-    version: 8,
+    version: 9,
     rngState: 77,
     player: p,
     act,

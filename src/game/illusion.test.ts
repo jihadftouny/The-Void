@@ -81,7 +81,7 @@ function fight(p: Player, e: Enemy): BattleState {
 
 function floorTwo(battle: BattleState, rngState: number): GameState {
   return {
-    version: 8,
+    version: 9,
     rngState,
     player: battle.player,
     act: 2,

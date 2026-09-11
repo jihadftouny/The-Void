@@ -70,7 +70,7 @@ import {
 import { equip, pickUp, resolveInstanceDef } from '../game/equipment.ts';
 import { canCarry } from '../game/inventory.ts';
 import { clampMomentum } from '../game/classKit.ts';
-import { decodeSave, encodeSave } from '../game/save.ts';
+import { decodeSave, encodeSave, SAVE_VERSION } from '../game/save.ts';
 import { emptyRunSummary, type RunSummary, type RunUnlocks } from '../game/unlockStore.ts';
 import { createStoryMemory, type StoryMemory } from '../llm/narrate.ts';
 import type { Rarity } from '../game/weapon.ts';
@@ -375,7 +375,7 @@ export function buildJump(spec: JumpSpec): JumpBundle {
   const phase = buildPhase(spec.target ?? { kind: 'hub' }, player, act, karma, rng);
 
   const state: GameState = {
-    version: 8,
+    version: SAVE_VERSION,
     rngState: getState(),
     player,
     act,
@@ -401,7 +401,7 @@ export function buildJump(spec: JumpSpec): JumpBundle {
  * refusal names what is actually wrong and each reason can be driven red on its own.
  */
 export type JumpRejection =
-  | 'version-not-8'
+  | 'version-not-current'
   | 'rng-state-not-finite'
   | 'act-out-of-range'
   | 'place-not-act-minus-one'
@@ -454,7 +454,7 @@ export function validateJump(bundle: JumpBundle): JumpRejection[] {
   const reasons: JumpRejection[] = [];
   const { state, meta } = bundle;
 
-  if (state.version !== 8) reasons.push('version-not-8');
+  if (state.version !== SAVE_VERSION) reasons.push('version-not-current');
   if (!Number.isFinite(state.rngState)) reasons.push('rng-state-not-finite');
   if (!Number.isInteger(state.act) || state.act < 1 || state.act > 5) {
     reasons.push('act-out-of-range');

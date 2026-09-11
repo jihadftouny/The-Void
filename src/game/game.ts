@@ -108,7 +108,9 @@ export type Phase =
 
 /** The full, serializable game state. */
 export interface GameState {
-  version: 8;
+  /** The save format — `SAVE_VERSION` (PLAN.md #2 bumped 8 -> 9: potions and the banked rest
+   *  counter left the player, and the rest phase lost its decision; see `save.ts` `upgrade8to9`). */
+  version: 9;
   /** mulberry32 accumulator — the serializable RNG state; JSON round-trips it. */
   rngState: number;
   player: Player | null;
@@ -205,7 +207,7 @@ export interface StepResult {
  */
 export function createGame(seed: number, unlocks?: RunUnlocks): GameState {
   const state: GameState = {
-    version: 8,
+    version: 9,
     rngState: seed >>> 0,
     player: null,
     act: 1,
