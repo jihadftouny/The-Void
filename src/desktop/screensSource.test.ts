@@ -263,9 +263,193 @@ describe('retheme applies the floor, THEN the player’s preferences over it', (
     expect(body, 'the floor tag is set as markup').not.toMatch(/floorEl\.innerHTML/);
   });
 
-  it('and it is called on every step, at boot, and when a foreign run is adopted', () => {
-    expect((SOURCE.match(/\bretheme\s*\(\s*\)/g) ?? []).length, 'retheme lost a call site')
-      .toBeGreaterThanOrEqual(5);
+});
+
+// =========================================================================================
+// 6b — WHERE retheme() is called (FINDINGS.md G57). A count is not a placement.
+//
+// The guard this replaces asserted `SOURCE.match(/\bretheme\(\)/g).length >= 5`, and it was
+// proven blind: `if (false) retheme()` inside `adoptRun` left the whole suite green. The live
+// consequence would have been an F3 jump that changes the floor without re-painting it — the
+// very tool HUMAN-CHECKS check 8 uses to inspect the five palettes, silently lying about them.
+// `floor-mechanics` (PLAN.md #2) rewrites the descent and floor code, which is exactly what
+// could break this, so it is pinned FIRST, before any of that work lands.
+//
+// Each call is pinned INSIDE the body of the function that owns it, AS AN UNCONDITIONAL
+// STATEMENT of that body. "Unconditional" is checked mechanically rather than by eye:
+//   - the call is a statement (the previous significant character is `;`, `{` or `}` — so
+//     `if (x) retheme()`, `if (x)\n  retheme()`, `x && retheme()`, `x ? retheme() : 0` all fail);
+//   - every block enclosing it is the function body itself or a `try`/`finally` block (so
+//     wrapping it in `if (…) { … }`, `else { … }`, a loop or a callback `=> { … }` fails);
+//   - and no `return` precedes it in the body except the exits named per call site (so an
+//     inserted early return that skips it fails).
+//
+// WHAT WOULD SATISFY THESE WITHOUT THE BEHAVIOUR: a `retheme` redefined as a no-op (its body
+// is pinned separately above — applyTheme then applySettings, the tag written), or a call made
+// unconditionally that the renderer then overwrites before paint. Neither is a placement bug;
+// both are covered by the retheme-body tests and by `layoutProbe`'s real-renderer walk.
+// =========================================================================================
+
+/** Index just past the opening `{` of the function body in `body` (a `bodyOf` slice). */
+function functionBodyOpen(body: string): number {
+  // The first `{` after the parameter list closes. Signatures in this file carry no braces
+  // before the body (no destructured parameters), which the anchor test below asserts.
+  let depth = 0;
+  for (let i = 0; i < body.length; i += 1) {
+    const c = body[i];
+    if (c === '(') depth += 1;
+    else if (c === ')') depth -= 1;
+    else if (c === '{' && depth === 0) return i + 1;
+  }
+  return -1;
+}
+
+/**
+ * Why the call at `at` is NOT an unconditional statement of the function whose body slice is
+ * `body` — or `null` when it is. `allowedExits` lists the early returns that legitimately sit
+ * before the call (e.g. `dispatch`'s re-entry guard); any other `return` before it is a skip.
+ */
+function conditionalReason(body: string, at: number, allowedExits: RegExp[] = []): string | null {
+  const open = functionBodyOpen(body);
+  if (open < 0 || at < open) return 'the call is not inside the function body at all';
+
+  // The previous significant character must end a statement or open/close a block.
+  const before = body.slice(open, at).replace(/\s+$/, '');
+  const prev = before.length === 0 ? '{' : before[before.length - 1];
+  if (prev !== ';' && prev !== '{' && prev !== '}') {
+    return `the call follows '${prev}' — it is an operand or the body of a condition, not a statement`;
+  }
+
+  // Every enclosing block must be unconditional. Strings are skipped so a brace inside a
+  // message cannot move the depth.
+  const stack: string[] = [];
+  for (let i = open; i < at; i += 1) {
+    const c = body[i];
+    if (c === "'" || c === '"' || c === '`') {
+      i += 1;
+      while (i < at && body[i] !== c) i += body[i] === '\\' ? 2 : 1;
+      continue;
+    }
+    if (c === '{') {
+      const lead = body.slice(open, i).replace(/\s+$/, '');
+      stack.push(/(?:\btry|\bfinally)$/.test(lead) ? 'plain' : lead.slice(-24));
+    } else if (c === '}') {
+      stack.pop();
+    }
+  }
+  const guarded = stack.find((kind) => kind !== 'plain');
+  if (guarded !== undefined) return `the call sits inside a guarded block opened after "…${guarded}"`;
+
+  // No early return may skip it, beyond the ones this call site names.
+  let prefix = body.slice(open, at);
+  for (const exit of allowedExits) prefix = prefix.replace(exit, '');
+  if (/\breturn\b/.test(prefix)) return 'an early `return` before the call can skip it';
+  return null;
+}
+
+/** Every `retheme()` call position in a body slice. */
+function rethemeCalls(body: string): number[] {
+  return [...body.matchAll(/\bretheme\s*\(\s*\)/g)].map((m) => m.index as number);
+}
+
+/** The first UNCONDITIONAL `retheme()` in a body, or -1 — with the reasons the others failed. */
+function unconditionalRetheme(body: string, allowedExits: RegExp[] = []): { at: number; why: string[] } {
+  const why: string[] = [];
+  for (const at of rethemeCalls(body)) {
+    const reason = conditionalReason(body, at, allowedExits);
+    if (reason === null) return { at, why };
+    why.push(reason);
+  }
+  return { at: -1, why: why.length > 0 ? why : ['there is no retheme() call in this body'] };
+}
+
+describe('retheme() is placed where the floor can change, unconditionally (G57)', () => {
+  it('the anchors exist — every guard below reads a real function body', () => {
+    for (const decl of ['function adoptRun(', 'async function dispatch(', 'function start(']) {
+      const body = bodyOf(decl);
+      expect(functionBodyOpen(body), `${decl} has no body this scanner can find`).toBeGreaterThan(0);
+    }
+  });
+
+  it('inside adoptRun — an adopted run (a resume, an F3 jump) paints ITS floor', () => {
+    const body = bodyOf('function adoptRun(');
+    const { at, why } = unconditionalRetheme(body);
+    expect(at, `adoptRun no longer re-tints unconditionally: ${why.join('; ')}`).toBeGreaterThan(-1);
+  });
+
+  it('inside dispatch — and BEFORE renderSheet, or the re-render paints the old floor', () => {
+    const body = bodyOf('async function dispatch(');
+    // The ONE early exit allowed before the re-tint is the re-entry guard: a click while a
+    // step is in flight does nothing at all, so there is nothing to re-tint.
+    const { at, why } = unconditionalRetheme(body, [/if\s*\(\s*busy\s*\)\s*return\s*;/]);
+    expect(at, `dispatch no longer re-tints unconditionally: ${why.join('; ')}`).toBeGreaterThan(-1);
+    const step = body.search(/=\s*step\s*\(\s*state\s*,/);
+    const sheet = body.search(/\brenderSheet\s*\(\s*\)/);
+    expect(step, 'dispatch no longer steps the engine').toBeGreaterThan(-1);
+    expect(sheet, 'dispatch no longer re-renders the sheet').toBeGreaterThan(-1);
+    expect(at, 'the re-tint runs BEFORE the step — it paints the floor the step just left')
+      .toBeGreaterThan(step);
+    expect(at, 'the re-tint runs AFTER renderSheet — the sheet is drawn in the old floor’s ink')
+      .toBeLessThan(sheet);
+  });
+
+  it('inside start — a fresh run after a deep one returns to floor 0’s palette', () => {
+    const body = bodyOf('function start(');
+    const { at, why } = unconditionalRetheme(body);
+    expect(at, `start no longer re-tints unconditionally: ${why.join('; ')}`).toBeGreaterThan(-1);
+  });
+
+  it('at module scope, BEFORE the saved run is loaded — the first frame is painted', () => {
+    // A column-0 statement is at module scope in this file: every function body is indented.
+    const boot = [...SOURCE.matchAll(/^retheme\s*\(\s*\)\s*;/gm)].map((m) => m.index as number);
+    const load = SOURCE.search(/^const saved = loadRun\(\)/m);
+    expect(load, 'the boot block is gone').toBeGreaterThan(-1);
+    const unconditional = boot.filter((at) => {
+      const prev = SOURCE.slice(0, at).replace(/\s+$/, '');
+      const c = prev[prev.length - 1];
+      return c === ';' || c === '}' || prev.length === 0;
+    });
+    expect(unconditional.length, 'the boot-time retheme() is gone, or now follows a condition')
+      .toBeGreaterThan(0);
+    expect(Math.min(...unconditional), 'the boot-time retheme() runs after the save is loaded')
+      .toBeLessThan(load);
+  });
+});
+
+// Pins the mechanics of `conditionalReason` DIRECTLY, in the idioms this file actually uses,
+// so the guard above is not proven only by the one shape each placement happens to hold today.
+describe('the placement scanner itself (so the G57 guard cannot silently go blind)', () => {
+  const fn = (inner: string) => `function f(a: number): void {\n${inner}\n`;
+  const reason = (inner: string, exits: RegExp[] = []) => {
+    const body = fn(inner);
+    return conditionalReason(body, body.indexOf('retheme()'), exits);
+  };
+
+  it('accepts a bare statement, including one after a closed block and inside try', () => {
+    expect(reason('  retheme();')).toBeNull();
+    expect(reason('  if (a) {\n    x();\n  } else {\n    y();\n  }\n  retheme();')).toBeNull();
+    expect(reason('  try {\n    x();\n    retheme();\n  } finally {\n    z();\n  }')).toBeNull();
+    expect(reason("  log('a {brace} in a string', { n: 1 });\n  retheme();")).toBeNull();
+  });
+
+  it('rejects every conditional shape', () => {
+    expect(reason('  if (false) retheme();')).not.toBeNull();
+    expect(reason('  if (false)\n    retheme();')).not.toBeNull();
+    expect(reason('  if (a) {\n    retheme();\n  }')).not.toBeNull();
+    expect(reason('  if (a) {\n    x();\n  } else {\n    retheme();\n  }')).not.toBeNull();
+    expect(reason('  a && retheme();')).not.toBeNull();
+    expect(reason('  a ? retheme() : 0;')).not.toBeNull();
+    expect(reason('  for (const x of xs) {\n    retheme();\n  }')).not.toBeNull();
+    expect(reason('  xs.forEach(() => {\n    retheme();\n  });')).not.toBeNull();
+    expect(reason('  try {\n    x();\n  } catch {\n    retheme();\n  }')).not.toBeNull();
+  });
+
+  it('rejects an early return that can skip it, unless that exit is named', () => {
+    expect(reason('  if (a) return;\n  retheme();')).not.toBeNull();
+    expect(reason('  if (busy) return;\n  retheme();', [/if\s*\(\s*busy\s*\)\s*return\s*;/])).toBeNull();
+    expect(
+      reason('  if (busy) return;\n  if (a) return;\n  retheme();', [/if\s*\(\s*busy\s*\)\s*return\s*;/]),
+    ).not.toBeNull();
   });
 });
 
