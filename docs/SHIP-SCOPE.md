@@ -311,6 +311,10 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 
 **Against the deadline:** `b2` is due **31 Dec**. From 10 Sep that is ~16 weeks at 8 h/week ≈ **128 h of capacity**. **Slack falls from ~64 h to roughly 13–25 h.**
 
+> **⚠ REVISED 2026-09-11 — the margin is thinner than the figure above.** #2's plan came back at **~36 h**, not the ~28–30 h assumed here: it absorbs the §22.6 potion fold-in that #9 was meant to carry, a backpack cap, and — because the narrator does **not** already receive karma, as §22.26 wrongly claimed — a karma channel for the rest vignettes. The author's full-pack ruling (drop an item to make room) adds a little more. **Remaining is now ~111–126 h against ~127 h of capacity (11 Sep → 31 Dec). Slack is roughly 1–16 h — near zero at the pessimistic end.**
+>
+> **Two pre-agreed levers, in order:** (1) #2's own serial cut point after step 11 — engine complete and migrated — lets its balance half fork as `floor-balance` if the build stalls; (2) the narrator-judged talk field as #11's fallback, below. **Recommended moment to decide on (2): when #2 merges and its real hours are known**, not before — the estimate is the thing most likely to be wrong.
+
 **It still fits. But the margin is now thin enough that one unit going badly would consume it**, where before it would not have. Two things make that real rather than theoretical: this session has already seen two agent stalls and one pipeline escape, and #11 is the least-understood unit in the plan — nobody has yet built a boss that selects its own actions.
 
 ### What gives first if it runs over
