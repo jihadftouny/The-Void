@@ -341,6 +341,7 @@ import type { GameEvent } from './gameEvent.ts';
 import { simulateRun, simulateBatch, heuristicPolicy, gearUpAtHub } from './sim.ts';
 import type { AggregateReport, RunResult } from './sim.ts';
 import type { PlayerClass } from './player.ts';
+import { stripComments } from '../log/sourceScan.testutil.ts';
 
 /**
  * Play a seeded run to its terminal state and return the FINAL RNG accumulator. Mirrors
@@ -468,28 +469,81 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
 // call Math.random() or Date.now() inside src/game".
 // ---------------------------------------------------------------------------------------------
 
-describe('the logic core contains no unseeded randomness and no clock', () => {
-  it('no shipping file under src/game CALLS Math.random or Date.now', () => {
-    const dir = fileURLToPath(new URL('.', import.meta.url));
-    const offenders: string[] = [];
-    for (const name of readdirSync(dir)) {
-      if (!name.endsWith('.ts') || name.endsWith('.test.ts')) continue;
-      const lines = readFileSync(join(dir, name), 'utf8').split('\n');
-      lines.forEach((line, i) => {
-        // Skip comment lines — several modules DOCUMENT the prohibition by naming it.
-        const trimmed = line.trim();
-        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
-        if (/\bMath\s*\.\s*random\s*\(/.test(line) || /\bDate\s*\.\s*now\s*\(/.test(line)) {
-          offenders.push(`${name}:${i + 1}`);
-        }
-      });
+// FIX ROUND 1, F6: this ban used to read src/game only, while AC-4 relied on it for src/llm too
+// (`purity.test.ts` polices logging imports, never `Math`) — so `Math.random()` and `Date.now()`
+// planted in `src/llm/tone.ts` passed all 2,506 tests. src/llm is the other pure core: the
+// narration prompt must be reproducible from the state, or a replayed run tells a different story.
+
+/** The calls that read a clock or an unseeded generator, in any spacing. */
+const IMPURE: readonly RegExp[] = [
+  /\bMath\s*\.\s*random\s*\(/,
+  /\bDate\s*\.\s*now\s*\(/,
+  /\bnew\s+Date\s*\(/,
+  /\bperformance\s*\.\s*now\s*\(/,
+  /\bcrypto\s*\.\s*(?:getRandomValues|randomUUID)\s*\(/,
+];
+
+/** The offending lines of one source, comments stripped (modules DOCUMENT the ban by naming it). */
+function impureCalls(source: string, rel: string): string[] {
+  return stripComments(source)
+    .split('\n')
+    .flatMap((line, i) => (IMPURE.some((p) => p.test(line)) ? [`${rel}:${i + 1}`] : []));
+}
+
+/** Every shipping `.ts` under a core, recursively, as core-relative posix paths. */
+function shippingSources(core: 'game' | 'llm'): string[] {
+  const root = fileURLToPath(new URL(`../${core}/`, import.meta.url));
+  const out: string[] = [];
+  const walk = (dir: string, prefix: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) walk(join(dir, entry.name), `${prefix}${entry.name}/`);
+      else if (entry.name.endsWith('.ts') && !/\.test\.ts$|\.testutil\.ts$/.test(entry.name)) {
+        out.push(`${core}/${prefix}${entry.name}`);
+      }
     }
+  };
+  walk(root, '');
+  return out;
+}
+
+describe('the pure cores contain no unseeded randomness and no clock — src/game AND src/llm', () => {
+  const files = [...shippingSources('game'), ...shippingSources('llm')];
+
+  it('no shipping file in either core reads a clock or an unseeded generator', () => {
+    const src = fileURLToPath(new URL('../', import.meta.url));
+    const offenders = files.flatMap((rel) => impureCalls(readFileSync(join(src, rel), 'utf8'), rel));
     expect(offenders).toEqual([]);
   });
 
-  it('scans a non-trivial number of files (so an empty sweep cannot pass vacuously)', () => {
-    const dir = fileURLToPath(new URL('.', import.meta.url));
-    const shipping = readdirSync(dir).filter((n) => n.endsWith('.ts') && !n.endsWith('.test.ts'));
-    expect(shipping.length).toBeGreaterThan(30);
+  it('the sweep reads a real set in BOTH cores (so an empty sweep cannot pass vacuously)', () => {
+    expect(files.filter((f) => f.startsWith('game/')).length).toBeGreaterThan(30);
+    // src/llm is small, so its members are NAMED rather than counted.
+    for (const must of ['llm/narrate.ts', 'llm/tone.ts', 'game/rng.ts', 'game/game.ts']) {
+      expect(files, `${must} is outside the sweep`).toContain(must);
+    }
+  });
+
+  it('the detector fires on each shape a violation really takes — and not on the prose naming it', () => {
+    for (const code of [
+      'const r = Math.random();',
+      'const r = Math .random ();',
+      'seed = Date.now() >>> 0;',
+      'const t = new Date().getTime();',
+      'const t0 = performance.now();',
+      'crypto.getRandomValues(buf);',
+      'const id = crypto.randomUUID();',
+      '  return rng() + Math.random() * 0;',
+    ]) {
+      expect(impureCalls(code, 'x.ts'), code).toEqual(['x.ts:1']);
+    }
+    for (const clean of [
+      '// No Math.random / Date.now here.',
+      '/* never Date.now() in the core */ const x = 1;',
+      '/**\n * no Math.random(), ever — a JSDoc block, as the modules write it\n */\nconst x = 1;',
+      'const r = rng();',
+      'const d = dateOfBirth(now);',
+    ]) {
+      expect(impureCalls(clean, 'x.ts'), clean).toEqual([]);
+    }
   });
 });
