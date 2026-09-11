@@ -27,11 +27,19 @@ import { effectiveMaxHp, effectiveResistances } from './statEffects.ts';
 import { mitigate } from './skill.ts';
 import { type CombatEvent } from './combatEvent.ts';
 import { type EffectAction, type TriggerType } from './item.ts';
+import { type TriggeredEffect } from './equipEffects.ts';
+import { dampenHeal, floorModifiers, type FloorId } from './floors.ts';
 
 /** Extra facts an action reads that are not on the player/enemy (e.g. damage just taken). */
 export interface TriggerContext {
   /** HP damage the player just took this round — drives `pctOfDamageTaken` reflect. */
   damageTaken?: number;
+  /**
+   * PLAN.md #2: the percent of a `healSelf` the owner actually receives — the floor's
+   * `healPct` (floor 3's slow weight: 50). Absent ⇒ 100, so every existing caller (and every
+   * floor without the mechanic) heals byte-identically.
+   */
+  healPct?: number;
 }
 
 /** The outcome of applying one action: new entities, sub-events, and utility flags. */
@@ -89,6 +97,10 @@ export function applyEffectAction(
         const cap = effectiveMaxHp(p);
         let heal = action.params.amount ?? 0;
         if (action.params.pctMaxHp) heal += Math.floor((cap * action.params.pctMaxHp) / 100);
+        // PLAN.md #2: floor 3 dampens every heal that passes through here — a consumable and a
+        // relic alike. Applied to the TOTAL, after the pctMaxHp term, so a Void Draught on
+        // floor 3 restores half of what it restores elsewhere. Identity when `healPct` is absent.
+        heal = dampenHeal(heal, ctx.healPct ?? 100);
         if (heal > 0) p = { ...p, hp: Math.min(p.hp + heal, cap) };
       }
       break;
@@ -138,6 +150,14 @@ export function applyEffectAction(
       p = { ...p, skillCharges: Math.min(p.skillCharges + amt, p.maxSkillCharges) };
       break;
     }
+    case 'drainCharge': {
+      // PLAN.md #2, floor 3: take charges, never below 0. Emits nothing itself — the CALLER
+      // names the loss (`fireFloorTriggers` emits `floor-drain` with the amount actually taken),
+      // because the same primitive on a relic would be a relic's loss, not the floor's.
+      const amt = Math.max(action.params.amount ?? 0, 0);
+      p = { ...p, skillCharges: Math.max(p.skillCharges - amt, 0) };
+      break;
+    }
     case 'cure': {
       if (action.condition) {
         p = { ...p, activeConditions: cureCondition(p.activeConditions, action.condition) };
@@ -173,7 +193,58 @@ export function fireTrigger(
   enemy: Enemy,
   ctx: TriggerContext,
 ): { player: Player; enemy: Enemy; events: CombatEvent[] } {
-  const triggered = computeEquipModifiers(player.inventory).triggered;
+  return fireEffects(
+    computeEquipModifiers(player.inventory).triggered,
+    trigger,
+    player,
+    enemy,
+    ctx,
+    (t) => [{ kind: 'relic-triggered', trigger, action: t.action.kind }],
+  );
+}
+
+/**
+ * Fire the FLOOR's triggered effects matching `trigger` — PURE, RNG-FREE (PLAN.md #2).
+ *
+ * THE SAME LOOP `fireTrigger` runs over a relic's effects (`fireEffects`, below), and the same
+ * `applyEffectAction` — that sharing IS the hybrid rule's "simple modifiers reuse the relic
+ * pipeline" (GAME-DESIGN.md §8), and `relicEffects.test.ts` holds it to it by firing an equipped
+ * relic and a floor through one code path. Only the MARKER differs: a relic announces itself
+ * with `relic-triggered` (an enum id the renderer prints), while a floor's charge bleed is
+ * reported as `floor-drain` carrying the charges ACTUALLY taken — and nothing at all when there
+ * were none to take, so a floor-3 battle opened on an empty well is byte-identical to floor 1's.
+ *
+ * Off-equivalent: a floor with no triggered effects (1, 2, 4, 5) returns its inputs unchanged.
+ */
+export function fireFloorTriggers(
+  trigger: TriggerType,
+  floor: FloorId,
+  player: Player,
+  enemy: Enemy,
+  ctx: TriggerContext,
+): { player: Player; enemy: Enemy; events: CombatEvent[] } {
+  return fireEffects(floorModifiers(floor).triggered, trigger, player, enemy, ctx, (t, before, after) => {
+    if (t.action.kind !== 'drainCharge') return [];
+    const amount = before.skillCharges - after.skillCharges;
+    return amount > 0 ? [{ kind: 'floor-drain', resource: 'skillCharge', amount }] : [];
+  });
+}
+
+/**
+ * The one trigger loop, shared by equipped relics and floors. Filters `triggered` to
+ * `trigger`, skips `revive` (its gate is in battle.ts), applies each action in order through
+ * `applyEffectAction`, and emits the caller's marker events BEFORE the action's own sub-events.
+ * An empty match returns the ORIGINAL objects (reference-equal), which is what lets
+ * `openBattle` hand back the untouched battle.
+ */
+function fireEffects(
+  triggered: readonly TriggeredEffect[],
+  trigger: TriggerType,
+  player: Player,
+  enemy: Enemy,
+  ctx: TriggerContext,
+  marker: (t: TriggeredEffect, before: Player, after: Player) => CombatEvent[],
+): { player: Player; enemy: Enemy; events: CombatEvent[] } {
   let p = player;
   let e = enemy;
   const events: CombatEvent[] = [];
@@ -181,9 +252,9 @@ export function fireTrigger(
     if (t.trigger !== trigger) continue;
     if (t.action.kind === 'revive') continue;
     const r = applyEffectAction(t.action, p, e, ctx);
+    events.push(...marker(t, p, r.self), ...r.events);
     p = r.self;
     e = r.other;
-    events.push({ kind: 'relic-triggered', trigger, action: t.action.kind }, ...r.events);
   }
   return { player: p, enemy: e, events };
 }

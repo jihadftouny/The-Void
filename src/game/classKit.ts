@@ -27,6 +27,7 @@ import {
 } from './condition.ts';
 import { subjectOf, type CombatEvent } from './combatEvent.ts';
 import { useSkill, type SkillDef, type SkillId, type UseSkillResult } from './skill.ts';
+import { dampenHeal } from './floors.ts';
 
 /** The five playable classes (this string is the player's `classId`). */
 export type PlayerClass = 'Enforcer' | 'Neuromancer' | 'Scavver' | 'Penitent' | 'Hollow';
@@ -183,7 +184,14 @@ type ResourceCaster = Character & {
 export function castSkill<
   C extends ResourceCaster,
   T extends Character & { activeConditions: ActiveCondition[]; resistances: number[] },
->(caster: C, target: T, skill: SkillDef): UseSkillResult<C, T> {
+>(
+  caster: C,
+  target: T,
+  skill: SkillDef,
+  // PLAN.md #2: the floor's heal percentage — floor 3 halves `selfHeal` and
+  // `lifestealFraction`. Omitted ⇒ identity, so every enemy/test caller is byte-identical.
+  mods: { healPct: number } = { healPct: 100 },
+): UseSkillResult<C, T> {
   const base = useSkill(caster, target, skill);
   let newCaster: C = base.caster;
   let newTarget: T = base.target;
@@ -287,12 +295,13 @@ export function castSkill<
   // 10. selfHeal (Penitent mend): flat heal, clamped to effective max HP.
   if (skill.selfHeal) {
     const cap = effectiveMaxHp(newCaster);
-    newCaster = { ...newCaster, hp: Math.min(newCaster.hp + skill.selfHeal, cap) };
+    const heal = dampenHeal(skill.selfHeal, mods.healPct);
+    newCaster = { ...newCaster, hp: Math.min(newCaster.hp + heal, cap) };
   }
 
   // 11. lifestealFraction (Hollow siphon/unmake): heal floor(damage × fraction), clamped.
   if (skill.lifestealFraction) {
-    const heal = Math.floor(damage * skill.lifestealFraction);
+    const heal = dampenHeal(Math.floor(damage * skill.lifestealFraction), mods.healPct);
     if (heal > 0) {
       const cap = effectiveMaxHp(newCaster);
       newCaster = { ...newCaster, hp: Math.min(newCaster.hp + heal, cap) };

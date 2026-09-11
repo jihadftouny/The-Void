@@ -91,11 +91,34 @@ export function createKarma(): KarmaState {
  * result is unbounded (clamping deferred to M14).
  */
 export function recordKarma(karma: KarmaState, action: KarmaAction): KarmaState {
+  return recordKarmaWeighted(karma, action, 1);
+}
+
+/**
+ * Record a karma action with every delta multiplied by an integer `weight` — PURE.
+ *
+ * PLAN.md #2 / GAME-DESIGN.md §8 + §22.24: karma earned on floor 4 counts DOUBLE. The weight is
+ * the floor's `karmaMultiplier` (`floors.ts`), and `game.ts`'s `recordOnFloor` is the only
+ * engine caller. No new state — only weighted deltas while on floor 4, as §8 rules.
+ *
+ * WHY A SEPARATE FUNCTION rather than a third `weight = 1` parameter on `recordKarma` (the
+ * plan's wording, deliberately not followed): `recordKarma` is folded with
+ * `actions.reduce(recordKarma, karma)`, and `Array.prototype.reduce` passes the element INDEX
+ * as the callback's third argument. A defaulted third parameter would silently become the
+ * weight — the FIRST action of every fold multiplied by 0, the second by 1, the third by 2 —
+ * and TypeScript would accept it, because an index is a number. Keeping `recordKarma` at two
+ * parameters makes that trap impossible to fall into.
+ */
+export function recordKarmaWeighted(
+  karma: KarmaState,
+  action: KarmaAction,
+  weight: number,
+): KarmaState {
   const delta = KARMA_DELTAS[action];
   return {
-    mercyCruelty: karma.mercyCruelty + (delta.mercyCruelty ?? 0),
-    restraintGreed: karma.restraintGreed + (delta.restraintGreed ?? 0),
-    reverenceDesecration: karma.reverenceDesecration + (delta.reverenceDesecration ?? 0),
-    clarityDelusion: karma.clarityDelusion + (delta.clarityDelusion ?? 0),
+    mercyCruelty: karma.mercyCruelty + (delta.mercyCruelty ?? 0) * weight,
+    restraintGreed: karma.restraintGreed + (delta.restraintGreed ?? 0) * weight,
+    reverenceDesecration: karma.reverenceDesecration + (delta.reverenceDesecration ?? 0) * weight,
+    clarityDelusion: karma.clarityDelusion + (delta.clarityDelusion ?? 0) * weight,
   };
 }

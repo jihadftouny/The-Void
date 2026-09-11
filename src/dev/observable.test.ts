@@ -234,10 +234,11 @@ describe('sparing The Judged on floor 4', () => {
     expect(spareOffered(opened(bundle).state)).toBe(true);
   });
 
-  it('the spare moves BOTH axes in ONE step — mercy and reverence', () => {
+  it('the spare moves BOTH axes in ONE step — mercy and reverence, doubled on floor 4', () => {
     // Derived from the data as a spec: theJudged declares
     // `onSpare: ["spareWeighted", "honorDead"]`, and `KARMA_DELTAS` maps those to
-    // {mercyCruelty: +1} and {reverenceDesecration: +1}. Folded, that is +1 / +1.
+    // {mercyCruelty: +1} and {reverenceDesecration: +1}. Folded, that is +1 / +1 — and PLAN.md
+    // #2 (GAME-DESIGN §8, §22.24) makes karma earned on floor 4 count DOUBLE: +2 / +2.
     const family = getFamily('theJudged')!;
     expect(family.onSpare).toEqual(['spareWeighted', 'honorDead']);
     expect(KARMA_DELTAS.spareWeighted).toEqual({ mercyCruelty: 1 });
@@ -247,9 +248,9 @@ describe('sparing The Judged on floor 4', () => {
     const open = opened(bundle);
     const spared = step(open.state, { kind: 'battle-action', action: 'spare' });
     expect(karmaDelta(open.state.karma, spared.state.karma)).toEqual({
-      mercyCruelty: 1,
+      mercyCruelty: 2,
       restraintGreed: 0,
-      reverenceDesecration: 1,
+      reverenceDesecration: 2,
       clarityDelusion: 0,
     });
     expect(spared.state.phase.kind).toBe('main-menu');

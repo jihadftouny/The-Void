@@ -202,6 +202,17 @@ export function formatEvent(e: GameEvent): string {
       return `The crew strikes you for ${e.amount} damage.`;
     case 'boss-adapt':
       return `Your foe reads your pattern — your next strike falters.`;
+    // --- PLAN.md #2 floor mechanics ---
+    case 'floor-drain':
+      return `This place drains ${e.amount} skill charge${e.amount === 1 ? '' : 's'} from you.`;
+    case 'illusion-struck':
+      return `Your blow passes through it — nothing is there.`;
+    case 'illusion-dispelled':
+      // The one roll of the mechanic the player is shown (a FAILED roll emits nothing, or it
+      // would name the illusion early). Formats the engine's numbers; recomputes none.
+      return `You see through the illusion — Wisdom ${e.total} vs ${e.dc}. It was never there.`;
+    case 'loot-left-behind':
+      return `Your pack is full — you leave ${e.name} behind.`;
 
     // --- narrative events ---
     case 'title':
@@ -261,6 +272,15 @@ export function formatEvent(e: GameEvent): string {
       return [e.header, e.body].filter(Boolean).join('\n');
     case 'game-over':
       return `Game over. Final XP: ${e.xp}.`;
+    // --- PLAN.md #2: the found rest, the warped kit, the full-pack bargain ---
+    case 'rest-found':
+      return `You find a place to rest: ${e.place}.`;
+    case 'skills-warped':
+      return `Your skills twist into something else (${e.count} changed).`;
+    case 'deal-needs-room':
+      return `Your pack is full. Leave something behind to take ${e.reward}.`;
+    case 'item-discarded':
+      return `You leave ${e.name} behind.`;
   }
 }
 

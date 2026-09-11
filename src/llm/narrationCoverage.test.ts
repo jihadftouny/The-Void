@@ -138,6 +138,11 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'boss-summon': { kind: 'boss-summon', minions: 2 },
   'boss-minion-damage': { kind: 'boss-minion-damage', amount: 4 },
   'boss-adapt': { kind: 'boss-adapt' },
+  // PLAN.md #2 (combat)
+  'floor-drain': { kind: 'floor-drain', resource: 'skillCharge', amount: 1 },
+  'illusion-struck': { kind: 'illusion-struck' },
+  'illusion-dispelled': { kind: 'illusion-dispelled', natural: 13, modifier: 1, total: 14, dc: 13 },
+  'loot-left-behind': { kind: 'loot-left-behind', name: 'Rare ring', rarity: 'Rare' },
   // ---- narrative (26) ----
   title: { kind: 'title' },
   intro: { kind: 'intro', header: 'STORY', lines: ['The capital of Absolution, 2100 . . .'] },
@@ -188,6 +193,11 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
     body: 'You are judged worthy and rise from the Void, made whole.',
   },
   'game-over': { kind: 'game-over', xp: 42 },
+  // PLAN.md #2 (narrative)
+  'rest-found': { kind: 'rest-found', floor: 1, place: 'a dry stairwell', briefId: 'floor-1' },
+  'skills-warped': { kind: 'skills-warped', count: 3 },
+  'deal-needs-room': { kind: 'deal-needs-room', reward: 'Rare armor' },
+  'item-discarded': { kind: 'item-discarded', name: 'Common ring', rarity: 'Common' },
 };
 
 /**
@@ -245,6 +255,15 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   'draft-picked': 'fact',
   'rest-declined': 'fact',
   'no-rests': 'fact',
+  // --- the 8 facts PLAN.md #2 adds (floor mechanics, the found rest, the full-pack bargain) ---
+  'floor-drain': 'fact',
+  'illusion-struck': 'fact',
+  'illusion-dispelled': 'fact',
+  'loot-left-behind': 'fact',
+  'rest-found': 'fact',
+  'skills-warped': 'fact',
+  'deal-needs-room': 'fact',
+  'item-discarded': 'fact',
   // --- the 17 deliberate silences ---
   'cast-unavailable': 'silent',
   'potion-unavailable': 'silent',
@@ -298,20 +317,23 @@ const NEW_FACT_KINDS: readonly GameEventKind[] = [
 // ---------------------------------------------------------------------------------------
 
 describe('describeEvent covers every event kind (G13)', () => {
-  it('the union really has 63 kinds', () => {
+  it('the union really has 71 kinds', () => {
     // 37 CombatEvent members + 26 NarrativeEvent members, counted by hand from the two
     // union declarations in combatEvent.ts and gameEvent.ts. The mapped type guarantees
     // SAMPLE's keys ARE the union, so this anchors the size of the thing being covered.
     // (Note the count `src/render/format.test.ts` hard-codes is 52 — its own hand-list
     // omits the 11 M3/M6 combat kinds. That is a gap in that file, not in the union.)
-    expect(ALL_KINDS).toHaveLength(37 + 26);
+    // PLAN.md #2 added 4 combat kinds (floor-drain, illusion-struck, illusion-dispelled,
+    // loot-left-behind) and 4 narrative ones (rest-found, skills-warped, deal-needs-room,
+    // item-discarded).
+    expect(ALL_KINDS).toHaveLength(37 + 4 + 26 + 4);
   });
 
-  it('the classification is 46 facts and 17 deliberate silences', () => {
+  it('the classification is 54 facts and 17 deliberate silences', () => {
     // From the plan: 29 kinds already had a fact, G13 adds 17 more, and the other 17 are
     // silenced on purpose. 29 + 17 + 17 = 63.
     const facts = ALL_KINDS.filter((k) => EXPECTED[k] === 'fact');
-    expect(facts).toHaveLength(29 + 17);
+    expect(facts).toHaveLength(29 + 17 + 8);
     expect(DELIBERATELY_SILENT.size).toBe(17);
     expect(NEW_FACT_KINDS).toHaveLength(17);
     for (const k of NEW_FACT_KINDS) expect(EXPECTED[k]).toBe('fact');

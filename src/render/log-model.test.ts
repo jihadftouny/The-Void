@@ -68,6 +68,11 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'boss-summon': { kind: 'boss-summon', minions: 1 },
   'boss-minion-damage': { kind: 'boss-minion-damage', amount: 2 },
   'boss-adapt': { kind: 'boss-adapt' },
+  // PLAN.md #2 (combat)
+  'floor-drain': { kind: 'floor-drain', resource: 'skillCharge', amount: 1 },
+  'illusion-struck': { kind: 'illusion-struck' },
+  'illusion-dispelled': { kind: 'illusion-dispelled', natural: 12, modifier: 1, total: 13, dc: 13 },
+  'loot-left-behind': { kind: 'loot-left-behind', name: 'Common helmet', rarity: 'Common' },
   // ---- narrative (26) ----
   title: { kind: 'title' },
   intro: { kind: 'intro', header: 'HEAD', lines: ['one', 'two'] },
@@ -95,6 +100,11 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   verdict: { kind: 'verdict', outcome: 'cast-down' },
   ending: { kind: 'ending', endingType: 'damnation', header: 'DAMNATION', body: '' },
   'game-over': { kind: 'game-over', xp: 120 },
+  // PLAN.md #2 (narrative)
+  'rest-found': { kind: 'rest-found', floor: 3, place: 'a cold hearth', briefId: 'floor-3' },
+  'skills-warped': { kind: 'skills-warped', count: 2 },
+  'deal-needs-room': { kind: 'deal-needs-room', reward: 'Legendary mainHand' },
+  'item-discarded': { kind: 'item-discarded', name: 'Suture Kit', rarity: 'Common' },
 };
 
 const ALL_KINDS = Object.keys(SAMPLE) as GameEventKind[];
@@ -104,12 +114,13 @@ const ALL_KINDS = Object.keys(SAMPLE) as GameEventKind[];
 // ---------------------------------------------------------------------------
 
 describe('LOG_ROUTING is total over GameEventKind', () => {
-  it('has exactly 63 entries (37 combat + 26 narrative)', () => {
+  it('has exactly 71 entries (41 combat + 30 narrative)', () => {
     // Counted by hand from the two union declarations, the same independent count
     // `narrationCoverage.test.ts` and `format.test.ts` each make separately. The
     // `Record<GameEventKind, LogRoute>` type already guarantees the KEYS are the union; this
     // anchors its SIZE, so a 64th kind cannot arrive unnoticed even if someone adds a key.
-    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 26);
+    // PLAN.md #2: +4 combat, +4 narrative.
+    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 + 26 + 4);
     expect(new Set(Object.keys(LOG_ROUTING))).toEqual(new Set(ALL_KINDS));
   });
 
@@ -128,7 +139,9 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
       expect(lines, `${kind} must produce a line`).toHaveLength(1);
       expect(lines[0]!.text.length, `${kind} produced an empty line`).toBeGreaterThan(0);
     }
-    expect(logged).toBe(37); // non-vacuity: the loop really ran over 37 kinds
+    // non-vacuity: 37 + PLAN.md #2's three in-fight kinds (floor-drain, illusion-struck,
+    // illusion-dispelled). `loot-left-behind` is a combat kind routed to the PANE.
+    expect(logged).toBe(37 + 3);
   });
 
   it('every PANE-routed kind yields NO line at all', () => {
@@ -138,7 +151,8 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
       paned += 1;
       expect(logLines([SAMPLE[kind]]), `${kind} must not reach the log`).toEqual([]);
     }
-    expect(paned).toBe(26);
+    // 26 narrative + PLAN.md #2's four narrative kinds + `loot-left-behind`.
+    expect(paned).toBe(26 + 4 + 1);
   });
 
   it('a rejected input IS logged, though the narrator stays silent about it', () => {

@@ -33,8 +33,9 @@ import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
 import { weaponForSlot, UNARMED, pickUp } from './equipment.ts';
 import { rollLootDrop, summarizeLoot } from './loot.ts';
 import { computeEquipModifiers, effectiveChargeCost, type EquipModifiers } from './equipEffects.ts';
-import { fireTrigger, reviveActionFor } from './relicEffects.ts';
+import { fireFloorTriggers, fireTrigger, reviveActionFor } from './relicEffects.ts';
 import { applyConsumable, type ConsumableSource } from './consumable.ts';
+import { ILLUSION_DC, type FloorId } from './floors.ts';
 
 /** The full, serializable state of a battle in progress. */
 export interface BattleState {
@@ -89,6 +90,24 @@ export type BattleAction =
   | 'spare'
   | { kind: 'cast'; skillId: SkillId }
   | { kind: 'useConsumable'; source: ConsumableSource };
+
+/**
+ * The per-floor rules a round is resolved under (PLAN.md #2). Passed IN by `game.ts`, which
+ * derives them from `state.place` — the battle itself stores no floor, so a mid-battle save's
+ * shape is unchanged and the rules can never disagree with where the run actually is.
+ *
+ * `DEFAULT_ROUND_RULES` is the identity (no floor mechanic), and every caller that passes
+ * nothing — every pre-#2 test, every direct `resolveRound` caller — gets exactly today's round.
+ */
+export interface RoundRules {
+  /** Percent of every dampenable heal the player receives (floor 3: 50). Identity 100. */
+  healPct: number;
+  /** The Difficulty Class of the passive Wisdom roll against an illusion (`floors.ts`). */
+  illusionDc: number;
+}
+
+/** No floor mechanic: full heals, the shipped illusion DC. */
+export const DEFAULT_ROUND_RULES: RoundRules = { healPct: 100, illusionDc: ILLUSION_DC };
 
 /** The state of the battle after a round resolves. */
 export type RoundStatus = 'ongoing' | 'player-won' | 'player-died' | 'fled' | 'spared';
@@ -212,10 +231,24 @@ export function createBattle(
  * list (off-equivalence — a normal battle opens byte-identically). Call once, when a battle
  * becomes active (game.ts flips `started` to true).
  */
-export function openBattle(battle: BattleState): { battle: BattleState; events: CombatEvent[] } {
+export function openBattle(
+  battle: BattleState,
+  floor?: FloorId,
+): { battle: BattleState; events: CombatEvent[] } {
   const fired = fireTrigger('startOfBattle', battle.player, battle.enemy, {});
-  if (fired.events.length === 0) return { battle, events: [] };
-  return { battle: { ...battle, player: fired.player, enemy: fired.enemy }, events: fired.events };
+  // PLAN.md #2: then the FLOOR's `startOfBattle` triggers (floor 3's charge bleed), through the
+  // same loop and the same `applyEffectAction` a relic uses. Relics first, so a relic that
+  // restores a charge at battle open is not cancelled by a drain that ran before it existed.
+  // `floor` omitted ⇒ today's behaviour byte-for-byte (every pre-#2 caller).
+  const floored =
+    floor === undefined
+      ? { player: fired.player, enemy: fired.enemy, events: [] as CombatEvent[] }
+      : fireFloorTriggers('startOfBattle', floor, fired.player, fired.enemy, {});
+  const events = [...fired.events, ...floored.events];
+  // Nothing fired ⇒ the ORIGINAL battle object (off-equivalence). A drain with no charge to
+  // take emits nothing and changes nothing, so it lands here too.
+  if (events.length === 0) return { battle, events: [] };
+  return { battle: { ...battle, player: floored.player, enemy: floored.enemy }, events };
 }
 
 // ------- THE ONE GUARDED PLAYER-DAMAGE PATH (G24, G29) ------------------------
@@ -378,14 +411,19 @@ export function rollFlee(rng: Rng): boolean {
  * hit/crit with charges) -> player-condition-tick draws -> player d20 + damage draws
  * (Fight) or no draw (Cast) -> on victory: extra-rest draw then loot roll.
  */
-export function resolveRound(state: BattleState, action: BattleAction, rng: Rng): RoundResult {
+export function resolveRound(
+  state: BattleState,
+  action: BattleAction,
+  rng: Rng,
+  rules: RoundRules = DEFAULT_ROUND_RULES,
+): RoundResult {
   if (typeof action === 'object') {
-    if (action.kind === 'cast') return resolveCast(state, action.skillId, rng);
-    return resolveUseConsumable(state, action.source, rng);
+    if (action.kind === 'cast') return resolveCast(state, action.skillId, rng, rules);
+    return resolveUseConsumable(state, action.source, rng, rules);
   }
   switch (action) {
     case 'fight':
-      return resolvePlayerTurn(state, { kind: 'fight' }, rng);
+      return resolvePlayerTurn(state, { kind: 'fight' }, rng, rules);
     case 'potion':
       return resolvePotion(state);
     case 'run':
@@ -448,6 +486,7 @@ function resolvePlayerTurn(
   state: BattleState,
   action: PlayerTurnAction,
   rng: Rng,
+  rules: RoundRules,
 ): RoundResult {
   const events: CombatEvent[] = [];
   let player: Player = state.player;
@@ -585,7 +624,8 @@ function resolvePlayerTurn(
     // useSkill damage/condition PLUS the class signature twist, all deterministic (NO rng
     // draw, so the documented draw order is unchanged). Forward the twist events; the base
     // `enemy-skill-used` event is dropped in favor of the player-facing `skill-cast`.
-    const cast = castSkill(player, enemy, action.skill);
+    // PLAN.md #2: the floor's heal percentage reaches `selfHeal` and `lifestealFraction`.
+    const cast = castSkill(player, enemy, action.skill, { healPct: rules.healPct });
     player = cast.caster;
     enemy = cast.target;
     playerDamage = cast.damage;
@@ -685,16 +725,19 @@ function resolvePlayerTurn(
 
   // 5b. Fire the player's ACTION triggers (RNG-free). `onTakeDamage` already fired inside the
   //     damage helper above, alongside the shield and the revive gate it belongs with.
+  //     PLAN.md #2: a relic's `healSelf` (Penitent's Rosary, Stitched Heart) is dampened on
+  //     floor 3 like every other heal — `healPct` rides the trigger context.
+  const triggerCtx = { healPct: rules.healPct };
   if (didHit) {
-    const t = fireTrigger('onHit', player, enemy, {});
+    const t = fireTrigger('onHit', player, enemy, triggerCtx);
     player = t.player; enemy = t.enemy; events.push(...t.events);
   }
   if (didCrit) {
-    const t = fireTrigger('onCrit', player, enemy, {});
+    const t = fireTrigger('onCrit', player, enemy, triggerCtx);
     player = t.player; enemy = t.enemy; events.push(...t.events);
   }
   if (didCast) {
-    const t = fireTrigger('onCast', player, enemy, {});
+    const t = fireTrigger('onCast', player, enemy, triggerCtx);
     player = t.player; enemy = t.enemy; events.push(...t.events);
   }
 
@@ -762,7 +805,7 @@ function killAndVictory(
  * no-op: state unchanged, a single `cast-unavailable` event, `ongoing`, and NO rng draw
  * (mirrors an unavailable potion). Otherwise it runs `resolvePlayerTurn` as a cast.
  */
-function resolveCast(state: BattleState, skillId: SkillId, rng: Rng): RoundResult {
+function resolveCast(state: BattleState, skillId: SkillId, rng: Rng, rules: RoundRules): RoundResult {
   const player = state.player;
   // M9: resolve the player's OWN skill def (base merged with any owned upgrade). No upgrade
   // ⇒ the base SKILLS def is returned unchanged (off-equivalence); the enemy path still reads
@@ -778,7 +821,7 @@ function resolveCast(state: BattleState, skillId: SkillId, rng: Rng): RoundResul
   if (!skill || !player.skillPool.includes(skillId) || player.skillCharges < effectiveCost) {
     return { state, events: [{ kind: 'cast-unavailable' }], status: 'ongoing', resolved: false };
   }
-  return resolvePlayerTurn(state, { kind: 'cast', skill }, rng);
+  return resolvePlayerTurn(state, { kind: 'cast', skill }, rng, rules);
 }
 
 /**
@@ -852,8 +895,10 @@ function resolveUseConsumable(
   state: BattleState,
   source: ConsumableSource,
   rng: Rng,
+  rules: RoundRules,
 ): RoundResult {
-  const res = applyConsumable(state.player, state.enemy, source);
+  // PLAN.md #2: a healing consumable is dampened on floor 3 (`healPct` reaches `healSelf`).
+  const res = applyConsumable(state.player, state.enemy, source, { healPct: rules.healPct });
   if (!res.consumed) {
     return { state, events: res.events, status: 'ongoing', resolved: false };
   }

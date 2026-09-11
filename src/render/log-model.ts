@@ -92,6 +92,15 @@ export const LOG_ROUTING: Record<GameEventKind, LogRoute> = {
   'boss-summon': 'log',
   'boss-minion-damage': 'log',
   'boss-adapt': 'log',
+  // PLAN.md #2 — inside a fight, so the battle log's (the log is the BATTLE log, rule above).
+  // `illusion-dispelled` ends the fight the way `victory` and `spared` do, and like them it is
+  // logged: it carries the one roll of the illusion mechanic the player is allowed to see.
+  'floor-drain': 'log',
+  'illusion-struck': 'log',
+  'illusion-dispelled': 'log',
+  // A victory drop OR a chest item the full pack could not take. Pane, not log: the chest path
+  // happens outside any fight, and the victory line already reports what WAS taken.
+  'loot-left-behind': 'pane',
   // ---- the narration pane: every narrative event (26) ----
   title: 'pane',
   intro: 'pane',
@@ -119,6 +128,11 @@ export const LOG_ROUTING: Record<GameEventKind, LogRoute> = {
   verdict: 'pane',
   ending: 'pane',
   'game-over': 'pane',
+  // PLAN.md #2 — outside any fight: the found rest, the warped kit, the full-pack bargain.
+  'rest-found': 'pane',
+  'skills-warped': 'pane',
+  'deal-needs-room': 'pane',
+  'item-discarded': 'pane',
 };
 
 /**

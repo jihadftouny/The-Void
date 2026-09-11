@@ -142,6 +142,8 @@ function seekAndAccept(from: StepResult, want: DealCost['kind'], maxSeeks = 300)
  */
 interface SpareObservation {
   familyId: string;
+  /** The floor index (`state.place`) the spare happened on — floor 4 (place 3) counts double. */
+  place: number;
   before: KarmaState;
   after: KarmaState;
   events: GameEvent[];
@@ -157,10 +159,11 @@ function observeSpares(seed: number, classId: PlayerClass, guard = 200_000): Spa
     const before = r.state.karma;
     const phase = r.state.phase;
     const familyId = phase.kind === 'battle' ? phase.battle.enemy.familyId : null;
+    const place = r.state.place;
     r = step(r.state, policy(r));
     steps += 1;
     if (familyId !== null && r.events.some((e) => e.kind === 'spared')) {
-      out.push({ familyId, before, after: r.state.karma, events: [...r.events] });
+      out.push({ familyId, place, before, after: r.state.karma, events: [...r.events] });
     }
   }
   return out;
@@ -584,15 +587,23 @@ describe('honorDead — sparing The Judged, through the real step', () => {
     expect(otherWeighted.length).toBeGreaterThan(0); // the control set is non-empty too
   });
 
-  it('moves BOTH mercy +1 and reverence +1 in the SAME step, every time', () => {
+  // PLAN.md #2 (GAME-DESIGN §8 / §22.24): karma earned on FLOOR 4 counts DOUBLE. The multiplier
+  // is written here from the ruling — place 3 is floor 4 — not read from `floors.json`.
+  const weight = (place: number): number => (place === 3 ? 2 : 1);
+
+  it('moves BOTH mercy and reverence in the SAME step, every time (x2 on floor 4)', () => {
     for (const o of judged) {
+      const w = weight(o.place);
       expect(karmaDelta(o.before, o.after)).toEqual({
-        mercyCruelty: 1,
+        mercyCruelty: 1 * w,
         restraintGreed: 0,
-        reverenceDesecration: 1,
+        reverenceDesecration: 1 * w,
         clarityDelusion: 0,
       });
     }
+    // The Judged are a floor-4 family, so every observed Judged spare really is doubled —
+    // asserted, or the x2 above would be satisfied by a weight that is always 1.
+    expect(judged.every((o) => o.place === 3)).toBe(true);
   });
 
   it('every OTHER ⚖ family still spares as mercy alone — the family data carries the change', () => {
@@ -600,7 +611,7 @@ describe('honorDead — sparing The Judged, through the real step', () => {
     // been taught "a spare also honours the dead", this goes red.
     for (const o of otherWeighted) {
       expect(karmaDelta(o.before, o.after), o.familyId).toEqual({
-        mercyCruelty: 1,
+        mercyCruelty: 1 * weight(o.place),
         restraintGreed: 0,
         reverenceDesecration: 0,
         clarityDelusion: 0,

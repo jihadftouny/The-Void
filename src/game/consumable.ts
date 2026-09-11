@@ -19,7 +19,7 @@ import { type Player } from './player.ts';
 import { type Enemy } from './enemy.ts';
 import { type CombatEvent } from './combatEvent.ts';
 import { getCatalogItemById } from './item.ts';
-import { applyEffectAction } from './relicEffects.ts';
+import { applyEffectAction, type TriggerContext } from './relicEffects.ts';
 
 /** Which consumable to use: a backpack slot index (the authoritative loose-item store). */
 export interface ConsumableSource {
@@ -51,6 +51,9 @@ export function applyConsumable(
   player: Player,
   enemy: Enemy,
   source: ConsumableSource,
+  // PLAN.md #2: the floor's heal percentage (floor 3 dampens a Void Draught like any heal).
+  // Omitted ⇒ `{}`, exactly the context every action was applied with before.
+  ctx: TriggerContext = {},
 ): ConsumableResult {
   const instance = player.inventory.backpack[source.index];
   const def = instance ? getCatalogItemById(instance.defId) : undefined;
@@ -75,7 +78,7 @@ export function applyConsumable(
   let reroll = false;
 
   for (const action of use) {
-    const out = applyEffectAction(action, p, e, {});
+    const out = applyEffectAction(action, p, e, ctx);
     p = out.self;
     e = out.other;
     events.push(...out.events);

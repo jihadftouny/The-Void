@@ -22,7 +22,7 @@ const FLOORS = [
 /**
  * One short factual clause describing an event, or '' if it needs no narration.
  *
- * TOTAL over the `GameEvent` union — every one of its 63 kinds has an explicit case, and
+ * TOTAL over the `GameEvent` union — every one of its kinds (counted in `narrationCoverage.test.ts`) has an explicit case, and
  * the `default:` branch is a compile-time exhaustiveness check (G13). Before that check,
  * 34 kinds fell through a silent `default: return ''`, including `skill-cast`: the
  * player's own class action never reached the model, so on a cast round the only
@@ -208,6 +208,34 @@ export function describeEvent(e: GameEvent): string {
       return `You press on without resting.`;
     case 'no-rests':
       return `There is no rest left in you.`;
+
+    // ---- PLAN.md #2: the floor mechanics, the found rest, the full-pack bargain -------
+    // Engine facts under the same three-part rule: observable, written from the event's own
+    // fields, no enum id. No numbers (VOID_PERSONA forbids them and none is needed), no karma,
+    // no reserved word (WORLD.md §0) — held to that by the reserved-word and hidden-karma
+    // guards, which cover every fact literal.
+
+    case 'floor-drain':
+      // Floor 3's charge bleed at battle open. The amount is the log's to show.
+      return `Something in this place takes a little of your strength.`;
+    case 'illusion-struck':
+      // Floor 2. Says what the player SAW — the blow met nothing — without naming an illusion
+      // the player has not yet seen through.
+      return `Your blow passes through it.`;
+    case 'illusion-dispelled':
+      return `It was never there.`;
+    case 'loot-left-behind':
+      return `You cannot carry ${e.name}; you leave it.`;
+    case 'rest-found':
+      // The scene itself (the place, the character's condition, the tone) is the scene block
+      // `buildNarrationPrompt` appends for this step; this fact line only anchors it.
+      return `You find somewhere to rest: ${e.place}.`;
+    case 'skills-warped':
+      return `Your skills no longer feel like your own.`;
+    case 'deal-needs-room':
+      return `Your pack is full; to take ${e.reward}, you must leave something behind.`;
+    case 'item-discarded':
+      return `You leave ${e.name} behind.`;
 
     // ---- G13: DELIBERATE SILENCE — seventeen kinds that return '' on purpose ----------
     //

@@ -194,6 +194,8 @@
 //
 //   RULE / POLICY CHANGED                                  STEP  DIRECTION ON THESE RUNS
 //   the sim gears up at the hub + heals with found items    S1   PLAYER MUCH STRONGER
+//   floor 3: heals x50%, one charge drained per battle      S2   player weaker from floor 3
+//   floor 4: karma earned there counts double               S2   NONE on these runs
 //
 //  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
 //     | step 12) so that every later rules change is measured against a player who uses what
@@ -210,6 +212,18 @@
 //     | Enforcer 0.67, Neuromancer/Hollow 0.48, Penitent 0.43). That is far ABOVE the one-in-three
 //     | target, which is the point: #2's re-run now tunes a real game DOWN toward it instead of a
 //     | gearless one up.
+//  S2 | THE FLOOR HOOK (`floors.ts` + `floors.json`), with its two numeric floors live. Floor 3:
+//     | every dampenable heal (rest, consumable, relic healSelf, mend, lifesteal) is floored at
+//     | 50%, and one skill charge is drained at every battle open — RNG-free both, so only the
+//     | DECISIONS they change can move a draw. Floor 4: karma is recorded x2.
+//     | EXPECTED (written before measuring): runs that die before floor 3 are BYTE-IDENTICAL;
+//     | runs that reach floor 3 get weaker (fewer casts, smaller rests). Floor 4's weight moves
+//     | nothing here: the heuristic never spares or takes deals, so its ledger only ever falls,
+//     | the verdict is cast-down either way, and the Sin's axis is read on floor 3, before it.
+//     | OBSERVED: Enforcer seed 3 is BYTE-IDENTICAL (rngState 4155263102) — it dies in its
+//     | first floor-3 fight before any drained charge changes a decision, a useful control. The
+//     | other five move; Hollow seed 2 turns a damnation into an act-4 death; wins 3/6 -> 2/6.
+//     | The 500-run guard 0.580 -> 0.556, in the predicted direction.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -260,12 +274,12 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 436, cause: 'unmade the Hollow (damnation)', rngState: 2097322993 },
-  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 343, cause: 'unmade the Hollow (damnation)', rngState: 736074460 },
+  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 408, cause: 'unmade the Hollow (damnation)', rngState: 209392283 },
+  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 376, cause: 'unmade the Hollow (damnation)', rngState: 4015558904 },
   { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 183, cause: 'Cursed Roaring Ire', rngState: 4155263102 },
-  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 14, floorsCleared: 3, steps: 333, cause: 'Gaea', rngState: 4053440403 },
-  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 324, cause: 'unmade the Hollow (damnation)', rngState: 2406121882 },
-  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 326, cause: 'Gaea', rngState: 1966109804 },
+  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 358, cause: 'Remembered Ghost', rngState: 2526427975 },
+  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 274, cause: 'The Counselor', rngState: 1612767821 },
+  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 14, floorsCleared: 3, steps: 350, cause: 'Gaea', rngState: 3669793223 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -291,16 +305,16 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(report).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 3,
+      wins: 2,
       grace: 0,
-      damnation: 3,
-      deaths: 3,
-      winRate: 3 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 23+23+9+14+23+12 = 104, floors
-      // 4+4+2+3+4+3 = 20. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 104 / 6,
+      damnation: 2,
+      deaths: 4,
+      winRate: 2 / 6,
+      // Summed from the GOLDEN_RUNS rows above: levels 23+23+9+16+12+14 = 97, floors
+      // 4+4+2+4+3+3 = 20. Written as the fraction so the two stay visibly tied together.
+      avgLevel: 97 / 6,
       avgFloorsCleared: 20 / 6,
-      deathByAct: { 1: 0, 2: 0, 3: 1, 4: 2, 5: 0 },
+      deathByAct: { 1: 0, 2: 0, 3: 1, 4: 2, 5: 1 },
       perClass: {
         Enforcer: {
           runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,
@@ -308,9 +322,9 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
           deathByAct: { 1: 0, 2: 0, 3: 1, 4: 0, 5: 0 },
         },
         Hollow: {
-          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
-          winRate: 1 / 3, avgLevel: 49 / 3, avgFloorsCleared: 10 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 2, 5: 0 },
+          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
+          winRate: 0 / 3, avgLevel: 42 / 3, avgFloorsCleared: 10 / 3,
+          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 2, 5: 1 },
         },
       },
     });

@@ -149,6 +149,11 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'boss-summon': { kind: 'boss-summon', minions: 2 },
   'boss-minion-damage': { kind: 'boss-minion-damage', amount: 4 },
   'boss-adapt': { kind: 'boss-adapt' },
+  // PLAN.md #2 (combat)
+  'floor-drain': { kind: 'floor-drain', resource: 'skillCharge', amount: 2 },
+  'illusion-struck': { kind: 'illusion-struck' },
+  'illusion-dispelled': { kind: 'illusion-dispelled', natural: 11, modifier: 3, total: 14, dc: 13 },
+  'loot-left-behind': { kind: 'loot-left-behind', name: 'Legendary mainHand', rarity: 'Legendary' },
   // ---- narrative (26) ----
   title: { kind: 'title' },
   intro: { kind: 'intro', header: 'H', lines: ['a', 'b'] },
@@ -179,6 +184,11 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   verdict: { kind: 'verdict', outcome: 'grace' },
   ending: { kind: 'ending', endingType: 'grace', header: 'H', body: 'B' },
   'game-over': { kind: 'game-over', xp: 42 },
+  // PLAN.md #2 (narrative)
+  'rest-found': { kind: 'rest-found', floor: 5, place: 'a still room', briefId: 'floor-5' },
+  'skills-warped': { kind: 'skills-warped', count: 4 },
+  'deal-needs-room': { kind: 'deal-needs-room', reward: 'Rare armor' },
+  'item-discarded': { kind: 'item-discarded', name: 'Suture Kit', rarity: 'Common' },
 };
 
 /** Derived from the mapped type's keys, so it cannot fall behind the union. */
@@ -190,7 +200,8 @@ describe('formatEvent — totality over every event kind', () => {
     // mapped type already guarantees the KEYS are the union; this anchors its SIZE, so a
     // kind quietly deleted from the union would not shrink the guarantee unnoticed.
     // (`src/llm/narrationCoverage.test.ts` counts the same 37 + 26 independently.)
-    expect(ALL_KINDS).toHaveLength(37 + 26);
+    // PLAN.md #2 added 4 combat and 4 narrative kinds.
+    expect(ALL_KINDS).toHaveLength(37 + 4 + 26 + 4);
     for (const kind of ALL_KINDS) expect(SAMPLES[kind].kind).toBe(kind);
   });
 
@@ -580,5 +591,38 @@ describe('formatRollDetail', () => {
       const line = formatRollDetail(e);
       if (e.damage > 0) expect(line.endsWith(`= ${e.damage}`)).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PLAN.md #2 — the floor mechanics' log lines, written out by hand from the plan's intent.
+// Each carries the number the player needs and nothing the engine did not compute.
+// ---------------------------------------------------------------------------
+
+describe('formatEvent — the floor mechanics (PLAN.md #2)', () => {
+  it('floor-drain names the charges taken, singular and plural', () => {
+    expect(formatEvent({ kind: 'floor-drain', resource: 'skillCharge', amount: 1 })).toBe(
+      'This place drains 1 skill charge from you.',
+    );
+    expect(formatEvent(SAMPLES['floor-drain'])).toBe('This place drains 2 skill charges from you.');
+  });
+
+  it('illusion-struck does not name the illusion; illusion-dispelled shows the roll', () => {
+    expect(formatEvent(SAMPLES['illusion-struck'])).toBe('Your blow passes through it — nothing is there.');
+    expect(formatEvent(SAMPLES['illusion-struck'])).not.toMatch(/illusion/i);
+    expect(formatEvent(SAMPLES['illusion-dispelled'])).toBe(
+      'You see through the illusion — Wisdom 14 vs 13. It was never there.',
+    );
+  });
+
+  it('the full-pack lines name the item, never an id', () => {
+    expect(formatEvent(SAMPLES['loot-left-behind'])).toBe('Your pack is full — you leave Legendary mainHand behind.');
+    expect(formatEvent(SAMPLES['deal-needs-room'])).toBe('Your pack is full. Leave something behind to take Rare armor.');
+    expect(formatEvent(SAMPLES['item-discarded'])).toBe('You leave Suture Kit behind.');
+  });
+
+  it('rest-found and skills-warped', () => {
+    expect(formatEvent(SAMPLES['rest-found'])).toBe('You find a place to rest: a still room.');
+    expect(formatEvent(SAMPLES['skills-warped'])).toBe('Your skills twist into something else (4 changed).');
   });
 });

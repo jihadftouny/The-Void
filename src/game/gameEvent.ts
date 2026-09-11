@@ -65,7 +65,23 @@ export type NarrativeEvent =
    */
   | { kind: 'verdict'; outcome: 'grace' | 'cast-down'; text?: string }
   | { kind: 'ending'; endingType: 'grace' | 'damnation'; header: string; body: string; text?: string }
-  | { kind: 'game-over'; xp: number; text?: string };
+  | { kind: 'game-over'; xp: number; text?: string }
+  // ---- PLAN.md #2: rest as a found place, the warped kit, and the full-pack bargain ----
+  /**
+   * A rest spot, found on the descent and taken at once (GAME-DESIGN.md §22.26). `place` is the
+   * floor's placeholder place line from `restBriefs.json`; `briefId` names the brief the
+   * narrator's scene block is built from. Always followed by `rest-taken` in the same step.
+   */
+  | { kind: 'rest-found'; floor: number; place: string; briefId: string; text?: string }
+  /** Floor 5: every owned skill took on a corrupted form (`count` of them) on arrival. */
+  | { kind: 'skills-warped'; count: number; text?: string }
+  /**
+   * A bargain was accepted with a FULL backpack and an item reward (plan Appendix A.3): the pack
+   * opens so the player can leave something behind. Nothing has been paid yet.
+   */
+  | { kind: 'deal-needs-room'; reward: string; text?: string }
+  /** An item was left behind to make room for a bargain's reward (A.3). */
+  | { kind: 'item-discarded'; name: string; rarity: Rarity; text?: string };
 
 /** The full game event stream: combat events plus narrative events. */
 export type GameEvent = CombatEvent | NarrativeEvent;

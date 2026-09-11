@@ -43,7 +43,7 @@ import { type EquipSlot, type ItemInstance, getAllRelics } from './item.ts';
 import { type Rarity } from './weapon.ts';
 import { generateItem } from './rarityGen.ts';
 import { pick, type Rng } from './rng.ts';
-import { type KarmaState, recordKarma } from './karma.ts';
+import { type KarmaState, recordKarmaWeighted } from './karma.ts';
 import { pickUp } from './equipment.ts';
 import dealsData from '../data/deals.json';
 
@@ -297,6 +297,8 @@ export function applyDeal(
   player: Player,
   karma: KarmaState,
   deal: SacrificeDeal,
+  // PLAN.md #2: the floor's karma multiplier — a bargain paid on floor 4 counts double. Default 1.
+  karmaWeight = 1,
 ): { player: Player; karma: KarmaState; outcome: 'taken' | 'unaffordable' } {
   if (!canAfford(player, deal.cost)) {
     return { player, karma, outcome: 'unaffordable' };
@@ -335,17 +337,17 @@ export function applyDeal(
       // recorded the karma without taking the item would be free reverence.
       const backpack = next.inventory.backpack.slice(1);
       next = { ...next, inventory: { slots: { ...next.inventory.slots }, backpack } };
-      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.offering);
+      nextKarma = recordKarmaWeighted(nextKarma, KARMA_COST_ACTION.offering, karmaWeight);
       break;
     }
     case 'desecrate':
-      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.desecrate);
+      nextKarma = recordKarmaWeighted(nextKarma, KARMA_COST_ACTION.desecrate, karmaWeight);
       break;
     case 'greed':
-      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.greed);
+      nextKarma = recordKarmaWeighted(nextKarma, KARMA_COST_ACTION.greed, karmaWeight);
       break;
     case 'whisper':
-      nextKarma = recordKarma(nextKarma, KARMA_COST_ACTION.whisper);
+      nextKarma = recordKarmaWeighted(nextKarma, KARMA_COST_ACTION.whisper, karmaWeight);
       break;
   }
 

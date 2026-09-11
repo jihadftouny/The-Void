@@ -22,7 +22,7 @@
 
 import { createRng, type Rng } from './rng.ts';
 import { type Stats } from './character.ts';
-import { createKarma, recordKarma, type KarmaAction, type KarmaState } from './karma.ts';
+import { createKarma, recordKarmaWeighted, type KarmaAction, type KarmaState } from './karma.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
 import {
@@ -31,7 +31,9 @@ import {
   openBattle,
   type BattleState,
   type BattleAction,
+  type RoundRules,
 } from './battle.ts';
+import { dampenHeal, floorModifiers, floorOf, ILLUSION_DC } from './floors.ts';
 import { createBattle } from './battle.ts';
 import { generateBoss, bossPostRound, computeVerdict, type BossId } from './boss.ts';
 import {
@@ -157,6 +159,20 @@ export type GameInput =
   | { kind: 'deal-decision'; accept: boolean }
   | { kind: 'rest-decision'; accept: boolean };
 
+/**
+ * Rule overrides for a `step` — a MEASUREMENT seam, never set by the game (PLAN.md #2).
+ *
+ * The balance report measures how sensitive the win rate is to floor 2's `ILLUSION_DC`
+ * (§22.27: the author chooses the Wisdom-gap remedy from evidence). Editing the frozen constant
+ * to take that measurement would be exactly the move the ruling forbids, and a module-level
+ * setter would be global mutable state in a pure core. So the DC can be INJECTED per call, as
+ * plain data: the sim threads it through every `step` of a run, and the shipped renderer never
+ * passes anything. Absent ⇒ the shipped constant. Pure and deterministic either way.
+ */
+export interface StepOptions {
+  illusionDc?: number;
+}
+
 /** What `step` returns: the next state, the ordered events, and the next Awaiting. */
 export interface StepResult {
   state: GameState;
@@ -239,7 +255,7 @@ function substituteName(text: string, name: string): string {
  * state. If `input` does not match what the current phase awaits, the state is
  * returned unchanged with no events (the reducer is total). Never mutates `state`.
  */
-export function step(state: GameState, input: GameInput): StepResult {
+export function step(state: GameState, input: GameInput, options: StepOptions = {}): StepResult {
   const { rng, getState } = createRng(state.rngState);
   const noop: StepResult = { state, events: [], awaiting: awaitingFor(state.phase) };
 
@@ -328,11 +344,13 @@ export function step(state: GameState, input: GameInput): StepResult {
         if (input.kind !== 'continue') return noop;
         // M6: fire startOfBattle relic triggers as the battle becomes active. Off-equivalent
         // (same battle, no events) for a player with no startOfBattle relics equipped.
-        const opened = openBattle(phase.battle);
+        // PLAN.md #2: and the FLOOR's startOfBattle triggers (floor 3's charge bleed) — keyed on
+        // `state.place`, never the act counter.
+        const opened = openBattle(phase.battle, floorOf(state));
         return finish({ ...phase, battle: opened.battle, started: true }, opened.events);
       }
       if (input.kind !== 'battle-action') return noop;
-      return resolveBattleRound(state, phase, input.action, rng, finish);
+      return resolveBattleRound(state, phase, input.action, rng, finish, roundRules(state, options));
     }
 
     case 'battle-victory': {
@@ -474,6 +492,27 @@ type Finish = (
   events: GameEvent[],
   patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>>,
 ) => StepResult;
+
+/**
+ * The rules a battle round on the current floor is resolved under — the floor's heal percentage
+ * and the illusion DC (injected by the balance sim, else the shipped constant). PURE.
+ */
+function roundRules(state: GameState, options: StepOptions): RoundRules {
+  return {
+    healPct: floorModifiers(floorOf(state)).healPct,
+    illusionDc: options.illusionDc ?? ILLUSION_DC,
+  };
+}
+
+/**
+ * Record a karma action AS EARNED ON THE CURRENT FLOOR — the ONE funnel every engine karma write
+ * goes through (PLAN.md #2). Floor 4 counts double (GAME-DESIGN.md §8, §22.24): the floor's
+ * `karmaMultiplier` weights the deltas. No new state — the verdict (`computeVerdict`) reads the
+ * same four numbers it always did; only what floor 4 adds to them is heavier.
+ */
+function recordOnFloor(state: GameState, karma: KarmaState, action: KarmaAction): KarmaState {
+  return recordKarmaWeighted(karma, action, floorModifiers(floorOf(state)).karmaMultiplier);
+}
 
 function requirePlayer(state: GameState): Player {
   if (!state.player) throw new Error('step: player is required in this phase but is null');
@@ -640,8 +679,9 @@ function resolveBattleRound(
   action: BattleAction,
   rng: Rng,
   finish: Finish,
+  rules: RoundRules,
 ): StepResult {
-  const round = resolveRound(phase.battle, action, rng);
+  const round = resolveRound(phase.battle, action, rng, rules);
   const events: GameEvent[] = [...round.events];
   let battle = round.state;
   let status = round.status;
@@ -691,8 +731,9 @@ function resolveBattleRound(
       // site the behavioural test watches.
       return finish({ kind: 'main-menu' }, events, {
         player: battle.player,
+        // PLAN.md #2: each entry is weighted by the floor (floor 4 counts double).
         karma: (getFamily(enemy.familyId)?.onSpare ?? DEFAULT_SPARE_ACTIONS).reduce(
-          recordKarma,
+          (k, action) => recordOnFloor(state, k, action),
           state.karma,
         ),
       });
@@ -700,7 +741,7 @@ function resolveBattleRound(
       // A moral (⚖) kill records cruelty; a plain enemy (and every boss) records nothing.
       // Karma is an INPUT only here (the first EFFECT is the act-4 verdict gate).
       const karma = enemy.karmaWeighted
-        ? recordKarma(state.karma, getFamily(enemy.familyId)?.onKill ?? 'killWeighted')
+        ? recordOnFloor(state, state.karma, getFamily(enemy.familyId)?.onKill ?? 'killWeighted')
         : state.karma;
       // M12: a floor-boss win (acts 1–3, non-final, boss present) schedules an act advance once
       // any earned level-ups drain (`resolvePostVictory`). The Hollow (final) routes to the
@@ -767,7 +808,11 @@ function resolveRestDecision(
     // Nothing a rest could do: no roll, no rest consumed (faithful to Java's full-HP case).
     return finish({ kind: 'main-menu' }, [{ kind: 'rest-full' }]);
   }
-  const hpRestored = computeRestHeal(player.xp, rng);
+  // PLAN.md #2: floor 3 dampens the rest heal (the draw is unchanged in position).
+  const hpRestored = dampenHeal(
+    computeRestHeal(player.xp, rng),
+    floorModifiers(floorOf(state)).healPct,
+  );
   const hp = Math.min(player.hp + hpRestored, player.maxHp);
   const healed: Player = {
     ...player,
@@ -803,7 +848,12 @@ function resolveDealDecision(
       { kind: 'deal-unaffordable', cost: describeCost(deal.cost) },
     ]);
   }
-  const result = applyDeal(player, state.karma, deal);
+  const result = applyDeal(
+    player,
+    state.karma,
+    deal,
+    floorModifiers(floorOf(state)).karmaMultiplier,
+  );
   return finish(
     { kind: 'main-menu' },
     [{ kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
