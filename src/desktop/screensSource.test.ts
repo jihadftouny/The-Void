@@ -283,6 +283,9 @@ describe('retheme applies the floor, THEN the player’s preferences over it', (
 //     wrapping it in `if (…) { … }`, `else { … }`, a loop or a callback `=> { … }` fails);
 //   - and no `return` precedes it in the body except the exits named per call site (so an
 //     inserted early return that skips it fails).
+//   - and it comes AFTER the line that installs the state it reads — `retheme()` reads
+//     `state.place`, so a call above `state = saved.state` / `state = r.state` /
+//     `state = createGame(` paints the OLD floor (FIX ROUND 1, F1: all three reorders were green).
 //
 // WHAT WOULD SATISFY THESE WITHOUT THE BEHAVIOUR: a `retheme` redefined as a no-op (its body
 // is pinned separately above — applyTheme then applySettings, the tag written), or a call made
@@ -352,15 +355,36 @@ function rethemeCalls(body: string): number[] {
   return [...body.matchAll(/\bretheme\s*\(\s*\)/g)].map((m) => m.index as number);
 }
 
-/** The first UNCONDITIONAL `retheme()` in a body, or -1 — with the reasons the others failed. */
-function unconditionalRetheme(body: string, allowedExits: RegExp[] = []): { at: number; why: string[] } {
+/**
+ * The first UNCONDITIONAL `retheme()` in a body that comes AFTER index `after`, or -1 — with
+ * the reasons the others failed. FIX ROUND 1, F1: `retheme()` reads `state.place`, so a call
+ * placed above the line that installs the new state paints the OLD floor. `after` is that
+ * line's position; a call before it does not count, however unconditional it is.
+ */
+function unconditionalRetheme(
+  body: string,
+  allowedExits: RegExp[] = [],
+  after = -1,
+): { at: number; why: string[] } {
   const why: string[] = [];
   for (const at of rethemeCalls(body)) {
+    if (at < after) {
+      why.push('the call runs BEFORE the new state is installed — it paints the old floor');
+      continue;
+    }
     const reason = conditionalReason(body, at, allowedExits);
     if (reason === null) return { at, why };
     why.push(reason);
   }
   return { at: -1, why: why.length > 0 ? why : ['there is no retheme() call in this body'] };
+}
+
+/** Where a body installs the state `retheme()` must read — asserted present, never -1. */
+function installsState(body: string, pattern: RegExp, where: string): number {
+  const at = body.search(pattern);
+  expect(at, `${where} no longer installs the new state as ${pattern} — this guard is stale`)
+    .toBeGreaterThan(-1);
+  return at;
 }
 
 describe('retheme() is placed where the floor can change, unconditionally (G57)', () => {
@@ -371,32 +395,41 @@ describe('retheme() is placed where the floor can change, unconditionally (G57)'
     }
   });
 
-  it('inside adoptRun — an adopted run (a resume, an F3 jump) paints ITS floor', () => {
+  it('inside adoptRun — AFTER the adopted state is installed, so it paints ITS floor', () => {
     const body = bodyOf('function adoptRun(');
-    const { at, why } = unconditionalRetheme(body);
-    expect(at, `adoptRun no longer re-tints unconditionally: ${why.join('; ')}`).toBeGreaterThan(-1);
+    const installed = installsState(body, /\bstate\s*=\s*saved\.state\s*;/, 'adoptRun');
+    const { at, why } = unconditionalRetheme(body, [], installed);
+    expect(at, `adoptRun no longer re-tints the ADOPTED floor unconditionally: ${why.join('; ')}`)
+      .toBeGreaterThan(-1);
   });
 
   it('inside dispatch — and BEFORE renderSheet, or the re-render paints the old floor', () => {
     const body = bodyOf('async function dispatch(');
     // The ONE early exit allowed before the re-tint is the re-entry guard: a click while a
     // step is in flight does nothing at all, so there is nothing to re-tint.
-    const { at, why } = unconditionalRetheme(body, [/if\s*\(\s*busy\s*\)\s*return\s*;/]);
-    expect(at, `dispatch no longer re-tints unconditionally: ${why.join('; ')}`).toBeGreaterThan(-1);
     const step = body.search(/=\s*step\s*\(\s*state\s*,/);
     const sheet = body.search(/\brenderSheet\s*\(\s*\)/);
     expect(step, 'dispatch no longer steps the engine').toBeGreaterThan(-1);
     expect(sheet, 'dispatch no longer re-renders the sheet').toBeGreaterThan(-1);
+    // Not merely after the STEP: after the step's result is INSTALLED. Between `const r = step(…)`
+    // and `state = r.state`, `state.place` is still the floor the step just left.
+    const installed = installsState(body, /\bstate\s*=\s*r\.state\s*;/, 'dispatch');
+    expect(installed, 'dispatch installs the result before it steps?').toBeGreaterThan(step);
+    const { at, why } = unconditionalRetheme(body, [/if\s*\(\s*busy\s*\)\s*return\s*;/], installed);
+    expect(at, `dispatch no longer re-tints the NEW floor unconditionally: ${why.join('; ')}`)
+      .toBeGreaterThan(-1);
     expect(at, 'the re-tint runs BEFORE the step — it paints the floor the step just left')
       .toBeGreaterThan(step);
     expect(at, 'the re-tint runs AFTER renderSheet — the sheet is drawn in the old floor’s ink')
       .toBeLessThan(sheet);
   });
 
-  it('inside start — a fresh run after a deep one returns to floor 0’s palette', () => {
+  it('inside start — AFTER the fresh state exists, so a run after a deep one returns to floor 0', () => {
     const body = bodyOf('function start(');
-    const { at, why } = unconditionalRetheme(body);
-    expect(at, `start no longer re-tints unconditionally: ${why.join('; ')}`).toBeGreaterThan(-1);
+    const installed = installsState(body, /\bstate\s*=\s*createGame\s*\(/, 'start');
+    const { at, why } = unconditionalRetheme(body, [], installed);
+    expect(at, `start no longer re-tints the FRESH floor unconditionally: ${why.join('; ')}`)
+      .toBeGreaterThan(-1);
   });
 
   it('at module scope, BEFORE the saved run is loaded — the first frame is painted', () => {
@@ -442,6 +475,18 @@ describe('the placement scanner itself (so the G57 guard cannot silently go blin
     expect(reason('  for (const x of xs) {\n    retheme();\n  }')).not.toBeNull();
     expect(reason('  xs.forEach(() => {\n    retheme();\n  });')).not.toBeNull();
     expect(reason('  try {\n    x();\n  } catch {\n    retheme();\n  }')).not.toBeNull();
+  });
+
+  it('F1: a call ABOVE the state it must read does not count, however unconditional', () => {
+    const body = fn('  retheme();\n  state = saved.state;\n  renderSheet();');
+    const installed = body.search(/\bstate\s*=\s*saved\.state/);
+    expect(unconditionalRetheme(body, [], installed).at).toBe(-1);
+    // ...and moved below it, it counts again — the guard is about ORDER, not presence.
+    const fixed = fn('  state = saved.state;\n  retheme();\n  renderSheet();');
+    expect(unconditionalRetheme(fixed, [], fixed.search(/\bstate\s*=\s*saved\.state/)).at).toBeGreaterThan(-1);
+    // A call on both sides is fine: the one after the install is the one that paints.
+    const both = fn('  retheme();\n  state = saved.state;\n  retheme();');
+    expect(unconditionalRetheme(both, [], both.search(/\bstate\s*=\s*saved\.state/)).at).toBeGreaterThan(-1);
   });
 
   it('rejects an early return that can skip it, unless that exit is named', () => {
