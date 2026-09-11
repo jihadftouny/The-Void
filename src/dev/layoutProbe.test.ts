@@ -127,6 +127,12 @@ const EXPECTED: Readonly<Record<string, Expectation>> = {
   'battle-open': { mode: 'side', prose: true, scenery: false },
   'choose-class': { mode: 'side', prose: true, scenery: false },
   'draft-pick': { mode: 'side', prose: true, scenery: false },
+  // PLAN.md #2: the found rest spot carries the floor's scenery (§22.26), as the hub does;
+  // the bargain and the full-pack bargain (Appendix A.3) are short action lists beside prose.
+  rest: { mode: 'side', prose: true, scenery: true },
+  'deal-decision': { mode: 'side', prose: true, scenery: false },
+  'deal-discard': { mode: 'side', prose: true, scenery: false },
+  'deal-discard-open': { mode: 'side', prose: true, scenery: false },
   inventory: { mode: 'wide', prose: true, scenery: false },
   settings: { mode: 'wide', prose: true, scenery: false },
   'content-warning': { mode: 'wide', prose: false, scenery: false },
@@ -567,7 +573,7 @@ describe('the narration always has room to be read', () => {
 // =========================================================================================
 
 describe('the reserved scenery region is capped in BOTH directions, and keeps its ratio', () => {
-  it('it is really mounted on the hub, and nowhere else', () => {
+  it('it is really mounted on the hub and the rest spot, and nowhere else', () => {
     for (const [width, height] of AT_OR_ABOVE_MIN) {
       for (const scenario of SCENARIOS) {
         const r = report(width, height, scenario, 'normal');
@@ -692,7 +698,19 @@ describe('every control is reachable at the enforced minimum window', () => {
    * nothing to scroll. This is the strict standard, and it covers everything the player meets
    * repeatedly — the hub, the abandon confirmation, a battle, class select, the title.
    */
-  const ALL_VISIBLE = ['hub', 'confirm-abandon', 'battle', 'choose-class', 'title'];
+  const ALL_VISIBLE = [
+    'hub',
+    'confirm-abandon',
+    'battle',
+    'choose-class',
+    'title',
+    // PLAN.md #2: met on every floor — several bargains and a rest or two per floor — so they
+    // get the strict standard. Appendix A.3.4 says it of the full-pack bargain in so many words:
+    // nothing below the fold, at 960x640, at large text.
+    'rest',
+    'deal-decision',
+    'deal-discard',
+  ];
 
   /**
    * A list the GAME PRESENTS that outgrows the window. The standard here is stricter than
@@ -738,6 +756,11 @@ describe('every control is reachable at the enforced minimum window', () => {
   }[] = [
     { scenario: 'battle-open', collapsed: 'battle', scale: 'normal' },
     { scenario: 'battle-open', collapsed: 'battle', scale: 'large' },
+    // PLAN.md #2, Appendix A.3: twelve leave rows and the refusal — 13 controls of at least one
+    // line each plus their gaps cannot fit a 640px window at either text size, which is WHY the
+    // rows sit in a closed list. The player opens it with one click and closes it with another.
+    { scenario: 'deal-discard-open', collapsed: 'deal-discard', scale: 'normal' },
+    { scenario: 'deal-discard-open', collapsed: 'deal-discard', scale: 'large' },
   ];
 
   /**
@@ -774,7 +797,15 @@ describe('every control is reachable at the enforced minimum window', () => {
    *   choose-class           the five class rows.
    *   draft-pick             three cards (the "Choose one" line is a div, not a control).
    *   settings               `SETTINGS_ROWS` is 3 + 3 + 2 options, plus Back = 9.
-   *   inventory / game-over  the rows are label/value spans; only Back / Descend again.
+   *   inventory              the rows are label/value spans, plus Back — and PLAN.md #2 gave
+   *                          each of the fixture's 15 backpack rows a Discard: 1 + 15 = 16.
+   *   game-over              the rows are label/value spans; only Descend again.
+   *   rest                   one Continue — the rest has already happened (§22.26).
+   *   deal-decision          Pay the price + Refuse = 2 (the block above them is text).
+   *   deal-discard           A.3: the "Choose what to leave" toggle + the refusal = 2 on screen;
+   *                          one leave row per slot of the FULL pack (BACKPACK_CAPACITY = 12)
+   *                          inside the closed list = 12 hidden.
+   *   deal-discard-open      the same 14 with the list open: 14 on screen, none hidden.
    *   content-warning        exactly one control, by policy — never a fight to get past.
    *   title / resume         two stacked buttons.
    *
@@ -789,7 +820,11 @@ describe('every control is reachable at the enforced minimum window', () => {
     'battle-open': { visible: 11, hidden: 1 },
     'choose-class': { visible: 5, hidden: 0 },
     'draft-pick': { visible: 3, hidden: 0 },
-    inventory: { visible: 1, hidden: 0 },
+    inventory: { visible: 16, hidden: 0 },
+    rest: { visible: 1, hidden: 0 },
+    'deal-decision': { visible: 2, hidden: 0 },
+    'deal-discard': { visible: 2, hidden: 12 },
+    'deal-discard-open': { visible: 14, hidden: 0 },
     settings: { visible: 9, hidden: 0 },
     'content-warning': { visible: 1, hidden: 0 },
     title: { visible: 2, hidden: 0 },

@@ -36,6 +36,14 @@
 // the hub are checked against the ones the actual game produces for the actual hub. Neither
 // half is trusted alone.
 //
+// PLAN.md #2 added four more mirrors, of the screens it added or changed: the inventory's
+// per-row Discard, the found rest spot (scenery + Continue), the bargain (cost/reward block +
+// two controls) and the full-pack bargain of Appendix A.3 (its block, a closed "Choose what to
+// leave" list, the refusal). Their labels come from the REAL view-model (`dealView`,
+// `dealDiscardView`), and the other end of THOSE couplings is `floorWiringSource.test.ts`,
+// which pins the renderer's arms to the same shape (one picker holding the leave rows, one
+// refusal, one Continue).
+//
 // DETERMINISM: no clock, no randomness, no network. `src/dev/exclusion.test.ts` scans this
 // directory for all three and this file must keep passing it.
 
@@ -47,7 +55,11 @@ import {
 } from '../render/settings-model.ts';
 import { appendButton, appendLogLine, appendRow, picker } from '../render/components.ts';
 import { buttonModel, rowModel } from '../render/component-model.ts';
-import { hubMenu } from '../desktop/view-model.ts';
+import { dealDiscardView, dealView, hubMenu } from '../desktop/view-model.ts';
+import { createPlayer, type Player } from '../game/player.ts';
+import type { SacrificeDeal } from '../game/deal.ts';
+import type { ItemInstance } from '../game/item.ts';
+import { BACKPACK_CAPACITY } from '../game/inventory.ts';
 import {
   CONTENT_WARNING,
   buildArtSlotById,
@@ -151,6 +163,33 @@ const DRAFT_LABELS: readonly string[] = [
   'Ashwalker — the Ash City costs you nothing to cross, and its wardens forget you were there',
   'Kindled Blade — every strike you land while below half health burns for one extra damage',
 ];
+
+/**
+ * A rolled item with a long name — the worst case a leave row or a reward line can carry.
+ * Built in the `rarityGen` shape by hand, so no RNG is touched (this file must stay free of it).
+ */
+function longItem(i: number): ItemInstance {
+  return {
+    defId: `gen:Legendary:mainHand:${i}`,
+    rolled: {
+      name: `Ashbound Cleaver of the Seventh Ward ${i + 1}`,
+      rarity: 'Legendary',
+      slot: 'mainHand',
+      kind: 'weapon',
+      effects: [],
+    },
+  };
+}
+
+/** A bargain whose reward is the long item and whose price names an act (`greed`). */
+const DEAL: SacrificeDeal = { pool: 'tempting', cost: { kind: 'greed' }, reward: { kind: 'item', instance: longItem(99) } };
+
+/** A character with a FULL pack (§22.17) of long-named items — the A.3 screen's worst case. */
+function fullPackPlayer(): Player {
+  const base = createPlayer({ name: 'Probe', classId: 'Enforcer', stats: { STR: 12, DEX: 12, CON: 12, INT: 12, WIS: 12, CHA: 12 } });
+  const backpack = Array.from({ length: BACKPACK_CAPACITY }, (_unused, i) => longItem(i));
+  return { ...base, inventory: { ...base.inventory, backpack } };
+}
 
 /** Six castable skills, for the battle screen with the Cast list open. */
 const CAST_LABELS: readonly string[] = [
@@ -281,10 +320,59 @@ function buildInventory(): void {
   pack.textContent = 'Backpack';
   wrap.appendChild(pack);
   for (let i = 0; i < 15; i += 1) {
-    appendRow(wrap, rowModel(`#${i}`, 'Grave Salt · common'));
+    const row = appendRow(wrap, rowModel(`#${i}`, 'Grave Salt · common'));
+    // PLAN.md #2: every backpack row carries a Discard (MIRRORED from renderInventoryScreen).
+    appendButton(row, buttonModel('Discard'), () => undefined);
   }
   choices.appendChild(wrap);
   appendButton(choices, buttonModel('Back'), () => undefined);
+}
+
+/** The found rest spot — `case 'rest'` in `renderChoices`: the scenery, one Continue. MIRRORED. */
+function buildRest(): void {
+  mountScenery();
+  appendButton(el('choices'), buttonModel('Continue'), () => undefined);
+}
+
+/** `case 'deal-decision'`: the cost/reward block and the two answers. MIRRORED. */
+function buildDealDecision(): void {
+  const choices = el('choices');
+  const dv = dealView(DEAL);
+  const block = document.createElement('div');
+  block.className = 'deal-block';
+  const cost = document.createElement('div');
+  cost.className = 'deal-cost';
+  cost.textContent = `Cost: ${dv.cost}`;
+  const reward = document.createElement('div');
+  reward.className = 'deal-reward';
+  reward.textContent = `Reward: ${dv.reward}`;
+  block.append(cost, reward);
+  choices.appendChild(block);
+  appendButton(choices, buttonModel('Pay the price'), () => undefined);
+  appendButton(choices, buttonModel('Refuse'), () => undefined);
+}
+
+/** `case 'deal-discard'` (Appendix A.3): the block, the closed leave list, the refusal. MIRRORED. */
+function buildDealDiscard(openList: boolean): void {
+  const choices = el('choices');
+  const view = dealDiscardView(fullPackPlayer(), DEAL);
+  const block = document.createElement('div');
+  block.className = 'deal-block';
+  const ask = document.createElement('div');
+  ask.className = 'deal-reward';
+  ask.textContent = view.prompt;
+  const cost = document.createElement('div');
+  cost.className = 'deal-cost';
+  cost.textContent = `Cost: ${view.cost}`;
+  block.append(ask, cost);
+  choices.appendChild(block);
+  const wrap = picker(choices, view.choose, (list) => {
+    for (const row of view.leave) appendButton(list, buttonModel(row.label), () => undefined);
+  });
+  appendButton(choices, buttonModel(view.refuse), () => undefined);
+  // Opened through the real toggle the real `picker` built, as the battle case does.
+  const toggle = wrap.querySelector('button');
+  if (openList && toggle) toggle.click();
 }
 
 /** The end-of-run record: the same panel shape, with the run's own headline. */
@@ -375,6 +463,40 @@ const SCENARIOS: Readonly<Record<string, Scenario>> = {
       for (const label of DRAFT_LABELS) {
         appendButton(el('choices'), buttonModel(label), () => undefined).classList.add('draft-card');
       }
+    },
+  },
+  // PLAN.md #2: the found rest spot — the scenery frame's other job (§22.26).
+  rest: {
+    screen: 'rest',
+    build: () => {
+      writeBeat();
+      writeLog();
+      buildRest();
+    },
+  },
+  'deal-decision': {
+    screen: 'deal-decision',
+    build: () => {
+      writeBeat();
+      writeLog();
+      buildDealDecision();
+    },
+  },
+  // Appendix A.3: the full-pack bargain, as it opens, and with its leave list opened.
+  'deal-discard': {
+    screen: 'deal-discard',
+    build: () => {
+      writeBeat();
+      writeLog();
+      buildDealDiscard(false);
+    },
+  },
+  'deal-discard-open': {
+    screen: 'deal-discard',
+    build: () => {
+      writeBeat();
+      writeLog();
+      buildDealDiscard(true);
     },
   },
   inventory: {
