@@ -36,7 +36,7 @@
         <div id="stage-body" class="stage-body">
           <!-- The reading column: a measure the narration is comfortable to read at, which is
                also the surface #13's prose gets written into. Every id below is unchanged —
-               game.ts looks all of them up at module scope. -->
+               game.ts looks all of them up in `boot()`, and throws on a missing one. -->
           <div id="column" class="column">
             <h1 id="title">THE VOID</h1>
             <!-- Boot notices the player must not miss (an unlock store recovered from
@@ -61,6 +61,8 @@
         </div>
       </section>
     </main>
-    <script type="module" src="/src/desktop/game.ts"></script>
+    <!-- The entry script. `main.ts` calls `boot()` and nothing else (G51): the renderer module
+         itself is inert on import. A file, not an inline script — the policy above allows none. -->
+    <script type="module" src="/src/desktop/main.ts"></script>
   </body>
 </html>

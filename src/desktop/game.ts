@@ -23,6 +23,7 @@ import {
   applyRunSummary,
   type RunSummary,
   type NewlyUnlocked,
+  type UnlockStore,
 } from '../game/unlockStore.ts';
 import { loadUnlockStore, saveUnlockStore } from '../storage/unlockStorage.ts';
 import {
@@ -56,8 +57,9 @@ import { buttonModel, rowModel, conditionChips } from '../render/component-model
 import { appendButton, appendRow, appendLogLine, chip, picker } from '../render/components.ts';
 import { logLines, startsNewBattle } from '../render/log-model.ts';
 // The two new screens and the three reserved art regions. They live in their own module
-// because THIS file cannot be imported (Electron IPC at module scope — G51), so everything
-// lifted out of it becomes testable for real instead of by reading source text.
+// because, until G51 moved this file's start-up behind `boot()`, THIS file could not be
+// imported at all — so everything lifted out of it became testable for real instead of by
+// reading source text. The rule still holds: a builder belongs in a module of its own.
 import {
   CONTENT_WARNING,
   buildArtSlotById,
@@ -84,27 +86,40 @@ interface VoidApi {
 }
 declare global { interface Window { void: VoidApi } }
 
-// Started before anything else runs, so the boot line can say how long the renderer's own
-// prologue took. Measured through `logger.now()` — the single clock seam.
-const bootTimer = startTimer();
+// =========================================================================================
+// G51 — THIS MODULE IS INERT ON IMPORT. Nothing below runs until `boot()` is called, and the
+// ONE place that calls it is `src/desktop/main.ts`, the page's entry script.
+//
+// Until PLAN.md #6 every line of the renderer's start-up ran at module scope: the element
+// lookups, the logger's level and sinks, the Electron IPC subscription, the stored unlocks
+// and preferences, the wall-clock seed, the first paint and the dev-panel gate. So this file
+// could not be imported by anything — a test that tried died on `window.void` before its
+// first line — and every guard on its wiring had to READ it as text instead. Module scope now
+// holds only imports, types, constant tables, function declarations and the `let` slots
+// below; `boot()` does, in the same order, everything module scope used to do.
+// `src/desktop/boot.test.ts` imports this file under jsdom and walks the real renderer.
+// =========================================================================================
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
   if (!el) throw new Error(`missing #${id}`);
   return el as T;
 };
-const titleEl = $('title');
-const floorEl = $('floor');
-const statusEl = $('status');
-const noticeEl = $('notice');
-const narrationEl = $('narration');
-const logEl = $('log');
-const choicesEl = $('choices');
-const sheetEl = $('sheet');
+
+// The page's elements. Slots, not lookups: `boot()` assigns every one of them, and nothing
+// reads them before it has.
+let titleEl: HTMLElement;
+let floorEl: HTMLElement;
+let statusEl: HTMLElement;
+let noticeEl: HTMLElement;
+let narrationEl: HTMLElement;
+let logEl: HTMLElement;
+let choicesEl: HTMLElement;
+let sheetEl: HTMLElement;
 // The floor's own reserved region, in the READING column rather than in the choices. Its own
 // element because the choices are cleared wholesale on every render and the scenery is not
 // part of them: it belongs beside the prose it establishes.
-const sceneryEl = $('scenery');
+let sceneryEl: HTMLElement;
 
 /**
  * The developer's explicit opt-in: `localStorage['thevoid:loglevel'] = 'debug'`. Wrapped
@@ -120,127 +135,20 @@ function readLogLevelOverride(): unknown {
   }
 }
 
-// ---- Logging: console + in-memory ring (for the debug overlay) + forward to
-// the Electron main process (which writes the log file). Overlay: ` or F2.
-const ring = createRingBuffer(1000);
-// THE SHIPPED-VS-DEVELOPER LEVEL POLICY, decided in one pure, tested function. `file:` is
-// a packaged build (`main.mjs` loads `dist/desktop.html` from disk) and logs at `info`;
-// `http:` is the dev server and logs at `debug`. The consequence that matters: the
-// `ui`/`choice` payload carries the player's TYPED NAME, and `info` never emits it, so a
-// packaged build never writes a player's name to disk. `src/log/level.test.ts` asserts
-// that consequence rather than trusting this comment.
-log.setLevel(
-  resolveLogLevel({
-    protocol: location.protocol,
-    override: readLogLevelOverride(),
-  }),
-);
-log.addSink(consoleSink);
-log.addSink(ring.sink);
-log.addSink((e) => {
-  try {
-    window.void.log?.(e);
-  } catch {
-    /* main not ready */
-  }
-});
-createDebugOverlay(ring.get);
-log.info('game', 'renderer booted', {
-  level: log.level(),
-  protocol: location.protocol,
-  ms: bootTimer.stop(),
-});
-window.addEventListener('error', (ev) =>
-  log.error('error', 'window error', { message: ev.message, source: ev.filename, line: ev.lineno }),
-);
-
-// THE SIZE OF THE WINDOW THE PLAYER ACTUALLY HAS. Every layout promise this game makes is
-// conditional on it, and until now no log line recorded it — so a report of "the narration is
-// gone" arrived with no way to tell whether the window was 1920 wide or dragged to the
-// minimum. The display scale factor is here for the same reason: it is what makes one
-// machine's pixels a different size from another's.
-log.info('render', 'viewport', {
-  width: window.innerWidth,
-  height: window.innerHeight,
-  dpr: window.devicePixelRatio,
-});
-// Resizing fires continuously while a window is dragged, so this is DEBOUNCED to the settled
-// size — an undebounced listener would write a hundred lines per drag and bury everything
-// else in the file. At `debug`: it is a developer's question, not a shipped one.
-let resizeTimer: ReturnType<typeof setTimeout> | undefined;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    log.debug('render', 'viewport resized', {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      dpr: window.devicePixelRatio,
-    });
-  }, 250);
-});
-
-// THE PACKAGED-BUILD DIAGNOSTIC FOR THE BUNDLED TYPEFACE (principle 7, and PLAN.md #16's
-// whole risk). The failure this exists for is silent by nature: if the four woff2 faces do
-// not reach `dist/`, or their urls resolve wrongly under `file://`, the browser falls back
-// to the system monospace with no error anywhere — the game simply looks different on every
-// machine. A COUNT is the only observable. `fonts: 0` in a real run means bundling failed,
-// and the duration says whether `font-display: block` held the first paint.
-//
-// The try/catch is not ceremony: `document.fonts` is a property access at MODULE SCOPE, and
-// this file's module scope is the boot path. An environment without the font API would throw
-// here and take the whole game down before anything rendered — for a diagnostic. Catching it
-// keeps a missing API a logged warning instead of a black window, which is the same shape
-// `readLogLevelOverride` above already uses for `localStorage`.
-const fontTimer = startTimer();
-try {
-  void document.fonts.ready
-    .then((set) => {
-      log.info('render', 'fonts ready', { ms: fontTimer.stop(), fonts: set.size });
-    })
-    .catch((err: unknown) =>
-      log.error('render', 'fonts never became ready', {
-        ms: fontTimer.stop(),
-        message: err instanceof Error ? err.message : String(err),
-      }),
-    );
-} catch (err) {
-  log.error('render', 'the font loading API is unavailable', {
-    message: err instanceof Error ? err.message : String(err),
-  });
-}
-window.addEventListener('unhandledrejection', (ev) =>
-  log.error('error', 'unhandled rejection', { reason: String(ev.reason) }),
-);
+// ---- The run and the player's standing data. Slots, assigned by `boot()`. ----------------
 
 // M13 meta-progression: the persistent cross-run unlock store, loaded once at boot. Read at
 // class-select (gating) and run start (snapshot); grown at run end (applyRunSummary + persist).
-//
-// G3: the load now REPORTS what it found. This is the only copy of everything the player has
-// ever earned, and one unparseable byte used to replace all of it with an empty store —
-// silently, with the class select simply back to Enforcer-only and no explanation. When the
-// store was recovered from its backup, or could not be recovered at all, say so where the
-// player will actually see it. `textContent`, never markup.
-const unlockLoad = loadUnlockStore();
-let unlockStore = unlockLoad.store;
-if (unlockLoad.lost !== undefined) {
-  noticeEl.textContent = unlockLoad.lost;
-  log.warn('unlocks', 'unlock store did not load cleanly', { source: unlockLoad.source });
-} else {
-  log.info('unlocks', 'unlock store loaded', { source: unlockLoad.source });
-}
+let unlockStore: UnlockStore;
 // THE PLAYER'S PREFERENCES — render-layer only, and deliberately NOT part of the save
 // envelope: a run played at large text is the same run, so putting text size in the run save
-// would make two players' saves incompatible over a preference. Loaded once, here, so the
-// very first `retheme()` below already paints at the size and contrast the player chose.
-let settings: Settings = loadSettings();
-log.info('settings', 'preferences loaded', {
-  textScale: settings.textScale,
-  motion: settings.motion,
-  contrast: settings.contrast,
-});
-
-let runSeed = Date.now() >>> 0;
-let state: GameState = createGame(runSeed, snapshotUnlocks(unlockStore));
+// would make two players' saves incompatible over a preference. Loaded once, in `boot()`, so
+// the very first `retheme()` already paints at the size and contrast the player chose.
+let settings: Settings;
+// The run's identity. Seeded from the wall clock in `boot()` and `start()` — the two places a
+// run begins — and restored from the save envelope on resume.
+let runSeed = 0;
+let state: GameState;
 let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
 // The pure run-summary subscriber: folded from each step's events, applied to the store at the
 // terminal phase. Reset per run. `runApplied` guards against a double-apply (ending -> game-over).
@@ -249,6 +157,227 @@ let runApplied = false;
 // The ids most recently unlocked. Read by the end-of-run summary screen (G2), which is what
 // finally consumes this — it was written and never read, annotated `void`, since M13.
 let lastNewlyUnlocked: NewlyUnlocked | null = null;
+
+/** Set by the first `boot()`. A second call is refused — see `refuseSecondBoot`. */
+let booted = false;
+
+/**
+ * START THE RENDERER — everything this module used to do at module scope, in the same order.
+ *
+ * ⚠ THE ORDER IS LOAD-BEARING, and each dependency is pinned by a source guard:
+ *   - the log level is set before the first line is logged, or the boot lines escape the
+ *     shipped/developer policy (`instrumentationSource.test.ts`);
+ *   - the preferences are loaded before the first `retheme()`, or the first frame ignores the
+ *     player's text size and contrast (`screensSource.test.ts`);
+ *   - the fresh state exists before that `retheme()` reads its floor, and the `retheme()`
+ *     comes before the saved run is loaded, so the first frame is painted (G57);
+ *   - the developer panel's gate is last, as it always was.
+ *
+ * ONCE ONLY. A second call would add every log sink and every window listener again and start
+ * a second run over the first, so it logs at `error` and throws instead. Not re-entrant by
+ * design: making every function close over a booted context would rewrite the whole file for
+ * nothing a test cannot already get from re-importing the module (see `boot.test.ts`).
+ *
+ * Placed HERE, above every function that logs, because the level-before-first-log guard reads
+ * SOURCE order: function declarations hoist, so `boot()` can call the functions below it.
+ */
+export function boot(): void {
+  if (booted) refuseSecondBoot();
+  booted = true;
+  // Started before anything else runs, so the boot line can say how long the renderer's own
+  // prologue took. Measured through `logger.now()` — the single clock seam.
+  const bootTimer = startTimer();
+
+  titleEl = $('title');
+  floorEl = $('floor');
+  statusEl = $('status');
+  noticeEl = $('notice');
+  narrationEl = $('narration');
+  logEl = $('log');
+  choicesEl = $('choices');
+  sheetEl = $('sheet');
+  sceneryEl = $('scenery');
+
+  // ---- Logging: console + in-memory ring (for the debug overlay) + forward to
+  // the Electron main process (which writes the log file). Overlay: ` or F2.
+  const ring = createRingBuffer(1000);
+  // THE SHIPPED-VS-DEVELOPER LEVEL POLICY, decided in one pure, tested function. `file:` is
+  // a packaged build (`main.mjs` loads `dist/desktop.html` from disk) and logs at `info`;
+  // `http:` is the dev server and logs at `debug`. The consequence that matters: the
+  // `ui`/`choice` payload carries the player's TYPED NAME, and `info` never emits it, so a
+  // packaged build never writes a player's name to disk. `src/log/level.test.ts` asserts
+  // that consequence rather than trusting this comment.
+  log.setLevel(
+    resolveLogLevel({
+      protocol: location.protocol,
+      override: readLogLevelOverride(),
+    }),
+  );
+  log.addSink(consoleSink);
+  log.addSink(ring.sink);
+  log.addSink((e) => {
+    try {
+      window.void.log?.(e);
+    } catch {
+      /* main not ready */
+    }
+  });
+  createDebugOverlay(ring.get);
+  log.info('game', 'renderer booted', {
+    level: log.level(),
+    protocol: location.protocol,
+    ms: bootTimer.stop(),
+  });
+  window.addEventListener('error', (ev) =>
+    log.error('error', 'window error', { message: ev.message, source: ev.filename, line: ev.lineno }),
+  );
+
+  // THE SIZE OF THE WINDOW THE PLAYER ACTUALLY HAS. Every layout promise this game makes is
+  // conditional on it, and until now no log line recorded it — so a report of "the narration
+  // is gone" arrived with no way to tell whether the window was 1920 wide or dragged to the
+  // minimum. The display scale factor is here for the same reason: it is what makes one
+  // machine's pixels a different size from another's.
+  log.info('render', 'viewport', {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    dpr: window.devicePixelRatio,
+  });
+  // Resizing fires continuously while a window is dragged, so this is DEBOUNCED to the settled
+  // size — an undebounced listener would write a hundred lines per drag and bury everything
+  // else in the file. At `debug`: it is a developer's question, not a shipped one.
+  let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      log.debug('render', 'viewport resized', {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        dpr: window.devicePixelRatio,
+      });
+    }, 250);
+  });
+
+  // THE PACKAGED-BUILD DIAGNOSTIC FOR THE BUNDLED TYPEFACE (principle 7, and PLAN.md #16's
+  // whole risk). The failure this exists for is silent by nature: if the four woff2 faces do
+  // not reach `dist/`, or their urls resolve wrongly under `file://`, the browser falls back
+  // to the system monospace with no error anywhere — the game simply looks different on every
+  // machine. A COUNT is the only observable. `fonts: 0` in a real run means bundling failed,
+  // and the duration says whether `font-display: block` held the first paint.
+  //
+  // The try/catch is not ceremony: this is the boot path, and an environment without the font
+  // API would throw here and take the whole game down before anything rendered — for a
+  // diagnostic. Catching it keeps a missing API a logged warning instead of a black window,
+  // which is the same shape `readLogLevelOverride` above already uses for `localStorage`.
+  const fontTimer = startTimer();
+  try {
+    void document.fonts.ready
+      .then((set) => {
+        log.info('render', 'fonts ready', { ms: fontTimer.stop(), fonts: set.size });
+      })
+      .catch((err: unknown) =>
+        log.error('render', 'fonts never became ready', {
+          ms: fontTimer.stop(),
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+  } catch (err) {
+    log.error('render', 'the font loading API is unavailable', {
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+  window.addEventListener('unhandledrejection', (ev) =>
+    log.error('error', 'unhandled rejection', { reason: String(ev.reason) }),
+  );
+
+  // G3: the load REPORTS what it found. This is the only copy of everything the player has
+  // ever earned, and one unparseable byte used to replace all of it with an empty store —
+  // silently, with the class select simply back to Enforcer-only and no explanation. When the
+  // store was recovered from its backup, or could not be recovered at all, say so where the
+  // player will actually see it. `textContent`, never markup.
+  const unlockLoad = loadUnlockStore();
+  unlockStore = unlockLoad.store;
+  if (unlockLoad.lost !== undefined) {
+    noticeEl.textContent = unlockLoad.lost;
+    log.warn('unlocks', 'unlock store did not load cleanly', { source: unlockLoad.source });
+  } else {
+    log.info('unlocks', 'unlock store loaded', { source: unlockLoad.source });
+  }
+  settings = loadSettings();
+  log.info('settings', 'preferences loaded', {
+    textScale: settings.textScale,
+    motion: settings.motion,
+    contrast: settings.contrast,
+  });
+
+  runSeed = Date.now() >>> 0;
+  state = createGame(runSeed, snapshotUnlocks(unlockStore));
+
+  window.void.onStatus((s) => {
+    // The phase is in `s` — interpolating it into the message would make the boot timeline
+    // ungreppable, since every line would have a different message.
+    log.info('llm', 'model status', s);
+    if (s.phase === 'ready') {
+      statusEl.textContent = `the Void is listening — ${s.gpu ? `GPU (${s.device ? String(s.device) : String(s.gpu)})` : 'CPU'}`;
+    } else if (s.phase === 'loading') statusEl.textContent = 'the Void stirs (loading model)…';
+    else if (s.phase === 'resolving') statusEl.textContent = 'locating the model…';
+    else if (s.phase === 'error') {
+      statusEl.textContent = `error: ${s.message ?? 'unknown'}`;
+      statusEl.classList.add('error');
+    }
+  });
+
+  retheme(); // paint the floor-0 palette before the first frame
+  const saved = loadRun();
+  if (saved) {
+    log.info('save', 'resumable run found', { act: saved.state.act, phase: saved.state.phase.kind });
+    adoptRun(saved);
+    renderResume();
+  } else {
+    start();
+  }
+
+  // THE DEVELOPER STATE PANEL — present in dev, ABSENT FROM THE PACKAGED BUILD BY CONSTRUCTION.
+  //
+  // `vite build` replaces `import.meta.env.DEV` with the literal `false`, Rollup eliminates the
+  // dead branch, and the dynamic import goes with it — so nothing under the dev directory is in
+  // a shipped build's module graph: no chunk, no string, nothing in the sourcemap. There is no
+  // runtime flag and no env var, by the author's explicit decision; the cost (states cannot be
+  // jumped inside a packaged build) was named and accepted. `src/dev/exclusion.test.ts` proves
+  // the exclusion by running the real bundler twice in a subprocess.
+  if (import.meta.env.DEV) {
+    void import('../dev/panel.ts')
+      .then((m) =>
+        m.mountDebugPanel({
+          getBundle: () => ({ state, memory, meta: runMeta() }),
+          adopt: adoptFromPanel,
+          env: { protocol: location.protocol },
+          unlockStorage: localStorage,
+        }),
+      )
+      // A failure here is a dev-tooling failure and must never take the game down — but it must
+      // not vanish either. Without this the panel simply never appears and the only trace is an
+      // unhandled rejection nobody is watching for (principle 7: log before you recover).
+      .catch((err: unknown) =>
+        log.error('dev', 'panel failed to load', {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+  }
+}
+
+/**
+ * A second `boot()` in the same page. Logged at `error` BEFORE it throws (principle 7: a
+ * failure path speaks before anything else happens), and never silently ignored — a caller
+ * that boots twice has a real bug, and swallowing it would hide exactly that.
+ *
+ * A separate function, below `boot()`, rather than a log line at the top of it: the level
+ * is already set by the time a SECOND call can happen, and keeping every `log.` call in
+ * `boot()`'s body after `log.setLevel(` is what the source guard on that order reads.
+ */
+function refuseSecondBoot(): never {
+  log.error('game', 'renderer already booted', { booted });
+  throw new Error('renderer already booted');
+}
 
 /** The class-select buttons, gated by the unlock store (Enforcer always shown). */
 const CLASS_BUTTONS: readonly { classId: PlayerClass; label: string }[] = [
@@ -285,20 +414,6 @@ function applyRunOutcome(): void {
   lastNewlyUnlocked = applied.newlyUnlocked;
   log.info('unlocks', 'run outcome applied', { newlyUnlocked: applied.newlyUnlocked });
 }
-
-window.void.onStatus((s) => {
-  // The phase is in `s` — interpolating it into the message would make the boot timeline
-  // ungreppable, since every line would have a different message.
-  log.info('llm', 'model status', s);
-  if (s.phase === 'ready') {
-    statusEl.textContent = `the Void is listening — ${s.gpu ? `GPU (${s.device ? String(s.device) : String(s.gpu)})` : 'CPU'}`;
-  } else if (s.phase === 'loading') statusEl.textContent = 'the Void stirs (loading model)…';
-  else if (s.phase === 'resolving') statusEl.textContent = 'locating the model…';
-  else if (s.phase === 'error') {
-    statusEl.textContent = `error: ${s.message ?? 'unknown'}`;
-    statusEl.classList.add('error');
-  }
-});
 
 /**
  * Re-paint the whole UI for the floor the player is currently on.
@@ -1203,42 +1318,4 @@ function adoptFromPanel(saved: SavedRun): boolean {
   screen = 'game';
   renderChoices(awaitingFor(state.phase));
   return true;
-}
-
-retheme(); // paint the floor-0 palette before the first frame
-const saved = loadRun();
-if (saved) {
-  log.info('save', 'resumable run found', { act: saved.state.act, phase: saved.state.phase.kind });
-  adoptRun(saved);
-  renderResume();
-} else {
-  start();
-}
-
-// THE DEVELOPER STATE PANEL — present in dev, ABSENT FROM THE PACKAGED BUILD BY CONSTRUCTION.
-//
-// `vite build` replaces `import.meta.env.DEV` with the literal `false`, Rollup eliminates the
-// dead branch, and the dynamic import goes with it — so nothing under the dev directory is in
-// a shipped build's module graph: no chunk, no string, nothing in the sourcemap. There is no
-// runtime flag and no env var, by the author's explicit decision; the cost (states cannot be
-// jumped inside a packaged build) was named and accepted. `src/dev/exclusion.test.ts` proves
-// the exclusion by running the real bundler twice in a subprocess.
-if (import.meta.env.DEV) {
-  void import('../dev/panel.ts')
-    .then((m) =>
-      m.mountDebugPanel({
-        getBundle: () => ({ state, memory, meta: runMeta() }),
-        adopt: adoptFromPanel,
-        env: { protocol: location.protocol },
-        unlockStorage: localStorage,
-      }),
-    )
-    // A failure here is a dev-tooling failure and must never take the game down — but it must
-    // not vanish either. Without this the panel simply never appears and the only trace is an
-    // unhandled rejection nobody is watching for (principle 7: log before you recover).
-    .catch((err: unknown) =>
-      log.error('dev', 'panel failed to load', {
-        message: err instanceof Error ? err.message : String(err),
-      }),
-    );
 }

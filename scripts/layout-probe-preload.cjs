@@ -1,9 +1,10 @@
 // THE LAYOUT PROBE'S STAND-IN FOR THE GAME'S IPC BRIDGE.
 //
-// `src/desktop/game.ts` calls `window.void.onStatus(...)` at MODULE SCOPE (FINDINGS.md G51),
-// so the renderer cannot boot at all without this object existing. That is the whole reason
-// the renderer can never be imported by a test, and the reason phase C of the probe has to
-// boot it in a real window instead.
+// The renderer's `boot()` (called by `src/desktop/main.ts`, the page's entry script) subscribes
+// to `window.void.onStatus(...)`, so the real page cannot start without this object existing.
+// (Until PLAN.md #6 that call sat at module scope — FINDINGS.md G51 — and the renderer could
+// not be imported at all; it now can, and `boot.test.ts` drives it under jsdom. Phase C still
+// boots it here because only a real Chromium computes layout.)
 //
 // It is deliberately the smallest thing that lets the real renderer run:
 //   - `onStatus` accepts the subscription and never reports a phase, so the status line stays

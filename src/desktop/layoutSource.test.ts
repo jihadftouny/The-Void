@@ -1,7 +1,9 @@
 // SOURCE GUARDS on the layout wiring THIS unit added to `src/desktop/game.ts`.
 //
-// WHY A SOURCE SCAN, AGAIN. `game.ts` calls the Electron IPC at module scope, so nothing can
-// import it and every guard on it must read its text (FINDINGS.md G51). Everything that
+// WHY A SOURCE SCAN, AGAIN. When this was written `game.ts` called the Electron IPC at module
+// scope, so nothing could import it and every guard on it had to read its text (FINDINGS.md
+// G51). PLAN.md #6 moved that into `boot()`; these scans are kept and re-anchored, and the
+// behavioural half of the wiring is driven for real in `boot.test.ts`. Everything that
 // COULD be lifted out of it was: the screen-to-layout mapping is `screenLayout` in
 // `settings-model.ts`, the measurement and its warnings are `layout.ts`, and both are unit
 // tested for real. What is left here is WIRING — which helper is called, from where, in what
@@ -63,8 +65,11 @@ describe('the scanner reached the end of the file (or every guard below reads a 
 
 describe('the floor’s reserved region lives in the reading column', () => {
   it('the renderer looks it up as its own element', () => {
-    expect(SOURCE, 'the scenery element is not resolved at all').toMatch(
-      /const sceneryEl = \$\(\s*'scenery'\s*\)/,
+    // RE-ANCHORED by PLAN.md #6 (G51): the lookup moved from a module-scope `const` into
+    // `boot()`, which assigns a module-level slot. Searched inside `boot()`'s body, so a
+    // lookup that drifted into some other function (or vanished) still fails here.
+    expect(bodyOf('export function boot('), 'the scenery element is not resolved at all').toMatch(
+      /\bsceneryEl\s*=\s*\$\(\s*'scenery'\s*\)/,
     );
   });
 

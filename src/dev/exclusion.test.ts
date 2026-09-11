@@ -327,9 +327,10 @@ describe('the import-direction scan', () => {
 
 // =========================================================================================
 // The two BRANCHES this unit added to `src/desktop/game.ts`, and the seam it extracted.
-// `game.ts` cannot be imported (it calls the Electron IPC at module scope — G51), so wiring
-// is asserted by reading it, exactly as `rendererSource.test.ts` and
-// `instrumentationSource.test.ts` already do.
+// When this was written `game.ts` could not be imported (it called the Electron IPC at module
+// scope — G51), so wiring was asserted by reading it, exactly as `rendererSource.test.ts` and
+// `instrumentationSource.test.ts` do. PLAN.md #6 moved the start-up into `boot()`; the scans
+// are kept, re-anchored to `boot()`'s body where they used to read "the end of the file".
 // =========================================================================================
 
 describe('the renderer wiring', () => {
@@ -389,9 +390,17 @@ describe('the renderer wiring', () => {
       source.indexOf('\n}', source.indexOf('function adoptFromPanel(')),
     );
     expect(panelBody, 'the panel path does not use the shared seam').toMatch(/adoptRun\s*\(\s*saved\s*\)/);
-    const bootStart = source.indexOf('const saved = loadRun()');
-    expect(bootStart, 'the boot block is gone').toBeGreaterThan(-1);
-    expect(source.slice(bootStart), 'the resume path does not use the shared seam').toMatch(
+    // RE-ANCHORED by PLAN.md #6 (G51). This used to slice from `const saved = loadRun()` to the
+    // END OF THE FILE, which was right while the boot block was the file's last statement. The
+    // boot path now lives in `boot()` near the top, and a slice to the end of the file would
+    // also contain `adoptFromPanel`'s call — so the resume path could stop using the seam with
+    // this assertion still green. Sliced to `boot()`'s own body instead.
+    const bootStart = source.indexOf('export function boot(');
+    expect(bootStart, 'boot() is gone').toBeGreaterThan(-1);
+    const bootBody = source.slice(bootStart, source.indexOf('\n}', bootStart));
+    expect(bootBody, 'the boot block no longer loads a saved run').toMatch(/const saved = loadRun\(\)/);
+    const resume = bootBody.slice(bootBody.indexOf('const saved = loadRun()'));
+    expect(resume, 'the resume path does not use the shared seam').toMatch(
       /adoptRun\s*\(\s*saved\s*\)/,
     );
   });

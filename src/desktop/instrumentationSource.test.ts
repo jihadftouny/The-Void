@@ -1,16 +1,16 @@
 // SOURCE GUARDS on `src/desktop/game.ts`'s INSTRUMENTATION — plus the G50 pin.
 //
-// Same technique and same file as `rendererSource.test.ts`, and for the same reason:
-// `game.ts` calls the Electron IPC (`window.void.onStatus(...)`) at MODULE SCOPE, so
-// importing it in Vitest throws before a line of test code runs. Everything behavioural
+// Same technique and same file as `rendererSource.test.ts`, and for the same original reason:
+// `game.ts` called the Electron IPC (`window.void.onStatus(...)`) at MODULE SCOPE, so
+// importing it in Vitest threw before a line of test code ran. Everything behavioural
 // has been pushed into pure helpers that ARE tested (`view-model.ts`, `log-model.ts`,
 // `src/log/*`); what is left is WIRING — which timer brackets which call, on which side of
-// which await — and the only way to assert wiring in a file you cannot load is to read it.
+// which await.
 //
-// (When `PLAN.md` #6 lands G51's `boot()` extraction and this file becomes importable,
-// the three timing guards below become behavioural tests: drive `dispatch()` with a
-// scripted clock and assert the emitted entries exactly, the way `persist.test.ts`
-// already does. That is recorded here as independent evidence for scheduling G51 first.)
+// PLAN.md #6 landed G51: the start-up is `export function boot()` and the module is inert on
+// import, so `boot.test.ts` now boots the real renderer and asserts emitted entries for real.
+// These scans are KEPT and re-anchored rather than retired: a scan pins a bracket on every
+// path at once, which one behavioural walk cannot.
 //
 // ---------------------------------------------------------------------------------------
 // THE RULES, each of them the scar of a guard that could not fail:
@@ -123,9 +123,17 @@ describe('the source scanner itself', () => {
     expect(SOURCE, 'the strip ate the tail of game.ts — a hole below the last anchor').toMatch(
       /function renderResume\(/,
     );
-    expect(SOURCE, 'the strip ate the boot block at the very end of game.ts').toMatch(
-      /const saved\s*=\s*loadRun\(\s*\)/,
+    // RE-ANCHORED by PLAN.md #6 (G51): the boot block used to be the LAST thing in the file,
+    // which is why it was the bottom anchor. It now lives in `boot()` near the top, so it
+    // anchors the head, and the function that really is last carries the tail.
+    expect(SOURCE, 'the strip ate the boot block').toMatch(/const saved\s*=\s*loadRun\(\s*\)/);
+    expect(SOURCE, 'the strip ate the tail of game.ts — the last function is gone').toMatch(
+      /function adoptFromPanel\(/,
     );
+    expect(
+      SOURCE.search(/function adoptFromPanel\(/),
+      'the tail anchor is no longer near the tail — pick the function that really is last',
+    ).toBeGreaterThan(SOURCE.length * 0.8);
     expect(
       stripReachesEndOfFile(RAW),
       'the strip ran off the END of the file — a regex literal containing `/*` with no later `*/` swallows everything after it, and every anchor ABOVE it still passes',
@@ -436,6 +444,19 @@ describe('the renderer applies the shipped/developer level policy', () => {
     expect(setAt).toBeGreaterThan(-1);
     expect(firstLog).toBeGreaterThan(-1);
     expect(setAt, 'the level is applied after the first log line').toBeLessThan(firstLog);
+  });
+
+  it('...and inside boot() too, which is where the start-up really runs (G51)', () => {
+    // TIGHTENED by PLAN.md #6. The file-wide order above is a statement about SOURCE order,
+    // and now that the start-up is the body of `boot()` the order that matters is the order of
+    // that body: a `log.info(...)` hoisted above `log.setLevel(` inside it would escape the
+    // shipped level on every boot while the file-wide check could still pass.
+    const body = bodyOf('export function boot(');
+    const setAt = body.search(/log\.setLevel\s*\(/);
+    const firstLog = body.search(/\blog\.(debug|info|warn|error|log)\s*\(/);
+    expect(setAt, 'boot() no longer sets the level at all').toBeGreaterThan(-1);
+    expect(firstLog, 'boot() logs nothing — the boot line is gone').toBeGreaterThan(-1);
+    expect(setAt, 'boot() logs before it applies the level').toBeLessThan(firstLog);
   });
 
   it('and the boot line says which level and protocol it resolved to', () => {

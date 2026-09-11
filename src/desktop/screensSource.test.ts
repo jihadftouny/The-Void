@@ -1,12 +1,16 @@
 // SOURCE GUARDS on the wiring THIS unit added to `src/desktop/game.ts` (PLAN.md #8, AC-12).
 //
-// WHY A SOURCE SCAN. `src/desktop/game.ts` calls the Electron IPC at module scope, so it
-// cannot be imported and every guard on it must read it (FINDINGS.md G51). Everything this
-// unit could lift OUT of it was lifted — `hubMenu`, `screenKey`, `floorTagText`,
-// `settings-model`, and the DOM builders in `screens.ts`, all of which are behaviourally
-// tested elsewhere. What is left here is WIRING: which helper is called, in which branch, in
-// which order. `rendererSource.test.ts` and `instrumentationSource.test.ts` own the wiring
-// that PRECEDED this unit and are not edited; this file owns what this unit added.
+// WHY A SOURCE SCAN. When this was written `src/desktop/game.ts` called the Electron IPC at
+// module scope, so it could not be imported and every guard on it had to read it (FINDINGS.md
+// G51). PLAN.md #6 moved that start-up behind `export function boot()` and `boot.test.ts` now
+// drives the real renderer under jsdom — but these scans are KEPT, re-anchored rather than
+// deleted: a behavioural walk proves what one path does, and a placement scan proves a call
+// cannot be skipped on any path. Everything this unit could lift OUT of it was lifted —
+// `hubMenu`, `screenKey`, `floorTagText`, `settings-model`, and the DOM builders in
+// `screens.ts`, all of which are behaviourally tested elsewhere. What is left here is WIRING:
+// which helper is called, in which branch, in which order. `rendererSource.test.ts` and
+// `instrumentationSource.test.ts` own the wiring that PRECEDED this unit; this file owns what
+// this unit added.
 //
 // ---------------------------------------------------------------------------------------
 // COVERAGE LEDGER — enumerated MECHANICALLY from `git diff main -- src/desktop/game.ts`,
@@ -389,7 +393,12 @@ function installsState(body: string, pattern: RegExp, where: string): number {
 
 describe('retheme() is placed where the floor can change, unconditionally (G57)', () => {
   it('the anchors exist — every guard below reads a real function body', () => {
-    for (const decl of ['function adoptRun(', 'async function dispatch(', 'function start(']) {
+    for (const decl of [
+      'function adoptRun(',
+      'async function dispatch(',
+      'function start(',
+      'export function boot(',
+    ]) {
       const body = bodyOf(decl);
       expect(functionBodyOpen(body), `${decl} has no body this scanner can find`).toBeGreaterThan(0);
     }
@@ -432,20 +441,25 @@ describe('retheme() is placed where the floor can change, unconditionally (G57)'
       .toBeGreaterThan(-1);
   });
 
-  it('at module scope, BEFORE the saved run is loaded — the first frame is painted', () => {
-    // A column-0 statement is at module scope in this file: every function body is indented.
-    const boot = [...SOURCE.matchAll(/^retheme\s*\(\s*\)\s*;/gm)].map((m) => m.index as number);
-    const load = SOURCE.search(/^const saved = loadRun\(\)/m);
-    expect(load, 'the boot block is gone').toBeGreaterThan(-1);
-    const unconditional = boot.filter((at) => {
-      const prev = SOURCE.slice(0, at).replace(/\s+$/, '');
-      const c = prev[prev.length - 1];
-      return c === ';' || c === '}' || prev.length === 0;
-    });
-    expect(unconditional.length, 'the boot-time retheme() is gone, or now follows a condition')
-      .toBeGreaterThan(0);
-    expect(Math.min(...unconditional), 'the boot-time retheme() runs after the save is loaded')
-      .toBeLessThan(load);
+  it('inside boot() — after the fresh state exists, BEFORE the saved run is loaded', () => {
+    // RE-ANCHORED by PLAN.md #6 (G51). This used to find a COLUMN-0 `retheme();` at module
+    // scope and compare it with a column-0 `const saved = loadRun()` — brittle by construction,
+    // and gone the moment the start-up moved into `boot()`. The same three facts, now judged
+    // with the same placement scanner the other sites use:
+    //   - the call is an UNCONDITIONAL statement of `boot()`'s body (not in a branch, a loop, a
+    //     callback, or after an early return);
+    //   - it comes AFTER `state = createGame(`, because `retheme()` reads `state.place` and a
+    //     call above it would read a state that does not exist yet (F1's lesson);
+    //   - and it comes BEFORE the saved run is loaded, so the first frame is painted before a
+    //     resume re-tints it to the saved floor.
+    const body = bodyOf('export function boot(');
+    const installed = installsState(body, /\bstate\s*=\s*createGame\s*\(/, 'boot');
+    const load = body.search(/\bconst saved\s*=\s*loadRun\s*\(\s*\)/);
+    expect(load, 'boot() no longer loads a saved run — this guard has gone stale').toBeGreaterThan(-1);
+    const { at, why } = unconditionalRetheme(body, [], installed);
+    expect(at, `boot() no longer paints the first frame unconditionally: ${why.join('; ')}`)
+      .toBeGreaterThan(-1);
+    expect(at, 'the first-frame retheme() runs after the save is loaded').toBeLessThan(load);
   });
 });
 
@@ -636,10 +650,16 @@ describe('the boot path loads the player’s preferences before the first paint'
   it('loadSettings is called, and its result is what retheme reads', () => {
     expect(SOURCE, 'the settings are never loaded').toMatch(/settings[^=]*=\s*loadSettings\s*\(\s*\)/);
     // ...and the first `retheme()` comes after that, or the first frame ignores them.
-    const load = SOURCE.search(/=\s*loadSettings\s*\(\s*\)/);
-    const firstRetheme = SOURCE.search(/^retheme\s*\(\s*\);/m);
+    // RE-ANCHORED by PLAN.md #6 (G51): both now live in `boot()`'s body, so both are searched
+    // THERE — a column-0 `retheme();` no longer exists to find.
+    const body = bodyOf('export function boot(');
+    const load = body.search(/\bsettings\s*=\s*loadSettings\s*\(\s*\)/);
+    const firstRetheme = body.search(/\bretheme\s*\(\s*\)/);
+    expect(load, 'boot() no longer loads the preferences').toBeGreaterThan(-1);
     expect(firstRetheme, 'the boot-time retheme is gone').toBeGreaterThan(-1);
-    expect(load).toBeLessThan(firstRetheme);
+    expect(load, 'the first frame is painted before the preferences are loaded').toBeLessThan(
+      firstRetheme,
+    );
   });
 
   it('and the preferences are NOT put in the save envelope', () => {
