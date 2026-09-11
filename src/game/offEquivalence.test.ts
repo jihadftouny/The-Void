@@ -188,6 +188,29 @@
 // at ONE win in a hundred, so the "no class stuck at ~0%" assertion is one unlucky seed from
 // failing for a reason that has nothing to do with the class.
 // ---------------------------------------------------------------------------------------------
+// #2 `floor-mechanics` RULE LEDGER — one row per commit that moves these numbers, each with its
+// direction WRITTEN DOWN BEFORE MEASURING (the #0a discipline). `balance.test.ts`'s 500-run
+// heuristic win rate is quoted alongside, because six runs are a fingerprint, not a sample.
+//
+//   RULE / POLICY CHANGED                                  STEP  DIRECTION ON THESE RUNS
+//   the sim gears up at the hub + heals with found items    S1   PLAYER MUCH STRONGER
+//
+//  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
+//     | step 12) so that every later rules change is measured against a player who uses what
+//     | it finds. The heuristic now (a) equips found gear at every hub visit through the same
+//     | pure `equip` the UI's Equip button calls, outside `step` (`sim.ts` `gearUpAtHub`: an
+//     | empty slot takes anything, an occupied one only a strictly higher rarity), and (b) heals
+//     | with a found `healSelf` consumable at <= 35% HP once potions run out. The ENGINE IS
+//     | UNTOUCHED: `finalRngState` below applies the same gear-up, so the lock still measures
+//     | "these inputs, this engine".
+//     | EXPECTED (plan §7, written before any run): PLAYER MUCH STRONGER — the old 32.9%
+//     | headline described a character that never equipped anything, and every empty paperdoll
+//     | slot now fills. OBSERVED: wins 0/6 -> 3/6 (three damnation endings), avg level 54/6 ->
+//     | 104/6, floors cleared 13/6 -> 20/6; the 500-run guard 0.126 -> 0.580 (Scavver 0.84,
+//     | Enforcer 0.67, Neuromancer/Hollow 0.48, Penitent 0.43). That is far ABOVE the one-in-three
+//     | target, which is the point: #2's re-run now tunes a real game DOWN toward it instead of a
+//     | gearless one up.
+// ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
 // (outcome, act, level, floors, step count, cause), the FINAL RNG ACCUMULATOR of a full run
@@ -201,7 +224,7 @@ import { fileURLToPath } from 'node:url';
 import { createGame, step, awaitingFor } from './game.ts';
 import type { GameState, GameInput } from './game.ts';
 import type { GameEvent } from './gameEvent.ts';
-import { simulateRun, simulateBatch, heuristicPolicy } from './sim.ts';
+import { simulateRun, simulateBatch, heuristicPolicy, gearUpAtHub } from './sim.ts';
 import type { RunResult } from './sim.ts';
 import type { PlayerClass } from './player.ts';
 
@@ -218,6 +241,8 @@ function finalRngState(seed: number, classId: PlayerClass): number {
   let events: GameEvent[] = [];
   let steps = 0;
   while (awaiting !== 'game-over' && steps < 200_000) {
+    // #2 S1: the sim's hub gear-up, exactly as `runToTerminal` applies it.
+    if (awaiting === 'main-menu') state = gearUpAtHub(state);
     const input: GameInput = policy({ state, events, awaiting });
     const res = step(state, input);
     state = res.state;
@@ -235,12 +260,12 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 318, cause: 'The Counselor', rngState: 254850083 },
-  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 354, cause: 'Ancient Sif', rngState: 2902498858 },
-  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 10, floorsCleared: 2, steps: 322, cause: 'The Cruelty', rngState: 1262756637 },
-  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 8, floorsCleared: 2, steps: 272, cause: 'Cursed Nameless Dread', rngState: 2861286560 },
-  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 383, cause: 'Ravenous The Counselor', rngState: 559403469 },
-  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 2, floorsCleared: 0, steps: 92, cause: 'Armored Punk', rngState: 1233366143 },
+  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 436, cause: 'unmade the Hollow (damnation)', rngState: 2097322993 },
+  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 343, cause: 'unmade the Hollow (damnation)', rngState: 736074460 },
+  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 183, cause: 'Cursed Roaring Ire', rngState: 4155263102 },
+  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 14, floorsCleared: 3, steps: 333, cause: 'Gaea', rngState: 4053440403 },
+  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 324, cause: 'unmade the Hollow (damnation)', rngState: 2406121882 },
+  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 326, cause: 'Gaea', rngState: 1966109804 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -266,26 +291,26 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(report).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 0,
+      wins: 3,
       grace: 0,
-      damnation: 0,
-      deaths: 6,
-      winRate: 0 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 12+11+10+8+11+2 = 54, floors
-      // 3+3+2+2+3+0 = 13. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 54 / 6,
-      avgFloorsCleared: 13 / 6,
-      deathByAct: { 1: 1, 2: 0, 3: 2, 4: 3, 5: 0 },
+      damnation: 3,
+      deaths: 3,
+      winRate: 3 / 6,
+      // Summed from the GOLDEN_RUNS rows above: levels 23+23+9+14+23+12 = 104, floors
+      // 4+4+2+3+4+3 = 20. Written as the fraction so the two stay visibly tied together.
+      avgLevel: 104 / 6,
+      avgFloorsCleared: 20 / 6,
+      deathByAct: { 1: 0, 2: 0, 3: 1, 4: 2, 5: 0 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 33 / 3, avgFloorsCleared: 8 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 2, 5: 0 },
+          runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,
+          winRate: 2 / 3, avgLevel: 55 / 3, avgFloorsCleared: 10 / 3,
+          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 0, 5: 0 },
         },
         Hollow: {
-          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 21 / 3, avgFloorsCleared: 5 / 3,
-          deathByAct: { 1: 1, 2: 0, 3: 1, 4: 1, 5: 0 },
+          runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
+          winRate: 1 / 3, avgLevel: 49 / 3, avgFloorsCleared: 10 / 3,
+          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 2, 5: 0 },
         },
       },
     });

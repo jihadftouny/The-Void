@@ -13,11 +13,20 @@
 //  - Serializable plain-data state: `RunResult` / `ClassStats` / `AggregateReport` are flat
 //    plain data; the harness only reads/serializes plain `GameState`.
 //
-// SCOPE: this unit is PURE-ADDITIVE. It measures winnability of the CURRENT build; it tunes no
-// balance constant and edits no existing source file. The run fights with STARTING GEAR the
-// whole way — the `step` controller's `GameInput` union has no equip action, so found loot lands
-// in the backpack unused. The measured win-rate is therefore a LOWER BOUND (real players equip
-// found loot). Promoting equip to a step input is a later follow-up, out of scope here.
+// SCOPE: it measures winnability of the CURRENT build and tunes no balance constant.
+//
+// EQUIPMENT IS MODELLED (PLAN.md #2, FINDINGS.md G48/G11). The run used to fight with STARTING
+// GEAR the whole way — `step` has no equip input, so found loot landed in the backpack unused and
+// the old 32.9% headline described a character who never equipped anything. The sim now gears up
+// at every hub visit through `gearUpAtHub`, which calls the SAME pure `equip` the UI's Equip
+// button calls, OUTSIDE `step`, exactly as the UI does. ⚠ RECORDED DEVIATION from "every state
+// change goes through `step`" (CLAUDE.md principle 1), inherited from `view-model.ts`'s
+// `equipFromBackpack` and retired with it when #1.1 makes equip a step input. It stays
+// deterministic: the gear-up is a pure function of the state, so a sim run still replays from
+// `seed + inputs + the same gear-up rule`.
+//
+// It also HEALS WITH FOUND CONSUMABLES (a `healSelf` item from the backpack at ≤ 35% HP) once
+// potions are spent — the path §22.6's fold-in turns into the only in-battle heal.
 
 import {
   createGame,
@@ -31,6 +40,9 @@ import { type PlayerClass } from './player.ts';
 import { spareAvailable, type BattleState, type BattleAction } from './battle.ts';
 import { hasControlCondition } from './condition.ts';
 import { resolveSkill, type SkillId } from './skill.ts';
+import { equip, resolveInstanceDef } from './equipment.ts';
+import { getCatalogItemById } from './item.ts';
+import { type Rarity } from './weapon.ts';
 import { type DraftOption } from './draft.ts';
 import { effectiveMaxHp } from './statEffects.ts';
 import { type RunUnlocks } from './unlockStore.ts';
@@ -91,6 +103,12 @@ export interface AggregateReport {
   perClass: Record<PlayerClass, ClassStats>;
 }
 
+/**
+ * A hub-time move the sim makes OUTSIDE `step` — the recorded deviation above. PURE: a function
+ * of the state alone, so a run is still exactly reproducible.
+ */
+export type HubPrep = (state: GameState) => GameState;
+
 /** The five playable classes, in a fixed canonical order (for the report roster). */
 export const ALL_CLASSES: readonly PlayerClass[] = [
   'Enforcer',
@@ -101,6 +119,58 @@ export const ALL_CLASSES: readonly PlayerClass[] = [
 ];
 
 // ------- The policies --------------------------------------------------------
+
+/** Rarity as a rank, so "better" is a comparison: Common < Rare < Legendary. */
+const RARITY_RANK: Record<Rarity, number> = { Common: 0, Rare: 1, Legendary: 2 };
+
+/**
+ * Gear up at the hub — PURE, deterministic, and OUTSIDE `step` (see the header's deviation).
+ *
+ * THE RULE, the plan's (AC-26): walk the backpack in index order; a piece of gear goes on if its
+ * slot is EMPTY, or if it OUTRANKS what is equipped there by rarity (strictly — an equal-rarity
+ * item never displaces, so the walk cannot loop). A displaced item returns to the backpack, as
+ * the UI's swap does. Repeats until a full pass equips nothing.
+ *
+ * ⚠ KNOWN, NOT FIXED HERE (GAME-DESIGN.md §22.20, `equipment.ts`'s known-gap block): a generated
+ * weapon swings the unarmed die plus its flat bonus, so a COMMON generated mainHand is a
+ * downgrade from a starting weapon. "Strictly outranks" means a Common drop never displaces
+ * starting gear (whose rarity is Common or better), which is the only protection the rarity rule
+ * can give; #1 owns the real fix.
+ */
+export function gearUpAtHub(state: GameState): GameState {
+  if (state.phase.kind !== 'main-menu' || !state.player) return state;
+  let inventory = state.player.inventory;
+  let changed = true;
+  let guard = 0;
+  while (changed && guard < 64) {
+    changed = false;
+    guard += 1;
+    for (let i = 0; i < inventory.backpack.length; i += 1) {
+      const item = inventory.backpack[i]!;
+      const def = resolveInstanceDef(item);
+      if (!def || def.slot === null) continue;
+      const current = inventory.slots[def.slot];
+      const currentDef = current ? resolveInstanceDef(current) : undefined;
+      const better =
+        !current || (currentDef !== undefined && RARITY_RANK[def.rarity] > RARITY_RANK[currentDef.rarity]);
+      if (!better) continue;
+      const r = equip(inventory, i);
+      if (!r.ok) continue;
+      inventory = r.inventory;
+      changed = true;
+      break; // indices shifted — restart the walk
+    }
+  }
+  if (inventory === state.player.inventory) return state;
+  return { ...state, player: { ...state.player, inventory } };
+}
+
+/** The backpack index of the first item whose `use` heals, or -1 (the sim's only heal source once potions are gone). */
+function healingConsumableIndex(backpack: readonly { defId: string }[]): number {
+  return backpack.findIndex((item) =>
+    (getCatalogItemById(item.defId)?.use ?? []).some((a) => a.kind === 'healSelf'),
+  );
+}
 
 /**
  * Pick the highest-priority draft offer, first match wins (deterministic): a `stat` on CON,
@@ -142,8 +212,12 @@ function chooseBattleAction(battle: BattleState, merciful: boolean): BattleActio
   // resolve and the control wear off; the player's swing is skipped but the condition ticks.
   if (hasControlCondition(pl)) return 'fight';
 
-  // 1. Heal with a potion when badly hurt and one remains.
+  // 1. Heal when badly hurt: a potion while any remain, else a found healing consumable.
   if (pl.pots > 0 && pl.hp <= 0.35 * cap) return 'potion';
+  if (pl.hp <= 0.35 * cap) {
+    const heal = healingConsumableIndex(pl.inventory.backpack);
+    if (heal >= 0) return { kind: 'useConsumable', source: { index: heal } };
+  }
 
   // 2. Consider the best AFFORDABLE skill from the pool (deterministic; ties broken by pool
   //    order via the strict `>` comparisons below).
@@ -252,6 +326,7 @@ export function runToTerminal(
   initial: GameState,
   policy: SimPolicy,
   guard = 200_000,
+  prep: HubPrep = gearUpAtHub,
 ): RunResult {
   let res: StepResult = {
     state: initial,
@@ -264,6 +339,8 @@ export function runToTerminal(
   let lastEnemy = '';
 
   while (res.awaiting !== 'game-over' && steps < guard) {
+    // The hub-time gear-up (outside `step`, see the header). Only ever at the hub.
+    if (res.awaiting === 'main-menu') res = { ...res, state: prep(res.state) };
     const input = policy(res);
     res = step(res.state, input);
     steps++;

@@ -153,16 +153,18 @@ export const STANDING_CAVEATS: readonly Caveat[] = [
   {
     id: 'equipment',
     text:
-      '**Equipment is un-modelled.** The `step` controller has no equip action, so every ' +
-      'simulated run fights with STARTING GEAR the whole way and found loot sits unused in ' +
-      'the backpack. A real player equips what they find.',
+      '**Equipment is modelled by a greedy hub rule, OUTSIDE `step`.** `step` still has no ' +
+      'equip input (#1.1), so the sim gears up at every hub visit through the same pure ' +
+      '`equip` the UI calls: an empty slot takes anything, an occupied one only a strictly ' +
+      'higher rarity. A generated weapon still swings the unarmed die plus its bonus ' +
+      '(§22.20; #1 owns the fix), so found weapons are under-valued here exactly as in the game.',
   },
   {
     id: 'G48',
     text:
-      '**Consumables are never used.** The shipped policies choose only fight / cast / ' +
-      'potion / run / spare, so nothing here reflects the authored consumables that ' +
-      '`FINDINGS.md` G14 put on the drop tables — including every healing item.',
+      '**Consumables: only healing is used.** The heuristic drinks a found `healSelf` item ' +
+      'at <= 35% HP; every other consumable (cures, throwables, flee items) sits unused, so ' +
+      'nothing here measures them.',
   },
   {
     id: 'two-healing-systems',

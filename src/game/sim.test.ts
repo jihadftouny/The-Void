@@ -6,8 +6,11 @@ import {
   simulateRun,
   simulateBatch,
   ALL_CLASSES,
+  gearUpAtHub,
   type SimPolicy,
 } from './sim.ts';
+import { type ItemInstance } from './item.ts';
+import { createBattle } from './battle.ts';
 import {
   createGame,
   step,
@@ -166,6 +169,8 @@ function driveAndCheck(seed: number, policy: SimPolicy): number {
   let awaiting = awaitingFor(state.phase);
   let steps = 0;
   while (awaiting !== 'game-over' && steps < GUARD) {
+    // The sim's hub gear-up (outside `step`), exactly as `runToTerminal` applies it.
+    if (awaiting === 'main-menu') state = gearUpAtHub(state);
     const res0: StepResult = { state, events: [], awaiting };
     const input = policy(res0);
     expect(ALLOWED[awaiting].has(input.kind)).toBe(true);
@@ -270,5 +275,119 @@ describe('simulateBatch aggregates deterministically and conserves outcomes', ()
     const b = simulateBatch({ seeds, classes: [...ALL_CLASSES], policy: mercifulPolicy });
     expect(b).toEqual(a);
     expect(a.grace + a.damnation + a.deaths).toBe(a.runs);
+  });
+});
+
+// ------- #2 S1: the sim uses what it finds (G48, G11) -----------------------------------------
+
+/** A rolled item built by hand in the `rarityGen` shape (so no draw is spent building it). */
+function rolled(slot: 'helmet' | 'mainHand' | 'ring', rarity: 'Common' | 'Rare' | 'Legendary'): ItemInstance {
+  return {
+    defId: `gen:${rarity}:${slot}`,
+    rolled: {
+      name: `${rarity} ${slot}`,
+      rarity,
+      slot,
+      kind: slot === 'mainHand' ? 'weapon' : slot === 'helmet' ? 'armor' : 'trinket',
+      effects: [{ type: 'bonusArmorClass', params: { amount: 1 } }],
+    },
+  };
+}
+
+function hubWith(backpack: ItemInstance[]): GameState {
+  const p = makePlayer();
+  return {
+    version: 8,
+    rngState: 1,
+    player: { ...p, inventory: { ...p.inventory, backpack } },
+    act: 1,
+    place: 0,
+    karma: createKarma(),
+    phase: { kind: 'main-menu' },
+  };
+}
+
+describe('gearUpAtHub — the rarity rule, derived from the plan (AC-26)', () => {
+  it('fills an EMPTY slot with anything, Common included', () => {
+    const out = gearUpAtHub(hubWith([rolled('helmet', 'Common')]));
+    expect(out.player!.inventory.slots.helmet?.defId).toBe('gen:Common:helmet');
+    expect(out.player!.inventory.backpack).toEqual([]);
+  });
+
+  it('never displaces equal-or-better gear: a Common or Rare mainHand leaves the Rare sword on', () => {
+    // The Enforcer starts with 'Jaaj Sword 1', an Act-1 RARE (classKit.ts). Common < Rare and
+    // Rare == Rare, so neither is "strictly better" — and a Common generated weapon is the
+    // known downgrade (GAME-DESIGN §22.20) this rule exists to avoid.
+    const out = gearUpAtHub(hubWith([rolled('mainHand', 'Common'), rolled('mainHand', 'Rare')]));
+    expect(out.player!.inventory.slots.mainHand?.defId).toBe('Jaaj Sword 1');
+    expect(out.player!.inventory.backpack).toHaveLength(2);
+    // An EQUAL rarity changes nothing at all — not even a swap-and-swap-back. (A `>=` rule
+    // would swap the two Rares back and forth until the loop guard stopped it; an even number
+    // of swaps lands on the sword again, so only object identity can see it.)
+    const equal = hubWith([rolled('mainHand', 'Rare')]);
+    expect(gearUpAtHub(equal)).toBe(equal);
+  });
+
+  it('a strictly higher rarity displaces, and the displaced piece returns to the pack', () => {
+    const out = gearUpAtHub(hubWith([rolled('mainHand', 'Legendary')]));
+    expect(out.player!.inventory.slots.mainHand?.defId).toBe('gen:Legendary:mainHand');
+    expect(out.player!.inventory.backpack.map((i) => i.defId)).toEqual(['Jaaj Sword 1']);
+  });
+
+  it('is a no-op (same object) off the hub, and when there is nothing to equip', () => {
+    const hub = hubWith([]);
+    expect(gearUpAtHub(hub)).toBe(hub);
+    const battle: GameState = { ...hubWith([rolled('helmet', 'Rare')]), phase: { kind: 'title' } };
+    expect(gearUpAtHub(battle)).toBe(battle);
+  });
+
+  it('fires in real runs: some hub visit over seeds 1..10 equips found gear', () => {
+    // Non-vacuity (G48): the rule is exercised by the batch, not only by the fixtures above.
+    let fired = 0;
+    for (let seed = 1; seed <= 10; seed++) {
+      let state = createGame(seed);
+      let awaiting = awaitingFor(state.phase);
+      const policy = heuristicPolicy('Enforcer');
+      for (let i = 0; i < 2000 && awaiting !== 'game-over'; i++) {
+        if (awaiting === 'main-menu') {
+          const geared = gearUpAtHub(state);
+          if (geared !== state) fired++;
+          state = geared;
+        }
+        const r = step(state, policy({ state, events: [], awaiting }));
+        state = r.state;
+        awaiting = r.awaiting;
+      }
+    }
+    expect(fired).toBeGreaterThan(0);
+  });
+});
+
+describe('the heuristic heals with a found consumable once potions are gone', () => {
+  function battleAt(hp: number, pots: number, backpack: ItemInstance[]): StepResult {
+    const p = makePlayer({ hp, maxHp: 20, pots });
+    const player = { ...p, inventory: { ...p.inventory, backpack } };
+    const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(3));
+    const battle = createBattle(player, enemy, 1);
+    const state: GameState = { ...hubWith([]), player, phase: { kind: 'battle', battle, started: true, final: false } };
+    return { state, events: [], awaiting: 'battle-action' };
+  }
+
+  it('at <= 35% HP with no potions, uses the FIRST healSelf item (index derived by hand)', () => {
+    // 7/20 = 35% exactly. Index 0 is an Antidote (cure only), index 1 a Suture Kit (healSelf 4).
+    const res = battleAt(7, 0, [{ defId: 'antidote' }, { defId: 'suture-kit' }]);
+    expect(heuristicPolicy('Enforcer')(res)).toEqual({
+      kind: 'battle-action',
+      action: { kind: 'useConsumable', source: { index: 1 } },
+    });
+  });
+
+  it('does not, above 35% HP, or with no healing item', () => {
+    expect(heuristicPolicy('Enforcer')(battleAt(8, 0, [{ defId: 'suture-kit' }]))).not.toMatchObject({
+      action: { kind: 'useConsumable' },
+    });
+    expect(heuristicPolicy('Enforcer')(battleAt(3, 0, [{ defId: 'antidote' }]))).not.toMatchObject({
+      action: { kind: 'useConsumable' },
+    });
   });
 });
