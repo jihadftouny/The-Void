@@ -131,13 +131,13 @@ Minutes are an **estimate** at 10 seconds per step (`SECONDS_PER_STEP`); the cou
 
 ## Resources per floor (baseline, per run that reached the floor)
 
-| Floor | Runs reaching it | Rests found | Bargains offered | Bargains taken | Heal items used | Loot left behind | Bargains per cleared floor | Bargain share of the table |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 2500 | 1.92 | 1.90 | 1.41 | 1.36 | 0.00 | 2.12 | 16.7% |
-| 2 | 1924 | 1.25 | 2.44 | 1.69 | 0.67 | 0.00 | 2.58 | 18.2% |
-| 3 | 1704 | 1.15 | 2.33 | 1.55 | 1.44 | 0.03 | 2.44 | 18.2% |
-| 4 | 1407 | 1.06 | 2.11 | 1.56 | 1.16 | 0.13 | 2.44 | 18.2% |
-| 5 | 871 | 1.20 | 2.45 | 1.77 | 1.64 | 0.43 | 2.63 | 18.2% |
+| Floor | Runs reaching it | Died there | Rests found | Bargains offered | Bargains taken | Heal items used | Loot left behind | Bargains per cleared floor | Bargain share of the table |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 2500 | 23.0% | 1.92 | 1.90 | 1.41 | 1.36 | 0.00 | 2.12 | 16.7% |
+| 2 | 1924 | 11.4% | 1.25 | 2.44 | 1.69 | 0.67 | 0.00 | 2.58 | 18.2% |
+| 3 | 1704 | 17.4% | 1.15 | 2.33 | 1.55 | 1.44 | 0.03 | 2.44 | 18.2% |
+| 4 | 1407 | 35.5% | 1.06 | 2.11 | 1.56 | 1.16 | 0.13 | 2.44 | 18.2% |
+| 5 | 871 | 16.3% | 1.20 | 2.45 | 1.77 | 1.64 | 0.43 | 2.63 | 18.2% |
 
 The last column is the data's expectation: a bargain is one weight in the floor's encounter table (`floors.json`), and bosses are not drawn from it.
 

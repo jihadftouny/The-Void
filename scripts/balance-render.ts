@@ -213,12 +213,14 @@ function floorLengthTable(report: AggregateReport): string {
 
 function resourceTable(report: AggregateReport): string {
   const head =
-    '| Floor | Runs reaching it | Rests found | Bargains offered | Bargains taken | Heal items used | Loot left behind | Bargains per cleared floor | Bargain share of the table |\n' +
-    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
+    '| Floor | Runs reaching it | Died there | Rests found | Bargains offered | Bargains taken | Heal items used | Loot left behind | Bargains per cleared floor | Bargain share of the table |\n' +
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
   const rows = FLOOR_IDS.map((f: FloorId) => {
     const p = report.perFloor[f];
     const c = report.perClearedFloor[f];
-    return `| ${f} | ${p.reached} | ${f2(per(p.rests, p.reached))} | ${f2(per(p.bargainsOffered, p.reached))} | ${f2(per(p.bargainsTaken, p.reached))} | ${f2(per(p.healsUsed, p.reached))} | ${f2(per(p.lootLeftBehind, p.reached))} | ${f2(per(c.bargainsOffered, c.cleared))} | ${pct(bargainShare(floorDef(f).encounters))} |`;
+    // "Died there": the share of the runs that REACHED the floor which died on it — how hard the
+    // floor itself is, rather than how many runs it happened to see (FIX ROUND 1, F7's evidence).
+    return `| ${f} | ${p.reached} | ${pct(per(p.died, p.reached))} | ${f2(per(p.rests, p.reached))} | ${f2(per(p.bargainsOffered, p.reached))} | ${f2(per(p.bargainsTaken, p.reached))} | ${f2(per(p.healsUsed, p.reached))} | ${f2(per(p.lootLeftBehind, p.reached))} | ${f2(per(c.bargainsOffered, c.cleared))} | ${pct(bargainShare(floorDef(f).encounters))} |`;
   });
   return [head, ...rows].join('\n');
 }
