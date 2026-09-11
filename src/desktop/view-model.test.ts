@@ -19,6 +19,7 @@ import {
   fallbackNarration,
   dealDiscardView,
   DEAL_DISCARD_REFUSE,
+  DEAL_DISCARD_CHOOSE,
 } from './view-model.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
 import { createGame, step } from '../game/game.ts';
@@ -862,6 +863,11 @@ describe('dealDiscardView — the full-pack bargain screen (plan Appendix A.3)',
       { index: 1, label: 'Leave Jaaj Sword 1' },
     ]);
     expect(v.refuse).toBe(DEAL_DISCARD_REFUSE);
+  });
+
+  it('the rows sit behind one disclosure, named for what it asks', () => {
+    expect(dealDiscardView(packed, deal).choose).toBe(DEAL_DISCARD_CHOOSE);
+    expect(DEAL_DISCARD_CHOOSE).toBe('Choose what to leave');
   });
 
   it('never carries the karma-derived pool', () => {

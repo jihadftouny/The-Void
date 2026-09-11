@@ -390,12 +390,23 @@ export function dealView(deal: SacrificeDeal): DealView {
 /** The label on the full-pack screen's way out — which is exactly refusing the bargain (A.3.2). */
 export const DEAL_DISCARD_REFUSE = 'Keep everything — refuse the bargain';
 
+/**
+ * The label of the disclosure that holds the leave rows. A.3.4: the screen must fit the 960x640
+ * minimum at the large text setting with NOTHING below the fold — and twelve leave rows plus the
+ * way out cannot (thirteen stacked controls in a 640px window). So the rows sit inside a closed
+ * list the player opens, exactly as the battle screen's Cast and Use-item lists do: two controls
+ * on arrival, and the layout probe holds the opened list to the expanded-disclosure rule.
+ */
+export const DEAL_DISCARD_CHOOSE = 'Choose what to leave';
+
 /** The full-pack bargain screen: what the bargain asks, and one way to make room per item. */
 export interface DealDiscardView {
   /** Says the pack is full and names the reward that needs the room. */
   prompt: string;
   /** The price, which is NOT yet paid (A.3.3) — shown so the choice is made knowing it. */
   cost: string;
+  /** The disclosure the leave rows sit in — `DEAL_DISCARD_CHOOSE`. */
+  choose: string;
   /** One row per backpack item, in pack order; `index` is the `discard` input's argument. */
   leave: { index: number; label: string }[];
   /** The way out — `DEAL_DISCARD_REFUSE`, dispatched as `deal-decision` accept false. */
@@ -414,6 +425,7 @@ export function dealDiscardView(player: Player, deal: SacrificeDeal): DealDiscar
   return {
     prompt: `Your pack is full. Leave something behind to take ${dv.reward}.`,
     cost: dv.cost,
+    choose: DEAL_DISCARD_CHOOSE,
     leave: player.inventory.backpack.map((item, index) => ({
       index,
       label: `Leave ${displayItem(item).name}`,
