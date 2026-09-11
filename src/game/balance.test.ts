@@ -174,7 +174,7 @@ describe('M15 anchor — a fresh Act-1 enemy takes ~3-4 Fight actions to kill', 
 // ------- Anchor 2: winnability regression guard ----------------------------------------------
 
 describe('M15 anchor — the baseline sim is winnable and deaths are not bunched at Act 1', () => {
-  it('overall win-rate > 0.12 AND Act-1 death share < 0.55 (heuristic policy, seeds 1..100 × 5)', () => {
+  it('overall win-rate > 0.20 AND Act-1 death share < 0.55 (heuristic policy, seeds 1..100 × 5)', () => {
     const seeds = Array.from({ length: 100 }, (_, i) => i + 1);
     const report = simulateBatch({
       seeds,
@@ -184,7 +184,14 @@ describe('M15 anchor — the baseline sim is winnable and deaths are not bunched
 
     // Directional thresholds derived from the target (win band 25-35%, deaths spread): a weaker,
     // stable guard that both FAIL against the pre-M15 build (0% win, 98% Act-1 deaths).
-    expect(report.winRate).toBeGreaterThan(0.12);
+    //
+    // THE WIN FLOOR IS 0.20 (FIX ROUND 1; it was 0.12). 0.12 was sized for the gearless sim, and
+    // at the tuned build it waved through a DEATH TRAP: illusions that can never be seen through
+    // drop this sample to 12.8% and still passed. 0.20 is derived from the band, not a run: the
+    // band's floor (0.25) less 2.5 standard errors of a 500-run proportion near the one-in-three
+    // aim (sqrt(0.3 x 0.7 / 500) = 0.0205; 0.25 - 0.051 = 0.199). So a build inside the band
+    // does not fail by sampling noise, and one well under it does.
+    expect(report.winRate).toBeGreaterThan(0.2);
 
     const act1Share = report.deaths > 0 ? (report.deathByAct[1] ?? 0) / report.deaths : 1;
     expect(act1Share).toBeLessThan(0.55);
@@ -196,8 +203,8 @@ describe('M15 anchor — the baseline sim is winnable and deaths are not bunched
   });
 
   it('AC-29 — the Hollow gate is no longer pinned to this floor by coincidence', () => {
-    // It WAS: §22.21 lowered HOLLOW_GATE_XP 600 -> 500 only so this file's > 0.12 floor would
-    // pass (the sim then fought with starting gear). PLAN.md #2's re-run measured a real game
+    // It WAS: §22.21 lowered HOLLOW_GATE_XP 600 -> 500 only so this file's old > 0.12 floor would
+    // pass (the sim then fought with starting gear; the floor is now 0.20). PLAN.md #2's re-run measured a real game
     // well above that floor and moved it back to 600 on its own evidence — tuning step T3 in
     // docs/BALANCE-REPORT.md's ledger (`TUNING_LEDGER`, scripts/balance-claims.ts). This test
     // pins the value so a move is a decision someone ledgers, not a drift.
