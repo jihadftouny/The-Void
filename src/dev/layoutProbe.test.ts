@@ -133,6 +133,9 @@ const EXPECTED: Readonly<Record<string, Expectation>> = {
   'deal-decision': { mode: 'side', prose: true, scenery: false },
   'deal-discard': { mode: 'side', prose: true, scenery: false },
   'deal-discard-open': { mode: 'side', prose: true, scenery: false },
+  // Fix round 2: the marking state (a pack over the cap, two marked) — the same screen, fuller.
+  'deal-discard-marked': { mode: 'side', prose: true, scenery: false },
+  'deal-discard-marked-open': { mode: 'side', prose: true, scenery: false },
   inventory: { mode: 'wide', prose: true, scenery: false },
   settings: { mode: 'wide', prose: true, scenery: false },
   'content-warning': { mode: 'wide', prose: false, scenery: false },
@@ -710,6 +713,9 @@ describe('every control is reachable at the enforced minimum window', () => {
     'rest',
     'deal-decision',
     'deal-discard',
+    // Fix round 2: the marking state too — the longer prompt and its "Leaving:" line must not
+    // push the two controls below the fold (A.3.4), at either text size.
+    'deal-discard-marked',
   ];
 
   /**
@@ -761,6 +767,8 @@ describe('every control is reachable at the enforced minimum window', () => {
     // rows sit in a closed list. The player opens it with one click and closes it with another.
     { scenario: 'deal-discard-open', collapsed: 'deal-discard', scale: 'normal' },
     { scenario: 'deal-discard-open', collapsed: 'deal-discard', scale: 'large' },
+    { scenario: 'deal-discard-marked-open', collapsed: 'deal-discard-marked', scale: 'normal' },
+    { scenario: 'deal-discard-marked-open', collapsed: 'deal-discard-marked', scale: 'large' },
   ];
 
   /**
@@ -806,6 +814,9 @@ describe('every control is reachable at the enforced minimum window', () => {
    *                          one leave row per slot of the FULL pack (BACKPACK_CAPACITY = 12)
    *                          inside the closed list = 12 hidden.
    *   deal-discard-open      the same 14 with the list open: 14 on screen, none hidden.
+   *   deal-discard-marked    fix round 2 — a pack of 15 with 2 marked: the toggle + the refusal
+   *                          = 2 on screen; 15 - 2 marked = 13 leave rows hidden in the list.
+   *   deal-discard-marked-open  the same 15 with the list open: 15 on screen, none hidden.
    *   content-warning        exactly one control, by policy — never a fight to get past.
    *   title / resume         two stacked buttons.
    *
@@ -825,6 +836,8 @@ describe('every control is reachable at the enforced minimum window', () => {
     'deal-decision': { visible: 2, hidden: 0 },
     'deal-discard': { visible: 2, hidden: 12 },
     'deal-discard-open': { visible: 14, hidden: 0 },
+    'deal-discard-marked': { visible: 2, hidden: 13 },
+    'deal-discard-marked-open': { visible: 15, hidden: 0 },
     settings: { visible: 9, hidden: 0 },
     'content-warning': { visible: 1, hidden: 0 },
     title: { visible: 2, hidden: 0 },

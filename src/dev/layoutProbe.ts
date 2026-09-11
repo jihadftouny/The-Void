@@ -185,11 +185,18 @@ function longItem(i: number): ItemInstance {
 const DEAL: SacrificeDeal = { pool: 'tempting', cost: { kind: 'greed' }, reward: { kind: 'item', instance: longItem(99) } };
 
 /** A character with a FULL pack (§22.17) of long-named items — the A.3 screen's worst case. */
-function fullPackPlayer(): Player {
+function fullPackPlayer(size: number = BACKPACK_CAPACITY): Player {
   const base = createPlayer({ name: 'Probe', classId: 'Enforcer', stats: { STR: 12, DEX: 12, CON: 12, INT: 12, WIS: 12, CHA: 12 } });
-  const backpack = Array.from({ length: BACKPACK_CAPACITY }, (_unused, i) => longItem(i));
+  const backpack = Array.from({ length: size }, (_unused, i) => longItem(i));
   return { ...base, inventory: { ...base.inventory, backpack } };
 }
+
+/**
+ * THE MARKING STATE (fix round 2, F3's screen): a pack OVER the cap — fifteen, as a v8 save can
+ * hold — with two items already marked to leave. The prompt grows ("Leave 2 more things behind …
+ * Leaving: <two long names>.") and the list holds thirteen rows: the worst case the screen meets.
+ */
+const MARKED = { size: 15, leaving: [0, 5] } as const;
 
 /** Six castable skills, for the battle screen with the Cast list open. */
 const CAST_LABELS: readonly string[] = [
@@ -353,9 +360,11 @@ function buildDealDecision(): void {
 }
 
 /** `case 'deal-discard'` (Appendix A.3): the block, the closed leave list, the refusal. MIRRORED. */
-function buildDealDiscard(openList: boolean): void {
+function buildDealDiscard(openList: boolean, marked = false): void {
   const choices = el('choices');
-  const view = dealDiscardView(fullPackPlayer(), DEAL);
+  const view = marked
+    ? dealDiscardView(fullPackPlayer(MARKED.size), DEAL, MARKED.leaving)
+    : dealDiscardView(fullPackPlayer(), DEAL);
   const block = document.createElement('div');
   block.className = 'deal-block';
   const ask = document.createElement('div');
@@ -497,6 +506,23 @@ const SCENARIOS: Readonly<Record<string, Scenario>> = {
       writeBeat();
       writeLog();
       buildDealDiscard(true);
+    },
+  },
+  // Fix round 2: the MARKING state F3 added — fifteen items, two marked, closed and open.
+  'deal-discard-marked': {
+    screen: 'deal-discard',
+    build: () => {
+      writeBeat();
+      writeLog();
+      buildDealDiscard(false, true);
+    },
+  },
+  'deal-discard-marked-open': {
+    screen: 'deal-discard',
+    build: () => {
+      writeBeat();
+      writeLog();
+      buildDealDiscard(true, true);
     },
   },
   inventory: {
