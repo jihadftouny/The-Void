@@ -67,7 +67,8 @@ export function shouldAdvance(act: number, xp: number): boolean {
  * X(k) = 240·e^(k/8) for k kills of floor 5:
  *     k = 4 -> 396      k = 5 -> 448      k = 6 -> 508      k = 7.5 -> 610
  *
- * The first choice was 600 (k ~ 7.5, matching the ~8–11 kills floors 3 and 4 each take). It is
+ * The first choice was 600 (k ~ 7.5, to match floors 3 and 4 — #0a put them at "~8–11 kills";
+ * PLAN.md #2 MEASURED them, see below). It is
  * LOWERED to 500 (k = 6) for a measured reason, not a taste: at 600 the heuristic-policy win
  * rate over `balance.test.ts`'s 500-run sample lands on EXACTLY 0.120, which does not clear
  * that file's `> 0.12` floor. The unit's own rule for this case is to lower the CONSTANT and
@@ -80,8 +81,10 @@ export function shouldAdvance(act: number, xp: number): boolean {
  *  1. The only reason 500 existed is gone. It was chosen to clear `balance.test.ts`'s 0.12
  *     floor by a coincidence of the gearless sim; the sim now equips gear and uses consumables
  *     and wins well clear of that floor (AC-29).
- *  2. At 600 (k ~ 7.5 kills) floor 5 is as long as floors 3 and 4, which take ~8–11 kills
- *     each — the length first derived for it.
+ *  2. At 600 (k ~ 7.5 kills) floor 5 is as long as floors 3 and 4 — the length first derived
+ *     for it. MEASURED (fix round 2, over the runs that cleared each floor in the report's
+ *     2,500-run baseline): floor 3 takes 7.9 kills and floor 4 7.0 — not the "~8–11" #0a
+ *     estimated, which this note repeated until then. Floor 5 at 600 measures 8.8.
  * What floor 5 cost when T3 was applied (after T1 and T2, on the report's 2,500-run baseline):
  * 106 deaths in 871 arrivals, about 1 in 8 — close to floor 2 (220 in 1,924, about 1 in 8.7)
  * and well below floors 3 (1 in 5.7) and 4 (1 in 2.8). Measured effect: 0.321 -> 0.306, and
