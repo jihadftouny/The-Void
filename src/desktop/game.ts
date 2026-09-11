@@ -574,6 +574,20 @@ function renderInventoryScreen(): void {
         rerender();
       });
     }
+    // PLAN.md #2: leave an item behind — an ENGINE input (`discard`), so the run still replays
+    // from seed + inputs. Stepped here rather than through `dispatch` because a discard is not
+    // a narrated beat: the inventory screen stays up, the run autosaves, and the move is logged
+    // at the boundary. A refused discard (a stale index) returns the same state and saves nothing.
+    appendButton(row, buttonModel('Discard'), () => {
+      const r = step(state, { kind: 'discard', index: b.index });
+      if (r.state !== state) {
+        state = r.state;
+        runSummary = foldRunEvents(runSummary, r.events, r.state);
+        saveRun(state, memory, runMeta());
+        log.info('inventory', 'item discarded', { index: b.index, defId: b.item.defId });
+      }
+      rerender();
+    });
   }
 
   choicesEl.appendChild(wrap);
