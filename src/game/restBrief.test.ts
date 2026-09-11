@@ -4,10 +4,11 @@
 import { describe, it, expect } from 'vitest';
 import { restBrief, REST_BRIEF_STATUS } from './restBrief.ts';
 import { FLOOR_IDS } from './floors.ts';
+import { SCENE_VOCABULARY } from './karmaVocabulary.testutil.ts';
 
 /** WORLD.md §0's reserved words, and the hidden-karma axis vocabulary (GAME-DESIGN §7). */
 const RESERVED = /\bhollow|made whole/i;
-const AXIS = /karm|nature|merc(?:y|i)|cruel|greed|restrain|reveren|desecrat|clarity|delu(?:sion|d)/i;
+const AXIS = SCENE_VOCABULARY; // the shared list (F4), plus the act verb — a brief reaches the model verbatim
 
 describe('restBriefs.json — one calm brief per floor', () => {
   it('every floor 1..5 has a place line and two to four lore lines', () => {

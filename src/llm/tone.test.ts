@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { ALL_TONE_WORDS, TONE_AXES, TONE_WORDS, karmaTone } from './tone.ts';
+import { SCENE_VOCABULARY } from '../game/karmaVocabulary.testutil.ts';
 import {
   buildNarrationPrompt,
   conditionBrief,
@@ -23,8 +24,8 @@ import { createRng } from '../game/rng.ts';
 import { makeCondition } from '../game/condition.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 
-/** GAME-DESIGN §7's hidden axes, and the words that would name them (the G53 vocabulary). */
-const AXIS_VOCABULARY = /karm|nature|merc(?:y|i)|cruel|greed|restrain|reveren|desecrat|clarity|delu(?:sion|d)/i;
+/** The shared list, plus the act verb — nothing in a rest scene may name the ledger at all (F4). */
+const AXIS_VOCABULARY = SCENE_VOCABULARY;
 /** WORLD.md §0's reserved words. */
 const RESERVED = /\bhollow|made whole/i;
 

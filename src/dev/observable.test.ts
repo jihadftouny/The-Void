@@ -36,6 +36,7 @@ import { heuristicPolicy } from '../game/sim.ts';
 import { runSummaryView, spareOffered } from '../desktop/view-model.ts';
 import { formatEvent } from '../render/format.ts';
 import { describeEvent } from '../llm/narrate.ts';
+import { AXIS_VOCABULARY } from '../game/karmaVocabulary.testutil.ts';
 
 /** The four axes as a delta, so a karma assertion is a CHANGE and never a state of the world. */
 function karmaDelta(before: KarmaState, after: KarmaState): KarmaState {
@@ -402,8 +403,9 @@ describe('the act-5 no-flee rule, from the hollow-fight jump', () => {
 // the lockstep comparison stays sound.
 // =========================================================================================
 
-const AXIS_VOCABULARY =
-  /karma|nature|mercy|cruel|greed|restraint|reveren|desecration|clarity|delusion/i;
+// The word list is SHARED (FIX ROUND 1, F4) — `src/game/karmaVocabulary.testutil.ts`. This copy
+// used to be the OLD word list, so "merciful" in the victory log line and "merciless" in the
+// victory fact line passed this sweep over every event of a real run.
 
 /** Proper nouns are AUTHORED CONTENT and collide with the vocabulary on purpose (§9). */
 const NEUTRAL_NAME = 'Foe';

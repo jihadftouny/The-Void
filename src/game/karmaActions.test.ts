@@ -68,7 +68,10 @@ import { type GameEvent } from './gameEvent.ts';
 import { formatEvent } from '../render/format.ts';
 import { describeEvent } from '../llm/narrate.ts';
 import { ALL_TONE_WORDS } from '../llm/tone.ts';
+import { AXIS_VOCABULARY } from './karmaVocabulary.testutil.ts';
+import { ONE_OF_EVERY_EVENT } from './eventSamples.testutil.ts';
 import { restBrief } from './restBrief.ts';
+import { selectEncounter } from './encounter.ts';
 import { dealView } from '../desktop/view-model.ts';
 
 // =============================================================================================
@@ -748,11 +751,8 @@ describe('the reverence axis moves in BOTH directions now', () => {
 // exactly the event #10a newly made carry a second axis.
 // =============================================================================================
 
-// STEMS, not words (PLAN.md #2): the list used to read `mercy` / `restraint` / `delusion`, so
-// "merciful", "restrained" and "deluded" — the adjectives a tone channel would reach for first —
-// all passed it. The plan's own mutation (put "merciful" in TONE_WORDS) was GREEN until this.
-const AXIS_VOCABULARY =
-  /karm|nature|merc(?:y|i)|cruel|greed|restrain|reveren|desecration|clarity|delu(?:sion|d)/i;
+// The word list is SHARED (FIX ROUND 1, F4): `karmaVocabulary.testutil.ts`, imported by every
+// karma guard, as stems — "merciful", "restrained", "deluded", "karmic" all passed the old words.
 
 /** Every string a deal reaches a human or the model through. */
 function surfacesOf(deal: SacrificeDeal): string[] {
@@ -982,19 +982,35 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
   // tone words). Every one of them is held to the SAME word list, with the same single
   // structural exclusion (authored proper nouns), and nothing else.
 
+  it('EVERY event kind — one sample of each, on all three surfaces (F4: ordinary events too)', () => {
+    // FIX ROUND 1, F4: the sweeps above cover the karma-recording steps and the floors' new
+    // kinds; "merciful" planted in the VICTORY log line and "merciless" in the victory fact line
+    // fired none of them. This one reads the type-exhaustive table narrationCoverage proves
+    // complete, so every kind — today's and any added later — is scanned by the shared list.
+    // The ONE structural exclusion, as everywhere in this block: authored proper nouns. Names
+    // become NEUTRAL_NAME, and a consumable's catalog id becomes a clean catalog item (the
+    // sample uses "Clarity Draught", which §22.13 kept on purpose) — so what is scanned is
+    // the TEMPLATE around them, which is where a leak is written.
+    const neutral = (e: GameEvent): GameEvent => {
+      const n = neutralizeFloorNouns(e);
+      return 'itemId' in n ? { ...n, itemId: 'suture-kit' } : n;
+    };
+    const kinds = Object.keys(ONE_OF_EVERY_EVENT) as GameEvent['kind'][];
+    expect(kinds.length).toBeGreaterThan(60); // the whole union, not a handful
+    for (const kind of kinds) {
+      const e = neutral(ONE_OF_EVERY_EVENT[kind] as GameEvent);
+      // The (neutralised) sample DATA is clean, so any hit below is the TEMPLATE speaking.
+      expect(JSON.stringify(e), `${kind} sample data`).not.toMatch(AXIS_VOCABULARY);
+      expect(formatEvent(e), `${kind} player log`).not.toMatch(AXIS_VOCABULARY);
+      expect(describeEvent(e), `${kind} model fact`).not.toMatch(AXIS_VOCABULARY);
+    }
+    // The substitution is not a silent no-op: it reached the rendered consumable line.
+    expect(formatEvent(neutral(ONE_OF_EVERY_EVENT['consumable-used']))).toContain('Suture Kit');
+  });
+
   it('the TONE vocabulary obeys the rule — the one channel that is derived FROM the ledger', () => {
     expect(ALL_TONE_WORDS.length).toBe(8);
     for (const w of ALL_TONE_WORDS) expect(w, w).not.toMatch(AXIS_VOCABULARY);
-  });
-
-  it('the word list catches the INFLECTED forms a tone word would take, and spares the act verb', () => {
-    for (const w of ['merciful', 'Merciless', 'cruelty', 'greedy', 'restrained', 'reverent', 'deluded', 'delusional', 'karmic', 'nature']) {
-      expect(w, w).toMatch(AXIS_VOCABULARY);
-    }
-    // The verb names the ACT (§7's line) and stays legal; the tone words are clean by design.
-    for (const w of ['desecrate', 'gentle', 'hungry', 'hushed', 'clear-eyed', 'mercenary']) {
-      expect(w, w).not.toMatch(AXIS_VOCABULARY);
-    }
   });
 
   /** Item names are authored proper nouns too ("Clarity Draught", §22.13) — same exclusion. */
@@ -1041,6 +1057,9 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
     // Played, not hand-written: the payloads (rest places, left-behind item names, dispel
     // numbers) are whatever the engine really produced. Deterministic seeds; the loop stops
     // once every kind the descent reliably produces has been seen.
+    // `loot-left-behind` is NOT waited for here: a full pack is a late-descent event (1 run in
+    // 150 in seeds 1..30), so it vanished under a DC change and turned this red for a BALANCE
+    // reason (FIX ROUND 1). It is CONSTRUCTED below instead, through the same real step.
     const MUST_SEE: readonly FloorKind[] = [
       'rest-found',
       'rest-taken',
@@ -1048,9 +1067,8 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
       'illusion-struck',
       'floor-drain',
       'skills-warped',
-      'loot-left-behind',
     ];
-    const FLOOR_KINDS = new Set<string>([...MUST_SEE, 'deal-needs-room', 'item-discarded']);
+    const FLOOR_KINDS = new Set<string>([...MUST_SEE, 'loot-left-behind', 'deal-needs-room', 'item-discarded']);
     const swept: GameEvent[] = [];
     const seenKinds = new Set<string>();
     for (let seed = 1; seed <= 30 && !MUST_SEE.every((k) => seenKinds.has(k)); seed += 1) {
@@ -1069,6 +1087,20 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
       }
     }
     for (const k of MUST_SEE) expect(seenKinds.has(k), `no real run emitted '${k}'`).toBe(true);
+
+    // A chest found with a FULL pack, through the real step: the seed is chosen by the pure
+    // encounter pick (floor 1, a chest), so the event is guaranteed rather than hoped for.
+    const hub = newRunAtHub(4).state;
+    const full: GameState = {
+      ...hub,
+      player: { ...hub.player!, inventory: { ...hub.player!.inventory, backpack: Array.from({ length: 12 }, () => ({ defId: 'antidote' })) } },
+    };
+    let chestSeed = 0;
+    while (selectEncounter(createRng(chestSeed).rng, 1) !== 'chest') chestSeed += 1;
+    const chest = step({ ...full, rngState: chestSeed }, { kind: 'menu', choice: 'continue' });
+    expect(chest.events.some((e) => e.kind === 'loot-left-behind'), 'the constructed chest left nothing behind').toBe(true);
+    swept.push(...chest.events.filter((e) => FLOOR_KINDS.has(e.kind)));
+
     for (const e of swept) {
       for (const s of floorSurfaces(e)) expect(s, e.kind).not.toMatch(AXIS_VOCABULARY);
     }
