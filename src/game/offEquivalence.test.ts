@@ -383,8 +383,9 @@ function lockedOf(r: RunResult): LockedRecord {
   return locked;
 }
 function lockedReport(r: AggregateReport): unknown {
-  const { perFloor, perWisBucket, perClass, ...locked } = r;
+  const { perFloor, perClearedFloor, perWisBucket, perClass, ...locked } = r;
   void perFloor;
+  void perClearedFloor;
   void perWisBucket;
   const classes: Record<string, unknown> = {};
   for (const [id, stats] of Object.entries(perClass)) {

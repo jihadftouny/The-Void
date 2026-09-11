@@ -535,6 +535,14 @@ describe('the counters of REAL runs agree with the run record (a separate path)'
       expect(report.perFloor[f].rounds).toBe(runs.reduce((s, r) => s + r.perFloor[f].rounds, 0));
       expect(report.perFloor[f].reached).toBe(runs.filter((r) => r.finalAct >= f).length);
     }
+    // The cleared-floor sums hold exactly the runs that cleared each floor.
+    for (const f of [1, 2, 3, 4, 5] as const) {
+      const cleared = runs.filter((r) => r.perFloor[f].cleared > 0);
+      expect(report.perClearedFloor[f].cleared).toBe(cleared.length);
+      expect(report.perClearedFloor[f].reached).toBe(cleared.length);
+      expect(report.perClearedFloor[f].died).toBe(0); // a run that cleared a floor did not die on it
+      expect(report.perClearedFloor[f].bargainsOffered).toBe(cleared.reduce((s, r) => s + r.perFloor[f].bargainsOffered, 0));
+    }
     const b = report.perWisBucket;
     expect(b.low.runs + b.mid.runs + b.high.runs).toBe(report.runs);
     // Each bucket, rebuilt from the runs by their rolled Wisdom and their DEATH ACT — the run

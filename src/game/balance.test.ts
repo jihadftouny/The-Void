@@ -17,6 +17,8 @@ import { weaponForSlot, UNARMED } from './equipment.ts';
 import { mulberry32 } from './rng.ts';
 import { STAT_KEYS, type Stats } from './character.ts';
 import { simulateBatch, heuristicPolicy, ALL_CLASSES } from './sim.ts';
+import { FLOOR_IDS } from './floors.ts';
+import { HOLLOW_GATE_XP } from './progression.ts';
 
 // ------- Anchor 1: Act-1 hits-to-kill --------------------------------------------------------
 
@@ -191,5 +193,37 @@ describe('M15 anchor — the baseline sim is winnable and deaths are not bunched
     for (const c of ALL_CLASSES) {
       expect(report.perClass[c].wins).toBeGreaterThan(0);
     }
+  });
+
+  it('AC-29 — the Hollow gate is no longer pinned to this floor by coincidence', () => {
+    // It WAS: §22.21 lowered HOLLOW_GATE_XP 600 -> 500 only so this file's > 0.12 floor would
+    // pass (the sim then fought with starting gear). PLAN.md #2's re-run measured a real game
+    // well above that floor and moved it back to 600 on its own evidence — tuning step T3 in
+    // docs/BALANCE-REPORT.md's ledger (`TUNING_LEDGER`, scripts/balance-claims.ts). This test
+    // pins the value so a move is a decision someone ledgers, not a drift.
+    expect(HOLLOW_GATE_XP).toBe(600);
+  });
+});
+
+// ------- AC-22: bargains find the run several times per floor ---------------------------------
+
+describe('AC-22 — bargains arrive several times per completed floor', () => {
+  it('over 500 heuristic runs, the mean deal-offer count per completed floor lies in [2, 6]', () => {
+    // The band is the plan's (AC-22). Read through the encounter weights: a bargain is 2 of
+    // 11-12 weights (about one encounter in six), so [2, 6] offers is what a floor of about 12
+    // to 36 encounters yields — the report states the measured floor lengths beside it. Counted over CLEARED floors only, so a death partway down a
+    // floor cannot drag the mean below what a whole floor offers.
+    const seeds = Array.from({ length: 100 }, (_, i) => i + 1);
+    const report = simulateBatch({ seeds, classes: [...ALL_CLASSES] });
+    let offers = 0;
+    let cleared = 0;
+    for (const f of FLOOR_IDS) {
+      offers += report.perClearedFloor[f].bargainsOffered;
+      cleared += report.perClearedFloor[f].cleared;
+    }
+    expect(cleared).toBeGreaterThan(500); // non-vacuity: hundreds of whole floors measured
+    const mean = offers / cleared;
+    expect(mean).toBeGreaterThanOrEqual(2);
+    expect(mean).toBeLessThanOrEqual(6);
   });
 });

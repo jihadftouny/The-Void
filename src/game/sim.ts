@@ -309,6 +309,12 @@ export interface AggregateReport {
   perClass: Record<PlayerClass, ClassStats>;
   /** Every run's per-floor counters, summed across classes (PLAN.md #2). */
   perFloor: Record<FloorId, FloorCounters>;
+  /**
+   * The same sums over only the runs that CLEARED each floor — a whole floor's length and
+   * resources, never truncated by a death on it (the G9 floor-length measure, AC-22's
+   * bargains-per-completed-floor).
+   */
+  perClearedFloor: Record<FloorId, FloorCounters>;
   /** Win rate and floor-2 death share by starting Wisdom (runs with no character are skipped). */
   perWisBucket: Record<WisBucket, WisBucketStats>;
 }
@@ -665,6 +671,7 @@ export function simulateBatch(opts: {
   const perClass = {} as Record<PlayerClass, ClassStats>;
   const overallDeathByAct = emptyDeathByAct();
   let overallPerFloor = emptyPerFloor();
+  let clearedPerFloor = emptyPerFloor();
   const wisTally: Record<WisBucket, { runs: number; wins: number; deaths: number; floor2Deaths: number }> = {
     low: { runs: 0, wins: 0, deaths: 0, floor2Deaths: 0 },
     mid: { runs: 0, wins: 0, deaths: 0, floor2Deaths: 0 },
@@ -708,6 +715,9 @@ export function simulateBatch(opts: {
 
       for (const floor of FLOOR_IDS) {
         stat.perFloor[floor] = addCounters(stat.perFloor[floor], r.perFloor[floor]);
+        if (r.perFloor[floor].cleared > 0) {
+          clearedPerFloor = { ...clearedPerFloor, [floor]: addCounters(clearedPerFloor[floor], r.perFloor[floor]) };
+        }
       }
       if (r.startingWis !== null) {
         const bucket = wisTally[wisBucket(r.startingWis)];
@@ -767,6 +777,7 @@ export function simulateBatch(opts: {
     deathByAct: overallDeathByAct,
     perClass,
     perFloor: overallPerFloor,
+    perClearedFloor: clearedPerFloor,
     perWisBucket: {
       low: bucketStats(wisTally.low),
       mid: bucketStats(wisTally.mid),
