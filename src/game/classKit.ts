@@ -190,7 +190,7 @@ export function castSkill<
   skill: SkillDef,
   // PLAN.md #2: the floor's heal percentage — floor 3 halves `selfHeal` and
   // `lifestealFraction`. Omitted ⇒ identity, so every enemy/test caller is byte-identical.
-  mods: { healPct: number } = { healPct: 100 },
+  mods: { healPct: number; illusoryTarget?: boolean } = { healPct: 100 },
 ): UseSkillResult<C, T> {
   const base = useSkill(caster, target, skill);
   let newCaster: C = base.caster;
@@ -300,7 +300,10 @@ export function castSkill<
   }
 
   // 11. lifestealFraction (Hollow siphon/unmake): heal floor(damage × fraction), clamped.
-  if (skill.lifestealFraction) {
+  // PLAN.md #2: against an ILLUSION there is no wound to draw from — the target takes 0, so the
+  // Hollow's lifesteal returns nothing. (Self-effects that do not feed on the target — mend,
+  // brace, a self-condition — still apply; the charge is still spent.)
+  if (skill.lifestealFraction && !mods.illusoryTarget) {
     const heal = dampenHeal(Math.floor(damage * skill.lifestealFraction), mods.healPct);
     if (heal > 0) {
       const cap = effectiveMaxHp(newCaster);

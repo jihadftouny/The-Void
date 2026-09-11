@@ -37,6 +37,8 @@ export interface ConsumableResult {
   fled: boolean;
   /** A `reroll` action fired (Lodestone / illusion tools): the reroll target lands in M7/M9. */
   reroll: boolean;
+  /** PLAN.md #2: a damaging action passed through an illusory enemy (`battle.ts` says so). */
+  voided: boolean;
 }
 
 /**
@@ -66,6 +68,7 @@ export function applyConsumable(
       consumed: false,
       fled: false,
       reroll: false,
+      voided: false,
     };
   }
 
@@ -76,6 +79,7 @@ export function applyConsumable(
   const events: CombatEvent[] = [{ kind: 'consumable-used', itemId: def.id }];
   let fled = false;
   let reroll = false;
+  let voided = false;
 
   for (const action of use) {
     const out = applyEffectAction(action, p, e, ctx);
@@ -84,7 +88,8 @@ export function applyConsumable(
     events.push(...out.events);
     if (out.fled) fled = true;
     if (out.reroll) reroll = true;
+    if (out.voided) voided = true;
   }
 
-  return { player: p, enemy: e, events, consumed: true, fled, reroll };
+  return { player: p, enemy: e, events, consumed: true, fled, reroll, voided };
 }

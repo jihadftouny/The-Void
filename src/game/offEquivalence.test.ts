@@ -196,6 +196,7 @@
 //   the sim gears up at the hub + heals with found items    S1   PLAYER MUCH STRONGER
 //   floor 3: heals x50%, one charge drained per battle      S2   player weaker from floor 3
 //   floor 4: karma earned there counts double               S2   NONE on these runs
+//   floor 2: a third of fights are illusions (A.1)          S3   predicted WEAKER — was WRONG
 //
 //  S1 | NOT AN ENGINE RULE — a SIM POLICY, landed FIRST (a recorded reordering of the plan's
 //     | step 12) so that every later rules change is measured against a player who uses what
@@ -224,6 +225,24 @@
 //     | first floor-3 fight before any drained charge changes a decision, a useful control. The
 //     | other five move; Hollow seed 2 turns a damnation into an act-4 death; wins 3/6 -> 2/6.
 //     | The 500-run guard 0.580 -> 0.556, in the predicted direction.
+//  S3 | FLOOR 2's ILLUSIONS (plan Appendix A.1, CONFIRMED: real damage from the illusion, none
+//     | from you, seeing through ends the fight with no XP and no loot). One extra draw builds
+//     | every floor-2 random battle (the illusion roll, last); one d20 per round against an
+//     | illusion (the passive Wisdom roll); `seeThroughIllusion` finally fires.
+//     | EXPECTED (written before measuring): PLAYER WEAKER — a third of floor 2 becomes rounds
+//     | of real damage for no reward.
+//     | OBSERVED, and the prediction was WRONG: all six runs now WIN (six damnations, 2/6 ->
+//     | 6/6), and the 500-run guard RISES 0.556 -> 0.602, with 4 heuristic runs reaching GRACE.
+//     | Diagnosed rather than accepted (PRINCIPLES §A4), over 300 heuristic runs, floor 2 only:
+//     | an illusion lasts 2.28 rounds and costs 0.63 HP (612 of 617 seen through, 3 fled, 2
+//     | died inside one), while a REAL floor-2 fight lasts 3.80 rounds and costs 1.69 HP. The
+//     | roll rate matches the DC derivation (P = 0.40 at WIS 10 -> 2.5 rolls). So at these
+//     | numbers an illusion is CHEAPER than the fight it replaces; its cost is TEMPO (no XP, so
+//     | floor 2 takes more encounters — more chests, rests and gear), and each dispel adds a
+//     | point of clarity, which the generous verdict (§22.16) can tip into grace even for a run
+//     | that kills everything. Nothing was softened or retuned (A.1 forbids it); this is the
+//     | author's evidence, and `docs/BALANCE-REPORT.md` carries the per-class and per-Wisdom
+//     | tables it feeds.
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
@@ -274,12 +293,12 @@ function finalRngState(seed: number, classId: PlayerClass): number {
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
 const GOLDEN_RUNS: readonly (RunResult & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 408, cause: 'unmade the Hollow (damnation)', rngState: 209392283 },
-  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 376, cause: 'unmade the Hollow (damnation)', rngState: 4015558904 },
-  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 9, floorsCleared: 2, steps: 183, cause: 'Cursed Roaring Ire', rngState: 4155263102 },
-  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 5, finalAct: 5, finalLevel: 16, floorsCleared: 4, steps: 358, cause: 'Remembered Ghost', rngState: 2526427975 },
-  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 274, cause: 'The Counselor', rngState: 1612767821 },
-  { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 14, floorsCleared: 3, steps: 350, cause: 'Gaea', rngState: 3669793223 },
+  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 22, floorsCleared: 4, steps: 447, cause: 'unmade the Hollow (damnation)', rngState: 2650064866 },
+  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 336, cause: 'unmade the Hollow (damnation)', rngState: 3398875834 },
+  { seed: 3, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 22, floorsCleared: 4, steps: 392, cause: 'unmade the Hollow (damnation)', rngState: 3583123126 },
+  { seed: 1, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 24, floorsCleared: 4, steps: 498, cause: 'unmade the Hollow (damnation)', rngState: 3289476836 },
+  { seed: 2, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 23, floorsCleared: 4, steps: 469, cause: 'unmade the Hollow (damnation)', rngState: 2984923452 },
+  { seed: 3, classId: 'Hollow', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 24, floorsCleared: 4, steps: 466, cause: 'unmade the Hollow (damnation)', rngState: 130298488 },
 ];
 
 describe('off-equivalence lock — a fixed-seed run is byte-identical across refactors', () => {
@@ -305,26 +324,26 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
     expect(report).toEqual({
       runs: 6,
       classes: ['Enforcer', 'Hollow'],
-      wins: 2,
+      wins: 6,
       grace: 0,
-      damnation: 2,
-      deaths: 4,
-      winRate: 2 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 23+23+9+16+12+14 = 97, floors
-      // 4+4+2+4+3+3 = 20. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 97 / 6,
-      avgFloorsCleared: 20 / 6,
-      deathByAct: { 1: 0, 2: 0, 3: 1, 4: 2, 5: 1 },
+      damnation: 6,
+      deaths: 0,
+      winRate: 6 / 6,
+      // Summed from the GOLDEN_RUNS rows above: levels 22+23+22+24+23+24 = 138, floors
+      // 4 x 6 = 24. Written as the fraction so the two stay visibly tied together.
+      avgLevel: 138 / 6,
+      avgFloorsCleared: 24 / 6,
+      deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
       perClass: {
         Enforcer: {
-          runs: 3, wins: 2, grace: 0, damnation: 2, deaths: 1,
-          winRate: 2 / 3, avgLevel: 55 / 3, avgFloorsCleared: 10 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 1, 4: 0, 5: 0 },
+          runs: 3, wins: 3, grace: 0, damnation: 3, deaths: 0,
+          winRate: 3 / 3, avgLevel: 67 / 3, avgFloorsCleared: 12 / 3,
+          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
         },
         Hollow: {
-          runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 42 / 3, avgFloorsCleared: 10 / 3,
-          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 2, 5: 1 },
+          runs: 3, wins: 3, grace: 0, damnation: 3, deaths: 0,
+          winRate: 3 / 3, avgLevel: 71 / 3, avgFloorsCleared: 12 / 3,
+          deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
         },
       },
     });

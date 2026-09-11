@@ -19,16 +19,16 @@
 //    does); run consumes only the flee roll + the enemy counter-attack draws.
 
 import { type Player } from './player.ts';
-import { type Enemy } from './enemy.ts';
+import { damageEnemy, type Enemy } from './enemy.ts';
 import { getFamily } from './enemyFamily.ts';
-import { type Rng } from './rng.ts';
+import { rollDie, type Rng } from './rng.ts';
 import { type CombatEvent, type DamageSource, withDamageSource } from './combatEvent.ts';
 import { hasControlCondition, tickConditions, type ConditionType } from './condition.ts';
 import { combineAdvDis, resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
 import { resolveSkill, type SkillDef, type SkillId } from './skill.ts';
 import { castSkill, clampMomentum, grantMomentum, usesMomentum } from './classKit.ts';
 import { perkModifiers } from './perks.ts';
-import { effectiveMaxHp } from './statEffects.ts';
+import { effectiveMaxHp, effectiveMods } from './statEffects.ts';
 import { playerArmorClass, enemyAdvDisVs } from './defense.ts';
 import { weaponForSlot, UNARMED, pickUp } from './equipment.ts';
 import { rollLootDrop, summarizeLoot } from './loot.ts';
@@ -109,8 +109,12 @@ export interface RoundRules {
 /** No floor mechanic: full heals, the shipped illusion DC. */
 export const DEFAULT_ROUND_RULES: RoundRules = { healPct: 100, illusionDc: ILLUSION_DC };
 
-/** The state of the battle after a round resolves. */
-export type RoundStatus = 'ongoing' | 'player-won' | 'player-died' | 'fled' | 'spared';
+/**
+ * The state of the battle after a round resolves. `dispelled` (PLAN.md #2): the passive Wisdom
+ * roll saw through an illusory enemy and the fight simply ends — no XP, no loot; `game.ts`
+ * records `seeThroughIllusion` and returns to the hub.
+ */
+export type RoundStatus = 'ongoing' | 'player-won' | 'player-died' | 'fled' | 'spared' | 'dispelled';
 
 /** What `resolveRound` returns: the next state, the events, and a terminal status. */
 export interface RoundResult {
@@ -468,7 +472,14 @@ function resolveSpare(state: BattleState): RoundResult {
 type PlayerTurnAction = { kind: 'fight' } | { kind: 'cast'; skill: SkillDef };
 
 /**
- * The shared symmetric round for Fight and Cast — PURE. Draw order (steps 1-6):
+ * The shared symmetric round for Fight and Cast — PURE. Draw order (steps 0-6):
+ *  0. PLAN.md #2, floor 2 — ONLY against an `illusory` enemy: ONE d20 draw, the passive Wisdom
+ *     roll `d20 + effective WIS mod` (Lucid / Clouded shift it through `effectiveMods`) against
+ *     `rules.illusionDc`. At or above the DC the illusion is seen through: `illusion-dispelled`
+ *     (carrying the roll), status `dispelled`, and NOTHING else happens this round — no
+ *     further draw, no attack either way. Below it, the round runs as below, except that no
+ *     damage reaches the enemy (`damageEnemy`) and the enemy's attack is real. A real enemy
+ *     takes NO draw here, so every non-illusory round keeps its exact pre-#2 draw order.
  *  1. Tick ENEMY conditions (player-inflicted DoT/control finally tick). Apply the hp
  *     delta; if the enemy dies to its own DoT before acting, it is still a victory.
  *     Zero rng draws when the enemy is conditionless, so a conditionless round's draws
@@ -492,6 +503,22 @@ function resolvePlayerTurn(
   let player: Player = state.player;
   let enemy: Enemy = state.enemy;
 
+  // 0. PLAN.md #2: the passive Wisdom roll against an illusion (see the doc comment above).
+  if (enemy.illusory) {
+    const natural = rollDie(rng, 20);
+    const modifier = effectiveMods(player).WIS;
+    const total = natural + modifier;
+    if (total >= rules.illusionDc) {
+      return {
+        state,
+        events: [{ kind: 'illusion-dispelled', natural, modifier, total, dc: rules.illusionDc }],
+        status: 'dispelled',
+        resolved: true,
+      };
+    }
+    // A FAILED roll emits nothing: saying so would name the illusion before it is seen through.
+  }
+
   // M6: read the player's aggregated equip modifiers ONCE. Every field below is
   // identity-valued (0 / false / mult 1 / null / []) for effect-free gear, so all the M6
   // branches are no-ops for a normal run (off-equivalence). RNG-FREE — no draw is added.
@@ -512,7 +539,15 @@ function resolvePlayerTurn(
   const rawEnemyHp = enemy.hp + enemyTickDelta;
   enemy = {
     ...tickedEnemy,
-    hp: enemyTickDelta > 0 ? Math.min(rawEnemyHp, effectiveMaxHp(tickedEnemy)) : rawEnemyHp,
+    // PLAN.md #2: an illusion LOSES nothing to a damage-over-time tick either (the tick's own
+    // `condition-damage` line still reads as damage — the fracture is what the player sees),
+    // or a bleed cast on it would kill it and pay out XP and loot for a thing that is not there.
+    hp:
+      enemyTickDelta > 0
+        ? Math.min(rawEnemyHp, effectiveMaxHp(tickedEnemy))
+        : enemy.illusory
+          ? enemy.hp
+          : rawEnemyHp,
   };
   events.push(...etc.events);
   const skipEnemyAttack = etc.skipTurn;
@@ -625,7 +660,10 @@ function resolvePlayerTurn(
     // draw, so the documented draw order is unchanged). Forward the twist events; the base
     // `enemy-skill-used` event is dropped in favor of the player-facing `skill-cast`.
     // PLAN.md #2: the floor's heal percentage reaches `selfHeal` and `lifestealFraction`.
-    const cast = castSkill(player, enemy, action.skill, { healPct: rules.healPct });
+    const cast = castSkill(player, enemy, action.skill, {
+      healPct: rules.healPct,
+      ...(enemy.illusory ? { illusoryTarget: true } : {}),
+    });
     player = cast.caster;
     enemy = cast.target;
     playerDamage = cast.damage;
@@ -693,11 +731,21 @@ function resolvePlayerTurn(
     }
   }
 
+  // 4c. PLAN.md #2: the blow passes through an illusion. The event that reported it keeps its
+  //     rolled damage (its terms still sum to it; folding an "illusion" term into the dice
+  //     detail would NAME the illusion in the log before it is seen through), and
+  //     `illusion-struck` is placed right after it to say nothing was there. `playerDamage` is
+  //     then 0, so step 5 lands nothing and the momentum hook below banks nothing for it.
+  if (enemy.illusory && playerDamage > 0) {
+    events.splice(playerDamageEventIndex + 1, 0, { kind: 'illusion-struck' });
+    playerDamage = 0;
+  }
+
   // 5. Apply the exchanged damage. The player's blow lands first (nothing between reads
   //    either hp, and this keeps the enemy's HP settled before any onTakeDamage reflect),
   //    then the enemy's damage goes through the ONE guarded path (G24/G29): first-hit
   //    reduction -> shield -> hp -> onTakeDamage -> revive gate.
-  enemy = { ...enemy, hp: Math.max(enemy.hp - playerDamage, 0) };
+  enemy = damageEnemy(enemy, playerDamage);
   const taken = applyDamageToPlayer(player, enemy, enemyDamage, {
     mods,
     firstHitDone,
@@ -905,6 +953,8 @@ function resolveUseConsumable(
   let player = res.player;
   const enemy = res.enemy;
   const events = res.events;
+  // PLAN.md #2: a thrown item passed through an illusion — say so, as a blow does.
+  if (res.voided) events.push({ kind: 'illusion-struck' });
   if (res.fled) {
     // G39: a flee consumable used to return `fled` WITHOUT consulting `canFlee`, which every
     // boss battle sets to false. Measured: a Smoke Vial in the act-5 Hollow fight returned

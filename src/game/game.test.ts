@@ -24,6 +24,7 @@ import { createKarma, type KarmaState } from './karma.ts';
 import { hasControlCondition, makeCondition } from './condition.ts';
 import { resolveSkill, type SkillId } from './skill.ts';
 import { generateDraft } from './draft.ts';
+import { gearUpAtHub } from './sim.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- Fixtures ------------------------------------------------------------
@@ -1447,6 +1448,12 @@ function runPlaythrough(
   const events: GameEvent[] = [];
   let guard = 0;
   while (r.awaiting !== 'game-over' && guard < 100000) {
+    // PLAN.md #2: the driver now EQUIPS what it finds at the hub, with the sim's own rule
+    // (`gearUpAtHub`, outside `step` exactly as the UI's Equip button). The G43 precedent
+    // below applies again: when floor 2's illusions (a pure HP cost, Appendix A.1) made a
+    // driver that fought in starting gear unable to win any of these 20 seeds, the fix was
+    // for the driver to PLAY — not to lower the guard or re-pick the seeds.
+    if (r.awaiting === 'main-menu') r = { ...r, state: gearUpAtHub(r.state) };
     r = step(r.state, decide(r));
     for (const e of r.events) events.push(e);
     guard++;

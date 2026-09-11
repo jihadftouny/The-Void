@@ -25,10 +25,11 @@
 // Sin's identity and bonus HP (`pickIndulgedAxis`) and the altar's offer pool
 // (`deal.ts selectPool`).
 //
-// STILL UNWIRED, deliberately: `seeThroughIllusion`. It needs floor 2's illusions,
-// and the only illusion seam in the engine is `statEffects.ts`'s
-// `illusionSightTwist` — a `return 0` stub its own test labels as #2's. Inventing a
-// trigger for it would mean inventing floor 2's mechanic.
+//   · seeing through an illusion -> game.ts's `dispelled` branch records
+//                 `seeThroughIllusion` (PLAN.md #2, floor 2) — the last of the eight to be
+//                 wired, and it fires from nowhere else.
+//   · every engine write goes through game.ts's `recordOnFloor`, which weights it by the
+//     floor's `karmaMultiplier` (`recordKarmaWeighted`): floor 4 counts double.
 //
 // EVERY MAGNITUDE BELOW IS A #2 BALANCE PLACEHOLDER. §22.5 ruled WIRE and explicitly
 // rejected re-weighting; the numbers are re-run with #2's balance pass.
@@ -48,7 +49,7 @@ export interface KarmaState {
   clarityDelusion: number;
 }
 
-/** A named karma-weighted action. Seven of the eight are wired; see the header. */
+/** A named karma-weighted action. All of them are wired; see the header. */
 export type KarmaAction =
   | 'spareWeighted'
   | 'killWeighted'

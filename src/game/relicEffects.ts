@@ -19,7 +19,7 @@
 // death check and needs the per-battle `reviveUsed` flag on BattleState.
 
 import { type Player } from './player.ts';
-import { type Enemy } from './enemy.ts';
+import { damageEnemy, type Enemy } from './enemy.ts';
 import { computeEquipModifiers } from './equipEffects.ts';
 import { applyCondition, cureCondition } from './condition.ts';
 import { computeStatMods } from './character.ts';
@@ -51,6 +51,12 @@ export interface ActionOutcome {
   fled: boolean;
   /** A `reroll` action fired (consumables): the caller emits the reroll and no-ops the target. */
   reroll: boolean;
+  /**
+   * PLAN.md #2: a `dealDamage` that WOULD have hurt passed through an illusory enemy. The caller
+   * decides whether to say so (a thrown consumable does, with `illusion-struck`; a relic proc
+   * riding a blow that already reported it does not). Always false against a real enemy.
+   */
+  voided: boolean;
 }
 
 /**
@@ -69,6 +75,7 @@ export function applyEffectAction(
   const events: CombatEvent[] = [];
   let fled = false;
   let reroll = false;
+  let voided = false;
 
   switch (action.kind) {
     case 'dealDamage': {
@@ -88,7 +95,9 @@ export function applyEffectAction(
         amt = mitigate(amt, effectiveResistances(e)[action.element] ?? 0);
       }
       amt = Math.max(amt, 0);
-      if (amt > 0) e = { ...e, hp: Math.max(e.hp - amt, 0) };
+      // PLAN.md #2: through the one enemy-damage helper, so an illusion takes nothing.
+      if (amt > 0 && e.illusory) voided = true;
+      e = damageEnemy(e, amt);
       break;
     }
     case 'healSelf': {
@@ -178,7 +187,7 @@ export function applyEffectAction(
       break;
   }
 
-  return { self: p, other: e, events, fled, reroll };
+  return { self: p, other: e, events, fled, reroll, voided };
 }
 
 /**

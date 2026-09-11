@@ -621,7 +621,8 @@ function continueJourney(
     // Absent snapshot ⇒ both sets are `undefined` ⇒ byte-identical to a pre-M13 draw.
     const families = state.unlocks ? new Set(state.unlocks.families) : undefined;
     const affixes = state.unlocks ? new Set(state.unlocks.affixes) : undefined;
-    const battle = buildRandomBattle(player, state.act, rng, families, affixes);
+    // PLAN.md #2: the floor rides along for the illusion roll (floor 2), keyed on `place`.
+    const battle = buildRandomBattle(player, state.act, rng, families, affixes, floorOf(state));
     return finish({ kind: 'battle', battle, started: false, final: false }, [
       { kind: 'encounter-start', enemyName: battle.enemy.fullName },
     ]);
@@ -720,6 +721,16 @@ function resolveBattleRound(
       return finish({ ...phase, battle }, events);
     case 'fled':
       return finish({ kind: 'main-menu' }, events, { player: battle.player });
+    case 'dispelled':
+      // PLAN.md #2, floor 2: the passive Wisdom roll saw through an illusion. The fight ends
+      // with NO reward (plan Appendix A.1 — "a pure cost": the illusion's attacks were real, the
+      // player's were not, and seeing through pays nothing but the clarity nudge). The player's
+      // battle state carries to the hub, as on any exit. `seeThroughIllusion` goes through the
+      // floor funnel like every karma write (x1 on floor 2).
+      return finish({ kind: 'main-menu' }, events, {
+        player: battle.player,
+        karma: recordOnFloor(state, state.karma, 'seeThroughIllusion'),
+      });
     case 'spared':
       // Mercy: end the encounter with no rewards. Record the spare on the karma vector. The
       // actions are data-sourced from the family (the karma seam), defaulting to the uniform

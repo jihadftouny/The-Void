@@ -21,6 +21,9 @@
 // assertion is a floor the design implies, not the number that came out.
 
 import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   createGame,
   step,
@@ -221,11 +224,25 @@ describe('the balance constants #10a must not touch', () => {
     for (const w of Object.values(GATE_WEIGHTS)) expect(Number.isInteger(w)).toBe(true);
   });
 
-  it('seeThroughIllusion is still DECLARED AND UNWIRED — floor 2 has nothing to hook it to', () => {
-    // Not an oversight: the only illusion seam in `src/` is `statEffects.ts`'s
-    // `illusionSightTwist`, a `return 0` stub its own test labels as #2's. Inventing a trigger
-    // here would mean inventing floor 2's mechanic. Recorded so the gap stays a decision.
+  it('seeThroughIllusion is WIRED (PLAN.md #2) — and fires only from seeing through an illusion', () => {
+    // It was the last unwired action until floor 2 existed. The delta is unchanged, and the ONE
+    // shipping site that records it is game.ts's `dispelled` branch — held by a source scan so a
+    // second, easier trigger cannot quietly appear. Its behaviour through the real `step` is in
+    // `illusion.test.ts` (a dispel moves clarity by exactly +1 on floor 2).
     expect(KARMA_DELTAS.seeThroughIllusion).toEqual({ clarityDelusion: 1 });
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const sites: string[] = [];
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.ts') || name.endsWith('.test.ts') || name === 'karma.ts') continue;
+      const src = readFileSync(join(dir, name), 'utf8');
+      const count = (src.match(/'seeThroughIllusion'/g) ?? []).length;
+      for (let i = 0; i < count; i++) sites.push(name);
+    }
+    expect(sites).toEqual(['game.ts']);
+    const game = readFileSync(join(dir, 'game.ts'), 'utf8');
+    const at = game.indexOf("'seeThroughIllusion'");
+    const branch = game.lastIndexOf('case ', at);
+    expect(game.slice(branch, branch + 20)).toMatch(/case 'dispelled'/);
   });
 });
 
@@ -1116,6 +1133,8 @@ interface RunRecord {
   verdict: 'grace' | 'cast-down' | null;
   dealOffers: number;
   spares: number;
+  /** PLAN.md #2: illusions seen through on floor 2 — each records `seeThroughIllusion`. */
+  dispels: number;
 }
 
 /** Play one run to its terminal state through the real `step`, recording what it did. */
@@ -1124,6 +1143,7 @@ function playRun(seed: number, classId: PlayerClass, policy: SimPolicy, guard = 
   let verdict: 'grace' | 'cast-down' | null = null;
   let dealOffers = 0;
   let spares = 0;
+  let dispels = 0;
   let steps = 0;
   while (r.awaiting !== 'game-over' && steps < guard) {
     r = step(r.state, policy(r));
@@ -1132,10 +1152,11 @@ function playRun(seed: number, classId: PlayerClass, policy: SimPolicy, guard = 
       if (e.kind === 'verdict') verdict = e.outcome;
       else if (e.kind === 'deal-offer') dealOffers += 1;
       else if (e.kind === 'spared') spares += 1;
+      else if (e.kind === 'illusion-dispelled') dispels += 1;
     }
   }
   expect(steps, `run ${classId}/${seed} hit the step guard`).toBeLessThan(guard);
-  return { seed, classId, karma: r.state.karma, verdict, dealOffers, spares };
+  return { seed, classId, karma: r.state.karma, verdict, dealOffers, spares, dispels };
 }
 
 function batch(seeds: number[], classes: PlayerClass[], policy: (c: PlayerClass) => SimPolicy) {
@@ -1231,15 +1252,21 @@ describe('the balance anchor cannot see this unit', () => {
     expect(PENITENT.reduce((a, r) => a + r.dealOffers, 0)).toBeGreaterThan(0);
   });
 
-  it('under the heuristic policy the three axes this unit touches never move at all', () => {
-    // The sharpest statement of inertness: reverence, restraint and clarity stay exactly 0
-    // across every heuristic run, so no draw is added, no outcome flips, and the win-rate the
-    // anchor measures cannot move. `mercyCruelty` moves (kills) and always did.
+  it('under the heuristic policy reverence and restraint never move; clarity moves ONLY by dispels', () => {
+    // The sharpest statement of #10a's inertness: reverence and restraint stay exactly 0 across
+    // every heuristic run. `mercyCruelty` moves (kills) and always did.
+    //
+    // PLAN.md #2 changed the clarity half ON PURPOSE: floor 2's illusions are met by EVERY
+    // policy, and seeing through one records `seeThroughIllusion` (+1 clarity, x1 on floor 2).
+    // So clarity is no longer 0 — it is EXACTLY the number of dispels the run saw, which pins
+    // it to that one cause rather than letting any other path move it.
     for (const r of HEURISTIC) {
       expect(r.karma.reverenceDesecration, `${r.classId}/${r.seed}`).toBe(0);
       expect(r.karma.restraintGreed, `${r.classId}/${r.seed}`).toBe(0);
-      expect(r.karma.clarityDelusion, `${r.classId}/${r.seed}`).toBe(0);
+      expect(r.karma.clarityDelusion, `${r.classId}/${r.seed}`).toBe(r.dispels);
     }
+    // Non-vacuity: the sweep really met and saw through illusions.
+    expect(HEURISTIC.reduce((a, r) => a + r.dispels, 0)).toBeGreaterThan(0);
   });
 });
 

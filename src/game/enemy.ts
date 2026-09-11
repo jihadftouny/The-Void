@@ -59,6 +59,27 @@ export interface Enemy extends Character {
   karmaWeighted: boolean;
   /** M8: the applied elite affix id, or absent when the enemy carries no affix. */
   affixId?: string;
+  /**
+   * PLAN.md #2, floor 2 ("the fracture"): this enemy is NOT THERE. It attacks for real, but no
+   * damage from any source reaches it (`damageEnemy`), so the fight can end only when the
+   * player's passive Wisdom roll sees through it (`dispelled` — no XP, no loot), or in flight
+   * or death. OPTIONAL and additive: absent on every real enemy, so JSON drops it and neither a
+   * save nor a non-illusory battle changes shape. Set only by `buildRandomBattle` on a floor
+   * whose data carries an `illusionChance`; a boss is never built through it.
+   */
+  illusory?: true;
+}
+
+/**
+ * Apply `amount` damage to an enemy — PURE, RNG-free, floored at 0. THE ONE PLACE an illusion's
+ * immunity lives (PLAN.md #2): an `illusory` enemy is returned UNCHANGED, whatever hit it —
+ * the player's blow, a cast, a relic proc, a thrown consumable. A 0-or-negative amount is also a
+ * no-op. Every enemy-HP loss in the round goes through here or through the tick guard beside it
+ * in `battle.ts`.
+ */
+export function damageEnemy(enemy: Enemy, amount: number): Enemy {
+  if (amount <= 0 || enemy.illusory) return enemy;
+  return { ...enemy, hp: Math.max(enemy.hp - amount, 0) };
 }
 
 const ENEMY_ARMOR_CLASS = 10;

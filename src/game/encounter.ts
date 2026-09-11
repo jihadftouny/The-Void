@@ -21,6 +21,7 @@ import { getLore, type LoreEntry } from './lore.ts';
 import { type Player } from './player.ts';
 import { rollChestLoot } from './loot.ts';
 import { type ItemInstance } from './item.ts';
+import { floorModifiers, type FloorId } from './floors.ts';
 
 /** The kinds of encounter the descent can present. */
 export type EncounterType = 'battle' | 'rest' | 'chest';
@@ -82,11 +83,20 @@ export function buildRandomBattle(
   rng: Rng,
   available?: ReadonlySet<string>,
   availableAffixes?: ReadonlySet<string>,
+  floor?: FloorId,
 ): BattleState {
   const family = pick(rng, availableFamiliesForAct(act, available));
   let enemy = generateEnemy({ act, family, playerXp: player.xp }, rng);
   const affix = rollAffix(rng, availableAffixes);
   if (affix) enemy = applyAffix(enemy, affix);
+  // PLAN.md #2, floor 2 (§22.24: "about one fight in three"): ONE draw, LAST, and only on a floor
+  // whose data carries an `illusionChance` — `randInt(rng, denominator) < numerator`. Last, so
+  // every other floor keeps its exact pre-#2 draw order; `floor` omitted (every pre-#2 caller)
+  // draws nothing. Keyed on the floor the caller passes (`floorOf(state)`), never on `act`.
+  const chance = floor === undefined ? null : floorModifiers(floor).illusionChance;
+  if (chance && randInt(rng, chance.denominator) < chance.numerator) {
+    enemy = { ...enemy, illusory: true };
+  }
   // G12: the ambush bonus is BATTLE-scoped, passed as an opening advantage, instead of being
   // stamped onto the player as `advantageDisadvantage: 1`. That stamp was persisted to the hub
   // player by `game.ts`, so every later fight — including every floor boss and the final
