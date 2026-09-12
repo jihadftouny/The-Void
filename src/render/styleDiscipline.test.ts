@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FLOOR_THEMES, TYPE } from './tokens.ts';
+import { FLOOR_THEMES, TYPE, themeVars } from './tokens.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = join(HERE, '..');
@@ -103,6 +103,132 @@ function stopsMotion(css: string, attr: string, target: string): boolean {
   return selectorsCarrying(css, attr).some(
     (r) => r.selector.includes(target) && /(?:animation|transition)\s*:\s*none/.test(r.body),
   );
+}
+
+/**
+ * The rules that style `selector` ITSELF: every rule one of whose comma-split selectors is
+ * exactly `selector` (whitespace normalised). A rule scoped by an override — the reduced-motion
+ * `[data-motion='reduce'] .arena-float` — is a DIFFERENT selector and is not returned, which is
+ * the whole point: that rule sets `animation: none`, and a check that let it stand in for the
+ * rule that makes the thing move proved nothing (#6's fix round, F1).
+ */
+function rulesFor(css: string, selector: string): { selector: string; body: string }[] {
+  const want = selector.replace(/\s+/g, ' ').trim();
+  return rules(css).filter((rule) => rule.selector.split(',').some((part) => part.replace(/\s+/g, ' ').trim() === want));
+}
+
+/** Every `@keyframes name { … }`, name → body, braces balanced. */
+function keyframes(css: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const m of css.matchAll(/@keyframes\s+([-\w]+)\s*\{/g)) {
+    const open = (m.index as number) + m[0].length - 1;
+    let depth = 0;
+    for (let i = open; i < css.length; i += 1) {
+      if (css[i] === '{') depth += 1;
+      else if (css[i] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          out.set(m[1] as string, css.slice(open + 1, i));
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * True when `selector` really MOVES: a rule styling it itself declares an `animation` (or
+ * `animation-name`) whose value is not `none` and NAMES a `@keyframes` that exists, and those
+ * keyframes change `property` between at least two distinct values. Each clause closes a way
+ * the old one-line regex passed with nothing moving: a reduced-motion rule's `animation: none`,
+ * an animation naming keyframes that were renamed away, and keyframes that hold still.
+ */
+function animatesWith(css: string, selector: string, property: string): boolean {
+  const frames = keyframes(css);
+  return rulesFor(css, selector).some((rule) =>
+    declarations(rule.body)
+      .filter((d) => d.prop === 'animation' || d.prop === 'animation-name')
+      .filter((d) => d.value !== 'none')
+      .some((d) =>
+        d.value.split(/[\s,]+/).some((token) => {
+          const body = frames.get(token);
+          if (body === undefined) return false;
+          const values = declarations(body).filter((f) => f.prop === property).map((f) => f.value);
+          return new Set(values).size >= 2;
+        }),
+      ),
+  );
+}
+
+/** True when a rule styling `selector` itself declares `prop` with a value matching `value`. */
+function declares(css: string, selector: string, prop: string, value: RegExp): boolean {
+  return rulesFor(css, selector).some((rule) => declarations(rule.body).some((d) => d.prop === prop && value.test(d.value)));
+}
+
+/** A `var(--void-…)` read resolved to the token's value — tokens.ts is the single source. */
+const TOKEN_VALUES = themeVars(0);
+function resolveTokens(value: string): string {
+  return value.replace(/var\(\s*(--[-\w]+)\s*\)/g, (whole, name: string) => TOKEN_VALUES[name] ?? whole);
+}
+
+/** A width in px, or `null` when the token is not a width. The three keywords are the UA's. */
+function widthPx(token: string): number | null {
+  const keyword: Record<string, number> = { thin: 1, medium: 3, thick: 5 };
+  if (token in keyword) return keyword[token] as number;
+  const m = /^(-?\d*\.?\d+)(px|em|rem)?$/.exec(token);
+  return m ? Number(m[1]) : null;
+}
+
+const DRAWN_STYLES = new Set(['solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset']);
+
+/** Anything in a rule's body that moves the element: an animation, a transition, a transform. */
+function moves(body: string): boolean {
+  return declarations(body).some(
+    (d) =>
+      ((d.prop === 'animation' || d.prop === 'animation-name' || d.prop === 'transition') && d.value !== 'none') ||
+      (d.prop === 'transform' && d.value !== 'none'),
+  );
+}
+
+/**
+ * True when a rule's body paints a mark a player can SEE and nothing in it moves: an outline
+ * with a drawn style, a non-zero width and a colour that is not transparent — or a background
+ * that is not none or transparent. Token reads are resolved through tokens.ts, so a width token
+ * set to 0 is caught. Longhands are read after the shorthand (an approximation of cascade order
+ * within one rule, which is enough for the rules this surface writes).
+ *
+ * Catalogue entry 10, "present is not visible": the reduced-motion strike used to be guarded
+ * only by the script ADDING its class; deleting the rule, or an outline of 0, left every test
+ * green while a struck side showed no mark at all.
+ */
+function visibleStaticMark(body: string): boolean {
+  if (moves(body)) return false;
+  const decls = declarations(body);
+  let style: string | undefined;
+  let width: number | undefined;
+  let transparent = false;
+  const outline = decls.filter((d) => d.prop === 'outline').at(-1);
+  if (outline) {
+    for (const token of resolveTokens(outline.value).split(/\s+/)) {
+      if (DRAWN_STYLES.has(token) || token === 'none' || token === 'hidden') style = token;
+      else if (token === 'transparent') transparent = true;
+      else {
+        const px = widthPx(token);
+        if (px !== null) width = px;
+      }
+    }
+  }
+  const longStyle = decls.filter((d) => d.prop === 'outline-style').at(-1);
+  if (longStyle) style = resolveTokens(longStyle.value).trim();
+  const longWidth = decls.filter((d) => d.prop === 'outline-width').at(-1);
+  if (longWidth) width = widthPx(resolveTokens(longWidth.value).trim()) ?? width;
+  const longColour = decls.filter((d) => d.prop === 'outline-color').at(-1);
+  if (longColour) transparent = resolveTokens(longColour.value).trim() === 'transparent';
+  const drawsOutline = style !== undefined && DRAWN_STYLES.has(style) && (width ?? 3) > 0 && !transparent;
+  const background = decls.filter((d) => d.prop === 'background' || d.prop === 'background-color').at(-1);
+  const paints = background !== undefined && !/^(none|transparent|initial|unset|inherit)$/.test(resolveTokens(background.value).trim());
+  return drawsOutline || paints;
 }
 
 /**
@@ -320,9 +446,92 @@ describe('reduced motion has somewhere to bite, and bites there', () => {
     expect((ALL_CSS.match(/@keyframes\s+void-/g) ?? []).length, 'no atmosphere animates')
       .toBeGreaterThan(2);
     // PLAN.md #6: and the battle frame's three really move, or stopping them proves nothing.
-    expect(ALL_CSS, 'the enemy never flashes').toMatch(/\.arena-figure\.is-struck\s*\{[^}]*animation\s*:/);
-    expect(ALL_CSS, 'the stat box never shakes').toMatch(/\.vitals-inner\.is-shaking\s*\{[^}]*animation\s*:/);
-    expect(ALL_CSS, 'the damage number never rises').toMatch(/\.arena-float\s*\{[^}]*animation\s*:/);
+    // Judged by `animatesWith` — the rule styling the thing ITSELF names real keyframes that
+    // change something. (The float's first check was a regex that the reduced-motion rule's
+    // own `.arena-float { animation: none }` satisfied: deleting the rise left it green.)
+    expect(animatesWith(ALL_CSS, '.arena-figure.is-struck', 'filter'), 'the enemy never flashes').toBe(true);
+    expect(animatesWith(ALL_CSS, '.vitals-inner.is-shaking', 'transform'), 'the stat box never shakes').toBe(true);
+    expect(animatesWith(ALL_CSS, '.arena-float', 'transform'), 'the damage number never rises').toBe(true);
+  });
+
+  it('the motion detector needs the rule styling the thing itself, naming keyframes that move', () => {
+    const FRAMES = '@keyframes rise { from { transform: translateY(0); } to { transform: translateY(-9px); } }';
+    const STILL = '@keyframes rise { from { transform: translateY(0); } to { transform: translateY(0); } }';
+    expect(animatesWith(`.f { animation: rise 1s ease-out; } ${FRAMES}`, '.f', 'transform'), 'the real shape').toBe(true);
+    expect(animatesWith(`.f { animation-name: rise; } ${FRAMES}`, '.f', 'transform'), 'the longhand').toBe(true);
+    expect(animatesWith(`.g, .f { animation: rise 1s; } ${FRAMES}`, '.f', 'transform'), 'a selector list').toBe(true);
+    // THE SHAPE THAT BLINDED THE OLD CHECK: only the reduced-motion rule mentions the float.
+    expect(animatesWith(`[data-motion='reduce'] .f { animation: none; } ${FRAMES}`, '.f', 'transform'), 'an override stood in').toBe(false);
+    expect(animatesWith(`.f { animation: none; } ${FRAMES}`, '.f', 'transform'), '`none` counted as motion').toBe(false);
+    expect(animatesWith('.f { animation: rise 1s; }', '.f', 'transform'), 'keyframes that do not exist').toBe(false);
+    expect(animatesWith(`.f { animation: rise 1s; } ${STILL}`, '.f', 'transform'), 'keyframes that hold still').toBe(false);
+    expect(animatesWith(`.f { animation: rise 1s; } ${FRAMES}`, '.f', 'filter'), 'keyframes moving the wrong thing').toBe(false);
+    expect(animatesWith(`.host .f { animation: rise 1s; } ${FRAMES}`, '.f', 'transform'), 'a different selector').toBe(false);
+  });
+
+  it('the floating number is taken OUT of the flow, over a host that anchors it', () => {
+    // Without `position: absolute` every float drops into normal flow and shifts the frame on
+    // every beat; without a positioned host it anchors to whatever ancestor is positioned —
+    // the page. The two hosts are where `playRound` puts floats: `arenaEls` resolves them as
+    // `.arena-figure` (the enemy) and `.vitals-inner` (the player), and `battle.test.ts`
+    // proves the floats are appended to exactly those.
+    expect(declares(ALL_CSS, '.arena-float', 'position', /^absolute$/), 'the float sits in normal flow').toBe(true);
+    for (const host of ['.arena-figure', '.vitals-inner']) {
+      expect(declares(ALL_CSS, host, 'position', /^(relative|absolute|fixed|sticky)$/), `${host} anchors no float`).toBe(true);
+    }
+    // The detector: only the rule styling the float itself counts, and only that value.
+    expect(declares('.arena-float { position: absolute; }', '.arena-float', 'position', /^absolute$/)).toBe(true);
+    expect(declares('.arena-float { position: static; }', '.arena-float', 'position', /^absolute$/)).toBe(false);
+    expect(declares("[data-motion='reduce'] .arena-float { position: absolute; }", '.arena-float', 'position', /^absolute$/)).toBe(false);
+  });
+
+  it('the reduced-motion mark detector needs a mark a player can SEE, that does not move', () => {
+    expect(visibleStaticMark('outline: var(--void-rule-heavy) solid var(--void-harm); outline-offset: var(--void-space-1);'), 'the real shape').toBe(true);
+    expect(visibleStaticMark('background: var(--void-harm);'), 'a background tint').toBe(true);
+    expect(visibleStaticMark('outline-style: solid;'), 'a drawn style at the default width').toBe(true);
+    expect(visibleStaticMark('outline: 2px solid var(--void-harm); animation: none;'), '`animation: none` is not motion').toBe(true);
+    for (const [body, why] of [
+      ['outline: 0;', 'an outline of 0'],
+      ['outline: none;', 'no outline'],
+      ['outline: 0 solid var(--void-harm);', 'a drawn style at width 0'],
+      ['outline: 0px solid var(--void-harm);', 'a drawn style at 0px'],
+      ['outline: var(--void-rule-heavy) none var(--void-harm);', 'style none'],
+      ['outline: 2px solid transparent;', 'a transparent outline'],
+      ['outline-style: solid; outline-width: 0;', 'the longhands at width 0'],
+      ['background: transparent;', 'a transparent background'],
+      ['outline: 2px solid var(--void-harm); animation: arena-shake 240ms linear;', 'a mark that moves'],
+      ['outline: 2px solid var(--void-harm); transform: translateX(4px);', 'a mark that is moved'],
+      ['color: var(--void-harm);', 'a colour change is not a mark on the frame'],
+      ['', 'an empty rule'],
+    ] as const) {
+      expect(visibleStaticMark(body), why).toBe(false);
+    }
+  });
+
+  it('under reduced motion a strike still leaves a VISIBLE mark on both sides, and nothing moves', () => {
+    // The script adds ONLY `is-tinted` under reduced motion (`battle.ts`'s `strikeClass`), so
+    // this rule is the whole of what a struck side shows. The class being added proves nothing
+    // if the rule behind it paints nothing.
+    for (const target of ['.arena-figure.is-tinted', '.vitals-inner.is-tinted']) {
+      const found = rulesFor(ALL_CSS, target);
+      expect(found.length, `nothing styles ${target} — a struck side shows no mark at all`).toBeGreaterThan(0);
+      expect(found.some((r) => visibleStaticMark(r.body)), `${target} paints no visible mark`).toBe(true);
+      expect(found.some((r) => moves(r.body)), `${target} moves — the reduced-motion mark must be still`).toBe(false);
+    }
+    // ...and the CSS half, for a strike flagged before the script knew motion was off: in the
+    // OS block AND under the player's own setting, the flash and the shake become the same
+    // still mark.
+    for (const [css, attr, where] of [
+      [mediaBlock(), "data-motion='full'", 'the OS reduced-motion block'],
+      [ALL_CSS, "[data-motion='reduce']", "the player's reduced-motion setting"],
+    ] as const) {
+      for (const target of ['.arena-figure.is-struck', '.vitals-inner.is-shaking']) {
+        expect(
+          selectorsCarrying(css, attr).some((r) => r.selector.endsWith(target) && visibleStaticMark(r.body)),
+          `${where}: a ${target} strike shows no still mark`,
+        ).toBe(true);
+      }
+    }
   });
 
   it('the detector needs the target NAMED by the rule that carries the attribute', () => {
