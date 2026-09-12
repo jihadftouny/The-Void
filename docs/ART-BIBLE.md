@@ -293,6 +293,16 @@ floor's worst-case surface is identical at every frame and the contrast gate can
 mid-animation. `ART-BIBLE` rule 4 still governs: floor 2's register is mirrors, doubles and signal
 — **degradation is a texture, never a diagnosis.**
 
+> ### ⚠ REVISED 2026-09-12 — the author played it, and floors 2 and 3 did not look like the direction
+>
+> **The author's verdict in play:** *"floor 3 and 2 are only lines in the background, no gradient colors or anything."* Correct. Floors 1 and 4 use **soft radial gradients** (drifting fog, a light from above); floors 2 and 3 were built from **thin repeating 1 px lines only** — a grid and a crosshatch — at 7%, the weakest of any floor, on near-black. They read as a faint grid, not a place. **The contrast gates passed; they measure readability, not whether a floor looks like what was asked for.** Only a person could catch this.
+>
+> **Floor 2 — becomes a genuinely LIGHT floor** *(the author's choice, over keeping it dark with a visible white wash)*. The shipped reading above traded *"blinding white"* away to keep the scarlet readable, and hid the white in 7% lines that do not read as white at all. **Now: a white ground, dark ink, and a deeper red that clears the gates on white.** It becomes **the only light floor in the game** — stepping into the Entrance to the Void is a white-out after the dark Undercity, which is the fracture made visible. *Red flecks* belong in its texture. Every panel, button, chip, float and frame must work on a light ground, and every gate is re-derived for it. **High contrast still forces white-on-black on every floor, floor 2 included** — the setting's promise is that it defeats the atmosphere. ⚠ **The re-theme into floor 2 must fade, not snap:** today the interface re-colours instantly, and an instant black-to-white jolt is harsh for light-sensitive players — the very thing *blinding* names. *(Added by the orchestrator when recording the decision; the author's choice did not address the transition.)*
+>
+> **Floor 3 — a grey haze with drifting ash specks** *(the author's choice, over a haze alone)*. Greyscale only, as first asked: *"purely white gray and black, the fire has settled already and it's just ash."* A soft colourless haze, like floor 1's fog, with fine specks slowly falling through it. **Grey has large contrast headroom (the accent measured 8.29:1), so floor 3 was never constrained — its crosshatch was simply a weak choice.**
+>
+> **Why nothing automated caught it:** every guard here proves a colour is *readable*. None can prove a floor *looks like its direction* — that was always the author's check (`HUMAN-CHECKS.md`, *"accept or reject the look"*), and this is it doing its job.
+
 ### The three reserved art regions — the RATIO is the commitment **[LOCKED 2026-09-08, #8]**
 
 The author asked for *"placeholders for where scenery and enemy images and character image would
