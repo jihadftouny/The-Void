@@ -32,6 +32,8 @@ import { battleMenuRows, stageView, vitalsView, type BattleMenuMode } from '../d
 import { buildArena, buildBattleMenu, buildVitals } from '../desktop/battle.ts';
 import { saveRun } from '../desktop/persist.ts';
 import type { LogEntry } from '../log/logger.ts';
+import { saveSettings } from '../storage/settingsStorage.ts';
+import { DEFAULT_SETTINGS } from '../render/settings-model.ts';
 import {
   choiceButtons,
   click,
@@ -293,6 +295,33 @@ describe('floor 2’s illusions are not revealed by the stage (AC-26)', () => {
     expect(seen.lines.slice(0, beats.length)).toEqual(beats.map((b) => b.line));
     expect(seen.lines.at(beats.length - 1)).toBe(formatEvent(dispel));
     expect(roundLine(entries)!.hooks.at(-1)).toBe('dispel');
+  });
+});
+
+// `floor-looks` (2026-09-12): floor 2 is the one LIGHT floor. Resumed in the real renderer, the
+// root must say so to the stylesheet (`data-ground`), carry the white ground, and log the change
+// of floor exactly once. The boot paints floor 1 first (a fresh state), so the resume IS a
+// change of floor — from place 0 to place 1 — which is what the one line must report. Every
+// expected value is the plan's: the white #f4f5f9, the dissolve's 1200 ms.
+describe('floor 2 is painted light by the real renderer, and the change of floor is logged once', () => {
+  const painted = (entries: LogEntry[]): { level: string; data: unknown }[] =>
+    entries.filter((e) => e.category === 'ui' && e.message === 'floor painted').map((e) => ({ level: e.level, data: e.data }));
+
+  it('resumed on floor 2: data-ground is light, the ground is the white, and one line says 0 -> 1', async () => {
+    const entries = await resume(bundleOf('act2-illusion'));
+    const root = document.documentElement;
+    expect(root.dataset['ground'], 'the stylesheet is not told floor 2 is light').toBe('light');
+    expect(root.style.getPropertyValue('--void-bg')).toBe('#f4f5f9');
+    expect(painted(entries)).toEqual([{ level: 'info', data: { from: 0, to: 1, ground: 'light', fadeMs: 1200 } }]);
+  });
+
+  it('under HIGH CONTRAST the same resume paints floor 2 black, and the line says dark', async () => {
+    saveSettings({ ...DEFAULT_SETTINGS, contrast: 'high' });
+    const entries = await resume(bundleOf('act2-illusion'));
+    const root = document.documentElement;
+    expect(root.dataset['ground'], 'high contrast left floor 2 declared light').toBe('dark');
+    expect(root.style.getPropertyValue('--void-bg'), 'the white ground survived high contrast').toBe('#000000');
+    expect(painted(entries)).toEqual([{ level: 'info', data: { from: 0, to: 1, ground: 'dark', fadeMs: 1200 } }]);
   });
 });
 
