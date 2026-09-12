@@ -157,6 +157,8 @@ describe('every CSS hook is an attribute the appliers really write', () => {
     expect(names, 'no stylesheet selects on a texture').toContain('data-texture');
     expect(names, 'no stylesheet selects on the motion setting').toContain('data-motion');
     expect(names, 'no stylesheet selects on the contrast setting').toContain('data-contrast');
+    // `floor-looks` (2026-09-12): and the light floor's one inverted effect, the strike flash.
+    expect(names, 'no stylesheet selects on the ground').toContain('data-ground');
   });
 
   it('FORWARD: every `[data-x=v]` a stylesheet uses can be produced by an applier', () => {
@@ -313,6 +315,55 @@ describe('applySettings writes the player’s preferences as CSS can see them', 
     expect(root.style.getPropertyValue('--void-texture-opacity')).toBe(
       String(floorTheme(1).texture.opacity),
     );
+  });
+});
+
+// =========================================================================================
+// `data-ground` (`floor-looks`, 2026-09-12) — the ground as PAINTED. Floor 2 is the one light
+// floor; high contrast paints it black like every other. The expected values are written by
+// hand from the design (floor 2 light, the rest dark), not read from `floorTheme`.
+// =========================================================================================
+
+describe('data-ground says which ground is really painted', () => {
+  /** The one light floor, by the plan: place 1, ART-BIBLE floor 2, the Entrance to the Void. */
+  const LIGHT = 1;
+
+  it('the theme writes light on floor 2 and dark on the other four', () => {
+    for (let place = 0; place < FLOOR_THEMES.length; place += 1) {
+      applyTheme(root, place);
+      expect(root.getAttribute('data-ground'), `place ${place}`).toBe(place === LIGHT ? 'light' : 'dark');
+    }
+  });
+
+  it('floor 2 in normal contrast stays LIGHT through the settings write', () => {
+    applyTheme(root, LIGHT);
+    applySettings(root, settings({ contrast: 'normal' }), LIGHT);
+    expect(root.getAttribute('data-ground')).toBe('light');
+  });
+
+  it('floor 2 under HIGH CONTRAST is painted DARK — the white does not survive the setting', () => {
+    applyTheme(root, LIGHT);
+    applySettings(root, settings({ contrast: 'high' }), LIGHT);
+    expect(root.getAttribute('data-ground'), 'high contrast left floor 2 declared light').toBe('dark');
+    expect(root.style.getPropertyValue('--void-bg'), 'high contrast left the white ground').toBe('#000000');
+  });
+
+  it('and turning high contrast back off writes LIGHT again — reversible, like the tokens', () => {
+    applyTheme(root, LIGHT);
+    applySettings(root, settings({ contrast: 'high' }), LIGHT);
+    applySettings(root, settings({ contrast: 'normal' }), LIGHT);
+    expect(root.getAttribute('data-ground')).toBe('light');
+    expect(root.style.getPropertyValue('--void-bg')).toBe(floorTheme(LIGHT).bg);
+  });
+
+  it('high contrast paints EVERY floor dark, in every motion and text setting', () => {
+    for (let place = 0; place < FLOOR_THEMES.length; place += 1) {
+      for (const motion of ['system', 'reduce', 'full'] as MotionSetting[]) {
+        applyTheme(root, place);
+        applySettings(root, settings({ contrast: 'high', motion }), place);
+        expect(root.getAttribute('data-ground'), `place ${place}/${motion}`).toBe('dark');
+      }
+    }
   });
 });
 

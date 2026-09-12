@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FLOOR_THEMES, TYPE, themeVars } from './tokens.ts';
+import { FADED_VARS, FLOOR_THEMES, RETHEME_FADE_MS, TYPE, themeVars } from './tokens.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = join(HERE, '..');
@@ -851,6 +851,220 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
     expect(seam(textureLoop(css('41px 53px, 20% 10%'), '.t'), true), 'a diagonal is not straight down').not.toBeNull();
     expect(seam(textureLoop(css('41px 53px, 20% 10%'), '.t'), false), 'a whole-tile diagonal is seamless').toBeNull();
     expect(seam(textureLoop('.t { background-size: 41px 53px; }', '.t'), true), 'no animation at all').not.toBeNull();
+  });
+});
+
+// =========================================================================================
+// `floor-looks` (2026-09-12) — THE RE-THEME DISSOLVE, coupled at both ends (AC-11), KEPT under
+// reduced motion (AC-10), and the light ground's inverted strike flash (AC-14).
+//
+// The dissolve itself — that the ground really passes through the in-between colours in the
+// built page — is measured in real Chromium by `src/dev/layoutProbe.test.ts`. What a source
+// scan holds here is the STRUCTURE it depends on: every colour token registered and transitioned,
+// the list and tokens.ts agreeing name for name, and no reduced-motion rule reaching the root.
+// =========================================================================================
+
+/** Every `@property --name { … }` registration in a stylesheet, name -> body. */
+function registrations(css: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const m of css.matchAll(/@property\s+(--[-\w]+)\s*\{([^{}]*)\}/g)) out.set(m[1] as string, m[2] as string);
+  return out;
+}
+
+/** The `:root { transition: … }` list, as `{ name, duration }` per comma-separated entry. */
+function rootTransitions(css: string): { name: string; duration: string; rest: string }[] {
+  const out: { name: string; duration: string; rest: string }[] = [];
+  for (const rule of rulesFor(css, ':root')) {
+    for (const d of declarations(rule.body).filter((x) => x.prop === 'transition')) {
+      for (const entry of splitTop(d.value)) {
+        const [name = '', duration = '', ...rest] = entry.split(/\s+(?![^(]*\))/);
+        out.push({ name, duration, rest: rest.join(' ') });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * True when a selector's SUBJECT can be the root element itself: a single compound (no
+ * descendant or child part) carrying no class, no id and no type other than `html`. In this
+ * codebase every `[data-*]` hook but the screen/layout pair lives ON the root, so a bare
+ * `[data-motion='reduce']` targets `<html>` — which is exactly the shape that would switch the
+ * dissolve off for the players who asked for less motion.
+ */
+function targetsRoot(selector: string): boolean {
+  // Collapse bracketed and parenthesised text so their spaces and dots cannot read as structure.
+  let flat = selector.trim();
+  for (let prev = ''; prev !== flat; ) {
+    prev = flat;
+    flat = flat.replace(/\[[^[\]]*\]/g, '[]').replace(/\([^()]*\)/g, '()');
+  }
+  if (/\s|[>+~]/.test(flat)) return false; // more than one compound: the subject is a descendant
+  if (/[.#]/.test(flat) || /::/.test(flat)) return false;
+  const type = /^[a-zA-Z][\w-]*/.exec(flat)?.[0];
+  return type === undefined || type.toLowerCase() === 'html';
+}
+
+/** Does a rule body declare anything that would change the root's transition? */
+function touchesTransition(body: string): boolean {
+  return declarations(body).some((d) => d.prop.startsWith('transition'));
+}
+
+/** The body of the first `@media (prefers-reduced-motion: reduce)` block in a stylesheet. */
+function reducedMotionBlock(css: string): string {
+  const start = css.search(/@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)/);
+  if (start < 0) return '';
+  const open = css.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return css.slice(open + 1, i);
+    }
+  }
+  return '';
+}
+
+/** Every selector — in either reduced-motion context — whose rule would reach the root's transition. */
+function reducedMotionRootTransitions(css: string): string[] {
+  const offenders: string[] = [];
+  const contexts = [
+    { name: "[data-motion='reduce']", selectors: selectorsCarrying(css, "[data-motion='reduce']") },
+    {
+      name: 'prefers-reduced-motion',
+      selectors: rules(reducedMotionBlock(css)).flatMap((r) =>
+        r.selector.split(',').map((s) => ({ selector: s.trim(), body: r.body })),
+      ),
+    },
+  ];
+  for (const { name, selectors } of contexts) {
+    for (const { selector, body } of selectors) {
+      if (targetsRoot(selector) && touchesTransition(body)) offenders.push(`${name}: ${selector}`);
+    }
+  }
+  return offenders;
+}
+
+describe('the re-theme dissolve is coupled to tokens.ts at both ends (AC-11)', () => {
+  const TOKENS_CSS = SHEETS.find((s) => s.name === 'tokens.css');
+
+  it('THE CONTROL: the root really transitions, and every entry lasts --void-fade-retheme', () => {
+    const list = rootTransitions(ALL_CSS);
+    expect(list.length, 'nothing transitions on :root — the floor change snaps').toBeGreaterThan(0);
+    for (const t of list) {
+      expect(t.duration, `${t.name} does not last the token's duration`).toBe('var(--void-fade-retheme)');
+      expect(t.rest, `${t.name}: an easing other than the dissolve's`).toBe('ease-in-out');
+    }
+    // ...and that token is written by the theme, from the one number the log line reports.
+    expect(themeVars(0)['--void-fade-retheme']).toBe(`${RETHEME_FADE_MS}ms`);
+  });
+
+  it('FORWARD: every colour token the dissolve is meant to carry is registered AND transitioned', () => {
+    const registered = registrations(ALL_CSS);
+    const transitioned = new Set(rootTransitions(ALL_CSS).map((t) => t.name));
+    expect(FADED_VARS.length, 'FADED_VARS is empty — nothing would fade').toBe(12);
+    for (const name of FADED_VARS) {
+      expect(registered.has(name), `${name} is not registered — it would SNAP while its siblings fade`).toBe(true);
+      expect(transitioned.has(name), `${name} is registered but never transitioned`).toBe(true);
+    }
+  });
+
+  it('BACKWARD: nothing is registered or transitioned that tokens.ts does not list', () => {
+    const listed = new Set(FADED_VARS);
+    expect([...registrations(ALL_CSS).keys()].filter((n) => !listed.has(n)), 'a registration FADED_VARS does not know').toEqual([]);
+    expect(rootTransitions(ALL_CSS).map((t) => t.name).filter((n) => !listed.has(n)), 'a transition FADED_VARS does not know').toEqual([]);
+    // In particular the texture's ink and opacity are NOT faded: the pattern swaps at once.
+    expect(listed.has('--void-texture-ink')).toBe(false);
+    expect(listed.has('--void-texture-opacity')).toBe(false);
+  });
+
+  it('every registration is an inherited <color> starting transparent, and all of them live in tokens.css', () => {
+    for (const [name, body] of registrations(ALL_CSS)) {
+      const decls = Object.fromEntries(declarations(body).map((d) => [d.prop, d.value]));
+      expect(decls['syntax'], `${name}: not a colour — it would not interpolate as one`).toBe("'<color>'");
+      expect(decls['inherits'], `${name}: not inherited — no descendant would see the fade`).toBe('true');
+      expect(decls['initial-value'], `${name}: a starting colour other than the keyword`).toBe('transparent');
+    }
+    expect(TOKENS_CSS, 'tokens.css is not among the scanned sheets').toBeDefined();
+    expect(registrations(TOKENS_CSS!.css).size, 'the registrations moved out of tokens.css').toBe(FADED_VARS.length);
+  });
+
+  it('the readers parse the shapes they are handed (or the couplings above read nothing)', () => {
+    const css =
+      "@property --a { syntax: '<color>'; inherits: true; initial-value: transparent; }\n" +
+      ':root {\n  transition:\n    --a var(--void-fade-retheme) ease-in-out,\n    --b 2s linear;\n}';
+    expect([...registrations(css).keys()]).toEqual(['--a']);
+    expect(rootTransitions(css)).toEqual([
+      { name: '--a', duration: 'var(--void-fade-retheme)', rest: 'ease-in-out' },
+      { name: '--b', duration: '2s', rest: 'linear' },
+    ]);
+  });
+});
+
+describe('reduced motion does NOT stop the re-theme dissolve — it moves nothing, and it removes the white-out (AC-10)', () => {
+  it('no reduced-motion rule, in either context, reaches the root’s transition', () => {
+    expect(
+      reducedMotionRootTransitions(ALL_CSS),
+      'a reduced-motion rule switches the dissolve off — the players who asked for less motion ' +
+        'would get the one-frame jump from near-black to white instead',
+    ).toEqual([]);
+  });
+
+  it('...while the texture’s own drift, which IS motion, still stops (the control)', () => {
+    expect(stopsMotion(ALL_CSS, "[data-motion='reduce']", '.void-texture')).toBe(true);
+    expect(stopsMotion(reducedMotionBlock(ALL_CSS), "data-motion='full'", '.void-texture')).toBe(true);
+  });
+
+  it('the detector catches the root in every spelling the reduced-motion rules could take', () => {
+    const REDUCE_LIST =
+      "[data-motion='reduce'] .void-texture,\n[data-motion='reduce'] .void-button";
+    for (const [css, why] of [
+      ["[data-motion='reduce'] { transition: none; }", 'the bare hook — it lives on <html>'],
+      [":root[data-motion='reduce'] { transition: none; }", ':root with the hook'],
+      ["html[data-motion='reduce'] { transition-duration: 0s; }", 'html, and a longhand'],
+      [`${REDUCE_LIST},\n[data-motion='reduce'] {\n  animation: none;\n  transition: none;\n}`, 'appended to the existing list'],
+      ["@media (prefers-reduced-motion: reduce) {\n  :root:not([data-motion='full']) { transition: none; }\n}", 'the OS block'],
+      ["[data-motion='reduce'] { transition: opacity 90ms; }", 'a transition that replaces the list'],
+    ] as const) {
+      expect(reducedMotionRootTransitions(css), why).not.toEqual([]);
+    }
+    for (const [css, why] of [
+      [`${REDUCE_LIST} {\n  animation: none;\n  transition: none;\n}`, 'the real element rules'],
+      ["@media (prefers-reduced-motion: reduce) {\n  :root:not([data-motion='full']) .void-texture { transition: none; }\n}", 'an element in the OS block'],
+      ["[data-motion='reduce'] { color: red; }", 'the root, but no transition'],
+      [":root { transition: none; }", 'not a reduced-motion rule at all'],
+    ] as const) {
+      expect(reducedMotionRootTransitions(css), why).toEqual([]);
+    }
+  });
+});
+
+describe('the strike flash inverts on the light ground (AC-14)', () => {
+  const LIGHT = "[data-ground='light'] .arena-figure.is-struck";
+  /** The `brightness()` a flash's keyframes open on, or null. */
+  const openingBrightness = (selector: string): number | null => {
+    const rule = rulesFor(ALL_CSS, selector).find((r) =>
+      declarations(r.body).some((d) => d.prop === 'animation' || d.prop === 'animation-name'),
+    );
+    const decl = rule && declarations(rule.body).find((d) => d.prop === 'animation' || d.prop === 'animation-name');
+    const frames = keyframes(ALL_CSS);
+    const name = decl?.value.split(/[\s,]+/).find((t) => frames.has(t));
+    const from = name ? /(?:^|\})\s*(?:from|0%)\s*\{([^}]*)\}/.exec(frames.get(name) as string)?.[1] : undefined;
+    const m = from ? /brightness\(\s*([\d.]+)\s*\)/.exec(from) : null;
+    return m ? Number(m[1]) : null;
+  };
+
+  it('on a light ground a struck enemy DARKENS — brightening a white frame shows nothing', () => {
+    expect(animatesWith(ALL_CSS, LIGHT, 'filter'), 'the light-ground flash does not move').toBe(true);
+    const opening = openingBrightness(LIGHT);
+    expect(opening, 'the light-ground flash names no brightness').not.toBeNull();
+    expect(opening!, 'the light-ground flash brightens a white frame').toBeLessThan(1);
+  });
+
+  it('and the dark-ground flash is unchanged: it still BRIGHTENS', () => {
+    const opening = openingBrightness('.arena-figure.is-struck');
+    expect(opening).toBe(2.2);
   });
 });
 

@@ -24,6 +24,12 @@
  *   2. NOTHING ANIMATES OPACITY OR COLOUR. The motion below moves `background-position` only,
  *      so a floor's worst-case surface is the same at every frame of the animation. An
  *      opacity keyframe would make the measured ratio true only at one instant.
+ *      ONE BOUNDED EXCEPTION (`floor-looks`, 2026-09-12): the RE-THEME DISSOLVE in tokens.css,
+ *      which transitions the colour tokens for 1200 ms when the floor changes. It protects
+ *      something this rule never could — a one-frame jump from near-black to floor 2's white —
+ *      and it is a transition between two gated palettes, not a keyframe in a steady state:
+ *      at rest every floor is exactly the palette the gate measured. The keyframe guard in
+ *      `styleDiscipline.test.ts` (no `@keyframes void-*` touches opacity or colour) still holds.
  *
  * HIGH CONTRAST REMOVES THIS ENTIRELY — `settingsVars` forces the opacity token to 0, and the
  * rule at the bottom hides the layer outright. Both, deliberately: one is the value the gate
@@ -214,9 +220,31 @@
  * `styleDiscipline.test.ts` asserts no stylesheet mentions it. */
 
 /* ---------------------------------------------------------------------------------------
+ * THE STRIKE FLASH ON THE LIGHT GROUND (`floor-looks`, 2026-09-12). `battle.css` flashes a struck
+ * enemy by BRIGHTENING its frame (`brightness(2.2)`), which on floor 2's near-white frame clips
+ * straight to white and shows nothing. On a light ground the same 240 ms beat, with the same
+ * easing, DARKENS instead. It lives here, with the floor and motion policy for the battle
+ * effects, so `battle.css` keeps describing the pieces rather than the floors. `data-ground` is
+ * the ground as PAINTED: high contrast writes `dark` on every floor, so it keeps the bright flash.
+ * Placed BEFORE the reduced-motion rules below, so the OS block's `animation: none` (same
+ * specificity, later) still wins for a strike flagged before the script knew motion was off.
+ * --------------------------------------------------------------------------------------- */
+
+[data-ground='light'] .arena-figure.is-struck {
+  animation-name: arena-flash-light;
+}
+@keyframes arena-flash-light {
+  from { filter: brightness(0.45); }
+  to { filter: brightness(1); }
+}
+
+/* ---------------------------------------------------------------------------------------
  * S4b — MOTION. The OS is honoured by default; the player can override it in EITHER
  * direction, because a player whose OS setting is wrong for them needs a way to say so.
  * `settings-model.ts`'s `motionEnabled` is the same rule for the script side.
+ *
+ * ⚠ NOTHING HERE TOUCHES `:root`'s TRANSITION. The re-theme dissolve (tokens.css) is KEPT under
+ * reduced motion: it moves nothing, and it is the thing that removes floor 2's white-out.
  * --------------------------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
