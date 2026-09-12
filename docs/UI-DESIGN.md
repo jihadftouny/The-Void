@@ -59,6 +59,14 @@ duration, skill charges, and the class build-resource.
 cheaper and both read fine, but neither gives the enemy visual presence, and enemy presence is the
 whole point of putting a creature on screen.
 
+**BUILT 2026-09-12 (`battle-screen`, `PLAN.md` #6)** as the layout's third mode, `stage` — the
+measurements, floors and exceptions are in §17 ("The third mode"). Three differences from the frame
+above, each deliberate: the prose stays on screen beneath the arena (§2 — the Void speaks while the
+round plays); the enemy shows its name, HP and conditions but **no family caption** (the family names
+are #13's to write, and an unreviewed name on the stage is the naming defect again); and the tempo row
+and **Talk** are reserved seams that render nothing until the engine has a tempo (#1.6) and bosses can
+talk (#11).
+
 ## 2. Narration placement and cadence **[DECIDED]**
 
 **Bookends only — fast rounds.** The narrator speaks at battle start, on dramatic beats (a heavy
@@ -612,7 +620,7 @@ metrics have had their say. Both kinds of guard were thorough. Both were blind.
 ### The model
 
 - **Two modes, and a mode is six CSS custom properties**, so the rules that read them are written
-  once. `screenLayout(key)` in `src/render/settings-model.ts` is the pure, exhaustively-tested
+  once. (A third, `stage`, joined on 2026-09-12 for the live fight — "The third mode" below.) `screenLayout(key)` in `src/render/settings-model.ts` is the pure, exhaustively-tested
   mapping; the renderer writes it to `<body data-layout>` through one branchless funnel.
   - **`side`** (default) — reading column + a **260 px** choice column beside it. 260 px is the
     longest fixed label the game ships (`Neuromancer - mind and static`) plus the button's padding.
@@ -670,3 +678,68 @@ reading measure that is already 45 characters; shrinking the large step is the r
 text-size setting exists to prevent. So the draft takes the standard the open Cast list already
 set — first control visible, box inside the window, scrollable — and a separate assertion pins that
 the **default** text size must still fit outright.
+
+### The third mode: `stage` — the framed battle **[BUILT 2026-09-12 — `battle-screen`, `PLAN.md` #6]**
+
+The live fight (`battle-action`) is its own mode, `screenLayout('battle-action') === 'stage'`,
+written through the same branchless funnel. It is §1's frame: the **stat box** bottom-left in a
+220 px column, the **arena** in the centre (the enemy's 3:4 region, its name, its HP bar, its
+conditions, and the one-line **ticker** with the `Record` toggle), the **prose** beneath the arena,
+and the **menu** in the right-hand column, **bottom-anchored** so the free space above it is where
+#11's Talk row and its input land. The HUD column (`#sheet`) is hidden while the fight runs — the
+stat box *is* the HUD in a fight.
+
+**Measured, before and after** (the layout probe, real Chromium, the production build):
+
+| At 960x640 | Before #6 | After #6 |
+|---|---|---|
+| layout mode | `side` | `stage` |
+| the menu | 683-788 px of content in a 555-558 px column (the Cast list opened *inline*) | the command list (five rows at worst), and the Cast list's seven (Back and six skills), fit outright at both text sizes |
+| the enemy's region | in `#sheet`, beside the HUD | in `#arena`, centred, 153.6 x 204.8 px (3:4, capped at 32vh) |
+| the prose | — | 171.5 px (default text) / 146.7 px (large), floors 102 / 122 |
+| the page | — | 640 of 640: nothing scrolls |
+
+**The floors, and why they differ from the other two modes.**
+- **Prose: four lines, not eight** (`--void-prose-floor: 4lh` in the stage block). At 640 px the
+  arena takes the height eight lines would need, and battle prose is a bookend by design (§2): the
+  round itself is told by the ticker and the frame.
+- **The log is closed behind the ticker** — the ticker is its one visible line — and opens under the
+  prose when the player presses `Record`. Opened, it is **capped at 18vh and floored at two lines**,
+  and scrolls inside its cap.
+
+**Two bounded exceptions**, both judged by the rule the draft already set (first control visible, box
+inside the window, it really scrolls, collapsing restores everything):
+- **The opened log** (`battle-log-open`): the reading column may scroll inside its box. At the
+  minimum with LARGE text there is not room for four lines of prose *and* two of log (the column is
+  155 px; the prose floor, the log's two lines, the gap and the padding need 198), so the log starts
+  below the column's fold and the column scrolls to it. The prose keeps its floor, as the log
+  yields to the prose first.
+- **A full pack's Use-item list** (`battle-items-open-full`): twelve usables plus Back is 13 rows,
+  595 px measured at the default text size, in a 558 px column. Back is the first control and stays
+  visible.
+
+**The narrow fallback (below 900 px) stacks** the arena, the prose, then the stat box and the menu
+side by side, and hides the enemy's region, as the side mode hides the scenery. **The menu yields to
+the prose** there: the bottom row is `fit-content(40vh)`, so a long menu scrolls instead of squeezing
+the prose. (It first shipped content-sized, and an open Cast list at 800x600 squeezed the prose
+column to its padding — 4 px of prose visible — while the narration's own box still measured its
+floor, because the floor is a min-height. The probe now measures the prose the player can SEE: the
+narration's box clipped by the column's.) **One measured limit** there: the reserved tempo gauge
+adds a row to the arena and to the stat box, which does not scroll, and at 800x600 with large text
+that leaves three lines of prose (~98 px), not four. Nothing renders the gauge today; the unit that
+turns it on (#1.6) decides its stacked form. The probe holds it at three.
+
+**Reversals — one thing to move, and its twin in the probe.**
+
+| To change | Move this one thing | And this |
+|---|---|---|
+| The enemy's presence | `max-height: 32vh` on `#arena .void-art-slot` in `battle.css` (a literal, so the relative-cap detector reads its unit) | `ARENA_CAP_VH` in `layoutProbe.test.ts` |
+| The opened log's cap | `--void-log-cap: 18vh` in the stage block of `game.css` | `STAGE_LOG_CAP_VH` |
+| The compact command rows | `padding: var(--void-space-2) var(--void-space-4)` on `.battle-menu .void-button` in `battle.css` | `BATTLE_ROW_PAD_PX` (and the census in AC-16) |
+| The prose floor in a fight | `--void-prose-floor: 4lh` in the stage block | `PROSE_LINES.stage` |
+| The narrow fallback's menu cap | `fit-content(40vh)` in the stacked stage block | `STACKED_THREE_LINES` if the arithmetic moves |
+
+**Still a human's job** (`HUMAN-CHECKS.md`, "The framed battle"): whether a round reads as an
+exchange, whether the flash and the reduced-motion tint are comfortable, whether the empty frame
+reads as a stage rather than a missing picture, the minimum window at large text by eye, the focus
+ring inside the bottom-anchored menu, and how a screen reader speaks the ticker.

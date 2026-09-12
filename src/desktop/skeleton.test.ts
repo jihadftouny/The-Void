@@ -17,7 +17,7 @@
 //   - TAB ORDER. With no `tabindex` anywhere, the keyboard follows document order. So
 //     "`#choices` comes after `#column`" is not a styling preference — it is the guarantee
 //     that a keyboard user reads the prose before reaching the buttons.
-//   - The three-way join between `desktop.html`, `game.ts`'s module-scope `$()` lookups and
+//   - The three-way join between `desktop.html`, `game.ts`'s `$()` lookups in `boot()` and
 //     `game.css`'s selectors. A dropped id is not a degraded layout, it is a game that
 //     throws at boot.
 // ---------------------------------------------------------------------------------------
@@ -68,12 +68,31 @@ describe('the page really parsed (or every assertion below reads an empty docume
 // =========================================================================================
 
 describe('the choices are OUTSIDE the reading column', () => {
-  it('the stage body holds exactly two regions: the column, then the choices', () => {
-    // The defect this unit fixes, expressed structurally. While `#choices` was a child of
-    // `#column`, a six-row hub menu shared the column's height budget with the prose — and
-    // took it, because a scroll pane's automatic minimum size is zero and a non-scrolling
+  it('the stage body holds the frame’s two regions, then the column, then the choices', () => {
+    // The defect `layout-breathing-room` fixed, expressed structurally. While `#choices` was a
+    // child of `#column`, a six-row hub menu shared the column's height budget with the prose —
+    // and took it, because a scroll pane's automatic minimum size is zero and a non-scrolling
     // sibling's is its content.
-    expect(childIds('stage-body')).toEqual(['column', 'choices']);
+    //
+    // PLAN.md #6 adds the battle frame's two regions AHEAD of the column: the arena (the
+    // centre stage, whose ticker toggle is the frame's first focusable) and the stat box.
+    // Off the battle screen both are empty and hidden, so the column and the choices sit
+    // exactly as they did.
+    expect(childIds('stage-body')).toEqual(['arena', 'vitals', 'column', 'choices']);
+  });
+
+  it('the frame’s two regions say nothing, hide nothing, and ship EMPTY', () => {
+    // The stylesheet hides an off-screen region by `display: none` and the renderer fills it
+    // only on the battle screen, so anything shipped inside would show on the wrong screen —
+    // and whitespace would defeat a future `:empty`. Not aria-hidden: the enemy region manages
+    // its own, and a future `<img alt>` inside it must stay announced.
+    for (const id of ['arena', 'vitals']) {
+      const region = byId(id);
+      expect(region.getAttribute('aria-hidden'), `#${id} hides its future content`).toBeNull();
+      expect(region.children.length, `#${id} ships pre-filled`).toBe(0);
+      expect(region.textContent, `#${id} ships text or whitespace`).toBe('');
+      expect(region.closest('#stage-body'), `#${id} is outside the stage body`).not.toBeNull();
+    }
   });
 
   it('`#choices` is not a descendant of `#column`, at any depth', () => {
@@ -157,11 +176,15 @@ describe('every id the renderer and the stylesheet reach for exists', () => {
     'log',
     'choices',
     'sheet',
+    // PLAN.md #6: the battle frame's regions, and the column whose log flag the ticker sets.
+    'arena',
+    'vitals',
+    'column',
   ];
 
-  it('the ids `game.ts` resolves at module scope are all present', () => {
-    // `$()` THROWS on a missing element, and it runs at module scope on the boot path, so a
-    // dropped id is a black window rather than a cosmetic regression.
+  it('the ids `game.ts` resolves in boot() are all present', () => {
+    // `$()` THROWS on a missing element, and `boot()` runs it on the boot path, so a dropped
+    // id is a black window rather than a cosmetic regression.
     for (const id of RENDERER_LOOKUPS) {
       expect(doc.getElementById(id), `#${id} is gone — the renderer throws at boot`).not.toBeNull();
     }

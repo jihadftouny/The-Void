@@ -1,12 +1,16 @@
 // SOURCE GUARDS on the wiring THIS unit added to `src/desktop/game.ts` (PLAN.md #8, AC-12).
 //
-// WHY A SOURCE SCAN. `src/desktop/game.ts` calls the Electron IPC at module scope, so it
-// cannot be imported and every guard on it must read it (FINDINGS.md G51). Everything this
-// unit could lift OUT of it was lifted — `hubMenu`, `screenKey`, `floorTagText`,
-// `settings-model`, and the DOM builders in `screens.ts`, all of which are behaviourally
-// tested elsewhere. What is left here is WIRING: which helper is called, in which branch, in
-// which order. `rendererSource.test.ts` and `instrumentationSource.test.ts` own the wiring
-// that PRECEDED this unit and are not edited; this file owns what this unit added.
+// WHY A SOURCE SCAN. When this was written `src/desktop/game.ts` called the Electron IPC at
+// module scope, so it could not be imported and every guard on it had to read it (FINDINGS.md
+// G51). PLAN.md #6 moved that start-up behind `export function boot()` and `boot.test.ts` now
+// drives the real renderer under jsdom — but these scans are KEPT, re-anchored rather than
+// deleted: a behavioural walk proves what one path does, and a placement scan proves a call
+// cannot be skipped on any path. Everything this unit could lift OUT of it was lifted —
+// `hubMenu`, `screenKey`, `floorTagText`, `settings-model`, and the DOM builders in
+// `screens.ts`, all of which are behaviourally tested elsewhere. What is left here is WIRING:
+// which helper is called, in which branch, in which order. `rendererSource.test.ts` and
+// `instrumentationSource.test.ts` own the wiring that PRECEDED this unit; this file owns what
+// this unit added.
 //
 // ---------------------------------------------------------------------------------------
 // COVERAGE LEDGER — enumerated MECHANICALLY from `git diff main -- src/desktop/game.ts`,
@@ -389,7 +393,12 @@ function installsState(body: string, pattern: RegExp, where: string): number {
 
 describe('retheme() is placed where the floor can change, unconditionally (G57)', () => {
   it('the anchors exist — every guard below reads a real function body', () => {
-    for (const decl of ['function adoptRun(', 'async function dispatch(', 'function start(']) {
+    for (const decl of [
+      'function adoptRun(',
+      'async function dispatch(',
+      'function start(',
+      'export function boot(',
+    ]) {
       const body = bodyOf(decl);
       expect(functionBodyOpen(body), `${decl} has no body this scanner can find`).toBeGreaterThan(0);
     }
@@ -432,20 +441,25 @@ describe('retheme() is placed where the floor can change, unconditionally (G57)'
       .toBeGreaterThan(-1);
   });
 
-  it('at module scope, BEFORE the saved run is loaded — the first frame is painted', () => {
-    // A column-0 statement is at module scope in this file: every function body is indented.
-    const boot = [...SOURCE.matchAll(/^retheme\s*\(\s*\)\s*;/gm)].map((m) => m.index as number);
-    const load = SOURCE.search(/^const saved = loadRun\(\)/m);
-    expect(load, 'the boot block is gone').toBeGreaterThan(-1);
-    const unconditional = boot.filter((at) => {
-      const prev = SOURCE.slice(0, at).replace(/\s+$/, '');
-      const c = prev[prev.length - 1];
-      return c === ';' || c === '}' || prev.length === 0;
-    });
-    expect(unconditional.length, 'the boot-time retheme() is gone, or now follows a condition')
-      .toBeGreaterThan(0);
-    expect(Math.min(...unconditional), 'the boot-time retheme() runs after the save is loaded')
-      .toBeLessThan(load);
+  it('inside boot() — after the fresh state exists, BEFORE the saved run is loaded', () => {
+    // RE-ANCHORED by PLAN.md #6 (G51). This used to find a COLUMN-0 `retheme();` at module
+    // scope and compare it with a column-0 `const saved = loadRun()` — brittle by construction,
+    // and gone the moment the start-up moved into `boot()`. The same three facts, now judged
+    // with the same placement scanner the other sites use:
+    //   - the call is an UNCONDITIONAL statement of `boot()`'s body (not in a branch, a loop, a
+    //     callback, or after an early return);
+    //   - it comes AFTER `state = createGame(`, because `retheme()` reads `state.place` and a
+    //     call above it would read a state that does not exist yet (F1's lesson);
+    //   - and it comes BEFORE the saved run is loaded, so the first frame is painted before a
+    //     resume re-tints it to the saved floor.
+    const body = bodyOf('export function boot(');
+    const installed = installsState(body, /\bstate\s*=\s*createGame\s*\(/, 'boot');
+    const load = body.search(/\bconst saved\s*=\s*loadRun\s*\(\s*\)/);
+    expect(load, 'boot() no longer loads a saved run — this guard has gone stale').toBeGreaterThan(-1);
+    const { at, why } = unconditionalRetheme(body, [], installed);
+    expect(at, `boot() no longer paints the first frame unconditionally: ${why.join('; ')}`)
+      .toBeGreaterThan(-1);
+    expect(at, 'the first-frame retheme() runs after the save is loaded').toBeLessThan(load);
   });
 });
 
@@ -636,10 +650,16 @@ describe('the boot path loads the player’s preferences before the first paint'
   it('loadSettings is called, and its result is what retheme reads', () => {
     expect(SOURCE, 'the settings are never loaded').toMatch(/settings[^=]*=\s*loadSettings\s*\(\s*\)/);
     // ...and the first `retheme()` comes after that, or the first frame ignores them.
-    const load = SOURCE.search(/=\s*loadSettings\s*\(\s*\)/);
-    const firstRetheme = SOURCE.search(/^retheme\s*\(\s*\);/m);
+    // RE-ANCHORED by PLAN.md #6 (G51): both now live in `boot()`'s body, so both are searched
+    // THERE — a column-0 `retheme();` no longer exists to find.
+    const body = bodyOf('export function boot(');
+    const load = body.search(/\bsettings\s*=\s*loadSettings\s*\(\s*\)/);
+    const firstRetheme = body.search(/\bretheme\s*\(\s*\)/);
+    expect(load, 'boot() no longer loads the preferences').toBeGreaterThan(-1);
     expect(firstRetheme, 'the boot-time retheme is gone').toBeGreaterThan(-1);
-    expect(load).toBeLessThan(firstRetheme);
+    expect(load, 'the first frame is painted before the preferences are loaded').toBeLessThan(
+      firstRetheme,
+    );
   });
 
   it('and the preferences are NOT put in the save envelope', () => {
@@ -653,43 +673,76 @@ describe('the boot path loads the player’s preferences before the first paint'
 });
 
 describe('all three reserved art regions are actually mounted (A.7)', () => {
-  it('the character portrait and the enemy portrait live in the HUD', () => {
+  // RE-ANCHORED by PLAN.md #6. The enemy region used to be reserved in the HUD column beside
+  // the foe's lines, pinned by two scope guards that kept #8 out of the battle branch ("it
+  // belongs to PLAN.md #6"). #6 IS that branch: the region moved to the centre stage, and the
+  // scope pins are replaced by pins on the same facts in their new place.
+  const BATTLE_RAW = readFileSync(path.join(ROOT, 'src/desktop/battle.ts'), 'utf8');
+  const BATTLE = stripComments(BATTLE_RAW);
+
+  it('the character portrait lives in the HUD — and it is the HUD’s ONLY region now', () => {
     const body = bodyOf('function renderSheet(');
     expect(body, 'the character region is not reserved anywhere').toMatch(
       /buildArtSlotById\s*\(\s*'character'\s*\)/,
     );
-    expect(body, 'the enemy region is not reserved anywhere').toMatch(
+    expect(body, 'the enemy region is back in the HUD — the stage owns the foe').not.toMatch(
       /buildArtSlotById\s*\(\s*'enemy'\s*\)/,
     );
   });
 
-  it('and the enemy one only while a battle is on screen', () => {
-    // It is reserved in the battle CHROME rather than inside `renderChoices`'s
-    // `battle-action` branch, which belongs to PLAN.md #6 and this unit does not touch.
-    const body = bodyOf('function renderSheet(');
-    const battle = body.search(/if\s*\(\s*state\.phase\.kind\s*===\s*'battle'\s*\)/);
-    const enemy = body.search(/buildArtSlotById\s*\(\s*'enemy'\s*\)/);
-    expect(battle, 'the battle branch is gone').toBeGreaterThan(-1);
-    expect(enemy).toBeGreaterThan(battle);
+  it('the ENEMY region is the arena’s: built by buildArena, and nowhere in the renderer', () => {
+    expect(stripReachesEndOfFile(BATTLE_RAW), 'the strip ran off the end of battle.ts').toBe(true);
+    const at = BATTLE.indexOf('export function buildArena(');
+    expect(at, 'buildArena is gone — this guard has gone stale').toBeGreaterThan(-1);
+    const arena = BATTLE.slice(at, BATTLE.indexOf('\n}', at));
+    expect(arena, 'the arena no longer holds the enemy region').toMatch(
+      /buildArtSlotById\s*\(\s*'enemy'\s*\)/,
+    );
+    // ...inside the figure the flash plays on and #7's sprite will mount into.
+    expect(arena).toMatch(/figure\.appendChild\(\s*buildArtSlotById\(\s*'enemy'\s*\)\s*\)/);
+    expect(SOURCE, 'the renderer mounts an enemy region of its own again').not.toMatch(
+      /buildArtSlotById\s*\(\s*'enemy'\s*\)/,
+    );
   });
 
   it('the scenery region is the floor’s, on the hub', () => {
     expect(bodyOf('function renderHub(')).toMatch(/buildArtSlotById\s*\(\s*'scenery'\s*\)/);
   });
 
-  it('and the battle-action branch is untouched by this unit', () => {
-    // Scope, asserted: the battle screen is #6's, and the one thing this unit must not do is
-    // start editing it.
+  it('the battle arm draws the stage from the models, into the frame — never into the HUD', () => {
     const body = bodyOf('function renderChoices(');
     const start = body.indexOf("case 'battle-action'");
     expect(start, 'the battle case is gone').toBeGreaterThan(-1);
     const battleCase = body.slice(start, body.indexOf("case 'continue'", start));
-    expect(battleCase, 'this unit put an art slot in the battle branch').not.toContain(
-      'buildArtSlot',
+    for (const model of ['stageView', 'vitalsView', 'battleMenuRows']) {
+      expect(battleCase, `the battle arm no longer reads ${model}`).toMatch(new RegExp(`\\b${model}\\s*\\(`));
+    }
+    expect(battleCase, 'the battle arm no longer mounts the stage from the CURRENT state').toMatch(
+      /mountStage\s*\(\s*stageView\s*\(\s*state\s*\)\s*,\s*vitalsView\s*\(\s*state\s*\)\s*,\s*tickerLine\s*\)/,
     );
-    expect(battleCase, 'this unit put a data-screen write in the battle branch').not.toContain(
-      'dataset',
-    );
+    expect(battleCase, 'the battle arm writes into the HUD').not.toMatch(/sheetEl/);
+    expect(battleCase, 'the battle arm writes a screen attribute by hand').not.toContain('dataset');
+    // ...and the one mounting path writes the frame's two regions and nothing else.
+    const mount = bodyOf('function mountStage(');
+    expect(mount).toMatch(/arenaEl\.appendChild\(/);
+    expect(mount).toMatch(/vitalsEl\.appendChild\(/);
+    expect(mount, 'the stage mounts into the HUD').not.toMatch(/sheetEl/);
+  });
+});
+
+describe('the battle DOM module builds no markup from a string either (PLAN.md #6)', () => {
+  // The same two assertions this file makes over `game.ts`, over the module that now draws
+  // the one screen carrying an enemy's generated name.
+  const BATTLE = stripComments(readFileSync(path.join(ROOT, 'src/desktop/battle.ts'), 'utf8'));
+
+  it('no innerHTML assignment at all', () => {
+    expect(BATTLE).not.toMatch(/\.\s*innerHTML\s*=/);
+  });
+
+  it('and no other markup-writing API', () => {
+    expect(BATTLE).not.toMatch(/outerHTML\s*=|insertAdjacentHTML\s*\(|createContextualFragment\s*\(/);
+    // Non-vacuity: the module really does write text.
+    expect(BATTLE).toMatch(/textContent\s*=/);
   });
 });
 
@@ -726,9 +779,10 @@ describe('the renderer reports whether the bundled faces actually loaded', () =>
 // =========================================================================================
 
 describe('desktop.html carries the header band and loses no id', () => {
-  it('every id the renderer looks up at module scope still exists', () => {
-    // `game.ts` resolves all of these with `$()` at module scope and THROWS on a missing one,
-    // so a dropped id is not a degraded layout — it is a game that does not boot.
+  it('every id the renderer looks up in boot() still exists', () => {
+    // `game.ts` resolves all of these with `$()` in `boot()` and THROWS on a missing one, so a
+    // dropped id is not a degraded layout — it is a game that does not boot. PLAN.md #6 adds
+    // the battle frame's two regions and the reading column its log toggle marks.
     for (const id of [
       'game',
       'sheet',
@@ -740,6 +794,9 @@ describe('desktop.html carries the header band and loses no id', () => {
       'narration',
       'log',
       'choices',
+      'arena',
+      'vitals',
+      'column',
     ]) {
       expect(HTML, `#${id} is gone — the renderer throws at boot`).toContain(`id="${id}"`);
     }

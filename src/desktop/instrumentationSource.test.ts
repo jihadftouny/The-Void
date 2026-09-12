@@ -1,16 +1,16 @@
 // SOURCE GUARDS on `src/desktop/game.ts`'s INSTRUMENTATION — plus the G50 pin.
 //
-// Same technique and same file as `rendererSource.test.ts`, and for the same reason:
-// `game.ts` calls the Electron IPC (`window.void.onStatus(...)`) at MODULE SCOPE, so
-// importing it in Vitest throws before a line of test code runs. Everything behavioural
+// Same technique and same file as `rendererSource.test.ts`, and for the same original reason:
+// `game.ts` called the Electron IPC (`window.void.onStatus(...)`) at MODULE SCOPE, so
+// importing it in Vitest threw before a line of test code ran. Everything behavioural
 // has been pushed into pure helpers that ARE tested (`view-model.ts`, `log-model.ts`,
 // `src/log/*`); what is left is WIRING — which timer brackets which call, on which side of
-// which await — and the only way to assert wiring in a file you cannot load is to read it.
+// which await.
 //
-// (When `PLAN.md` #6 lands G51's `boot()` extraction and this file becomes importable,
-// the three timing guards below become behavioural tests: drive `dispatch()` with a
-// scripted clock and assert the emitted entries exactly, the way `persist.test.ts`
-// already does. That is recorded here as independent evidence for scheduling G51 first.)
+// PLAN.md #6 landed G51: the start-up is `export function boot()` and the module is inert on
+// import, so `boot.test.ts` now boots the real renderer and asserts emitted entries for real.
+// These scans are KEPT and re-anchored rather than retired: a scan pins a bracket on every
+// path at once, which one behavioural walk cannot.
 //
 // ---------------------------------------------------------------------------------------
 // THE RULES, each of them the scar of a guard that could not fail:
@@ -123,9 +123,17 @@ describe('the source scanner itself', () => {
     expect(SOURCE, 'the strip ate the tail of game.ts — a hole below the last anchor').toMatch(
       /function renderResume\(/,
     );
-    expect(SOURCE, 'the strip ate the boot block at the very end of game.ts').toMatch(
-      /const saved\s*=\s*loadRun\(\s*\)/,
+    // RE-ANCHORED by PLAN.md #6 (G51): the boot block used to be the LAST thing in the file,
+    // which is why it was the bottom anchor. It now lives in `boot()` near the top, so it
+    // anchors the head, and the function that really is last carries the tail.
+    expect(SOURCE, 'the strip ate the boot block').toMatch(/const saved\s*=\s*loadRun\(\s*\)/);
+    expect(SOURCE, 'the strip ate the tail of game.ts — the last function is gone').toMatch(
+      /function adoptFromPanel\(/,
     );
+    expect(
+      SOURCE.search(/function adoptFromPanel\(/),
+      'the tail anchor is no longer near the tail — pick the function that really is last',
+    ).toBeGreaterThan(SOURCE.length * 0.8);
     expect(
       stripReachesEndOfFile(RAW),
       'the strip ran off the END of the file — a regex literal containing `/*` with no later `*/` swallows everything after it, and every anchor ABOVE it still passes',
@@ -353,6 +361,62 @@ describe('dispatch() times the step and the whole turn', () => {
   });
 });
 
+// =========================================================================================
+// 2b. PLAN.md #6 — THE ROUND'S REPLAY IS TIMED (principle 7). A battle round now holds the
+// turn for its beats as well as its narration, so the replay gets a duration of its own and a
+// threshold of its own (`SLOW_MS.round`): a starved timer is exactly the kind of freeze this
+// principle was written after. The line lives in `replayRound`, which `dispatch` calls.
+// =========================================================================================
+
+describe('the round replay is timed, escalates when slow, and fails loudly', () => {
+  const body = bodyOf('async function replayRound(');
+
+  it('brackets playRound, and closes the bracket AFTER the await — not before', () => {
+    const start = body.search(/roundTimer\s*=\s*startTimer\s*\(\s*\)/);
+    const call = body.search(/await\s+playRound\s*\(/);
+    const stop = body.search(/roundTimer\.stop\s*\(\s*\)/);
+    expect(start, 'the replay is no longer timed').toBeGreaterThan(-1);
+    expect(call, 'replayRound no longer plays the round — this guard has gone stale').toBeGreaterThan(-1);
+    expect(stop, 'the round timer is never stopped').toBeGreaterThan(-1);
+    expect(start).toBeLessThan(call);
+    expect(call).toBeLessThan(stop);
+    expect(body.slice(start, call), 'the timer is stopped before the replay runs').not.toMatch(/roundTimer\.stop\s*\(/);
+  });
+
+  it('reports the measured duration, at the level the round threshold decides', () => {
+    const played = logCalls(body).find((c) => c.includes("'round played'"));
+    expect(played, 'the round line is gone').toBeDefined();
+    expect(played).toMatch(/levelForDuration\s*\(\s*roundMs\s*,\s*SLOW_MS\.round\s*,\s*'info'\s*\)/);
+    expect(played).toMatch(/ms:\s*roundMs/);
+    expect(played).toMatch(/beats:\s*plan\.beats\.length/);
+    expect(body, 'the duration is fabricated rather than measured').toMatch(/const roundMs\s*=\s*roundTimer\.stop\(\s*\)/);
+  });
+
+  it('a replay that throws is logged at error, before the turn rebuilds the screen', () => {
+    const catchAt = body.search(/\}\s*catch\s*\(/);
+    expect(catchAt, 'the replay no longer catches — a throw would lose the turn').toBeGreaterThan(-1);
+    const failure = logCalls(body.slice(catchAt))[0];
+    expect(failure, 'a failed replay is silent').toBeDefined();
+    expect(failure).toMatch(/^log\.error\s*\(\s*'battle'/);
+  });
+
+  it('dispatch starts the narration FIRST, replays WHILE it runs, and only then awaits it', () => {
+    const turn = bodyOf('async function dispatch(');
+    const started = turn.search(/const narration\s*=\s*narrate\s*\(\s*r\.events\s*\)/);
+    const replay = turn.search(/await\s+replayRound\s*\(/);
+    const awaited = turn.search(/await\s+narration\s*;/);
+    expect(started, 'the narration is no longer started before the replay').toBeGreaterThan(-1);
+    expect(replay, 'dispatch no longer replays a battle round').toBeGreaterThan(-1);
+    expect(awaited, 'the narration is never awaited — the turn would end mid-sentence').toBeGreaterThan(-1);
+    expect(started).toBeLessThan(replay);
+    expect(replay).toBeLessThan(awaited);
+    // ...and the replay is fed the state from BEFORE the step, so the bars start where they were.
+    expect(turn).toMatch(/const before\s*=\s*state\s*;/);
+    expect(turn.search(/const before\s*=\s*state\s*;/)).toBeLessThan(turn.search(/=\s*step\s*\(\s*state\s*,/));
+    expect(turn).toMatch(/roundPlan\s*\(\s*before\s*,\s*state\s*,\s*r\.events\s*\)/);
+  });
+});
+
 describe('narrate() times the round trip to the model', () => {
   const body = bodyOf('async function narrate(');
 
@@ -438,6 +502,19 @@ describe('the renderer applies the shipped/developer level policy', () => {
     expect(setAt, 'the level is applied after the first log line').toBeLessThan(firstLog);
   });
 
+  it('...and inside boot() too, which is where the start-up really runs (G51)', () => {
+    // TIGHTENED by PLAN.md #6. The file-wide order above is a statement about SOURCE order,
+    // and now that the start-up is the body of `boot()` the order that matters is the order of
+    // that body: a `log.info(...)` hoisted above `log.setLevel(` inside it would escape the
+    // shipped level on every boot while the file-wide check could still pass.
+    const body = bodyOf('export function boot(');
+    const setAt = body.search(/log\.setLevel\s*\(/);
+    const firstLog = body.search(/\blog\.(debug|info|warn|error|log)\s*\(/);
+    expect(setAt, 'boot() no longer sets the level at all').toBeGreaterThan(-1);
+    expect(firstLog, 'boot() logs nothing — the boot line is gone').toBeGreaterThan(-1);
+    expect(setAt, 'boot() logs before it applies the level').toBeLessThan(firstLog);
+  });
+
   it('and the boot line says which level and protocol it resolved to', () => {
     const boot = logCalls(SOURCE).find((c) => c.includes("'renderer booted'"));
     expect(boot, 'the boot line is gone').toBeDefined();
@@ -463,6 +540,10 @@ const PLAYER_ELEMENTS = [
   'sheetEl',
   'titleEl',
   'floorEl',
+  // PLAN.md #6: the battle frame — the enemy's stage and ticker, and the player's stat box —
+  // is written on every round, from inside the same `dispatch` that logs the round.
+  'arenaEl',
+  'vitalsEl',
 ];
 
 describe('no log line can reach the screen', () => {

@@ -42,6 +42,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
 import { TYPE } from '../render/tokens.ts';
 import { TEXT_SCALE_TABLE } from '../render/settings-model.ts';
+import { BEAT_HOLD_MS, BEAT_MS, MAX_ROUND_MS, MIN_SPACING_MS } from '../render/beat-model.ts';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const VITE_BIN = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
@@ -61,8 +62,16 @@ const RESULT_FILE = path.join(OUT_DIR, 'result.json');
 const NARRATION_LINE_HEIGHT = 1.7;
 const BODY_LINE_HEIGHT = 1.55;
 
-/** The prose floor, in lines, for each stage layout — `--void-prose-floor` in `game.css`. */
-const PROSE_LINES = { side: 8, wide: 4 } as const;
+/**
+ * The prose floor, in lines, for each stage layout — `--void-prose-floor` in `game.css`.
+ *
+ * `stage` (PLAN.md #6) is FOUR, not eight, and that is a recorded deviation from UI-DESIGN §17:
+ * the battle frame holds the enemy's 32vh region, its name, bar, chips and ticker above the
+ * prose, and at a 640px window eight lines cannot fit beside all of that. Battle prose is a
+ * bookend by design (UI-DESIGN §2); on the default window the pane grows past its floor.
+ */
+const PROSE_LINES = { side: 8, wide: 4, stage: 4 } as const;
+type Mode = keyof typeof PROSE_LINES;
 
 /** The log's floor, in lines, on a `side` screen — `--void-log-floor`. */
 const LOG_LINES_FLOOR = 3;
@@ -76,6 +85,29 @@ const SCENERY_CAP_PX = 440;
 
 /** The committed ratio for the scenery region. LOCKED by `artSlots.json` / ART-BIBLE §4. */
 const SCENERY_RATIO = 16 / 9;
+
+/**
+ * THE BATTLE FRAME'S NUMBERS (PLAN.md #6), each one a literal in the stylesheet or the data,
+ * transcribed here and cross-checked against the text it came from — never read off a run.
+ *
+ *   ARENA_CAP_VH       `#arena .void-art-slot { max-height: 32vh }` in `battle.css`
+ *   ENEMY_RATIO        the enemy slot's `ratioW / ratioH` in `artSlots.json` (3:4, LOCKED)
+ *   STAGE_LOG_CAP_VH   `--void-log-cap: 18vh` in the `stage` block of `game.css`
+ *   STAGE_LOG_LINES    `--void-log-floor: 2lh` there: the opened log's floor, in lines
+ *   CHOICES_PAD_PX     `.choices { padding: var(--void-space-1) }` — SPACE.s1, 4px
+ *   BATTLE_ROW_PAD_PX  a battle row's vertical padding + border: `padding: space-2` (8 + 8)
+ *                      plus the `--void-rule-hair` border above and below (1 + 1)
+ *   BATTLE_GAP_PX      `[data-layout='stage'] .battle-menu { gap: var(--void-space-2) }`, 8px
+ */
+const ARENA_CAP_VH = 0.32;
+const ENEMY_RATIO = 3 / 4;
+const STAGE_LOG_CAP_VH = 0.18;
+const STAGE_LOG_LINES = 2;
+const CHOICES_PAD_PX = 4;
+const BATTLE_ROW_PAD_PX = 8 + 8 + 1 + 1;
+const BATTLE_GAP_PX = 8;
+/** `.stage-body { padding: calc(var(--void-space-5) - var(--void-space-1)) }` — 24 − 4. */
+const STAGE_BODY_PAD_PX = 24 - 4;
 
 /**
  * The base font size at each text setting, in pixels.
@@ -98,8 +130,32 @@ const CONTROL_PX = { normal: 13, large: 16 } as const;
 const SLACK = 1;
 
 /** The guaranteed narration height for a layout mode at a text size, in pixels. */
-function proseFloorPx(mode: 'side' | 'wide', scale: Scale): number {
+function proseFloorPx(mode: Mode, scale: Scale): number {
   return PROSE_LINES[mode] * BASE_PX[scale] * NARRATION_LINE_HEIGHT;
+}
+
+/**
+ * A round's replay length for `n` beats, re-derived from `beat-model.ts`'s four constants
+ * (which `beat-model.test.ts` pins to the plan's numbers) rather than from its schedule.
+ */
+function scheduledMs(n: number): number {
+  if (n <= 0) return 0;
+  const spacing = n === 1 ? BEAT_MS : Math.max(MIN_SPACING_MS, Math.min(BEAT_MS, Math.floor((MAX_ROUND_MS - BEAT_HOLD_MS) / (n - 1))));
+  return (n - 1) * spacing + BEAT_HOLD_MS;
+}
+
+/** One single-line battle row: a line of control text plus its padding and border. */
+function battleRowPx(scale: Scale): number {
+  return CONTROL_PX[scale] * BODY_LINE_HEIGHT + BATTLE_ROW_PAD_PX;
+}
+
+/**
+ * THE ROOM #11 NEEDS (AC-17): its Talk row and a one-line text input, i.e. two battle rows and
+ * the gap between them, above the first command — so the free-text input lands without a
+ * re-layout. 84.3px at the default text size, 93.6 at large.
+ */
+function talkHeadroomPx(scale: Scale): number {
+  return 2 * battleRowPx(scale) + BATTLE_GAP_PX;
 }
 
 /** The guaranteed log height on a `side` screen, in pixels. */
@@ -115,7 +171,7 @@ function logFloorPx(scale: Scale): number {
 // =========================================================================================
 
 interface Expectation {
-  mode: 'side' | 'wide';
+  mode: Mode;
   prose: boolean;
   scenery: boolean;
 }
@@ -123,8 +179,24 @@ interface Expectation {
 const EXPECTED: Readonly<Record<string, Expectation>> = {
   hub: { mode: 'side', prose: true, scenery: true },
   'confirm-abandon': { mode: 'side', prose: true, scenery: true },
-  battle: { mode: 'side', prose: true, scenery: false },
-  'battle-open': { mode: 'side', prose: true, scenery: false },
+  // PLAN.md #6 — THE FRAMED STAGE. Seven battle states, each with the worst-case beat in the
+  // pane, sixty log lines behind the ticker, a 44-character enemy name and six condition chips
+  // on each side. They replace `battle` / `battle-open`, whose Cast list opened INLINE and put
+  // 683-788px of content in a 555-558px box (layout-breathing-room's handover):
+  //   battle                  the commands                          Fight Cast Spare Item Run
+  //   battle-cast-open        the Cast sub-menu: Back + six warped skills (the longest labels)
+  //   battle-items-open       the Use-item sub-menu: Back + one usable
+  //   battle-items-open-full  Back + a FULL pack of twelve usables (BACKPACK_CAPACITY)
+  //   battle-boss             a boss: no Spare, and Run DISABLED with its reason (G4, §14.9)
+  //   battle-log-open         the player opened the full log from the ticker
+  //   battle-tempo            the reserved tempo row PRESENT (#1.6's seam, measured before it lands)
+  battle: { mode: 'stage', prose: true, scenery: false },
+  'battle-cast-open': { mode: 'stage', prose: true, scenery: false },
+  'battle-items-open': { mode: 'stage', prose: true, scenery: false },
+  'battle-items-open-full': { mode: 'stage', prose: true, scenery: false },
+  'battle-boss': { mode: 'stage', prose: true, scenery: false },
+  'battle-log-open': { mode: 'stage', prose: true, scenery: false },
+  'battle-tempo': { mode: 'stage', prose: true, scenery: false },
   'choose-class': { mode: 'side', prose: true, scenery: false },
   'draft-pick': { mode: 'side', prose: true, scenery: false },
   // PLAN.md #2: the found rest spot carries the floor's scenery (§22.26), as the hub does;
@@ -175,6 +247,16 @@ interface Pane extends Box {
   scrollHeight: number;
   clientHeight: number;
 }
+/** A region the battle frame adds, or `null` when the page has no such element at all. */
+type Region = (Pane & { display: string }) | null;
+/** Where the enemy's reserved region is, counted across the WHOLE page. */
+interface EnemySlot {
+  inPage: number;
+  inArena: number;
+  inSheet: number;
+  box: Box | null;
+  ratio: number | null;
+}
 interface Report {
   scenario: string;
   scale: Scale;
@@ -182,14 +264,27 @@ interface Report {
   layout: string;
   viewport: { width: number; height: number };
   narration: Pane & { beats: number; lineHeight: number; fontSize: number };
-  log: Pane & { lines: number };
+  log: Pane & { lines: number; display: string };
   column: Pane;
   choices: Pane & { controls: number };
   scenery: { count: number; box: Box | null; ratio: number | null };
   buttons: Box[];
+  /** Each control's label and whether it is disabled, in the same order as `buttons`. */
+  buttonLabels: string[];
+  buttonDisabled: boolean[];
   page: { scrollHeight: number; clientHeight: number };
   focusOrder: string[];
   fontLoaded: boolean;
+  // ---- PLAN.md #6: the battle frame ----
+  arena: Region;
+  vitals: Region;
+  sheet: Box & { display: string };
+  stageBody: Box;
+  enemySlot: EnemySlot;
+  /** The ticker's line and its Record toggle, when the arena carries them. */
+  ticker: { line: Box | null; toggles: number; expanded: string | null };
+  /** The tempo rows the frame rendered (the reserved #1.6 slot). */
+  tempoRows: number;
 }
 interface SizeGroup {
   requested: { width: number; height: number };
@@ -218,6 +313,14 @@ interface WalkStep {
   hubMenuRows: number;
   hubPromptVisible: boolean;
   documentPanels: number;
+  // ---- PLAN.md #6: the battle frame, as the REAL renderer builds it ----
+  arena: Region;
+  vitals: Region;
+  sheet: Box & { display: string };
+  enemySlot: EnemySlot;
+  ticker: { line: Box | null; text: string; toggles: number };
+  /** The bars on the frame, by tone class, with their readouts — the round must move them. */
+  bars: { tone: string; text: string }[];
 }
 
 /** A structured log entry as the renderer emitted it. */
@@ -374,6 +477,14 @@ const AT_OR_ABOVE_MIN = SIZES.filter(([w, h]) => w >= 960 && h >= 640);
 const SCENARIOS = Object.keys(EXPECTED);
 const SIDE_SCENARIOS = SCENARIOS.filter((s) => EXPECTED[s]!.mode === 'side');
 const WIDE_SCENARIOS = SCENARIOS.filter((s) => EXPECTED[s]!.mode === 'wide');
+const STAGE_SCENARIOS = SCENARIOS.filter((s) => EXPECTED[s]!.mode === 'stage');
+
+/**
+ * The one stage state in which the READING COLUMN is allowed to hold more than it shows: the
+ * player opened the full log (AC-15). Every other state is judged by the strict rule that the
+ * column never scrolls; this one by its own bounded rule in the battle-frame section.
+ */
+const COLUMN_MAY_SCROLL: ReadonlySet<string> = new Set(['battle-log-open']);
 
 // =========================================================================================
 // 0 — the probe measured what it claims to have measured.
@@ -547,6 +658,7 @@ describe('the narration always has room to be read', () => {
           if (r.narration.bottom > height + SLACK) {
             offenders.push(`${where}: narration bottom ${r.narration.bottom} > ${height}`);
           }
+          if (COLUMN_MAY_SCROLL.has(scenario)) continue; // judged by its own bounded rule
           if (r.column.scrollHeight > r.column.clientHeight + SLACK) {
             offenders.push(
               `${where}: the reading column scrolls (${r.column.scrollHeight} > ${r.column.clientHeight})`,
@@ -704,7 +816,15 @@ describe('every control is reachable at the enforced minimum window', () => {
   const ALL_VISIBLE = [
     'hub',
     'confirm-abandon',
+    // PLAN.md #6: the battle, with each sub-menu the player opens every fight, and the boss —
+    // all under the strict standard. The Cast list used to open INLINE and push Run to y695
+    // in a 640px window; as a sub-menu that REPLACES the commands it has to fit outright.
     'battle',
+    'battle-cast-open',
+    'battle-items-open',
+    'battle-boss',
+    'battle-log-open',
+    'battle-tempo',
     'choose-class',
     'title',
     // PLAN.md #2: met on every floor — several bargains and a rest or two per floor — so they
@@ -744,24 +864,27 @@ describe('every control is reachable at the enforced minimum window', () => {
   /**
    * A disclosure the PLAYER expanded, which is a different thing and gets a different rule.
    *
-   * Opening the Cast list is a deliberate act with a one-click undo, and it adds six controls
-   * to a column that was already full. Measured at 960x640: with the list open, Run begins at
-   * y695 at the default text size, and three controls begin below the fold at the large one.
-   * Nothing in the stage layout can make 788px of content fit in 555px, and the battle
-   * screen's own contents belong to `docs/PLAN.md` #6, not to this unit.
+   * ⚠ `battle-open` LEFT THIS LIST WITH PLAN.md #6, and that is the point of #6's layout. The
+   * inline Cast list put 683-788px of content in a 555-558px box and Run at y695 in a 640px
+   * window; the Cast list is now a sub-menu that REPLACES the commands and fits outright
+   * (`battle-cast-open` is in ALL_VISIBLE above).
+   *
+   * What remains is the one battle list that genuinely cannot fit: the Use-item sub-menu with a
+   * FULL pack — twelve usables (BACKPACK_CAPACITY) plus Back is 13 rows, and 13 x 38px + 12 x
+   * 8px of gaps is 590px in a 558px column at the default text size, more at large. The Back
+   * row is the FIRST control and stays on screen; the rest scroll in the column's own box.
    *
    * ⚠ SO THE GUARANTEE IS NAMED AT BOTH ENDS, and neither half is taken on trust: the list
    * scrolls so everything is reachable, AND **the collapsed state restores every control to
-   * the window** — which is asserted directly below against the `battle` scenario, not merely
-   * assumed because it appears in another list.
+   * the window** — asserted directly below against the `battle` scenario.
    */
   const EXPANDED_DISCLOSURE: readonly {
     scenario: string;
     collapsed: string;
     scale: Scale;
   }[] = [
-    { scenario: 'battle-open', collapsed: 'battle', scale: 'normal' },
-    { scenario: 'battle-open', collapsed: 'battle', scale: 'large' },
+    { scenario: 'battle-items-open-full', collapsed: 'battle', scale: 'normal' },
+    { scenario: 'battle-items-open-full', collapsed: 'battle', scale: 'large' },
     // PLAN.md #2, Appendix A.3: twelve leave rows and the refusal — 13 controls of at least one
     // line each plus their gaps cannot fit a 640px window at either text size, which is WHY the
     // rows sit in a closed list. The player opens it with one click and closes it with another.
@@ -797,11 +920,19 @@ describe('every control is reachable at the enforced minimum window', () => {
    *   hub / confirm-abandon  `hubMenu` returns 5 rows in menu mode (Continue, Inventory,
    *                          Character sheet, Settings, Abandon — PLAN.md #2 removed "Seek a
    *                          bargain") and 2 in confirmation mode.
-   *   battle                 Fight + the Cast toggle + Spare + the Use-item toggle + Run = 5 on
-   *                          screen (PLAN.md #2 removed the Potion button, §22.6); 6 skills and
-   *                          1 item sit inside the two closed picker lists = 7 hidden.
-   *   battle-open            the same 12, with the Cast list open, so 11 on screen and 1 left
-   *                          inside the still-closed Use-item list.
+   *   battle                 PLAN.md #6: the commands are the WHOLE menu — Fight, Cast, Spare
+   *                          (the fixture foe is karma-weighted and alive), Use item (one usable
+   *                          in the pack), Run = 5; nothing hidden, because the sub-menus are
+   *                          not built until opened. The Record toggle lives in the ARENA and is
+   *                          not a choice.
+   *   battle-cast-open       the Cast sub-menu REPLACES the commands: Back + the fixture's six
+   *                          skills = 7.
+   *   battle-items-open      Back + the one usable = 2.
+   *   battle-items-open-full Back + twelve usables (a full pack, BACKPACK_CAPACITY) = 13.
+   *   battle-boss            a boss is never karma-weighted, so no Spare: Fight, Cast, Use
+   *                          item, Run = 4 — and Run is a DISABLED control, still laid out.
+   *   battle-log-open        the commands again, 5: opening the log changes the column only.
+   *   battle-tempo           the commands again, 5: the tempo row is vitals, not a control.
    *   choose-class           the five class rows.
    *   draft-pick             three cards (the "Choose one" line is a div, not a control).
    *   settings               `SETTINGS_ROWS` is 3 + 3 + 2 options, plus Back = 9.
@@ -827,8 +958,13 @@ describe('every control is reachable at the enforced minimum window', () => {
   const EXPECTED_CONTROLS: Readonly<Record<string, { visible: number; hidden: number }>> = {
     hub: { visible: 5, hidden: 0 },
     'confirm-abandon': { visible: 2, hidden: 0 },
-    battle: { visible: 5, hidden: 7 },
-    'battle-open': { visible: 11, hidden: 1 },
+    battle: { visible: 5, hidden: 0 },
+    'battle-cast-open': { visible: 7, hidden: 0 },
+    'battle-items-open': { visible: 2, hidden: 0 },
+    'battle-items-open-full': { visible: 13, hidden: 0 },
+    'battle-boss': { visible: 4, hidden: 0 },
+    'battle-log-open': { visible: 5, hidden: 0 },
+    'battle-tempo': { visible: 5, hidden: 0 },
     'choose-class': { visible: 5, hidden: 0 },
     'draft-pick': { visible: 3, hidden: 0 },
     inventory: { visible: 16, hidden: 0 },
@@ -896,12 +1032,17 @@ describe('every control is reachable at the enforced minimum window', () => {
   it('...and the census really is measuring boxes of both kinds (non-vacuity)', () => {
     // Without this, the discriminators above could both be broken and every count could be
     // satisfied by a page where nothing has a box at all.
-    const battle = report(960, 640, 'battle', 'normal');
-    expect(battle.buttons.filter(laidOut).length, 'no control is laid out anywhere')
+    //
+    // RE-ANCHORED by PLAN.md #6: this used the battle screen, whose closed Cast and Use-item
+    // pickers were the page's hidden controls. The battle's sub-menus now REPLACE the commands
+    // and hide nothing, so the page that still carries a closed list — the full-pack bargain,
+    // twelve leave rows inside one collapsed disclosure — carries the check.
+    const discard = report(960, 640, 'deal-discard', 'normal');
+    expect(discard.buttons.filter(laidOut).length, 'no control is laid out anywhere')
       .toBeGreaterThan(0);
     expect(
-      battle.buttons.filter((b) => !laidOut(b)).length,
-      'the closed pickers hide nothing — the discriminator has nothing to tell apart',
+      discard.buttons.filter((b) => !laidOut(b)).length,
+      'the closed list hides nothing — the discriminator has nothing to tell apart',
     ).toBeGreaterThan(0);
     // The discriminators themselves, on the three shapes they must separate.
     expect(laidOut({ top: 10, right: 236, bottom: 56, left: 10, width: 226, height: 46 })).toBe(true);
@@ -1204,6 +1345,356 @@ describe('tab order follows reading order', () => {
     );
     expect(order.filter((r) => r === 'choices').length).toBeGreaterThanOrEqual(5);
   });
+
+  it('in the battle frame: the arena, then the reading column, then the choices (AC-10)', () => {
+    // The ticker's Record toggle is the arena's one focusable. It must come before the log it
+    // opens and before the menu, so the keyboard walks the frame top-down, centre-first.
+    const offenders: string[] = [];
+    for (const [width, height] of AT_OR_ABOVE_MIN) {
+      for (const scenario of STAGE_SCENARIOS) {
+        const order = report(width, height, scenario, 'normal').focusOrder;
+        const lastArena = order.lastIndexOf('arena');
+        const firstColumn = order.indexOf('column');
+        const firstChoices = order.indexOf('choices');
+        if (lastArena < 0) offenders.push(`${width}x${height} ${scenario}: nothing focusable in the arena`);
+        if (firstColumn >= 0 && lastArena > firstColumn) {
+          offenders.push(`${width}x${height} ${scenario}: the arena comes after the column: ${order.join(',')}`);
+        }
+        if (firstChoices >= 0 && lastArena > firstChoices) {
+          offenders.push(`${width}x${height} ${scenario}: the arena comes after the choices: ${order.join(',')}`);
+        }
+      }
+    }
+    expect(offenders, 'the battle frame is out of reading order for the keyboard').toEqual([]);
+  });
+});
+
+// =========================================================================================
+// 5b — THE FRAMED STAGE (PLAN.md #6, UI-DESIGN.md §1). The enemy on a large framed stage in
+// the centre; the stat box bottom-left; the action menu bottom-right; a thin ticker with the
+// full log behind it. Every number below is arithmetic on the constants at the top of this
+// file, which are themselves cross-checked against the stylesheet and the data.
+// =========================================================================================
+
+describe('the battle is a framed stage', () => {
+  /** A region the frame needs, present and actually drawn — or a failure naming what is not. */
+  function drawn(region: Region, what: string, where: string): Pane {
+    expect(region, `${where}: the page has no ${what} at all`).not.toBeNull();
+    expect(region!.display, `${where}: the ${what} is not displayed`).not.toBe('none');
+    expect(region!.height, `${where}: the ${what} has no height`).toBeGreaterThan(SLACK);
+    return region as Pane;
+  }
+
+  it('the four regions sit where §1 puts them, at every size and text setting (AC-10)', () => {
+    const offenders: string[] = [];
+    for (const [width, height] of AT_OR_ABOVE_MIN) {
+      for (const scenario of STAGE_SCENARIOS) {
+        for (const scale of SCALES) {
+          const r = report(width, height, scenario, scale);
+          const where = `${width}x${height} ${scenario}/${scale}`;
+          const arena = drawn(r.arena, 'arena', where);
+          const vitals = drawn(r.vitals, 'stat box', where);
+          const check = (ok: boolean, why: string): void => {
+            if (!ok) offenders.push(`${where}: ${why}`);
+          };
+          check(arena.bottom <= r.column.top + SLACK, `the arena (to ${arena.bottom.toFixed(0)}) is not above the column (from ${r.column.top.toFixed(0)})`);
+          check(Math.abs(arena.left - r.column.left) <= SLACK && Math.abs(arena.width - r.column.width) <= SLACK, 'the arena and the reading column are not the same middle column');
+          check(vitals.right <= arena.left + SLACK, 'the stat box is not LEFT of the arena');
+          check(r.choices.left >= arena.right - SLACK, 'the menu is not RIGHT of the arena');
+          check(Math.abs(r.choices.top - arena.top) <= SLACK, 'the menu column does not start with the frame');
+          check(Math.abs(r.choices.bottom - r.column.bottom) <= SLACK, 'the menu column does not end with the frame');
+          check(Math.abs(vitals.bottom - r.column.bottom) <= SLACK, 'the stat box is not anchored to the bottom');
+          check(r.sheet.display === 'none' && r.sheet.width <= SLACK, `the HUD column is still on screen (${r.sheet.width.toFixed(0)}px wide)`);
+        }
+      }
+    }
+    expect(offenders, 'the battle is not the frame UI-DESIGN §1 decided').toEqual([]);
+  });
+
+  it('outside the battle the frame is gone: no arena, no stat box, and the HUD is back', () => {
+    for (const r of everyReport()) {
+      if (EXPECTED[r.scenario]!.mode === 'stage') continue;
+      const where = `${r.viewport.width}x${r.viewport.height} ${r.scenario}/${r.scale}`;
+      for (const [what, region] of [['arena', r.arena], ['stat box', r.vitals]] as const) {
+        if (region === null) continue;
+        expect(region.display, `${where}: the ${what} is displayed off the battle screen`).toBe('none');
+        expect(region.height, `${where}: the ${what} takes space off the battle screen`).toBeLessThanOrEqual(SLACK);
+      }
+      expect(r.sheet.display, `${where}: the HUD column is hidden off the battle screen`).not.toBe('none');
+      expect(r.enemySlot.inPage, `${where}: an enemy region is mounted off the battle screen`).toBe(0);
+    }
+  });
+
+  it("the enemy's region is in the arena: exactly one in the page, none in the HUD (AC-11)", () => {
+    for (const r of everyReport()) {
+      if (EXPECTED[r.scenario]!.mode !== 'stage') continue;
+      const where = `${r.viewport.width}x${r.viewport.height} ${r.scenario}/${r.scale}`;
+      expect(r.enemySlot.inPage, `${where}: ${r.enemySlot.inPage} enemy regions in the page`).toBe(1);
+      expect(r.enemySlot.inArena, `${where}: the enemy region is not in the arena`).toBe(1);
+      expect(r.enemySlot.inSheet, `${where}: the enemy region is still in the HUD`).toBe(0);
+    }
+  });
+
+  it('it keeps the committed 3:4, never passes 32vh, and is centred on the stage (AC-11)', () => {
+    for (const [width, height] of AT_OR_ABOVE_MIN) {
+      for (const scenario of STAGE_SCENARIOS) {
+        for (const scale of SCALES) {
+          const r = report(width, height, scenario, scale);
+          const where = `${width}x${height} ${scenario}/${scale}`;
+          const slot = r.enemySlot.box;
+          expect(slot, `${where}: no enemy region measured`).not.toBeNull();
+          expect(
+            Math.abs((r.enemySlot.ratio as number) - ENEMY_RATIO),
+            `${where}: the enemy region is ${r.enemySlot.ratio}, not 3:4`,
+          ).toBeLessThan(0.01);
+          expect(slot!.height, `${where}: taller than ${ARENA_CAP_VH * 100}vh`).toBeLessThanOrEqual(
+            ARENA_CAP_VH * height + SLACK,
+          );
+          expect(slot!.height, `${where}: the region collapsed`).toBeGreaterThan(100);
+          const arena = r.arena as Pane;
+          const off = Math.abs(slot!.left + slot!.width / 2 - (arena.left + arena.width / 2));
+          expect(off, `${where}: the enemy is ${off.toFixed(1)}px off the stage's centre`).toBeLessThanOrEqual(2);
+        }
+      }
+    }
+  });
+
+  it('the cap governs at the minimum window, and the region outgrows the HUD it left (AC-11)', () => {
+    // 32vh of 640 is 204.8px; at the default window the region is wider than the 140px the
+    // HUD column capped it at — the whole reason for moving it to the centre.
+    const small = report(960, 640, 'battle', 'normal').enemySlot.box as Box;
+    expect(small.height, 'the HEIGHT cap does not govern at the minimum window').toBeCloseTo(ARENA_CAP_VH * 640, 0);
+    const roomy = report(1100, 820, 'battle', 'normal').enemySlot.box as Box;
+    expect(roomy.width, 'the stage figure is no bigger than the HUD slot it replaced').toBeGreaterThanOrEqual(190);
+  });
+
+  it('ARENA_CAP_VH is the literal in battle.css, and ENEMY_RATIO is the data (no invented numbers)', () => {
+    const css = readFileSync(path.join(ROOT, 'src/desktop/battle.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = /#arena\s+\.void-art-slot\s*\{([^}]*)\}/.exec(css);
+    expect(rule, 'battle.css does not cap the enemy region through #arena').not.toBeNull();
+    expect(rule![1], 'the enemy region cap is not the 32vh literal this file mirrors').toMatch(
+      new RegExp(`max-height:\\s*${ARENA_CAP_VH * 100}vh`),
+    );
+    const data = JSON.parse(readFileSync(path.join(ROOT, 'src/data/artSlots.json'), 'utf8')) as {
+      slots: { id: string; ratioW: number; ratioH: number }[];
+    };
+    const enemy = data.slots.find((s) => s.id === 'enemy');
+    expect(enemy, 'the enemy slot is gone from the data').toBeDefined();
+    expect(enemy!.ratioW / enemy!.ratioH).toBe(ENEMY_RATIO);
+  });
+
+  it(`the prose keeps ${PROSE_LINES.stage} lines in every battle state, with the log closed (AC-13)`, () => {
+    const starved: string[] = [];
+    for (const [width, height] of AT_OR_ABOVE_MIN) {
+      for (const scenario of STAGE_SCENARIOS) {
+        for (const scale of SCALES) {
+          const r = report(width, height, scenario, scale);
+          const floor = proseFloorPx('stage', scale) - SLACK;
+          if (r.narration.height < floor) {
+            starved.push(`${width}x${height} ${scenario}/${scale}: ${r.narration.height.toFixed(1)}px, needs ${floor.toFixed(1)}`);
+          }
+        }
+      }
+    }
+    expect(starved, 'the battle frame starves the prose').toEqual([]);
+    // Non-vacuity: the pane really holds the worst-case beat, which is longer than the floor.
+    const r = report(960, 640, 'battle', 'normal');
+    expect(r.narration.beats).toBe(1);
+    expect(r.narration.scrollHeight).toBeGreaterThan(proseFloorPx('stage', 'normal'));
+  });
+
+  it('the full log is closed behind the ticker unless the player opens it (AC-18)', () => {
+    for (const [width, height] of AT_OR_ABOVE_MIN) {
+      for (const scenario of STAGE_SCENARIOS) {
+        for (const scale of SCALES) {
+          const r = report(width, height, scenario, scale);
+          const where = `${width}x${height} ${scenario}/${scale}`;
+          expect(r.log.lines, `${where}: the log is not holding the fight's sixty lines`).toBe(60);
+          expect(r.ticker.toggles, `${where}: not exactly one Record toggle`).toBe(1);
+          if (scenario === 'battle-log-open') {
+            expect(r.ticker.expanded, `${where}: the open toggle does not say so`).toBe('true');
+            continue;
+          }
+          expect(r.ticker.expanded, `${where}: the closed toggle does not say so`).toBe('false');
+          expect(r.log.display, `${where}: the log is open without being asked`).toBe('none');
+          expect(r.log.height).toBeLessThanOrEqual(SLACK);
+        }
+      }
+    }
+  });
+
+  it('opened, the log is bounded: two lines at least, 18vh at most, scrolling inside its cap (AC-15)', () => {
+    for (const [width, height] of AT_OR_ABOVE_MIN) {
+      for (const scale of SCALES) {
+        const r = report(width, height, 'battle-log-open', scale);
+        const where = `${width}x${height} battle-log-open/${scale}`;
+        expect(r.log.display, `${where}: the opened log is not shown`).not.toBe('none');
+        expect(r.log.height, `${where}: the opened log is squeezed below two lines`).toBeGreaterThanOrEqual(
+          STAGE_LOG_LINES * BASE_PX[scale] * BODY_LINE_HEIGHT - SLACK,
+        );
+        expect(r.log.height, `${where}: the opened log passes its 18vh cap`).toBeLessThanOrEqual(
+          STAGE_LOG_CAP_VH * height + SLACK,
+        );
+        expect(r.log.scrollHeight, `${where}: sixty lines fit — the cap is not being tested`).toBeGreaterThan(
+          r.log.clientHeight,
+        );
+        // ...and the reading column's BOX stays inside the window whatever it holds.
+        expect(r.column.bottom, `${where}: the column runs past the window`).toBeLessThanOrEqual(height + SLACK);
+        expect(r.narration.height, `${where}: opening the log starved the prose`).toBeGreaterThanOrEqual(
+          proseFloorPx('stage', scale) - SLACK,
+        );
+      }
+    }
+    // COLLAPSING RESTORES EVERYTHING: the closed twin is the plain battle, already judged
+    // under the strict standard (ALL_VISIBLE, and the column-never-scrolls rule).
+    expect(COLUMN_MAY_SCROLL.has('battle')).toBe(false);
+  });
+
+  it('the ticker is one line inside the arena (AC-18)', () => {
+    for (const [width, height] of AT_OR_ABOVE_MIN) {
+      for (const scale of SCALES) {
+        const r = report(width, height, 'battle', scale);
+        const where = `${width}x${height}/${scale}`;
+        const line = r.ticker.line;
+        expect(line, `${where}: no ticker line`).not.toBeNull();
+        const arena = r.arena as Pane;
+        expect(line!.top >= arena.top - SLACK && line!.bottom <= arena.bottom + SLACK, `${where}: the ticker is outside the arena`).toBe(true);
+        // One line of the ticker's own step (sm), never two: a long combat line is cut, not wrapped.
+        const oneLine = Number.parseFloat(TEXT_SCALE_TABLE[scale].sm) * BODY_LINE_HEIGHT;
+        expect(line!.height, `${where}: the ticker is ${line!.height.toFixed(1)}px — more than one line`).toBeLessThan(
+          oneLine * 1.5,
+        );
+        expect(line!.height, `${where}: the ticker collapsed`).toBeGreaterThan(oneLine * 0.5);
+      }
+    }
+  });
+
+  it("the menu is bottom-anchored, with room above it for #11's talk row and input (AC-17)", () => {
+    const offenders: string[] = [];
+    for (const scenario of ['battle', 'battle-boss']) {
+      for (const scale of SCALES) {
+        const r = report(960, 640, scenario, scale);
+        const where = `${scenario}/${scale}`;
+        const rows = r.buttons.filter((b) => b.height > 0);
+        const first = rows[0] as Box;
+        const last = rows.at(-1) as Box;
+        const headroom = first.top - (r.choices.top + CHOICES_PAD_PX);
+        if (headroom < talkHeadroomPx(scale) - SLACK) {
+          offenders.push(`${where}: ${headroom.toFixed(1)}px above the first command, needs ${talkHeadroomPx(scale).toFixed(1)}`);
+        }
+        // NON-VACUOUS: the room must be ABOVE a menu that sits at the bottom. A top-anchored
+        // menu with space below it has the same free height and none of it where #11 needs it.
+        if (r.choices.bottom - last.bottom > CHOICES_PAD_PX + SLACK) {
+          offenders.push(`${where}: the menu is not bottom-anchored (${(r.choices.bottom - last.bottom).toFixed(1)}px below the last command)`);
+        }
+      }
+    }
+    expect(offenders, 'the menu column has no room for the talk input #11 adds').toEqual([]);
+  });
+
+  it('the battle rows are compact single lines, and the disabled Run is still a laid-out control', () => {
+    for (const scale of SCALES) {
+      const r = report(960, 640, 'battle', scale);
+      for (const [i, b] of r.buttons.entries()) {
+        expect(b.height, `battle/${scale} row ${i} is not one compact line`).toBeCloseTo(battleRowPx(scale), 0);
+      }
+      const boss = report(960, 640, 'battle-boss', scale);
+      expect(boss.buttonLabels, `battle-boss/${scale}: a boss can be spared`).not.toContain('Spare');
+      const run = boss.buttonLabels.findIndex((l) => l.startsWith('Run'));
+      expect(run, `battle-boss/${scale}: the Run row is gone rather than disabled (§14.9)`).toBeGreaterThan(-1);
+      expect(boss.buttonDisabled[run], `battle-boss/${scale}: Run is live against a boss`).toBe(true);
+      expect(boss.buttons[run]!.height, `battle-boss/${scale}: the disabled Run collapsed`).toBeGreaterThanOrEqual(
+        CONTROL_PX[scale] * BODY_LINE_HEIGHT - SLACK,
+      );
+    }
+  });
+
+  it("the reserved tempo row fits the frame, and nothing renders it while there is no tempo (#1.6)", () => {
+    for (const r of everyReport()) {
+      if (EXPECTED[r.scenario]!.mode !== 'stage') continue;
+      const where = `${r.viewport.width}x${r.viewport.height} ${r.scenario}/${r.scale}`;
+      expect(r.tempoRows, `${where}: the tempo rows rendered`).toBe(r.scenario === 'battle-tempo' ? 2 : 0);
+    }
+    // The fit itself is the strict standard: `battle-tempo` is in ALL_VISIBLE, and the prose
+    // floor above runs over every stage scenario including it.
+  });
+
+  it('below the breakpoint the frame STACKS: arena, then the prose, then the stat box and the menu', () => {
+    // Unreachable in the shipped build (the window minimum is 960 wide); measured so the
+    // fallback principle 6 asks for is not dead code nobody has rendered. The art region is
+    // the first thing to go, as the scenery's is.
+    for (const scale of SCALES) {
+      const r = report(800, 600, 'battle', scale);
+      const arena = r.arena as Pane;
+      const vitals = r.vitals as Pane;
+      expect(arena.bottom, `${scale}: the arena is not above the prose`).toBeLessThanOrEqual(r.column.top + SLACK);
+      expect(r.choices.top, `${scale}: the menu is not below the prose`).toBeGreaterThanOrEqual(r.column.bottom - SLACK);
+      expect(vitals.top, `${scale}: the stat box is not below the prose`).toBeGreaterThanOrEqual(r.column.bottom - SLACK);
+      // THE HORIZONTAL HALF, found by mutation: without the stacked values the grid kept its
+      // three full-width columns and still put everything in the right ROWS — with the menu
+      // stranded mid-screen beside an empty column. So: the arena and the prose share one full
+      // width, and beneath them the stat box takes the left edge and the menu the right.
+      expect(Math.abs(arena.width - r.column.width), `${scale}: the arena and the prose are not one width`).toBeLessThanOrEqual(SLACK);
+      // ...and that width is the WHOLE frame: the column runs from the stage body's inner left
+      // edge to its inner right edge (`.stage-body { padding: calc(space-5 − space-1) }`, 20px),
+      // so no empty column can sit beyond the menu.
+      expect(Math.abs(r.column.left - (r.stageBody.left + STAGE_BODY_PAD_PX)), `${scale}: the prose does not start at the frame's edge`).toBeLessThanOrEqual(SLACK);
+      expect(Math.abs(r.column.right - (r.stageBody.right - STAGE_BODY_PAD_PX)), `${scale}: the frame has an empty column beyond the menu`).toBeLessThanOrEqual(SLACK);
+      expect(Math.abs(vitals.left - r.column.left), `${scale}: the stat box is not at the left edge`).toBeLessThanOrEqual(SLACK);
+      expect(Math.abs(r.choices.right - r.column.right), `${scale}: the menu is not at the right edge`).toBeLessThanOrEqual(SLACK);
+      expect(vitals.right, `${scale}: the stat box and the menu overlap`).toBeLessThanOrEqual(r.choices.left + SLACK);
+      expect((r.enemySlot.box as Box).height, `${scale}: the art region still takes space when stacked`).toBeLessThanOrEqual(SLACK);
+      expect(r.narration.height, `${scale}: the stacked frame starves the prose`).toBeGreaterThanOrEqual(
+        proseFloorPx('stage', scale) - SLACK,
+      );
+    }
+  });
+
+  /**
+   * How much of the narration the player can SEE: its box, clipped by the reading column's.
+   * The narration keeps its floor as a MIN-HEIGHT, so its own box can measure a full floor while
+   * the column holding it has been squeezed to its padding and scrolls it out of view — which
+   * is exactly what an open Cast list did to the stacked frame (the narration measured 102px
+   * inside an 8px column). Measuring the narration's box alone could not see that.
+   */
+  function visibleProse(r: Report): number {
+    return Math.max(0, Math.min(r.narration.bottom, r.column.bottom) - Math.max(r.narration.top, r.column.top));
+  }
+
+  /**
+   * ONE MEASURED LIMIT, recorded rather than smoothed over (UI-DESIGN §17). The reserved tempo
+   * gauge (#1.6) adds a row to the arena AND to the stat box, and the stat box does not scroll;
+   * at 800x600 with LARGE text the fixed parts then leave ~98px — three lines, not four. The
+   * state is not rendered by anything today (no engine tempo yet) and the fallback is
+   * unreachable in the shipped build; the unit that turns the gauge on decides its stacked
+   * form. Held to three lines so it cannot quietly get worse.
+   */
+  const STACKED_THREE_LINES: ReadonlySet<string> = new Set(['battle-tempo/large']);
+
+  it('below the breakpoint NO battle state hides the prose: the floor is visible, not merely laid out', () => {
+    const hidden: string[] = [];
+    for (const scenario of STAGE_SCENARIOS) {
+      for (const scale of SCALES) {
+        const r = report(800, 600, scenario, scale);
+        const where = `800x600 ${scenario}/${scale}`;
+        const lines = STACKED_THREE_LINES.has(`${scenario}/${scale}`) ? 3 : PROSE_LINES.stage;
+        const floor = lines * BASE_PX[scale] * NARRATION_LINE_HEIGHT - SLACK;
+        const seen = visibleProse(r);
+        if (seen < floor) hidden.push(`${where}: ${seen.toFixed(1)}px of prose visible, needs ${floor.toFixed(1)}`);
+        // The menu yields instead: its box stays inside the window and its first control is on
+        // screen — the standard the full pack's Use-item list already holds at the minimum.
+        if (r.choices.bottom > 600 + SLACK) hidden.push(`${where}: the menu box runs past the window (${r.choices.bottom.toFixed(1)})`);
+        const first = r.buttons.find((b) => b.height > 0);
+        if (!first || first.top < r.choices.top - SLACK || first.bottom > r.choices.bottom + SLACK) {
+          hidden.push(`${where}: the menu's first control is not inside its box`);
+        }
+      }
+    }
+    expect(hidden, 'the stacked frame hides the prose behind a tall menu').toEqual([]);
+    // Non-vacuity: every battle state was measured, and the helper measures a real overlap.
+    expect(STAGE_SCENARIOS.length).toBeGreaterThanOrEqual(7);
+    expect(visibleProse(report(960, 640, 'battle', 'normal'))).toBeGreaterThanOrEqual(proseFloorPx('stage', 'normal') - SLACK);
+  });
 });
 
 // =========================================================================================
@@ -1259,14 +1750,16 @@ describe('the enforced minimum is the size the PAGE receives, not the window fra
 // Everything above measures pages the PROBE assembles. This measures the page the GAME
 // assembles: the production `dist/desktop.html` with only a stub IPC bridge, the real
 // `src/desktop/game.ts` running, and a click walk from the content warning to the abandon
-// confirmation at the default window size.
+// confirmation — and, since PLAN.md #6, on down the descent into a real fight — at the default
+// window size.
 //
-// WHY IT IS NOT REDUNDANT. The driver in `src/dev/layoutProbe.ts` MIRRORS two structures the
-// renderer builds inline — the battle control list and the `.hub-menu` wrapper — because
-// `game.ts` calls the Electron IPC at module scope and can never be imported (G51). A mirror
-// can drift from the thing it mirrors, and a drifted mirror is a test that carefully measures
-// a page the game never shows. This is the other end of that coupling, and the two are
-// compared against each other directly below.
+// WHY IT IS NOT REDUNDANT. The driver in `src/dev/layoutProbe.ts` still MIRRORS one structure
+// the renderer builds inline — the `.hub-menu` wrapper around `hubMenu`'s rows. (The battle
+// control list was mirrored too until #6; the battle scenarios now make the renderer's own
+// builder calls, so what remains to check there is that the renderer really makes them — the
+// real battle's rows are compared with the probe's below.) A mirror can drift from the thing it
+// mirrors, and a drifted mirror is a test that carefully measures a page the game never shows.
+// This is the other end of that coupling, and the two are compared against each other below.
 //
 // It also exercises three things only a real boot can: that clearing the reserved region on
 // every render path really stops frames accumulating, that the REAL settings path moves the
@@ -1297,7 +1790,84 @@ describe('the real renderer, booted and walked', () => {
       'inventory',
       'hub-after-re-renders',
       'confirm-abandon',
+      // PLAN.md #6: back out of the confirmation, descend until a REAL fight opens, open its
+      // Cast menu, then swing once — the renderer's own battle, not the probe's fixture.
+      'battle',
+      'battle-cast-open',
+      'battle-after-round',
     ]);
+  });
+
+  it('after a REAL round the frame is whole: the ticker speaks, the bars stand, nothing stacked', () => {
+    const s = step('battle-after-round');
+    expect(s.layout, 'the round left the stage').toBe('stage');
+    expect(s.ticker.text.length, 'the ticker carries no line after a round').toBeGreaterThan(0);
+    // The foe's bar, the player's HP and charges — rebuilt from the engine's final state.
+    expect(s.bars.map((b) => b.tone)).toEqual(['void-bar-foe', 'void-bar-hp', 'void-bar-accent']);
+    for (const b of s.bars) expect(b.text, `a ${b.tone} bar has no readout`).toMatch(/^\d+\/\d+$/);
+    // The replay mounted a frame of its own and the rebuild replaced it: still exactly one.
+    expect(s.enemySlot.inPage, 'the replay left a second enemy region on the page').toBe(1);
+    expect(s.enemySlot.inSheet).toBe(0);
+    expect(s.choices.labels, 'the commands did not come back after the round').toContain('Fight');
+  });
+
+  it('and the renderer logged the round it played, timed, with every beat', () => {
+    // AC-19 / AC-31, from the renderer's OWN log channel. The duration is at least the
+    // schedule for that many beats (re-derived here from the four constants) and far below
+    // the round threshold.
+    const rounds = RESULT.phaseC.logs.filter((e) => e.category === 'battle' && e.message === 'round played');
+    expect(rounds.length, 'no round was logged — the replay never ran').toBeGreaterThan(0);
+    for (const r of rounds) {
+      const data = r.data as { beats: number; ms: number; motion: string; hooks: string[] };
+      expect(data.beats, 'a round with no beats was replayed').toBeGreaterThanOrEqual(1);
+      expect(data.ms, `a ${data.beats}-beat round took less than its schedule`).toBeGreaterThanOrEqual(scheduledMs(data.beats) - 5);
+      expect(data.ms, 'a round took longer than the slow threshold').toBeLessThan(3000);
+      expect(['full', 'reduced']).toContain(data.motion);
+      expect(Array.isArray(data.hooks)).toBe(true);
+    }
+  });
+
+  it('the REAL battle is the framed stage: the arena holds the enemy, and the HUD is gone', () => {
+    for (const name of ['battle', 'battle-cast-open']) {
+      const s = step(name);
+      expect(s.layout, `${name} is not in the stage layout`).toBe('stage');
+      expect(s.arena, `${name}: the real page has no arena`).not.toBeNull();
+      expect(s.arena!.height, `${name}: the arena is empty`).toBeGreaterThan(100);
+      expect(s.enemySlot.inPage, `${name}: ${s.enemySlot.inPage} enemy regions in the page`).toBe(1);
+      expect(s.enemySlot.inArena, `${name}: the enemy region is not in the arena`).toBe(1);
+      expect(s.enemySlot.inSheet, `${name}: the enemy region is still in the HUD`).toBe(0);
+      expect(s.sheet.display, `${name}: the HUD column is still drawn in battle`).toBe('none');
+      expect(Math.abs((s.enemySlot.ratio as number) - ENEMY_RATIO), `${name}: not 3:4`).toBeLessThan(0.01);
+      expect(s.ticker.toggles, `${name}: not exactly one Record toggle`).toBe(1);
+      expect(s.vitals, `${name}: no stat box`).not.toBeNull();
+      expect(s.vitals!.height, `${name}: the stat box is empty`).toBeGreaterThan(40);
+    }
+  });
+
+  it('Cast opens a sub-menu that REPLACES the commands, with a way back', () => {
+    const commands = step('battle').choices.labels;
+    const cast = step('battle-cast-open').choices.labels;
+    expect(commands, 'the real battle offers no Fight').toContain('Fight');
+    expect(commands, 'the real battle offers no Cast').toContain('Cast');
+    expect(cast[0], 'the Cast sub-menu does not lead with Back').toBe('Back');
+    expect(cast, 'the commands are still on screen under the Cast list').not.toContain('Fight');
+    // An Enforcer starts with two castable skills (classKit `coreSkills`), so Back + 2.
+    expect(cast.length, 'the Cast list does not hold the starting kit').toBe(3);
+  });
+
+  it('the rows the RENDERER builds are the rows the probe measured (anti-drift)', () => {
+    // The probe's battle fixture is built by the same builders the renderer calls; this is
+    // the other end, checked in the real page: a real single-line command is exactly one
+    // compact battle row tall, the height every fold and headroom number above assumes.
+    const real = step('battle');
+    for (const [i, b] of real.buttons.entries()) {
+      expect(b.height, `real battle row ${i} (${real.choices.labels[i]}) is not one compact row`).toBeCloseTo(
+        battleRowPx('normal'),
+        0,
+      );
+    }
+    const mirrored = report(1100, 820, 'battle', 'normal');
+    expect(Math.abs((real.buttons[0] as Box).height - (mirrored.buttons[0] as Box).height)).toBeLessThan(1);
   });
 
   it('and it is the real page: the bundled face loaded and all four weights are there', () => {
@@ -1314,6 +1884,9 @@ describe('the real renderer, booted and walked', () => {
       ['settings', 'wide'],
       ['inventory', 'wide'],
       ['confirm-abandon', 'side'],
+      ['battle', 'stage'],
+      ['battle-cast-open', 'stage'],
+      ['battle-after-round', 'stage'],
     ] as const) {
       expect(step(name).layout, `${name} is in the wrong stage layout`).toBe(mode);
     }
@@ -1368,7 +1941,7 @@ describe('the real renderer, booted and walked', () => {
       ).toBe(1);
     }
     // ...and it is gone entirely on the screens that do not own it.
-    for (const name of ['content-warning', 'title', 'settings', 'inventory']) {
+    for (const name of ['content-warning', 'title', 'settings', 'inventory', 'battle', 'battle-cast-open', 'battle-after-round']) {
       expect(step(name).scenery.inPage, `${name} mounts a scenery frame`).toBe(0);
     }
   });

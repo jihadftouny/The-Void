@@ -222,6 +222,18 @@ describe('regular-expression literals are consumed whole', () => {
       expect(files, `${required} is no longer swept`).toContain(required);
     }
 
+    // ⚠ ONE FILE SITS BELOW THE PER-FILE FLOOR BY DESIGN, named here with its EXACT count.
+    // `src/desktop/main.ts` (PLAN.md #6, G51) is the page's entry script and its whole body is
+    // two statements — `import { boot } from './game.ts';` and `boot();` — so "more than three
+    // code lines" cannot hold for it, and padding it with extra lines to satisfy a floor would
+    // be the guard being gamed rather than kept. Pinned to exactly two instead, which is
+    // STRICTER than the floor: the file cannot quietly grow into a second start-up path, and a
+    // comment hole that swallowed either statement still fails (the count drops).
+    const EXACT_CODE_LINES = new Map([['src/desktop/main.ts', 2]]);
+    for (const [file] of EXACT_CODE_LINES) {
+      expect(files, `${file} is exempted from the floor but not swept at all`).toContain(file);
+    }
+
     let totalChecked = 0;
     for (const file of files) {
       const raw = fs.readFileSync(path.join(HERE, '..', file), 'utf8');
@@ -238,7 +250,11 @@ describe('regular-expression literals are consumed whole', () => {
         expect(stripped, `${file}: the scanner ate "${t}"`).toContain(t);
         checked += 1;
       }
-      expect(checked, `${file}: no code lines checked`).toBeGreaterThan(3);
+      if (EXACT_CODE_LINES.has(file)) {
+        expect(checked, `${file}: its code lines changed`).toBe(EXACT_CODE_LINES.get(file));
+      } else {
+        expect(checked, `${file}: no code lines checked`).toBeGreaterThan(3);
+      }
       totalChecked += checked;
     }
     expect(totalChecked, 'the sweep checked almost nothing').toBeGreaterThan(2000);

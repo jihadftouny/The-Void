@@ -1,0 +1,267 @@
+/* THE BATTLE SCREEN'S OWN LOOK (PLAN.md #6 — the framed stage, UI-DESIGN.md §1).
+ *
+ * WHAT LIVES WHERE, and why. The stage MODE — which region sits in which cell of the frame,
+ * the prose and log floors, the HUD column giving way — is layout, and lives in `game.css`
+ * with the other two modes: `tokens.test.ts` requires every mode property to be declared
+ * there and nowhere else, and one breakpoint literal is easier to keep true than two. The
+ * MOTION switch (reduced motion stopping the flash, the shake and the float) lives with the
+ * rest of the interface's motion policy in `atmosphere.css`. What is left here is the look of
+ * the pieces themselves: the arena, the stat box, the ticker, the menu rows, and the three
+ * effects a beat plays.
+ *
+ * Every colour is a --void-* token and every font size reads the type scale
+ * (`styleDiscipline.test.ts` scans this file like every other).
+ */
+
+/* ---- The arena: the enemy's framed stage, centred in the middle column ------------------ */
+
+#arena {
+  min-width: 0;
+}
+
+.arena-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-1);
+  min-width: 0;
+}
+
+/* The flash target, the float host, and the anchor #7's sprite mounts into. A block wrapper,
+ * not a flex item of its own: the art slot as a direct flex item collapses to a few pixels
+ * (the same finding `#scenery` records), and `width: auto` inside a block is what lets the
+ * height cap transfer through `aspect-ratio` to the width. */
+.arena-figure {
+  position: relative;
+  display: block;
+}
+
+/* THE ENEMY REGION, CAPPED BY HEIGHT WITH THE COMMITTED 3:4 GOVERNING INSIDE THE BOX.
+ * The ratio is LOCKED (docs/ART-BIBLE.md §4, `artSlots.json`): it is the box that is capped,
+ * never the shape. 32vh is a LITERAL, not a custom property, so the relative-cap detector in
+ * `styleDiscipline.test.ts` can read its unit, and the layout probe's `ARENA_CAP_VH` is
+ * cross-checked against this exact text: 204.8px tall at the 960x640 minimum, 262px at the
+ * default window — where the old HUD slot was capped at 140px wide. */
+#arena .void-art-slot {
+  width: auto;
+  max-height: 32vh;
+  margin: 0 auto;
+}
+
+.arena-name {
+  margin: 0;
+  text-align: center;
+  color: var(--void-foe);
+  font-size: var(--void-type-base);
+  letter-spacing: var(--void-track-wide);
+  text-transform: uppercase;
+}
+
+.frame-bar {
+  min-width: 0;
+}
+
+.arena-inner .chips,
+.vitals-inner .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--void-space-1);
+}
+.arena-inner .chips {
+  justify-content: center;
+}
+/* Appended unconditionally by the builders; an empty row takes no space. */
+.arena-inner .chips:empty,
+.vitals-inner .chips:empty {
+  display: none;
+}
+
+/* ---- The ticker: ONE line, the most recent combat line, and the way into the full log -- */
+
+.ticker {
+  display: flex;
+  align-items: center;
+  gap: var(--void-space-3);
+  padding-top: var(--void-space-1);
+  border-top: var(--void-rule-hair) solid var(--void-rule);
+}
+
+/* One line, always: a long combat line is CUT with an ellipsis, never wrapped, so a round's
+ * lines cannot make the frame breathe. The whole line is in the log behind the toggle. The
+ * floor keeps an empty ticker (a fight's first screen) from collapsing the frame by a line. */
+.ticker-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 1lh;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--void-ink);
+  font-size: var(--void-type-sm);
+}
+
+.ticker-toggle {
+  flex: none;
+  padding: var(--void-space-1) var(--void-space-2);
+  background: transparent;
+  border: var(--void-rule-hair) solid var(--void-rule);
+  color: var(--void-ink-dim);
+  font-size: var(--void-type-xs);
+  letter-spacing: var(--void-track-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.ticker-toggle[aria-expanded='true'] {
+  color: var(--void-accent);
+  border-color: var(--void-accent);
+}
+
+/* ---- The stat box: bottom-left of the frame ----------------------------------------------- */
+
+#vitals {
+  min-width: 0;
+}
+
+.vitals-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-1);
+  padding: var(--void-space-3);
+  border: var(--void-rule-hair) solid var(--void-rule);
+  background: var(--void-panel);
+}
+
+.vitals-name {
+  margin: 0;
+  color: var(--void-ink);
+  font-size: var(--void-type-base);
+  letter-spacing: var(--void-track-wide);
+}
+
+.vitals-class,
+.vitals-resource {
+  margin: 0;
+  color: var(--void-ink-dim);
+  font-size: var(--void-type-sm);
+}
+
+/* ---- The reserved tempo gauge (#1.6, GAME-DESIGN §16.1) -------------------------------------
+ * Rendered only when the engine supplies a tempo, which it does not yet. Two halves meet at a
+ * centre line: the right fills toward the EXTRA ACTION (the accent), the left toward the LOST
+ * TURN (harm). Discrete cells, like every bar here, so a player can count how close it is. */
+.tempo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--void-space-2);
+  font-size: var(--void-type-sm);
+}
+.tempo-label {
+  min-width: 5.5em;
+  color: var(--void-ink-dim);
+  font-size: var(--void-type-xs);
+  letter-spacing: var(--void-track-wide);
+  text-transform: uppercase;
+}
+.tempo-gauge {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.tempo-half {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.tempo-cell {
+  flex: 1;
+  height: 10px;
+  min-width: 2px;
+  background: var(--void-rule);
+}
+.tempo-quick .tempo-cell.is-filled { background: var(--void-accent); }
+.tempo-slow .tempo-cell.is-filled { background: var(--void-harm); }
+.tempo-centre {
+  flex: none;
+  width: var(--void-rule-heavy);
+  height: 14px;
+  background: var(--void-ink-dim);
+}
+.tempo-text {
+  min-width: 3.5em;
+  text-align: right;
+  color: var(--void-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The menu: compact rows, bottom-anchored in the right-hand column --------------------- */
+
+.battle-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--void-space-2);
+}
+
+/* Compact: a battle row is one line of its label plus a space-2 pad (38px at the default
+ * text size, 43 at large — both above the one-line floor the probe holds every control to).
+ * Left-aligned, so the commands read as a list, the way §1 draws them. */
+.battle-menu .void-button {
+  padding: var(--void-space-2) var(--void-space-4);
+  text-align: left;
+}
+
+/* ---- The three effects a beat plays -------------------------------------------------------
+ * All three are switched off by reduced motion in `atmosphere.css`, where the rest of the
+ * interface's motion policy lives; under it the script sends the soft TINT instead of the
+ * flash and the shake (UI-DESIGN §13: the strike must still read, nothing may strobe or move).
+ * No keyframe here touches opacity or a colour the contrast gate measures. */
+
+/* THE FLASH — the enemy is struck. A brightening of its frame, 240ms, once. */
+.arena-figure.is-struck {
+  animation: arena-flash 240ms ease-out;
+}
+@keyframes arena-flash {
+  from { filter: brightness(2.2); }
+  to { filter: brightness(1); }
+}
+
+/* THE SHAKE — the player is struck. Four pixels either way, 240ms, once. */
+.vitals-inner.is-shaking {
+  animation: arena-shake 240ms linear;
+}
+@keyframes arena-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+/* THE TINT — the strike, without motion: a static harm-coloured rule around the struck side. */
+.arena-figure.is-tinted,
+.vitals-inner.is-tinted {
+  outline: var(--void-rule-heavy) solid var(--void-harm);
+  outline-offset: var(--void-space-1);
+}
+
+/* THE FLOAT — the engine's number, over the side it concerns. It rises under full motion and
+ * simply sits there under reduced motion. Decorative: the ticker line says the same in words. */
+.arena-float {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: var(--void-type-lg);
+  letter-spacing: var(--void-track-wide);
+  animation: arena-float-rise 480ms ease-out forwards;
+}
+.arena-float-harm { color: var(--void-harm); }
+.arena-float-heal { color: var(--void-heal); }
+.arena-float-plain { color: var(--void-ink); }
+@keyframes arena-float-rise {
+  from { transform: translate(-50%, 0); }
+  to { transform: translate(-50%, -24px); }
+}

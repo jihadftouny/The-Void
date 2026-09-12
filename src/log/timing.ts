@@ -27,14 +27,20 @@ import { now, type LogLevel } from './logger.ts';
  *  - `narrate` 20 000 ms — the same derivation, minus the render work `turn` also covers.
  *  - `save` 100 ms / `load` 250 ms — a run save is tens of kilobytes of `JSON.stringify`;
  *    both are two orders of magnitude above that, so only a real stall trips them.
+ *  - `round` 2 500 ms (PLAN.md #6) — the battle's beat replay is SCHEDULED, not computed:
+ *    `beat-model.ts` caps a round at `MAX_ROUND_MS` 1 600 ms (up to twelve beats; a thirteenth
+ *    runs to 1 680 at the readable floor). 2 500 is well above every designed replay and far
+ *    below the narration, so a warn means the timers themselves are being starved — a busy
+ *    main thread, the very freeze principle 7 was added for.
  */
-export const SLOW_MS: Readonly<Record<'step' | 'turn' | 'narrate' | 'save' | 'load', number>> =
+export const SLOW_MS: Readonly<Record<'step' | 'turn' | 'narrate' | 'save' | 'load' | 'round', number>> =
   Object.freeze({
     step: 50,
     turn: 25_000,
     narrate: 20_000,
     save: 100,
     load: 250,
+    round: 2_500,
   });
 
 /**

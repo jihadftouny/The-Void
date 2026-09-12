@@ -1,13 +1,15 @@
-// SOURCE GUARDS on `src/desktop/game.ts` — the file that CANNOT be imported.
+// SOURCE GUARDS on `src/desktop/game.ts` — written when it was the file that CANNOT be imported.
 //
-// WHY A SOURCE SCAN AND NOT A REAL TEST. `src/desktop/game.ts` calls the Electron IPC
-// (`window.void.onStatus(...)`) at MODULE SCOPE, which is why `npm run dev` cannot run outside
-// Electron and why importing it in Vitest throws before a single line of test code runs.
-// Every behaviour worth testing has therefore been pushed out into pure helpers
-// (`view-model.ts`, `log-model.ts`) that ARE tested. What is left in this file is WIRING —
-// which helper is called, in which branch, in which order — and the only way to assert wiring
-// in a file you cannot load is to read it. #0b set this precedent
+// WHY A SOURCE SCAN AND NOT A REAL TEST. `src/desktop/game.ts` called the Electron IPC
+// (`window.void.onStatus(...)`) at MODULE SCOPE, so importing it in Vitest threw before a
+// single line of test code ran. Every behaviour worth testing was therefore pushed out into
+// pure helpers (`view-model.ts`, `log-model.ts`) that ARE tested, and what was left here is
+// WIRING — which helper is called, in which branch, in which order. #0b set this precedent
 // (`narrationCoverage.test.ts`'s G42 scan); this file collects #0c's.
+//
+// PLAN.md #6 landed G51 — the start-up is `export function boot()` and `boot.test.ts` drives the
+// real renderer under jsdom. These scans are kept and re-anchored, not retired: each pins a
+// polarity on every path at once, which one behavioural walk cannot.
 //
 // THE RULE THESE GUARDS FOLLOW. A scan that only recognises the exact characters that happen
 // to be there today is untested in every other shape the violation can take. So each pattern
@@ -62,6 +64,14 @@ const RAW = readFileSync(fileURLToPath(new URL('./game.ts', import.meta.url)), '
  * out of a string literal.
  */
 const SOURCE = RAW.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+/**
+ * PLAN.md #6's battle DOM module, stripped the same way — the foe's name and chips moved there
+ * from `renderSheet`, so the guards on them follow it.
+ */
+const BATTLE_SOURCE = readFileSync(fileURLToPath(new URL('./battle.ts', import.meta.url)), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/\/\/.*$/gm, '');
 
 /** The body of a top-level function declaration, up to the first closing brace in column 0. */
 function bodyOf(declaration: string): string {
@@ -258,10 +268,21 @@ describe('renderSheet() never interpolates a name into markup', () => {
   const body = bodyOf('function renderSheet(');
 
   it('still renders the names (the guard has something to guard)', () => {
-    // If renderSheet stopped showing either name, every "must not" below would pass by
+    // If renderSheet stopped showing the player's name, every "must not" below would pass by
     // finding nothing at all.
     expect(body).toMatch(/\bp\.name\b/);
-    expect(body).toMatch(/\bfullName\b/);
+    // RE-ANCHORED by PLAN.md #6: the ENEMY's generated name left the HUD for the framed stage.
+    // It must not come back here, and it must be set as TEXT where it went — `buildArena`
+    // passes `view.name` to the `element` helper, and that helper writes `textContent`.
+    expect(body, 'the foe is back in the HUD — the stage owns it').not.toMatch(/\bfullName\b/);
+    const battle = BATTLE_SOURCE;
+    const arena = battle.slice(battle.indexOf('export function buildArena('), battle.indexOf('\n}', battle.indexOf('export function buildArena(')));
+    expect(arena, 'the arena no longer shows the enemy’s name').toMatch(
+      /element\(\s*'p',\s*'arena-name',\s*view\.name\s*\)/,
+    );
+    const helper = battle.slice(battle.indexOf('function element('), battle.indexOf('\n}', battle.indexOf('function element(')));
+    expect(helper, 'the element helper no longer sets text').toMatch(/\.textContent\s*=\s*text\b/);
+    expect(helper).not.toMatch(/innerHTML/);
   });
 
   it('assigns no innerHTML at all', () => {
@@ -309,9 +330,22 @@ describe('renderSheet() puts condition chips on the HUD', () => {
       /conditionChips\s*\(/,
     );
     expect(body).toMatch(/\bchip\s*\(/);
-    // Both combatants: the player's own row, and the foe's during a battle.
+    // The player's own row stays in the HUD...
     expect(body).toMatch(/chips\s*\(\s*p\.activeConditions\s*\)/);
-    expect(body).toMatch(/chips\s*\(\s*e\.activeConditions\s*\)/);
+    // ...and RE-ANCHORED by PLAN.md #6: the foe's row moved to the framed stage, where
+    // `stageView` builds its models (pinned behaviourally in `battle-model.test.ts`) and
+    // `buildArena` appends the row UNCONDITIONALLY — the same no-branch idiom as here.
+    expect(body, 'the foe’s chips are back in the HUD').not.toMatch(/e\.activeConditions/);
+    const battle = BATTLE_SOURCE;
+    const arena = battle.slice(battle.indexOf('export function buildArena('), battle.indexOf('\n}', battle.indexOf('export function buildArena(')));
+    expect(arena, 'the arena shows no condition chips — that is G28(a) on the new screen').toMatch(
+      /\n\s*inner\.appendChild\(\s*chipsRow\(\s*view\.chips\s*\)\s*\)/,
+    );
+    const row = battle.slice(battle.indexOf('function chipsRow('), battle.indexOf('\n}', battle.indexOf('function chipsRow(')));
+    expect(row, 'the arena’s chip row grew a branch that could hide it').not.toMatch(/\bif\s*\(|\?\s*.*:/);
+    // One exit, and it is the end: an early `return` would skip the row just as an `if` would.
+    expect(row.match(/\breturn\b/g) ?? [], 'the chip row grew an early return').toHaveLength(1);
+    expect(row, 'the chip row no longer returns the row it built').toMatch(/return row;\s*$/);
   });
 
   it('and the chip row carries no branch that could be inverted', () => {

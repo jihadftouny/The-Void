@@ -1,7 +1,8 @@
 // SOURCE GUARDS on the wiring PLAN.md #2 (`floor-mechanics`) added to `src/desktop/game.ts`.
 //
-// `game.ts` calls the Electron IPC at module scope, so it cannot be imported and its wiring can
-// only be read (FINDINGS.md G51). Everything that could be lifted OUT was: the full-pack screen is
+// When this was written `game.ts` called the Electron IPC at module scope, so it could not be
+// imported and its wiring could only be read (FINDINGS.md G51; PLAN.md #6 has since moved that
+// start-up into `boot()`). Everything that could be lifted OUT was: the full-pack screen is
 // `view-model.ts`'s `dealDiscardView`, behaviourally tested there. What is left here is which
 // input each new control dispatches, with which argument — the part a typo breaks silently.
 //

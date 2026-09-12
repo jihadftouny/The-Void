@@ -30,6 +30,7 @@
 @import '../render/atmosphere.css';
 @import '../render/components.css';
 @import './screens.css';
+@import './battle.css';
 
 html, body { height: 100%; }
 
@@ -201,6 +202,80 @@ html, body { height: 100%; }
   --void-log-floor: 2lh;
 }
 
+/* =========================================================================================
+ * THE FRAMED STAGE (PLAN.md #6, UI-DESIGN.md §1) — the third mode, for a live fight.
+ *
+ *   ┌──────────┬─────────────────────────────┬──────────────┐
+ *   │          │ #arena: the enemy, 3:4,     │ #choices     │
+ *   │          │ ≤32vh, centred; name, bar,  │ (the menu,   │
+ *   │          │ chips; the ticker           │  bottom-     │
+ *   │ #vitals  ├─────────────────────────────┤  anchored)   │
+ *   │ (bottom) │ #column: the prose; the log │              │
+ *   └──────────┴─────────────────────────────┴──────────────┘
+ *
+ * Still one set of properties and one set of rules: the mode is a change of numbers plus the
+ * four placements below. The HUD column gives way — the stat box IS the HUD in a fight, and
+ * §1's frame has no sidebar. Two recorded deviations from §17's floors, both measured by the
+ * layout probe: the prose floor is FOUR lines (the arena takes the height eight would need at
+ * 640px; battle prose is a bookend by design, §2), and the log is closed behind the ticker —
+ * its floor applies only when the player opens it, which is why it can be two lines here.
+ * ========================================================================================= */
+#arena,
+#vitals {
+  display: none;
+}
+
+[data-layout='stage'] #game {
+  grid-template-columns: minmax(0, 1fr);
+}
+[data-layout='stage'] #sheet {
+  display: none;
+}
+
+[data-layout='stage'] .stage-body {
+  --void-layout-cols: 220px minmax(0, 1fr) var(--void-choices-w);
+  --void-layout-rows: auto minmax(0, 1fr);
+  --void-column-max: none;
+  --void-prose-floor: 4lh;
+  --void-log-cap: 18vh;
+  --void-log-floor: 2lh;
+  /* The frame and its measure travel together and stay centred on a wide desktop. */
+  max-width: calc(72ch + 220px + var(--void-choices-w) + 4 * var(--void-space-5));
+}
+
+[data-layout='stage'] #arena {
+  display: block;
+  grid-column: 2;
+  grid-row: 1;
+}
+[data-layout='stage'] #vitals {
+  display: block;
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: end;
+}
+[data-layout='stage'] #column {
+  grid-column: 2;
+  grid-row: 2;
+}
+[data-layout='stage'] #choices {
+  grid-column: 3;
+  grid-row: 1 / 3;
+}
+/* BOTTOM-ANCHORED, the way §1 draws the menu — and the free space above it is where #11's
+ * talk row and its text input land without a re-layout. An auto margin rather than
+ * `justify-content: flex-end`, deliberately: when a list outgrows the column (a full pack of
+ * items), an auto margin collapses to zero and the list starts at the top where it can be
+ * scrolled, while flex-end would push its first rows ABOVE the box, out of scroll's reach. */
+[data-layout='stage'] .choices > :first-child {
+  margin-top: auto;
+}
+/* The full log sits closed behind the ticker until the player opens it (the `Record` toggle
+ * sets `#column[data-log]`). The ticker is the log's one visible line. */
+[data-layout='stage'] #column:not([data-log='open']) .log {
+  display: none;
+}
+
 /* THE STACKED FALLBACK. Below 900px the reading column could not keep ~40 characters beside
  * a 260px choice column (W - 552 < 360 at the base step). Derived from the MEASURE, not from
  * a device.
@@ -221,6 +296,46 @@ html, body { height: 100%; }
   /* The establishing frame is the first thing to go when there is no room for it: at this
    * width the prose and the controls both need the height more than the atmosphere does. */
   #scenery {
+    display: none;
+  }
+
+  /* The framed stage, STACKED: the arena across the top, the prose beneath it, then the stat
+   * box and the menu side by side. The enemy's art region goes first, as the scenery's does.
+   *
+   * THE MENU YIELDS TO THE PROSE, not the other way round. Here the menu sits BELOW the prose
+   * and competes with it for height, and the prose's column is a scroll container (automatic
+   * minimum: zero), so a content-sized menu row won every time: an open Cast list squeezed the
+   * column to its padding and the prose was scrolled out of sight — §17's original defect,
+   * again. So the bottom row is `fit-content(40vh)`: as tall as the menu, up to 40% of the
+   * window; past that the menu scrolls, first control on screen. 40vh from the probe's 800x600:
+   * the header, padding and gaps leave ~518px, the arena ~122px at large text, four lines of
+   * prose ~126px — which leaves 246px, and 40vh is 240. (The stat box, which does not scroll,
+   * still sets the row's minimum.) */
+  [data-layout='stage'] .stage-body {
+    --void-layout-cols: minmax(0, 1fr) var(--void-choices-w);
+    --void-layout-rows: auto minmax(0, 1fr) fit-content(40vh);
+    --void-column-max: none;
+    --void-prose-floor: 4lh;
+    --void-log-cap: 18vh;
+    --void-log-floor: 2lh;
+  }
+  [data-layout='stage'] #arena {
+    grid-column: 1 / 3;
+    grid-row: 1;
+  }
+  [data-layout='stage'] #column {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+  [data-layout='stage'] #vitals {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  [data-layout='stage'] #choices {
+    grid-column: 2;
+    grid-row: 3;
+  }
+  [data-layout='stage'] #arena .arena-figure {
     display: none;
   }
 }

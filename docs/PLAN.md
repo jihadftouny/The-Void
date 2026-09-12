@@ -322,6 +322,9 @@ unterminated, so the dead figures rendered live twice:)* ~~Total ~118 assets / 3
 **#6 `battle-screen`** · **#7 `canvas-layer`** · **#8 `screens-restyle`** — per `UI-DESIGN.md`.
 **#6 also needs two things recorded elsewhere:** **audio hooks on every beat** (`ART-BIBLE.md` §10 —
 marked BLOCKING; free now, a rewrite after) and **a free-text input** for talking to bosses (§20).
+*(2026-09-12, #6 built: the hooks are done — FINDINGS B18. The talk input is **reserved, not built**:
+the menu is bottom-anchored with measured headroom for a Talk row and its input, and the input itself
+moves to **#11**, which makes the bosses agents it would talk to.)*
 #6 must not start before #2: building on a battle loop with no floor-modifier hook is the most
 expensive mistake available.
 
@@ -380,7 +383,9 @@ dead** — taking `mirror-shard`, the only hard-coded item on any *acquisition* 
 The other three can be wired independently.
 
 **#11 finish M12** — there are **four** combat bosses, not five (floor 4's executioner does not
-exist), and **no boss is an agent**, which was M12's entire premise.
+exist), and **no boss is an agent**, which was M12's entire premise. **Also #11's (moved from #6 on
+2026-09-12, FINDINGS B18):** the **free-text input for talking to bosses** (§20) — the battle menu
+already reserves the room for a Talk row and its input (`UI-DESIGN.md` §17, "The third mode").
 
 **#12 narrator to spec (reduced M11)** — grammar-constrained choices, the tool registry and
 free-text mapping are **dropped**. What remains: the persona rewrite (the narrator *is* the

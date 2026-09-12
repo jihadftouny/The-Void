@@ -28,6 +28,7 @@ import {
   serializeSettings,
   settingsVars,
   WIDE_SCREENS,
+  STAGE_SCREENS,
   type ContrastSetting,
   type LayoutMode,
   type MotionSetting,
@@ -517,7 +518,7 @@ describe('the settings rows describe controls that actually control something', 
 // almost right, and quietly get the wrong prose floor.
 // =========================================================================================
 
-describe('every screen is classified into one of the two stage layouts', () => {
+describe('every screen is classified into one of the three stage layouts', () => {
   // Transcribed from the plan's own table (§2.6), not read back from the code.
   const EXPECTED: Record<
     Awaiting | HubScreen | 'confirm-abandon' | 'resume' | 'content-warning',
@@ -537,7 +538,9 @@ describe('every screen is classified into one of the two stage layouts', () => {
     'accept-or-reroll-stats': 'side',
     'main-menu': 'side',
     'confirm-abandon': 'side',
-    'battle-action': 'side',
+    // `stage` (PLAN.md #6, UI-DESIGN §1): the live fight is the JRPG frame. An un-started
+    // fight (`continue`) and the victory screen stay `side` — the frame is for the exchange.
+    'battle-action': 'stage',
     continue: 'side',
     'draft-pick': 'side',
     'deal-decision': 'side',
@@ -557,14 +560,24 @@ describe('every screen is classified into one of the two stage layouts', () => {
     const modes = Object.values(EXPECTED);
     expect(modes.filter((m) => m === 'wide').length, 'the document screens moved').toBe(7);
     // PLAN.md #2: +1 side screen — the full-pack bargain (`deal-discard`, Appendix A.3);
-    // `rest-decision` became `rest` (same count).
-    expect(modes.filter((m) => m === 'side').length, 'the action screens moved').toBe(11);
+    // `rest-decision` became `rest` (same count). PLAN.md #6: the battle left for `stage`.
+    expect(modes.filter((m) => m === 'side').length, 'the action screens moved').toBe(10);
+    expect(modes.filter((m) => m === 'stage').length, 'the battle is not the framed stage').toBe(1);
     expect(modes.length, 'a screen key was dropped from the table').toBe(18);
   });
 
   it('an unknown key is `side` — the mode that guarantees the prose its floor', () => {
     expect(screenLayout('a-screen-that-does-not-exist-yet')).toBe('side');
     expect(screenLayout('')).toBe('side');
+  });
+
+  it('and `STAGE_SCREENS` holds exactly the one the table calls stage (both ends, G56)', () => {
+    const stageInTable = Object.entries(EXPECTED)
+      .filter(([, mode]) => mode === 'stage')
+      .map(([key]) => key);
+    expect([...STAGE_SCREENS]).toEqual(stageInTable);
+    // Disjoint from the document screens, or a screen would be classified twice.
+    for (const key of STAGE_SCREENS) expect(WIDE_SCREENS.has(key), key).toBe(false);
   });
 
   it('and `WIDE_SCREENS` holds exactly the seven the table calls wide', () => {

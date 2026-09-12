@@ -23,18 +23,21 @@
 // ---------------------------------------------------------------------------------------
 // WHAT IT DELIBERATELY DOES NOT DO. It is not the renderer. It imports the REAL builders
 // (`buildArtSlotById`, `appendButton`, `appendLogLine`, `picker`, `buildContentWarning`,
-// `buildSettingsScreen`), the REAL models (`hubMenu`, `buttonModel`, `rowModel`), and the
-// REAL theme application, so the content it measures is the content the game produces. Two
-// structures it MIRRORS rather than imports, because `src/desktop/game.ts` calls the Electron
-// IPC at module scope and can never be imported (FINDINGS.md G51):
+// `buildSettingsScreen`, and PLAN.md #6's `buildArena` / `buildVitals` / `buildBattleMenu`),
+// the REAL models (`hubMenu`, `buttonModel`, `rowModel`, `stageView`, `vitalsView`,
+// `battleMenuRows`), and the REAL theme application, so the content it measures is the content
+// the game produces.
 //
-//   1. the battle control list (`case 'battle-action'` in `renderChoices`), and
-//   2. the `.hub-menu` / `.hub-prompt` wrapper `renderHub` builds around `hubMenu`'s rows.
-//
-// A mirror can drift. THE OTHER END OF THAT COUPLING IS PHASE C of the probe, which boots the
-// REAL renderer in Electron and walks it by clicking — so the numbers this file produces for
-// the hub are checked against the ones the actual game produces for the actual hub. Neither
-// half is trusted alone.
+// THE BATTLE IS NO LONGER MIRRORED. Until PLAN.md #6 the battle control list was copied here
+// by hand, because `src/desktop/game.ts` called the Electron IPC at module scope and could not
+// be imported (FINDINGS.md G51). #6 moved that start-up behind `boot()` and built the battle
+// screen from importable builders, so the battle scenarios below make exactly the calls the
+// renderer's battle arm makes; only the fight's STATE is a fixture. One structure is still
+// mirrored — the `.hub-menu` / `.hub-prompt` wrapper `renderHub` builds inline around
+// `hubMenu`'s rows — and a mirror can drift. THE OTHER END OF THAT COUPLING IS PHASE C of the
+// probe, which boots the REAL renderer in Electron and walks it by clicking, now into a real
+// fight as well, so the numbers this file produces are checked against the ones the actual
+// game produces. Neither half is trusted alone.
 //
 // PLAN.md #2 added four more mirrors, of the screens it added or changed: the inventory's
 // per-row Discard, the found rest spot (scenery + Continue), the bargain (cost/reward block +
@@ -56,10 +59,27 @@ import {
 import { appendButton, appendLogLine, appendRow, picker } from '../render/components.ts';
 import { buttonModel, rowModel } from '../render/component-model.ts';
 import { dealDiscardView, dealView, hubMenu } from '../desktop/view-model.ts';
+import {
+  battleMenuRows,
+  stageView,
+  tempoGauge,
+  vitalsView,
+  type StageView,
+  type VitalsView,
+} from '../desktop/battle-model.ts';
+import { buildArena, buildBattleMenu, buildVitals, setLogOpen } from '../desktop/battle.ts';
 import { createPlayer, type Player } from '../game/player.ts';
 import type { SacrificeDeal } from '../game/deal.ts';
 import type { ItemInstance } from '../game/item.ts';
 import { BACKPACK_CAPACITY } from '../game/inventory.ts';
+import type { GameState } from '../game/game.ts';
+import { createBattle, type BattleState } from '../game/battle.ts';
+import { generateEnemy, type Enemy } from '../game/enemy.ts';
+import { generateBoss } from '../game/boss.ts';
+import { createKarma } from '../game/karma.ts';
+import { makeCondition, type ConditionType } from '../game/condition.ts';
+import { mulberry32 } from '../game/rng.ts';
+import { SAVE_VERSION } from '../game/save.ts';
 import {
   CONTENT_WARNING,
   buildArtSlotById,
@@ -88,6 +108,9 @@ export interface ProbePane extends ProbeBox {
   clientHeight: number;
 }
 
+/** A battle-frame region, or `null` when the page has no such element at all. */
+export type ProbeRegion = (ProbePane & { display: string }) | null;
+
 export interface ProbeReport {
   scenario: string;
   scale: TextScale;
@@ -95,13 +118,16 @@ export interface ProbeReport {
   layout: string;
   viewport: { width: number; height: number };
   narration: ProbePane & { beats: number; lineHeight: number; fontSize: number };
-  log: ProbePane & { lines: number };
+  log: ProbePane & { lines: number; display: string };
   column: ProbePane;
   choices: ProbePane & { controls: number };
   /** The scenery figure, when one is mounted. `count` is how many are in the whole stage. */
   scenery: { count: number; box: ProbeBox | null; ratio: number | null };
   /** Every control inside `#choices`, in DOM order. */
   buttons: ProbeBox[];
+  /** Each control's label and disabled state, in the same order as `buttons`. */
+  buttonLabels: string[];
+  buttonDisabled: boolean[];
   page: { scrollHeight: number; clientHeight: number };
   /**
    * For each focusable element in the page, in DOM order, the id of the region it lives in.
@@ -110,6 +136,15 @@ export interface ProbeReport {
   focusOrder: string[];
   /** Whether the bundled face really loaded — the measure numbers are only its if it did. */
   fontLoaded: boolean;
+  // ---- PLAN.md #6: the battle frame ----
+  arena: ProbeRegion;
+  vitals: ProbeRegion;
+  sheet: ProbeBox & { display: string };
+  stageBody: ProbeBox;
+  /** The enemy's reserved region, counted across the WHOLE page. */
+  enemySlot: { inPage: number; inArena: number; inSheet: number; box: ProbeBox | null; ratio: number | null };
+  ticker: { line: ProbeBox | null; toggles: number; expanded: string | null };
+  tempoRows: number;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -198,15 +233,91 @@ function fullPackPlayer(size: number = BACKPACK_CAPACITY): Player {
  */
 const MARKED = { size: 15, leaving: [0, 5] } as const;
 
-/** Six castable skills, for the battle screen with the Cast list open. */
-const CAST_LABELS: readonly string[] = [
-  'Rend',
-  'Static Bloom',
-  'Quicken',
-  'Penitence',
-  'Hollow Step',
-  'Sundering Word',
-];
+// ---------------------------------------------------------------------------------------
+// THE BATTLE FIXTURE (PLAN.md #6). A real `GameState` in a live fight, assembled from the
+// engine's own constructors — `createPlayer`, `generateEnemy` / `generateBoss` on a SEEDED
+// generator, `createBattle` — so the frame is measured on the data the renderer really reads.
+// Every worst case is named, and each overshoots the game rather than undershooting it
+// (PRINCIPLES §A8):
+//
+//   CAST_SKILLS     six real castable ids. A class kit holds FOUR, so six is more than any
+//                   player carries; each is the longest name its kit has.
+//   WARP            every one of them warped by the LONGEST corruption suffix, `(bleeding)` —
+//                   floor 5's labels are the longest a Cast row can carry.
+//   ENEMY_NAME      the longest name the tables can generate (35 characters, measured over
+//                   `enemyNames.json`) behind the longest affix prefix, `Ravenous` — 44.
+//   CHIPS           six conditions on each side, so both chip rows wrap.
+//   TICKER_LINE     a combat line far longer than the arena is wide — the ticker must cut it,
+//                   never wrap it.
+// ---------------------------------------------------------------------------------------
+
+const CAST_SKILLS = ['heavyStrike', 'intimidate', 'consecrate', 'venomCoat', 'mindSpike', 'sacrifice'] as const;
+const WARP = 'bleeding';
+const ENEMY_NAME = 'Ravenous Reinforced Electro-Core Auto-Turret';
+const PLAYER_CHIPS: readonly ConditionType[] = ['stun', 'burn', 'bleed', 'poison', 'fracture', 'strong'];
+const ENEMY_CHIPS: readonly ConditionType[] = ['freeze', 'burn', 'bleed', 'electrify', 'exposed', 'weak'];
+const TICKER_LINE =
+  'You see through the illusion — Wisdom 17 vs 13. It was never there, and it never had a name.';
+/** A catalog consumable with a `use` — what the Use-item sub-menu lists. */
+const USABLE = 'antidote';
+
+/** The fixture player: an Enforcer carrying the worst-case kit, charges and conditions. */
+function battlePlayer(usables: number): Player {
+  const base = createPlayer({
+    name: 'Probe',
+    classId: 'Enforcer',
+    stats: { STR: 12, DEX: 12, CON: 12, INT: 12, WIS: 12, CHA: 12 },
+  });
+  const backpack: ItemInstance[] = Array.from({ length: usables }, () => ({ defId: USABLE }));
+  return {
+    ...base,
+    skillPool: [...CAST_SKILLS],
+    corruptedSkills: Object.fromEntries(CAST_SKILLS.map((id) => [id, WARP])),
+    skillCharges: 3,
+    momentum: 2,
+    activeConditions: PLAYER_CHIPS.map((type) => makeCondition(type)),
+    inventory: { ...base.inventory, backpack },
+  };
+}
+
+/** A worst-case fight: a karma-weighted foe (Spare is offered), or a real boss. */
+function battleState(options: { usables: number; boss?: boolean }): GameState {
+  const player = battlePlayer(options.usables);
+  let enemy: Enemy;
+  let battle: BattleState;
+  if (options.boss) {
+    const made = generateBoss({ bossId: 'kingpin', act: 1, player, karma: createKarma(), rng: mulberry32(9) });
+    enemy = { ...made.enemy, activeConditions: ENEMY_CHIPS.map((type) => makeCondition(type)) };
+    battle = createBattle(player, enemy, 1, { boss: made.boss });
+  } else {
+    const base = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(4));
+    enemy = {
+      ...base,
+      fullName: ENEMY_NAME,
+      karmaWeighted: true,
+      hp: Math.max(1, Math.floor(base.maxHp / 2)),
+      activeConditions: ENEMY_CHIPS.map((type) => makeCondition(type)),
+    };
+    battle = createBattle(player, enemy, 1);
+  }
+  return {
+    version: SAVE_VERSION,
+    rngState: 1,
+    player,
+    act: 1,
+    place: 0,
+    karma: createKarma(),
+    phase: { kind: 'battle', battle, started: true, final: false },
+  };
+}
+
+/** Which menu the scenario shows, and the frame state around it. */
+interface BattleScene {
+  state: GameState;
+  menu: 'commands' | 'cast' | 'item';
+  logOpen: boolean;
+  tempo: boolean;
+}
 
 // ---------------------------------------------------------------------------------------
 // Element lookup. Throws on a missing id, exactly as the renderer's own `$` does — a probe
@@ -290,26 +401,33 @@ function buildHub(mode: 'menu' | 'confirm-abandon'): void {
   }
 }
 
-/** The battle control list from `renderChoices`'s `battle-action` case. MIRRORED. */
-function buildBattle(openPicker: boolean): void {
-  const choices = el('choices');
-  appendButton(choices, buttonModel('Fight'), () => undefined);
-  const wrap = picker(choices, 'Cast', (list) => {
-    for (const [i, name] of CAST_LABELS.entries()) {
-      appendButton(list, buttonModel(name, { hint: `(${(i % 3) + 1}⚡)` }), () => undefined);
-    }
-  });
-  appendButton(choices, buttonModel('Spare'), () => undefined);
-  picker(choices, 'Use item', (list) => {
-    appendButton(list, buttonModel('Ash Draught', { hint: '(common)' }), () => undefined);
-  });
-  // PLAN.md #2 / §22.6: no Potion button — the real battle case lost it when potions folded
-  // into consumables (they are in the Use-item picker above).
-  appendButton(choices, buttonModel('Run'), () => undefined);
-  // Opening it through the real element the real `picker` built, rather than by hand: the
-  // measured height is then the height a player's click produces.
-  const toggle = wrap.querySelector('button');
-  if (openPicker && toggle) toggle.click();
+/**
+ * THE FRAMED STAGE, built by the SAME calls `renderChoices`'s battle arm makes: the real models
+ * (`stageView`, `vitalsView`, `battleMenuRows`) handed to the real builders (`buildArena`,
+ * `buildVitals`, `buildBattleMenu`, `setLogOpen`). Nothing is mirrored any more — G51 made the
+ * renderer's own pieces importable — so the only fixture here is the STATE. The HUD column is
+ * left empty: the stage hides it, and phase C measures the real one.
+ *
+ * The tempo scenario sets the reserved `tempo` on the views by hand — the one test-only value
+ * in the frame, because no engine field exists yet (#1.6 adds it).
+ */
+function mountBattle(scene: BattleScene): void {
+  const { state } = scene;
+  const stage = stageView(state) as StageView;
+  const vitals = vitalsView(state) as VitalsView;
+  if (scene.tempo) {
+    // One of each side of the two-sided gauge: the foe near its extra action, the player
+    // drifting toward a lost turn.
+    stage.tempo = tempoGauge(0.8);
+    vitals.tempo = tempoGauge(-0.3);
+  }
+  const arena = buildArena(stage, { line: TICKER_LINE });
+  el('arena').appendChild(arena);
+  el('vitals').appendChild(buildVitals(vitals));
+  const toggle = arena.querySelector<HTMLElement>('.ticker-toggle');
+  if (!toggle) throw new Error('layout probe: the arena has no Record toggle');
+  setLogOpen(el('column'), toggle, scene.logOpen);
+  el('choices').appendChild(buildBattleMenu(battleMenuRows(state, scene.menu), () => undefined));
 }
 
 /** A nineteen-row inventory — a full paperdoll plus a loaded backpack. */
@@ -417,6 +535,27 @@ interface Scenario {
   build: () => void;
 }
 
+/** One battle scenario: the fixture fight, the menu it shows, and the frame state around it. */
+function battleScenario(
+  fixture: { usables: number; boss?: boolean },
+  menu: BattleScene['menu'],
+  frame: { logOpen?: boolean; tempo?: boolean } = {},
+): Scenario {
+  return {
+    screen: 'battle-action',
+    build: () => {
+      writeBeat();
+      writeLog();
+      mountBattle({
+        state: battleState(fixture),
+        menu,
+        logOpen: frame.logOpen === true,
+        tempo: frame.tempo === true,
+      });
+    },
+  };
+}
+
 const SCENARIOS: Readonly<Record<string, Scenario>> = {
   hub: {
     screen: 'main-menu',
@@ -436,22 +575,15 @@ const SCENARIOS: Readonly<Record<string, Scenario>> = {
       buildHub('confirm-abandon');
     },
   },
-  battle: {
-    screen: 'battle-action',
-    build: () => {
-      writeBeat();
-      writeLog();
-      buildBattle(false);
-    },
-  },
-  'battle-open': {
-    screen: 'battle-action',
-    build: () => {
-      writeBeat();
-      writeLog();
-      buildBattle(true);
-    },
-  },
+  // PLAN.md #6 — the framed stage. Seven states of one worst-case fight; every one carries the
+  // long beat in the pane and the sixty-line log behind the ticker.
+  battle: battleScenario({ usables: 1 }, 'commands'),
+  'battle-cast-open': battleScenario({ usables: 1 }, 'cast'),
+  'battle-items-open': battleScenario({ usables: 1 }, 'item'),
+  'battle-items-open-full': battleScenario({ usables: BACKPACK_CAPACITY }, 'item'),
+  'battle-boss': battleScenario({ usables: 1, boss: true }, 'commands'),
+  'battle-log-open': battleScenario({ usables: 1 }, 'commands', { logOpen: true }),
+  'battle-tempo': battleScenario({ usables: 1 }, 'commands', { tempo: true }),
   'choose-class': {
     screen: 'choose-class',
     build: () => {
@@ -580,14 +712,25 @@ export const SCENARIO_NAMES: readonly string[] = Object.keys(SCENARIOS);
 // ---------------------------------------------------------------------------------------
 
 function reset(): void {
-  for (const id of ['narration', 'log', 'choices']) el(id).replaceChildren();
+  for (const id of ['narration', 'log', 'choices', 'sheet']) el(id).replaceChildren();
   sceneryHost().replaceChildren();
   el('notice').replaceChildren();
+  // PLAN.md #6's two frame regions (absent from a pre-#6 page, so looked up softly) and the
+  // opened-log flag the ticker's toggle writes on the reading column.
+  for (const id of ['arena', 'vitals']) document.getElementById(id)?.replaceChildren();
+  delete el('column').dataset['log'];
 }
 
 function focusRegion(target: Element): string {
-  const owner = target.closest('#column, #choices, #sheet, #stage');
+  const owner = target.closest('#arena, #vitals, #column, #choices, #sheet, #stage');
   return owner ? owner.id : 'elsewhere';
+}
+
+/** A battle-frame region, or null when the page has no such element. */
+function region(id: string): ProbeRegion {
+  const node = document.getElementById(id);
+  if (!node) return null;
+  return { ...pane(node), display: getComputedStyle(node).display };
 }
 
 function measure(name: string, scale: TextScale, screen: string): ProbeReport {
@@ -600,6 +743,11 @@ function measure(name: string, scale: TextScale, screen: string): ProbeReport {
   const first = slots[0] ?? null;
   const slotBox = first ? box(first) : null;
   const controls = [...choices.querySelectorAll('button')];
+  const enemies = document.querySelectorAll('.void-art-slot[data-art-slot="enemy"]');
+  const enemyBox = enemies[0] ? box(enemies[0]) : null;
+  const tickerLine = document.querySelector('#arena .ticker-line');
+  const toggles = document.querySelectorAll('#arena .ticker-toggle');
+  const sheet = el('sheet');
 
   return {
     scenario: name,
@@ -613,7 +761,11 @@ function measure(name: string, scale: TextScale, screen: string): ProbeReport {
       lineHeight: px(computed.lineHeight),
       fontSize: px(computed.fontSize),
     },
-    log: { ...pane(logEl), lines: logEl.querySelectorAll('.void-log-line').length },
+    log: {
+      ...pane(logEl),
+      lines: logEl.querySelectorAll('.void-log-line').length,
+      display: getComputedStyle(logEl).display,
+    },
     column: pane(column),
     choices: { ...pane(choices), controls: controls.length },
     scenery: {
@@ -622,12 +774,31 @@ function measure(name: string, scale: TextScale, screen: string): ProbeReport {
       ratio: slotBox && slotBox.height > 0 ? slotBox.width / slotBox.height : null,
     },
     buttons: controls.map(box),
+    buttonLabels: controls.map((b) => (b.textContent ?? '').trim()),
+    buttonDisabled: controls.map((b) => b.disabled),
     page: {
       scrollHeight: document.documentElement.scrollHeight,
       clientHeight: document.documentElement.clientHeight,
     },
     focusOrder: [...document.querySelectorAll('button, summary, input, [tabindex]')].map(focusRegion),
     fontLoaded: document.fonts.check('15px "JetBrains Mono"'),
+    arena: region('arena'),
+    vitals: region('vitals'),
+    sheet: { ...box(sheet), display: getComputedStyle(sheet).display },
+    stageBody: box(el('stage-body')),
+    enemySlot: {
+      inPage: enemies.length,
+      inArena: document.querySelectorAll('#arena .void-art-slot[data-art-slot="enemy"]').length,
+      inSheet: sheet.querySelectorAll('.void-art-slot[data-art-slot="enemy"]').length,
+      box: enemyBox,
+      ratio: enemyBox && enemyBox.height > 0 ? enemyBox.width / enemyBox.height : null,
+    },
+    ticker: {
+      line: tickerLine ? box(tickerLine) : null,
+      toggles: toggles.length,
+      expanded: toggles[0]?.getAttribute('aria-expanded') ?? null,
+    },
+    tempoRows: document.querySelectorAll('#arena .tempo-row, #vitals .tempo-row').length,
   };
 }
 

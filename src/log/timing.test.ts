@@ -30,16 +30,20 @@ describe('SLOW_MS — the threshold table', () => {
     // step: ~0.05 ms/step measured (G13) x ~1000 => 50. turn: 89 tok/s x 400 tok ≈ 4.5 s
     // healthy, 7.6 tok/s ≈ 53 s pathological => 25 s sits between them. narrate: the same,
     // minus render. save/load: two orders of magnitude above a tens-of-KB stringify.
-    expect(SLOW_MS).toEqual({ step: 50, turn: 25_000, narrate: 20_000, save: 100, load: 250 });
+    // round (PLAN.md #6): the beat replay is capped at 1 600 ms by design; 2 500 is above
+    // every designed replay and below any narration.
+    expect(SLOW_MS).toEqual({ step: 50, turn: 25_000, narrate: 20_000, save: 100, load: 250, round: 2_500 });
   });
 
   it('orders the thresholds the way the boundaries nest', () => {
     // A whole turn contains a narration, which contains neither a save nor a step; so the
     // turn budget must be the largest and the step budget the smallest, or a slow step
-    // could never escalate before the turn did.
+    // could never escalate before the turn did. A round's replay runs beside its narration,
+    // inside the turn, and is far shorter than either.
     expect(SLOW_MS.step).toBeLessThan(SLOW_MS.save);
     expect(SLOW_MS.save).toBeLessThan(SLOW_MS.load);
-    expect(SLOW_MS.load).toBeLessThan(SLOW_MS.narrate);
+    expect(SLOW_MS.load).toBeLessThan(SLOW_MS.round);
+    expect(SLOW_MS.round).toBeLessThan(SLOW_MS.narrate);
     expect(SLOW_MS.narrate).toBeLessThan(SLOW_MS.turn);
   });
 });

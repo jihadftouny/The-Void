@@ -34,9 +34,19 @@
              960x640 minimum and 4.5 px at the default window, and Abandon sat at y 664-713
              in a 640 px window. `src/dev/layoutProbe.test.ts` measures all of it for real. -->
         <div id="stage-body" class="stage-body">
+          <!-- THE BATTLE FRAME'S TWO REGIONS (PLAN.md #6, UI-DESIGN.md §1), empty and hidden on
+               every screen but a live fight. The ARENA is the centre stage: the enemy's framed
+               3:4 region, its name, bar and chips, and the ticker with its Record toggle. The
+               VITALS are the stat box that stands bottom-left in the fight. In the DOM they
+               come first, so the keyboard reaches the ticker's toggle, then the prose and the
+               log, then the menu — the frame read centre-first, top-down. Neither is
+               aria-hidden: the enemy region manages its own, and a future <img alt> inside it
+               must stay announced. Nothing inside either tag, not even whitespace. -->
+          <div id="arena" class="arena"></div>
+          <div id="vitals" class="vitals"></div>
           <!-- The reading column: a measure the narration is comfortable to read at, which is
                also the surface #13's prose gets written into. Every id below is unchanged —
-               game.ts looks all of them up at module scope. -->
+               game.ts looks all of them up in `boot()`, and throws on a missing one. -->
           <div id="column" class="column">
             <h1 id="title">THE VOID</h1>
             <!-- Boot notices the player must not miss (an unlock store recovered from
@@ -61,6 +71,8 @@
         </div>
       </section>
     </main>
-    <script type="module" src="/src/desktop/game.ts"></script>
+    <!-- The entry script. `main.ts` calls `boot()` and nothing else (G51): the renderer module
+         itself is inert on import. A file, not an inline script — the policy above allows none. -->
+    <script type="module" src="/src/desktop/main.ts"></script>
   </body>
 </html>
