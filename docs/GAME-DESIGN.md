@@ -1926,3 +1926,19 @@ The **enemy art region moves from the HUD to the centre stage**. Its locked **3:
 **Why the v2.0 placement does not block this:** v2.0 is gated on milestone `f5` because it is *the first release allowed to cost money* (plan rule 2). **Boss agents cost nothing** — they run on the local model already installed. They were parked in v2.0 by bundling, not by money, so **pulling them forward does not break the $0 rule.**
 
 **The cost, stated plainly:** an estimated **35–45 h** (the plan agent will firm it up). See `SHIP-SCOPE.md` §12 for what it does to the schedule.
+
+
+### 22.30 You strike first, and Dexterity decides speed — §14.8 and §16.1 reconfirmed *(2026-09-12)*
+
+**The author reconfirmed both August decisions:** the round is **sequential — you act, then it acts, and a killing blow ends the fight before the enemy can hit back** (§14.8); and **speed comes from the tempo gauge** (§16.1) — Dexterity fills a gauge each round, full earns an extra action, empty loses a turn. **No D&D initiative roll.**
+
+**How it surfaced:** asked which round order was intended, the author answered *"you strike first but it really depends on initiative like DnD, and the Dexterity stat, i dont remember how it goes exactly."* That describes §14.8 plus §16.1 almost exactly — including that §16.1 was the author's own idea, recorded at the time as *"better than any of the three options offered."* Shown the design, the author confirmed it. **A real D&D initiative roll was offered and declined again.**
+
+**⚠ The engine implements NEITHER, and never has** (`FINDINGS.md` G62):
+
+- **The round is a simultaneous exchange, not sequential.** `resolvePlayerTurn` (`src/game/battle.ts`) rolls the enemy's attack (step 2) and the player's (step 4), then applies **both** damages together (lines 747–748). **A killing blow does not stop the enemy's hit.** The Java original (`GameLogic.java:283, 295, 327`) works the same way, so the port is faithful — **§14.8's sentence, written later, described an order the engine never had.** Its point was *removing initiative*; the order it named was assumed.
+- **The tempo gauge is unbuilt.** `statEffects` returns 0 for it and `initiativeOrderTwist` returns 0 — **Dexterity currently does nothing for speed.**
+
+**⚠ A consequence to measure before any class is tuned.** The two halves likely pull the class spread (G59) in **opposite** directions: *"you strike first"* helps everyone and fragile classes most, since a killing blow no longer costs a hit — **likely narrowing** the gap. The tempo gauge rewards high Dexterity, and **Scavver — already winning 57% — is the only Dexterity-primary class** (Neuromancer is INT/WIS, Penitent WIS/CHA) — **likely widening** it. *These are predictions from the design, not measurements.* **So G59's remedy should be decided only after the round order and the gauge exist and have been re-measured**, or classes get tuned against a game about to change beneath them.
+
+**Where it lands:** an engine unit of its own — it is `#1.6` territory, and both halves change balance, so it carries a re-run. **It is not in v1 today**, and v1's schedule margin is thin (`SHIP-SCOPE.md` §12). Sequence recommended: **#6 → this unit → decide G59 on the new numbers → #11** — the boss agents act in rounds too, so they should be built on the final round rules. **#6 is being built order-agnostic, and able to replay any number of actions per side per round,** so it needs no rework either way.
