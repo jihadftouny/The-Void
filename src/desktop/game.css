@@ -300,10 +300,20 @@ html, body { height: 100%; }
   }
 
   /* The framed stage, STACKED: the arena across the top, the prose beneath it, then the stat
-   * box and the menu side by side. The enemy's art region goes first, as the scenery's does. */
+   * box and the menu side by side. The enemy's art region goes first, as the scenery's does.
+   *
+   * THE MENU YIELDS TO THE PROSE, not the other way round. Here the menu sits BELOW the prose
+   * and competes with it for height, and the prose's column is a scroll container (automatic
+   * minimum: zero), so a content-sized menu row won every time: an open Cast list squeezed the
+   * column to its padding and the prose was scrolled out of sight — §17's original defect,
+   * again. So the bottom row is `fit-content(40vh)`: as tall as the menu, up to 40% of the
+   * window; past that the menu scrolls, first control on screen. 40vh from the probe's 800x600:
+   * the header, padding and gaps leave ~518px, the arena ~122px at large text, four lines of
+   * prose ~126px — which leaves 246px, and 40vh is 240. (The stat box, which does not scroll,
+   * still sets the row's minimum.) */
   [data-layout='stage'] .stage-body {
     --void-layout-cols: minmax(0, 1fr) var(--void-choices-w);
-    --void-layout-rows: auto minmax(0, 1fr) minmax(0, auto);
+    --void-layout-rows: auto minmax(0, 1fr) fit-content(40vh);
     --void-column-max: none;
     --void-prose-floor: 4lh;
     --void-log-cap: 18vh;

@@ -1649,6 +1649,52 @@ describe('the battle is a framed stage', () => {
       );
     }
   });
+
+  /**
+   * How much of the narration the player can SEE: its box, clipped by the reading column's.
+   * The narration keeps its floor as a MIN-HEIGHT, so its own box can measure a full floor while
+   * the column holding it has been squeezed to its padding and scrolls it out of view — which
+   * is exactly what an open Cast list did to the stacked frame (the narration measured 102px
+   * inside an 8px column). Measuring the narration's box alone could not see that.
+   */
+  function visibleProse(r: Report): number {
+    return Math.max(0, Math.min(r.narration.bottom, r.column.bottom) - Math.max(r.narration.top, r.column.top));
+  }
+
+  /**
+   * ONE MEASURED LIMIT, recorded rather than smoothed over (UI-DESIGN §17). The reserved tempo
+   * gauge (#1.6) adds a row to the arena AND to the stat box, and the stat box does not scroll;
+   * at 800x600 with LARGE text the fixed parts then leave ~98px — three lines, not four. The
+   * state is not rendered by anything today (no engine tempo yet) and the fallback is
+   * unreachable in the shipped build; the unit that turns the gauge on decides its stacked
+   * form. Held to three lines so it cannot quietly get worse.
+   */
+  const STACKED_THREE_LINES: ReadonlySet<string> = new Set(['battle-tempo/large']);
+
+  it('below the breakpoint NO battle state hides the prose: the floor is visible, not merely laid out', () => {
+    const hidden: string[] = [];
+    for (const scenario of STAGE_SCENARIOS) {
+      for (const scale of SCALES) {
+        const r = report(800, 600, scenario, scale);
+        const where = `800x600 ${scenario}/${scale}`;
+        const lines = STACKED_THREE_LINES.has(`${scenario}/${scale}`) ? 3 : PROSE_LINES.stage;
+        const floor = lines * BASE_PX[scale] * NARRATION_LINE_HEIGHT - SLACK;
+        const seen = visibleProse(r);
+        if (seen < floor) hidden.push(`${where}: ${seen.toFixed(1)}px of prose visible, needs ${floor.toFixed(1)}`);
+        // The menu yields instead: its box stays inside the window and its first control is on
+        // screen — the standard the full pack's Use-item list already holds at the minimum.
+        if (r.choices.bottom > 600 + SLACK) hidden.push(`${where}: the menu box runs past the window (${r.choices.bottom.toFixed(1)})`);
+        const first = r.buttons.find((b) => b.height > 0);
+        if (!first || first.top < r.choices.top - SLACK || first.bottom > r.choices.bottom + SLACK) {
+          hidden.push(`${where}: the menu's first control is not inside its box`);
+        }
+      }
+    }
+    expect(hidden, 'the stacked frame hides the prose behind a tall menu').toEqual([]);
+    // Non-vacuity: every battle state was measured, and the helper measures a real overlap.
+    expect(STAGE_SCENARIOS.length).toBeGreaterThanOrEqual(7);
+    expect(visibleProse(report(960, 640, 'battle', 'normal'))).toBeGreaterThanOrEqual(proseFloorPx('stage', 'normal') - SLACK);
+  });
 });
 
 // =========================================================================================
