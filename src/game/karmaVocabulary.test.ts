@@ -1,7 +1,7 @@
 // The shared hidden-karma word list catches what it must and spares what it must (F4).
 //
 // Every guard that polices karma vocabulary imports `karmaVocabulary.testutil.ts`. These pin the
-// list itself — each inflection a leak would really take — and prove the four guards all read
+// list itself — each inflection a leak would really take — and prove the five guards all read
 // THIS list rather than a private copy that could drift.
 
 import { describe, it, expect } from 'vitest';
@@ -111,12 +111,19 @@ function everyTestFile(): string[] {
 describe('every karma guard reads THIS list — no private copy left to drift', () => {
   const root = fileURLToPath(new URL('../../', import.meta.url));
   const read = (rel: string): string => readFileSync(path.join(root, rel), 'utf8');
-  const GUARDS = ['src/game/karmaActions.test.ts', 'src/dev/observable.test.ts', 'src/llm/tone.test.ts', 'src/game/restBrief.test.ts'];
+  // PLAN.md #6 added the fifth: the battle screen's sweep of the stage (AC-30).
+  const GUARDS = [
+    'src/game/karmaActions.test.ts',
+    'src/dev/observable.test.ts',
+    'src/llm/tone.test.ts',
+    'src/game/restBrief.test.ts',
+    'src/dev/battleScreen.test.ts',
+  ];
   // The ONE file allowed to spell the families out: this one, which pins the list's inflections
   // and holds this detector's own root list.
   const HOME = 'src/game/karmaVocabulary.test.ts';
 
-  it('each of the four known guards imports it', () => {
+  it('each of the five known guards imports it', () => {
     for (const rel of GUARDS) {
       expect(read(rel), rel).toMatch(/from '[./]+(?:game\/)?karmaVocabulary\.testutil\.ts'/);
     }
@@ -124,7 +131,7 @@ describe('every karma guard reads THIS list — no private copy left to drift', 
 
   it('no test file anywhere carries a private copy, in any shape', () => {
     const files = everyTestFile();
-    // Non-vacuity: the whole suite, not a handful — and the four guards among it.
+    // Non-vacuity: the whole suite, not a handful — and the five guards among it.
     expect(files.length).toBeGreaterThan(90);
     for (const rel of GUARDS) expect(files).toContain(rel);
     const found = files.filter((rel) => rel !== HOME).flatMap((rel) => privateCopies(read(rel)).map((h) => `${rel} — ${h}`));
