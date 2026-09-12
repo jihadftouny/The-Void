@@ -34,8 +34,15 @@
  *
  * ART-BIBLE.md rule 4 governs here as much as in the prose: floor 2's register is mirrors,
  * doubles, static and signal. Degradation is a TEXTURE, not a diagnosis. Nothing below
- * flickers, strobes or pulses; the fastest thing in the file takes six seconds to move three
- * pixels.
+ * flickers, strobes or pulses; the fastest thing in the file is the nearer layer of floor 3's
+ * ash, falling about six pixels a second (REVISED 2026-09-12 — it used to be floor 2's static,
+ * which took six seconds to crawl three pixels, and is gone with the static).
+ *
+ * REVISED 2026-09-12 (`floor-looks`), the author's verdict after playing it: floors 2 and 3
+ * were "only lines in the background, no gradient colors or anything" — 1px repeating lines at
+ * 7%, the weakest atmosphere of any floor. Floor 2 is now the one LIGHT floor with red flecks,
+ * floor 3 a grey haze with falling ash. Floors 1, 4 and 5 are untouched, and
+ * `styleDiscipline.test.ts` pins their three rules and two keyframes to the text they had.
  * --------------------------------------------------------------------------------------- */
 
 /* The layer itself. Painted by the `[data-texture='…']` rules below; `theme.ts` writes that
@@ -65,22 +72,39 @@
   animation: void-fog-drift 96s ease-in-out infinite alternate;
 }
 
-/* STATIC — the Entrance to the Void. Mirrors, doubles, signal. A scanline grid, fine enough
- * to read as interference rather than as stripes. */
-[data-texture='static'] .void-texture {
+/* FLECKS — the Entrance to the Void, the one LIGHT floor (REVISED 2026-09-12; it was a scanline
+ * grid on near-black, which the author, having played it, called "only lines in the
+ * background"). Red flecks on the white: three layers of tiny dots on three tiles whose sizes
+ * share no factor (47x61, 83x71, 131x157 px), set off from one another so the marks read as
+ * scattered rather than gridded. They drift slowly on a diagonal, each layer by exactly ONE
+ * tile per cycle, so the loop has no seam. The alpha stops at the layer's 0.3 — the densest the
+ * composite gate allows before the blood-red accent drops under AA on a fleck. */
+[data-texture='flecks'] .void-texture {
   background:
-    repeating-linear-gradient(0deg, var(--void-texture-ink) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(90deg, var(--void-texture-ink) 0 1px, transparent 1px 9px);
-  animation: void-static-crawl 6s steps(3) infinite;
+    radial-gradient(circle, var(--void-texture-ink) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle, var(--void-texture-ink) 0 1px, transparent 2px),
+    radial-gradient(circle, var(--void-texture-ink) 0 2px, transparent 3px);
+  background-size: 47px 61px, 83px 71px, 131px 157px;
+  background-position: 0px 0px, 19px 37px, 61px 23px;
+  animation: void-flecks-drift 60s linear infinite;
 }
 
-/* ASH — the Ash City. The fire has settled already; this is what is left over everything, at
- * two shallow angles so it never reads as a weave. */
+/* ASH — the Ash City (REVISED 2026-09-12; it was a crosshatch of 1px lines). The fire has
+ * settled already; this is what is left over everything. A soft colourless haze — two still
+ * radial layers, like floor 1's fog but neutral — with fine specks falling slowly through it:
+ * two speck layers on their own tiles (41x53 and 67x89 px), each falling exactly ONE tile per
+ * cycle, so the loop is seamless and the nearer, larger specks fall faster than the far ones.
+ * One animation per element: the haze's two positions are repeated unchanged in both keyframes
+ * so it holds still while the specks move — a haze that looped would visibly jump. */
 [data-texture='ash'] .void-texture {
   background:
-    repeating-linear-gradient(24deg, var(--void-texture-ink) 0 1px, transparent 1px 7px),
-    repeating-linear-gradient(-63deg, var(--void-texture-ink) 0 1px, transparent 1px 11px);
-  animation: void-ash-settle 120s linear infinite;
+    radial-gradient(circle, var(--void-texture-ink) 0 0.8px, transparent 1.4px),
+    radial-gradient(circle, var(--void-texture-ink) 0 1.3px, transparent 2px),
+    radial-gradient(110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%),
+    radial-gradient(90% 72% at 82% 92%, var(--void-texture-ink), transparent 68%);
+  background-size: 41px 53px, 67px 89px, 150% 150%, 140% 140%;
+  background-position: 0px 0px, 23px 11px, 20% 10%, 80% 90%;
+  animation: void-ash-fall 14s linear infinite;
 }
 
 /* GLOW — the Angelic Underground. The one stage that reveals rather than distorts, and the
@@ -91,7 +115,8 @@
   animation: void-glow-breathe 70s ease-in-out infinite alternate;
 }
 
-/* ABSENCE — the True Void. The only texture that SUBTRACTS: a vignette in pure black eating
+/* ABSENCE — the True Void. The only texture that SUBTRACTS from a dark ground (floor 2's flecks
+ * darken too, but on white): a vignette in pure black eating
  * the edges, so the interface is visibly smaller than it was. Negative space and things
  * missing, which is what ART-BIBLE rule 3 asks for and the opposite of gore or ruin.
  * It does not move. Absence does not move. */
@@ -103,13 +128,16 @@
   from { background-position: 0% 100%, 100% 100%; }
   to { background-position: 12% 88%, 88% 84%; }
 }
-@keyframes void-static-crawl {
-  from { background-position: 0 0, 0 0; }
-  to { background-position: 0 3px, 9px 0; }
+/* Each fleck layer advances by exactly its own tile (47,61) (83,71) (131,157): seamless. */
+@keyframes void-flecks-drift {
+  from { background-position: 0px 0px, 19px 37px, 61px 23px; }
+  to { background-position: 47px 61px, 102px 108px, 192px 180px; }
 }
-@keyframes void-ash-settle {
-  from { background-position: 0 0, 0 0; }
-  to { background-position: 140px 420px, -180px 380px; }
+/* Each speck layer falls exactly one tile DOWN (53px, 89px — about 4 and 6 px a second); the
+ * haze's two layers hold the same position at both ends, so they never move. */
+@keyframes void-ash-fall {
+  from { background-position: 0px 0px, 23px 11px, 20% 10%, 80% 90%; }
+  to { background-position: 0px 53px, 23px 100px, 20% 10%, 80% 90%; }
 }
 @keyframes void-glow-breathe {
   from { background-position: 50% 0%; }

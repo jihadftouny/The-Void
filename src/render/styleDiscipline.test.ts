@@ -644,6 +644,254 @@ describe('every floor texture kind has a rule that paints it', () => {
 });
 
 // =========================================================================================
+// `floor-looks` (2026-09-12) — FLOORS 2 AND 3 ARE REALLY PAINTED (AC-9), AND 1, 4, 5 ARE NOT
+// RE-PAINTED (AC-8b).
+//
+// The author, having played it: floors 2 and 3 were "only lines in the background, no gradient
+// colors or anything". Floor 2 is now red flecks on the one light floor; floor 3 a grey haze with
+// ash falling through it. What a source scan can hold about that: the paint uses ONLY the flat
+// texture ink (so the contrast gate's composite stays the worst case), it really moves, and the
+// motion loops without a seam — a speck layer that advanced half a tile would jump once a cycle,
+// which reads as a glitch on exactly the floor that is meant to read as stillness.
+// =========================================================================================
+
+/** Split a CSS value on the commas that are not inside parentheses. */
+function splitTop(value: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const c of value) {
+    if (c === '(') depth += 1;
+    if (c === ')') depth -= 1;
+    if (c === ',' && depth === 0) {
+      out.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  if (current.trim()) out.push(current.trim());
+  return out;
+}
+
+/** The argument text of every `*-gradient(...)` call in a value, parentheses balanced. */
+function gradientCalls(value: string): string[] {
+  const out: string[] = [];
+  for (const m of value.matchAll(/[a-z-]*gradient\(/g)) {
+    const open = (m.index as number) + m[0].length - 1;
+    let depth = 0;
+    for (let i = open; i < value.length; i += 1) {
+      if (value[i] === '(') depth += 1;
+      else if (value[i] === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          out.push(value.slice(open + 1, i));
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** A gradient's FIRST argument, when it is a shape, a size, a position or a direction. */
+const GRADIENT_PREAMBLE = /^(?:circle|ellipse|closest-|farthest-|to\s|at\s|-?[\d.]+(?:%|px|deg|turn|rad|grad|em)?(?:\s|$))/;
+
+/** Every colour stop in one gradient that is NOT the flat texture ink or `transparent`. */
+function foreignStops(args: string): string[] {
+  const parts = splitTop(args);
+  const stops = parts.length > 0 && GRADIENT_PREAMBLE.test(parts[0] as string) ? parts.slice(1) : parts;
+  return stops.filter((stop) => !/^(?:var\(\s*--void-texture-ink\s*\)|transparent\b)/.test(stop));
+}
+
+/** One background layer of a moving texture: its tile, and where the loop starts and ends. */
+interface LoopLayer {
+  tile: string[];
+  from: string[];
+  to: string[];
+}
+
+/**
+ * The layers of a texture's loop: `background-size` from the rule styling `selector` itself, and
+ * the `from` / `to` `background-position` lists of the keyframes its animation names.
+ */
+function textureLoop(css: string, selector: string): LoopLayer[] {
+  const rule = rulesFor(css, selector)[0];
+  if (!rule) return [];
+  const decls = declarations(rule.body);
+  const size = decls.filter((d) => d.prop === 'background-size').at(-1)?.value ?? '';
+  const animation = decls.filter((d) => d.prop === 'animation' || d.prop === 'animation-name').at(-1)?.value ?? '';
+  const frames = keyframes(css);
+  const name = animation.split(/[\s,]+/).find((token) => frames.has(token));
+  if (!name) return [];
+  const body = frames.get(name) as string;
+  const at = (which: string): string[] => {
+    const block = new RegExp(`(?:^|\\})\\s*(?:${which})\\s*\\{([^}]*)\\}`).exec(body)?.[1] ?? '';
+    const position = declarations(block).filter((d) => d.prop === 'background-position').at(-1)?.value ?? '';
+    return splitTop(position);
+  };
+  const from = at('from|0%');
+  const to = at('to|100%');
+  return splitTop(size).map((tile, i) => ({
+    tile: tile.split(/\s+/),
+    from: (from[i] ?? '').split(/\s+/),
+    to: (to[i] ?? '').split(/\s+/),
+  }));
+}
+
+/** A length in px (`0` counts as 0), or null for anything relative. */
+function pxOf(token: string | undefined): number | null {
+  if (token === '0') return 0;
+  const m = /^(-?[\d.]+)px$/.exec(token ?? '');
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Why a loop has a seam, or null when it is seamless. A layer tiled in px must advance by a
+ * whole number of tiles on both axes (anything else jumps once a cycle); a layer sized in % is a
+ * still haze and must not move at all. `down` additionally demands each px layer fall exactly ONE
+ * tile straight down — the ash.
+ */
+function seam(layers: readonly LoopLayer[], down: boolean): string | null {
+  if (layers.length === 0) return 'no loop found';
+  for (const [i, layer] of layers.entries()) {
+    const [tw, th] = layer.tile.map(pxOf);
+    if (tw === null || th === null) {
+      if (layer.from.join(' ') !== layer.to.join(' ')) return `layer ${i} is a haze and moves`;
+      continue;
+    }
+    const [fx, fy] = layer.from.map(pxOf);
+    const [tx, ty] = layer.to.map(pxOf);
+    if (fx == null || fy == null || tx == null || ty == null) return `layer ${i} has no px positions`;
+    const dx = tx - fx;
+    const dy = ty - fy;
+    if (dx % (tw as number) !== 0 || dy % (th as number) !== 0) return `layer ${i} advances ${dx}x${dy} on a ${tw}x${th} tile`;
+    if (dx === 0 && dy === 0) return `layer ${i} does not move`;
+    if (down && (dy !== th || dx !== 0)) return `layer ${i} does not fall exactly one tile straight down (${dx}, ${dy})`;
+  }
+  return null;
+}
+
+describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC-9)', () => {
+  const FLECKS = "[data-texture='flecks'] .void-texture";
+  const ASH = "[data-texture='ash'] .void-texture";
+
+  it('the stop detector fires on a foreign colour in any position, and passes the house shapes', () => {
+    // Clean — the shapes these two rules and the three untouched ones really write.
+    for (const args of [
+      'circle, var(--void-texture-ink) 0 1px, transparent 2px',
+      '110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%',
+      '118% 104% at 50% 46%, transparent 34%, var(--void-texture-ink)',
+      '24deg, var(--void-texture-ink) 0 1px, transparent 1px 7px',
+    ]) {
+      expect(foreignStops(args), args).toEqual([]);
+    }
+    // Dirty — a second token, a named colour, a literal, and a stop with no preamble before it.
+    expect(foreignStops('circle, var(--void-accent) 0 1px, transparent 2px')).toEqual(['var(--void-accent) 0 1px']);
+    expect(foreignStops('circle, red 0 1px, transparent 2px')).toEqual(['red 0 1px']);
+    expect(foreignStops('var(--void-texture-ink), #ffffff')).toEqual(['#ffffff']);
+    expect(foreignStops('var(--void-ink), transparent')).toEqual(['var(--void-ink)']);
+    expect(gradientCalls('radial-gradient(circle, var(--void-texture-ink) 0 1px, transparent 2px), linear-gradient(red, blue)'))
+      .toEqual(['circle, var(--void-texture-ink) 0 1px, transparent 2px', 'red, blue']);
+  });
+
+  for (const [floor, selector, layers] of [
+    ['floor 2, the flecks', FLECKS, 3],
+    ['floor 3, the ash', ASH, 4],
+  ] as const) {
+    it(`${floor}: every gradient stop is the flat texture ink or transparent`, () => {
+      const found = rulesFor(ALL_CSS, selector);
+      expect(found, `nothing paints ${selector}`).toHaveLength(1);
+      const decls = declarations(found[0]!.body);
+      const background = decls.filter((d) => d.prop === 'background').map((d) => d.value).join(', ');
+      const calls = gradientCalls(background);
+      expect(calls, `${selector} does not paint ${layers} layers`).toHaveLength(layers);
+      for (const args of calls) expect(foreignStops(args), `${selector}: ${args}`).toEqual([]);
+      // ...and nothing else in the rule adds alpha or colour: the layer's own opacity is the
+      // ONLY alpha, which is what keeps the gate's composite the worst case.
+      for (const d of decls) {
+        expect(['opacity', 'background-color', 'filter', 'mix-blend-mode', 'color'], `${selector} sets ${d.prop}`).not.toContain(d.prop);
+      }
+    });
+
+    it(`${floor}: it really moves — background-position, and only that`, () => {
+      expect(animatesWith(ALL_CSS, selector, 'background-position'), `${selector} is still`).toBe(true);
+    });
+  }
+
+  it('the ash FALLS: each speck layer drops exactly one tile, straight down, and the haze holds still', () => {
+    const layers = textureLoop(ALL_CSS, ASH);
+    expect(layers, 'the ash has no loop to judge').toHaveLength(4);
+    expect(seam(layers, true)).toBeNull();
+    // Down means the `to` y-offset is the LARGER one (a CSS y grows downward).
+    for (const layer of layers.filter((l) => pxOf(l.tile[1]) !== null)) {
+      expect(pxOf(layer.to[1])!, 'a speck layer rises').toBeGreaterThan(pxOf(layer.from[1])!);
+    }
+  });
+
+  it('the flecks drift by exactly one tile per layer, so the loop has no seam', () => {
+    const layers = textureLoop(ALL_CSS, FLECKS);
+    expect(layers, 'the flecks have no loop to judge').toHaveLength(3);
+    expect(seam(layers, false)).toBeNull();
+    for (const layer of layers) {
+      expect(pxOf(layer.to[0])! - pxOf(layer.from[0])!, 'not one tile across').toBe(pxOf(layer.tile[0]));
+      expect(pxOf(layer.to[1])! - pxOf(layer.from[1])!, 'not one tile down').toBe(pxOf(layer.tile[1]));
+    }
+  });
+
+  it('the seam detector fires on a half-tile loop, a rising speck, a drifting haze and a still layer', () => {
+    const css = (to: string, size = '41px 53px, 150% 150%'): string =>
+      `.t { background-size: ${size}; animation: fall 14s linear infinite; }\n` +
+      `@keyframes fall { from { background-position: 0px 0px, 20% 10%; } to { background-position: ${to}; } }`;
+    expect(seam(textureLoop(css('0px 53px, 20% 10%'), '.t'), true), 'the real shape').toBeNull();
+    expect(seam(textureLoop(css('0px 26px, 20% 10%'), '.t'), true), 'half a tile').not.toBeNull();
+    expect(seam(textureLoop(css('0px -53px, 20% 10%'), '.t'), true), 'a rising speck').not.toBeNull();
+    expect(seam(textureLoop(css('0px 53px, 20% 14%'), '.t'), true), 'a haze that drifts').not.toBeNull();
+    expect(seam(textureLoop(css('0px 0px, 20% 10%'), '.t'), false), 'a layer that never moves').not.toBeNull();
+    expect(seam(textureLoop(css('41px 53px, 20% 10%'), '.t'), true), 'a diagonal is not straight down').not.toBeNull();
+    expect(seam(textureLoop(css('41px 53px, 20% 10%'), '.t'), false), 'a whole-tile diagonal is seamless').toBeNull();
+    expect(seam(textureLoop('.t { background-size: 41px 53px; }', '.t'), true), 'no animation at all').not.toBeNull();
+  });
+});
+
+describe('floors 1, 4 and 5 keep the paint they had (AC-8b)', () => {
+  // TRANSCRIBED from `atmosphere.css` on `main` at 6ebfa42 (the plan's "unchanged CSS" block),
+  // whitespace-normalised — never read back from the file under test. A unit that DELIBERATELY
+  // re-paints one of these floors updates its line here, and says why in the commit.
+  const PINNED_RULES: Record<string, string> = {
+    "[data-texture='fog'] .void-texture":
+      "[data-texture='fog'] .void-texture { background: radial-gradient(120% 70% at 18% 108%, var(--void-texture-ink), transparent 62%), radial-gradient(95% 62% at 86% 96%, var(--void-texture-ink), transparent 66%); background-size: 160% 160%, 150% 150%; animation: void-fog-drift 96s ease-in-out infinite alternate; }",
+    "[data-texture='glow'] .void-texture":
+      "[data-texture='glow'] .void-texture { background: radial-gradient(72% 58% at 50% 4%, var(--void-texture-ink), transparent 72%); background-size: 130% 130%; animation: void-glow-breathe 70s ease-in-out infinite alternate; }",
+    "[data-texture='absence'] .void-texture":
+      "[data-texture='absence'] .void-texture { background: radial-gradient(118% 104% at 50% 46%, transparent 34%, var(--void-texture-ink)); }",
+  };
+  const PINNED_KEYFRAMES: Record<string, string> = {
+    'void-fog-drift':
+      '@keyframes void-fog-drift { from { background-position: 0% 100%, 100% 100%; } to { background-position: 12% 88%, 88% 84%; } }',
+    'void-glow-breathe':
+      '@keyframes void-glow-breathe { from { background-position: 50% 0%; } to { background-position: 50% 12%; } }',
+  };
+  const squash = (s: string): string => s.replace(/\s+/g, ' ').trim();
+
+  for (const [selector, pinned] of Object.entries(PINNED_RULES)) {
+    it(`${selector} is exactly what main shipped`, () => {
+      const found = rulesFor(ALL_CSS, selector);
+      expect(found, `${selector} is styled by ${found.length} rules`).toHaveLength(1);
+      expect(squash(`${selector} { ${found[0]!.body} }`)).toBe(pinned);
+    });
+  }
+
+  for (const [name, pinned] of Object.entries(PINNED_KEYFRAMES)) {
+    it(`@keyframes ${name} is exactly what main shipped`, () => {
+      const body = keyframes(ALL_CSS).get(name);
+      expect(body, `@keyframes ${name} is gone`).toBeDefined();
+      expect(squash(`@keyframes ${name} {${body}}`)).toBe(pinned);
+    });
+  }
+});
+
+// =========================================================================================
 // A.7 — the reserved art regions look DELIBERATE. This is the requirement most likely to be
 // shipped wrong: a grey box reading IMAGE HERE is what unfinished software looks like.
 // =========================================================================================

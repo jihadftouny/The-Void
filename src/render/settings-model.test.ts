@@ -280,9 +280,23 @@ describe('settingsVars only ever writes names the theme already defines', () => 
       expect(vars['--void-ink']).toBe(floor.ink);
       expect(vars['--void-ink-dim']).toBe(floor.inkDim);
       expect(vars['--void-texture-opacity']).toBe(String(floor.texture.opacity));
+      // REVISED 2026-09-12 (`floor-looks`): the furniture and roles are floor-scoped now, so
+      // "the floor's own" is the floor's, not PALETTE's — they differ on the light floor.
+      expect(vars['--void-ink-faint']).toBe(floor.inkFaint);
+      expect(vars['--void-rule']).toBe(floor.rule);
+      expect(vars['--void-rule-strong']).toBe(floor.ruleStrong);
+      expect(vars['--void-harm']).toBe(floor.harm);
+      expect(vars['--void-heal']).toBe(floor.heal);
+      expect(vars['--void-foe']).toBe(floor.foe);
+      expect(vars['--void-accent']).toBe(floor.accent);
+    }
+    // ...and on the dark floors that is still PALETTE's, verbatim, so nothing moved there.
+    for (const place of [0, 3, 4]) {
+      const vars = settingsVars(settings({ contrast: 'normal' }), place);
       expect(vars['--void-ink-faint']).toBe(PALETTE.inkFaint);
       expect(vars['--void-rule']).toBe(PALETTE.rule);
       expect(vars['--void-rule-strong']).toBe(PALETTE.ruleStrong);
+      expect(vars['--void-harm']).toBe(PALETTE.harm);
     }
   });
 
@@ -355,10 +369,77 @@ describe('high contrast is a real accessibility feature, not a flag', () => {
     }
   });
 
-  it('the accent is left alone — it reinforces, it never carries state (S4a)', () => {
+  // ⚠ FLIPPED 2026-09-12 (`floor-looks`), DELIBERATELY. This test used to read:
+  //
+  //     it('the accent is left alone — it reinforces, it never carries state (S4a)', () => {
+  //       ...expect(settingsVars(settings({ contrast: 'high' }), place)['--void-accent'])
+  //            .toBeUndefined();
+  //
+  // and it was right while every floor was dark: each floor's accent already read on black, so
+  // high contrast had no reason to touch it. Floor 2 is now a LIGHT floor, and NO colour is AA on
+  // both its white and high contrast's black — AA on the white needs L <= 0.183 (tightened to
+  // 0.164 by the fleck composite), AA on black needs L >= 0.175. Its deep red #8e0c0a is 2.11:1 on
+  // black. So `settingsVars` must now RESOLVE the accent under high contrast, to the floor's
+  // `accentOnBlack`. What S4a protects is unchanged and still asserted: the accent SURVIVES high
+  // contrast — it is still the floor's own, a different colour per floor — and it never carries
+  // state, because the floor tag names the floor in words.
+  it('the accent survives high contrast — still the floor’s own, resolved to one that reads on black', () => {
     for (let place = 0; place < FLOOR_THEMES.length; place += 1) {
-      expect(settingsVars(settings({ contrast: 'high' }), place)['--void-accent']).toBeUndefined();
+      const floor = floorTheme(place);
+      const high = settingsVars(settings({ contrast: 'high' }), place)['--void-accent'];
+      expect(high, `place ${place}: high contrast dropped the accent`).toBe(floor.accentOnBlack ?? floor.accent);
+      expect(contrastRatio(high!, HIGH_CONTRAST.bg), `place ${place}: ${high} on black`).toBeGreaterThanOrEqual(AA_TEXT);
     }
+    // Survives AS A PER-FLOOR COLOUR: five floors, five accents, even in high contrast.
+    const accents = FLOOR_THEMES.map((_, place) => settingsVars(settings({ contrast: 'high' }), place)['--void-accent']);
+    expect(new Set(accents).size).toBe(5);
+    // The dark floors keep their very own accent; only the light floor's is swapped.
+    for (const place of [0, 2, 3, 4]) {
+      expect(settingsVars(settings({ contrast: 'high' }), place)['--void-accent']).toBe(floorTheme(place).accent);
+    }
+  });
+});
+
+// =========================================================================================
+// AC-5 — HIGH CONTRAST DEFEATS THE LIGHT FLOOR SPECIFICALLY. The failure this guards against is
+// a white background surviving high contrast: the setting's promise is black and white on every
+// floor, and floor 2 is the one floor whose normal ground is the opposite of that.
+// =========================================================================================
+
+describe('high contrast paints floor 2 black, not white', () => {
+  const high = settingsVars(settings({ contrast: 'high' }), 1);
+
+  it('the ground and the ink are black and white, and the flecks are gone', () => {
+    expect(high['--void-bg'], 'the white ground survived high contrast').toBe('#000000');
+    expect(high['--void-panel']).toBe('#000000');
+    expect(high['--void-ink']).toBe('#ffffff');
+    expect(high['--void-texture-opacity']).toBe('0');
+  });
+
+  it('the roles are the ones that read on black, not floor 2’s dark reds and greens', () => {
+    expect(high['--void-harm']).toBe(HIGH_CONTRAST.harm);
+    expect(high['--void-heal']).toBe(HIGH_CONTRAST.heal);
+    expect(high['--void-foe']).toBe(HIGH_CONTRAST.foe);
+    for (const name of ['--void-harm', '--void-heal', '--void-foe']) {
+      expect(contrastRatio(high[name]!, '#000000'), name).toBeGreaterThanOrEqual(AA_TEXT);
+    }
+  });
+
+  it('the accent is the scarlet, at the hand-derived 5.92:1 on black', () => {
+    // #ff3b2f: L = 0.2126*1.0 + 0.7152*0.043733 + 0.0722*0.028428 = 0.245930;
+    // (0.245930 + 0.05) / 0.05 = 5.9186.
+    expect(high['--void-accent']).toBe('#ff3b2f');
+    expect(contrastRatio(high['--void-accent']!, '#000000')).toBeCloseTo(5.919, 2);
+  });
+
+  it('and turning it off restores the white floor, every name — total and reversible', () => {
+    const normal = settingsVars(settings({ contrast: 'normal' }), 1);
+    expect(Object.keys(normal).sort()).toEqual(Object.keys(high).sort());
+    expect(normal['--void-bg']).toBe('#f4f5f9');
+    expect(normal['--void-ink']).toBe('#15171d');
+    expect(normal['--void-accent']).toBe('#8e0c0a');
+    expect(normal['--void-harm']).toBe('#9b1b52');
+    expect(normal['--void-texture-opacity']).toBe('0.3');
   });
 });
 
