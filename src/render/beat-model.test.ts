@@ -3,12 +3,14 @@
 // engine event. Every expected value is derived by hand (dice chosen by hand, templates read
 // from `format.ts`, schedule arithmetic done here), never read off the module under test.
 //
-// ⚠ ORDER-AGNOSTIC (Appendix A.1). The engine resolves the enemy's turn before the player's in
-// a Fight/Cast round today, GAME-DESIGN §14.8 says the reverse, and the author is reviewing
-// which is meant. NOTHING HERE ASSERTS WHICH SIDE GOES FIRST. The engine round below takes its
-// order from the events the engine emitted; the guard block feeds a round in EACH order and
-// asserts both replay faithfully — if the engine is corrected, this file stays green, and if
-// the beat model ever starts imposing an order of its own, the guard goes red.
+// ⚠ ORDER-AGNOSTIC (Appendix A.1). As of 2026-09-12 the engine emits the enemy's turn before the
+// player's in a Fight/Cast round; that is its CURRENT behaviour, not the design, which (§14.8,
+// confirmed by the author) has you strike first, with speed from initiative and Dexterity —
+// an engine change tracked as FINDINGS G62. NOTHING HERE ASSERTS WHICH SIDE GOES FIRST. The
+// engine round below takes its order from the events the engine emitted; the guard block feeds
+// a round in EACH order, and with any number of actions per side, and asserts each replays
+// faithfully — when the engine changes, this file stays green, and if the beat model ever
+// starts imposing an order of its own, the guard goes red.
 
 import { describe, it, expect } from 'vitest';
 import {
@@ -203,14 +205,14 @@ describe('either round order replays faithfully (A.1)', () => {
     return beats;
   }
 
-  it('the engine’s CURRENT order: enemy tick, enemy strike, player tick, player strike', () => {
+  it('enemy first — the order the engine emits as of 2026-09-12: enemy tick, enemy strike, player tick, player strike', () => {
     const beats = assertFaithful([enemyTick, enemyStrike, playerTick, playerStrike]);
     // Hand-derived for this order: the player's bar is written at the player's own tick (2),
     // the enemy's at the player's strike (3).
     expect(barUpdateAt(beats)).toEqual({ player: 2, enemy: 3, charges: 3 });
   });
 
-  it('the DESIGN’S order (§14.8): player tick, player strike, enemy tick, enemy strike', () => {
+  it('player first — the design’s order (§14.8, FINDINGS G62): player tick, player strike, enemy tick, enemy strike', () => {
     const beats = assertFaithful([playerTick, playerStrike, enemyTick, enemyStrike]);
     // Hand-derived for this order: the enemy's bar at the enemy's own tick (2), the player's at
     // the enemy's strike (3). The mirror image of the case above — not the same numbers.

@@ -12,11 +12,14 @@
 //    over a count, and nothing in `src/game` ever sees it.
 //
 // ⚠ ORDER-AGNOSTIC BY CONSTRUCTION. The beats replay the events IN THE ORDER THE ENGINE EMITTED
-// THEM and this module never reorders, sorts or re-sides anything. Today the engine resolves the
-// enemy's turn before the player's in a Fight/Cast round (`resolvePlayerTurn`, steps 1-4);
-// GAME-DESIGN §14.8 says "you act, then it acts" and the author is reviewing which is intended.
-// Whichever way the engine settles, this file does not change: `beat-model.test.ts` feeds it a
-// round in each order and asserts both replay faithfully.
+// THEM and this module never reorders, sorts or re-sides anything. As of 2026-09-12 the engine
+// emits the enemy's turn before the player's in a Fight/Cast round (`resolvePlayerTurn`, steps
+// 1-4) — that is the engine's CURRENT behaviour, not the design. The design (GAME-DESIGN §14.8,
+// confirmed by the author 2026-09-12) is that you strike first, with initiative and Dexterity
+// deciding speed, and the §16.1 tempo gauge able to give a side an extra action or cost it a
+// turn; the engine change is tracked as FINDINGS G62. Whatever the engine emits, this file does
+// not change: `beat-model.test.ts` feeds it rounds in either order, and with any number of
+// actions per side, and asserts each replays faithfully.
 
 import type { GameEvent, GameEventKind } from '../game/gameEvent.ts';
 import type { CombatSubject } from '../game/combatEvent.ts';

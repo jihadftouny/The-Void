@@ -16,11 +16,13 @@
 >       *Failure:* it reads as a spreadsheet recalculating (too fast) or a slideshow (too slow). **The
 >       knob:** `BEAT_MS`, `BEAT_HOLD_MS` and `MAX_ROUND_MS` in `src/render/beat-model.ts` — one edit
 >       each; the tests pin the arithmetic, not the values' feel.
-> - [ ] **2. Today the enemy's blow plays FIRST, then yours.** The screen plays the round in the
->       order the engine resolves it, and the engine resolves the enemy's attack first
->       (`FINDINGS.md` G62 — you are meant to strike first, and speed is meant to come from
->       Dexterity). Nothing on the screen assumes an order: when the engine changes, the screen
->       follows with no change. Just confirm the ticker's last line of a round is YOUR strike today.
+> - [ ] **2. In this build the enemy's blow plays first, then yours — the ENGINE's current order,
+>       not the design.** The screen plays the round in whatever order the engine emits it. The
+>       design is that YOU strike first, with speed from initiative and Dexterity (§14.8, and the
+>       tempo gauge of §16.1); the engine does not do that yet (`FINDINGS.md` G62). Nothing on the
+>       screen assumes an order, so when the engine changes the screen follows with no change of
+>       its own. For this build, just confirm a round's lines come in the order the combat log
+>       gives them — the enemy's blow, then yours.
 > - [ ] **3. The flash, the shake — and the reduced-motion tint.** Is the enemy's flash and your stat
 >       box's shake comfortable over a long fight? Then **Settings → Motion → Reduced**: the timing
 >       is the same, nothing moves, and a struck side gets a soft outline instead. *Failure:* the

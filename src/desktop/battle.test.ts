@@ -310,7 +310,7 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
     return { frames, writes, audio, result, earlyResolve, classesSeen, plan: p, els };
   }
 
-  it('the engine’s CURRENT order: lines in order, each bar written once, at its beat, not before', async () => {
+  it('enemy first (what the engine emits as of 2026-09-12): lines in order, each bar written once, at its beat', async () => {
     const r = await walk([enemyStrike, playerStrike], true);
     // Hand-derived from format.ts and this order.
     expect(r.frames.map((f) => f.ticker)).toEqual(['The enemy strikes — hit for 3 damage.', 'You strike — hit for 4 damage.']);
@@ -328,7 +328,7 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
     expect(r.earlyResolve).toBe(false);
   });
 
-  it('the DESIGN’S order (§14.8): the same round player-first replays just as faithfully', async () => {
+  it('player first (the design’s order, §14.8 / FINDINGS G62): the same round replays just as faithfully', async () => {
     const r = await walk([playerStrike, enemyStrike], true);
     expect(r.frames.map((f) => f.ticker)).toEqual(['You strike — hit for 4 damage.', 'The enemy strikes — hit for 3 damage.']);
     // Mirror image: now the ENEMY's bar is written first and the player's second.
