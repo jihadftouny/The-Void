@@ -113,6 +113,25 @@ recompute the overall % (v3 runs **M0–M17**; all are counted), and
 prepend a dated Session-log entry. Everything a human must verify by hand — every NEEDS-HUMAN item
 the pipeline surfaces, plus feel/visual/mobile checks — is accumulated in `HUMAN-CHECKS.md`.
 
+## The author's planning board (lives outside this repo)
+
+The Void is one lane of a personal planning board kept **outside this repository**:
+`C:/Users/jihad/OneDrive/Desktop/Jihad/Seniority Upvamp/plan-v3/plan-dashboard.html`.
+**That file is the one to edit.** It is shared with the author's claude.ai cowork session, and its
+published claude.ai artifact is **republished from it** — never edited on its own, or the two drift.
+**Never copy the board into this repository**; it is personal, and this repository is public.
+
+**Update it whenever the plan changes** — specifically when:
+- a scope, budget or schedule decision is recorded in `docs/SHIP-SCOPE.md`;
+- a unit merges to `main` (its milestone becomes done, and the budget meter moves);
+- a unit is added to v1, removed from it, or re-estimated;
+- the week cards run out, or no longer describe the real week.
+
+**How:** update `docs/SHIP-SCOPE.md` first — the board follows the text, never the reverse. Check the
+board file's modified time before writing, since the cowork session may have changed it. Edit it, load it
+headless to catch script errors, then republish the artifact from that file to its existing address.
+The README beside the board holds the rest.
+
 ## Agentic engineering workflow
 
 **Every task that adds or changes game code goes through the `agentic-engineering` skill** — invoke
