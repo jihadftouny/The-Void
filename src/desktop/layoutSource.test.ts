@@ -104,6 +104,23 @@ describe('the floor’s reserved region lives in the reading column', () => {
     }
   });
 
+  it('PLAN.md #6: the paths that clear the scenery clear the battle frame’s regions too', () => {
+    // The arena and the stat box are not part of the choices either, so the same bug is
+    // waiting: miss one path and a second enemy region stacks on the stage, or the frame of
+    // the last fight hangs, hidden, under the hub (the walk counts enemy regions page-wide).
+    for (const fn of ['function renderChoices(', 'function start(']) {
+      const body = bodyOf(fn);
+      expect(body, `${fn} leaves the arena standing`).toMatch(/arenaEl\.replaceChildren\(\s*\)/);
+      expect(body, `${fn} leaves the stat box standing`).toMatch(/vitalsEl\.replaceChildren\(\s*\)/);
+    }
+    // ...and renderChoices clears them BEFORE the switch, or the battle arm's fresh frame
+    // would be wiped as soon as it was built.
+    const body = bodyOf('function renderChoices(');
+    const sw = body.search(/switch\s*\(\s*awaiting\s*\)/);
+    expect(body.search(/arenaEl\.replaceChildren\(/)).toBeLessThan(sw);
+    expect(body.search(/vitalsEl\.replaceChildren\(/)).toBeLessThan(sw);
+  });
+
   it('the scenery is cleared BEFORE the screen is built, not after', () => {
     // After the switch, it would wipe the frame the hub had just mounted.
     const body = bodyOf('function renderChoices(');
@@ -143,8 +160,14 @@ describe('the screen and the stage layout are announced together, from one place
     // ⚠ A call site that set `data-screen` by hand would leave `data-layout` showing the
     // PREVIOUS screen's geometry: a document rendered into a 260px action column, or a hub
     // whose prose keeps a document screen's cap. It throws nothing and looks almost right.
-    const writers = [...SOURCE.matchAll(/dataset\['(?:screen|layout)'\]\s*=/g)];
+    const WRITER = /dataset\['(?:screen|layout)'\]\s*=/g;
+    const writers = [...SOURCE.matchAll(WRITER)];
     expect(writers.length, 'nothing writes the screen attributes at all').toBe(2);
+    // PLAN.md #6's opened-log flag is a DIFFERENT attribute (`data-log`, written by
+    // `battle.ts`'s `setLogOpen` on the reading column) and must not be counted as a third
+    // screen writer — asserted, so the count above keeps meaning what it says.
+    expect(WRITER.test("column.dataset['log'] = open ? 'open' : 'closed';")).toBe(false);
+    WRITER.lastIndex = 0;
     const funnel = SOURCE.indexOf('function showScreen(');
     const funnelEnd = SOURCE.indexOf('\n}', funnel);
     for (const writer of writers) {
@@ -236,5 +259,14 @@ describe('the renderer records what the layout actually came out as', () => {
     const layout = readFileSync(path.join(ROOT, 'src/desktop/layout.ts'), 'utf8');
     expect(layout, 'the layout module logs for itself').not.toMatch(/\blog\s*\.\s*(?:info|warn|debug|error)\s*\(/);
     expect(layout, 'the layout module imports the logger').not.toMatch(/from\s*'[^']*\/log\//);
+  });
+
+  it('...nor inside the battle DOM module (PLAN.md #6, AC-31): it returns, game.ts logs', () => {
+    const battle = stripComments(readFileSync(path.join(ROOT, 'src/desktop/battle.ts'), 'utf8'));
+    expect(battle, 'battle.ts logs for itself').not.toMatch(/\blog\s*\.\s*(?:info|warn|debug|error|log)\s*\(/);
+    expect(battle, 'battle.ts imports the logger').not.toMatch(/from\s*'[^']*\/log\//);
+    // Non-vacuity: this read the real module, and the round's record is really handed back.
+    expect(battle).toMatch(/export async function playRound\(/);
+    expect(battle).toMatch(/return\s*\{\s*beats:\s*plan\.beats\.length,\s*hooks\s*\}/);
   });
 });

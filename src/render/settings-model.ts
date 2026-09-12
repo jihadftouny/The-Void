@@ -205,8 +205,18 @@ export function screenKey(awaiting: string, screen: string): string {
  *              DOCUMENT (the inventory, the character sheet, the settings screen, the content
  *              warning, the end-of-run record) or a wordmark with two stacked buttons (title,
  *              resume). A 260px column would be the wrong shape for every one of them.
+ *  - `stage` — the BATTLE (PLAN.md #6, UI-DESIGN.md §1): the JRPG frame. The enemy on a framed
+ *              stage in the centre with the prose beneath it, the player's stat box
+ *              bottom-left, the action menu bottom-right; the HUD column gives way to the stat
+ *              box. The prose floor is four lines here, not eight — the recorded deviation.
  */
-export type LayoutMode = 'side' | 'wide';
+export type LayoutMode = 'side' | 'wide' | 'stage';
+
+/**
+ * The screens drawn as the framed stage. One today: a live fight. #11 adds no new screen key
+ * (its talk input lives inside this one), so this set grows only if a second kind of fight does.
+ */
+export const STAGE_SCREENS: ReadonlySet<string> = new Set(['battle-action']);
 
 /**
  * The seven screens that render a document rather than a short list of actions.
@@ -233,6 +243,7 @@ export const WIDE_SCREENS: ReadonlySet<string> = new Set([
  * than a capped one.
  */
 export function screenLayout(key: string): LayoutMode {
+  if (STAGE_SCREENS.has(key)) return 'stage';
   return WIDE_SCREENS.has(key) ? 'wide' : 'side';
 }
 

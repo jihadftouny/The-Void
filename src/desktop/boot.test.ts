@@ -32,6 +32,12 @@ import { createGame, step, awaitingFor, type GameState } from '../game/game.ts';
 import { createStoryMemory } from '../llm/narrate.ts';
 import { emptyRunSummary } from '../game/unlockStore.ts';
 import type { LogEntry } from '../log/logger.ts';
+// The save is written through the real `saveRun`, imported STATICALLY. Measured, not guessed:
+// a second `vi.resetModules()` + dynamic `import('./persist.ts')` inside a case, after an
+// earlier case has booted a renderer, left the following dynamic `import('./game.ts')` pending
+// forever (a module-loader deadlock in the test runner — the renderer never even started).
+// `saveRun` only writes `localStorage`, so which module instance writes it changes nothing.
+import { saveRun } from './persist.ts';
 
 // The repo root. `import.meta.url` is not a file url under jsdom (the `skeleton.test.ts` note).
 const ROOT = process.cwd();
@@ -323,11 +329,8 @@ describe('a saved run resumes into a live battle (AC-7, second half)', () => {
     expect(fight.phase.kind).toBe('battle');
     expect(awaitingFor(fight.phase), 'the fixture battle is not open').toBe('battle-action');
 
-    // Written by the REAL persistence path of a fresh module instance — the same envelope a
-    // player's quit leaves behind.
-    vi.resetModules();
-    const persist = await import('./persist.ts');
-    persist.saveRun(fight, createStoryMemory(), { runSummary: emptyRunSummary(), runSeed: 77 });
+    // Written by the REAL persistence path — the same envelope a player's quit leaves behind.
+    saveRun(fight, createStoryMemory(), { runSummary: emptyRunSummary(), runSeed: 77 });
 
     installBridge();
     const { game, entries } = await freshRenderer();
@@ -342,6 +345,48 @@ describe('a saved run resumes into a live battle (AC-7, second half)', () => {
     expect(screen()).toBe('battle-action');
     expect(labels(), 'the battle offers no Fight').toContain('Fight');
     expect(labels(), 'the battle offers no Run').toContain('Run');
+  });
+
+  it('PLAN.md #6: the resumed fight is the framed stage, and its sub-menus open and close', async () => {
+    const fight = liveBattle();
+    saveRun(fight, createStoryMemory(), { runSummary: emptyRunSummary(), runSeed: 77 });
+    installBridge();
+    const { game, entries } = await freshRenderer();
+    game.boot();
+    click('Continue your descent');
+
+    // The stage: the enemy's region in the arena and nowhere else, the stat box filled.
+    expect(document.body.dataset['layout']).toBe('stage');
+    expect(document.querySelectorAll('.void-art-slot[data-art-slot="enemy"]')).toHaveLength(1);
+    expect(document.querySelectorAll('#arena .void-art-slot[data-art-slot="enemy"]')).toHaveLength(1);
+    expect(document.querySelectorAll('#sheet .void-art-slot[data-art-slot="enemy"]')).toHaveLength(0);
+    const enemyName = fight.phase.kind === 'battle' ? fight.phase.battle.enemy.fullName : '';
+    expect(document.querySelector('#arena .arena-name')!.textContent).toBe(enemyName);
+    expect(document.querySelector('#vitals .vitals-name')!.textContent).toBe('Probe');
+    expect(document.querySelectorAll('#arena .ticker-toggle')).toHaveLength(1);
+
+    // Cast REPLACES the commands; Back restores them — render-layer, no engine step.
+    const steps = (): number => entries.filter((e) => e.category === 'engine' && e.message === 'step').length;
+    const before = steps();
+    click('Cast');
+    expect(labels()[0]).toBe('Back');
+    expect(labels(), 'the commands are still on screen under the Cast list').not.toContain('Fight');
+    // An Enforcer's two core skills (classKit `coreSkills`), each with its cost.
+    expect(labels().slice(1)).toEqual(['Heavy Strike (2⚡)', 'Brace (1⚡)']);
+    click('Back');
+    expect(labels()).toContain('Fight');
+    expect(steps(), 'opening a sub-menu stepped the engine').toBe(before);
+    expect(entries.filter((e) => e.category === 'battle' && e.message === 'menu').map((e) => (e.data as { mode: string }).mode)).toEqual(['cast', 'commands']);
+
+    // The Record toggle opens the full log beneath the prose, and says so.
+    const toggle = document.querySelector<HTMLButtonElement>('#arena .ticker-toggle')!;
+    toggle.click();
+    expect(document.getElementById('column')!.dataset['log']).toBe('open');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    // ...and it survives a re-render of the frame (a sub-menu opening rebuilds the arena).
+    click('Cast');
+    expect(document.querySelector('#arena .ticker-toggle')!.getAttribute('aria-expanded')).toBe('true');
+    click('Back');
   });
 });
 

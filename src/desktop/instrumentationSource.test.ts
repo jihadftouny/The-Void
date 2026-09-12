@@ -484,6 +484,10 @@ const PLAYER_ELEMENTS = [
   'sheetEl',
   'titleEl',
   'floorEl',
+  // PLAN.md #6: the battle frame — the enemy's stage and ticker, and the player's stat box —
+  // is written on every round, from inside the same `dispatch` that logs the round.
+  'arenaEl',
+  'vitalsEl',
 ];
 
 describe('no log line can reach the screen', () => {

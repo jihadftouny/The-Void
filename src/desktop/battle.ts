@@ -76,8 +76,6 @@ export function setBar(host: HTMLElement, model: ResourceBarModel): void {
 export interface TickerState {
   /** The most recent combat line of this fight, or '' before the first. */
   line: string;
-  /** Whether the player has the full log open. */
-  logOpen: boolean;
 }
 
 /**
@@ -87,6 +85,10 @@ export interface TickerState {
  * empty today and deliberately so — inside `.arena-figure`, which is both the flash target and
  * the anchor a future sprite (#7) mounts into. The ticker is ONE line (`aria-live="polite"`)
  * and the `Record` toggle that opens the full combat log beneath the prose.
+ *
+ * The toggle is built CLOSED, always. Whether the log is open is set by `setLogOpen` alone —
+ * the one writer of the column's flag AND the toggle's state, so the two can never disagree
+ * (a log shown open under a toggle saying closed, after the next fight rebuilt the arena).
  */
 export function buildArena(view: StageView, ticker: TickerState): HTMLElement {
   const inner = element('div', 'arena-inner');
@@ -107,7 +109,7 @@ export function buildArena(view: StageView, ticker: TickerState): HTMLElement {
   toggle.setAttribute('aria-controls', 'log');
   band.appendChild(toggle);
   inner.appendChild(band);
-  paintToggle(toggle, ticker.logOpen);
+  paintToggle(toggle, false);
   return inner;
 }
 

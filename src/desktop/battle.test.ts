@@ -63,7 +63,7 @@ function mountFrame(s: StageView = stage(), v: VitalsView = vitals()): { arena: 
   document.body.innerHTML = '<div id="arena"></div><div id="vitals"></div><div id="column"><div id="log"></div></div>';
   const arena = document.getElementById('arena')!;
   const box = document.getElementById('vitals')!;
-  arena.appendChild(buildArena(s, { line: '', logOpen: false }));
+  arena.appendChild(buildArena(s, { line: '' }));
   box.appendChild(buildVitals(v));
   const els = arenaEls(arena, box);
   expect(els, 'the frame the builders made is missing an element the sequencer needs').not.toBeNull();
@@ -181,11 +181,13 @@ describe('the arena (AC-11, AC-18)', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('a rebuilt arena keeps the ticker’s last line and the log’s state', () => {
+  it('a rebuilt arena keeps the ticker’s last line, and is always built with the log CLOSED', () => {
     document.body.innerHTML = '';
-    const inner = buildArena(stage(), { line: 'You strike — hit for 4 damage.', logOpen: true });
+    const inner = buildArena(stage(), { line: 'You strike — hit for 4 damage.' });
     expect(inner.querySelector('.ticker-line')!.textContent).toBe('You strike — hit for 4 damage.');
-    expect(inner.querySelector('.ticker-toggle')!.getAttribute('aria-expanded')).toBe('true');
+    // The open state is applied by `setLogOpen` alone — the one writer of the column's flag and
+    // the toggle together — so a builder cannot paint one without the other.
+    expect(inner.querySelector('.ticker-toggle')!.getAttribute('aria-expanded')).toBe('false');
   });
 });
 

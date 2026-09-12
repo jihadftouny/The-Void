@@ -466,13 +466,14 @@ describe('every data-layout rule is keyed to a mode screenLayout can produce', (
     // ...and the mode the stylesheet is keyed to is one the pure function really returns.
     // Derived from the CSS side, so a `screenLayout` renamed to produce `'document'` fails
     // here rather than silently leaving every document screen in the action geometry.
-    for (const key of ['main-menu', 'inventory']) {
+    for (const key of ['main-menu', 'inventory', 'battle-action']) {
       expect([...MODES].includes(screenLayout(key)), key).toBe(true);
     }
     expect(screenLayout('inventory'), 'a document screen is not in the document layout').toBe(
       'wide',
     );
     expect(screenLayout('main-menu'), 'the hub is not in the action layout').toBe('side');
+    expect(screenLayout('battle-action'), 'a live fight is not the framed stage').toBe('stage');
   });
 });
 

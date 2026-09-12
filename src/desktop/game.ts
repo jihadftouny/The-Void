@@ -28,9 +28,6 @@ import {
 import { loadUnlockStore, saveUnlockStore } from '../storage/unlockStorage.ts';
 import {
   displayPlayer,
-  castOptions,
-  consumableOptions,
-  spareOffered,
   describeInventory,
   equipFromBackpack,
   unequipSlot,
@@ -67,6 +64,16 @@ import {
   buildSettingsScreen,
 } from './screens.ts';
 import { layoutWarnings, readLayout } from './layout.ts';
+// PLAN.md #6 — the framed stage: its pure models, and the thin DOM half that draws them.
+import {
+  battleMenuRows,
+  stageView,
+  vitalsView,
+  type BattleMenuMode,
+  type StageView,
+  type VitalsView,
+} from './battle-model.ts';
+import { buildArena, buildBattleMenu, buildVitals, setLogOpen } from './battle.ts';
 
 // `totalMs` is the main process's own measurement of the generation (`llm.mjs` computed
 // it already and used to throw it away). Optional because an older main process would not
@@ -120,6 +127,11 @@ let sheetEl: HTMLElement;
 // element because the choices are cleared wholesale on every render and the scenery is not
 // part of them: it belongs beside the prose it establishes.
 let sceneryEl: HTMLElement;
+// PLAN.md #6 — the battle frame's two regions (the centre stage and the stat box), and the
+// reading column itself, whose `data-log` flag the ticker's Record toggle sets.
+let arenaEl: HTMLElement;
+let vitalsEl: HTMLElement;
+let columnEl: HTMLElement;
 
 /**
  * The developer's explicit opt-in: `localStorage['thevoid:loglevel'] = 'debug'`. Wrapped
@@ -197,6 +209,9 @@ export function boot(): void {
   choicesEl = $('choices');
   sheetEl = $('sheet');
   sceneryEl = $('scenery');
+  arenaEl = $('arena');
+  vitalsEl = $('vitals');
+  columnEl = $('column');
 
   // ---- Logging: console + in-memory ring (for the debug overlay) + forward to
   // the Electron main process (which writes the log file). Overlay: ` or F2.
@@ -452,9 +467,12 @@ function retheme(): void {
  *
  * G28(a): condition chips. `conditionChips` / `chip` have existed, tested, since M-UI2, and
  * nothing imported them — so the player could be poisoned, fractured and about to lose their
- * turn to Insanity, and the only tell was the HP number moving. They now render for the
- * player always, and for the enemy during a battle, ordered control -> harm -> boon so the
- * thing that stops you acting reads first.
+ * turn to Insanity, and the only tell was the HP number moving. They render for the player
+ * always, ordered control -> harm -> boon so the thing that stops you acting reads first.
+ *
+ * PLAN.md #6: THE FOE LEFT THE HUD. In a live fight this column is hidden and the framed stage
+ * shows the enemy (its name, bar, chips and 3:4 region, in `#arena`) and the player's stat box
+ * (in `#vitals`) — `battle.ts` builds both. So this draws the player only, on every screen.
  */
 function renderSheet(): void {
   // The live battle combatant during a battle (HP ticks down each round), else
@@ -501,29 +519,63 @@ function renderSheet(): void {
   // It sits BELOW the vitals on purpose: `artSlots.json`'s own reasoning is that a portrait
   // must not cost HP, XP and the condition chips their place at the top of a 220px column.
   sheetEl.appendChild(buildArtSlotById('character'));
-
-  if (state.phase.kind === 'battle') {
-    sheetEl.appendChild(document.createElement('hr'));
-    const e = state.phase.battle.enemy;
-    line(e.fullName, 'foe');
-    line(`HP ${e.hp}/${e.maxHp}`);
-    chips(e.activeConditions);
-    // The ENEMY region, reserved in the battle chrome rather than inside `renderChoices`'s
-    // `battle-action` branch — that branch belongs to PLAN.md #6 and this unit does not
-    // touch it. It appears exactly when a battle is on screen, beside the foe's own vitals.
-    sheetEl.appendChild(buildArtSlotById('enemy'));
-  }
 }
+
+// ---- The battle frame's render-layer state (PLAN.md #6). None of it is game state, none of
+// it is saved, and none of it can change a rule: it is which menu is open, whether the player
+// opened the full log, and the line the ticker is showing.
+
+/** Which list the battle menu shows. Reset to the commands by every engine step. */
+let battleMenu: BattleMenuMode = 'commands';
+/** Whether the full log is open under the prose. Kept for the whole fight; closed by the next. */
+let logOpen = false;
+/** The ticker's line: the fight's most recent combat line, '' before the first. */
+let tickerLine = '';
 
 /**
  * Append this step's mechanical beats to the combat log, resetting it when a new fight
  * begins — G18. Everything about WHICH beats and WHAT they read is decided by the pure
  * `logLines` / `startsNewBattle`; this only appends elements and keeps the view at the bottom.
+ *
+ * PLAN.md #6: the ticker is the log's one visible line in a fight, so its line is the log's
+ * LAST line — the same line the round's final beat shows (`beat-model.test.ts` pins that the
+ * two agree). A new fight starts with a fresh log, an empty ticker and the log closed.
  */
 function renderLog(events: readonly GameEvent[]): void {
-  if (startsNewBattle(events)) logEl.replaceChildren();
-  for (const line of logLines(events)) appendLogLine(logEl, line);
+  if (startsNewBattle(events)) {
+    logEl.replaceChildren();
+    tickerLine = '';
+    logOpen = false;
+  }
+  const lines = logLines(events);
+  for (const line of lines) appendLogLine(logEl, line);
   logEl.scrollTop = logEl.scrollHeight;
+  tickerLine = lines.at(-1)?.text ?? tickerLine;
+}
+
+/**
+ * Mount the framed stage: the enemy's arena and the player's stat box, from their views, with
+ * the ticker showing its line and the Record toggle bound to the reading column. The ONE
+ * mounting path — the battle screen and a round's replay both come through here.
+ */
+function mountStage(stage: StageView | null, vitals: VitalsView | null): void {
+  arenaEl.replaceChildren();
+  vitalsEl.replaceChildren();
+  if (!stage || !vitals) return;
+  const arena = buildArena(stage, { line: tickerLine });
+  arenaEl.appendChild(arena);
+  vitalsEl.appendChild(buildVitals(vitals));
+  const toggle = arena.querySelector<HTMLElement>('.ticker-toggle');
+  if (!toggle) return;
+  // The ONE place the frame's log state is applied on a (re)build: the column's flag and the
+  // toggle together, from `logOpen` — so a new fight (which closed the log) cannot inherit the
+  // last fight's open column under a toggle that says closed.
+  setLogOpen(columnEl, toggle, logOpen);
+  toggle.addEventListener('click', () => {
+    logOpen = !logOpen;
+    setLogOpen(columnEl, toggle, logOpen);
+    log.debug('battle', 'log toggled', { open: logOpen });
+  });
 }
 
 async function narrate(events: readonly GameEvent[]): Promise<void> {
@@ -856,6 +908,16 @@ function renderSettingsScreen(): void {
   });
 }
 
+/**
+ * Open a battle sub-menu (or go back to the commands) — a render-layer switch with no engine
+ * step, so it is not a dispatch: the fight is exactly where it was, only the list changed.
+ */
+function openBattleMenu(mode: BattleMenuMode): void {
+  battleMenu = mode;
+  log.debug('battle', 'menu', { mode });
+  rerender();
+}
+
 // Show a transient indicator while the narrator generates, in place of the
 // (already-cleared) choice buttons. renderChoices() clears this when done.
 function showThinking(): void {
@@ -875,6 +937,7 @@ async function dispatch(input: GameInput): Promise<void> {
   if (busy) return;
   busy = true;
   screen = 'game'; // a real engine transition always returns to the plain game view
+  battleMenu = 'commands'; // ...and a fight's menu to its commands, whatever list was open
   // ⭐ THE PLAYER-PERCEIVED FREEZE, IN MILLISECONDS. `busy` is held for the whole of this
   // function, so every input is dead until it returns; this timer is exactly how long the
   // game was unresponsive, and it is reported in the `finally` so it survives a throw.
@@ -973,6 +1036,9 @@ function start(): void {
   // switch, so a stale `'settings'` here would put the settings screen where the title
   // belongs the moment the warning is acknowledged.
   screen = 'game';
+  battleMenu = 'commands';
+  logOpen = false;
+  tickerLine = '';
   narrationEl.innerHTML = '';
   logEl.replaceChildren();
   retheme();
@@ -984,6 +1050,8 @@ function start(): void {
   // could invert. Acknowledging it is what renders the title.
   choicesEl.replaceChildren();
   sceneryEl.replaceChildren();
+  arenaEl.replaceChildren();
+  vitalsEl.replaceChildren();
   titleEl.style.display = 'none';
   showScreen('content-warning');
   choicesEl.appendChild(buildContentWarning(CONTENT_WARNING, () => renderChoices('title')));
@@ -1031,6 +1099,11 @@ function renderChoices(awaiting: Awaiting): void {
   // The scenery is NOT part of the choices, so clearing them does not clear it — and it must
   // be cleared, or every re-render of the hub would stack another 16:9 frame on the column.
   sceneryEl.replaceChildren();
+  // PLAN.md #6: the same for the battle frame's two regions. Off the battle screen they must
+  // be EMPTY (the stylesheet hides them, and the probe counts the enemy region page-wide), and
+  // on it the battle arm below builds them fresh from the current state.
+  arenaEl.replaceChildren();
+  vitalsEl.replaceChildren();
   showScreen(screenKey(awaiting, screen));
   titleEl.style.display = awaiting === 'title' ? 'block' : 'none';
 
@@ -1098,40 +1171,53 @@ function renderChoices(awaiting: Awaiting): void {
       renderHub();
       break;
     case 'battle-action': {
-      const p = displayPlayer(state);
-      choice('Fight', () => void dispatch({ kind: 'battle-action', action: 'fight' }));
-      // Cast: an inline picker of the player's skills with charge costs; unaffordable
-      // skills render disabled. The engine re-checks the charge on dispatch.
-      const casts = p ? castOptions(p) : [];
-      if (casts.length > 0) {
-        picker(choicesEl, 'Cast', (list) => {
-          for (const c of casts) {
-            appendButton(
-              list,
-              buttonModel(c.name, { disabled: !c.affordable, hint: `(${c.chargeCost}⚡)` }),
-              () => void dispatch({ kind: 'battle-action', action: { kind: 'cast', skillId: c.skillId } }),
-            );
+      // PLAN.md #6 — THE FRAMED STAGE. Every decision is a pure model's: what the arena and
+      // the stat box show (`stageView` / `vitalsView`), which rows the menu holds and which
+      // are greyed (`battleMenuRows` — Run is ALWAYS a row, disabled with its reason against
+      // a boss, G4). Cast and Use item open SUB-MENUS that replace the commands (the JRPG
+      // idiom), so the list never grows past the column the way the inline pickers did.
+      mountStage(stageView(state), vitalsView(state));
+      const rows = battleMenuRows(state, battleMenu);
+      choicesEl.appendChild(
+        buildBattleMenu(rows, (row) => {
+          // WHICH INPUT A ROW DISPATCHES lives here, as literal actions, and nowhere else. The
+          // engine re-checks every one of them (a charge, a flee, a spare) on the step.
+          // PLAN.md #2 / §22.6: there is no Potion row — healing is a found consumable.
+          switch (row.kind) {
+            case 'fight':
+              void dispatch({ kind: 'battle-action', action: 'fight' });
+              break;
+            case 'spare':
+              void dispatch({ kind: 'battle-action', action: 'spare' });
+              break;
+            case 'run':
+              void dispatch({ kind: 'battle-action', action: 'run' });
+              break;
+            case 'cast-skill':
+              void dispatch({ kind: 'battle-action', action: { kind: 'cast', skillId: row.option.skillId } });
+              break;
+            case 'use-item':
+              void dispatch({
+                kind: 'battle-action',
+                action: { kind: 'useConsumable', source: { index: row.option.index } },
+              });
+              break;
+            case 'cast':
+            case 'item':
+              openBattleMenu(row.kind);
+              break;
+            case 'back':
+              openBattleMenu('commands');
+              break;
+            default: {
+              // EXHAUSTIVE: a new row kind (#11's `talk`) fails the build here until it is
+              // given an input, rather than rendering a button that does nothing.
+              const unhandled: never = row;
+              void unhandled;
+            }
           }
-        });
-      }
-      // Spare: only against a living karma-weighted enemy (the engine's own gate).
-      if (spareOffered(state)) {
-        choice('Spare', () => void dispatch({ kind: 'battle-action', action: 'spare' }));
-      }
-      // Use item: an inline picker of usable consumables in the backpack (by index).
-      const items = p ? consumableOptions(p) : [];
-      if (items.length > 0) {
-        picker(choicesEl, 'Use item', (list) => {
-          for (const it of items) {
-            appendButton(list, buttonModel(it.name, { hint: `(${it.rarity})` }), () =>
-              void dispatch({ kind: 'battle-action', action: { kind: 'useConsumable', source: { index: it.index } } }),
-            );
-          }
-        });
-      }
-      // PLAN.md #2 / §22.6: no Potion button — healing in battle is a found consumable, in the
-      // Use-item picker above like every other item.
-      choice('Run', () => void dispatch({ kind: 'battle-action', action: 'run' }));
+        }),
+      );
       break;
     }
     case 'continue':
@@ -1315,6 +1401,9 @@ function adoptFromPanel(saved: SavedRun): boolean {
   adoptRun(saved);
   narrationEl.innerHTML = '';
   logEl.replaceChildren();
+  tickerLine = '';
+  logOpen = false;
+  battleMenu = 'commands';
   screen = 'game';
   renderChoices(awaitingFor(state.phase));
   return true;

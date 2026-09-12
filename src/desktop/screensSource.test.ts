@@ -673,43 +673,76 @@ describe('the boot path loads the player’s preferences before the first paint'
 });
 
 describe('all three reserved art regions are actually mounted (A.7)', () => {
-  it('the character portrait and the enemy portrait live in the HUD', () => {
+  // RE-ANCHORED by PLAN.md #6. The enemy region used to be reserved in the HUD column beside
+  // the foe's lines, pinned by two scope guards that kept #8 out of the battle branch ("it
+  // belongs to PLAN.md #6"). #6 IS that branch: the region moved to the centre stage, and the
+  // scope pins are replaced by pins on the same facts in their new place.
+  const BATTLE_RAW = readFileSync(path.join(ROOT, 'src/desktop/battle.ts'), 'utf8');
+  const BATTLE = stripComments(BATTLE_RAW);
+
+  it('the character portrait lives in the HUD — and it is the HUD’s ONLY region now', () => {
     const body = bodyOf('function renderSheet(');
     expect(body, 'the character region is not reserved anywhere').toMatch(
       /buildArtSlotById\s*\(\s*'character'\s*\)/,
     );
-    expect(body, 'the enemy region is not reserved anywhere').toMatch(
+    expect(body, 'the enemy region is back in the HUD — the stage owns the foe').not.toMatch(
       /buildArtSlotById\s*\(\s*'enemy'\s*\)/,
     );
   });
 
-  it('and the enemy one only while a battle is on screen', () => {
-    // It is reserved in the battle CHROME rather than inside `renderChoices`'s
-    // `battle-action` branch, which belongs to PLAN.md #6 and this unit does not touch.
-    const body = bodyOf('function renderSheet(');
-    const battle = body.search(/if\s*\(\s*state\.phase\.kind\s*===\s*'battle'\s*\)/);
-    const enemy = body.search(/buildArtSlotById\s*\(\s*'enemy'\s*\)/);
-    expect(battle, 'the battle branch is gone').toBeGreaterThan(-1);
-    expect(enemy).toBeGreaterThan(battle);
+  it('the ENEMY region is the arena’s: built by buildArena, and nowhere in the renderer', () => {
+    expect(stripReachesEndOfFile(BATTLE_RAW), 'the strip ran off the end of battle.ts').toBe(true);
+    const at = BATTLE.indexOf('export function buildArena(');
+    expect(at, 'buildArena is gone — this guard has gone stale').toBeGreaterThan(-1);
+    const arena = BATTLE.slice(at, BATTLE.indexOf('\n}', at));
+    expect(arena, 'the arena no longer holds the enemy region').toMatch(
+      /buildArtSlotById\s*\(\s*'enemy'\s*\)/,
+    );
+    // ...inside the figure the flash plays on and #7's sprite will mount into.
+    expect(arena).toMatch(/figure\.appendChild\(\s*buildArtSlotById\(\s*'enemy'\s*\)\s*\)/);
+    expect(SOURCE, 'the renderer mounts an enemy region of its own again').not.toMatch(
+      /buildArtSlotById\s*\(\s*'enemy'\s*\)/,
+    );
   });
 
   it('the scenery region is the floor’s, on the hub', () => {
     expect(bodyOf('function renderHub(')).toMatch(/buildArtSlotById\s*\(\s*'scenery'\s*\)/);
   });
 
-  it('and the battle-action branch is untouched by this unit', () => {
-    // Scope, asserted: the battle screen is #6's, and the one thing this unit must not do is
-    // start editing it.
+  it('the battle arm draws the stage from the models, into the frame — never into the HUD', () => {
     const body = bodyOf('function renderChoices(');
     const start = body.indexOf("case 'battle-action'");
     expect(start, 'the battle case is gone').toBeGreaterThan(-1);
     const battleCase = body.slice(start, body.indexOf("case 'continue'", start));
-    expect(battleCase, 'this unit put an art slot in the battle branch').not.toContain(
-      'buildArtSlot',
+    for (const model of ['stageView', 'vitalsView', 'battleMenuRows']) {
+      expect(battleCase, `the battle arm no longer reads ${model}`).toMatch(new RegExp(`\\b${model}\\s*\\(`));
+    }
+    expect(battleCase, 'the battle arm no longer mounts the stage').toMatch(
+      /mountStage\s*\(\s*stageView\s*\(\s*state\s*\)\s*,\s*vitalsView\s*\(\s*state\s*\)\s*\)/,
     );
-    expect(battleCase, 'this unit put a data-screen write in the battle branch').not.toContain(
-      'dataset',
-    );
+    expect(battleCase, 'the battle arm writes into the HUD').not.toMatch(/sheetEl/);
+    expect(battleCase, 'the battle arm writes a screen attribute by hand').not.toContain('dataset');
+    // ...and the one mounting path writes the frame's two regions and nothing else.
+    const mount = bodyOf('function mountStage(');
+    expect(mount).toMatch(/arenaEl\.appendChild\(/);
+    expect(mount).toMatch(/vitalsEl\.appendChild\(/);
+    expect(mount, 'the stage mounts into the HUD').not.toMatch(/sheetEl/);
+  });
+});
+
+describe('the battle DOM module builds no markup from a string either (PLAN.md #6)', () => {
+  // The same two assertions this file makes over `game.ts`, over the module that now draws
+  // the one screen carrying an enemy's generated name.
+  const BATTLE = stripComments(readFileSync(path.join(ROOT, 'src/desktop/battle.ts'), 'utf8'));
+
+  it('no innerHTML assignment at all', () => {
+    expect(BATTLE).not.toMatch(/\.\s*innerHTML\s*=/);
+  });
+
+  it('and no other markup-writing API', () => {
+    expect(BATTLE).not.toMatch(/outerHTML\s*=|insertAdjacentHTML\s*\(|createContextualFragment\s*\(/);
+    // Non-vacuity: the module really does write text.
+    expect(BATTLE).toMatch(/textContent\s*=/);
   });
 });
 
@@ -746,9 +779,10 @@ describe('the renderer reports whether the bundled faces actually loaded', () =>
 // =========================================================================================
 
 describe('desktop.html carries the header band and loses no id', () => {
-  it('every id the renderer looks up at module scope still exists', () => {
-    // `game.ts` resolves all of these with `$()` at module scope and THROWS on a missing one,
-    // so a dropped id is not a degraded layout — it is a game that does not boot.
+  it('every id the renderer looks up in boot() still exists', () => {
+    // `game.ts` resolves all of these with `$()` in `boot()` and THROWS on a missing one, so a
+    // dropped id is not a degraded layout — it is a game that does not boot. PLAN.md #6 adds
+    // the battle frame's two regions and the reading column its log toggle marks.
     for (const id of [
       'game',
       'sheet',
@@ -760,6 +794,9 @@ describe('desktop.html carries the header band and loses no id', () => {
       'narration',
       'log',
       'choices',
+      'arena',
+      'vitals',
+      'column',
     ]) {
       expect(HTML, `#${id} is gone — the renderer throws at boot`).toContain(`id="${id}"`);
     }

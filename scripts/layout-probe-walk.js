@@ -1,9 +1,11 @@
 // THE REAL-BOOT WALK — the other end of every coupling phase A can only mirror.
 //
 // Phase A of the layout probe builds its worst cases with the real component builders, but it
-// MIRRORS two structures the renderer assembles inline: the battle control list and the
-// `.hub-menu` / `.hub-prompt` wrapper. A mirror can drift from the thing it mirrors, and a
-// drifted mirror is a test that measures a page the game never shows.
+// MIRRORS one structure the renderer assembles inline: the `.hub-menu` / `.hub-prompt` wrapper.
+// (The battle control list was mirrored too until PLAN.md #6, which built the battle screen
+// from importable builders; phase A now calls them, and this walk checks that the renderer
+// does.) A mirror can drift from the thing it mirrors, and a drifted mirror is a test that
+// measures a page the game never shows.
 //
 // So this walks the ACTUAL renderer. `dist/desktop.html` is loaded with only a stub IPC
 // bridge, the real `game.ts` boots, and every step below is a real click on a real button
@@ -127,7 +129,8 @@
       },
       // Reading order as the keyboard will walk it: the region each focusable lives in.
       focusOrder: [...document.querySelectorAll('button, summary, input, [tabindex]')].map((node) => {
-        const owner = node.closest('#column, #choices, #sheet');
+        // `#arena` and `#vitals` are PLAN.md #6's regions; the same list phase A uses.
+        const owner = node.closest('#arena, #vitals, #column, #choices, #sheet');
         return owner ? owner.id : 'elsewhere';
       }),
       hubMenuRows: el('choices').querySelectorAll('.hub-menu .void-button').length,
@@ -135,6 +138,47 @@
         (p) => p.getBoundingClientRect().height > 0,
       ),
       documentPanels: el('choices').querySelectorAll('.vm-screen').length,
+      // ---- PLAN.md #6: the battle frame, as the real renderer built it ----
+      arena: region('arena'),
+      vitals: region('vitals'),
+      sheet: { ...box(el('sheet')), display: getComputedStyle(el('sheet')).display },
+      enemySlot: enemySlot(),
+      ticker: {
+        line: document.querySelector('#arena .ticker-line')
+          ? box(document.querySelector('#arena .ticker-line'))
+          : null,
+        text: (document.querySelector('#arena .ticker-line')?.textContent ?? '').trim(),
+        toggles: document.querySelectorAll('#arena .ticker-toggle').length,
+      },
+      bars: [...document.querySelectorAll('#arena .void-bar, #vitals .void-bar')].map((b) => ({
+        tone: [...b.classList].find((c) => c.startsWith('void-bar-') && c !== 'void-bar') ?? '',
+        text: (b.querySelector('.void-bar-text')?.textContent ?? '').trim(),
+      })),
+    };
+  }
+
+  /** A frame region, or null when the page has no such element (the pre-#6 page had none). */
+  function region(id) {
+    const node = document.getElementById(id);
+    if (!node) return null;
+    return {
+      ...box(node),
+      scrollHeight: node.scrollHeight,
+      clientHeight: node.clientHeight,
+      display: getComputedStyle(node).display,
+    };
+  }
+
+  /** The enemy's reserved region, counted across the WHOLE page — a second one is a bug. */
+  function enemySlot() {
+    const all = document.querySelectorAll('.void-art-slot[data-art-slot="enemy"]');
+    const first = all[0] ? box(all[0]) : null;
+    return {
+      inPage: all.length,
+      inArena: document.querySelectorAll('#arena .void-art-slot[data-art-slot="enemy"]').length,
+      inSheet: document.querySelectorAll('#sheet .void-art-slot[data-art-slot="enemy"]').length,
+      box: first,
+      ratio: first && first.height > 0 ? first.width / first.height : null,
     };
   }
 
@@ -205,6 +249,41 @@
 
   await clickTo('Abandon the descent', 'confirm-abandon');
   steps.push(measure('confirm-abandon'));
+
+  // ---- PLAN.md #6: a REAL battle, reached the way a player reaches one ----------------------
+  // Back out of the confirmation (the answer that keeps the run), then press on down the
+  // descent until a fight opens. The descent is random — the run is seeded from the clock — so
+  // the found places on the way are handled as a player would: a cache or a rest is continued
+  // past, a bargain refused. Bounded, and loud when the bound is hit.
+  await clickTo('No — keep descending', 'main-menu');
+  let reached = false;
+  for (let tries = 0; tries < 12 && !reached; tries += 1) {
+    await click('Continue the descent');
+    await until('the descent to land somewhere', () => screen() !== 'main-menu');
+    for (let hops = 0; hops < 6 && screen() !== 'main-menu' && !reached; hops += 1) {
+      const now = screen();
+      if (now === 'battle-action') {
+        reached = true;
+      } else if (now === 'deal-decision') {
+        await clickTo('Refuse', 'main-menu');
+      } else if (now === 'continue' || now === 'rest') {
+        // A cache, a rest, or a fight waiting to be joined: Continue is the one way on, and each
+        // of them leaves for a DIFFERENT screen (the hub, or the fight itself). The choice
+        // column is empty while the step is in flight, so the screen key is the only honest wait.
+        await click('Continue');
+        await until('the Continue to land', () => screen() !== now);
+      } else {
+        throw new Error(`layout probe walk: the descent reached '${now}', which the walk cannot pass`);
+      }
+    }
+  }
+  if (!reached) throw new Error('layout probe walk: twelve descents and no battle opened');
+  steps.push(measure('battle'));
+
+  // Cast opens a sub-menu. It is a render-layer switch with no engine step, so it lands
+  // synchronously; the settle inside `click` is the whole wait.
+  await click('Cast');
+  steps.push(measure('battle-cast-open'));
 
   return {
     steps,
