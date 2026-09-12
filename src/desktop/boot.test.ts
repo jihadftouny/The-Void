@@ -33,93 +33,26 @@ import { createStoryMemory } from '../llm/narrate.ts';
 import { emptyRunSummary, foldRunEvents } from '../game/unlockStore.ts';
 import { BEAT_HOLD_MS, BEAT_MS, MAX_ROUND_MS, MIN_SPACING_MS, groupBeats } from '../render/beat-model.ts';
 import type { LogEntry } from '../log/logger.ts';
-// The save is written through the real `saveRun`, imported STATICALLY. Measured, not guessed:
-// a second `vi.resetModules()` + dynamic `import('./persist.ts')` inside a case, after an
-// earlier case has booted a renderer, left the following dynamic `import('./game.ts')` pending
-// forever (a module-loader deadlock in the test runner — the renderer never even started).
-// `saveRun` only writes `localStorage`, so which module instance writes it changes nothing.
+// The save is written through the real `saveRun`, imported STATICALLY — the harness's
+// one-reset-per-case rule (a second reset + dynamic import deadlocked the module loader).
 import { saveRun } from './persist.ts';
+// The shared harness for booting the real renderer (one copy; `battleScreen.test.ts` uses it too).
+import {
+  DESKTOP_HTML as HTML,
+  choiceButtons,
+  click,
+  freshRenderer,
+  installBridge,
+  installFonts,
+  installPage,
+  labels,
+  reach,
+  removeBridge,
+  screen,
+} from './rendererHarness.testutil.ts';
 
 // The repo root. `import.meta.url` is not a file url under jsdom (the `skeleton.test.ts` note).
 const ROOT = process.cwd();
-const HTML = readFileSync(path.join(ROOT, 'desktop.html'), 'utf8');
-
-/** The shipped page's body, parsed and installed. Scripts inserted this way never run. */
-function installPage(): void {
-  const parsed = new DOMParser().parseFromString(HTML, 'text/html');
-  document.body.innerHTML = parsed.body.innerHTML;
-  for (const name of Object.keys(document.body.dataset)) delete document.body.dataset[name];
-}
-
-interface Bridge {
-  onStatus: ReturnType<typeof vi.fn>;
-  generate: ReturnType<typeof vi.fn>;
-  log: ReturnType<typeof vi.fn>;
-}
-
-/**
- * The stand-in for the Electron IPC bridge — the same shape the layout probe's preload uses.
- * `generate` REJECTS: there is no model in a test (CLAUDE.md), and rejecting drives the
- * renderer down its own documented fallback, so the prose on screen is prose the game makes.
- */
-function installBridge(): Bridge {
-  const bridge: Bridge = {
-    onStatus: vi.fn(() => () => undefined),
-    generate: vi.fn(() => Promise.reject(new Error('boot test: no narrator'))),
-    log: vi.fn(),
-  };
-  (window as unknown as { void: Bridge }).void = bridge;
-  return bridge;
-}
-
-function removeBridge(): void {
-  delete (window as unknown as { void?: Bridge }).void;
-}
-
-/** jsdom ships no font-loading API; the renderer's diagnostic reads `document.fonts.ready`. */
-function installFonts(): void {
-  Object.defineProperty(document, 'fonts', {
-    configurable: true,
-    value: { ready: Promise.resolve({ size: 4 }) },
-  });
-}
-
-/** A fresh renderer module and the logger instance it writes to, with every entry captured. */
-async function freshRenderer(): Promise<{
-  game: typeof import('./game.ts');
-  log: typeof import('../log/logger.ts')['log'];
-  entries: LogEntry[];
-}> {
-  vi.resetModules();
-  const logger = await import('../log/logger.ts');
-  const entries: LogEntry[] = [];
-  logger.log.addSink((e) => entries.push(e));
-  const game = await import('./game.ts');
-  return { game, log: logger.log, entries };
-}
-
-const screen = (): string | undefined => document.body.dataset['screen'];
-const choiceButtons = (): HTMLButtonElement[] => [
-  ...document.getElementById('choices')!.querySelectorAll('button'),
-];
-const labels = (): string[] => choiceButtons().map((b) => (b.textContent ?? '').trim());
-
-/** Click the one control in the choice column whose label starts with `text`. */
-function click(text: string): void {
-  const found = choiceButtons().filter((b) => (b.textContent ?? '').trim().startsWith(text));
-  expect(found, `one control starting '${text}' on '${screen()}': ${labels().join(' | ')}`).toHaveLength(
-    1,
-  );
-  found[0]!.click();
-}
-
-/** Wait for an async dispatch (step + the rejected narration) to land on `key`. */
-async function reach(key: string): Promise<void> {
-  await vi.waitFor(() => expect(screen(), `waiting for '${key}'`).toBe(key), {
-    timeout: 3000,
-    interval: 5,
-  });
-}
 
 beforeEach(() => {
   installPage();
