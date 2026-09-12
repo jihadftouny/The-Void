@@ -17,7 +17,7 @@
 // them; which side acts first is the engine's business (Appendix A.1).
 
 import { appendButton, bar, chip } from '../render/components.ts';
-import type { ConditionChipModel, ResourceBarModel } from '../render/component-model.ts';
+import { barCells, type ConditionChipModel, type ResourceBarModel } from '../render/component-model.ts';
 import type { BarKey, Beat, BeatFloat } from '../render/beat-model.ts';
 import type { AudioHookName, AudioSink } from '../render/audio-hooks.ts';
 import { buildArtSlotById } from './screens.ts';
@@ -27,6 +27,7 @@ import {
   type BattleMenuRow,
   type RoundPlan,
   type StageView,
+  type TempoGaugeModel,
   type VitalsView,
 } from './battle-model.ts';
 
@@ -57,13 +58,40 @@ function barHost(key: BarKey, model: ResourceBarModel): HTMLElement {
   return host;
 }
 
+/** Cells on EACH side of the tempo gauge's centre line. */
+export const TEMPO_CELLS = 10;
+
+/** One half of the gauge: `filled` cells lit, nearest the centre line first. */
+function tempoHalf(side: 'slow' | 'quick', fraction: number): HTMLElement {
+  const half = element('span', `tempo-half tempo-${side}`);
+  const filled = barCells(fraction, TEMPO_CELLS);
+  for (let i = 0; i < TEMPO_CELLS; i += 1) {
+    // The slow half fills leftward from the centre, so its lit cells are its LAST ones; the
+    // quick half fills rightward, so its first. DOM order stays left-to-right either way.
+    const lit = side === 'slow' ? i >= TEMPO_CELLS - filled : i < filled;
+    half.appendChild(element('span', lit ? 'tempo-cell is-filled' : 'tempo-cell'));
+  }
+  return half;
+}
+
 /**
- * The reserved tempo row (#1.6). Built ONLY when a view carries a tempo — which no view does
- * until the engine has the field — so today the frame renders no gauge, no "0.0" and no label.
+ * The reserved tempo gauge (#1.6, GAME-DESIGN §16.1): two halves meeting at a centre line —
+ * filling rightward toward the extra action, leftward toward the lost turn — and the engine's
+ * number. Built ONLY when a view carries a tempo, which none does until the engine has the
+ * field, so today the frame renders no gauge, no "0.0" and no label. Counted with the shared
+ * `barCells` rule: only a true zero reads empty, only a true full reads full.
  */
-function tempoRow(tempo: number): HTMLElement {
+function tempoRow(gauge: TempoGaugeModel): HTMLElement {
   const row = element('div', 'tempo-row');
-  row.appendChild(bar({ label: 'Tempo', value: tempo, max: 1, text: tempo.toFixed(1), fraction: Math.max(0, Math.min(1, tempo)), tone: 'accent' }));
+  row.setAttribute('role', 'img');
+  row.setAttribute('aria-label', `${gauge.label} ${gauge.text}`);
+  row.appendChild(element('span', 'tempo-label', gauge.label));
+  const track = element('span', 'tempo-gauge');
+  track.appendChild(tempoHalf('slow', gauge.slow));
+  track.appendChild(element('span', 'tempo-centre'));
+  track.appendChild(tempoHalf('quick', gauge.quick));
+  row.appendChild(track);
+  row.appendChild(element('span', 'tempo-text', gauge.text));
   return row;
 }
 

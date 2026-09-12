@@ -62,6 +62,7 @@ import { dealDiscardView, dealView, hubMenu } from '../desktop/view-model.ts';
 import {
   battleMenuRows,
   stageView,
+  tempoGauge,
   vitalsView,
   type StageView,
   type VitalsView,
@@ -415,8 +416,10 @@ function mountBattle(scene: BattleScene): void {
   const stage = stageView(state) as StageView;
   const vitals = vitalsView(state) as VitalsView;
   if (scene.tempo) {
-    stage.tempo = 0.8;
-    vitals.tempo = 0.3;
+    // One of each side of the two-sided gauge: the foe near its extra action, the player
+    // drifting toward a lost turn.
+    stage.tempo = tempoGauge(0.8);
+    vitals.tempo = tempoGauge(-0.3);
   }
   const arena = buildArena(stage, { line: TICKER_LINE });
   el('arena').appendChild(arena);

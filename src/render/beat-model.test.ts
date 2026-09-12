@@ -222,6 +222,61 @@ describe('either round order replays faithfully (A.1)', () => {
     const b = groupBeats([playerTick, playerStrike, enemyTick, enemyStrike]);
     expect(beatSchedule(a.length)).toEqual(beatSchedule(b.length));
   });
+
+  // ---------------------------------------------------------------------------------------
+  // ⭐ ANY NUMBER OF ACTIONS PER SIDE. The author's answer on round order (2026-09-12): "you
+  // strike first, but it really depends on initiative like DnD, and the Dexterity stat" — which
+  // is GAME-DESIGN §16.1's tempo gauge: a full gauge is an EXTRA ACTION, an empty one a LOST
+  // TURN. Neither is built. When it is, a round can carry two actions from one side and none
+  // from the other, in either order, so the replay must hold no count per side at all.
+  // ---------------------------------------------------------------------------------------
+
+  const secondPlayerStrike: GameEvent = { ...attack, subject: 'player', outcome: 'hit', damage: 5 };
+  const secondEnemyStrike: GameEvent = { ...attack, subject: 'enemy', outcome: 'hit', damage: 2 };
+  const LINE2 = new Map<GameEvent, string>([
+    [secondPlayerStrike, 'You strike — hit for 5 damage.'],
+    [secondEnemyStrike, 'The enemy strikes — hit for 2 damage.'],
+  ]);
+  const lineOf = (e: GameEvent): string | undefined => LINE.get(e) ?? LINE2.get(e);
+
+  /** Faithful for any mix: every action is its own beat, in order, with its own line. */
+  function assertEveryActionReplayed(order: GameEvent[]): Beat[] {
+    const beats = groupBeats(order);
+    expect(beats.map((b) => b.anchor), 'an action was dropped, merged or moved').toEqual(order);
+    expect(beats.map((b) => b.line)).toEqual(order.map(lineOf));
+    return beats;
+  }
+
+  it('an EXTRA ACTION: the player acts twice in the round — first, or last, or around the enemy', () => {
+    // Hand-derived bar beats for each order: the ENEMY's bar is written at the player's LAST
+    // strike, the player's at the enemy's only strike.
+    let beats = assertEveryActionReplayed([playerStrike, secondPlayerStrike, enemyStrike]);
+    expect(barUpdateAt(beats)).toMatchObject({ enemy: 1, player: 2 });
+    beats = assertEveryActionReplayed([playerStrike, enemyStrike, secondPlayerStrike]);
+    expect(barUpdateAt(beats)).toMatchObject({ enemy: 2, player: 1 });
+    beats = assertEveryActionReplayed([enemyStrike, playerStrike, secondPlayerStrike]);
+    expect(barUpdateAt(beats)).toMatchObject({ enemy: 2, player: 0 });
+  });
+
+  it('the ENEMY’s extra action, likewise', () => {
+    const beats = assertEveryActionReplayed([enemyStrike, playerStrike, secondEnemyStrike]);
+    expect(barUpdateAt(beats)).toMatchObject({ player: 2, enemy: 1 });
+  });
+
+  it('a LOST TURN: one side does not act at all — the replay needs no action from it', () => {
+    // The player lost the turn: only the enemy acts, twice even. Nothing touches the enemy's
+    // bar, so it is written (with the engine's unchanged value) at the last beat.
+    let beats = assertEveryActionReplayed([enemyStrike, secondEnemyStrike]);
+    expect(barUpdateAt(beats)).toEqual({ player: 1, enemy: 1, charges: 1 });
+    expect(beats.every((b) => b.anchor?.kind === 'attack' && b.anchor.subject === 'enemy')).toBe(true);
+    // The enemy lost the turn: the player alone.
+    beats = assertEveryActionReplayed([playerStrike]);
+    expect(barUpdateAt(beats)).toEqual({ player: 0, enemy: 0, charges: 0 });
+    // A lost turn the engine SAYS (today's control-condition line) is a beat of its own.
+    const unable: GameEvent = { kind: 'player-unable-to-act', conditionType: 'stun' };
+    beats = groupBeats([unable, enemyStrike]);
+    expect(beats.map((b) => b.line)).toEqual(['You cannot act — Stun.', 'The enemy strikes — hit for 3 damage.']);
+  });
 });
 
 describe('floats and touches, by hand', () => {

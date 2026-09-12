@@ -17,6 +17,7 @@ import {
   roundBars,
   roundPlan,
   stageView,
+  tempoGauge,
   vitalsView,
   type BattleMenuRow,
 } from './battle-model.ts';
@@ -134,11 +135,24 @@ describe('the player’s stat box (AC-12): fighting numbers only', () => {
   });
 });
 
-describe('the reserved tempo slot (AC-25)', () => {
+describe('the reserved tempo slot (AC-25; GAME-DESIGN §16.1)', () => {
   it('is absent from both views today — there is no engine field, so nothing renders', () => {
     const s = inBattle(createBattle(hero(), foe(), 2));
     expect('tempo' in stageView(s)!).toBe(false);
     expect('tempo' in vitalsView(s)!).toBe(false);
+  });
+
+  it('is a TWO-SIDED gauge: it fills toward the extra action and empties toward the lost turn', () => {
+    // §16.1: +1.0 is an extra action, −1.0 a lost turn. Each half is the distance toward its
+    // threshold, by hand; the text is the engine's number, signed, to one decimal.
+    expect(tempoGauge(0.4)).toEqual({ value: 0.4, text: '+0.4', quick: 0.4, slow: 0, label: 'Tempo' });
+    expect(tempoGauge(-0.3)).toEqual({ value: -0.3, text: '−0.3', quick: 0, slow: 0.3, label: 'Tempo' });
+    expect(tempoGauge(0)).toMatchObject({ text: '0.0', quick: 0, slow: 0 });
+    // At a threshold the side is full; past it (the engine carries the remainder) it stays full.
+    expect(tempoGauge(1)).toMatchObject({ text: '+1.0', quick: 1, slow: 0 });
+    expect(tempoGauge(-1.2)).toMatchObject({ text: '−1.2', quick: 0, slow: 1 });
+    // A value that rounds to nothing reads as nothing, never "−0.0".
+    expect(tempoGauge(-0.04).text).toBe('0.0');
   });
 });
 

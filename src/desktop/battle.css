@@ -146,6 +146,57 @@
   font-size: var(--void-type-sm);
 }
 
+/* ---- The reserved tempo gauge (#1.6, GAME-DESIGN §16.1) -------------------------------------
+ * Rendered only when the engine supplies a tempo, which it does not yet. Two halves meet at a
+ * centre line: the right fills toward the EXTRA ACTION (the accent), the left toward the LOST
+ * TURN (harm). Discrete cells, like every bar here, so a player can count how close it is. */
+.tempo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--void-space-2);
+  font-size: var(--void-type-sm);
+}
+.tempo-label {
+  min-width: 5.5em;
+  color: var(--void-ink-dim);
+  font-size: var(--void-type-xs);
+  letter-spacing: var(--void-track-wide);
+  text-transform: uppercase;
+}
+.tempo-gauge {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.tempo-half {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.tempo-cell {
+  flex: 1;
+  height: 10px;
+  min-width: 2px;
+  background: var(--void-rule);
+}
+.tempo-quick .tempo-cell.is-filled { background: var(--void-accent); }
+.tempo-slow .tempo-cell.is-filled { background: var(--void-harm); }
+.tempo-centre {
+  flex: none;
+  width: var(--void-rule-heavy);
+  height: 14px;
+  background: var(--void-ink-dim);
+}
+.tempo-text {
+  min-width: 3.5em;
+  text-align: right;
+  color: var(--void-ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- The menu: compact rows, bottom-anchored in the right-hand column --------------------- */
 
 .battle-menu {

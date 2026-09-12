@@ -26,7 +26,7 @@ import {
   type ArenaEls,
   type PlayDeps,
 } from './battle.ts';
-import type { BattleMenuRow, RoundPlan, StageView, VitalsView } from './battle-model.ts';
+import { tempoGauge, type BattleMenuRow, type RoundPlan, type StageView, type VitalsView } from './battle-model.ts';
 import { barUpdateAt, beatSchedule, groupBeats } from '../render/beat-model.ts';
 import { resourceBarModel, conditionChips } from '../render/component-model.ts';
 import type { AudioHookName, AudioSink } from '../render/audio-hooks.ts';
@@ -213,10 +213,32 @@ describe('the stat box (AC-12) and the reserved tempo row (AC-25)', () => {
   });
 
   it('with a tempo (a test-only fixture — no engine field exists) a gauge row renders on each side', () => {
-    const { arena, vitals: box } = mountFrame(stage({ tempo: 0.8 }), vitals({ tempo: 0.3 }));
+    const { arena, vitals: box } = mountFrame(stage({ tempo: tempoGauge(0.8) }), vitals({ tempo: tempoGauge(-0.3) }));
     expect(arena.querySelectorAll('.tempo-row')).toHaveLength(1);
     expect(box.querySelectorAll('.tempo-row')).toHaveLength(1);
-    expect(arena.querySelector('.tempo-row .void-bar-text')!.textContent).toBe('0.8');
+    expect(arena.querySelector('.tempo-row .tempo-text')!.textContent).toBe('+0.8');
+    expect(box.querySelector('.tempo-row')!.getAttribute('aria-label')).toBe('Tempo −0.3');
+  });
+
+  it('the gauge is two-sided: it fills from the centre toward the extra action or the lost turn', () => {
+    /** Which cells are lit, per half, as a string of 0/1 in DOM (left-to-right) order. */
+    const lit = (gauge: HTMLElement, side: 'slow' | 'quick'): string =>
+      [...gauge.querySelectorAll(`.tempo-${side} .tempo-cell`)].map((c) => (c.classList.contains('is-filled') ? '1' : '0')).join('');
+    const { arena, vitals: box } = mountFrame(stage({ tempo: tempoGauge(0.4) }), vitals({ tempo: tempoGauge(-0.3) }));
+    const quickSide = arena.querySelector<HTMLElement>('.tempo-row')!;
+    const slowSide = box.querySelector<HTMLElement>('.tempo-row')!;
+    // +0.4 of 10 cells = 4, lit from the centre RIGHTWARD: the quick half's first four.
+    expect(lit(quickSide, 'quick')).toBe('1111000000');
+    expect(lit(quickSide, 'slow')).toBe('0000000000');
+    // −0.3 = 3 cells lit from the centre LEFTWARD: the slow half's last three.
+    expect(lit(slowSide, 'slow')).toBe('0000000111');
+    expect(lit(slowSide, 'quick')).toBe('0000000000');
+    // A full gauge is full; an empty one is empty — and the centre line is always there.
+    const full = mountFrame(stage({ tempo: tempoGauge(1) })).arena.querySelector<HTMLElement>('.tempo-row')!;
+    expect(lit(full, 'quick')).toBe('1111111111');
+    const zero = mountFrame(stage({ tempo: tempoGauge(0) })).arena.querySelector<HTMLElement>('.tempo-row')!;
+    expect(lit(zero, 'quick') + lit(zero, 'slow')).toBe('0'.repeat(20));
+    expect(zero.querySelectorAll('.tempo-centre')).toHaveLength(1);
   });
 });
 
@@ -317,6 +339,30 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
     const r = await walk([miss, playerStrike], true);
     expect(r.audio.calls.map((c) => c.name)).toEqual(['miss', 'hit']);
     expect(r.frames[0]!.ticker).toBe('The enemy strikes — miss.');
+  });
+
+  it('an EXTRA ACTION (§16.1): two player strikes in one round — every beat plays, each bar once', async () => {
+    const again: GameEvent = { ...attack, subject: 'player', outcome: 'hit', damage: 5 };
+    const r = await walk([playerStrike, enemyStrike, again], true);
+    expect(r.frames.map((f) => f.ticker)).toEqual([
+      'You strike — hit for 4 damage.',
+      'The enemy strikes — hit for 3 damage.',
+      'You strike — hit for 5 damage.',
+    ]);
+    // The enemy's bar waits for the player's SECOND strike; the player's lands at the enemy's.
+    expect(r.frames.map((f) => f.enemy)).toEqual(['20/30', '20/30', '16/30']);
+    expect(r.frames.map((f) => f.player)).toEqual(['12/15', '8/15', '8/15']);
+    expect(r.writes).toEqual({ player: 1, enemy: 1, charges: 1 });
+    expect(r.audio.calls.map((c) => c.side)).toEqual(['enemy', 'player', 'enemy']);
+  });
+
+  it('a LOST TURN (§16.1): the player does not act — the enemy’s beats play alone', async () => {
+    const again: GameEvent = { ...attack, subject: 'enemy', outcome: 'hit', damage: 2 };
+    const r = await walk([enemyStrike, again], true);
+    expect(r.frames.map((f) => f.ticker)).toEqual(['The enemy strikes — hit for 3 damage.', 'The enemy strikes — hit for 2 damage.']);
+    expect(r.frames.map((f) => f.player)).toEqual(['12/15', '8/15']);
+    expect(r.writes).toEqual({ player: 1, enemy: 1, charges: 1 });
+    expect(r.result.beats).toBe(2);
   });
 
   it('a longer round: the bar waits for the LAST beat that touched it', async () => {

@@ -45,18 +45,55 @@ import {
   type ConsumableOption,
 } from './view-model.ts';
 
+/**
+ * THE TEMPO GAUGE (GAME-DESIGN.md §16.1), as the stage will draw it — RESERVED for `PLAN.md`
+ * #1.6, which builds the engine half.
+ *
+ * §16.1: one number per combatant, drifting each round by a rate set by DEX (and Quick/Slow);
+ * at +1.0 the combatant takes an EXTRA ACTION and at −1.0 LOSES its turn, the threshold then
+ * spent. So it is a TWO-SIDED gauge from a centre line — filling toward the extra action,
+ * emptying toward the lost turn — not a bar from zero, and it is shown on both combatants
+ * beside their HP ("tempo is tactical; karma is thematic": this one is meant to be read).
+ *
+ * The engine has no tempo field yet (`statEffects` returns 0 for it), so no view carries one
+ * and NOTHING RENDERS — no gauge, no "0.0", no label. #1.6 adds the field and one line per
+ * view: `view.tempo = tempoGauge(combatant.tempo)`. The frame already has the room (the
+ * layout probe's `battle-tempo` measures both gauges in place).
+ */
+export interface TempoGaugeModel {
+  /** The engine's tempo, verbatim. */
+  value: number;
+  /** One decimal, signed: `+0.4`, `−0.3`, `0.0`. */
+  text: string;
+  /** How far toward +1.0 — the extra action — as 0..1. */
+  quick: number;
+  /** How far toward −1.0 — the lost turn — as 0..1. */
+  slow: number;
+  label: string;
+}
+
+/** Model the gauge for an engine tempo — PURE formatting of an engine value; no rule applied. */
+export function tempoGauge(value: number): TempoGaugeModel {
+  const rounded = Math.round(value * 10) / 10;
+  const magnitude = Math.abs(rounded).toFixed(1);
+  const text = rounded > 0 ? `+${magnitude}` : rounded < 0 ? `−${magnitude}` : '0.0';
+  return {
+    value,
+    text,
+    quick: Math.min(1, Math.max(0, value)),
+    slow: Math.min(1, Math.max(0, -value)),
+    label: 'Tempo',
+  };
+}
+
 /** The enemy, as the arena shows it. */
 export interface StageView {
   /** `enemy.fullName`, verbatim — set as TEXT by the builder, never markup. */
   name: string;
   hp: ResourceBarModel;
   chips: ConditionChipModel[];
-  /**
-   * RESERVED for `PLAN.md` #1.6's tempo gauge. Never set today — there is no engine field — and
-   * with it absent nothing renders (no gauge, no "0.0", no label). #1.6 sets it from the engine
-   * and the row appears; the frame already has the room (the probe's `battle-tempo`).
-   */
-  tempo?: number;
+  /** RESERVED for #1.6's tempo gauge (see `TempoGaugeModel`). Never set today. */
+  tempo?: TempoGaugeModel;
   /** A boss rides on the battle. Drives no text; #11's talk seam reads it. */
   isBoss: boolean;
 }
@@ -72,8 +109,8 @@ export interface VitalsView {
   /** The class's build resource — present only for a class that banks one. */
   resource?: { kind: 'momentum' | 'corruption'; value: number };
   chips: ConditionChipModel[];
-  /** RESERVED for #1.6, as on `StageView`. */
-  tempo?: number;
+  /** RESERVED for #1.6's tempo gauge, as on `StageView`. Never set today. */
+  tempo?: TempoGaugeModel;
 }
 
 /** Which list the menu column shows. Render-layer state, never saved. #11 adds `'talk'`. */
