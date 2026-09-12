@@ -45,7 +45,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applySettings, applyTheme, shouldAnimate } from './theme.ts';
-import { setLogOpen } from '../desktop/battle.ts';
+import { arenaEls, buildArena, buildBattleMenu, buildVitals, playRound, setLogOpen } from '../desktop/battle.ts';
+import { tempoGauge, type BattleMenuRow, type RoundPlan } from '../desktop/battle-model.ts';
+import { barUpdateAt, beatSchedule, groupBeats } from './beat-model.ts';
+import { conditionChips, resourceBarModel } from './component-model.ts';
+import { makeCondition } from '../game/condition.ts';
+import type { GameEvent } from '../game/gameEvent.ts';
+import { ONE_OF_EVERY_EVENT } from '../game/eventSamples.testutil.ts';
 import { FLOOR_THEMES, floorTheme, themeVars } from './tokens.ts';
 import {
   DEFAULT_SETTINGS,
@@ -498,5 +504,219 @@ describe('the opened-log flag the stage selects on is the one the toggle writes'
     expect(attributesOn(column)).toEqual(['data-log=open']);
     setLogOpen(column, toggle, false);
     expect(attributesOn(column)).toEqual(['data-log=closed']);
+  });
+});
+
+// =========================================================================================
+// THE BATTLE FRAME'S CLASSES — both ends of every class coupling (#6's fix round, F2;
+// catalogue entry 9). `battle.ts` writes class names as bare strings — the struck side's
+// `is-struck` / `is-shaking` / `is-tinted`, a tempo cell's `is-filled`, a float's tone — and
+// only a stylesheet gives any of them a look. Neither the compiler nor any test saw the join:
+// deleting the reduced-motion tint rule left the suite green while the script went on adding
+// the class, so a struck side under reduced motion showed nothing at all.
+//
+// DERIVED FROM BOTH ENDS SEPARATELY, never one from the other. The CLASSES are what the real
+// builders and the real sequencer put on the page — recorded while they run, over a frame and
+// a round built to exercise every state (both motion modes, a float of every tone, a tempo
+// gauge with lit cells, a greyed row). The SELECTORS are read out of the shipped stylesheets.
+// =========================================================================================
+
+/** Every class a shipped stylesheet's SELECTORS name — read from the selectors, not the bodies. */
+function selectedClasses(sheets: readonly { css: string }[] = SHEETS): Set<string> {
+  const out = new Set<string>();
+  for (const sheet of sheets) {
+    // An `@import 'x.css';` statement is not a selector; left in, its `.css` would read as a class.
+    const css = sheet.css.replace(/@(?:import|charset)[^;]*;/g, '');
+    for (const rule of css.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+      for (const c of (rule[1] as string).matchAll(/\.(-?[_a-zA-Z][-_a-zA-Z0-9]*)/g)) out.add(c[1] as string);
+    }
+  }
+  return out;
+}
+
+/** The classes of a selector's SUBJECT — its last compound, after the last combinator. */
+function subjectClasses(selector: string): string[] {
+  const last = selector.trim().split(/\s*[>+~]\s*|\s+/).at(-1) ?? '';
+  return [...last.matchAll(/\.(-?[_a-zA-Z][-_a-zA-Z0-9]*)/g)].map((m) => m[1] as string);
+}
+
+/** Every comma-split selector of a set of stylesheets. */
+function selectorsOf(sheets: readonly { css: string }[]): string[] {
+  const out: string[] = [];
+  for (const sheet of sheets) {
+    const css = sheet.css.replace(/@(?:import|charset)[^;]*;/g, '');
+    for (const rule of css.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+      for (const part of (rule[1] as string).split(',')) if (part.trim()) out.push(part.trim());
+    }
+  }
+  return out;
+}
+
+/** What the frame carried: every class, and every element's whole class list, at any moment. */
+interface Carried {
+  classes: Set<string>;
+  /** Each element's class list as it stood at some moment — a set of classes per entry. */
+  lists: string[][];
+}
+
+/**
+ * Build the frame and play a round on it through the REAL `battle.ts`, recording every class any
+ * element carried at any moment: every node added (and its subtree), every class attribute's
+ * value before each change (`attributeOldValue`), and the final page. A class the sequencer adds
+ * for one beat and removes at the next is caught by the second change's old value.
+ */
+async function classesTheFrameCarries(animate: boolean): Promise<Carried> {
+  const seen = new Set<string>();
+  const lists: string[][] = [];
+  const note = (value: string | null): void => {
+    const list = (value ?? '').split(/\s+/).filter(Boolean);
+    if (list.length > 0) lists.push(list);
+    for (const c of list) seen.add(c);
+  };
+  const sweep = (el: Element): void => {
+    note(el.getAttribute('class'));
+    for (const child of el.querySelectorAll('[class]')) note(child.getAttribute('class'));
+  };
+  const take = (records: MutationRecord[]): void => {
+    for (const r of records) {
+      if (r.type === 'attributes') note(r.oldValue);
+      for (const n of r.addedNodes) if (n instanceof Element) sweep(n);
+    }
+  };
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const observer = new MutationObserver(take);
+  observer.observe(host, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+
+  // Every state the frame can show: conditions on both sides, a tempo gauge lit both ways, a
+  // class resource, and every kind of menu row — greyed ones included.
+  const chips = conditionChips([makeCondition('burn')]);
+  const arena = document.createElement('div');
+  const vitals = document.createElement('div');
+  host.append(arena, vitals);
+  arena.appendChild(buildArena({ name: 'Rust Chorister', hp: resourceBarModel('HP', 20, 30, 'foe'), chips, isBoss: true, tempo: tempoGauge(0.6) }, { line: '' }));
+  vitals.appendChild(
+    buildVitals({
+      name: 'Probe',
+      classLine: 'Enforcer · level 3',
+      hp: resourceBarModel('HP', 12, 15, 'hp'),
+      charges: resourceBarModel('Charges', 3, 5, 'accent'),
+      resource: { kind: 'momentum', value: 2 },
+      chips,
+      tempo: tempoGauge(-0.4),
+    }),
+  );
+  const rows: BattleMenuRow[] = [
+    { kind: 'fight' },
+    { kind: 'cast' },
+    { kind: 'spare' },
+    { kind: 'item' },
+    { kind: 'run', enabled: false, reason: 'There is nowhere to go' },
+    { kind: 'back' },
+    { kind: 'cast-skill', option: { skillId: 'heavyStrike', name: 'Heavy Strike', chargeCost: 2, affordable: true } },
+    { kind: 'cast-skill', option: { skillId: 'brace', name: 'Brace', chargeCost: 9, affordable: false } },
+    { kind: 'use-item', option: { index: 0, name: 'Tonic', rarity: 'Common' } },
+  ];
+  host.appendChild(buildBattleMenu(rows, () => undefined));
+
+  // A round with a blow on each side and a float of every tone: harm, heal, plain.
+  const attack = ONE_OF_EVERY_EVENT.attack;
+  const events: GameEvent[] = [
+    { ...attack, subject: 'enemy', outcome: 'hit', damage: 3 },
+    { ...attack, subject: 'player', outcome: 'miss', damage: 0 },
+    { kind: 'condition-heal', subject: 'player', conditionType: 'regeneration', amount: 2 },
+    { ...attack, subject: 'player', outcome: 'crit', damage: 9 },
+  ];
+  const beats = groupBeats(events);
+  const plan: RoundPlan = {
+    beats,
+    schedule: beatSchedule(beats.length),
+    updateAt: barUpdateAt(beats),
+    lead: 0,
+    bars: {
+      player: { before: resourceBarModel('HP', 12, 15, 'hp'), after: resourceBarModel('HP', 11, 15, 'hp') },
+      enemy: { before: resourceBarModel('HP', 20, 30, 'foe'), after: resourceBarModel('HP', 11, 30, 'foe') },
+      charges: { before: resourceBarModel('Charges', 3, 5, 'accent'), after: resourceBarModel('Charges', 3, 5, 'accent') },
+    },
+  };
+  const els = arenaEls(arena, vitals);
+  expect(els, 'the frame the builders made is missing an element the sequencer needs').not.toBeNull();
+  await playRound(plan, els!, { wait: () => Promise.resolve(), audio: { play: () => undefined }, animate });
+  take(observer.takeRecords());
+  sweep(host);
+  observer.disconnect();
+  host.remove();
+  return { classes: seen, lists };
+}
+
+/** True when some element, at some moment, carried every one of `classes` at once. */
+const carriedTogether = (carried: Carried, classes: readonly string[]): boolean =>
+  carried.lists.some((list) => classes.every((c) => list.includes(c)));
+
+describe('every class the battle frame carries is one a stylesheet selects on — and back', () => {
+  it('BACKWARD: every class the builders and the sequencer write has a rule that selects it', async () => {
+    const selected = selectedClasses();
+    for (const animate of [true, false]) {
+      const { classes } = await classesTheFrameCarries(animate);
+      const unstyled = [...classes].filter((c) => !selected.has(c));
+      expect(
+        unstyled,
+        `motion ${animate ? 'full' : 'reduced'}: the frame carries a class no stylesheet selects on — ` +
+          'it looks wired, and a state it marks would show nothing',
+      ).toEqual([]);
+    }
+  });
+
+  it('...over the state classes that matter, really produced ON the elements they mark (non-vacuity)', async () => {
+    // Not a list the check reads: proof that the fixture drove every state through the real
+    // code, so "nothing unstyled" is not "nothing recorded". Checked as COMBINATIONS on one
+    // element, because a class can be shared — `is-filled` also marks the HP bar's cells.
+    const full = await classesTheFrameCarries(true);
+    const reduced = await classesTheFrameCarries(false);
+    for (const pair of [
+      ['arena-figure', 'is-struck'],
+      ['vitals-inner', 'is-shaking'],
+      ['tempo-cell', 'is-filled'],
+      ['arena-float', 'arena-float-harm'],
+      ['arena-float', 'arena-float-heal'],
+      ['arena-float', 'arena-float-plain'],
+      ['void-button', 'is-disabled'],
+    ]) {
+      expect(carriedTogether(full, pair), `the full-motion round never produced ${pair.join('.')}`).toBe(true);
+    }
+    expect(carriedTogether(reduced, ['arena-figure', 'is-tinted']), 'the reduced-motion round never tinted the enemy').toBe(true);
+    expect(carriedTogether(reduced, ['vitals-inner', 'is-tinted']), 'the reduced-motion round never tinted the stat box').toBe(true);
+    expect(reduced.classes, 'the reduced-motion round flashed').not.toContain('is-struck');
+  });
+
+  it('FORWARD: every rule in battle.css reaches an element the frame really carries', async () => {
+    // The other end of the same join: a rule keyed to a class — or a COMBINATION of classes —
+    // that no element ever carries never matches. Judged on each selector's subject (its last
+    // compound), so `.tempo-quick .tempo-cell.is-filled` needs a tempo cell that was really lit,
+    // not merely some element somewhere carrying `is-filled`. Ids, attributes and pseudo-classes
+    // in the subject are states this fixture does not all reach, and are not judged here.
+    const battleCss = SHEETS.filter((s) => s.name === 'battle.css');
+    expect(battleCss, 'battle.css is not among the scanned stylesheets').toHaveLength(1);
+    const full = await classesTheFrameCarries(true);
+    const reduced = await classesTheFrameCarries(false);
+    const everything = new Set([...full.classes, ...reduced.classes]);
+    const orphans = [...selectedClasses(battleCss)].filter((c) => !everything.has(c));
+    expect(orphans, 'battle.css styles a class the battle frame never carries').toEqual([]);
+    const judged = selectorsOf(battleCss).filter((s) => subjectClasses(s).length > 0);
+    const unreached = judged.filter((s) => !carriedTogether(full, subjectClasses(s)) && !carriedTogether(reduced, subjectClasses(s)));
+    expect(unreached, 'a battle.css rule reaches no element the frame ever carries').toEqual([]);
+    expect(judged.length, 'battle.css has almost no class-keyed rules — this swept nothing').toBeGreaterThan(25);
+  });
+
+  it('the selector readers read selectors only, and every way a class is written in one', () => {
+    const css =
+      "@import './x.css';\n.a.is-b, .c .d { color: red; }\n[data-motion='reduce'] .e { animation: none; }\n" +
+      ":root:not([data-motion='full']) .f:hover { opacity: 0.5; }\n@media (max-width: 899px) { .g { top: 1.5em; } }\n" +
+      '.h > .i.is-j { color: red; }';
+    expect([...selectedClasses([{ css }])].sort()).toEqual(['a', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'is-b', 'is-j']);
+    expect(selectorsOf([{ css }]).map(subjectClasses)).toEqual([['a', 'is-b'], ['d'], ['e'], ['f'], ['g'], ['i', 'is-j']]);
+    const carried: Carried = { classes: new Set(['i', 'is-j', 'k']), lists: [['i'], ['k', 'is-j']] };
+    expect(carriedTogether(carried, ['i', 'is-j']), 'two elements stood in for one').toBe(false);
+    expect(carriedTogether(carried, ['is-j', 'k'])).toBe(true);
   });
 });
