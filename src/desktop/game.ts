@@ -47,7 +47,7 @@ import { resolveLogLevel } from '../log/level.ts';
 import { SLOW_MS, levelForDuration, startTimer } from '../log/timing.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 // The shared render foundation (M-UI2 `ui-foundation`).
-import { applyTheme, applySettings } from '../render/theme.ts';
+import { applyTheme, applySettings, shouldAnimate } from '../render/theme.ts';
 import { floorTagText, screenKey, screenLayout, type Settings } from '../render/settings-model.ts';
 import { loadSettings, saveSettings } from '../storage/settingsStorage.ts';
 import { buttonModel, rowModel, conditionChips } from '../render/component-model.ts';
@@ -67,13 +67,16 @@ import { layoutWarnings, readLayout } from './layout.ts';
 // PLAN.md #6 — the framed stage: its pure models, and the thin DOM half that draws them.
 import {
   battleMenuRows,
+  roundPlan,
   stageView,
   vitalsView,
   type BattleMenuMode,
+  type RoundPlan,
   type StageView,
   type VitalsView,
 } from './battle-model.ts';
-import { buildArena, buildBattleMenu, buildVitals, setLogOpen } from './battle.ts';
+import { arenaEls, buildArena, buildBattleMenu, buildVitals, playRound, setLogOpen } from './battle.ts';
+import type { AudioHookName, AudioSink } from '../render/audio-hooks.ts';
 
 // `totalMs` is the main process's own measurement of the generation (`llm.mjs` computed
 // it already and used to throw it away). Optional because an older main process would not
@@ -323,6 +326,18 @@ export function boot(): void {
     motion: settings.motion,
     contrast: settings.contrast,
   });
+  // PLAN.md #6 / UI-DESIGN §13: the OS's reduced-motion signal, read for the SCRIPT side (the
+  // battle's flash and shake) the way the stylesheet's media query reads it for the CSS side,
+  // and re-read when the player changes it in the OS mid-game. Guarded: an environment with no
+  // `matchMedia` (jsdom) simply has no OS preference.
+  const reducedMotion =
+    typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  osReducedMotion = reducedMotion?.matches === true;
+  reducedMotion?.addEventListener('change', (ev) => {
+    osReducedMotion = ev.matches;
+    resolveMotion('os');
+  });
+  resolveMotion('boot');
 
   runSeed = Date.now() >>> 0;
   state = createGame(runSeed, snapshotUnlocks(unlockStore));
@@ -555,14 +570,14 @@ function renderLog(events: readonly GameEvent[]): void {
 
 /**
  * Mount the framed stage: the enemy's arena and the player's stat box, from their views, with
- * the ticker showing its line and the Record toggle bound to the reading column. The ONE
+ * the ticker showing `line` and the Record toggle bound to the reading column. The ONE
  * mounting path — the battle screen and a round's replay both come through here.
  */
-function mountStage(stage: StageView | null, vitals: VitalsView | null): void {
+function mountStage(stage: StageView | null, vitals: VitalsView | null, line: string): void {
   arenaEl.replaceChildren();
   vitalsEl.replaceChildren();
   if (!stage || !vitals) return;
-  const arena = buildArena(stage, { line: tickerLine });
+  const arena = buildArena(stage, { line });
   arenaEl.appendChild(arena);
   vitalsEl.appendChild(buildVitals(vitals));
   const toggle = arena.querySelector<HTMLElement>('.ticker-toggle');
@@ -575,6 +590,91 @@ function mountStage(stage: StageView | null, vitals: VitalsView | null): void {
     logOpen = !logOpen;
     setLogOpen(columnEl, toggle, logOpen);
     log.debug('battle', 'log toggled', { open: logOpen });
+  });
+}
+
+// ---- The round's replay: motion, sound and time, all at the boundary ----------------------
+
+/**
+ * Whether the battle frame animates: `shouldAnimate(settings, osReduced)`, the ONE motion seam
+ * the render layer shares (#7's canvas will read it too). Re-resolved at boot, when the OS
+ * setting changes, and when the player changes it — and logged each time, so a report of "the
+ * screen shook with reduced motion on" arrives with the three inputs that decided it.
+ */
+let osReducedMotion = false;
+let motionAnimate = true;
+
+function resolveMotion(reason: string): void {
+  motionAnimate = shouldAnimate(settings, osReducedMotion);
+  log.info('settings', 'motion resolved', {
+    setting: settings.motion,
+    osReduced: osReducedMotion,
+    animate: motionAnimate,
+    reason,
+  });
+}
+
+/** The sequencer's only clock. A promise over `setTimeout`; a test would inject its own. */
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * THE AUDIO SINK — every hook point observable today, with no audio. #15 replaces this one
+ * object with a sink that plays sounds; nothing in the sequencing changes (ART-BIBLE §10).
+ * At `debug`: a developer's question, and one line per beat.
+ */
+const audioSink: AudioSink = {
+  play: (name, detail) => log.debug('audio', 'hook', { name, side: detail.side ?? null, index: detail.index }),
+};
+
+/**
+ * Replay one battle step's beats on the frame, TIMED (principle 7), while the narration runs.
+ *
+ * The frame is mounted from the state BEFORE the step, with the ticker on the line it showed,
+ * so every number on it is the engine's pre-round value until its beat writes the new one. The
+ * screen is announced as the battle first: an OPENING step (floor 3's drain) starts from the
+ * encounter's own screen, and a round that ENDS the fight is replayed on the stage before the
+ * victory screen replaces it. A failure is logged at `error` BEFORE the turn goes on to rebuild
+ * the screen from the final state — so the bars are always right in the end, and the evidence
+ * that the replay broke is never lost.
+ */
+async function replayRound(plan: RoundPlan, before: GameState, tickerBefore: string): Promise<void> {
+  showScreen('battle-action');
+  mountStage(stageView(before), vitalsView(before), tickerBefore);
+  const els = arenaEls(arenaEl, vitalsEl);
+  if (!els) {
+    log.warn('battle', 'round not replayed', { beats: plan.beats.length });
+    return;
+  }
+  const hooks: AudioHookName[] = [];
+  const roundTimer = startTimer();
+  try {
+    const played = await playRound(plan, els, {
+      wait: waitMs,
+      audio: audioSink,
+      animate: motionAnimate,
+      onBeat: (beat) =>
+        log.debug('battle', 'beat', {
+          index: beat.index,
+          anchor: beat.anchor?.kind ?? null,
+          hook: beat.hook,
+          struck: beat.struck,
+          touches: beat.touches,
+        }),
+    });
+    hooks.push(...played.hooks);
+  } catch (err) {
+    log.error('battle', 'round replay failed', {
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+  const roundMs = roundTimer.stop();
+  log.log(levelForDuration(roundMs, SLOW_MS.round, 'info'), 'battle', 'round played', {
+    beats: plan.beats.length,
+    ms: roundMs,
+    motion: motionAnimate ? 'full' : 'reduced',
+    hooks,
   });
 }
 
@@ -900,6 +1000,7 @@ function renderSettingsScreen(): void {
         motion: next.motion,
         contrast: next.contrast,
       });
+      resolveMotion('settings');
     }),
   );
   choice('Back', () => {
@@ -945,9 +1046,17 @@ async function dispatch(input: GameInput): Promise<void> {
   try {
     choicesEl.innerHTML = '';
     sceneryEl.replaceChildren();
+    // PLAN.md #6: the battle frame's regions go with the rest. A battle step re-mounts them
+    // from the state BEFORE the step for its replay; any other step leaves them empty.
+    arenaEl.replaceChildren();
+    vitalsEl.replaceChildren();
     // At `debug` only — this payload carries the player's typed name on the name step, and
     // a packaged build runs at `info`. See `src/log/level.ts`.
     log.debug('ui', 'choice', { input });
+    // The engine's values BEFORE the step: what the frame shows until each beat writes the
+    // new ones. Plain data, read-only — the replay never touches game state.
+    const before = state;
+    const tickerBefore = tickerLine;
     const stepTimer = startTimer();
     const r = step(state, input);
     const stepMs = stepTimer.stop();
@@ -989,7 +1098,15 @@ async function dispatch(input: GameInput): Promise<void> {
     renderSheet();
     renderLog(r.events); // G18: the dice and the damage, before the prose that cannot say them
     showThinking();
-    await narrate(r.events);
+    // PLAN.md #6 — THE ROUND PLAYS WHILE THE VOID SPEAKS. The narration is started first and
+    // NOT awaited; a battle step's beats replay on the frame meanwhile (~0.5-1.6s, UI-DESIGN
+    // §6), and only then does the turn wait for the prose. Every state change has already
+    // happened in `step` above: the replay only decides WHEN in the second each engine value
+    // is shown, never what it is.
+    const narration = narrate(r.events);
+    const plan = roundPlan(before, state, r.events);
+    if (plan) await replayRound(plan, before, tickerBefore);
+    await narration;
     memory = rememberBeat(memory, r.events); // remember AFTER narrating
     // G2: ONE predicate decides both halves of "the run is over". The apply used to key off
     // `phase.kind === 'ending'` while the clear keyed off `awaiting === 'game-over'`, and the
@@ -1176,7 +1293,7 @@ function renderChoices(awaiting: Awaiting): void {
       // are greyed (`battleMenuRows` — Run is ALWAYS a row, disabled with its reason against
       // a boss, G4). Cast and Use item open SUB-MENUS that replace the commands (the JRPG
       // idiom), so the list never grows past the column the way the inline pickers did.
-      mountStage(stageView(state), vitalsView(state));
+      mountStage(stageView(state), vitalsView(state), tickerLine);
       const rows = battleMenuRows(state, battleMenu);
       choicesEl.appendChild(
         buildBattleMenu(rows, (row) => {

@@ -30,7 +30,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createGame, step, awaitingFor, type GameState } from '../game/game.ts';
 import { createStoryMemory } from '../llm/narrate.ts';
-import { emptyRunSummary } from '../game/unlockStore.ts';
+import { emptyRunSummary, foldRunEvents } from '../game/unlockStore.ts';
+import { BEAT_HOLD_MS, BEAT_MS, MAX_ROUND_MS, MIN_SPACING_MS, groupBeats } from '../render/beat-model.ts';
 import type { LogEntry } from '../log/logger.ts';
 // The save is written through the real `saveRun`, imported STATICALLY. Measured, not guessed:
 // a second `vi.resetModules()` + dynamic `import('./persist.ts')` inside a case, after an
@@ -302,25 +303,31 @@ describe('the real renderer walks a new run from the warning to the hub (AC-7)',
  */
 function liveBattle(): GameState {
   for (let seed = 1; seed < 400; seed += 1) {
-    let s = createGame(seed);
-    for (const input of [
-      { kind: 'continue' },
-      { kind: 'name', name: 'Probe' },
-      { kind: 'class', classId: 'Enforcer' },
-      { kind: 'stats-decision', accept: true },
-    ] as const) {
-      s = step(s, input).state;
-    }
-    // Some start-ups pass through a `continue` screen (the act intro) before the hub.
-    for (let i = 0; i < 4 && awaitingFor(s.phase) === 'continue'; i += 1) {
-      s = step(s, { kind: 'continue' }).state;
-    }
-    if (awaitingFor(s.phase) !== 'main-menu') continue;
-    s = step(s, { kind: 'menu', choice: 'continue' }).state;
-    if (s.phase.kind !== 'battle') continue;
-    return step(s, { kind: 'continue' }).state; // open the fight
+    const fight = liveBattleFrom(seed);
+    if (fight) return fight;
   }
   throw new Error('no seed under 400 opens a battle on the first descent');
+}
+
+/** The run seeded `seed`, walked to the hub and opened into its first fight — or null. */
+function liveBattleFrom(seed: number): GameState | null {
+  let s = createGame(seed);
+  for (const input of [
+    { kind: 'continue' },
+    { kind: 'name', name: 'Probe' },
+    { kind: 'class', classId: 'Enforcer' },
+    { kind: 'stats-decision', accept: true },
+  ] as const) {
+    s = step(s, input).state;
+  }
+  // Some start-ups pass through a `continue` screen (the act intro) before the hub.
+  for (let i = 0; i < 4 && awaitingFor(s.phase) === 'continue'; i += 1) {
+    s = step(s, { kind: 'continue' }).state;
+  }
+  if (awaitingFor(s.phase) !== 'main-menu') return null;
+  s = step(s, { kind: 'menu', choice: 'continue' }).state;
+  if (s.phase.kind !== 'battle') return null;
+  return step(s, { kind: 'continue' }).state; // open the fight
 }
 
 describe('a saved run resumes into a live battle (AC-7, second half)', () => {
@@ -387,6 +394,163 @@ describe('a saved run resumes into a live battle (AC-7, second half)', () => {
     click('Cast');
     expect(document.querySelector('#arena .ticker-toggle')!.getAttribute('aria-expanded')).toBe('true');
     click('Back');
+  });
+});
+
+// =========================================================================================
+// PLAN.md #6 — A REAL ROUND, PLAYED ON THE STAGE WHILE THE VOID SPEAKS (AC-21, AC-22, AC-31).
+// Every expectation about the round comes from STEPPING THE SAME SAVED STATE through the real
+// engine here, independently of the renderer — the renderer must end on exactly those values.
+// =========================================================================================
+
+/** The replay's length for `n` beats, re-derived from the four constants (not the schedule). */
+function scheduledMs(n: number): number {
+  if (n <= 0) return 0;
+  const spacing = n === 1 ? BEAT_MS : Math.max(MIN_SPACING_MS, Math.min(BEAT_MS, Math.floor((MAX_ROUND_MS - BEAT_HOLD_MS) / (n - 1))));
+  return (n - 1) * spacing + BEAT_HOLD_MS;
+}
+
+/** A live battle whose FIRST Fight lands a blow on someone — so a strike is there to see. */
+function fightWithAHit(): GameState {
+  for (let seed = 1; seed < 400; seed += 1) {
+    const fight = liveBattleFrom(seed);
+    if (!fight) continue;
+    const r = step(fight, { kind: 'battle-action', action: 'fight' });
+    const hit = r.events.some((e) => e.kind === 'attack' && (e.outcome === 'hit' || e.outcome === 'crit'));
+    if (hit && r.state.phase.kind === 'battle') return fight;
+  }
+  throw new Error('no seed opens a fight whose first round lands a blow and leaves it going');
+}
+
+/** A MediaQueryList stand-in for `prefers-reduced-motion`, and the listeners it was given. */
+function stubReducedMotion(matches: boolean): ((ev: { matches: boolean }) => void)[] {
+  const listeners: ((ev: { matches: boolean }) => void)[] = [];
+  (window as unknown as { matchMedia: unknown }).matchMedia = vi.fn(() => ({
+    matches,
+    addEventListener: (_type: string, cb: (ev: { matches: boolean }) => void) => listeners.push(cb),
+  }));
+  return listeners;
+}
+
+describe('a real round plays on the stage while the Void speaks (PLAN.md #6)', () => {
+  afterEach(() => {
+    delete (window as unknown as { matchMedia?: unknown }).matchMedia;
+  });
+
+  async function resume(fight: GameState): Promise<{ entries: LogEntry[] }> {
+    saveRun(fight, createStoryMemory(), { runSummary: emptyRunSummary(), runSeed: 77 });
+    installBridge();
+    const { game, entries } = await freshRenderer();
+    game.boot();
+    click('Continue your descent');
+    expect(screen()).toBe('battle-action');
+    return { entries };
+  }
+
+  const roundLine = (entries: LogEntry[]): { beats: number; ms: number; motion: string; hooks: string[] } | undefined =>
+    entries.find((e) => e.category === 'battle' && e.message === 'round played')?.data as
+      | { beats: number; ms: number; motion: string; hooks: string[] }
+      | undefined;
+
+  it('Fight: one engine step; the beats replay; the frame ends on the ENGINE’s values', async () => {
+    const fight = fightWithAHit();
+    const expected = step(fight, { kind: 'battle-action', action: 'fight' });
+    const beats = groupBeats(expected.events);
+    const { entries } = await resume(fight);
+    // Every value the enemy's bar shows, from the moment the replay mounts its frame to the end.
+    const enemyBarTexts: string[] = [];
+    new MutationObserver(() => {
+      const text = document.querySelector('#arena .frame-bar[data-bar="enemy"] .void-bar-text')?.textContent;
+      if (text && text !== enemyBarTexts.at(-1)) enemyBarTexts.push(text);
+    }).observe(document.getElementById('arena')!, { childList: true, subtree: true });
+
+    click('Fight');
+    await vi.waitFor(() => expect(roundLine(entries), 'no round was played').toBeDefined(), { timeout: 4000, interval: 10 });
+    await reach('battle-action');
+
+    const played = roundLine(entries)!;
+    expect(played.beats, 'the replay did not play the step’s beats').toBe(beats.length);
+    expect(played.ms, 'the round did not take its scheduled time').toBeGreaterThanOrEqual(scheduledMs(beats.length) - 5);
+    expect(played.ms).toBeLessThan(3000);
+    expect(played.motion).toBe('full');
+    // Every hook, in beat order — logged by the boundary sink as it is sent.
+    const expectedHooks = beats.map((b) => b.hook).filter((h): h is NonNullable<typeof h> => h !== null);
+    expect(played.hooks).toEqual(expectedHooks);
+    const hookLines = entries.filter((e) => e.category === 'audio' && e.message === 'hook');
+    expect(hookLines.map((e) => (e.data as { name: string }).name)).toEqual(expectedHooks);
+    expect(hookLines.every((e) => e.level === 'debug'), 'a hook line is louder than debug').toBe(true);
+    expect(entries.filter((e) => e.category === 'battle' && e.message === 'beat')).toHaveLength(beats.length);
+    expect(entries.filter((e) => e.category === 'engine' && e.message === 'step'), 'the round stepped the engine more than once').toHaveLength(1);
+
+    // THE FRAME ENDS ON THE ENGINE'S NUMBERS — the renderer decided when, never what.
+    if (expected.state.phase.kind !== 'battle') throw new Error('the fixture fight ended');
+    if (fight.phase.kind !== 'battle') throw new Error('the fixture is not a fight');
+    const { enemy, player } = expected.state.phase.battle;
+    // ...and it STARTED on the engine's numbers from before the step: the replay's frame shows
+    // the pre-round HP until the beat that moved it, then the engine's new value — and nothing
+    // in between (every bar is written once, by the engine, never stepped through by the UI).
+    const was = fight.phase.battle.enemy;
+    expect(enemyBarTexts[0], 'the replay did not start from the pre-round numbers').toBe(`${was.hp}/${was.maxHp}`);
+    expect(enemyBarTexts.at(-1)).toBe(`${enemy.hp}/${enemy.maxHp}`);
+    expect(enemyBarTexts.length, 'the enemy bar passed through a value the engine never held').toBeLessThanOrEqual(2);
+    const bar = (key: string): string => document.querySelector(`.frame-bar[data-bar="${key}"] .void-bar-text`)!.textContent ?? '';
+    expect(bar('enemy')).toBe(`${enemy.hp}/${enemy.maxHp}`);
+    expect(bar('player')).toBe(`${player.hp}/${player.maxHp}`);
+    expect(bar('charges')).toBe(`${player.skillCharges}/${player.maxSkillCharges}`);
+    // The ticker rests on the round's last beat, which is the log's last line.
+    expect(document.querySelector('#arena .ticker-line')!.textContent).toBe(beats.at(-1)!.line);
+    expect(document.querySelectorAll('.void-art-slot[data-art-slot="enemy"]'), 'the replay left a second frame').toHaveLength(1);
+
+    // G50, the behavioural half: the save the step left carries THIS step folded into the run.
+    const envelope = JSON.parse(localStorage.getItem('thevoid:run')!) as { runSummary: unknown };
+    expect(envelope.runSummary).toEqual(foldRunEvents(emptyRunSummary(), expected.events, expected.state));
+  });
+
+  it('REDUCED MOTION (the player’s setting): the same beats and timing; the strike is a tint, nothing moves', async () => {
+    const fight = fightWithAHit();
+    const beats = groupBeats(step(fight, { kind: 'battle-action', action: 'fight' }).events);
+    localStorage.setItem('thevoid:settings', JSON.stringify({ v: 1, textScale: 'normal', motion: 'reduce', contrast: 'normal' }));
+    const { entries } = await resume(fight);
+    const seen = new Set<string>();
+    new MutationObserver(() => {
+      for (const node of document.querySelectorAll('#arena *, #vitals *')) for (const c of node.classList) seen.add(c);
+    }).observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+
+    click('Fight');
+    await vi.waitFor(() => expect(roundLine(entries)).toBeDefined(), { timeout: 4000, interval: 10 });
+    const played = roundLine(entries)!;
+    expect(played.motion).toBe('reduced');
+    expect(played.beats).toBe(beats.length);
+    expect(played.ms, 'reduced motion shortened the round — §13 says timing is unchanged').toBeGreaterThanOrEqual(scheduledMs(beats.length) - 5);
+    expect(seen.has('is-struck'), 'a flash played under reduced motion').toBe(false);
+    expect(seen.has('is-shaking'), 'the stat box shook under reduced motion').toBe(false);
+    expect(seen.has('is-tinted'), 'the blow left no mark at all — the strike must still read').toBe(true);
+    const resolved = entries.find((e) => e.message === 'motion resolved')!.data;
+    expect(resolved).toEqual({ setting: 'reduce', osReduced: false, animate: false, reason: 'boot' });
+  });
+
+  it('changing Motion in Settings re-decides whether the battle animates, at once', async () => {
+    installBridge();
+    const { game, entries } = await freshRenderer();
+    game.boot();
+    choiceButtons()[0]!.click(); // the content warning
+    click('Settings');
+    const reduced = choiceButtons().find((b) => (b.textContent ?? '').trim() === 'Reduced');
+    expect(reduced, 'the settings screen offers no Reduced motion').toBeDefined();
+    reduced!.click();
+    const motion = entries.filter((e) => e.message === 'motion resolved').map((e) => e.data);
+    expect(motion.at(-1)).toEqual({ setting: 'reduce', osReduced: false, animate: false, reason: 'settings' });
+  });
+
+  it('the OS signal is honoured by default, and re-read when it changes mid-game', async () => {
+    const listeners = stubReducedMotion(true);
+    const fight = fightWithAHit();
+    const { entries } = await resume(fight);
+    const motion = (): unknown[] => entries.filter((e) => e.message === 'motion resolved').map((e) => e.data);
+    expect(motion()).toEqual([{ setting: 'system', osReduced: true, animate: false, reason: 'boot' }]);
+    expect(listeners, 'nothing listens for the OS setting changing').toHaveLength(1);
+    listeners[0]!({ matches: false });
+    expect(motion().at(-1)).toEqual({ setting: 'system', osReduced: false, animate: true, reason: 'os' });
   });
 });
 

@@ -42,6 +42,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
 import { TYPE } from '../render/tokens.ts';
 import { TEXT_SCALE_TABLE } from '../render/settings-model.ts';
+import { BEAT_HOLD_MS, BEAT_MS, MAX_ROUND_MS, MIN_SPACING_MS } from '../render/beat-model.ts';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const VITE_BIN = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
@@ -131,6 +132,16 @@ const SLACK = 1;
 /** The guaranteed narration height for a layout mode at a text size, in pixels. */
 function proseFloorPx(mode: Mode, scale: Scale): number {
   return PROSE_LINES[mode] * BASE_PX[scale] * NARRATION_LINE_HEIGHT;
+}
+
+/**
+ * A round's replay length for `n` beats, re-derived from `beat-model.ts`'s four constants
+ * (which `beat-model.test.ts` pins to the plan's numbers) rather than from its schedule.
+ */
+function scheduledMs(n: number): number {
+  if (n <= 0) return 0;
+  const spacing = n === 1 ? BEAT_MS : Math.max(MIN_SPACING_MS, Math.min(BEAT_MS, Math.floor((MAX_ROUND_MS - BEAT_HOLD_MS) / (n - 1))));
+  return (n - 1) * spacing + BEAT_HOLD_MS;
 }
 
 /** One single-line battle row: a line of control text plus its padding and border. */
@@ -1733,11 +1744,41 @@ describe('the real renderer, booted and walked', () => {
       'inventory',
       'hub-after-re-renders',
       'confirm-abandon',
-      // PLAN.md #6: back out of the confirmation, descend until a REAL fight opens, and open
-      // its Cast menu — the renderer's own battle, not the probe's fixture.
+      // PLAN.md #6: back out of the confirmation, descend until a REAL fight opens, open its
+      // Cast menu, then swing once — the renderer's own battle, not the probe's fixture.
       'battle',
       'battle-cast-open',
+      'battle-after-round',
     ]);
+  });
+
+  it('after a REAL round the frame is whole: the ticker speaks, the bars stand, nothing stacked', () => {
+    const s = step('battle-after-round');
+    expect(s.layout, 'the round left the stage').toBe('stage');
+    expect(s.ticker.text.length, 'the ticker carries no line after a round').toBeGreaterThan(0);
+    // The foe's bar, the player's HP and charges — rebuilt from the engine's final state.
+    expect(s.bars.map((b) => b.tone)).toEqual(['void-bar-foe', 'void-bar-hp', 'void-bar-accent']);
+    for (const b of s.bars) expect(b.text, `a ${b.tone} bar has no readout`).toMatch(/^\d+\/\d+$/);
+    // The replay mounted a frame of its own and the rebuild replaced it: still exactly one.
+    expect(s.enemySlot.inPage, 'the replay left a second enemy region on the page').toBe(1);
+    expect(s.enemySlot.inSheet).toBe(0);
+    expect(s.choices.labels, 'the commands did not come back after the round').toContain('Fight');
+  });
+
+  it('and the renderer logged the round it played, timed, with every beat', () => {
+    // AC-19 / AC-31, from the renderer's OWN log channel. The duration is at least the
+    // schedule for that many beats (re-derived here from the four constants) and far below
+    // the round threshold.
+    const rounds = RESULT.phaseC.logs.filter((e) => e.category === 'battle' && e.message === 'round played');
+    expect(rounds.length, 'no round was logged — the replay never ran').toBeGreaterThan(0);
+    for (const r of rounds) {
+      const data = r.data as { beats: number; ms: number; motion: string; hooks: string[] };
+      expect(data.beats, 'a round with no beats was replayed').toBeGreaterThanOrEqual(1);
+      expect(data.ms, `a ${data.beats}-beat round took less than its schedule`).toBeGreaterThanOrEqual(scheduledMs(data.beats) - 5);
+      expect(data.ms, 'a round took longer than the slow threshold').toBeLessThan(3000);
+      expect(['full', 'reduced']).toContain(data.motion);
+      expect(Array.isArray(data.hooks)).toBe(true);
+    }
   });
 
   it('the REAL battle is the framed stage: the arena holds the enemy, and the HUD is gone', () => {
@@ -1799,6 +1840,7 @@ describe('the real renderer, booted and walked', () => {
       ['confirm-abandon', 'side'],
       ['battle', 'stage'],
       ['battle-cast-open', 'stage'],
+      ['battle-after-round', 'stage'],
     ] as const) {
       expect(step(name).layout, `${name} is in the wrong stage layout`).toBe(mode);
     }
@@ -1853,7 +1895,7 @@ describe('the real renderer, booted and walked', () => {
       ).toBe(1);
     }
     // ...and it is gone entirely on the screens that do not own it.
-    for (const name of ['content-warning', 'title', 'settings', 'inventory', 'battle', 'battle-cast-open']) {
+    for (const name of ['content-warning', 'title', 'settings', 'inventory', 'battle', 'battle-cast-open', 'battle-after-round']) {
       expect(step(name).scenery.inPage, `${name} mounts a scenery frame`).toBe(0);
     }
   });

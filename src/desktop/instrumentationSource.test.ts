@@ -361,6 +361,62 @@ describe('dispatch() times the step and the whole turn', () => {
   });
 });
 
+// =========================================================================================
+// 2b. PLAN.md #6 — THE ROUND'S REPLAY IS TIMED (principle 7). A battle round now holds the
+// turn for its beats as well as its narration, so the replay gets a duration of its own and a
+// threshold of its own (`SLOW_MS.round`): a starved timer is exactly the kind of freeze this
+// principle was written after. The line lives in `replayRound`, which `dispatch` calls.
+// =========================================================================================
+
+describe('the round replay is timed, escalates when slow, and fails loudly', () => {
+  const body = bodyOf('async function replayRound(');
+
+  it('brackets playRound, and closes the bracket AFTER the await — not before', () => {
+    const start = body.search(/roundTimer\s*=\s*startTimer\s*\(\s*\)/);
+    const call = body.search(/await\s+playRound\s*\(/);
+    const stop = body.search(/roundTimer\.stop\s*\(\s*\)/);
+    expect(start, 'the replay is no longer timed').toBeGreaterThan(-1);
+    expect(call, 'replayRound no longer plays the round — this guard has gone stale').toBeGreaterThan(-1);
+    expect(stop, 'the round timer is never stopped').toBeGreaterThan(-1);
+    expect(start).toBeLessThan(call);
+    expect(call).toBeLessThan(stop);
+    expect(body.slice(start, call), 'the timer is stopped before the replay runs').not.toMatch(/roundTimer\.stop\s*\(/);
+  });
+
+  it('reports the measured duration, at the level the round threshold decides', () => {
+    const played = logCalls(body).find((c) => c.includes("'round played'"));
+    expect(played, 'the round line is gone').toBeDefined();
+    expect(played).toMatch(/levelForDuration\s*\(\s*roundMs\s*,\s*SLOW_MS\.round\s*,\s*'info'\s*\)/);
+    expect(played).toMatch(/ms:\s*roundMs/);
+    expect(played).toMatch(/beats:\s*plan\.beats\.length/);
+    expect(body, 'the duration is fabricated rather than measured').toMatch(/const roundMs\s*=\s*roundTimer\.stop\(\s*\)/);
+  });
+
+  it('a replay that throws is logged at error, before the turn rebuilds the screen', () => {
+    const catchAt = body.search(/\}\s*catch\s*\(/);
+    expect(catchAt, 'the replay no longer catches — a throw would lose the turn').toBeGreaterThan(-1);
+    const failure = logCalls(body.slice(catchAt))[0];
+    expect(failure, 'a failed replay is silent').toBeDefined();
+    expect(failure).toMatch(/^log\.error\s*\(\s*'battle'/);
+  });
+
+  it('dispatch starts the narration FIRST, replays WHILE it runs, and only then awaits it', () => {
+    const turn = bodyOf('async function dispatch(');
+    const started = turn.search(/const narration\s*=\s*narrate\s*\(\s*r\.events\s*\)/);
+    const replay = turn.search(/await\s+replayRound\s*\(/);
+    const awaited = turn.search(/await\s+narration\s*;/);
+    expect(started, 'the narration is no longer started before the replay').toBeGreaterThan(-1);
+    expect(replay, 'dispatch no longer replays a battle round').toBeGreaterThan(-1);
+    expect(awaited, 'the narration is never awaited — the turn would end mid-sentence').toBeGreaterThan(-1);
+    expect(started).toBeLessThan(replay);
+    expect(replay).toBeLessThan(awaited);
+    // ...and the replay is fed the state from BEFORE the step, so the bars start where they were.
+    expect(turn).toMatch(/const before\s*=\s*state\s*;/);
+    expect(turn.search(/const before\s*=\s*state\s*;/)).toBeLessThan(turn.search(/=\s*step\s*\(\s*state\s*,/));
+    expect(turn).toMatch(/roundPlan\s*\(\s*before\s*,\s*state\s*,\s*r\.events\s*\)/);
+  });
+});
+
 describe('narrate() times the round trip to the model', () => {
   const body = bodyOf('async function narrate(');
 

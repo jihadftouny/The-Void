@@ -256,34 +256,71 @@
   // the found places on the way are handled as a player would: a cache or a rest is continued
   // past, a bargain refused. Bounded, and loud when the bound is hit.
   await clickTo('No — keep descending', 'main-menu');
-  let reached = false;
-  for (let tries = 0; tries < 12 && !reached; tries += 1) {
-    await click('Continue the descent');
-    await until('the descent to land somewhere', () => screen() !== 'main-menu');
-    for (let hops = 0; hops < 6 && screen() !== 'main-menu' && !reached; hops += 1) {
-      const now = screen();
-      if (now === 'battle-action') {
-        reached = true;
-      } else if (now === 'deal-decision') {
-        await clickTo('Refuse', 'main-menu');
-      } else if (now === 'continue' || now === 'rest') {
-        // A cache, a rest, or a fight waiting to be joined: Continue is the one way on, and each
-        // of them leaves for a DIFFERENT screen (the hub, or the fight itself). The choice
-        // column is empty while the step is in flight, so the screen key is the only honest wait.
-        await click('Continue');
-        await until('the Continue to land', () => screen() !== now);
-      } else {
-        throw new Error(`layout probe walk: the descent reached '${now}', which the walk cannot pass`);
+
+  /**
+   * From the hub (or a victory's aftermath), press on until a fight is open. Every screen the
+   * descent can put in the way is passed as a player would: a cache, a rest, a victory or a
+   * fight waiting to be joined by its one Continue; a bargain refused; a level-up draft by its
+   * first card. Bounded, and loud when the bound is hit.
+   */
+  async function descendToBattle() {
+    for (let tries = 0; tries < 12; tries += 1) {
+      if (screen() === 'main-menu') {
+        await click('Continue the descent');
+        await until('the descent to land somewhere', () => screen() !== 'main-menu');
+      }
+      for (let hops = 0; hops < 8 && screen() !== 'main-menu'; hops += 1) {
+        const now = screen();
+        if (now === 'battle-action') return;
+        if (now === 'deal-decision') {
+          await clickTo('Refuse', 'main-menu');
+        } else if (now === 'continue' || now === 'rest') {
+          // Each of these leaves for a DIFFERENT screen (the hub, the fight itself, a draft).
+          // The choice column is empty while the step is in flight, so the screen key is the
+          // only honest wait.
+          await click('Continue');
+          await until('the Continue to land', () => screen() !== now);
+        } else if (now === 'draft-pick') {
+          buttons()[0].click();
+          await until('the draft to land', () => screen() !== 'draft-pick');
+        } else {
+          throw new Error(`layout probe walk: the descent reached '${now}', which the walk cannot pass`);
+        }
       }
     }
+    throw new Error('layout probe walk: twelve descents and no battle opened');
   }
-  if (!reached) throw new Error('layout probe walk: twelve descents and no battle opened');
+
+  await descendToBattle();
   steps.push(measure('battle'));
 
   // Cast opens a sub-menu. It is a render-layer switch with no engine step, so it lands
   // synchronously; the settle inside `click` is the whole wait.
   await click('Cast');
   steps.push(measure('battle-cast-open'));
+  await click('Back');
+
+  // ONE REAL ROUND. The beats replay on the stage while the (stub) narrator fails over to its
+  // fallback; the controls come back when both are done. A first blow can end a floor-1 fight
+  // outright — the run is seeded from the clock — in which case the walk presses on to the next
+  // fight and swings again, so what is measured is always the frame AFTER a round, mid-fight.
+  let midFight = false;
+  for (let swings = 0; swings < 6 && !midFight; swings += 1) {
+    await click('Fight');
+    await until(
+      'the round to replay and the controls to return',
+      () => screen() !== 'battle-action' || labels().includes('Fight'),
+    );
+    if (screen() === 'battle-action') {
+      midFight = true;
+    } else if (screen() === 'game-over') {
+      throw new Error('layout probe walk: the probe character died on floor 1');
+    } else {
+      await descendToBattle();
+    }
+  }
+  if (!midFight) throw new Error('layout probe walk: six fights ended in one blow each');
+  steps.push(measure('battle-after-round'));
 
   return {
     steps,

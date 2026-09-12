@@ -108,11 +108,15 @@ describe('the floor’s reserved region lives in the reading column', () => {
     // The arena and the stat box are not part of the choices either, so the same bug is
     // waiting: miss one path and a second enemy region stacks on the stage, or the frame of
     // the last fight hangs, hidden, under the hub (the walk counts enemy regions page-wide).
-    for (const fn of ['function renderChoices(', 'function start(']) {
+    for (const fn of ['function renderChoices(', 'function start(', 'async function dispatch(']) {
       const body = bodyOf(fn);
       expect(body, `${fn} leaves the arena standing`).toMatch(/arenaEl\.replaceChildren\(\s*\)/);
       expect(body, `${fn} leaves the stat box standing`).toMatch(/vitalsEl\.replaceChildren\(\s*\)/);
     }
+    // In `dispatch` the clear comes BEFORE the step, so a battle step's replay re-mounts the
+    // frame from the state before it, and every other step leaves the regions empty.
+    const turn = bodyOf('async function dispatch(');
+    expect(turn.search(/arenaEl\.replaceChildren\(/)).toBeLessThan(turn.search(/=\s*step\s*\(\s*state\s*,/));
     // ...and renderChoices clears them BEFORE the switch, or the battle arm's fresh frame
     // would be wiped as soon as it was built.
     const body = bodyOf('function renderChoices(');

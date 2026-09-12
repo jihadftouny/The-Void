@@ -717,8 +717,8 @@ describe('all three reserved art regions are actually mounted (A.7)', () => {
     for (const model of ['stageView', 'vitalsView', 'battleMenuRows']) {
       expect(battleCase, `the battle arm no longer reads ${model}`).toMatch(new RegExp(`\\b${model}\\s*\\(`));
     }
-    expect(battleCase, 'the battle arm no longer mounts the stage').toMatch(
-      /mountStage\s*\(\s*stageView\s*\(\s*state\s*\)\s*,\s*vitalsView\s*\(\s*state\s*\)\s*\)/,
+    expect(battleCase, 'the battle arm no longer mounts the stage from the CURRENT state').toMatch(
+      /mountStage\s*\(\s*stageView\s*\(\s*state\s*\)\s*,\s*vitalsView\s*\(\s*state\s*\)\s*,\s*tickerLine\s*\)/,
     );
     expect(battleCase, 'the battle arm writes into the HUD').not.toMatch(/sheetEl/);
     expect(battleCase, 'the battle arm writes a screen attribute by hand').not.toContain('dataset');
