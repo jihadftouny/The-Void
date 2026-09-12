@@ -334,9 +334,11 @@ describe('floor 5’s warped kit costs on the stage exactly what the data says (
 
 describe('hidden karma stays hidden on the stage (AC-30, G53)', () => {
   /**
-   * The five fights. The two Sin bosses' names are DESIGN-SANCTIONED — §20 names a Sin after
-   * the vice it embodies — so they are read from `SIN_BY_AXIS` and stripped before the sweep,
-   * and never spelled here.
+   * The five fights the plan names. The Sin bosses' names are DESIGN-SANCTIONED — a Sin is
+   * named for the vice it embodies — so they are read from `SIN_BY_AXIS` and stripped before
+   * the sweep, and never spelled here. None of these five is a Sin fight, so today the
+   * stripping removes nothing from the sweep itself; it is there so a Sin fight can join the
+   * list without a false alarm, and the case below proves it strips what it should.
    */
   const FIGHTS: readonly [string, () => GameState][] = [
     ['act2-illusion', () => toLiveFight(bundleOf('act2-illusion').state)],
