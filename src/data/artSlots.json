@@ -14,7 +14,7 @@
       "label": "Enemy",
       "ratioW": 3,
       "ratioH": 4,
-      "why": "Upright, because the subject is a standing figure and a wide frame would crop it or strand it in empty air. 3:4 is the SHALLOWEST upright ratio that still reads as a portrait, and shallow is what the placement needs: the region ships in the fixed 220px HUD column beside the foe's own vitals, because the battle screen proper belongs to docs/PLAN.md #6 and this unit does not edit it. At that column's 140px cap (game.css) 3:4 is 187px of height, where 2:3 would be 210px and 9:16 would be 249px — and the column is already carrying the player's region as well. The ratio survives the move: when #6 takes this region into the battle screen it is the same shape in a wider place.",
+      "why": "Upright, because the subject is a standing figure and a wide frame would crop it or strand it in empty air. 3:4 is the SHALLOWEST upright ratio that still reads as a portrait, and shallow is what its first placement needed: it shipped in the fixed 220px HUD column beside the foe's own vitals, where at the column's 140px cap 3:4 was 187px of height (2:3 would have been 210px, 9:16 249px). MOVED 2026-09-12 by docs/PLAN.md #6: the region is now the centre of the battle screen's framed stage (#arena in desktop.html, battle.css), centred and capped at 32vh of HEIGHT with its width following from the ratio - about 205px tall and 154px wide at the 960x640 minimum, so the narration keeps its floor below the frame. THE RATIO SURVIVED THE MOVE UNCHANGED, as it was committed to: the same shape in a wider place, and the shape a future sprite (#7) is drawn to.",
       "source": null
     },
     {
@@ -22,7 +22,7 @@
       "label": "Character",
       "ratioW": 1,
       "ratioH": 1,
-      "why": "Square, and it is the one ratio here chosen for the layout as much as for the subject. The player portrait lives in the fixed 220px HUD column, where game.css caps a slot at 140px wide — so 1:1 reserves 140px of column height and 3:4 would reserve 187px. During a battle that column carries this region AND the enemy's, so those 47px are part of what decides whether it scrolls at the 960x640 minimum. The vitals are not what pays either way: both regions render BELOW HP, XP and the condition chips, and #sheet scrolls. It also tells the art brief something true: this is a chest-up crop, not a full figure.",
+      "why": "Square, and it is the one ratio here chosen for the layout as much as for the subject. The player portrait lives in the fixed 220px HUD column, where game.css caps a slot at 140px wide — so 1:1 reserves 140px of column height and 3:4 would reserve 187px. Those 47px are part of what decides whether the column scrolls at the 960x640 minimum. (Until docs/PLAN.md #6 a battle stacked the enemy's region in this column too; the fight is now its own framed stage, and the HUD column is hidden while it runs.) The vitals are not what pays either way: both regions render BELOW HP, XP and the condition chips, and #sheet scrolls. It also tells the art brief something true: this is a chest-up crop, not a full figure.",
       "source": null
     }
   ]

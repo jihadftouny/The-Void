@@ -1,5 +1,49 @@
 # Human Checks — The Void
 
+> ## ▶️ From `battle-screen` (`PLAN.md` #6, 2026-09-12) — the fight is a framed stage now
+>
+> A fight has its own screen: the enemy's frame in the centre (empty until the art exists — that is
+> deliberate), your stat box bottom-left, the commands bottom-right, a one-line ticker under the
+> enemy, and the Void still speaking beneath. Pressing **Fight** replays the round beat by beat. The
+> layout, the timing arithmetic, the bars and the sounds' order are machine-checked; these are what
+> only a person can judge. **Start from F3** (`npm run desktop`, press **F3**): `act1-hub` then
+> Continue for a floor-1 fight; `hollow-fight` for a boss; `act2-illusion`; `act5-warped`;
+> `rest-spot` then Continue into floor 3 for its opening drain. Most likely to be wrong first:
+>
+> - [ ] **1. Does a round read as an EXCHANGE?** Fight a few rounds on floor 1. **Measured:** a
+>       typical two-beat round takes **about half a second** (480 ms scheduled; 487–511 ms in the real
+>       build). `UI-DESIGN.md` §6 said *"roughly a second end to end"* — so this may read too fast.
+>       *Failure:* it reads as a spreadsheet recalculating (too fast) or a slideshow (too slow). **The
+>       knob:** `BEAT_MS`, `BEAT_HOLD_MS` and `MAX_ROUND_MS` in `src/render/beat-model.ts` — one edit
+>       each; the tests pin the arithmetic, not the values' feel.
+> - [ ] **2. Today the enemy's blow plays FIRST, then yours.** The screen plays the round in the
+>       order the engine resolves it, and the engine resolves the enemy's attack first
+>       (`FINDINGS.md` G62 — you are meant to strike first, and speed is meant to come from
+>       Dexterity). Nothing on the screen assumes an order: when the engine changes, the screen
+>       follows with no change. Just confirm the ticker's last line of a round is YOUR strike today.
+> - [ ] **3. The flash, the shake — and the reduced-motion tint.** Is the enemy's flash and your stat
+>       box's shake comfortable over a long fight? Then **Settings → Motion → Reduced**: the timing
+>       is the same, nothing moves, and a struck side gets a soft outline instead. *Failure:* the
+>       strike is invisible under Reduced, or anything still moves.
+> - [ ] **4. Does the empty centre frame read as a STAGE, not a missing picture?** (`ART-BIBLE.md` §4.)
+>       And at the minimum window versus the default: is the figure's size (capped at 32% of the
+>       window's height) the right presence? The cap is one literal, named in `UI-DESIGN.md` §17.
+> - [ ] **5. The opening pause.** Joining a fight on floor 3 now shows the frame for one beat
+>       (240 ms) before the floor drains a charge, so you SEE the charges bar drop. Does the pause
+>       read naturally, or as a hitch?
+> - [ ] **6. The smallest window at LARGE text, by eye:** the frame and the commands, then Cast open
+>       (it fits — the probe measures it), then **Record** open (the log starts below the fold at large
+>       text and the reading column scrolls to it — a bounded exception, `UI-DESIGN.md` §17).
+> - [ ] **7. Focus rings** inside the bottom-anchored command column and on the **Record** toggle:
+>       Tab through a fight. *Failure:* a ring clipped or invisible. A ring is a paint, not a rectangle.
+> - [ ] **8. Screen reader on the ticker.** The ticker announces each beat (`aria-live="polite"`).
+>       With Narrator or NVDA, fight three rounds. *Failure:* too chatty to bear, or the beats are
+>       skipped. It is one attribute to change either way.
+> - [ ] **9. Boss, illusion, warped kit — the look.** `hollow-fight`: no Spare, and Run greyed with
+>       *"There is nowhere to go"*. `act2-illusion`: nothing on the stage says it is an illusion until
+>       the Void's own line does. `act5-warped`: the Cast list's warped names (floor-mechanics item 4
+>       below — its numbers are machine-checked now). All three are asserted; the look is yours.
+
 > ## ▶️ From `floor-mechanics` (`PLAN.md` #2, 2026-09-11) — seven checks, each one F3 jump away
 >
 > The five floors now play differently, bargains and rest spots find you on the descent, potions
@@ -35,7 +79,8 @@
 > - [ ] **4. Floor 5's warped kit reads clearly.** Jump `act5-warped`, open the character sheet and
 >       a battle's Cast list: each skill carries its warped name and cost. To see the ARRIVAL moment
 >       (*"Your skills twist into something else"*), jump `verdict-castdown` and Continue down into
->       floor 5.
+>       floor 5. *(Since #6 the NUMBERS are machine-checked — every Cast row's suffix and cost against
+>       the data and the character sheet, `src/dev/battleScreen.test.ts`. Only the look is yours.)*
 > - [ ] **5. Floor 3's slow weight — noticeable, not cruel.** From `rest-spot`, Continue into floor 3's
 >       fights: heals are halved there and every fight opens with *"This place drains 1 skill charge
 >       from you."* Does the floor feel heavier without feeling unfair?
@@ -249,10 +294,13 @@
 >       are announced before the prose, or the **"Choices"** landmark is not a jump target. DOM order is
 >       machine-checked; what a real screen reader does with it is not.
 >
-> **Known and deferred, not a bug to report:** with the battle action picker **open** at the minimum
+> ~~**Known and deferred, not a bug to report:** with the battle action picker **open** at the minimum
 > window, some controls begin below the fold — the content is 683–788 px in a 558 px box. The column
 > scrolls and closing the picker restores everything, which is asserted. The battle screen's contents
-> belong to **`PLAN.md` #6**.
+> belong to **`PLAN.md` #6**.~~ **Resolved 2026-09-12 by #6 (`battle-screen`):** the fight is now a
+> framed stage and the Cast list opens in the menu column — its seven rows fit outright at 960×640 at
+> both text sizes, measured by the layout probe. *(Since #6 the combat log in a fight is closed behind
+> the **Record** toggle under the enemy — open it before checking its expander arrows in item 3.)*
 
 > ## 🎨 From `visual-identity` (#8 + #16, merged 2026-09-08) — the game has a look now, and only your eyes can judge it
 >
