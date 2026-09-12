@@ -393,6 +393,18 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
     expect(document.querySelectorAll('.arena-float'), 'floats outlived the round').toHaveLength(0);
   });
 
+  it('a blow that connected for NOTHING flashes but floats no “−0” — the line says the rest', async () => {
+    const { els } = mountFrame();
+    const zeroHit: GameEvent = { ...attack, subject: 'player', outcome: 'hit', damage: 0 };
+    const running = playRound(plan([zeroHit]), els, deps(true));
+    await flush();
+    expect(els.ticker.textContent).toBe('You strike — hit for 0 damage.');
+    expect(els.enemy.classList.contains('is-struck'), 'the blow connected, and the frame no longer shows it').toBe(true);
+    expect(document.querySelectorAll('.arena-float'), 'a zero floated in the damage colour').toHaveLength(0);
+    await vi.runAllTimersAsync();
+    await running;
+  });
+
   it('never touches its plan — it is handed frozen data and throws on nothing', async () => {
     const { els } = mountFrame();
     const p = plan([enemyStrike, playerStrike]);

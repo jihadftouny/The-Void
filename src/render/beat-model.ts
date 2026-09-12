@@ -182,7 +182,15 @@ export function touchesOf(event: GameEvent): BarKey[] {
   }
 }
 
-/** Whose side a beat's anchor STRUCK — the flash goes on the enemy, the shake on the player. */
+/**
+ * Whose side a beat's anchor STRUCK — the flash goes on the enemy, the shake on the player.
+ *
+ * CONTACT, NOT HARM (decided in #6's fix round). An attack whose outcome is a hit or a crit
+ * connected, so it shows — even when it dealt 0: the ticker says "hit", and a blow that
+ * connected but showed nothing would contradict the line under it. Only its NUMBER is withheld
+ * (`floatFor` never floats a zero). A skill that dealt 0 is a different thing — a skill that
+ * does not strike at all (a guard, a curse) — so it shows no strike, as before.
+ */
 function struckBy(event: GameEvent): CombatSubject | null {
   switch (event.kind) {
     case 'attack':
@@ -200,8 +208,21 @@ function struckBy(event: GameEvent): CombatSubject | null {
 }
 
 /**
+ * A harm or heal number to float, or `null` when there is nothing to show.
+ *
+ * ⚠ A ZERO IS NEVER FLOATED. The engine truthfully reports a blow that connected for nothing (a
+ * 1 on the d6 with a −1 Strength adjustment, clamped to 0) and a failed escape a shield absorbed
+ * entirely (the 0 HP actually lost). A "−0" in the damage colour reads as harm that did not
+ * happen. The ticker keeps the engine's line either way — it is the truthful record — and the
+ * strike still SHOWS where the blow connected (`struckBy` is about contact, not harm).
+ */
+function amountFloat(side: CombatSubject, amount: number, sign: '−' | '+', tone: 'harm' | 'heal', prefix = ''): BeatFloat | null {
+  return amount > 0 ? { side, text: `${prefix}${sign}${amount}`, tone } : null;
+}
+
+/**
  * The number floated over a combatant for an anchor, or `null`. VERBATIM engine numbers — the
- * same ones the combat log already prints — never a sum the renderer computed.
+ * same ones the combat log already prints — never a sum the renderer computed, and never a zero.
  */
 export function floatFor(event: GameEvent): BeatFloat | null {
   switch (event.kind) {
@@ -209,9 +230,9 @@ export function floatFor(event: GameEvent): BeatFloat | null {
       const side = other(event.subject);
       switch (event.outcome) {
         case 'hit':
-          return { side, text: `−${event.damage}`, tone: 'harm' };
+          return amountFloat(side, event.damage, '−', 'harm');
         case 'crit':
-          return { side, text: `CRIT −${event.damage}`, tone: 'harm' };
+          return amountFloat(side, event.damage, '−', 'harm', 'CRIT ');
         case 'miss':
           return { side, text: 'MISS', tone: 'plain' };
         case 'fumble':
@@ -220,17 +241,17 @@ export function floatFor(event: GameEvent): BeatFloat | null {
       return null;
     }
     case 'skill-cast':
-      return event.damage > 0 ? { side: 'enemy', text: `−${event.damage}`, tone: 'harm' } : null;
+      return amountFloat('enemy', event.damage, '−', 'harm');
     case 'condition-damage':
-      return { side: event.subject, text: `−${event.amount}`, tone: 'harm' };
+      return amountFloat(event.subject, event.amount, '−', 'harm');
     case 'condition-heal':
-      return { side: event.subject, text: `+${event.amount}`, tone: 'heal' };
+      return amountFloat(event.subject, event.amount, '+', 'heal');
     case 'lifesteal':
-      return { side: 'player', text: `+${event.amount}`, tone: 'heal' };
+      return amountFloat('player', event.amount, '+', 'heal');
     case 'boss-minion-damage':
-      return { side: 'player', text: `−${event.amount}`, tone: 'harm' };
+      return amountFloat('player', event.amount, '−', 'harm');
     case 'escape-failed':
-      return { side: 'player', text: `−${event.damage}`, tone: 'harm' };
+      return amountFloat('player', event.damage, '−', 'harm');
     case 'revive':
       return { side: 'player', text: 'REVIVED', tone: 'heal' };
     default:

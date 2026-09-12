@@ -297,6 +297,33 @@ describe('floats and touches, by hand', () => {
     expect(floatFor({ kind: 'victory', xpGained: 5, loot: [] })).toBeNull();
   });
 
+  it('a blow that CONNECTED FOR NOTHING floats no number — never “−0” — but still reads as a hit', () => {
+    // The engine's truth, seen 6 times in 423 real hits: a 1 on the d6 with a −1 Strength
+    // adjustment, clamped to 0. The blow landed and did nothing. A "−0" in the damage colour
+    // reads as harm that did not happen, so no number floats — the rule the skill path already
+    // had. The strike itself still SHOWS (flash, shake or tint) and still sounds: the outcome
+    // is a hit, the blow connected, and the ticker says exactly that in the engine's words.
+    const zeroHit: GameEvent = { ...attack, subject: 'player', outcome: 'hit', damage: 0 };
+    expect(floatFor(zeroHit)).toBeNull();
+    expect(floatFor({ ...attack, subject: 'enemy', outcome: 'crit', damage: 0 })).toBeNull();
+    const [beat] = groupBeats([zeroHit]);
+    expect(beat!.float).toBeNull();
+    expect(beat!.struck, 'a blow that connected no longer shows it connected').toBe('enemy');
+    expect(beat!.line).toBe('You strike — hit for 0 damage.');
+    expect(beat!.hook).toBe('hit');
+    expect(beat!.touches, 'the bar is still written — with the engine’s unchanged value').toEqual(['enemy']);
+    // One rule for every number the stage floats: a zero is never shown. (A failed escape a
+    // shield absorbed entirely reports the 0 HP actually lost — the same "−0".)
+    expect(floatFor({ kind: 'escape-failed', damage: 0 })).toBeNull();
+    expect(floatFor({ kind: 'condition-damage', subject: 'enemy', conditionType: 'burn', amount: 0 })).toBeNull();
+    expect(floatFor({ kind: 'condition-heal', subject: 'player', conditionType: 'regeneration', amount: 0 })).toBeNull();
+    expect(floatFor({ kind: 'lifesteal', amount: 0 })).toBeNull();
+    expect(floatFor({ kind: 'boss-minion-damage', amount: 0 })).toBeNull();
+    // ...and the smallest real number still floats, so the rule is "zero", not "small".
+    expect(floatFor({ ...attack, subject: 'player', outcome: 'hit', damage: 1 })).toEqual({ side: 'enemy', text: '−1', tone: 'harm' });
+    expect(floatFor({ kind: 'escape-failed', damage: 1 })).toEqual({ side: 'player', text: '−1', tone: 'harm' });
+  });
+
   it('touches only the bars an event can move', () => {
     expect(touchesOf({ ...attack, subject: 'player' })).toEqual(['enemy']);
     expect(touchesOf({ ...attack, subject: 'enemy' })).toEqual(['player']);
