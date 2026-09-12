@@ -249,17 +249,20 @@ function showFloat(els: ArenaEls, float: BeatFloat): void {
 /**
  * Replay one step's beats on the frame, in order, on the plan's schedule.
  *
- * Per beat: the ticker takes its line; every bar whose update beat this is is written with the
- * engine's AFTER value (so each bar is written exactly once per round, at the last beat that
- * could have moved it — never before); the struck side flashes or shakes (or is tinted, under
- * reduced motion); the float appears; the hook is sent. Between beats it waits the spacing;
- * after the last it holds, then clears its effects and resolves.
+ * First it waits the plan's `lead` (non-zero only for the opening, whose frame was not on
+ * screen before — `openingLead`). Per beat: the ticker takes its line; every bar whose update
+ * beat this is is written with the engine's AFTER value (so each bar is written exactly once
+ * per round, at the last beat that could have moved it — never before); the struck side
+ * flashes or shakes (or is tinted, under reduced motion); the float appears; the hook is sent.
+ * Between beats it waits the spacing; after the last it holds, then clears its effects and
+ * resolves.
  *
  * It never receives `GameState`, and it writes nothing but these elements.
  */
 export async function playRound(plan: RoundPlan, els: ArenaEls, deps: PlayDeps): Promise<PlayResult> {
   const hooks: AudioHookName[] = [];
   const { at, done } = plan.schedule;
+  if (plan.lead > 0) await deps.wait(plan.lead);
   for (const beat of plan.beats) {
     if (beat.index > 0) await deps.wait((at[beat.index] as number) - (at[beat.index - 1] as number));
     clearEffects(els);

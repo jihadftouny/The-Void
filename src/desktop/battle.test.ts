@@ -88,13 +88,17 @@ const enemyStrike: GameEvent = { ...attack, subject: 'enemy', outcome: 'hit', da
 const playerStrike: GameEvent = { ...attack, subject: 'player', outcome: 'hit', damage: 4 };
 const playerTick: GameEvent = { kind: 'condition-damage', subject: 'player', conditionType: 'poison', amount: 1 };
 
-/** A plan for `events`, with the bars before and after as the engine would report them. */
-function plan(events: GameEvent[]): RoundPlan {
+/**
+ * A plan for `events`, with the bars before and after as the engine would report them. A
+ * round played from the fight screen — no lead-in — unless `lead` says otherwise.
+ */
+function plan(events: GameEvent[], lead = 0): RoundPlan {
   const beats = groupBeats(events);
   return freeze({
     beats,
     schedule: beatSchedule(beats.length),
     updateAt: barUpdateAt(beats),
+    lead,
     bars: {
       player: { before: resourceBarModel('HP', 12, 15, 'hp'), after: resourceBarModel('HP', 8, 15, 'hp') },
       enemy: { before: resourceBarModel('HP', 20, 30, 'foe'), after: resourceBarModel('HP', 16, 30, 'foe') },
@@ -399,13 +403,17 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
   });
 
   it('the floor-3 drain plays as its own beat, and the charges bar is written at it (AC-28)', async () => {
+    // The frame is freshly built (charges 3/5), as the opening's is; the plan carries the
+    // opening's lead-in, so the frame is SEEN at its before-values before the drain lands.
     const { els } = mountFrame();
+    const LEAD = 240;
     const drain = ONE_OF_EVERY_EVENT['floor-drain'];
     const beats = groupBeats([drain]);
     const p = freeze({
       beats,
       schedule: beatSchedule(1),
       updateAt: barUpdateAt(beats),
+      lead: LEAD,
       bars: {
         player: { before: resourceBarModel('HP', 12, 15, 'hp'), after: resourceBarModel('HP', 12, 15, 'hp') },
         enemy: { before: resourceBarModel('HP', 20, 30, 'foe'), after: resourceBarModel('HP', 20, 30, 'foe') },
@@ -414,6 +422,15 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
     });
     const audio = recorder();
     const running = playRound(p, els, deps(true, audio));
+    await flush();
+    // Through the lead-in the frame stands untouched: no line, the full bar, no sound.
+    await vi.advanceTimersByTimeAsync(LEAD - 1);
+    await flush();
+    expect(els.ticker.textContent, 'the drain landed before the frame could be seen').toBe('');
+    expect(barText(els.bars.charges)).toBe('3/5');
+    expect(audio.calls).toEqual([]);
+    // At the lead's end, the drain: its own line, the engine's value, the tick.
+    await vi.advanceTimersByTimeAsync(1);
     await flush();
     expect(els.ticker.textContent).toBe(`This place drains ${drain.amount} skill charge${drain.amount === 1 ? '' : 's'} from you.`);
     expect(barText(els.bars.charges)).toBe('2/5');

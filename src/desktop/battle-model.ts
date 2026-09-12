@@ -28,6 +28,7 @@ import {
   type ResourceBarModel,
 } from '../render/component-model.ts';
 import {
+  BEAT_MS,
   barUpdateAt,
   beatSchedule,
   groupBeats,
@@ -253,6 +254,25 @@ export interface RoundPlan {
   schedule: BeatSchedule;
   bars: Record<BarKey, BarPair>;
   updateAt: Record<BarKey, number>;
+  /**
+   * How long the frame stands, showing the BEFORE values, before the first beat plays.
+   * See `openingLead`.
+   */
+  lead: number;
+}
+
+/**
+ * The lead-in before a step's first beat — PURE.
+ *
+ * A round played FROM the fight screen needs none: that frame is already on screen, showing
+ * exactly the before-values, so the first beat's writes are seen as a change. The OPENING has
+ * no frame on screen yet — the player was reading the encounter — and the first beat is written
+ * in the same moment the frame is built, so without a lead the two land in one paint and the
+ * change is never seen: floor 3's drain would appear as a charges bar already drained (AC-28:
+ * "the charges bar updates at it"). One beat's spacing lets the frame be seen first.
+ */
+export function openingLead(before: GameState): number {
+  return before.phase.kind === 'battle' && !before.phase.started ? BEAT_MS : 0;
 }
 
 /**
@@ -301,5 +321,11 @@ export function roundPlan(before: GameState, after: GameState, events: readonly 
   if (beats.length === 0) return null;
   const bars = roundBars(before, after, events);
   if (!bars) return null;
-  return { beats, schedule: beatSchedule(beats.length), bars, updateAt: barUpdateAt(beats) };
+  return {
+    beats,
+    schedule: beatSchedule(beats.length),
+    bars,
+    updateAt: barUpdateAt(beats),
+    lead: openingLead(before),
+  };
 }

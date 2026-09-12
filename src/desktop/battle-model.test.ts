@@ -334,4 +334,15 @@ describe('the round plan: the bars are only ever engine values', () => {
     expect(plan.bars.charges.after.value).toBe(4);
     expect(plan.updateAt.charges).toBe(0);
   });
+
+  it('only the opening waits a lead-in before its first beat: its frame was not on screen before', () => {
+    // The opening: one beat's spacing (240ms, `BEAT_MS`), so the frame is seen at its
+    // before-values before the drain is written — otherwise the two land in one paint.
+    const b = createBattle(hero({ skillCharges: 5 }), foe(), 3);
+    const drain = [{ kind: 'floor-drain' as const, resource: 'skillCharge' as const, amount: 1 }];
+    expect(roundPlan(inBattle(b, false, 3), inBattle(b, true, 3), drain)!.lead).toBe(240);
+    // A round played from the fight screen: that frame is already up, showing the before-values.
+    const r = resolveRound(b, 'fight', scripted([face(18, 20), face(15, 20), face(4, 6)]));
+    expect(roundPlan(inBattle(b), inBattle(r.state), r.events)!.lead).toBe(0);
+  });
 });
