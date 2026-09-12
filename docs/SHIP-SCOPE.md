@@ -194,12 +194,18 @@ The ordering principle is not "what would be nicest next". It is: **what raises 
 
 ### v1.2 — "It has a floor to stand on" · ~24 h · trigger: v1.1 shipped
 
+> **⚠ ABSORBED INTO v1 (2026-09-07, §11) — #2 merged 2026-09-11.** This rung is now **empty**. **Consequence the author must settle: this rung was the planned answer to milestone `b3`** (★ below) — so **`b3` currently has no plan behind it.** Candidates, not a decision: v1.1's narrator rewrite, audio (#15), or a genuinely new game #2.
+
+
 - **#2** — the five floors get mechanics of their own, plus the real balance re-run that finally retires the invalidated `BALANCE-REPORT.md`.
 - Floor 2's illusions, which also unlock **`seeThroughIllusion`** — the fourth karma action, the one §3 could not wire in v1.
 
 > ⭐ **This release *is* milestone `b3`** (Mar 2027: *"Game #2 **or #1 expanded** · ≥100 plays"*). Expanding The Void satisfies it without starting a second game — which is the whole point of an increment ladder. Worth knowing before you start building a game #2 you may not need.
 
 ### v1.3 — "It looks and sounds like something" · ~24 h · trigger: v1.2 shipped
+
+> **⚠ LARGELY ABSORBED INTO v1 (§11).** #8 and #16 merged 2026-09-08; #6 is being built. **Only #15 audio remains** on this rung.
+
 
 - **#8** screens restyle, **#16** typeface, **#6** battle screen — typography and CSS, all $0.
 - **#15** audio, *only* with CC0/free assets that clear the licence check in `SHIPPING.md`.
@@ -315,6 +321,8 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 >
 > **Two pre-agreed levers, in order:** (1) #2's own serial cut point after step 11 — engine complete and migrated — lets its balance half fork as `floor-balance` if the build stalls; (2) the narrator-judged talk field as #11's fallback, below. **Recommended moment to decide on (2): when #2 merges and its real hours are known**, not before — the estimate is the thing most likely to be wrong.
 
+> **✅ UPDATED 2026-09-12 — #2 has MERGED, and the margin above is no longer the current figure.** The 2026-09-11 revision counted #2's ~36 h as still to do; #2 merged that same day. **Done so far:** blocks 1–3 (36 h) + #8/#16 (14 h) + #2 (~36 h) = **~86 h**. **Remaining:** #6 (~12 h, building) + #11 (~35–45 h) + block 4 (16 h, the author's) + block 5 (12 h) = **~75–85 h, plus the round-order and tempo-gauge unit** (§22.30, G62), **which is not yet estimated.** **Against ~126 h of capacity (12 Sep → 31 Dec at 8 h/week), slack is ~40–50 h before that unit.** ⚠ The orchestrator restated the stale "1–16 h" to the author on 2026-09-12 after #2 had merged; this corrects it. ⚠ **A caveat on the whole model:** these hours are effort estimates, and capacity is the author's weekly time — but the pipeline's agents did #2's ~36 estimated hours in about a day of wall-clock time. **The real constraints are now the author's own hours (block 4, review, play-tests) and the pipeline's session limits, not the estimate total.** Read the slack figure as "the estimates fit", not as a forecast.
+>
 **It still fits. But the margin is now thin enough that one unit going badly would consume it**, where before it would not have. Two things make that real rather than theoretical: this session has already seen two agent stalls and one pipeline escape, and #11 is the least-understood unit in the plan — nobody has yet built a boss that selects its own actions.
 
 ### What gives first if it runs over
