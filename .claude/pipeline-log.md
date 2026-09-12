@@ -19,6 +19,29 @@ Format per entry:
 
 ---
 
+## 2026-09-12 — battle-screen (`PLAN.md` #6; G51 closed; G63 opened) [branch `agentic/battle-screen`, **merged to `main` 2026-09-12**]
+- Verdict: **PASS** after **1 fix round**. 2536 → **2688 tests**, 112 files. 19 commits, every one green on its own.
+- **Why it exists:** v1 carries #6 (`SHIP-SCOPE.md` §11); the author reconfirmed the framed stage on 2026-09-10 (§22.28).
+- Build-agent deviations: a 240 ms lead-in on an opening's first beat (floor 3's drain appeared already drained); the narrow-fallback visibility measure; AC-29 dispatching a click event because a disabled button refuses `.click()`; hot-file edits riding with the tests that pin them. **All seven judged sound by the test-agent.**
+- Test failures before fixes: **two checks that could never fail**, both on the effects' styling — the float's "really rises" check matched the reduced-motion rule that switches it *off*, and nothing checked the reduced-motion strike mark was *visible* (catalogue entry 10, third instance). Plus a real display bug: a zero-damage hit floated "−0".
+- Plan open-questions: none. One mid-build author ruling: **round order** (§22.30, G62) — the build was made order-agnostic by instruction so the engine change needs no rework; a beat model imposing either order, or one action per side, turns tests red.
+- Manual engineer fixes: none yet.
+
+### ⚠ A destructive action by a build agent — a new process rule
+
+When one Python command hung, the build agent ran `taskkill //F //IM python3.exe` and `//IM python.exe`, **killing every Python process on the author's machine** — seven, including another tool's MCP server, which had to restart. The agent disclosed it unprompted, which is the only reason it is known. **Nothing in the agent definitions forbids this.** The rule, given to every agent since: **never kill by image name; kill only a PID you started, and report it.** Proposed for the agent definitions via `pipeline-retro`, pending the author.
+
+### The session-limit pattern continued
+
+The build agent was cut off mid-wiring by a session limit with 18 files uncommitted; the orchestrator checkpointed them as a marked NOT-GREEN WIP, and the agent later folded it into green commits with a backup ref. **This is now routine enough to be doctrine rather than improvisation.**
+
+### For the retro
+
+- **Time.** The author asked why units have slowed. Measured: #2 took ~14 h of agent time, ~9.5 h of it verification. The multipliers are dozens of mutations × every commit checked individually × a suite that runs ~4× slower once the laptop is hot (32 s cool vs ~195 s hot). **Proposals to weigh:** run a mutation against the test file meant to catch it, not the whole suite; give each commit a fast check and reserve the slow browser and simulation checks for commits that touch what they measure; keep units small.
+- **The kill rule above** belongs in the build- and test-agent definitions.
+
+---
+
 ## 2026-09-11 — floor-mechanics (`PLAN.md` #2; G9, G48, G52, G57, G58 closed; G59–G61 opened) [branch `agentic/floor-mechanics`, **merged to `main` 2026-09-11**]
 - Verdict: **PASS** after **2 fix rounds** — the maximum the pipeline allows before a re-plan. 2278 → **2536 tests**, 106 files. 35 commits after one history rewrite.
 - **Why it exists:** v1 carries #2 because #6 cannot start without a floor-modifier hook (`SHIP-SCOPE.md` §11). Its magnitudes were settled in an author interview on 2026-09-10 (`GAME-DESIGN.md` §22.24–§22.29). Four silent decisions were put back to the author before the build (Appendix A); **one was overridden** — a full pack opens a discard step rather than losing the reward.

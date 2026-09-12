@@ -18,7 +18,7 @@
 >       each; the tests pin the arithmetic, not the values' feel.
 > - [ ] **2. In this build the enemy's blow plays first, then yours — the ENGINE's current order,
 >       not the design.** The screen plays the round in whatever order the engine emits it. The
->       design is that YOU strike first, with speed from initiative and Dexterity (§14.8, and the
+>       design is that YOU strike first, with speed from the tempo gauge that Dexterity fills — no initiative roll (§14.8, and the
 >       tempo gauge of §16.1); the engine does not do that yet (`FINDINGS.md` G62). Nothing on the
 >       screen assumes an order, so when the engine changes the screen follows with no change of
 >       its own. For this build, just confirm a round's lines come in the order the combat log

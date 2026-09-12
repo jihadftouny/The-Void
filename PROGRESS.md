@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2536 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2688 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -137,11 +137,11 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
-### 2026-09-12 — #6 built: the fight is a framed stage, and a round plays out beat by beat 🔄
+### 2026-09-12 — #6 merged: the fight is a framed stage, and a round plays out beat by beat ✅
 
-**`battle-screen` built on `agentic/battle-screen` — awaiting its test-agent and your merge. 2536 → 2688 tests (2678 at the build, +10 in fix round 1).** A fight now has its own screen, the one `UI-DESIGN.md` §1 drew: the enemy's frame in the centre (empty until the art exists, deliberately), your stat box bottom-left, the commands bottom-right, a one-line ticker under the enemy with the full log behind a **Record** toggle, and the Void still speaking beneath. Pressing **Fight** replays the round **beat by beat** — each blow's line, the number floating off the side it hit, the bar moving at the moment it changed — instead of two numbers changing in a corner. Every beat also names a sound (logged for now; #15 plugs in real audio).
+**`battle-screen` merged to `main` on 2026-09-12 after one fix round. 2536 → 2688 tests (2678 at the build, +10 in fix round 1).** A fight now has its own screen, the one `UI-DESIGN.md` §1 drew: the enemy's frame in the centre (empty until the art exists, deliberately), your stat box bottom-left, the commands bottom-right, a one-line ticker under the enemy with the full log behind a **Record** toggle, and the Void still speaking beneath. Pressing **Fight** replays the round **beat by beat** — each blow's line, the number floating off the side it hit, the bar moving at the moment it changed — instead of two numbers changing in a corner. Every beat also names a sound (logged for now; #15 plugs in real audio).
 
-**The Cast list no longer falls off the screen.** Before, opening it at the smallest window put 683–788 px of buttons in a 558 px column; now its seven rows fit outright at both text sizes, measured in the real game window.
+**The Cast list no longer falls off the screen.** Before, opening it at the smallest window put 625 px of buttons in a 558 px column (726 px in 555 at large text), with its last control at y 683–787 — *(corrected at merge: an earlier wording quoted the y positions as if they were the content height)*; now its seven rows fit outright at both text sizes, measured in the real game window.
 
 **The renderer can finally be tested as a program, not as text** (`FINDINGS.md` G51). Everything `game.ts` did the moment it was loaded now happens in one `boot()` call, so tests load it and click through it — the content warning to the hub, a real fight, a resumed boss fight, the floor presets. No existing guard was deleted; each was moved and proven to still catch its bug.
 
@@ -149,7 +149,7 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 **Fix round 1 (same day):** the test-agent found two checks that could never fail, and one small display bug. The check that the floating damage number really rises was satisfied by the reduced-motion rule that STOPS it; the reduced-motion strike mark had no check at all, so deleting it left everything green while a struck side showed nothing. Both are now real checks, and a broader one makes every class the battle screen writes answer to a stylesheet rule, and every battle rule to something the screen really shows. The bug: a blow that connected for 0 damage floated "−0" in the damage colour; now no zero is ever floated, while the strike itself still shows (the blow did connect, and the ticker says "hit for 0 damage").
 
-**Next:** the test-agent's verification, then your merge and the nine checks at the top of `HUMAN-CHECKS.md`.
+**Verified and merged.** The test-agent's final pass found every fix genuine and nothing traded away; what remains are minor notes on unusual future edits, routed to the tempo unit (`FINDINGS.md` G63). **Next:** your checks at the top of `HUMAN-CHECKS.md` — the first is booting through the new entry point — then **the round-order and tempo-gauge unit**, which is not yet planned.
 
 ### 2026-09-11 — #2 merged: every floor plays differently, and the Void comes to you ✅
 
