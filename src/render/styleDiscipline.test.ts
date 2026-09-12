@@ -105,11 +105,18 @@ function stopsMotion(css: string, attr: string, target: string): boolean {
   );
 }
 
-/** The three things in this interface that move, and therefore the three that must stop. */
+/**
+ * Everything in this interface that moves, and therefore everything that must stop. PLAN.md #6
+ * added the battle frame's three: the flash on the enemy's figure, the shake on the stat box,
+ * and the number that floats over a struck side.
+ */
 const MOVING = [
   { target: '.beat', what: 'the narration fade' },
   { target: '.void-button', what: 'the button transition' },
   { target: '.void-texture', what: "the floor's atmosphere" },
+  { target: '.arena-figure', what: "the enemy's flash" },
+  { target: '.vitals-inner', what: "the stat box's shake" },
+  { target: '.arena-float', what: 'the floating damage number' },
 ] as const;
 
 describe('the scan finds the shipping stylesheets at all', () => {
@@ -312,6 +319,10 @@ describe('reduced motion has somewhere to bite, and bites there', () => {
     );
     expect((ALL_CSS.match(/@keyframes\s+void-/g) ?? []).length, 'no atmosphere animates')
       .toBeGreaterThan(2);
+    // PLAN.md #6: and the battle frame's three really move, or stopping them proves nothing.
+    expect(ALL_CSS, 'the enemy never flashes').toMatch(/\.arena-figure\.is-struck\s*\{[^}]*animation\s*:/);
+    expect(ALL_CSS, 'the stat box never shakes').toMatch(/\.vitals-inner\.is-shaking\s*\{[^}]*animation\s*:/);
+    expect(ALL_CSS, 'the damage number never rises').toMatch(/\.arena-float\s*\{[^}]*animation\s*:/);
   });
 
   it('the detector needs the target NAMED by the rule that carries the attribute', () => {
@@ -571,6 +582,42 @@ describe('the stage layout is one set of properties, defined in every mode', () 
     for (const property of MODE_PROPERTIES) {
       expect(block, `the stacked fallback does not define ${property}`).toContain(`${property}:`);
     }
+  });
+
+  it('the framed stage (PLAN.md #6) redeclares all six — at full width AND stacked', () => {
+    // The stage rule outranks the stacked fallback's bare `.stage-body` rule (an attribute
+    // selector is more specific), so the stage needs its OWN stacked values inside the
+    // breakpoint — or a narrow window would keep the three-column frame and scroll the page.
+    const outside = selectorsCarrying(gameCss().replace(stackedBlock(), ''), "[data-layout='stage']").filter(
+      (r) => r.selector === "[data-layout='stage'] .stage-body",
+    );
+    expect(outside.length, 'there is no stage mode rule at all').toBe(1);
+    const inside = selectorsCarrying(stackedBlock(), "[data-layout='stage']").filter(
+      (r) => r.selector === "[data-layout='stage'] .stage-body",
+    );
+    expect(inside.length, 'the stage has no stacked values inside the breakpoint').toBe(1);
+    for (const property of MODE_PROPERTIES) {
+      expect(outside[0]!.body, `the stage mode does not define ${property}`).toContain(`${property}:`);
+      expect(inside[0]!.body, `the stacked stage does not define ${property}`).toContain(`${property}:`);
+    }
+  });
+
+  it('the stage hides the HUD column and the log behind the ticker, selector-scoped', () => {
+    const css = gameCss().replace(stackedBlock(), '');
+    expect(
+      selectorsCarrying(css, "[data-layout='stage']").some(
+        (r) => r.selector === "[data-layout='stage'] #sheet" && /display\s*:\s*none/.test(r.body),
+      ),
+      'the HUD column is still drawn beside the framed stage',
+    ).toBe(true);
+    expect(
+      selectorsCarrying(css, "[data-layout='stage']").some(
+        (r) => r.selector.includes(":not([data-log='open']) .log") && /display\s*:\s*none/.test(r.body),
+      ),
+      'the full log is not closed behind the ticker',
+    ).toBe(true);
+    // ...and the frame's regions are hidden everywhere ELSE, so no other screen draws them.
+    expect(css).toMatch(/#arena,\s*#vitals\s*\{[^}]*display:\s*none/);
   });
 
   it('the stacked fallback hides the scenery, SELECTOR-SCOPED inside the breakpoint', () => {

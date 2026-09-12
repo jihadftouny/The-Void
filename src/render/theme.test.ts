@@ -45,6 +45,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applySettings, applyTheme, shouldAnimate } from './theme.ts';
+import { setLogOpen } from '../desktop/battle.ts';
 import { FLOOR_THEMES, floorTheme, themeVars } from './tokens.ts';
 import {
   DEFAULT_SETTINGS,
@@ -94,8 +95,12 @@ function attributeSelectors(): { name: string; value: string; sheet: string }[] 
  * `data-screen` comes from the pure `screenKey`; `data-layout` (added 2026-09-09 by
  * `layout-breathing-room`) from the pure `screenLayout`. Both are written by the ONE
  * `showScreen` funnel, together, which is itself pinned in `layoutSource.test.ts`.
+ *
+ * `data-log` (PLAN.md #6) is the battle frame's "the player opened the full log" flag, written
+ * on the reading column by `battle.ts`'s `setLogOpen` — checked against the stylesheet at the
+ * bottom of this file by CALLING that writer, both ends of the coupling named.
  */
-const OWNED_ELSEWHERE = new Set(['data-screen', 'data-layout']);
+const OWNED_ELSEWHERE = new Set(['data-screen', 'data-layout', 'data-log']);
 
 /** The `data-*` attributes actually on an element, as `name=value`. */
 function attributesOn(el: HTMLElement): string[] {
@@ -425,11 +430,12 @@ describe('every data-screen rule is keyed to a value screenKey can produce', () 
 
 describe('every data-layout rule is keyed to a mode screenLayout can produce', () => {
   /**
-   * The two modes, written out by hand from the design rather than imported. Importing the
+   * The three modes, written out by hand from the design rather than imported. Importing the
    * union from `settings-model.ts` would ask the module under test to agree with itself,
-   * which is the exact blindness the top of this file exists to remove.
+   * which is the exact blindness the top of this file exists to remove. `stage` is PLAN.md
+   * #6's framed battle (UI-DESIGN §1).
    */
-  const MODES = new Set(['side', 'wide']);
+  const MODES = new Set(['side', 'wide', 'stage']);
 
   it('no stylesheet is keyed to a stage layout that can never appear', () => {
     const unreachable = attributeSelectors()
@@ -448,6 +454,8 @@ describe('every data-layout rule is keyed to a mode screenLayout can produce', (
     const keyed = attributeSelectors().filter((s) => s.name === 'data-layout');
     expect(keyed.length, 'nothing selects on the stage layout at all').toBeGreaterThan(0);
     expect(keyed.map((s) => s.value), 'the document layout has no rules').toContain('wide');
+    // PLAN.md #6: and the battle frame has its own, or a fight would be drawn as the hub.
+    expect(keyed.map((s) => s.value), 'the framed stage has no rules').toContain('stage');
   });
 
   it('the renderer writes it, through the pure helper, for every mode', () => {
@@ -458,14 +466,36 @@ describe('every data-layout rule is keyed to a mode screenLayout can produce', (
     // ...and the mode the stylesheet is keyed to is one the pure function really returns.
     // Derived from the CSS side, so a `screenLayout` renamed to produce `'document'` fails
     // here rather than silently leaving every document screen in the action geometry.
-    for (const mode of ['side', 'wide']) {
-      expect(
-        [...MODES].includes(screenLayout(mode === 'wide' ? 'inventory' : 'main-menu')),
-      ).toBe(true);
+    for (const key of ['main-menu', 'inventory']) {
+      expect([...MODES].includes(screenLayout(key)), key).toBe(true);
     }
     expect(screenLayout('inventory'), 'a document screen is not in the document layout').toBe(
       'wide',
     );
     expect(screenLayout('main-menu'), 'the hub is not in the action layout').toBe('side');
+  });
+});
+
+// =========================================================================================
+// `data-log` — the battle frame's opened-log flag (PLAN.md #6). The stylesheet hides the log
+// behind the ticker unless `#column[data-log='open']`; `battle.ts`'s `setLogOpen` writes it.
+// Both ends, by calling the real writer: a writer that wrote `'opened'` would leave the log
+// closed forever with the toggle claiming otherwise.
+// =========================================================================================
+
+describe('the opened-log flag the stage selects on is the one the toggle writes', () => {
+  it('the stylesheet keys the log on `data-log=open`, and on nothing else', () => {
+    const keyed = attributeSelectors().filter((s) => s.name === 'data-log');
+    expect(keyed.length, 'nothing selects on the opened-log flag — the log could never open').toBeGreaterThan(0);
+    for (const s of keyed) expect(s.value, `${s.sheet} keys the log on '${s.value}'`).toBe('open');
+  });
+
+  it('and `setLogOpen` writes exactly those values, open and closed', () => {
+    const column = document.createElement('div');
+    const toggle = document.createElement('button');
+    setLogOpen(column, toggle, true);
+    expect(attributesOn(column)).toEqual(['data-log=open']);
+    setLogOpen(column, toggle, false);
+    expect(attributesOn(column)).toEqual(['data-log=closed']);
   });
 });

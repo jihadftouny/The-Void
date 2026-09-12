@@ -194,17 +194,36 @@
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion='full']) .void-texture,
   :root:not([data-motion='full']) .narration .beat,
-  :root:not([data-motion='full']) .void-button {
+  :root:not([data-motion='full']) .void-button,
+  :root:not([data-motion='full']) .arena-figure,
+  :root:not([data-motion='full']) .vitals-inner,
+  :root:not([data-motion='full']) .arena-float {
     animation: none;
     transition: none;
+  }
+  /* PLAN.md #6: a strike the script flagged with full motion still READS under reduced
+   * motion — as the soft tint, never a strobe (UI-DESIGN §13). The script sends the tint class
+   * itself when it knows motion is off; this is the CSS half for a flag set before it knew. */
+  :root:not([data-motion='full']) .arena-figure.is-struck,
+  :root:not([data-motion='full']) .vitals-inner.is-shaking {
+    outline: var(--void-rule-heavy) solid var(--void-harm);
+    outline-offset: var(--void-space-1);
   }
 }
 
 [data-motion='reduce'] .void-texture,
 [data-motion='reduce'] .narration .beat,
-[data-motion='reduce'] .void-button {
+[data-motion='reduce'] .void-button,
+[data-motion='reduce'] .arena-figure,
+[data-motion='reduce'] .vitals-inner,
+[data-motion='reduce'] .arena-float {
   animation: none;
   transition: none;
+}
+[data-motion='reduce'] .arena-figure.is-struck,
+[data-motion='reduce'] .vitals-inner.is-shaking {
+  outline: var(--void-rule-heavy) solid var(--void-harm);
+  outline-offset: var(--void-space-1);
 }
 
 /* ---------------------------------------------------------------------------------------
