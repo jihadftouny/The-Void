@@ -48,14 +48,31 @@
 // refusal, one Continue).
 //
 // DETERMINISM: no clock, no randomness, no network. `src/dev/exclusion.test.ts` scans this
-// directory for all three and this file must keep passing it.
+// directory for all three and this file must keep passing it. (The fade pass below is TIMED —
+// that is its whole point — so its clock lives in `scripts/layout-probe.mjs`, which drives it;
+// this file only exposes the synchronous steps.)
+//
+// ---------------------------------------------------------------------------------------
+// `floor-looks` (2026-09-12) ADDED TWO THINGS, both because floor 2 became the only LIGHT floor:
+//
+//   - THE PAINT AUDIT. `run({ ..., place, contrast, audit: true })` reads, out of the real
+//     cascade, every glyph's colour against the surface it is really drawn on, the art frames'
+//     hairlines and texture layers, and the battle floats and strike tint — so a token tuned for
+//     near-black that renders dark-on-white fails HERE, on the element, with its path.
+//   - THE FADE STEPS. `fadeFrom` / `fadeTo` re-theme floor 1 -> floor 2 through the real
+//     appliers, so the Electron half can sample the ground while the 1200 ms dissolve runs.
 
 import { applyTheme, applySettings } from '../render/theme.ts';
 import {
   DEFAULT_SETTINGS,
+  floorTagText,
   screenLayout,
+  type ContrastSetting,
+  type MotionSetting,
   type TextScale,
 } from '../render/settings-model.ts';
+import { RETHEME_FADE_MS } from '../render/tokens.ts';
+import { flatten, parseCssColor, textContrast, type Rgba } from './probeColour.ts';
 import { appendButton, appendLogLine, appendRow, picker } from '../render/components.ts';
 import { buttonModel, rowModel } from '../render/component-model.ts';
 import { dealDiscardView, dealView, hubMenu } from '../desktop/view-model.ts';
@@ -145,6 +162,52 @@ export interface ProbeReport {
   enemySlot: { inPage: number; inArena: number; inSheet: number; box: ProbeBox | null; ratio: number | null };
   ticker: { line: ProbeBox | null; toggles: number; expanded: string | null };
   tempoRows: number;
+  /**
+   * `floor-looks`: the paint audit — present ONLY on a run that asked for it (`audit: true`), so
+   * phase A's reports stay byte-identical to what they were and its 288 runs do not pay for it.
+   */
+  paint?: ProbePaint;
+}
+
+/** One colour judgement: the ratio, the element it was read on, and the two colours. */
+export interface ProbeContrast {
+  ratio: number;
+  path: string;
+  color: string;
+  background: string;
+}
+
+/** One reserved art region, as the real cascade painted it. */
+export interface ProbeFrame {
+  path: string;
+  /** The hairline border against the region's own background — the frame has to exist. */
+  border: number;
+  /** The inner atmosphere layer: really painted, at the floor's own alpha (or gone under HC). */
+  textureImage: boolean;
+  textureOpacity: number;
+  textureDisplay: string;
+}
+
+export interface ProbePaint {
+  place: number;
+  contrast: string;
+  /** `data-ground` as the appliers left it — the ground as PAINTED, not as declared. */
+  ground: string;
+  body: { background: string; color: string };
+  text: {
+    /** Text-bearing elements judged (the exempt ones are counted apart). */
+    samples: number;
+    min: ProbeContrast | null;
+    /** The lowest ratio of any body-prose (`.beat`) glyph, or null on a screen with no prose. */
+    minBeat: number | null;
+    /** Disabled controls and the decorative dice line — below AA by an existing decision. */
+    exempt: number;
+    /** Glyphs whose colours could not be parsed. Always expected empty; a non-empty list is a finding. */
+    unreadable: string[];
+  };
+  frames: ProbeFrame[];
+  /** The battle frame's floats and strike tint, read off the real figure. Null outside a fight. */
+  battle: { floats: { tone: string; color: string; ratio: number }[]; tint: string; tintRatio: number } | null;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -719,6 +782,9 @@ function reset(): void {
   // opened-log flag the ticker's toggle writes on the reading column.
   for (const id of ['arena', 'vitals']) document.getElementById(id)?.replaceChildren();
   delete el('column').dataset['log'];
+  // The floor tag: written only by an audited run (below), cleared so it never leaks into one
+  // that is not. Phase A has always measured it empty, and still does.
+  el('floor').textContent = '';
 }
 
 function focusRegion(target: Element): string {
@@ -802,6 +868,199 @@ function measure(name: string, scale: TextScale, screen: string): ProbeReport {
   };
 }
 
+// ---------------------------------------------------------------------------------------
+// THE PAINT AUDIT (`floor-looks`). Every judgement here is made on the BUILT stylesheet's
+// computed values, so a `@property` the bundler dropped, a selector that never matches, or a
+// component that took its colour from somewhere other than the floor fails here and nowhere else.
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Elements whose text is below AA BY AN EXISTING DECISION, named exhaustively and counted:
+ * disabled controls (WCAG exempts inactive UI from 1.4.3), and the combat log's dice line, which
+ * `tokens.ts` documents as "deliberately below AA — decorative only" (`--void-ink-faint`).
+ */
+const EXEMPT = '.is-disabled, :disabled, .void-log-detail';
+
+/** A readable path to an element: tag, id and up to three classes, from the nearest id down. */
+function pathOf(target: Element): string {
+  const parts: string[] = [];
+  for (let n: Element | null = target; n && n !== document.body; n = n.parentElement) {
+    const tag = n.tagName.toLowerCase();
+    if (n.id) {
+      parts.unshift(`${tag}#${n.id}`);
+      break;
+    }
+    const classes = [...n.classList].slice(0, 3).join('.');
+    parts.unshift(classes ? `${tag}.${classes}` : tag);
+  }
+  return parts.join(' > ');
+}
+
+function colour(value: string): Rgba | null {
+  return parseCssColor(value);
+}
+
+/**
+ * The opaque surface an element is REALLY drawn on: its own background, then each ancestor's,
+ * flattened onto the first opaque one. The atmosphere layer is a fixed SIBLING behind `#game`,
+ * not an ancestor, so this is the bare effective ground — the textured composite is the token
+ * gate's job (`tokens.test.ts`), which measures it at the layer's peak alpha.
+ */
+function surfaceOf(target: Element): Rgba {
+  const stack: Rgba[] = [];
+  for (let n: Element | null = target; n; n = n.parentElement) {
+    const c = colour(getComputedStyle(n).backgroundColor);
+    if (c && c.a > 0) {
+      stack.push(c);
+      if (c.a >= 1) break;
+    }
+  }
+  return flatten(stack);
+}
+
+/** The product of every opacity from the element up — a glyph at 0 is not rendered at all. */
+function effectiveOpacity(target: Element): number {
+  let opacity = 1;
+  for (let n: Element | null = target; n; n = n.parentElement) opacity *= Number(getComputedStyle(n).opacity);
+  return opacity;
+}
+
+function rgbString(c: Rgba): string {
+  return `rgb(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)})`;
+}
+
+/**
+ * Settle every animation that ENDS — the beat's 0.4 s fade-in is the one that matters, since a
+ * beat appended a moment ago is at opacity 0 and would be skipped as unrendered. The atmosphere's
+ * infinite drift is left running: it moves `background-position` and never a colour.
+ */
+function settleAnimations(): void {
+  for (const animation of document.getAnimations()) {
+    const end = animation.effect?.getComputedTiming().endTime;
+    if (typeof end === 'number' && Number.isFinite(end)) animation.finish();
+  }
+}
+
+/** Every element carrying a non-blank DIRECT text node, in document order. */
+function textElements(): Element[] {
+  const found = new Set<Element>();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if ((node.textContent ?? '').trim() && node.parentElement) found.add(node.parentElement);
+  }
+  return [...found];
+}
+
+function auditText(): ProbePaint['text'] {
+  let samples = 0;
+  let exempt = 0;
+  let min: ProbeContrast | null = null;
+  let minBeat: number | null = null;
+  const unreadable: string[] = [];
+  for (const target of textElements()) {
+    const style = getComputedStyle(target);
+    // RENDERED, by the browser's own definition: not `display: none`, not `visibility: hidden`,
+    // not at opacity 0, and not inside a subtree the browser skips — which is how Chromium hides
+    // the content of a CLOSED `<details>` (`content-visibility`). `getClientRects()` alone still
+    // reports boxes for that content: measured, it counted the combat log's twenty closed dice
+    // lines as on-screen text, and the exemption bound in the test caught it.
+    if (!target.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })) continue;
+    const opacity = effectiveOpacity(target);
+    if (opacity <= 0) continue;
+    if (target.closest(EXEMPT)) {
+      exempt += 1;
+      continue;
+    }
+    const ink = colour(style.color);
+    if (!ink) {
+      unreadable.push(`${pathOf(target)} color=${style.color}`);
+      continue;
+    }
+    const surface = surfaceOf(target);
+    const ratio = textContrast({ ...ink, a: ink.a * opacity }, surface);
+    samples += 1;
+    if (!min || ratio < min.ratio) {
+      min = { ratio, path: pathOf(target), color: style.color, background: rgbString(surface) };
+    }
+    if (target.closest('.beat')) minBeat = minBeat === null ? ratio : Math.min(minBeat, ratio);
+  }
+  return { samples, min, minBeat, exempt, unreadable };
+}
+
+function auditFrame(slot: HTMLElement): ProbeFrame {
+  const style = getComputedStyle(slot);
+  const rule = colour(style.borderTopColor);
+  const texture = slot.querySelector('.void-texture');
+  const layer = texture ? getComputedStyle(texture) : null;
+  return {
+    path: pathOf(slot),
+    border: rule ? textContrast(rule, surfaceOf(slot)) : 0,
+    textureImage: layer !== null && layer.backgroundImage !== 'none',
+    textureOpacity: layer ? Number(layer.opacity) : -1,
+    textureDisplay: layer ? layer.display : 'missing',
+  };
+}
+
+/**
+ * The floats and the strike tint, read through the BUILT stylesheet on the figure the real
+ * `buildArena` made. A float is a scratch `span` carrying exactly the classes `battle.ts`'s
+ * `showFloat` writes (`arena-float arena-float-<tone>`; `theme.test.ts` couples those names to
+ * the stylesheet both ways) — appended, read, removed. The tint is the real `is-tinted` class on
+ * the real figure, added and taken off again. Judged against the enemy region's panel (what a
+ * float is drawn over) and, for the tint's outline, the ground around the figure as well.
+ */
+function auditBattle(): ProbePaint['battle'] {
+  const figure = document.querySelector<HTMLElement>('#arena .arena-figure');
+  if (!figure) return null;
+  const slot = figure.querySelector('.void-art-slot');
+  const panel = surfaceOf(slot ?? figure);
+  const floats = (['harm', 'heal', 'plain'] as const).map((tone) => {
+    const float = document.createElement('span');
+    float.className = `arena-float arena-float-${tone}`;
+    float.setAttribute('aria-hidden', 'true');
+    float.textContent = '9';
+    figure.appendChild(float);
+    const value = getComputedStyle(float).color;
+    float.remove();
+    const ink = colour(value);
+    return { tone, color: value, ratio: ink ? textContrast(ink, panel) : 0 };
+  });
+  figure.classList.add('is-tinted');
+  const tint = getComputedStyle(figure).outlineColor;
+  figure.classList.remove('is-tinted');
+  const line = colour(tint);
+  const around = surfaceOf(figure.parentElement ?? figure);
+  const tintRatio = line ? Math.min(textContrast(line, panel), textContrast(line, around)) : 0;
+  return { floats, tint, tintRatio };
+}
+
+function paint(place: number, contrast: string): ProbePaint {
+  settleAnimations();
+  const body = getComputedStyle(document.body);
+  const text = auditText();
+  const frames = [...document.querySelectorAll<HTMLElement>('.void-art-slot')].map(auditFrame);
+  return {
+    place,
+    contrast,
+    ground: document.documentElement.dataset['ground'] ?? '',
+    body: { background: body.backgroundColor, color: body.color },
+    text,
+    frames,
+    battle: auditBattle(),
+  };
+}
+
+/** What one probe run is asked to render. */
+export interface RunOptions {
+  scenario: string;
+  scale: TextScale;
+  /** The engine `place` (0..4) to paint. Default 0 — phase A has always measured floor 1. */
+  place?: number;
+  contrast?: ContrastSetting;
+  /** Run the paint audit and attach it as `paint`. */
+  audit?: boolean;
+}
+
 /**
  * Render one scenario at one text size and measure it.
  *
@@ -810,26 +1069,107 @@ function measure(name: string, scale: TextScale, screen: string): ProbeReport {
  * page has a size — every token read resolves to nothing and the whole measurement would be
  * of an unstyled document.
  */
-export function run(options: { scenario: string; scale: TextScale }): ProbeReport {
+export function run(options: RunOptions): ProbeReport {
   const scenario = SCENARIOS[options.scenario];
   if (!scenario) throw new Error(`layout probe: no scenario '${options.scenario}'`);
+  const place = options.place ?? 0;
+  const contrast = options.contrast ?? 'normal';
+  const root = document.documentElement;
 
-  applyTheme(document.documentElement, 0);
-  applySettings(document.documentElement, { ...DEFAULT_SETTINGS, textScale: options.scale }, 0);
+  // ⚠ THE ONE PLACE THE RE-THEME FADE IS SWITCHED OFF — here, in the probe, and nowhere in the
+  // game. `tokens.css` dissolves every colour token over 1200 ms whenever the floor changes; a
+  // measurement taken mid-dissolve would judge a colour halfway between two floors. An inline
+  // `transition: none` on the root beats the stylesheet's rule, so every run reads SETTLED
+  // colours. The fade pass (`fadeFrom`) switches it back on, and `fadeEnd` puts it back.
+  root.style.transition = 'none';
+  applyTheme(root, place);
+  applySettings(root, { ...DEFAULT_SETTINGS, textScale: options.scale, contrast }, place);
 
   reset();
   document.body.dataset['screen'] = scenario.screen;
   document.body.dataset['layout'] = screenLayout(scenario.screen);
   el('title').style.display = scenario.screen === 'title' ? 'block' : 'none';
+  // The floor tag, as `retheme()` writes it — the accent on the header band, on every screen.
+  // Only on an audited run: phase A has always measured the band without it.
+  if (options.audit === true) el('floor').textContent = floorTagText(place);
   scenario.build();
 
-  return measure(options.scenario, options.scale, scenario.screen);
+  const report = measure(options.scenario, options.scale, scenario.screen);
+  return options.audit === true ? { ...report, paint: paint(place, contrast) } : report;
+}
+
+// ---------------------------------------------------------------------------------------
+// THE FADE STEPS (`floor-looks`). Synchronous, so the Electron half owns the clock: it calls
+// `fadeFrom`, then `fadeTo`, then samples `bodyBackground()` on its own timers.
+// ---------------------------------------------------------------------------------------
+
+export interface FadeOptions {
+  motion: MotionSetting;
+  contrast: ContrastSetting;
+}
+
+function paintFloor(place: number, options: FadeOptions): void {
+  // Theme, THEN settings, in one synchronous block — exactly `retheme()`. Under high contrast the
+  // theme writes floor 2's white and the settings overwrite it with black before any style is
+  // computed; the fade pass proves in real Chromium that this never reaches the screen.
+  const root = document.documentElement;
+  applyTheme(root, place);
+  applySettings(root, { ...DEFAULT_SETTINGS, motion: options.motion, contrast: options.contrast }, place);
+}
+
+/** The ground the body is painted with right now, as Chromium computes it. Flushes style. */
+export function bodyBackground(): string {
+  return getComputedStyle(document.body).backgroundColor;
+}
+
+/**
+ * Floor 1, painted and SETTLED with the fade still off — then the fade switched back on. The
+ * order is load-bearing: re-enabling the transition in the same style change as a colour change
+ * would START a dissolve from wherever the previous run left the page. Returns the settled ground.
+ */
+export function fadeFrom(options: FadeOptions): string {
+  const root = document.documentElement;
+  root.style.transition = 'none';
+  paintFloor(0, options);
+  const settled = bodyBackground();
+  root.style.removeProperty('transition');
+  bodyBackground(); // a style change with no colour change: nothing starts
+  return settled;
+}
+
+/** Re-theme to floor 2 through the real appliers — the dissolve starts here — and read t = 0. */
+export function fadeTo(options: FadeOptions): string {
+  paintFloor(1, options);
+  return bodyBackground();
+}
+
+/** Put the probe's override back, so anything measured afterwards reads settled colours. */
+export function fadeEnd(): void {
+  document.documentElement.style.transition = 'none';
 }
 
 declare global {
   interface Window {
-    __voidLayoutProbe: { run: typeof run; scenarios: readonly string[] };
+    __voidLayoutProbe: {
+      run: typeof run;
+      scenarios: readonly string[];
+      fadeMs: number;
+      fadeFrom: typeof fadeFrom;
+      fadeTo: typeof fadeTo;
+      bodyBackground: typeof bodyBackground;
+      fadeEnd: typeof fadeEnd;
+    };
   }
 }
 
-window.__voidLayoutProbe = { run, scenarios: SCENARIO_NAMES };
+window.__voidLayoutProbe = {
+  run,
+  scenarios: SCENARIO_NAMES,
+  // How long the dissolve is configured to take — the token the stylesheet reads — so the
+  // Electron half samples the real one. The test holds it to the plan's 1200 independently.
+  fadeMs: RETHEME_FADE_MS,
+  fadeFrom,
+  fadeTo,
+  bodyBackground,
+  fadeEnd,
+};

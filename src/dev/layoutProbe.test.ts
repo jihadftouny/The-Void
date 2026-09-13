@@ -40,8 +40,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
-import { TYPE } from '../render/tokens.ts';
-import { TEXT_SCALE_TABLE } from '../render/settings-model.ts';
+import { HIGH_CONTRAST, TYPE, floorTheme, hexToRgb, relativeLuminance, themeVars } from '../render/tokens.ts';
+import { DEFAULT_SETTINGS, TEXT_SCALE_TABLE, settingsVars } from '../render/settings-model.ts';
 import { BEAT_HOLD_MS, BEAT_MS, MAX_ROUND_MS, MIN_SPACING_MS } from '../render/beat-model.ts';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -285,6 +285,39 @@ interface Report {
   ticker: { line: Box | null; toggles: number; expanded: string | null };
   /** The tempo rows the frame rendered (the reserved #1.6 slot). */
   tempoRows: number;
+  /** `floor-looks`: the in-page paint audit — only on the paint pass's runs. */
+  paint?: Paint;
+}
+/** One colour judgement made in the real cascade. */
+interface Judged {
+  ratio: number;
+  path: string;
+  color: string;
+  background: string;
+}
+/** The paint audit of one run (`src/dev/layoutProbe.ts`'s `ProbePaint`). */
+interface Paint {
+  place: number;
+  contrast: string;
+  ground: string;
+  body: { background: string; color: string };
+  text: { samples: number; min: Judged | null; minBeat: number | null; exempt: number; unreadable: string[] };
+  frames: { path: string; border: number; textureImage: boolean; textureOpacity: number; textureDisplay: string }[];
+  battle: { floats: { tone: string; color: string; ratio: number }[]; tint: string; tintRatio: number } | null;
+}
+/** One timed floor-1 -> floor-2 re-theme. */
+interface FadeRun {
+  options: { motion: string; contrast: string };
+  fadeMs: number;
+  /** The settled floor-1 ground, read before the fade began. */
+  from: string;
+  /** The body's ground at t = 0, half-way, and after the fade — each with the time it was really taken. */
+  samples: {
+    at: number;
+    background: string;
+    /** The ground's own transition as Chromium runs it: whether it exists, has started, how far in. */
+    phase: { exists: boolean; pending: boolean; startLag: number | null; progress: number | null };
+  }[];
 }
 interface SizeGroup {
   requested: { width: number; height: number };
@@ -335,6 +368,10 @@ interface ProbeResult {
   chrome: string;
   electron: string;
   phaseA: SizeGroup[];
+  /** `floor-looks`: every scenario on every floor (and floor 2 under high contrast), audited. */
+  paint: (Report & { paint: Paint })[];
+  /** `floor-looks`: the timed floor-1 -> floor-2 re-theme, three ways. */
+  fade: FadeRun[];
   phaseC: { steps: WalkStep[]; fontLoaded: boolean; fontCount: number; logs: LogEntry[] };
   minWindow: {
     options: Record<string, unknown>;
@@ -2112,5 +2149,260 @@ describe('the renderer records the layout it produced', () => {
       /layoutWarnings\s*\(/,
     );
     expect(source, 'a layout warning would never be logged').toMatch(/log\.warn\('render'/);
+  });
+});
+
+// =========================================================================================
+// 9 — `floor-looks` (2026-09-12): THE WHITE-OUT, AND EVERY SCREEN ON IT.
+//
+// Floor 2 became the game's only LIGHT floor (the author's decision, `ART-BIBLE.md` §4, revised
+// 2026-09-12). Two things about that can only be seen in the real page, in the real Chromium:
+//
+//   1. THE FADE. Walking in from the dark Undercity must be a 1200 ms dissolve, never a one-frame
+//      snap from near-black to white — the harm "blinding" names, for exactly the players the
+//      reduced-motion setting exists for. The mechanism is registered colour tokens transitioned
+//      on `:root`; if the bundler dropped an `@property`, or a custom property silently refused to
+//      interpolate, the page would snap and every source scan would still pass. So the ground is
+//      SAMPLED while the dissolve runs: dark at first, in between at the midpoint, white at the end.
+//   2. THE PAINT. Every token that was tuned for near-black is a chance to render dark-on-white.
+//      The audit reads every glyph against the surface the real cascade put under it, on all five
+//      floors and on floor 2 under high contrast.
+//
+// Expected colours are the TOKENS, converted independently (`hexToRgb`) — never read off a run.
+// =========================================================================================
+
+/** The dissolve the plan designed, in ms. `tokens.test.ts` pins `RETHEME_FADE_MS` to this number. */
+const FADE_MS = 1200;
+
+/** A token hex as Chromium serialises an opaque computed colour. */
+function rgbOf(hex: string): string {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** A computed `rgb(r, g, b)` back to a hex, so the anchored WCAG luminance can be taken of it. */
+function hexOf(css: string): string {
+  const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(css);
+  if (!m) throw new Error(`not a computed rgb colour: ${css}`);
+  return `#${[m[1], m[2], m[3]].map((c) => Number(c).toString(16).padStart(2, '0')).join('')}`;
+}
+
+type Sample = FadeRun['samples'][number];
+
+describe('the re-theme into floor 2 FADES — sampled in real Chromium while it runs (AC-12)', () => {
+  const FLOOR_1 = floorTheme(0).bg; // the Undercity's near-black
+  const FLOOR_2 = floorTheme(1).bg; // the Entrance to the Void's white
+  const fade = (motion: string, contrast: string): FadeRun => {
+    const found = RESULT.fade.find((f) => f.options.motion === motion && f.options.contrast === contrast);
+    if (!found) throw new Error(`no ${motion}/${contrast} fade was measured`);
+    return found;
+  };
+  const samples = (f: FadeRun): [Sample, Sample, Sample] => {
+    expect(f.samples, 'a fade was not sampled three times').toHaveLength(3);
+    return f.samples as [Sample, Sample, Sample];
+  };
+
+  it('the pass ran all three fades, and the midpoint really was taken mid-fade', () => {
+    expect(RESULT.fade, 'a fade run is missing').toHaveLength(3);
+    for (const f of RESULT.fade) {
+      expect(f.fadeMs, 'the driver samples a different dissolve than the one designed').toBe(FADE_MS);
+      const [start, mid, end] = samples(f);
+      expect(start.at).toBe(0);
+      // A starved timer would take the "midpoint" after the fade had ended and read the end colour
+      // — the in-between check below would then judge nothing. So the real times are asserted.
+      expect(mid.at, 'the midpoint sample came early').toBeGreaterThanOrEqual(FADE_MS / 2 - 1);
+      expect(mid.at, `the midpoint sample was taken at ${mid.at.toFixed(0)} ms — too late to be mid-fade`).toBeLessThan(
+        FADE_MS * 0.85,
+      );
+      expect(end.at, 'the last sample was taken before the fade could have ended').toBeGreaterThanOrEqual(FADE_MS + 100);
+    }
+  });
+
+  for (const motion of ['full', 'reduce'] as const) {
+    const label =
+      motion === 'full' ? 'normal motion' : 'REDUCED motion (a dissolve moves nothing — it is the anti-flash)';
+    it(`${label}: dark at first, in between at the midpoint, white at the end`, () => {
+      const f = fade(motion, 'normal');
+      const [start, mid, end] = samples(f);
+      expect(f.from, 'floor 1 was not what the page showed before the fade').toBe(rgbOf(FLOOR_1));
+      expect(start.background, 'the ground SNAPPED: at t = 0 it is already not floor 1').toBe(rgbOf(FLOOR_1));
+      // In between, by luminance, and by a real margin — 10% of the span from EITHER end, so a
+      // fade that reached 99% of white in the first frame and idled is not "in between".
+      const l1 = relativeLuminance(FLOOR_1);
+      const l2 = relativeLuminance(FLOOR_2);
+      const lm = relativeLuminance(hexOf(mid.background));
+      const margin = 0.1 * (l2 - l1);
+      expect(lm, `half-way through, the ground is ${mid.background} — still the dark floor`).toBeGreaterThan(l1 + margin);
+      expect(lm, `half-way through, the ground is ${mid.background} — already the white`).toBeLessThan(l2 - margin);
+      expect(end.background, 'the dissolve never arrived at floor 2').toBe(rgbOf(FLOOR_2));
+    });
+  }
+
+  it('the dissolve STARTS at once — not a quarter of the way through its own duration', () => {
+    // A transition begins on the first frame after it is created. The fade page is an offscreen
+    // window rendering at 60 Hz, as a player's window does, so the ground's transition must exist
+    // and have started by the midpoint, within a quarter of the fade. (In a never-shown window it
+    // sat pending for 611 ms — measured, and the reason the fade page is offscreen.)
+    for (const motion of ['full', 'reduce'] as const) {
+      const [start, mid] = samples(fade(motion, 'normal'));
+      expect(start.phase.exists, `${motion}: no transition on the ground at all — it snapped`).toBe(true);
+      expect(mid.phase.pending, `${motion}: the dissolve had still not started at the midpoint`).toBe(false);
+      expect(mid.phase.startLag, `${motion}: the dissolve never started`).not.toBeNull();
+      expect(mid.phase.startLag!, `${motion}: the dissolve started ${mid.phase.startLag} ms late`).toBeLessThan(FADE_MS / 4);
+    }
+  });
+
+  it('HIGH CONTRAST: black at every sample — no white-out ever reaches the screen', () => {
+    const f = fade('full', 'high');
+    const black = rgbOf(HIGH_CONTRAST.bg);
+    expect(black).toBe('rgb(0, 0, 0)');
+    expect(f.from).toBe(black);
+    for (const s of samples(f)) {
+      expect(s.background, `at ${s.at.toFixed(0)} ms the ground was ${s.background}`).toBe(black);
+      // Not merely black when sampled: the ground never had anything to dissolve. The theme wrote
+      // floor 2's white and the settings overwrote it with black before any style was computed.
+      expect(s.phase.exists, `at ${s.at.toFixed(0)} ms the ground was dissolving under high contrast`).toBe(false);
+    }
+  });
+});
+
+describe('every screen is readable on every floor, in the real cascade (AC-13, AC-14)', () => {
+  /** The paint pass's floors, transcribed from the plan — five floors, then floor 2 in high contrast. */
+  const FLOORS = [
+    { place: 0, contrast: 'normal' },
+    { place: 1, contrast: 'normal' },
+    { place: 2, contrast: 'normal' },
+    { place: 3, contrast: 'normal' },
+    { place: 4, contrast: 'normal' },
+    { place: 1, contrast: 'high' },
+  ] as const;
+  /** Floor 2, the Entrance to the Void — the ONE light floor. */
+  const LIGHT_PLACE = 1;
+  /** WCAG 2.x AA for text; AAA for body prose, the standard the palette holds itself to. */
+  const AA = 4.5;
+  const AAA = 7;
+  const where = (r: { scenario: string; paint: Paint }): string =>
+    `${r.scenario} on place ${r.paint.place} (${r.paint.contrast} contrast)`;
+  const audited = (scenario: string, floor: (typeof FLOORS)[number]): Report & { paint: Paint } => {
+    const found = RESULT.paint.find(
+      (r) => r.scenario === scenario && r.paint.place === floor.place && r.paint.contrast === floor.contrast,
+    );
+    if (!found) throw new Error(`${scenario} was never audited on place ${floor.place}/${floor.contrast}`);
+    return found;
+  };
+  /** The tokens as the two appliers leave them on the root: the theme, then the settings over it. */
+  const painted = (place: number, contrast: string): Record<string, string> => ({
+    ...themeVars(place),
+    ...settingsVars({ ...DEFAULT_SETTINGS, contrast: contrast === 'high' ? 'high' : 'normal' }, place),
+  });
+
+  it('the pass audited every scenario on every floor (a dropped pass is a failure)', () => {
+    expect(RESULT.paint.length).toBe(SCENARIOS.length * FLOORS.length);
+    for (const scenario of SCENARIOS) for (const floor of FLOORS) expect(audited(scenario, floor).paint).toBeDefined();
+  });
+
+  it('the body is painted with the floor’s own ground and ink, and data-ground says which it is', () => {
+    for (const r of RESULT.paint) {
+      const { place, contrast } = r.paint;
+      const high = contrast === 'high';
+      expect(r.paint.body.background, where(r)).toBe(rgbOf(high ? HIGH_CONTRAST.bg : floorTheme(place).bg));
+      expect(r.paint.body.color, where(r)).toBe(rgbOf(high ? HIGH_CONTRAST.ink : floorTheme(place).ink));
+      // The PAINTED ground: light on floor 2 only, and dark again under high contrast.
+      expect(r.paint.ground, where(r)).toBe(place === LIGHT_PLACE && !high ? 'light' : 'dark');
+    }
+  });
+
+  it('every glyph clears AA against the surface it is really drawn on, and body prose clears AAA', () => {
+    const failures: string[] = [];
+    for (const r of RESULT.paint) {
+      expect(r.paint.text.unreadable, `${where(r)}: a colour the audit could not read`).toEqual([]);
+      const min = r.paint.text.min;
+      if (!min || min.ratio < AA) {
+        failures.push(
+          min
+            ? `${where(r)}: ${min.ratio.toFixed(2)}:1 — ${min.path} (${min.color} on ${min.background})`
+            : `${where(r)}: no glyph judged at all`,
+        );
+      }
+      if (EXPECTED[r.scenario]!.prose) {
+        const beat = r.paint.text.minBeat;
+        if (beat === null || beat < AAA) failures.push(`${where(r)}: the prose is at ${beat?.toFixed(2) ?? 'nothing'}:1`);
+      } else {
+        expect(r.paint.text.minBeat, `${where(r)} judged prose on a screen that has none`).toBeNull();
+      }
+    }
+    expect(failures, 'text the player cannot read').toEqual([]);
+  });
+
+  it('...and the audit really judged the page: every control, the prose and the floor tag (non-vacuity)', () => {
+    for (const r of RESULT.paint) {
+      // Every laid-out control carries its label as text; so does the floor tag; so does the beat.
+      // Judged or exempt, each must have been SEEN — an audit that skipped them would pass on nothing.
+      const controls = r.buttons.filter((b) => b.width > 0 && b.height > 0).length;
+      const seen = r.paint.text.samples + r.paint.text.exempt;
+      const least = controls + 1 + (EXPECTED[r.scenario]!.prose ? 1 : 0);
+      expect(seen, `${where(r)}: ${seen} glyph-bearing elements, fewer than its controls, tag and prose`).toBeGreaterThanOrEqual(
+        least,
+      );
+      // THE EXEMPTION IS BOUNDED, not merely named: it holds exactly the laid-out DISABLED
+      // controls (the combat log's dice lines sit closed in every scenario). A widened list —
+      // exempting every button, say — would hide the worst glyph on every floor and pass above.
+      const disabled = r.buttons.filter((b, i) => r.buttonDisabled[i] && b.width > 0 && b.height > 0).length;
+      expect(r.paint.text.exempt, `${where(r)}: the exemption holds more than the disabled controls`).toBe(disabled);
+    }
+    for (const floor of FLOORS) {
+      // The hub: sixty log lines, five menu rows and the beat — 66 at the very least.
+      expect(audited('hub', floor).paint.text.samples).toBeGreaterThanOrEqual(60 + 5 + 1);
+      // The exemption is bounded AND exercised: the boss fight's greyed Run is a member of it.
+      expect(audited('battle-boss', floor).paint.text.exempt).toBeGreaterThan(0);
+    }
+  });
+
+  it('every art frame has a hairline and carries the floor’s own atmosphere at the floor’s own alpha (AC-14)', () => {
+    for (const r of RESULT.paint) {
+      const expected = EXPECTED[r.scenario]!;
+      const framed = expected.scenery || expected.mode === 'stage';
+      expect(r.paint.frames.length > 0, `${where(r)}: ${r.paint.frames.length} art frames`).toBe(framed);
+      for (const frame of r.paint.frames) {
+        // 1.1:1 — the hairline EXISTS (the plan's figures: 1.1-1.3 on the dark floors, 1.36 on
+        // floor 2). It is a rule, not a black line, which is why it is not held to a text ratio.
+        expect(frame.border, `${where(r)}: ${frame.path} has no visible edge`).toBeGreaterThanOrEqual(1.1);
+        expect(frame.textureImage, `${where(r)}: ${frame.path}'s atmosphere paints nothing`).toBe(true);
+        if (r.paint.contrast === 'high') {
+          expect(frame.textureDisplay, `${where(r)}: high contrast left the atmosphere in the frame`).toBe('none');
+          expect(frame.textureOpacity).toBe(0);
+        } else {
+          expect(frame.textureDisplay, where(r)).not.toBe('none');
+          expect(frame.textureOpacity, `${where(r)}: the frame's atmosphere is not at the floor's alpha`).toBeCloseTo(
+            floorTheme(r.paint.place).texture.opacity,
+            5,
+          );
+        }
+      }
+    }
+  });
+
+  it('on the battle stage the floats and the strike tint are the floor’s own role colours, readable on its panel (AC-14)', () => {
+    for (const r of RESULT.paint) {
+      if (EXPECTED[r.scenario]!.mode !== 'stage') {
+        expect(r.paint.battle, `${where(r)} read a battle frame outside a fight`).toBeNull();
+        continue;
+      }
+      const battle = r.paint.battle;
+      expect(battle, `${where(r)}: no battle frame to read`).not.toBeNull();
+      const vars = painted(r.paint.place, r.paint.contrast);
+      const want: Record<string, string | undefined> = {
+        harm: vars['--void-harm'],
+        heal: vars['--void-heal'],
+        plain: vars['--void-ink'],
+      };
+      expect(battle!.floats.map((f) => f.tone)).toEqual(['harm', 'heal', 'plain']);
+      for (const f of battle!.floats) {
+        expect(f.color, `${where(r)}: the ${f.tone} float is not the floor's own colour`).toBe(rgbOf(want[f.tone]!));
+        expect(f.ratio, `${where(r)}: the ${f.tone} float is ${f.ratio.toFixed(2)}:1 on the arena panel`).toBeGreaterThanOrEqual(AA);
+      }
+      expect(battle!.tint, `${where(r)}: the reduced-motion strike tint is not the floor's harm`).toBe(rgbOf(vars['--void-harm']!));
+      expect(battle!.tintRatio, `${where(r)}: the strike tint is ${battle!.tintRatio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+    }
   });
 });

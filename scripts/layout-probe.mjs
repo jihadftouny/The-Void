@@ -29,6 +29,10 @@
 //      three quarters of a second, because nothing is asking the compositor for one. Layout
 //      is computed on demand when geometry is read, so a forced `getBoundingClientRect()` is
 //      both exact and instant — no measurement below depends on anything being painted.
+//   5. (`floor-looks`, 2026-09-12) THE ONE THING THAT DOES DEPEND ON FRAMES is the re-theme
+//      dissolve: a CSS transition does not start until a frame is produced, so the fade pass
+//      runs in an OFFSCREEN window rendering at 60 Hz — the cadence of a player's window —
+//      while everything else keeps the never-shown windows above. See `fadePass`.
 // ---------------------------------------------------------------------------------------
 
 import { app, BrowserWindow, ipcMain } from 'electron';
@@ -214,8 +218,146 @@ async function phaseA() {
       reports,
     });
   }
+
+  const paint = await paintPass(win, scenarios);
   win.destroy();
-  return out;
+  const fade = await fadePass();
+  return { groups: out, paint, fade };
+}
+
+/**
+ * THE PAINT PASS (`floor-looks`) — every scenario on every floor, and floor 2 again under high
+ * contrast, at the size the game opens at and the default text size. Colour does not depend on
+ * the window size, so one size is enough; the floors are what vary. Each run carries the in-page
+ * paint audit (`paint`), which reads every glyph against the surface the real cascade put under it.
+ */
+const PAINT_FLOORS = [
+  { place: 0, contrast: 'normal' },
+  { place: 1, contrast: 'normal' },
+  { place: 2, contrast: 'normal' },
+  { place: 3, contrast: 'normal' },
+  { place: 4, contrast: 'normal' },
+  { place: 1, contrast: 'high' },
+];
+
+async function paintPass(win, scenarios) {
+  await resize(win, 1100, 820);
+  const reports = [];
+  for (const scenario of scenarios) {
+    for (const { place, contrast } of PAINT_FLOORS) {
+      reports.push(
+        await win.webContents.executeJavaScript(
+          `window.__voidLayoutProbe.run(${JSON.stringify({ scenario, scale: 'normal', place, contrast, audit: true })})`,
+        ),
+      );
+    }
+  }
+  return reports;
+}
+
+/**
+ * THE FADE PASS (`floor-looks`) — floor 1 to floor 2, the white-out, sampled while it happens.
+ *
+ * The page applies floor 2 through the real appliers and reads the body's ground AT ONCE (t = 0),
+ * then again half-way through the dissolve and once it should be over. Judged in player terms by
+ * the test: dark at first, in between at the midpoint, white at the end — under normal motion AND
+ * under reduced motion (a dissolve moves nothing; it is what removes the one-frame white-out),
+ * and black at every sample under high contrast.
+ *
+ * THE CLOCK LIVES HERE, not in the driver: `exclusion.test.ts` keeps `src/dev` free of clocks, and
+ * a fade cannot be measured without one. Each sample carries the time it was really taken, so a
+ * starved timer is visible in the result rather than silently moving the goalposts — and the state
+ * of the dissolve itself (`phase`: whether the transition on `--void-bg` exists, has started, and
+ * how far in it is), so a late start is visible too.
+ *
+ * ⚠ IT RUNS IN AN OFFSCREEN WINDOW, and a measurement is why. A CSS transition does not START
+ * until the first frame after it is created, and a window that is never shown produces a frame
+ * about every 0.75 s (see the header). Measured in the phase-A window: the dissolve sat `pending`,
+ * start time null, for the first 611 ms, so the "midpoint" sample read floor 1's black while the
+ * interpolation itself was fine (it was caught at rgb(48, 52, 51) and rgb(174, 176, 179) on other
+ * samples). A player's window is shown and produces a frame every ~17 ms. Electron's OFFSCREEN
+ * rendering produces frames at a real 60 Hz without the window ever appearing on screen, so the
+ * dissolve is sampled on the cadence a player's window gives it — and nothing pops up on the
+ * machine running the tests.
+ */
+const FADE_RUNS = [
+  { motion: 'full', contrast: 'normal' },
+  { motion: 'reduce', contrast: 'normal' },
+  { motion: 'full', contrast: 'high' },
+];
+
+async function fadePass() {
+  const win = watch(
+    new BrowserWindow({
+      show: false,
+      useContentSize: true,
+      width: 1100,
+      height: 820,
+      webPreferences: { offscreen: true, contextIsolation: true, sandbox: false, backgroundThrottling: false },
+    }),
+  );
+  win.webContents.setFrameRate(60);
+  await win.loadFile(path.join(DIST, 'probe.html'));
+  const ready = await win.webContents.executeJavaScript('typeof window.__voidLayoutProbe === "object"');
+  if (!ready) fail('the probe driver did not install itself on the fade page');
+  // A real screen under the dissolve — the hub, with its prose, log, menu and scenery frame — so
+  // every frame of the fade restyles what a player's descent really restyles.
+  await win.webContents.executeJavaScript(`window.__voidLayoutProbe.run(${JSON.stringify({ scenario: 'hub', scale: 'normal' })})`);
+
+  // A DEADLINE ON EACH FADE, kept by the MAIN process. One fade is ~1.35 s of page timers; a page
+  // that stopped running them (a window the OS stopped scheduling) would otherwise hold the whole
+  // probe open until the test's 180 s ceiling — or indefinitely when run by hand. Main-process
+  // timers are not the page's, so this fires even when the page's never do.
+  const FADE_DEADLINE_MS = 15_000;
+  const withDeadline = (promise, options) =>
+    Promise.race([
+      promise,
+      new Promise((_resolve, reject) =>
+        setTimeout(
+          () => reject(new Error(`the ${JSON.stringify(options)} fade did not finish within ${FADE_DEADLINE_MS} ms`)),
+          FADE_DEADLINE_MS,
+        ),
+      ),
+    ]);
+
+  const runs = [];
+  for (const options of FADE_RUNS) {
+    runs.push(
+      await withDeadline(win.webContents.executeJavaScript(
+        `new Promise((resolve) => {
+           const probe = window.__voidLayoutProbe;
+           const options = ${JSON.stringify(options)};
+           const from = probe.fadeFrom(options);
+           const start = performance.now();
+           const origin = document.timeline.currentTime;
+           // The dissolve of the ground itself, as Chromium runs it. Diagnostic: the test judges
+           // the COLOUR; this says why, if the colour is wrong.
+           const phase = () => {
+             const fade = document.getAnimations().find((a) => a.transitionProperty === '--void-bg');
+             if (!fade) return { exists: false, pending: false, startLag: null, progress: null };
+             return {
+               exists: true,
+               pending: fade.pending,
+               startLag: fade.startTime === null ? null : fade.startTime - origin,
+               progress: fade.currentTime,
+             };
+           };
+           const samples = [{ at: 0, background: probe.fadeTo(options), phase: phase() }];
+           const take = () => samples.push({ at: performance.now() - start, background: probe.bodyBackground(), phase: phase() });
+           setTimeout(() => {
+             take();
+             setTimeout(() => {
+               take();
+               probe.fadeEnd();
+               resolve({ options, fadeMs: probe.fadeMs, from, samples });
+             }, Math.max(0, probe.fadeMs + 150 - (performance.now() - start)));
+           }, probe.fadeMs / 2);
+         })`,
+      ), options).catch((err) => fail(String(err && err.message ? err.message : err))),
+    );
+  }
+  win.destroy();
+  return runs;
 }
 
 /**
@@ -300,10 +442,13 @@ async function phaseC() {
 
 app.whenReady().then(async () => {
   try {
+    const a = await phaseA();
     const result = {
       chrome: process.versions.chrome,
       electron: process.versions.electron,
-      phaseA: await phaseA(),
+      phaseA: a.groups,
+      paint: a.paint,
+      fade: a.fade,
       minWindow: phaseB(),
       phaseC: await phaseC(),
     };
