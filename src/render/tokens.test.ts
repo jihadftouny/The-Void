@@ -7,9 +7,11 @@ import {
   FLOOR_THEMES,
   FLOOR_SCOPED_VARS,
   HIGH_CONTRAST,
-  ENTRANCE_ALTERNATIVE_WHITE,
+  RETHEME_FADE_MS,
   SPACE,
   TYPE,
+  TRACK,
+  RULE,
   FONT_MONO,
   floorTheme,
   themeVars,
@@ -20,6 +22,7 @@ import {
   compositeGround,
   primaryFontFamily,
 } from './tokens.ts';
+import { DEFAULT_SETTINGS, settingsVars } from './settings-model.ts';
 
 // Ordering of this file matters, and is deliberate:
 //   1. Anchor the contrast MATH against values derived by hand from the WCAG formula.
@@ -93,14 +96,33 @@ describe('WCAG luminance and contrast — anchored to hand-derived values', () =
 });
 
 describe('the shipped palette clears its contrast budget', () => {
-  it('every floor accent is legible on the background (>= 4.5:1)', () => {
-    for (const floor of FLOOR_THEMES) {
+  // ⚠ RE-SCOPED 2026-09-12 (`floor-looks`). This gate used to hold EVERY floor's accent to 4.5:1
+  // against `PALETTE.bg`, the near-black BOOT ground, which stood in for "a near-black ground"
+  // while all five floors were dark. Floor 2 is now LIGHT and its accent is a deep red that
+  // measures 2.11:1 on that black — correctly, because it is never painted there: the boot
+  // ground is only visible before the first `retheme()`, which always paints floor 1, and the
+  // body covers it on every floor after. Holding the light floor to a ground it never stands on
+  // would be a gate measuring a screen nobody sees. So the boot-ground gate now covers the DARK
+  // floors, the light floor's own ground and composite are gated below (8.73 / 5.18), and the
+  // one accent floor 2 DOES paint on black — its high-contrast `accentOnBlack` — is held here.
+  it('every DARK floor accent is legible on the boot ground (>= 4.5:1)', () => {
+    const dark = FLOOR_THEMES.filter((f) => f.ground === 'dark');
+    expect(dark.map((f) => f.place), 'the light floor is not the one exempted').toEqual([0, 2, 3, 4]);
+    for (const floor of dark) {
       const ratio = contrastRatio(floor.accent, PALETTE.bg);
       expect(
         ratio,
         `place ${floor.place} / ART-BIBLE floor ${floor.place + 1} (${floor.name}): ` +
           `accent ${floor.accent} is ${ratio.toFixed(2)}:1`,
       ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('...and the light floor’s accent-on-black is legible there too, since black is where it is painted', () => {
+    for (const floor of FLOOR_THEMES.filter((f) => f.ground === 'light')) {
+      expect(floor.accentOnBlack, `${floor.name} has no accent for high contrast's black`).toBeDefined();
+      expect(contrastRatio(floor.accentOnBlack!, PALETTE.bg)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(floor.accentOnBlack!, HIGH_CONTRAST.bg)).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -112,25 +134,31 @@ describe('the shipped palette clears its contrast budget', () => {
     expect(contrastRatio(PALETTE.inkDim, PALETTE.panel)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('the tightest accent is the Entrance scarlet at the hand-computed ~5.67:1', () => {
+  it('the Entrance scarlet survives as floor 2’s high-contrast accent, at the hand-computed ratios', () => {
     // FLOOR_THEMES[1] — place 1, which is ART-BIBLE floor 2, the Entrance to the Void.
-    // Entrance scarlet #ff3b2f. Red carries only 0.2126 of the luminance weight, so a
-    // saturated red is always the tightest colour in a palette like this:
+    // The scarlet #ff3b2f was this floor's accent until 2026-09-12; on the new white ground it
+    // would be ~3.1:1, so it moved to `accentOnBlack`, the red high contrast paints on black.
+    // Red carries only 0.2126 of the luminance weight, so a saturated red is always tight:
     //   R 255 -> 1.0            G 59 -> 0.043733        B 47 -> 0.028428
     //   L = 0.2126*1.0 + 0.7152*0.043733 + 0.0722*0.028428 = 0.245930
-    //   (0.245930 + 0.05) / (0.002190 + 0.05) = 0.295930 / 0.052190 = 5.6702
-    // Pinned so a future palette tweak that erodes the margin shows up in the diff rather
-    // than silently sliding toward the 4.5 floor.
-    expect(contrastRatio(FLOOR_THEMES[1]!.accent, PALETTE.bg)).toBeCloseTo(5.670, 2);
+    //   on the boot ground: (0.245930 + 0.05) / (0.002190 + 0.05) = 0.295930 / 0.052190 = 5.6702
+    //   on pure black:      (0.245930 + 0.05) / (0 + 0.05)        = 0.295930 / 0.05     = 5.9186
+    // Pinned so a future tweak that erodes the margin shows up in the diff.
+    expect(FLOOR_THEMES[1]!.accentOnBlack).toBe('#ff3b2f');
+    expect(contrastRatio(FLOOR_THEMES[1]!.accentOnBlack!, PALETTE.bg)).toBeCloseTo(5.670, 2);
+    expect(contrastRatio(FLOOR_THEMES[1]!.accentOnBlack!, '#000000')).toBeCloseTo(5.919, 2);
   });
 
   it('the Undercity green and the Ash City grey land where the hand computation says', () => {
     // Undercity #9dc043: L = 0.2126*0.337163 + 0.7152*0.527117 + 0.0722*0.056127
     //   = 0.452779 -> 0.502779 / 0.052190 = 9.6336
     expect(contrastRatio(FLOOR_THEMES[0]!.accent, PALETTE.bg)).toBeCloseTo(9.634, 2);
-    // Ash City #aeb8c0: L = 0.2126*0.423268 + 0.7152*0.479321 + 0.0722*0.527117
-    //   = 0.470855 -> 0.520855 / 0.052190 = 9.9799
-    expect(contrastRatio(FLOOR_THEMES[2]!.accent, PALETTE.bg)).toBeCloseTo(9.980, 2);
+    // Ash City #b8b8b8 (REVISED 2026-09-12 from the cold #aeb8c0 — greyscale now). All three
+    // channels are 184 = 0xb8: 184/255 = 0.721569, above the knee, so
+    //   ((0.721569 + 0.055) / 1.055)^2.4 = 0.736084^2.4 = e^(2.4 * -0.306412) = 0.479320,
+    // and with equal channels L is that same number (the weights sum to 1).
+    //   (0.479320 + 0.05) / 0.052190 = 0.529320 / 0.052190 = 10.1422
+    expect(contrastRatio(FLOOR_THEMES[2]!.accent, PALETTE.bg)).toBeCloseTo(10.142, 2);
   });
 });
 
@@ -142,21 +170,24 @@ describe('the shipped palette clears its contrast budget', () => {
 // docs/ART-BIBLE.md numbers the floors 1-5. place 2 IS ART-BIBLE floor 3, the Ash City.
 // Below, floors are named rather than numbered wherever a name will do.
 describe('the pale floors stay distinguishable (docs/ART-BIBLE.md §4)', () => {
-  const ASH = FLOOR_THEMES[2]!.accent; // place 2 = floor 3: cold neutral grey, drained
+  const ASH = FLOOR_THEMES[2]!.accent; // place 2 = floor 3: neutral grey, drained
   const BONE = FLOOR_THEMES[3]!.accent; // place 3 = floor 4: warm bone, sacred, lit
 
-  it('Ash City is COLD: its blue channel exceeds its red', () => {
-    // #aeb8c0 -> r 174, b 192. Blue leads by 18.
+  // ⚠ REVISED 2026-09-12 (`floor-looks`). These used to read "Ash City is COLD: its blue
+  // channel exceeds its red (#aeb8c0, blue leads by 18)". The revision asks for floor 3 in
+  // greyscale only — the author's "purely white gray and black" — so the Ash City is now
+  // strictly NEUTRAL, and the cold-against-warm separation becomes neutral-against-warm: still
+  // two OPPOSITE treatments, not two distances from one.
+  it('Ash City is NEUTRAL: all three channels are equal — no hue at all', () => {
+    // #b8b8b8 -> r 184, g 184, b 184.
     const { r, g, b } = hexToRgb(ASH);
-    expect(b).toBeGreaterThan(r);
-    expect(b - r).toBe(18);
-    // ...and it is genuinely neutral, not a blue: green sits between the two.
-    expect(g).toBeGreaterThan(r);
-    expect(g).toBeLessThan(b);
+    expect(r).toBe(184);
+    expect(g).toBe(r);
+    expect(b).toBe(r);
   });
 
   it('the Angelic Underground is WARM: its red channel exceeds its blue', () => {
-    // #e6e2d3 -> r 230, b 211. Red leads by 19 — the near-mirror of Ash City's 18.
+    // #e6e2d3 -> r 230, b 211. Red leads by 19.
     const { r, g, b } = hexToRgb(BONE);
     expect(r).toBeGreaterThan(b);
     expect(r - b).toBe(19);
@@ -164,35 +195,52 @@ describe('the pale floors stay distinguishable (docs/ART-BIBLE.md §4)', () => {
     expect(g).toBeGreaterThan(b);
   });
 
-  it('cold and warm sit on OPPOSITE sides of neutral, not merely at different distances', () => {
-    // The sign of (r - b) is the temperature. Ash is negative, bone positive.
+  it('neutral and warm are OPPOSITE treatments, not merely different distances from one', () => {
+    // The sign of (r - b) is the temperature: 0 is no hue at all, +1 is warm.
     const ash = hexToRgb(ASH);
     const bone = hexToRgb(BONE);
-    expect(Math.sign(ash.r - ash.b)).toBe(-1);
+    expect(Math.sign(ash.r - ash.b)).toBe(0);
     expect(Math.sign(bone.r - bone.b)).toBe(1);
   });
 
   it('and they are separated by LIGHTNESS too, so greyscale alone still tells them apart', () => {
-    // ~9.98:1 against ~15.50:1 — bone is more than half again as bright a step off the bg.
+    // ~10.14:1 against ~15.50:1 on the boot ground — a ratio of ratios of 15.5045 / 10.1421 =
+    // 1.529, more than the 1.4 this rule demands.
     const ashRatio = contrastRatio(ASH, PALETTE.bg);
     const boneRatio = contrastRatio(BONE, PALETTE.bg);
     expect(boneRatio).toBeGreaterThan(ashRatio * 1.4);
+    expect(boneRatio / ashRatio).toBeCloseTo(1.529, 2);
   });
 
-  it("the Entrance scarlet cannot be mistaken for the True Void arterial red", () => {
+  it("the Entrance's blood red cannot be mistaken for the True Void's arterial red", () => {
     // FLOOR_THEMES[1] (place 1 = ART-BIBLE floor 2, Entrance) against FLOOR_THEMES[4]
-    // (place 4 = ART-BIBLE floor 5, True Void).
-    // #ff3b2f (fresh blood on white) vs #ef6076 (old blood in the dark).
-    const scarlet = hexToRgb(FLOOR_THEMES[1]!.accent);
+    // (place 4 = ART-BIBLE floor 5, True Void). REVISED 2026-09-12: the Entrance's accent is no
+    // longer the bright scarlet but a deep blood red, so they separate on new axes —
+    // #8e0c0a (fresh blood, on white) against #ef6076 (old blood, burning in the dark).
+    const blood = hexToRgb(FLOOR_THEMES[1]!.accent);
     const arterial = hexToRgb(FLOOR_THEMES[4]!.accent);
-    // The arterial red is far pinker: blue 118 against 47.
-    expect(arterial.b - scarlet.b).toBe(71);
-    // And the scarlet is far more saturated: chroma 255-47=208 against 239-96=143.
-    const chroma = (c: { r: number; g: number; b: number }): number =>
-      Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b);
-    expect(chroma(scarlet)).toBe(208);
-    expect(chroma(arterial)).toBe(143);
-    expect(chroma(scarlet)).toBeGreaterThan(chroma(arterial));
+    // The arterial red is far pinker: blue 118 against 10.
+    expect(arterial.b - blood.b).toBe(108);
+    // And far lighter: L 0.2802 against 0.0604 (the blood red's channels 142/12/10 linearise to
+    // 0.270498 / 0.003677 / 0.003035, so L = 0.057508 + 0.002630 + 0.000219 = 0.060357) — more
+    // than four times the light, so they differ even with the hue taken away.
+    expect(relativeLuminance(FLOOR_THEMES[1]!.accent)).toBeCloseTo(0.0604, 4);
+    expect(relativeLuminance(FLOOR_THEMES[4]!.accent) / relativeLuminance(FLOOR_THEMES[1]!.accent)).toBeGreaterThan(4);
+    // ...and they never share a ground: one sits on the only light floor, the other on the darkest.
+    expect(FLOOR_THEMES[1]!.ground).toBe('light');
+    expect(FLOOR_THEMES[4]!.ground).toBe('dark');
+  });
+
+  it("floor 2's harm is a CRIMSON, never the accent's red — the HP and charges bars cannot match", () => {
+    // On floor 2 the player's HP bar fills with `--void-harm` and the charges bar with
+    // `--void-accent`, side by side in the stat box. #9b1b52 (r 155, b 82) against #8e0c0a
+    // (r 142, b 10): the harm leans toward magenta by 72 points of blue; the accent is a pure red.
+    const harm = hexToRgb(FLOOR_THEMES[1]!.harm);
+    const accent = hexToRgb(FLOOR_THEMES[1]!.accent);
+    expect(harm.b - accent.b).toBe(72);
+    // ...while the accent's green and blue sit together (12 and 10): a red, leaning neither
+    // toward orange nor toward the harm's magenta.
+    expect([accent.g, accent.b]).toEqual([12, 10]);
   });
 
   it('the toxic green is not the healing green — a chip can never be misread', () => {
@@ -206,26 +254,10 @@ describe('the pale floors stay distinguishable (docs/ART-BIBLE.md §4)', () => {
   });
 });
 
-describe('the floor-2 white alternative is pre-verified, so the swap is safe', () => {
-  it('clears the contrast gate and is brighter AND cooler than both pale floors', () => {
-    const white = ENTRANCE_ALTERNATIVE_WHITE;
-    const ratio = contrastRatio(white, PALETTE.bg);
-    expect(ratio).toBeGreaterThanOrEqual(4.5);
-    // Brighter than bone (~15.50) and therefore than the cold grey (~9.98) as well.
-    expect(ratio).toBeGreaterThan(contrastRatio(FLOOR_THEMES[3]!.accent, PALETTE.bg));
-    // Cooler than both: blue leads red, where bone's red leads blue.
-    const { r, b } = hexToRgb(white);
-    expect(b).toBeGreaterThan(r);
-  });
-
-  it('is documented as close to body ink — the reason it is NOT the default', () => {
-    // ~18.2:1 against ink's ~16.5:1. Under a 1.3x ratio of ratios they read as the same
-    // brightness of white, which is the whole objection recorded in tokens.ts.
-    const white = contrastRatio(ENTRANCE_ALTERNATIVE_WHITE, PALETTE.bg);
-    const ink = contrastRatio(PALETTE.ink, PALETTE.bg);
-    expect(white / ink).toBeLessThan(1.3);
-  });
-});
+// (REMOVED 2026-09-12, `floor-looks`: "the floor-2 white alternative is pre-verified, so the
+// swap is safe" — two tests pinning `ENTRANCE_ALTERNATIVE_WHITE`, a white ACCENT on a dark floor
+// 2 kept as "the reversible half" of the 2026-08-25 decision. The white is floor 2's GROUND now,
+// so the alternative has no meaning and the constant is deleted with its tests.)
 
 describe('floorTheme is total and clamped', () => {
   it('maps each in-range place to its named floor', () => {
@@ -237,9 +269,10 @@ describe('floorTheme is total and clamped', () => {
   });
 
   it('returns the hand-listed accent for each floor', () => {
-    // docs/ART-BIBLE.md §4: toxic green, red fleck, cold ash grey, warm bone, arterial.
+    // docs/ART-BIBLE.md §4: toxic green, blood red on white, neutral ash grey, warm bone,
+    // arterial. (REVISED 2026-09-12: floor 2 #ff3b2f -> #8e0c0a, floor 3 #aeb8c0 -> #b8b8b8.)
     expect(FLOOR_THEMES.map((f) => f.accent)).toEqual([
-      '#9dc043', '#ff3b2f', '#aeb8c0', '#e6e2d3', '#ef6076',
+      '#9dc043', '#8e0c0a', '#b8b8b8', '#e6e2d3', '#ef6076',
     ]);
   });
 
@@ -349,6 +382,172 @@ describe('themeVars', () => {
   });
 });
 
+// ---------------------------------------------------------------------------------------
+// `floor-looks` (2026-09-12) — FLOORS 1, 4 AND 5 ARE NOT RESTYLED, proven against a snapshot.
+//
+// The six furniture/role tokens became floor-scoped so floor 2 could carry its own. That
+// refactor touches every floor's `themeVars`, so the three floors the unit must NOT change are
+// held to what they emitted on `main` at 6ebfa42 — TRANSCRIBED BY HAND from the plan's table,
+// never generated from the code under test (a snapshot regenerated from the new code would
+// agree with it by construction and prove nothing). A unit that deliberately re-paints one of
+// these floors updates its row here and says why.
+// ---------------------------------------------------------------------------------------
+
+describe('floors 1, 4 and 5 emit exactly what they emitted before this unit', () => {
+  /** The floor-scoped values of `themeVars` on `main` at 6ebfa42, transcribed. */
+  const FURNITURE = {
+    '--void-rule': '#23232e',
+    '--void-rule-strong': '#3a3a4a',
+    '--void-ink-faint': '#55555f',
+    '--void-harm': '#e0574f',
+    '--void-heal': '#78b98a',
+    '--void-foe': '#c98a3a',
+  };
+  const ON_MAIN: Record<number, { vars: Record<string, string>; kind: string }> = {
+    0: {
+      kind: 'fog',
+      vars: {
+        '--void-accent': '#9dc043', '--void-bg': '#060a09', '--void-panel': '#0b100e',
+        '--void-panel-raised': '#111815', '--void-ink': '#e6ece7', '--void-ink-dim': '#89968e',
+        '--void-texture-ink': '#4f8f6a', '--void-texture-opacity': '0.1', ...FURNITURE,
+      },
+    },
+    3: {
+      kind: 'glow',
+      vars: {
+        '--void-accent': '#e6e2d3', '--void-bg': '#0d0b07', '--void-panel': '#14110b',
+        '--void-panel-raised': '#1c1810', '--void-ink': '#f0ead8', '--void-ink-dim': '#9b9483',
+        '--void-texture-ink': '#e6d9b0', '--void-texture-opacity': '0.1', ...FURNITURE,
+      },
+    },
+    4: {
+      kind: 'absence',
+      vars: {
+        '--void-accent': '#ef6076', '--void-bg': '#030304', '--void-panel': '#08080a',
+        '--void-panel-raised': '#0e0e11', '--void-ink': '#ded7d9', '--void-ink-dim': '#8b8489',
+        '--void-texture-ink': '#000000', '--void-texture-opacity': '0.55', ...FURNITURE,
+      },
+    },
+  };
+  /** The dimensionless keys — unchanged constants, asserted by reference to their scales. */
+  const DIMENSIONLESS: Record<string, string> = {
+    '--void-space-1': SPACE.s1, '--void-space-2': SPACE.s2, '--void-space-3': SPACE.s3,
+    '--void-space-4': SPACE.s4, '--void-space-5': SPACE.s5, '--void-space-6': SPACE.s6,
+    '--void-space-7': SPACE.s7,
+    '--void-type-xs': TYPE.xs, '--void-type-sm': TYPE.sm, '--void-type-md': TYPE.md,
+    '--void-type-base': TYPE.base, '--void-type-lg': TYPE.lg, '--void-type-xl': TYPE.xl,
+    '--void-type-xxl': TYPE.xxl,
+    '--void-track-tight': TRACK.tight, '--void-track-wide': TRACK.wide, '--void-track-widest': TRACK.widest,
+    '--void-rule-hair': RULE.hair, '--void-rule-heavy': RULE.heavy, '--void-radius': RULE.radius,
+    '--void-font-mono': FONT_MONO,
+  };
+
+  for (const [place, snapshot] of Object.entries(ON_MAIN)) {
+    it(`place ${place} (${floorTheme(Number(place)).name}): every value it had, it still has`, () => {
+      const now = themeVars(Number(place));
+      const before = { ...snapshot.vars, ...DIMENSIONLESS };
+      expect(Object.keys(before)).toHaveLength(35); // 14 floor-scoped + 21 dimensionless, on main
+      for (const [name, value] of Object.entries(before)) {
+        expect(now[name], `${name} moved on a floor this unit must not touch`).toBe(value);
+      }
+      // ...and the ONLY key it gained is the dissolve's duration.
+      expect(Object.keys(now).filter((k) => !(k in before))).toEqual(['--void-fade-retheme']);
+      expect(floorTheme(Number(place)).texture.kind).toBe(snapshot.kind);
+    });
+  }
+});
+
+describe('the six furniture and role tokens are floor-scoped now (AC-4)', () => {
+  const SIX = ['--void-rule', '--void-rule-strong', '--void-ink-faint', '--void-harm', '--void-heal', '--void-foe'];
+
+  it('all six are on the floor-scoped list', () => {
+    for (const name of SIX) expect(FLOOR_SCOPED_VARS, name).toContain(name);
+  });
+
+  it('on floors 1, 4 and 5 they are still the PALETTE values, verbatim', () => {
+    const palette: Record<string, string> = {
+      '--void-rule': PALETTE.rule, '--void-rule-strong': PALETTE.ruleStrong, '--void-ink-faint': PALETTE.inkFaint,
+      '--void-harm': PALETTE.harm, '--void-heal': PALETTE.heal, '--void-foe': PALETTE.foe,
+    };
+    for (const place of [0, 3, 4]) {
+      for (const name of SIX) expect(themeVars(place)[name], `${name} on place ${place}`).toBe(palette[name]);
+    }
+  });
+
+  it('on floor 2 they are the light floor’s own, as the plan lists them', () => {
+    const vars = themeVars(1);
+    expect(vars['--void-rule']).toBe('#c9ccd6');
+    expect(vars['--void-rule-strong']).toBe('#a5a9b7');
+    expect(vars['--void-ink-faint']).toBe('#9a9eab');
+    expect(vars['--void-harm']).toBe('#9b1b52');
+    expect(vars['--void-heal']).toBe('#1f5c33');
+    expect(vars['--void-foe']).toBe('#6b4a0c');
+  });
+
+  it('the dissolve duration is one number, emitted for CSS in ms', () => {
+    // 1200 ms: the plan's reasoning is in tokens.ts, beside the constant. The layout probe
+    // samples the real fade against this same number.
+    expect(RETHEME_FADE_MS).toBe(1200);
+    for (let place = 0; place < FLOOR_THEMES.length; place += 1) {
+      expect(themeVars(place)['--void-fade-retheme']).toBe('1200ms');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// `floor-looks` (2026-09-12) — THE GROUND, DECLARED AND MEASURED (AC-2), and FLOOR 3's GREYSCALE
+// (AC-6). A declared `ground` that disagreed with the luminance would invert the strike flash on
+// the wrong floor; a "greyscale" floor with one tinted token would be greyscale in name only.
+// ---------------------------------------------------------------------------------------
+
+describe('floor 2 is the one LIGHT floor, by declaration AND by the maths (AC-2)', () => {
+  it('exactly one ground has more than half of white’s luminance, and it is place 1', () => {
+    const light = FLOOR_THEMES.filter((f) => relativeLuminance(f.bg) > 0.5);
+    expect(light.map((f) => f.place)).toEqual([1]);
+    // #f4f5f9: 244 / 245 / 249 linearise to 0.904661 / 0.913099 / 0.947307, so
+    // L = 0.2126*0.904661 + 0.7152*0.913099 + 0.0722*0.947307 = 0.913775.
+    expect(relativeLuminance(FLOOR_THEMES[1]!.bg)).toBeCloseTo(0.9138, 4);
+  });
+
+  it('every floor DECLARES the ground its luminance says it has', () => {
+    for (const floor of FLOOR_THEMES) {
+      const measured = relativeLuminance(floor.bg) > 0.5 ? 'light' : 'dark';
+      expect(floor.ground, `${floor.name} declares a ${floor.ground} ground on ${floor.bg}`).toBe(measured);
+    }
+  });
+
+  it('the light floor’s ground and ink are the hand-listed white and near-black', () => {
+    expect(themeVars(1)['--void-bg']).toBe('#f4f5f9');
+    expect(themeVars(1)['--void-ink']).toBe('#15171d');
+    expect(themeVars(1)['--void-accent']).toBe('#8e0c0a');
+  });
+});
+
+describe('floor 3 is greyscale — no hue anywhere in its environment (AC-6)', () => {
+  it('every environment colour has r = g = b', () => {
+    const f = FLOOR_THEMES[2]!;
+    const environment: Record<string, string> = {
+      bg: f.bg, panel: f.panel, panelRaised: f.panelRaised, ink: f.ink, inkDim: f.inkDim,
+      inkFaint: f.inkFaint, rule: f.rule, ruleStrong: f.ruleStrong, accent: f.accent,
+      'texture.ink': f.texture.ink,
+    };
+    expect(Object.keys(environment)).toHaveLength(10);
+    for (const [name, hex] of Object.entries(environment)) {
+      const { r, g, b } = hexToRgb(hex);
+      expect([g, b], `floor 3's ${name} ${hex} carries a hue`).toEqual([r, r]);
+    }
+  });
+
+  it('...and the three ROLES are the one declared exemption: harm must read as harm on every floor', () => {
+    const f = FLOOR_THEMES[2]!;
+    expect([f.harm, f.heal, f.foe]).toEqual([PALETTE.harm, PALETTE.heal, PALETTE.foe]);
+    // Non-vacuity for the greyscale check above: the roles really do carry hue, so a check that
+    // had swept them in would have failed — the exemption is load-bearing, not decorative.
+    const harm = hexToRgb(f.harm);
+    expect(harm.r === harm.g && harm.g === harm.b).toBe(false);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // THE FIVE ENVIRONMENTS (author direction, 2026-09-07). Five ink/ground pairings is five
 // chances to ship something unreadable, and legibility is the one thing that cannot be
@@ -412,22 +611,38 @@ describe('the atmosphere is ON — the control, before anything is measured agai
     }
   });
 
-  it('four textures ADD light (so they cost contrast) and the True Void SUBTRACTS it', () => {
-    // The direction is the meaning, not a detail: fog, static, ash and the sacred glow all
-    // lie on top of the ground and make it paler, which is precisely why the gate has to run
-    // against the composite. The True Void's is a vignette in pure black — absence, not
-    // destruction — so it is the one floor where the atmosphere makes text easier to read.
+  it('each texture pushes its ground the way its KIND says: fog, ash and glow lighten; flecks and absence darken', () => {
+    // The direction is the meaning, not a detail. Fog, ash and the sacred glow lie on top of a
+    // dark ground and make it paler — which is precisely why the gate has to run against the
+    // composite. The True Void's is a vignette in pure black — absence, not destruction — so it
+    // darkens its ground. REVISED 2026-09-12: floor 2's red flecks lie on a WHITE ground, so
+    // they darken it too — and on the light floor darkening is what COSTS contrast, because
+    // its ink is the dark one. (This used to read "four textures add light".)
+    //
+    // Transcribed from the design rather than derived from the data, so a kind that quietly
+    // changed direction fails here.
+    const DIRECTION: Record<string, 'lighten' | 'darken'> = {
+      fog: 'lighten',
+      ash: 'lighten',
+      glow: 'lighten',
+      flecks: 'darken',
+      absence: 'darken',
+    };
     for (const floor of FLOOR_THEMES) {
       const bare = relativeLuminance(floor.bg);
       const composited = relativeLuminance(compositeGround(floor));
-      if (floor.texture.kind === 'absence') {
+      const want = DIRECTION[floor.texture.kind];
+      expect(want, `${floor.name}'s texture kind '${floor.texture.kind}' has no declared direction`).toBeDefined();
+      if (want === 'darken') {
         expect(composited, `${floor.name} should be darkened by its texture`).toBeLessThan(bare);
       } else {
         expect(composited, `${floor.name} should be lightened by its texture`).toBeGreaterThan(bare);
       }
     }
-    // ...and exactly one floor is the subtracting one, so the branch above cannot be vacuous.
-    expect(FLOOR_THEMES.filter((f) => f.texture.kind === 'absence')).toHaveLength(1);
+    // ...and both directions are really exercised, so neither branch above is vacuous.
+    const kinds = FLOOR_THEMES.map((f) => DIRECTION[f.texture.kind]);
+    expect(kinds.filter((d) => d === 'darken')).toHaveLength(2);
+    expect(kinds.filter((d) => d === 'lighten')).toHaveLength(3);
   });
 });
 
@@ -484,18 +699,57 @@ describe('every floor is legible in its own environment', () => {
     }
   });
 
-  it('and harm still reads as harm on all five floors', () => {
-    // `--void-harm` and `--void-heal` are deliberately floor-INDEPENDENT, which means they
-    // were never re-checked against four new grounds. A damage number nobody can read on
-    // floor 3 is a rules bug wearing a palette's clothes.
+  it('and harm still reads as harm on all five floors — on the ground and on BOTH panels', () => {
+    // A damage number nobody can read on floor 3 is a rules bug wearing a palette's clothes.
+    //
+    // ⚠ REVISED 2026-09-12 (`floor-looks`), twice over:
+    //   - The roles are the FLOOR's own now (`floor.harm`, ...): floor 2 is white, and PALETTE's
+    //     harm is 3.41:1 on it. The dark floors still carry PALETTE's, so for them nothing moved.
+    //   - The RAISED panel is gated too. This gate used to stop at the ground and the flat
+    //     panel, and the destructive hub row — "Abandon the descent", harm on a button, and a
+    //     button is `--void-panel-raised` — measured 4.39:1 on floor 3 on `main`, under AA, with
+    //     every test green. The layout probe's paint audit found it in the real page; this is
+    //     the token-level half, so the next palette tweak cannot reopen it before the probe runs.
     for (const floor of FLOOR_THEMES) {
-      for (const role of [PALETTE.harm, PALETTE.heal, PALETTE.foe]) {
-        expect(
-          Math.min(contrastRatio(role, floor.bg), contrastRatio(role, floor.panel)),
-          `${floor.name}: ${role}`,
-        ).toBeGreaterThanOrEqual(AA);
+      for (const [role, colour] of [['harm', floor.harm], ['heal', floor.heal], ['foe', floor.foe]] as const) {
+        for (const surface of [floor.bg, floor.panel, floor.panelRaised]) {
+          const ratio = contrastRatio(colour, surface);
+          expect(ratio, `${floor.name}: ${role} ${colour} on ${surface} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+        }
       }
     }
+  });
+
+  it('floor 2’s TIGHTEST gate is its accent on the fleck composite, at the hand-derived 5.18:1', () => {
+    // The worst case on the light floor, pinned to two decimals so a later alpha or ink tweak
+    // shows in the diff rather than sliding silently toward 4.5.
+    //   composite = 0.3 * (192, 24, 26) + 0.7 * (244, 245, 249)      [#c0181a over #f4f5f9]
+    //             = (228.4, 178.7, 182.1) -> (228, 179, 182) = #e4b3b6
+    //   L(#e4b3b6) = 0.2126*0.775822 + 0.7152*0.450786 + 0.0722*0.467784 = 0.521116
+    //   L(#8e0c0a) = 0.2126*0.270498 + 0.7152*0.003677 + 0.0722*0.003035 = 0.060357
+    //     (blue 10/255 = 0.039216 sits just under the 0.03928 knee: 0.039216 / 12.92)
+    //   (0.521116 + 0.05) / (0.060357 + 0.05) = 0.571116 / 0.110357 = 5.1752
+    // (The plan's text wrote the composite's first operand as (142, 12, 10), the ACCENT's
+    // channels; the result it reached, #e4b3b6, is the fleck ink's — this derivation is that.)
+    const f = FLOOR_THEMES[1]!;
+    expect(compositeGround(f)).toBe('#e4b3b6');
+    expect(contrastRatio(f.accent, compositeGround(f))).toBeCloseTo(5.175, 2);
+    // On the bare white it is far roomier: (0.913775 + 0.05) / 0.110357 = 8.7333.
+    expect(contrastRatio(f.accent, f.bg)).toBeCloseTo(8.733, 2);
+    // ...and the body ink on the composite, the other thing the fleck alpha is capped by:
+    // #15171d on #e4b3b6 = 9.74:1, clear of AAA.
+    expect(contrastRatio(f.ink, compositeGround(f))).toBeCloseTo(9.744, 2);
+  });
+
+  it('floor 3’s haze composite and its accent land where the hand computation says', () => {
+    //   composite = 0.2 * 189 + 0.8 * 20 = 37.8 + 16 = 53.8 -> 54 per channel = #363636
+    //   L(#363636): 54/255 = 0.211765 -> ((0.211765 + 0.055)/1.055)^2.4 = 0.036889
+    //   accent #b8b8b8, L = 0.479320 (above): 0.529320 / 0.086889 = 6.0919
+    //   ink #dcdcdc, L = 0.715694:            0.765694 / 0.086889 = 8.8123
+    const f = FLOOR_THEMES[2]!;
+    expect(compositeGround(f)).toBe('#363636');
+    expect(contrastRatio(f.accent, compositeGround(f))).toBeCloseTo(6.092, 2);
+    expect(contrastRatio(f.ink, compositeGround(f))).toBeCloseTo(8.812, 2);
   });
 });
 
@@ -555,11 +809,30 @@ describe('the five environments are genuinely distinguishable', () => {
     ).toBeGreaterThan(2);
   });
 
-  it('the Ash City is the palest ground — the ash is over everything', () => {
-    const byLight = [...FLOOR_THEMES].sort(
-      (a, b) => relativeLuminance(b.bg) - relativeLuminance(a.bg),
-    );
+  // REVISED 2026-09-12 (`floor-looks`): this read "the Ash City is the palest ground". The
+  // Entrance is now white, so it is palest by a mile; the ash claim is about the DARK floors.
+  it('the Entrance is the palest ground of all — the white-out', () => {
+    const byLight = [...FLOOR_THEMES].sort((a, b) => relativeLuminance(b.bg) - relativeLuminance(a.bg));
+    expect(byLight[0]!.name).toBe('Entrance to the Void');
+  });
+
+  it('and the Ash City is the palest DARK ground — the ash is over everything', () => {
+    const dark = FLOOR_THEMES.filter((f) => f.ground === 'dark');
+    const byLight = [...dark].sort((a, b) => relativeLuminance(b.bg) - relativeLuminance(a.bg));
     expect(byLight[0]!.name).toBe('Ash City');
+    // In linear light: #141414 is 0.006995; the Undercity #060a09 0.002755, the Angelic
+    // Underground #0d0b07 0.003403, the True Void #030304 0.000932 — so the ash ground carries
+    // 2.54x, 2.06x and 7.50x their light.
+    const ash = relativeLuminance(FLOOR_THEMES[2]!.bg);
+    expect(ash / relativeLuminance(FLOOR_THEMES[0]!.bg)).toBeCloseTo(2.54, 2);
+    expect(ash / relativeLuminance(FLOOR_THEMES[3]!.bg)).toBeCloseTo(2.06, 2);
+    expect(ash / relativeLuminance(FLOOR_THEMES[4]!.bg)).toBeCloseTo(7.50, 1);
+  });
+
+  it('the Entrance’s white is COOL, so the Angelic Underground stays the only warm ground', () => {
+    // #f4f5f9: blue 249 leads red 244 by 5.
+    const { r, b } = hexToRgb(FLOOR_THEMES[1]!.bg);
+    expect(b - r).toBe(5);
   });
 });
 
@@ -604,14 +877,38 @@ describe('high contrast defeats every floor, on all five', () => {
   it('and every floor’s accent gets MORE legible, not less', () => {
     // The accent survives high contrast (the floor name carries the state, per UI-DESIGN
     // §11; the colour is reinforcement). It must not be the one thing that got worse.
+    //
+    // ⚠ RE-POINTED 2026-09-12 (`floor-looks`) at the accent high contrast REALLY PAINTS — what
+    // `settingsVars` emits — rather than at `floor.accent`. On the light floor those differ:
+    // its deep red is 2.11:1 on black, so high contrast resolves it to `accentOnBlack`
+    // (#ff3b2f, 5.92:1), which is MORE legible than the red's normal-mode worst case of 5.18.
+    // Measuring `floor.accent` on black here would judge a colour the screen never shows.
     for (const floor of FLOOR_THEMES) {
       const before = Math.min(
         contrastRatio(floor.accent, floor.bg),
         contrastRatio(floor.accent, compositeGround(floor)),
       );
-      const after = contrastRatio(floor.accent, HIGH_CONTRAST.bg);
-      expect(after, `${floor.name}: accent`).toBeGreaterThan(before);
+      const painted = settingsVars({ ...DEFAULT_SETTINGS, contrast: 'high' }, floor.place)['--void-accent']!;
+      const after = contrastRatio(painted, HIGH_CONTRAST.bg);
+      expect(after, `${floor.name}: accent ${painted} under high contrast`).toBeGreaterThan(before);
       expect(after).toBeGreaterThanOrEqual(AA);
+    }
+    // ...and on the light floor it really is the swapped red, or the loop above proved nothing new.
+    expect(settingsVars({ ...DEFAULT_SETTINGS, contrast: 'high' }, 1)['--void-accent']).toBe('#ff3b2f');
+  });
+
+  it('and its three roles are legible on its black — floor 2’s own dark roles would not be', () => {
+    // HIGH_CONTRAST carries the dark-floor roles, hand-derived on black (L / 0.05 + 1):
+    //   harm #e0574f: L = 0.2126*0.745404 + 0.7152*0.095307 + 0.0722*0.078187 = 0.232282 -> 5.6456
+    //   heal #78b98a: L = 0.2126*0.187821 + 0.7152*0.485150 + 0.0722*0.254152 = 0.405260 -> 9.1052
+    //   foe  #c98a3a: L = 0.2126*0.584078 + 0.7152*0.254152 + 0.0722*0.042311 = 0.309000 -> 7.1800
+    expect(contrastRatio(HIGH_CONTRAST.harm, HIGH_CONTRAST.bg)).toBeCloseTo(5.646, 2);
+    expect(contrastRatio(HIGH_CONTRAST.heal, HIGH_CONTRAST.bg)).toBeCloseTo(9.105, 2);
+    expect(contrastRatio(HIGH_CONTRAST.foe, HIGH_CONTRAST.bg)).toBeCloseTo(7.180, 2);
+    // THE CONTROL: floor 2's own roles would have failed there, so the swap is load-bearing.
+    const f = FLOOR_THEMES[1]!;
+    for (const role of [f.harm, f.heal, f.foe]) {
+      expect(contrastRatio(role, HIGH_CONTRAST.bg), `${role} on black`).toBeLessThan(AA);
     }
   });
 });

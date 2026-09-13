@@ -48,6 +48,7 @@ import { SLOW_MS, levelForDuration, startTimer } from '../log/timing.ts';
 import { createDebugOverlay } from './debug-overlay.ts';
 // The shared render foundation (M-UI2 `ui-foundation`).
 import { applyTheme, applySettings, shouldAnimate } from '../render/theme.ts';
+import { RETHEME_FADE_MS } from '../render/tokens.ts';
 import { floorTagText, screenKey, screenLayout, type Settings } from '../render/settings-model.ts';
 import { loadSettings, saveSettings } from '../storage/settingsStorage.ts';
 import { buttonModel, rowModel, conditionChips } from '../render/component-model.ts';
@@ -456,7 +457,7 @@ function applyRunOutcome(): void {
  * this can never throw mid-render.
  *
  * ⚠ THE CALL ORDER IS LOAD-BEARING, and reversing it is the whole defect: `applySettings`
- * deliberately overwrites nine of the names `applyTheme` just wrote. Theme LAST would clobber
+ * deliberately overwrites the colour names (and `data-ground`) `applyTheme` just wrote. Theme LAST would clobber
  * the player's text size and high-contrast ink on every single engine step — the setting
  * would appear to work once and silently revert on the next click.
  *
@@ -464,11 +465,35 @@ function applyRunOutcome(): void {
  * never be the only carrier of any state, so the floor's NAME is always on screen — title
  * screen included, where it truthfully names where the descent begins. There is no branch to
  * invert, which is the chips-helper lesson applied.
+ *
+ * `floor-looks` (2026-09-12): a change of floor now DISSOLVES over `RETHEME_FADE_MS` (the
+ * stylesheet does it, keyed on the tokens this writes), and floor 2 is white — so the one
+ * moment the screen can jump in brightness is recorded, by `noteFloorPaint`. Its `if` lives in
+ * the helper, not here, so this body stays branch-free.
  */
 function retheme(): void {
   applyTheme(document.documentElement, state.place);
   applySettings(document.documentElement, settings, state.place);
   floorEl.textContent = floorTagText(state.place);
+  noteFloorPaint(state.place, document.documentElement.dataset['ground'] ?? '');
+}
+
+/** The floor the page was last painted for — `null` until the first `retheme()`. */
+let paintedPlace: number | null = null;
+
+/**
+ * Log a change of floor, at the boundary, exactly when the PAINTED floor changes (CLAUDE.md
+ * principle 7). A descent into floor 2 is a 1200 ms white-out; if a player reports a flash, a
+ * freeze or a screen that stayed grey, this line says which floors, which ground was painted
+ * (`light`, or `dark` under high contrast) and how long the dissolve was configured to take.
+ * Never on a same-floor step — `retheme()` runs after every step — and not at boot, when
+ * nothing changed. Numbers stay numbers; the player never sees it.
+ */
+function noteFloorPaint(place: number, ground: string): void {
+  if (paintedPlace !== null && paintedPlace !== place) {
+    log.info('ui', 'floor painted', { from: paintedPlace, to: place, ground, fadeMs: RETHEME_FADE_MS });
+  }
+  paintedPlace = place;
 }
 
 /**

@@ -18,6 +18,59 @@ html {
   background: #07070a;
 }
 
+/* THE RE-THEME DISSOLVE (`floor-looks`, 2026-09-12).
+ *
+ * Floor 2 is white and every other floor is near-black. Re-coloured in one frame, the screen's
+ * luminance would rise ~300-fold before the eye could respond — the harm "blinding" names, and
+ * the one a light-sensitive player cannot look away from in time. So a change of floor
+ * DISSOLVES, over `--void-fade-retheme` (RETHEME_FADE_MS, 1200 ms, in tokens.ts).
+ *
+ * HOW. A custom property does not interpolate on its own; one REGISTERED as a `<color>` does,
+ * and a transition on the element that carries it (`:root`, where theme.ts writes every token)
+ * animates the VALUE that every `var()` in every stylesheet reads. One rule, no per-component
+ * transitions to keep in step, no overlay element, and nothing for the reduced-motion
+ * `transition: none` rules to collide with (they target elements, never the root).
+ *
+ * The list is exactly `FADED_VARS` in tokens.ts, coupled both ways by styleDiscipline.test.ts,
+ * and `src/dev/layoutProbe.test.ts` samples the real dissolve in the built page. The texture's
+ * ink and opacity are deliberately NOT here: the pattern swaps at once, and a pattern cannot fade.
+ *
+ * ⚠ REDUCED MOTION KEEPS THIS, deliberately. A dissolve moves nothing and it is the opposite of a
+ * flash — it is what REMOVES the white-out. No rule under `[data-motion='reduce']` or in the OS
+ * reduced-motion block may switch it off; a test says so.
+ *
+ * `initial-value: transparent` is a keyword, not a colour literal: before the first `retheme()`
+ * an unset token reads as transparent (backgrounds show the boot ground above, exactly as an
+ * unset `var()` did; text is invisible for that one frame instead of near-black on near-black). */
+@property --void-bg { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-panel { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-panel-raised { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-ink { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-ink-dim { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-ink-faint { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-rule { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-rule-strong { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-accent { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-harm { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-heal { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --void-foe { syntax: '<color>'; inherits: true; initial-value: transparent; }
+
+:root {
+  transition:
+    --void-bg var(--void-fade-retheme) ease-in-out,
+    --void-panel var(--void-fade-retheme) ease-in-out,
+    --void-panel-raised var(--void-fade-retheme) ease-in-out,
+    --void-ink var(--void-fade-retheme) ease-in-out,
+    --void-ink-dim var(--void-fade-retheme) ease-in-out,
+    --void-ink-faint var(--void-fade-retheme) ease-in-out,
+    --void-rule var(--void-fade-retheme) ease-in-out,
+    --void-rule-strong var(--void-fade-retheme) ease-in-out,
+    --void-accent var(--void-fade-retheme) ease-in-out,
+    --void-harm var(--void-fade-retheme) ease-in-out,
+    --void-heal var(--void-fade-retheme) ease-in-out,
+    --void-foe var(--void-fade-retheme) ease-in-out;
+}
+
 body {
   margin: 0;
   background: var(--void-bg);

@@ -417,6 +417,32 @@ describe('the round replay is timed, escalates when slow, and fails loudly', () 
   });
 });
 
+// =========================================================================================
+// 2c. `floor-looks` (2026-09-12) — THE FLOOR CHANGE IS LOGGED. Floor 2 is white, and walking
+// into it is a 1200 ms dissolve; a player who reports a flash or a grey screen needs a line that
+// says which floors, which ground was painted and how long the dissolve was set to take. The
+// behaviour (one line per change, none at boot) is asserted in `battleScreen.test.ts` on the
+// real renderer; this pins the line's SHAPE on every path at once.
+// =========================================================================================
+
+describe('a change of floor is logged at the boundary, with its numbers as numbers', () => {
+  const body = bodyOf('function noteFloorPaint(');
+
+  it('logs one info line on the ui channel, with from, to, the painted ground and the fade', () => {
+    const calls = logCalls(body);
+    expect(calls, 'noteFloorPaint logs nothing — or more than one line').toHaveLength(1);
+    expect(calls[0]).toMatch(
+      /^log\.info\(\s*'ui'\s*,\s*'floor painted'\s*,\s*\{\s*from:\s*paintedPlace\s*,\s*to:\s*place\s*,\s*ground\s*,\s*fadeMs:\s*RETHEME_FADE_MS\s*\}\s*\)$/,
+    );
+  });
+
+  it('and the fade it reports is the configured token, imported — not a number typed twice', () => {
+    // `fadeMs` is a CONFIGURED duration, not a measurement, which is why it may be a named
+    // constant; the constant must be the one the stylesheet's dissolve reads through themeVars.
+    expect(SOURCE).toMatch(/import\s*\{\s*RETHEME_FADE_MS\s*\}\s*from\s*'\.\.\/render\/tokens\.ts'/);
+  });
+});
+
 describe('narrate() times the round trip to the model', () => {
   const body = bodyOf('async function narrate(');
 

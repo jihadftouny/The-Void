@@ -267,6 +267,58 @@ describe('retheme applies the floor, THEN the player’s preferences over it', (
     expect(body, 'the floor tag is set as markup').not.toMatch(/floorEl\.innerHTML/);
   });
 
+  // `floor-looks` (2026-09-12): the painted floor is recorded, at the boundary.
+  it('and records the painted floor AFTER both appliers, reading the ground they left', () => {
+    // After, because the ground it reports is the one `applySettings` PAINTED — `dark` on floor
+    // 2 under high contrast. Called unconditionally; the helper owns the only branch, so this
+    // body stays branch-free (the assertion just above).
+    const note = body.search(/noteFloorPaint\s*\(\s*state\.place\s*,\s*document\.documentElement\.dataset\['ground'\]/);
+    expect(note, 'retheme() no longer records the floor it painted').toBeGreaterThan(-1);
+    expect(note, 'the floor is recorded before the settings painted it').toBeGreaterThan(body.search(/applySettings\s*\(/));
+  });
+});
+
+describe('noteFloorPaint logs a change of floor, and nothing else', () => {
+  const body = bodyOf('function noteFloorPaint(');
+
+  it('logs only when the painted floor CHANGED — never at boot, never on a same-floor step', () => {
+    // Pinned by polarity: `===` would log on every step and never on a descent; dropping the
+    // null check would log a change "from null" at boot.
+    expect(body, 'the change test is gone or inverted').toMatch(
+      /if\s*\(\s*paintedPlace\s*!==\s*null\s*&&\s*paintedPlace\s*!==\s*place\s*\)/,
+    );
+    expect(body, 'the change test compares equal').not.toMatch(/paintedPlace\s*===\s*place/);
+  });
+
+  /** Index of the `}` that closes the block opened by the first `{` at or after `from`. */
+  const closeOf = (text: string, from: number): number => {
+    let depth = 0;
+    for (let i = text.indexOf('{', from); i >= 0 && i < text.length; i += 1) {
+      if (text[i] === '{') depth += 1;
+      else if (text[i] === '}') {
+        depth -= 1;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  };
+
+  it('and always remembers the floor it saw, outside the branch', () => {
+    // Inside the branch, the first paint would never be remembered and no change would ever log.
+    // The branch's end is found by MATCHING braces: the first `}` after the `if` is the log
+    // payload's object literal, and a guard that stopped there was proven blind — moving the
+    // assignment inside the branch left it green.
+    const branchEnd = closeOf(body, body.search(/if\s*\(/));
+    const remember = body.search(/paintedPlace\s*=\s*place\s*;/);
+    expect(branchEnd, 'the branch has no block to close').toBeGreaterThan(-1);
+    expect(remember, 'the painted floor is never remembered').toBeGreaterThan(-1);
+    expect(remember, 'the painted floor is only remembered on a change').toBeGreaterThan(branchEnd);
+  });
+
+  it('the brace matcher skips a nested object literal (or the guard above measures the wrong block)', () => {
+    const fn = 'if (a) {\n  log({ x: 1 });\n  y = 2;\n}\nz = 3;';
+    expect(fn.slice(closeOf(fn, 0) + 1)).toBe('\nz = 3;');
+  });
 });
 
 // =========================================================================================

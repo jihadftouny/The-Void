@@ -26,7 +26,7 @@
 // screen is row-model-driven, so each future group is a data addition, not a rewrite.
 // (Author's answer, 2026-09-07: "the reduced subset is right. Confirmed.")
 
-import { HIGH_CONTRAST, TYPE, floorTheme, themeVars } from './tokens.ts';
+import { HIGH_CONTRAST, TYPE, floorTheme } from './tokens.ts';
 
 /** How large the interface's type is. */
 export type TextScale = 'small' | 'normal' | 'large';
@@ -135,6 +135,15 @@ export function serializeSettings(s: Settings): string {
  * ⚠ EVERY KEY IT RETURNS IS A KEY `themeVars` ALSO RETURNS. That is asserted, not assumed:
  * it is what keeps the whole settings layer inside `tokens.test.ts`'s CSS-resolution walk by
  * construction, rather than needing its own parallel guard that could drift.
+ *
+ * ⚠ REVISED 2026-09-12 (`floor-looks`): IT NOW RESOLVES THE ACCENT AND THE THREE ROLES TOO.
+ * Floor 2 became a light floor, and high contrast must still paint it black. On black, floor
+ * 2's own roles (dark crimson, dark green, dark amber) and its deep-red accent (2.1:1) would
+ * all but vanish, so under high contrast the roles become `HIGH_CONTRAST`'s and the accent
+ * becomes the floor's `accentOnBlack`. The accent still SURVIVES high contrast — it is still
+ * the floor's own, per floor — it is only that a light floor's accent has no legal value on
+ * black. In normal mode all four are the floor's own, so the setting stays total and
+ * reversible exactly as before.
  */
 export function settingsVars(s: Settings, place: number): Record<string, string> {
   const floor = floorTheme(place);
@@ -153,9 +162,13 @@ export function settingsVars(s: Settings, place: number): Record<string, string>
     '--void-panel-raised': high ? HIGH_CONTRAST.panelRaised : floor.panelRaised,
     '--void-ink': high ? HIGH_CONTRAST.ink : floor.ink,
     '--void-ink-dim': high ? HIGH_CONTRAST.inkDim : floor.inkDim,
-    '--void-ink-faint': high ? HIGH_CONTRAST.inkFaint : themeVars(place)['--void-ink-faint']!,
-    '--void-rule': high ? HIGH_CONTRAST.rule : themeVars(place)['--void-rule']!,
-    '--void-rule-strong': high ? HIGH_CONTRAST.ruleStrong : themeVars(place)['--void-rule-strong']!,
+    '--void-ink-faint': high ? HIGH_CONTRAST.inkFaint : floor.inkFaint,
+    '--void-rule': high ? HIGH_CONTRAST.rule : floor.rule,
+    '--void-rule-strong': high ? HIGH_CONTRAST.ruleStrong : floor.ruleStrong,
+    '--void-harm': high ? HIGH_CONTRAST.harm : floor.harm,
+    '--void-heal': high ? HIGH_CONTRAST.heal : floor.heal,
+    '--void-foe': high ? HIGH_CONTRAST.foe : floor.foe,
+    '--void-accent': high ? (floor.accentOnBlack ?? floor.accent) : floor.accent,
     // THE ATMOSPHERE IS TURNED OFF, not dimmed. Zero, so the composite the contrast gate
     // measures IS the ground — which is why high contrast can be proved to beat every floor.
     '--void-texture-opacity': high ? '0' : String(floor.texture.opacity),

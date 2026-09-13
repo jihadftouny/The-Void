@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FLOOR_THEMES, TYPE, themeVars } from './tokens.ts';
+import { FADED_VARS, FLOOR_THEMES, RETHEME_FADE_MS, TYPE, themeVars } from './tokens.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = join(HERE, '..');
@@ -641,6 +641,468 @@ describe('every floor texture kind has a rule that paints it', () => {
       /\[data-contrast='high'\]\s+\.void-texture\s*\{[^}]*display\s*:\s*none/,
     );
   });
+});
+
+// =========================================================================================
+// `floor-looks` (2026-09-12) — FLOORS 2 AND 3 ARE REALLY PAINTED (AC-9), AND 1, 4, 5 ARE NOT
+// RE-PAINTED (AC-8b).
+//
+// The author, having played it: floors 2 and 3 were "only lines in the background, no gradient
+// colors or anything". Floor 2 is now red flecks on the one light floor; floor 3 a grey haze with
+// ash falling through it. What a source scan can hold about that: the paint uses ONLY the flat
+// texture ink (so the contrast gate's composite stays the worst case), it really moves, and the
+// motion loops without a seam — a speck layer that advanced half a tile would jump once a cycle,
+// which reads as a glitch on exactly the floor that is meant to read as stillness.
+// =========================================================================================
+
+/** Split a CSS value on the commas that are not inside parentheses. */
+function splitTop(value: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const c of value) {
+    if (c === '(') depth += 1;
+    if (c === ')') depth -= 1;
+    if (c === ',' && depth === 0) {
+      out.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  if (current.trim()) out.push(current.trim());
+  return out;
+}
+
+/** The argument text of every `*-gradient(...)` call in a value, parentheses balanced. */
+function gradientCalls(value: string): string[] {
+  const out: string[] = [];
+  for (const m of value.matchAll(/[a-z-]*gradient\(/g)) {
+    const open = (m.index as number) + m[0].length - 1;
+    let depth = 0;
+    for (let i = open; i < value.length; i += 1) {
+      if (value[i] === '(') depth += 1;
+      else if (value[i] === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          out.push(value.slice(open + 1, i));
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** A gradient's FIRST argument, when it is a shape, a size, a position or a direction. */
+const GRADIENT_PREAMBLE = /^(?:circle|ellipse|closest-|farthest-|to\s|at\s|-?[\d.]+(?:%|px|deg|turn|rad|grad|em)?(?:\s|$))/;
+
+/** Every colour stop in one gradient that is NOT the flat texture ink or `transparent`. */
+function foreignStops(args: string): string[] {
+  const parts = splitTop(args);
+  const stops = parts.length > 0 && GRADIENT_PREAMBLE.test(parts[0] as string) ? parts.slice(1) : parts;
+  return stops.filter((stop) => !/^(?:var\(\s*--void-texture-ink\s*\)|transparent\b)/.test(stop));
+}
+
+/** One background layer of a moving texture: its tile, and where the loop starts and ends. */
+interface LoopLayer {
+  tile: string[];
+  from: string[];
+  to: string[];
+}
+
+/**
+ * The layers of a texture's loop: `background-size` from the rule styling `selector` itself, and
+ * the `from` / `to` `background-position` lists of the keyframes its animation names.
+ */
+function textureLoop(css: string, selector: string): LoopLayer[] {
+  const rule = rulesFor(css, selector)[0];
+  if (!rule) return [];
+  const decls = declarations(rule.body);
+  const size = decls.filter((d) => d.prop === 'background-size').at(-1)?.value ?? '';
+  const animation = decls.filter((d) => d.prop === 'animation' || d.prop === 'animation-name').at(-1)?.value ?? '';
+  const frames = keyframes(css);
+  const name = animation.split(/[\s,]+/).find((token) => frames.has(token));
+  if (!name) return [];
+  const body = frames.get(name) as string;
+  const at = (which: string): string[] => {
+    const block = new RegExp(`(?:^|\\})\\s*(?:${which})\\s*\\{([^}]*)\\}`).exec(body)?.[1] ?? '';
+    const position = declarations(block).filter((d) => d.prop === 'background-position').at(-1)?.value ?? '';
+    return splitTop(position);
+  };
+  const from = at('from|0%');
+  const to = at('to|100%');
+  return splitTop(size).map((tile, i) => ({
+    tile: tile.split(/\s+/),
+    from: (from[i] ?? '').split(/\s+/),
+    to: (to[i] ?? '').split(/\s+/),
+  }));
+}
+
+/** A length in px (`0` counts as 0), or null for anything relative. */
+function pxOf(token: string | undefined): number | null {
+  if (token === '0') return 0;
+  const m = /^(-?[\d.]+)px$/.exec(token ?? '');
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Why a loop has a seam, or null when it is seamless. A layer tiled in px must advance by a
+ * whole number of tiles on both axes (anything else jumps once a cycle); a layer sized in % is a
+ * still haze and must not move at all. `down` additionally demands each px layer fall exactly ONE
+ * tile straight down — the ash.
+ */
+function seam(layers: readonly LoopLayer[], down: boolean): string | null {
+  if (layers.length === 0) return 'no loop found';
+  for (const [i, layer] of layers.entries()) {
+    const [tw, th] = layer.tile.map(pxOf);
+    if (tw === null || th === null) {
+      if (layer.from.join(' ') !== layer.to.join(' ')) return `layer ${i} is a haze and moves`;
+      continue;
+    }
+    const [fx, fy] = layer.from.map(pxOf);
+    const [tx, ty] = layer.to.map(pxOf);
+    if (fx == null || fy == null || tx == null || ty == null) return `layer ${i} has no px positions`;
+    const dx = tx - fx;
+    const dy = ty - fy;
+    if (dx % (tw as number) !== 0 || dy % (th as number) !== 0) return `layer ${i} advances ${dx}x${dy} on a ${tw}x${th} tile`;
+    if (dx === 0 && dy === 0) return `layer ${i} does not move`;
+    if (down && (dy !== th || dx !== 0)) return `layer ${i} does not fall exactly one tile straight down (${dx}, ${dy})`;
+  }
+  return null;
+}
+
+describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC-9)', () => {
+  const FLECKS = "[data-texture='flecks'] .void-texture";
+  const ASH = "[data-texture='ash'] .void-texture";
+
+  it('the stop detector fires on a foreign colour in any position, and passes the house shapes', () => {
+    // Clean — the shapes these two rules and the three untouched ones really write.
+    for (const args of [
+      'circle, var(--void-texture-ink) 0 1px, transparent 2px',
+      '110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%',
+      '118% 104% at 50% 46%, transparent 34%, var(--void-texture-ink)',
+      '24deg, var(--void-texture-ink) 0 1px, transparent 1px 7px',
+    ]) {
+      expect(foreignStops(args), args).toEqual([]);
+    }
+    // Dirty — a second token, a named colour, a literal, and a stop with no preamble before it.
+    expect(foreignStops('circle, var(--void-accent) 0 1px, transparent 2px')).toEqual(['var(--void-accent) 0 1px']);
+    expect(foreignStops('circle, red 0 1px, transparent 2px')).toEqual(['red 0 1px']);
+    expect(foreignStops('var(--void-texture-ink), #ffffff')).toEqual(['#ffffff']);
+    expect(foreignStops('var(--void-ink), transparent')).toEqual(['var(--void-ink)']);
+    expect(gradientCalls('radial-gradient(circle, var(--void-texture-ink) 0 1px, transparent 2px), linear-gradient(red, blue)'))
+      .toEqual(['circle, var(--void-texture-ink) 0 1px, transparent 2px', 'red, blue']);
+  });
+
+  for (const [floor, selector, layers] of [
+    ['floor 2, the flecks', FLECKS, 3],
+    ['floor 3, the ash', ASH, 4],
+  ] as const) {
+    it(`${floor}: every gradient stop is the flat texture ink or transparent`, () => {
+      const found = rulesFor(ALL_CSS, selector);
+      expect(found, `nothing paints ${selector}`).toHaveLength(1);
+      const decls = declarations(found[0]!.body);
+      const background = decls.filter((d) => d.prop === 'background').map((d) => d.value).join(', ');
+      const calls = gradientCalls(background);
+      expect(calls, `${selector} does not paint ${layers} layers`).toHaveLength(layers);
+      for (const args of calls) expect(foreignStops(args), `${selector}: ${args}`).toEqual([]);
+      // ...and nothing else in the rule adds alpha or colour: the layer's own opacity is the
+      // ONLY alpha, which is what keeps the gate's composite the worst case.
+      for (const d of decls) {
+        expect(['opacity', 'background-color', 'filter', 'mix-blend-mode', 'color'], `${selector} sets ${d.prop}`).not.toContain(d.prop);
+      }
+    });
+
+    it(`${floor}: it really moves — background-position, and only that`, () => {
+      expect(animatesWith(ALL_CSS, selector, 'background-position'), `${selector} is still`).toBe(true);
+    });
+  }
+
+  it('the ash FALLS: each speck layer drops exactly one tile, straight down, and the haze holds still', () => {
+    const layers = textureLoop(ALL_CSS, ASH);
+    expect(layers, 'the ash has no loop to judge').toHaveLength(4);
+    expect(seam(layers, true)).toBeNull();
+    // Down means the `to` y-offset is the LARGER one (a CSS y grows downward).
+    for (const layer of layers.filter((l) => pxOf(l.tile[1]) !== null)) {
+      expect(pxOf(layer.to[1])!, 'a speck layer rises').toBeGreaterThan(pxOf(layer.from[1])!);
+    }
+  });
+
+  it('the flecks drift by exactly one tile per layer, so the loop has no seam', () => {
+    const layers = textureLoop(ALL_CSS, FLECKS);
+    expect(layers, 'the flecks have no loop to judge').toHaveLength(3);
+    expect(seam(layers, false)).toBeNull();
+    for (const layer of layers) {
+      expect(pxOf(layer.to[0])! - pxOf(layer.from[0])!, 'not one tile across').toBe(pxOf(layer.tile[0]));
+      expect(pxOf(layer.to[1])! - pxOf(layer.from[1])!, 'not one tile down').toBe(pxOf(layer.tile[1]));
+    }
+  });
+
+  it('the seam detector fires on a half-tile loop, a rising speck, a drifting haze and a still layer', () => {
+    const css = (to: string, size = '41px 53px, 150% 150%'): string =>
+      `.t { background-size: ${size}; animation: fall 14s linear infinite; }\n` +
+      `@keyframes fall { from { background-position: 0px 0px, 20% 10%; } to { background-position: ${to}; } }`;
+    expect(seam(textureLoop(css('0px 53px, 20% 10%'), '.t'), true), 'the real shape').toBeNull();
+    expect(seam(textureLoop(css('0px 26px, 20% 10%'), '.t'), true), 'half a tile').not.toBeNull();
+    expect(seam(textureLoop(css('0px -53px, 20% 10%'), '.t'), true), 'a rising speck').not.toBeNull();
+    expect(seam(textureLoop(css('0px 53px, 20% 14%'), '.t'), true), 'a haze that drifts').not.toBeNull();
+    expect(seam(textureLoop(css('0px 0px, 20% 10%'), '.t'), false), 'a layer that never moves').not.toBeNull();
+    expect(seam(textureLoop(css('41px 53px, 20% 10%'), '.t'), true), 'a diagonal is not straight down').not.toBeNull();
+    expect(seam(textureLoop(css('41px 53px, 20% 10%'), '.t'), false), 'a whole-tile diagonal is seamless').toBeNull();
+    expect(seam(textureLoop('.t { background-size: 41px 53px; }', '.t'), true), 'no animation at all').not.toBeNull();
+  });
+});
+
+// =========================================================================================
+// `floor-looks` (2026-09-12) — THE RE-THEME DISSOLVE, coupled at both ends (AC-11), KEPT under
+// reduced motion (AC-10), and the light ground's inverted strike flash (AC-14).
+//
+// The dissolve itself — that the ground really passes through the in-between colours in the
+// built page — is measured in real Chromium by `src/dev/layoutProbe.test.ts`. What a source
+// scan holds here is the STRUCTURE it depends on: every colour token registered and transitioned,
+// the list and tokens.ts agreeing name for name, and no reduced-motion rule reaching the root.
+// =========================================================================================
+
+/** Every `@property --name { … }` registration in a stylesheet, name -> body. */
+function registrations(css: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const m of css.matchAll(/@property\s+(--[-\w]+)\s*\{([^{}]*)\}/g)) out.set(m[1] as string, m[2] as string);
+  return out;
+}
+
+/** The `:root { transition: … }` list, as `{ name, duration }` per comma-separated entry. */
+function rootTransitions(css: string): { name: string; duration: string; rest: string }[] {
+  const out: { name: string; duration: string; rest: string }[] = [];
+  for (const rule of rulesFor(css, ':root')) {
+    for (const d of declarations(rule.body).filter((x) => x.prop === 'transition')) {
+      for (const entry of splitTop(d.value)) {
+        const [name = '', duration = '', ...rest] = entry.split(/\s+(?![^(]*\))/);
+        out.push({ name, duration, rest: rest.join(' ') });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * True when a selector's SUBJECT can be the root element itself: a single compound (no
+ * descendant or child part) carrying no class, no id and no type other than `html`. In this
+ * codebase every `[data-*]` hook but the screen/layout pair lives ON the root, so a bare
+ * `[data-motion='reduce']` targets `<html>` — which is exactly the shape that would switch the
+ * dissolve off for the players who asked for less motion.
+ */
+function targetsRoot(selector: string): boolean {
+  // Collapse bracketed and parenthesised text so their spaces and dots cannot read as structure.
+  let flat = selector.trim();
+  for (let prev = ''; prev !== flat; ) {
+    prev = flat;
+    flat = flat.replace(/\[[^[\]]*\]/g, '[]').replace(/\([^()]*\)/g, '()');
+  }
+  if (/\s|[>+~]/.test(flat)) return false; // more than one compound: the subject is a descendant
+  if (/[.#]/.test(flat) || /::/.test(flat)) return false;
+  const type = /^[a-zA-Z][\w-]*/.exec(flat)?.[0];
+  return type === undefined || type.toLowerCase() === 'html';
+}
+
+/** Does a rule body declare anything that would change the root's transition? */
+function touchesTransition(body: string): boolean {
+  return declarations(body).some((d) => d.prop.startsWith('transition'));
+}
+
+/** The body of the first `@media (prefers-reduced-motion: reduce)` block in a stylesheet. */
+function reducedMotionBlock(css: string): string {
+  const start = css.search(/@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)/);
+  if (start < 0) return '';
+  const open = css.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return css.slice(open + 1, i);
+    }
+  }
+  return '';
+}
+
+/** Every selector — in either reduced-motion context — whose rule would reach the root's transition. */
+function reducedMotionRootTransitions(css: string): string[] {
+  const offenders: string[] = [];
+  const contexts = [
+    { name: "[data-motion='reduce']", selectors: selectorsCarrying(css, "[data-motion='reduce']") },
+    {
+      name: 'prefers-reduced-motion',
+      selectors: rules(reducedMotionBlock(css)).flatMap((r) =>
+        r.selector.split(',').map((s) => ({ selector: s.trim(), body: r.body })),
+      ),
+    },
+  ];
+  for (const { name, selectors } of contexts) {
+    for (const { selector, body } of selectors) {
+      if (targetsRoot(selector) && touchesTransition(body)) offenders.push(`${name}: ${selector}`);
+    }
+  }
+  return offenders;
+}
+
+describe('the re-theme dissolve is coupled to tokens.ts at both ends (AC-11)', () => {
+  const TOKENS_CSS = SHEETS.find((s) => s.name === 'tokens.css');
+
+  it('THE CONTROL: the root really transitions, and every entry lasts --void-fade-retheme', () => {
+    const list = rootTransitions(ALL_CSS);
+    expect(list.length, 'nothing transitions on :root — the floor change snaps').toBeGreaterThan(0);
+    for (const t of list) {
+      expect(t.duration, `${t.name} does not last the token's duration`).toBe('var(--void-fade-retheme)');
+      expect(t.rest, `${t.name}: an easing other than the dissolve's`).toBe('ease-in-out');
+    }
+    // ...and that token is written by the theme, from the one number the log line reports.
+    expect(themeVars(0)['--void-fade-retheme']).toBe(`${RETHEME_FADE_MS}ms`);
+  });
+
+  it('FORWARD: every colour token the dissolve is meant to carry is registered AND transitioned', () => {
+    const registered = registrations(ALL_CSS);
+    const transitioned = new Set(rootTransitions(ALL_CSS).map((t) => t.name));
+    expect(FADED_VARS.length, 'FADED_VARS is empty — nothing would fade').toBe(12);
+    for (const name of FADED_VARS) {
+      expect(registered.has(name), `${name} is not registered — it would SNAP while its siblings fade`).toBe(true);
+      expect(transitioned.has(name), `${name} is registered but never transitioned`).toBe(true);
+    }
+  });
+
+  it('BACKWARD: nothing is registered or transitioned that tokens.ts does not list', () => {
+    const listed = new Set(FADED_VARS);
+    expect([...registrations(ALL_CSS).keys()].filter((n) => !listed.has(n)), 'a registration FADED_VARS does not know').toEqual([]);
+    expect(rootTransitions(ALL_CSS).map((t) => t.name).filter((n) => !listed.has(n)), 'a transition FADED_VARS does not know').toEqual([]);
+    // In particular the texture's ink and opacity are NOT faded: the pattern swaps at once.
+    expect(listed.has('--void-texture-ink')).toBe(false);
+    expect(listed.has('--void-texture-opacity')).toBe(false);
+  });
+
+  it('every registration is an inherited <color> starting transparent, and all of them live in tokens.css', () => {
+    for (const [name, body] of registrations(ALL_CSS)) {
+      const decls = Object.fromEntries(declarations(body).map((d) => [d.prop, d.value]));
+      expect(decls['syntax'], `${name}: not a colour — it would not interpolate as one`).toBe("'<color>'");
+      expect(decls['inherits'], `${name}: not inherited — no descendant would see the fade`).toBe('true');
+      expect(decls['initial-value'], `${name}: a starting colour other than the keyword`).toBe('transparent');
+    }
+    expect(TOKENS_CSS, 'tokens.css is not among the scanned sheets').toBeDefined();
+    expect(registrations(TOKENS_CSS!.css).size, 'the registrations moved out of tokens.css').toBe(FADED_VARS.length);
+  });
+
+  it('the readers parse the shapes they are handed (or the couplings above read nothing)', () => {
+    const css =
+      "@property --a { syntax: '<color>'; inherits: true; initial-value: transparent; }\n" +
+      ':root {\n  transition:\n    --a var(--void-fade-retheme) ease-in-out,\n    --b 2s linear;\n}';
+    expect([...registrations(css).keys()]).toEqual(['--a']);
+    expect(rootTransitions(css)).toEqual([
+      { name: '--a', duration: 'var(--void-fade-retheme)', rest: 'ease-in-out' },
+      { name: '--b', duration: '2s', rest: 'linear' },
+    ]);
+  });
+});
+
+describe('reduced motion does NOT stop the re-theme dissolve — it moves nothing, and it removes the white-out (AC-10)', () => {
+  it('no reduced-motion rule, in either context, reaches the root’s transition', () => {
+    expect(
+      reducedMotionRootTransitions(ALL_CSS),
+      'a reduced-motion rule switches the dissolve off — the players who asked for less motion ' +
+        'would get the one-frame jump from near-black to white instead',
+    ).toEqual([]);
+  });
+
+  it('...while the texture’s own drift, which IS motion, still stops (the control)', () => {
+    expect(stopsMotion(ALL_CSS, "[data-motion='reduce']", '.void-texture')).toBe(true);
+    expect(stopsMotion(reducedMotionBlock(ALL_CSS), "data-motion='full'", '.void-texture')).toBe(true);
+  });
+
+  it('the detector catches the root in every spelling the reduced-motion rules could take', () => {
+    const REDUCE_LIST =
+      "[data-motion='reduce'] .void-texture,\n[data-motion='reduce'] .void-button";
+    for (const [css, why] of [
+      ["[data-motion='reduce'] { transition: none; }", 'the bare hook — it lives on <html>'],
+      [":root[data-motion='reduce'] { transition: none; }", ':root with the hook'],
+      ["html[data-motion='reduce'] { transition-duration: 0s; }", 'html, and a longhand'],
+      [`${REDUCE_LIST},\n[data-motion='reduce'] {\n  animation: none;\n  transition: none;\n}`, 'appended to the existing list'],
+      ["@media (prefers-reduced-motion: reduce) {\n  :root:not([data-motion='full']) { transition: none; }\n}", 'the OS block'],
+      ["[data-motion='reduce'] { transition: opacity 90ms; }", 'a transition that replaces the list'],
+    ] as const) {
+      expect(reducedMotionRootTransitions(css), why).not.toEqual([]);
+    }
+    for (const [css, why] of [
+      [`${REDUCE_LIST} {\n  animation: none;\n  transition: none;\n}`, 'the real element rules'],
+      ["@media (prefers-reduced-motion: reduce) {\n  :root:not([data-motion='full']) .void-texture { transition: none; }\n}", 'an element in the OS block'],
+      ["[data-motion='reduce'] { color: red; }", 'the root, but no transition'],
+      [":root { transition: none; }", 'not a reduced-motion rule at all'],
+    ] as const) {
+      expect(reducedMotionRootTransitions(css), why).toEqual([]);
+    }
+  });
+});
+
+describe('the strike flash inverts on the light ground (AC-14)', () => {
+  const LIGHT = "[data-ground='light'] .arena-figure.is-struck";
+  /** The `brightness()` a flash's keyframes open on, or null. */
+  const openingBrightness = (selector: string): number | null => {
+    const rule = rulesFor(ALL_CSS, selector).find((r) =>
+      declarations(r.body).some((d) => d.prop === 'animation' || d.prop === 'animation-name'),
+    );
+    const decl = rule && declarations(rule.body).find((d) => d.prop === 'animation' || d.prop === 'animation-name');
+    const frames = keyframes(ALL_CSS);
+    const name = decl?.value.split(/[\s,]+/).find((t) => frames.has(t));
+    const from = name ? /(?:^|\})\s*(?:from|0%)\s*\{([^}]*)\}/.exec(frames.get(name) as string)?.[1] : undefined;
+    const m = from ? /brightness\(\s*([\d.]+)\s*\)/.exec(from) : null;
+    return m ? Number(m[1]) : null;
+  };
+
+  it('on a light ground a struck enemy DARKENS — brightening a white frame shows nothing', () => {
+    expect(animatesWith(ALL_CSS, LIGHT, 'filter'), 'the light-ground flash does not move').toBe(true);
+    const opening = openingBrightness(LIGHT);
+    expect(opening, 'the light-ground flash names no brightness').not.toBeNull();
+    expect(opening!, 'the light-ground flash brightens a white frame').toBeLessThan(1);
+  });
+
+  it('and the dark-ground flash is unchanged: it still BRIGHTENS', () => {
+    const opening = openingBrightness('.arena-figure.is-struck');
+    expect(opening).toBe(2.2);
+  });
+});
+
+describe('floors 1, 4 and 5 keep the paint they had (AC-8b)', () => {
+  // TRANSCRIBED from `atmosphere.css` on `main` at 6ebfa42 (the plan's "unchanged CSS" block),
+  // whitespace-normalised — never read back from the file under test. A unit that DELIBERATELY
+  // re-paints one of these floors updates its line here, and says why in the commit.
+  const PINNED_RULES: Record<string, string> = {
+    "[data-texture='fog'] .void-texture":
+      "[data-texture='fog'] .void-texture { background: radial-gradient(120% 70% at 18% 108%, var(--void-texture-ink), transparent 62%), radial-gradient(95% 62% at 86% 96%, var(--void-texture-ink), transparent 66%); background-size: 160% 160%, 150% 150%; animation: void-fog-drift 96s ease-in-out infinite alternate; }",
+    "[data-texture='glow'] .void-texture":
+      "[data-texture='glow'] .void-texture { background: radial-gradient(72% 58% at 50% 4%, var(--void-texture-ink), transparent 72%); background-size: 130% 130%; animation: void-glow-breathe 70s ease-in-out infinite alternate; }",
+    "[data-texture='absence'] .void-texture":
+      "[data-texture='absence'] .void-texture { background: radial-gradient(118% 104% at 50% 46%, transparent 34%, var(--void-texture-ink)); }",
+  };
+  const PINNED_KEYFRAMES: Record<string, string> = {
+    'void-fog-drift':
+      '@keyframes void-fog-drift { from { background-position: 0% 100%, 100% 100%; } to { background-position: 12% 88%, 88% 84%; } }',
+    'void-glow-breathe':
+      '@keyframes void-glow-breathe { from { background-position: 50% 0%; } to { background-position: 50% 12%; } }',
+  };
+  const squash = (s: string): string => s.replace(/\s+/g, ' ').trim();
+
+  for (const [selector, pinned] of Object.entries(PINNED_RULES)) {
+    it(`${selector} is exactly what main shipped`, () => {
+      const found = rulesFor(ALL_CSS, selector);
+      expect(found, `${selector} is styled by ${found.length} rules`).toHaveLength(1);
+      expect(squash(`${selector} { ${found[0]!.body} }`)).toBe(pinned);
+    });
+  }
+
+  for (const [name, pinned] of Object.entries(PINNED_KEYFRAMES)) {
+    it(`@keyframes ${name} is exactly what main shipped`, () => {
+      const body = keyframes(ALL_CSS).get(name);
+      expect(body, `@keyframes ${name} is gone`).toBeDefined();
+      expect(squash(`@keyframes ${name} {${body}}`)).toBe(pinned);
+    });
+  }
 });
 
 // =========================================================================================
