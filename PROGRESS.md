@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2688 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2767 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,14 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-13 — floor 2 is a white-out, floor 3 is ash, and floors fade into each other ✅
+
+**`floor-looks` merged. 2688 → 2767 tests.** You played the game and said floors 2 and 3 were *"only lines in the background, no gradient colors or anything."* They were: thin 1 px repeating lines at 7% on near-black, while floors 1 and 4 had soft gradients. **Floor 2 is now the only light floor** — white, dark ink, a deep blood-red, red flecks — so entering the Void is a white-out. **Floor 3 is a grey haze with ash falling through it.** **Moving between floors now dissolves over 1.2 s instead of snapping**, proven in a real browser. It fades under reduced motion too, because a fade moves nothing and is what prevents the flash.
+
+**A new in-browser check reads the colour of every word on every screen, on every floor.** On its first run it found a live bug: floor 3's Abandon row was 4.39:1, under the 4.5 minimum. Fixed. **Floors 1, 4 and 5 are byte-for-byte unchanged.**
+
+**Next:** your six checks at the top of `HUMAN-CHECKS.md` — above all, whether the white-out feels like light or a glitch, and whether the flecks read as red or as pale rose (a darker fleck colour is ready if so). Then **the round-order and tempo-gauge unit**.
 
 ### 2026-09-12 — #6 merged: the fight is a framed stage, and a round plays out beat by beat ✅
 

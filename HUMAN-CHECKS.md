@@ -1,5 +1,16 @@
 # Human Checks — The Void
 
+> ## 🎨 From `floor-looks` (merged 2026-09-13) — floor 2 is a white-out and floor 3 is ash; only your eyes can judge them
+>
+> **You asked for this after playing:** floors 2 and 3 were *"only lines in the background."* Now floor 2 is the only light floor — white, dark ink, a deep red, red flecks — and floor 3 is a grey haze with ash falling through it. **Moving between floors dissolves over 1.2 s instead of snapping.** Readability is machine-checked on every floor; **whether it looks right is not.** Start with `npm run desktop`, most-likely-wrong first.
+>
+> - [ ] **1. The white-out.** F3-jump from floor 1 to `act2-illusion`. The red flecks appear at once, then the ground dissolves to white. **Mid-fade all text dips below readable, and for about a tenth of a second body text is effectively invisible — that is expected** (any fade between opposites does it). *Fail if* it reads as a flicker or glitch, or anything flashes white in a single frame. Repeat with **Settings → Motion → Reduced**: *fail if* it snaps. On floor 2 turn **High contrast** on: *fail if* any white, flecks or dark red remain after 1.2 s; turn it off: *fail if* the return to white is instant.
+> - [ ] **2. Are the flecks red, or pale rose?** At their densest they are `#e4b3b6`. *Fail if* they read as pink dust. **A ready fix if so:** a darker fleck colour at the same strength — `#a01014` still passes every readability check. Raising their strength does not.
+> - [ ] **3. Is the deep red blood-red or brown?** `#8e0c0a` — check the floor tag, the title, and the keyboard focus ring (Tab through the hub). *Fail if* it reads as brown or maroon, or the ring is hard to find.
+> - [ ] **4. Does floor 3 read as ash?** Watch the hub background for 15 s: fine specks falling slowly over a still grey haze. *Fail if* they are invisible, read as rain or snow, the haze looks like a dirty screen, or any colour shows.
+> - [ ] **5. Does floor 2 look deliberate everywhere?** The hub, inventory, character sheet, settings, a battle with the log open, and the three empty art frames. A strike must darken the enemy's frame, and your HP bar (crimson) must look different from the charges bar's red. *Fail if* anything reads as dark-mode furniture dropped onto white.
+> - [ ] **6. A clean boot.** The title fades in over about 1.2 s. *Fail if* anything throws in the console. The log should hold one `ui / floor painted` line per change of floor.
+
 > ## ▶️ From `battle-screen` (`PLAN.md` #6, 2026-09-12) — the fight is a framed stage now
 >
 > A fight has its own screen: the enemy's frame in the centre (empty until the art exists — that is

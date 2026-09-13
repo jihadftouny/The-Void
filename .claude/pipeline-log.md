@@ -19,6 +19,27 @@ Format per entry:
 
 ---
 
+## 2026-09-13 — floor-looks (G64 fixed; G65, G66 opened) [branch `agentic/floor-looks`, **merged to `main` 2026-09-13**]
+- Verdict: **PASS**, first time, **0 fix rounds**. 2688 → **2767 tests**, 113 files. 4 commits, each green on its own.
+- **Why it exists:** a pipeline escape from `visual-identity`, found by the author in play (*"floor 3 and 2 are only lines in the background"*). Floor 2 became the only light floor; floor 3 a greyscale haze with ash; the change of floor now dissolves over 1.2 s.
+- Build-agent deviations: floor 3's panels re-stepped (`#181818` / `#1d1d1d`) because the new audit found **a live AA failure on `main`** (the Abandon row, 4.39:1); four commits instead of five, since a texture rename must land in TS and CSS together; the audit's per-screen count rule replaced an impossible one. All judged sound.
+- Test failures before fixes: none.
+- Plan open-questions: none.
+- Manual engineer fixes: none yet.
+
+### What went right
+
+- **The first unit this week to pass verification with no fix round.** The plan pre-derived every contrast figure from the WCAG formula before proposing it, and the verifier reproduced every one to the second decimal.
+- **The probe proved the fade by measurement, not by reading CSS.** It sampled the ground mid-dissolve in real Chromium, and was proven red against both ways the fade could silently fail. A CSS-text check would have passed a fade that snaps to white in one frame.
+- **The new audit found a real bug on its first run** — and one no test had ever measured.
+- **The agent followed the new kill rule.** When an Electron process it launched hung (its own timing edit put a line break inside a string), it killed only that PID and its two children, and reported it.
+
+### Time, honestly
+
+**The build ran ~16 h of wall-clock time, but most was not work.** It stalled for ~54 min, came back and committed the core in ten minutes, then stalled for good on the last piece and was ended by the watchdog; and one timing run sat for **122 minutes, most likely while the machine slept**. The agent added a 15 s deadline to the fade so a hung run now fails in ~30 s instead of waiting. **Verification took ~1.8 h.**
+
+---
+
 ## 2026-09-12 — battle-screen (`PLAN.md` #6; G51 closed; G63 opened) [branch `agentic/battle-screen`, **merged to `main` 2026-09-12**]
 - Verdict: **PASS** after **1 fix round**. 2536 → **2688 tests**, 112 files. 19 commits, every one green on its own.
 - **Why it exists:** v1 carries #6 (`SHIP-SCOPE.md` §11); the author reconfirmed the framed stage on 2026-09-10 (§22.28).
