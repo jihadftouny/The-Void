@@ -712,30 +712,41 @@ interface LoopLayer {
 }
 
 /**
- * The layers of a texture's loop: `background-size` from the rule styling `selector` itself, and
- * the `from` / `to` `background-position` lists of the keyframes its animation names.
+ * The raw `from` / `to` `background-position` lists of the keyframes the rule styling `selector`
+ * itself animates with — one entry per comma, NOT one per layer: a short list is returned short,
+ * so a check can see what CSS would silently repeat. Null when there is no such rule or loop.
  */
-function textureLoop(css: string, selector: string): LoopLayer[] {
+function loopPositions(css: string, selector: string): { from: string[]; to: string[] } | null {
   const rule = rulesFor(css, selector)[0];
-  if (!rule) return [];
+  if (!rule) return null;
   const decls = declarations(rule.body);
-  const size = decls.filter((d) => d.prop === 'background-size').at(-1)?.value ?? '';
   const animation = decls.filter((d) => d.prop === 'animation' || d.prop === 'animation-name').at(-1)?.value ?? '';
   const frames = keyframes(css);
   const name = animation.split(/[\s,]+/).find((token) => frames.has(token));
-  if (!name) return [];
+  if (!name) return null;
   const body = frames.get(name) as string;
   const at = (which: string): string[] => {
     const block = new RegExp(`(?:^|\\})\\s*(?:${which})\\s*\\{([^}]*)\\}`).exec(body)?.[1] ?? '';
     const position = declarations(block).filter((d) => d.prop === 'background-position').at(-1)?.value ?? '';
     return splitTop(position);
   };
-  const from = at('from|0%');
-  const to = at('to|100%');
+  return { from: at('from|0%'), to: at('to|100%') };
+}
+
+/**
+ * The layers of a texture's loop: `background-size` from the rule styling `selector` itself, and
+ * the `from` / `to` `background-position` lists of the keyframes its animation names.
+ */
+function textureLoop(css: string, selector: string): LoopLayer[] {
+  const rule = rulesFor(css, selector)[0];
+  if (!rule) return [];
+  const size = declarations(rule.body).filter((d) => d.prop === 'background-size').at(-1)?.value ?? '';
+  const loop = loopPositions(css, selector);
+  if (!loop) return [];
   return splitTop(size).map((tile, i) => ({
     tile: tile.split(/\s+/),
-    from: (from[i] ?? '').split(/\s+/),
-    to: (to[i] ?? '').split(/\s+/),
+    from: (loop.from[i] ?? '').split(/\s+/),
+    to: (loop.to[i] ?? '').split(/\s+/),
   }));
 }
 
@@ -772,6 +783,49 @@ function seam(layers: readonly LoopLayer[], down: boolean): string | null {
   return null;
 }
 
+/**
+ * The widest angle, in degrees, between the per-cycle moves of any two layers that move in px: 0
+ * when every layer slides the same way (the whole field travels as one rigid sheet), 180 when two
+ * slide in opposite directions. A layer that does not move, or is not in px, has no direction.
+ */
+function directionSpread(layers: readonly LoopLayer[]): number {
+  const moves: [number, number][] = [];
+  for (const layer of layers) {
+    const [fx, fy] = layer.from.map(pxOf);
+    const [tx, ty] = layer.to.map(pxOf);
+    if (fx == null || fy == null || tx == null || ty == null) continue;
+    if (tx === fx && ty === fy) continue;
+    moves.push([tx - fx, ty - fy]);
+  }
+  let widest = 0;
+  for (const [i, [ax, ay]] of moves.entries()) {
+    for (const [bx, by] of moves.slice(i + 1)) {
+      const cos = (ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by));
+      widest = Math.max(widest, (Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI);
+    }
+  }
+  return widest;
+}
+
+/**
+ * Every comma-split selector that gives the texture element ITSELF a `::before` / `::after` (or
+ * the legacy one-colon form). The element is `.void-texture` everywhere and also `#atmosphere` on
+ * the full-screen instance, so both names count; a pseudo-element on some other element does not.
+ */
+function texturePseudoElements(css: string): string[] {
+  const out: string[] = [];
+  for (const rule of rules(css)) {
+    for (const part of rule.selector.split(',')) {
+      const selector = part.trim();
+      const compounds = selector.split(/\s*[\s>+~]\s*/);
+      if (compounds.some((c) => /(?:\.void-texture|#atmosphere)(?![-\w])/.test(c) && /::?(?:before|after)\b/i.test(c))) {
+        out.push(selector);
+      }
+    }
+  }
+  return out;
+}
+
 describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC-9)', () => {
   const FLECKS = "[data-texture='flecks'] .void-texture";
   const ASH = "[data-texture='ash'] .void-texture";
@@ -795,9 +849,11 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
       .toEqual(['circle, var(--void-texture-ink) 0 1px, transparent 2px', 'red, blue']);
   });
 
+  // `speck-scatter` (2026-09-14): 3 -> 12 and 4 -> 14. Each speck tile now carries four (flecks)
+  // or six (ash) dots, and a dot is one gradient layer; the ash's two haze layers are unchanged.
   for (const [floor, selector, layers] of [
-    ['floor 2, the flecks', FLECKS, 3],
-    ['floor 3, the ash', ASH, 4],
+    ['floor 2, the flecks', FLECKS, 12],
+    ['floor 3, the ash', ASH, 14],
   ] as const) {
     it(`${floor}: every gradient stop is the flat texture ink or transparent`, () => {
       const found = rulesFor(ALL_CSS, selector);
@@ -817,25 +873,91 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
     it(`${floor}: it really moves — background-position, and only that`, () => {
       expect(animatesWith(ALL_CSS, selector, 'background-position'), `${selector} is still`).toBe(true);
     });
+
+    // `speck-scatter` (AC-4). A per-layer list shorter than the layers is valid CSS: the browser
+    // repeats it from the top, silently pairing a dot with ANOTHER group's tile or move — a dot
+    // that jumps at the loop's seam, or a haze that drifts. Every list is counted, not trusted.
+    it(`${floor}: every per-layer list has exactly one entry per gradient layer`, () => {
+      const decls = declarations(rulesFor(ALL_CSS, selector)[0]!.body);
+      const last = (prop: string): string => decls.filter((d) => d.prop === prop).at(-1)?.value ?? '';
+      expect(gradientCalls(last('background')), 'the layer count moved under this test').toHaveLength(layers);
+      expect(splitTop(last('background-size')), 'background-size').toHaveLength(layers);
+      const loop = loopPositions(ALL_CSS, selector);
+      expect(loop, `${selector} has no loop`).not.toBeNull();
+      expect(loop!.from, 'the keyframes’ from list').toHaveLength(layers);
+      expect(loop!.to, 'the keyframes’ to list').toHaveLength(layers);
+      // The rule's own list is what reduced motion shows. One entry is the one safe short form —
+      // every layer takes it; anything between one and all of them misplaces some layer.
+      expect([1, layers], 'the still frame’s background-position').toContain(splitTop(last('background-position')).length);
+    });
   }
 
   it('the ash FALLS: each speck layer drops exactly one tile, straight down, and the haze holds still', () => {
     const layers = textureLoop(ALL_CSS, ASH);
-    expect(layers, 'the ash has no loop to judge').toHaveLength(4);
+    expect(layers, 'the ash has no loop to judge').toHaveLength(14);
     expect(seam(layers, true)).toBeNull();
     // Down means the `to` y-offset is the LARGER one (a CSS y grows downward).
-    for (const layer of layers.filter((l) => pxOf(l.tile[1]) !== null)) {
+    const specks = layers.filter((l) => pxOf(l.tile[1]) !== null);
+    expect(specks, 'the ash has no speck layers').toHaveLength(12);
+    for (const layer of specks) {
       expect(pxOf(layer.to[1])!, 'a speck layer rises').toBeGreaterThan(pxOf(layer.from[1])!);
     }
+    // `speck-scatter` (AC-3): straight down stays, but the ash is not one rigid sheet — the far
+    // and near specks fall different distances per cycle, so they visibly pass each other.
+    const falls = new Set(specks.map((l) => pxOf(l.to[1])! - pxOf(l.from[1])!));
+    expect(falls.size, 'every speck falls at one speed — the ash moves as one sheet').toBeGreaterThanOrEqual(2);
   });
 
-  it('the flecks drift by exactly one tile per layer, so the loop has no seam', () => {
+  // `speck-scatter` (AC-3), replacing "exactly one tile across and one tile down": that rule sent
+  // every fleck layer down-right, so the field slid as one sheet. Whole tiles still (no seam);
+  // the direction is now free, and the layers must not all share one.
+  it('the flecks drift whole tiles per cycle (no seam), and not all in one direction', () => {
     const layers = textureLoop(ALL_CSS, FLECKS);
-    expect(layers, 'the flecks have no loop to judge').toHaveLength(3);
+    expect(layers, 'the flecks have no loop to judge').toHaveLength(12);
     expect(seam(layers, false)).toBeNull();
-    for (const layer of layers) {
-      expect(pxOf(layer.to[0])! - pxOf(layer.from[0])!, 'not one tile across').toBe(pxOf(layer.tile[0]));
-      expect(pxOf(layer.to[1])! - pxOf(layer.from[1])!, 'not one tile down').toBe(pxOf(layer.tile[1]));
+    expect(directionSpread(layers), 'every fleck layer slides the same way — the field moves as one sheet')
+      .toBeGreaterThanOrEqual(45);
+  });
+
+  it('the direction spread measures angles between moves, not their lengths', () => {
+    const loop = (...to: string[]): LoopLayer[] =>
+      to.map((t) => ({ tile: ['41px', '53px'], from: ['0px', '0px'], to: t.split(' ') }));
+    expect(directionSpread(loop('41px 0px', '0px 53px')), 'right and down are a right angle').toBeCloseTo(90, 6);
+    expect(directionSpread(loop('41px 0px', '-41px 0px')), 'right and left are opposite').toBeCloseTo(180, 6);
+    expect(directionSpread(loop('41px 53px', '82px 106px')), 'one direction at two speeds').toBeCloseTo(0, 6);
+    expect(directionSpread(loop('41px 53px', '0px 0px')), 'a still layer has no direction').toBe(0);
+    // The flecks as `floor-looks` shipped them: (47,61) (83,71) (131,157), all down-right. The
+    // steepest is atan(61/47) = 52.4 deg, the shallowest atan(71/83) = 40.5 deg — 11.8 apart.
+    const old = [['47px', '61px'], ['83px', '71px'], ['131px', '157px']].map((t) => ({ tile: t, from: ['0px', '0px'], to: t }));
+    expect(directionSpread(old), 'the old flecks were one sheet').toBeCloseTo(11.8, 0);
+  });
+
+  // `speck-scatter` (AC-5). The route that keeps the contrast gate honest is that every dot is
+  // painted in the ONE `.void-texture` background, under the one opacity. A pseudo-element would
+  // be a second surface: its own paint the stop scan above never reads, and its own animation the
+  // reduced-motion rules (which name `.void-texture`) never reach.
+  it('no stylesheet gives the texture element a ::before or ::after', () => {
+    expect(texturePseudoElements(ALL_CSS)).toEqual([]);
+  });
+
+  it('the pseudo-element scan fires on every way of writing one, and nowhere else', () => {
+    for (const planted of [
+      '.void-texture::before { content: ""; }',
+      "[data-texture='flecks'] .void-texture::after { content: ''; }",
+      '.void-texture:after { content: ""; }',
+      '#atmosphere::before { content: ""; }',
+      '.a, .void-texture.is-x::after { content: ""; }',
+      "@media (min-width: 1px) { [data-texture='ash'] .void-texture::before { content: ''; } }",
+    ]) {
+      expect(texturePseudoElements(planted), planted).toHaveLength(1);
+    }
+    for (const clean of [
+      '.void-art-frame::after { content: ""; }',
+      '.void-texture { opacity: 0; }',
+      '.void-texture-glow::before { content: ""; }',
+      "[data-texture='flecks'] .void-texture { background: none; }",
+    ]) {
+      expect(texturePseudoElements(clean), clean).toEqual([]);
     }
   });
 
@@ -851,6 +973,632 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
     expect(seam(textureLoop(css('41px 53px, 20% 10%'), '.t'), true), 'a diagonal is not straight down').not.toBeNull();
     expect(seam(textureLoop(css('41px 53px, 20% 10%'), '.t'), false), 'a whole-tile diagonal is seamless').toBeNull();
     expect(seam(textureLoop('.t { background-size: 41px 53px; }', '.t'), true), 'no animation at all').not.toBeNull();
+  });
+});
+
+// =========================================================================================
+// `speck-scatter` (2026-09-14) — NO SPECK LAYER IS A CENTRED LATTICE.
+//
+// The author, having played floors 2 and 3 after `floor-looks`: "the design were correct but I
+// felt they were too grid like. like every speckle is on the same x and y axis level." They
+// were: every speck layer was ONE positionless `radial-gradient(circle, …)` on its own tile, so
+// every tile held one dot at its centre and every layer was a perfect grid of rows and columns.
+// The tile sizes sharing no factor — the one defence the old comment claimed — only stops the
+// COMBINED pattern repeating; it cannot hide any single layer's rows.
+//
+// So the detector below judges each TILE's own arrangement, from the CSS text and geometry only
+// (tile size × percentage, dot radius), never from a render. It is proven red against the two
+// rules exactly as `floor-looks` shipped them before it is trusted to pass the new ones.
+// =========================================================================================
+
+/** Greatest common divisor of two positive integers. */
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+/** A position that puts a dot dead centre. CSS's default, when there is no `at`, is the same. */
+const CENTRED_AT = /^(?:center(?:\s+center)?|50%)$/;
+
+/** The least a tile's column (or row) gaps must differ by, in percentage points, to read as uneven. */
+const UNEVEN_GAP = 8;
+
+// FIX ROUND 1 (2026-09-14). The verifier found what judging one tile ALONE cannot see: tiles sit
+// edge to edge, so dots of neighbouring tiles line up. Floor 2's B tile had all four dots in a
+// 1.22 px strip 250 px long ACROSS its edges, and every B fleck within ~3 px of parallel lines
+// rising at ~24 degrees. The four rules below close that, and the near-misses the exact-equality
+// rules let through.
+
+/**
+ * Two dots of one tile whose centres are nearer than this in x (or y) — across the tile's edge
+ * too — share a column (row). Exact equality let 1.09 px apart pass. 8 px is more than one of the
+ * widest flecks is across (a 3.4 px reach), so two dots this close sit in one band down the floor.
+ */
+const MIN_AXIS_GAP_PX = 8;
+
+/**
+ * A pair of dots (either may be a neighbouring tile's copy) nearer than this share of the spacing
+ * they would have if spread perfectly evenly, √(w·h / dots), is a CLUMP.
+ */
+const CLUMP_SHARE = 0.5;
+
+/**
+ * The most a tile's dots may line up along one family of parallel lines — see `lineStrength`.
+ *
+ * WHERE 0.9 SITS, measured by the build over 8,000 random tiles per size, that pass the older
+ * rules (distinct, uneven): it is the 70th percentile for four-dot tiles (it turns away the most
+ * line-like 30%) and the 96th for six-dot tiles. What it means is the same at any dot count: at
+ * 0.9 the dots sit, on average, within about 7% of the line spacing of one family of lines.
+ * floor 2 as first scattered: A 0.939 (more line-like than 86% of random tiles), B 0.980 (97%).
+ */
+const LINE_LIMIT = 0.9;
+
+/**
+ * How strongly one tile's dots line up along a family of parallel straight lines that runs ACROSS
+ * tile edges — which is what the eye sees, because tiles sit edge to edge.
+ *
+ * For whole numbers (m, n), the lines m·x/w + n·y/h = constant are a family of parallel lines that
+ * every tile continues exactly, 1/|(m/w, n/h)| px apart. The strength is
+ * |mean over the tile's dots of e^(2πi·(m·x% + n·y%)/100)|: 1 when every dot sits exactly on one
+ * family (a one-dot tile scores 1 on every family — the grid the author saw), near 0 when the
+ * dots are spread across it. Every (m, n) with |m|, |n| ≤ 3 is weighed — the verifier's families
+ * and also their harmonics, the same lines at a half or a third of the spacing, which catch a tile
+ * whose dots fall in two or three column bands — but only a family whose dots are no sparser
+ * ALONG a line than 2.5 × the gap BETWEEN lines: sparser than that, nobody sees a line.
+ */
+function lineStrength(
+  dots: readonly { x: number; y: number }[],
+  w: number,
+  h: number,
+): { strength: number; m: number; n: number; spacing: number } {
+  let best = { strength: 0, m: 0, n: 0, spacing: 0 };
+  if (dots.length === 0) return best;
+  for (let m = 0; m <= 3; m += 1) {
+    for (let n = -3; n <= 3; n += 1) {
+      if (m === 0 && n <= 0) continue; // (m, n) and (-m, -n) are one family
+      const g = Math.hypot(m / w, n / h);
+      const spacing = 1 / g;
+      const along = (w * h * g) / dots.length;
+      if (along > 2.5 * spacing) continue;
+      let re = 0;
+      let im = 0;
+      for (const d of dots) {
+        const phase = 2 * Math.PI * ((m * d.x + n * d.y) / 100);
+        re += Math.cos(phase);
+        im += Math.sin(phase);
+      }
+      const strength = Math.hypot(re, im) / dots.length;
+      if (strength > best.strength) best = { strength, m, n, spacing };
+    }
+  }
+  return best;
+}
+
+/**
+ * Every way the speck layers of the rule styling `selector` ITSELF still read as a grid, or `[]`.
+ * Each fault opens with a one-word code, then says what a player would see.
+ *
+ * A layer on a px tile is a DOT; the dots sharing one `background-size` are one TILE of dots,
+ * judged together: at least four; each placed `circle at X% Y%` and none dead centre; no two
+ * within 8 px of one column or one row; the column gaps, and the row gaps, not all alike; none
+ * nearer its tile's edge than its own reach (a dot does not wrap onto the next tile, it is cut);
+ * no two in a clump, counting the neighbouring tiles' copies; no three on one straight line; and
+ * no family of parallel lines, running across the tile edges, that the dots line up along. Tiles
+ * of one rule share no factor across or down. A layer on a relative (%) tile is a still haze and
+ * is skipped — unless it draws a px dot, which would be a grid this cannot measure, and says so.
+ *
+ * Short per-layer lists are read the way CSS reads them — repeated from the top — so a dropped
+ * entry is judged where the browser would really put that dot. And every dot of a tile must be
+ * PLACED and MOVED as one (the rule's `background-position` and both ends of its loop): a dot
+ * offset from its siblings is not where its percentage says, and would make everything judged
+ * above a statement about a picture nobody sees.
+ */
+function latticeFaults(css: string, selector: string): string[] {
+  const found = rulesFor(css, selector);
+  if (found.length !== 1) return [`rules — ${selector} is styled by ${found.length} rules, not one`];
+  const decls = declarations(found[0]!.body);
+  const last = (prop: string): string => decls.filter((d) => d.prop === prop).at(-1)?.value ?? '';
+  const calls = gradientCalls(last('background'));
+  if (calls.length === 0) return [`no-gradient — ${selector} paints no gradient at all`];
+  const faults: string[] = [];
+  const sizes = splitTop(last('background-size'));
+  if (sizes.length !== calls.length) {
+    faults.push(`list — ${calls.length} gradient layers but ${sizes.length} background-size entries: CSS repeats the list, pairing dots with the wrong tile`);
+  }
+  const nth = (list: readonly string[], i: number): string =>
+    list.length === 0 ? '' : (list[i % list.length] as string).replace(/\s+/g, ' ');
+
+  type Dot = { x: number; y: number; r: number };
+  const tiles = new Map<string, { w: number; h: number; layers: number[]; dots: Dot[] }>();
+  const unjudged = new Set<string>();
+  for (const [i, args] of calls.entries()) {
+    const layer = i + 1;
+    const size = nth(sizes, i);
+    const [w, h] = size.split(' ').map(pxOf);
+    const parts = splitTop(args);
+    const preamble = parts.length > 0 && GRADIENT_PREAMBLE.test(parts[0] as string) ? (parts[0] as string) : '';
+    const stops = preamble ? parts.slice(1) : parts;
+    const reach = stops.flatMap((stop) => [...stop.matchAll(/(-?[\d.]+)px\b/g)].map((m) => Number(m[1])));
+    if (w == null || h == null) {
+      if (reach.length > 0) faults.push(`relative — layer ${layer} draws a px dot on a "${size}" tile, a grid this cannot measure`);
+      continue;
+    }
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w <= 0 || h <= 0) {
+      if (!unjudged.has(size)) faults.push(`tile — the "${size}" tile (layer ${layer} on) is not a whole number of px each way`);
+      unjudged.add(size);
+      continue;
+    }
+    if (!/^circle\b/.test(preamble)) {
+      faults.push(`shape — layer ${layer} is not a circle ("${preamble || 'no shape'}"), so its px stops are not its reach`);
+    }
+    let x: number | null = null;
+    let y: number | null = null;
+    const at = /\bat\s+(.+)$/.exec(preamble)?.[1]?.trim();
+    const xy = at === undefined ? null : /^(-?[\d.]+)%\s+(-?[\d.]+)%$/.exec(at);
+    if (at === undefined || CENTRED_AT.test(at) || (xy && Number(xy[1]) === 50 && Number(xy[2]) === 50)) {
+      faults.push(`centred — layer ${layer} ${at === undefined ? 'has no position' : `sits at "${at}"`}: one dot dead centre in every ${w}x${h} tile, a grid`);
+      x = 50;
+      y = 50;
+    } else if (!xy) {
+      faults.push(`position — layer ${layer} sits at "${at}", not X% Y%, so where it lands in its tile cannot be judged`);
+    } else {
+      x = Number(xy[1]);
+      y = Number(xy[2]);
+    }
+    // How far the dot's ink reaches: the last stop must be `transparent` AT a px length, or the
+    // fade runs on to the far corner of the tile. CSS clamps a stop to the one before it, so the
+    // reach is the largest px length among the stops.
+    const r = /^transparent\s+-?[\d.]+px$/.test(stops.at(-1) ?? '') ? Math.max(...reach) : null;
+    if (r === null) {
+      faults.push(`radius — layer ${layer} does not end on a transparent px stop, so how far its ink reaches is unknown`);
+    } else if (x !== null && y !== null) {
+      const margin = Math.min((x * w) / 100, ((100 - x) * w) / 100, (y * h) / 100, ((100 - y) * h) / 100);
+      if (margin < r) {
+        faults.push(`clipped — layer ${layer} at ${x}% ${y}% reaches ${r}px but sits ${Number(margin.toFixed(2))}px from its ${w}x${h} tile's edge: cut into a half-moon`);
+      }
+    }
+    const key = `${w}x${h}`;
+    const tile = tiles.get(key) ?? { w, h, layers: [], dots: [] };
+    tile.layers.push(i);
+    // A dot whose reach is unknown (the `radius` fault) counts as a point for the checks below.
+    if (x !== null && y !== null) tile.dots.push({ x, y, r: r ?? 0 });
+    tiles.set(key, tile);
+  }
+
+  const fixed = (v: number): number => Number(v.toFixed(2));
+  for (const [key, tile] of tiles) {
+    const { w, h, dots } = tile;
+    if (tile.layers.length < 4) {
+      faults.push(`sparse — the ${key} tile holds ${tile.layers.length} dot(s); fewer than four cannot hide the tile's own rows and columns`);
+    }
+    for (const [axis, side, line] of [['x', w, 'column'], ['y', h, 'row']] as const) {
+      // Nearer than 8 px in this axis, the short way round — a dot at 4% and one at 97% of a tile
+      // are neighbours across its edge.
+      let near: string | null = null;
+      for (const [k, a] of dots.entries()) {
+        for (const b of dots.slice(k + 1)) {
+          const apart = (Math.abs(a[axis] - b[axis]) * side) / 100;
+          const gap = Math.min(apart, side - apart);
+          if (near === null && gap < MIN_AXIS_GAP_PX) near = `${a[axis]}% and ${b[axis]}%, ${fixed(gap)}px apart`;
+        }
+      }
+      if (near !== null) {
+        faults.push(`${line} — two dots of the ${key} tile share a ${line} (${axis} ${near}; the least is ${MIN_AXIS_GAP_PX}px): every tile repeats them, a ${line} of dots across the floor`);
+      }
+      const values = dots.map((d) => d[axis]);
+      const distinct = [...new Set(values)].sort((a, b) => a - b);
+      const gaps = distinct.slice(1).map((v, k) => v - (distinct[k] as number));
+      if (gaps.length >= 2 && Math.max(...gaps) - Math.min(...gaps) < UNEVEN_GAP) {
+        faults.push(`even-${axis} — the ${key} tile's dots are evenly spaced in ${axis} (gaps ${gaps.join(', ')}): a finer grid`);
+      }
+    }
+    const px = dots.map((d) => ({ ...d, X: (d.x * w) / 100, Y: (d.y * h) / 100 }));
+    // A clump: two dots nearer than half the even spacing. A dot's neighbours include the
+    // copies of its siblings in the eight tiles around it, because that is where they are seen.
+    if (px.length >= 2) {
+      const even = Math.sqrt((w * h) / px.length);
+      let closest = Infinity;
+      for (const [k, a] of px.entries()) {
+        for (const b of px.slice(k + 1)) {
+          for (const across of [-1, 0, 1]) {
+            for (const down of [-1, 0, 1]) closest = Math.min(closest, Math.hypot(a.X - b.X - across * w, a.Y - b.Y - down * h));
+          }
+        }
+      }
+      if (closest < CLUMP_SHARE * even) {
+        faults.push(`clump — two dots of the ${key} tile are ${fixed(closest)}px apart, under half the ${fixed(even)}px they would have if spread evenly`);
+      }
+    }
+    // Three dots on one straight line: the middle one (the one not in the farthest-apart pair)
+    // within one dot-width — twice the largest reach of the three — of the line through the others.
+    let straight: string | null = null;
+    for (const [i, a] of px.entries()) {
+      for (const [j, b] of px.slice(i + 1).entries()) {
+        for (const c of px.slice(i + j + 2)) {
+          if (straight !== null) break;
+          const trio = [a, b, c];
+          const pairs = [[0, 1], [0, 2], [1, 2]] as const;
+          const [p, q] = pairs.reduce((best, pair) => {
+            const len = (u: readonly [number, number]): number => Math.hypot(trio[u[0]]!.X - trio[u[1]]!.X, trio[u[0]]!.Y - trio[u[1]]!.Y);
+            return len(pair) > len(best) ? pair : best;
+          });
+          const [e1, e2, mid] = [trio[p]!, trio[q]!, trio[3 - p - q]!];
+          const length = Math.hypot(e2.X - e1.X, e2.Y - e1.Y);
+          if (length === 0) continue; // dots on one spot are a clump, and are reported as one
+          const off = Math.abs((e2.X - e1.X) * (mid.Y - e1.Y) - (e2.Y - e1.Y) * (mid.X - e1.X)) / length;
+          if (off < 2 * Math.max(a.r, b.r, c.r)) straight = `${e1.x}% ${e1.y}%, ${mid.x}% ${mid.y}%, ${e2.x}% ${e2.y}% — the middle one ${fixed(off)}px off`;
+        }
+      }
+    }
+    if (straight !== null) {
+      faults.push(`collinear — three dots of the ${key} tile lie on one straight line (${straight}): a string of dots, repeated in every tile`);
+    }
+    const lines = lineStrength(dots, w, h);
+    if (lines.strength > LINE_LIMIT) {
+      faults.push(`lines — the ${key} tile's dots line up along the (${lines.m},${lines.n}) family of parallel lines, ${fixed(lines.spacing)}px apart, at strength ${fixed(lines.strength)} (1 is a perfect grid; the limit is ${LINE_LIMIT}): side by side, the tiles draw those lines across the floor`);
+    }
+  }
+
+  const all = [...tiles.entries()];
+  for (const [k, [ka, a]] of all.entries()) {
+    for (const [kb, b] of all.slice(k + 1)) {
+      if (gcd(a.w, b.w) !== 1) faults.push(`widths — the ${ka} and ${kb} tiles share a factor of ${gcd(a.w, b.w)} across: their columns fall into step`);
+      if (gcd(a.h, b.h) !== 1) faults.push(`heights — the ${ka} and ${kb} tiles share a factor of ${gcd(a.h, b.h)} down: their rows fall into step`);
+    }
+  }
+
+  const loop = loopPositions(css, selector);
+  for (const [name, list] of [
+    ['its background-position', splitTop(last('background-position'))],
+    ["its loop's from", loop?.from ?? []],
+    ["its loop's to", loop?.to ?? []],
+  ] as const) {
+    if (list.length === 0) continue;
+    for (const [key, tile] of tiles) {
+      const placed = new Set(tile.layers.map((i) => nth(list, i)));
+      if (placed.size > 1) {
+        faults.push(`drift — ${name} puts the ${key} tile's dots in different places (${[...placed].join(' | ')}): they are not one tile`);
+      }
+    }
+  }
+  return faults;
+}
+
+/** How near two rows (or columns) of dots must be to add up into one line — the verifier's band. */
+const BAND_PX = 6;
+
+/**
+ * The picture AT REST — what a reduced-motion player always sees, and the first frame of every
+ * loop — as crowding into bands. One dot of one tile makes a row of dots right across the screen,
+ * one per tile; that row alone is too sparse to read as a line. But when the rows of several
+ * TILES fall within 6 px of each other they add up into one. Returns the most different tiles
+ * whose rows share any 6-px band across a `width` x `height` screen (and where the first such band
+ * starts), and the same for columns, from the rule's own `background-position` and each dot's
+ * `circle at X% Y%`.
+ */
+function restingBands(
+  css: string,
+  selector: string,
+  width: number,
+  height: number,
+): { rows: number; rowAt: number; columns: number; columnAt: number } {
+  const decls = declarations(rulesFor(css, selector)[0]?.body ?? '');
+  const last = (prop: string): string => decls.filter((d) => d.prop === prop).at(-1)?.value ?? '';
+  const sizes = splitTop(last('background-size'));
+  const positions = splitTop(last('background-position'));
+  const marks = { x: [] as { at: number; tile: string }[], y: [] as { at: number; tile: string }[] };
+  for (const [i, args] of gradientCalls(last('background')).entries()) {
+    const size = sizes.length > 0 ? (sizes[i % sizes.length] as string) : '';
+    const [w, h] = size.split(/\s+/).map(pxOf);
+    const xy = /\bat\s+(-?[\d.]+)%\s+(-?[\d.]+)%/.exec(splitTop(args)[0] ?? '');
+    const [ox, oy] = (positions.length > 0 ? (positions[i % positions.length] as string) : '0px 0px').split(/\s+/).map(pxOf);
+    if (w == null || h == null || !xy || ox == null || oy == null) continue;
+    for (const [axis, pct, side, offset, extent] of [
+      ['x', Number(xy[1]), w, ox, width],
+      ['y', Number(xy[2]), h, oy, height],
+    ] as const) {
+      for (let at = ((((pct * side) / 100 + offset) % side) + side) % side; at < extent; at += side) {
+        marks[axis].push({ at, tile: `${w}x${h}` });
+      }
+    }
+  }
+  const crowd = (list: { at: number; tile: string }[]): [number, number] => {
+    list.sort((a, b) => a.at - b.at);
+    let most = 0;
+    let where = Number.NaN;
+    for (const [i, mark] of list.entries()) {
+      const tiles = new Set<string>();
+      for (let j = i; j < list.length && (list[j] as { at: number }).at < mark.at + BAND_PX; j += 1) tiles.add((list[j] as { tile: string }).tile);
+      if (tiles.size > most) {
+        most = tiles.size;
+        where = mark.at;
+      }
+    }
+    return [most, where];
+  };
+  const [rows, rowAt] = crowd(marks.y);
+  const [columns, columnAt] = crowd(marks.x);
+  return { rows, rowAt, columns, columnAt };
+}
+
+/**
+ * The ink a speck field lays per px² of screen: every dot's alpha summed over its disc, over its
+ * tile's area. A dot is solid ink out to its first stop's end (r1) and fades in a straight line
+ * to transparent at r2, and the integral of that is (π/3)(r1² + r1·r2 + r2²) — a solid disc when
+ * r1 = r2, a cone (a third of its base) when r1 = 0.
+ */
+function inkCoverage(css: string, selector: string): number {
+  const decls = declarations(rulesFor(css, selector)[0]?.body ?? '');
+  const last = (prop: string): string => decls.filter((d) => d.prop === prop).at(-1)?.value ?? '';
+  const sizes = splitTop(last('background-size'));
+  let ink = 0;
+  for (const [i, args] of gradientCalls(last('background')).entries()) {
+    const [w, h] = (sizes.length > 0 ? (sizes[i % sizes.length] as string) : '').split(/\s+/).map(pxOf);
+    const parts = splitTop(args);
+    const stops = parts.length > 0 && GRADIENT_PREAMBLE.test(parts[0] as string) ? parts.slice(1) : parts;
+    const end = /^transparent\s+(-?[\d.]+)px$/.exec(stops.at(-1) ?? '');
+    if (w == null || h == null || !end || stops.length < 2) continue;
+    const r1 = Number([...(stops[0] as string).matchAll(/(-?[\d.]+)px\b/g)].at(-1)?.[1] ?? 0);
+    const r2 = Number(end[1]);
+    ink += ((Math.PI / 3) * (r1 * r1 + r1 * r2 + r2 * r2)) / (w * h);
+  }
+  return ink;
+}
+
+describe('no speck layer is a centred lattice (speck-scatter)', () => {
+  const FLECKS = "[data-texture='flecks'] .void-texture";
+  const ASH = "[data-texture='ash'] .void-texture";
+  /** The faults' codes, sorted — what each case below is judged on. */
+  const codes = (faults: readonly string[]): string[] => faults.map((f) => f.split(' ')[0] as string).sort();
+
+  // THE TWO RULES AS `floor-looks` SHIPPED THEM — TRANSCRIBED from `atmosphere.css` at 39ea7b1,
+  // whitespace-normalised, never read back from the file under test. They are the defect the
+  // author saw, and the detector must report it before its silence on the new rules means a thing.
+  const OLD_FLECKS =
+    "[data-texture='flecks'] .void-texture { background: radial-gradient(circle, var(--void-texture-ink) 0 1.5px, transparent 2.5px), radial-gradient(circle, var(--void-texture-ink) 0 1px, transparent 2px), radial-gradient(circle, var(--void-texture-ink) 0 2px, transparent 3px); background-size: 47px 61px, 83px 71px, 131px 157px; background-position: 0px 0px, 19px 37px, 61px 23px; animation: void-flecks-drift 60s linear infinite; }";
+  const OLD_ASH =
+    "[data-texture='ash'] .void-texture { background: radial-gradient(circle, var(--void-texture-ink) 0 0.8px, transparent 1.4px), radial-gradient(circle, var(--void-texture-ink) 0 1.3px, transparent 2px), radial-gradient(110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%), radial-gradient(90% 72% at 82% 92%, var(--void-texture-ink), transparent 68%); background-size: 41px 53px, 67px 89px, 150% 150%, 140% 140%; background-position: 0px 0px, 23px 11px, 20% 10%, 80% 90%; animation: void-ash-fall 14s linear infinite; }";
+
+  // FLOOR 2 AS THIS UNIT FIRST SCATTERED IT (db7bbcb) — TRANSCRIBED, whitespace-normalised. Every
+  // per-tile rule of the first build passed it; the verifier then measured what they cannot see:
+  // A's and B's dots lining up across their tile edges (A 0.94, B 0.98 on the (1,2) family).
+  const FIRST_BUILD_FLECKS =
+    "[data-texture='flecks'] .void-texture { background: radial-gradient(circle at 11% 67%, var(--void-texture-ink) 0 1.2px, transparent 2px), radial-gradient(circle at 29% 14%, var(--void-texture-ink) 0 1.6px, transparent 2.5px), radial-gradient(circle at 58% 46%, var(--void-texture-ink) 0 1px, transparent 1.8px), radial-gradient(circle at 83% 88%, var(--void-texture-ink) 0 1.4px, transparent 2.2px), radial-gradient(circle at 19% 38%, var(--void-texture-ink) 0 1px, transparent 1.8px), radial-gradient(circle at 41% 79%, var(--void-texture-ink) 0 1.8px, transparent 2.8px), radial-gradient(circle at 72% 9%, var(--void-texture-ink) 0 1.3px, transparent 2.1px), radial-gradient(circle at 91% 52%, var(--void-texture-ink) 0 1.5px, transparent 2.4px), radial-gradient(circle at 8% 22%, var(--void-texture-ink) 0 2px, transparent 3px), radial-gradient(circle at 39% 63%, var(--void-texture-ink) 0 1.4px, transparent 2.3px), radial-gradient(circle at 66% 33%, var(--void-texture-ink) 0 1.7px, transparent 2.6px), radial-gradient(circle at 88% 86%, var(--void-texture-ink) 0 2.2px, transparent 3.2px); background-size: 131px 109px, 131px 109px, 131px 109px, 131px 109px, 173px 151px, 173px 151px, 173px 151px, 173px 151px, 227px 197px, 227px 197px, 227px 197px, 227px 197px; background-position: 0px 0px; animation: void-flecks-drift 90s linear infinite; }";
+
+  it('reports the grid the author saw: the flecks as floor-looks shipped them', () => {
+    // Three layers, not one with an `at` — three dots dead centre; each on its own tile — three
+    // tiles of ONE dot; and a one-dot tile sits exactly on every family of lines (strength 1). The
+    // tiles (47, 83, 131 across; 61, 71, 157 down) are all prime, so the one clause the old
+    // comment relied on passes, and was never going to be enough.
+    expect(codes(latticeFaults(OLD_FLECKS, FLECKS))).toEqual(['centred', 'centred', 'centred', 'lines', 'lines', 'lines', 'sparse', 'sparse', 'sparse']);
+  });
+
+  it('...and the ash as floor-looks shipped it', () => {
+    // Two speck layers, centred, one per tile. The two haze layers are on % tiles: not specks.
+    expect(codes(latticeFaults(OLD_ASH, ASH))).toEqual(['centred', 'centred', 'lines', 'lines', 'sparse', 'sparse']);
+  });
+
+  it('reports the diagonal the verifier found in floor 2 as first scattered: A and B, not C', () => {
+    // A 0.939 and B 0.980 on the (1,2) family, over the 0.9 limit; C's strongest is 0.833.
+    expect(codes(latticeFaults(FIRST_BUILD_FLECKS, FLECKS))).toEqual(['lines', 'lines']);
+    expect(latticeFaults(FIRST_BUILD_FLECKS, FLECKS).join('\n')).toMatch(/131x109 tile's dots line up along the \(1,2\) family[\s\S]*173x151 tile's dots line up along the \(1,2\) family/);
+  });
+
+  it('the shipped flecks and ash are not a lattice', () => {
+    expect(latticeFaults(ALL_CSS, FLECKS)).toEqual([]);
+    expect(latticeFaults(ALL_CSS, ASH)).toEqual([]);
+  });
+
+  it('line strength: 1 for one dot, 1 for a finer grid inside a tile, and the first build by hand', () => {
+    expect(lineStrength([{ x: 37, y: 61 }], 101, 103).strength, 'one dot is a grid').toBeCloseTo(1, 9);
+    // A 2x2 grid inside the tile is a grid at half the spacing: on (0,2), every phase is 1/2 a turn.
+    const grid = [{ x: 25, y: 25 }, { x: 75, y: 25 }, { x: 25, y: 75 }, { x: 75, y: 75 }];
+    expect(lineStrength(grid, 101, 103).strength, 'a 2x2 grid').toBeCloseTo(1, 9);
+    // B as first scattered, on (1,2): phases (x + 2y)/100 = .95 .99 .90 .95 of a turn, so the
+    // mean of the four unit arrows is (3.709, -1.269)/4, length 0.980.
+    const b = lineStrength([{ x: 19, y: 38 }, { x: 41, y: 79 }, { x: 72, y: 9 }, { x: 91, y: 52 }], 173, 151);
+    expect(b.strength).toBeCloseTo(0.98, 3);
+    expect([b.m, b.n]).toEqual([1, 2]);
+    // A as first scattered, on (1,2): phases .45 .57 .50 .59 — mean (-3.700, -0.653)/4, length 0.939.
+    const a = lineStrength([{ x: 11, y: 67 }, { x: 29, y: 14 }, { x: 58, y: 46 }, { x: 83, y: 88 }], 131, 109);
+    expect(a.strength).toBeCloseTo(0.939, 3);
+    expect([a.m, a.n]).toEqual([1, 2]);
+  });
+
+  it('at rest, no 6-px band gathers rows (or columns) from all three fleck tiles', () => {
+    // The first build started all three tiles at 0 0. Its rows met at 119.29px — B's 79% of 151 —
+    // with C's 63% of 197 (124.11) and A's 14% of 109 one tile down (124.26): 4.97px, one band.
+    const first = restingBands(FIRST_BUILD_FLECKS, FLECKS, 1920, 1080);
+    expect(first.rows, 'rows').toBe(3);
+    expect(first.rowAt).toBeCloseTo(119.29, 2);
+    // ...and its columns, at 75.98 + 3x131, 124.56 + 2x173 and 18.16 + 2x227: 468.98 to 472.16.
+    expect(first.columns, 'columns').toBe(3);
+    // The shipped offsets were chosen so no three tiles' rows meet on screens up to 2160 CSS px
+    // tall, nor their columns up to 5120 wide (the largest a desktop gives at 100% scaling).
+    const now = restingBands(ALL_CSS, FLECKS, 5120, 2160);
+    expect(now.rows, `rows meet at ${now.rowAt}px`).toBeLessThanOrEqual(2);
+    expect(now.columns, `columns meet at ${now.columnAt}px`).toBeLessThanOrEqual(2);
+  });
+
+  it('every loop begins on the still frame, so the moment it comes round is the picture above', () => {
+    for (const selector of [FLECKS, ASH]) {
+      const own = splitTop(declarations(rulesFor(ALL_CSS, selector)[0]!.body).filter((d) => d.prop === 'background-position').at(-1)?.value ?? '');
+      const from = loopPositions(ALL_CSS, selector)?.from ?? [];
+      expect(from.length, selector).toBeGreaterThan(0);
+      expect(from.map((_, i) => own[i % own.length]), selector).toEqual(from);
+    }
+  });
+
+  it('the ink the author approved: each floor within 10% of the floor-looks density', () => {
+    const one = (stops: string): number =>
+      inkCoverage(`.t { background: radial-gradient(circle at 50% 50%, ${stops}); background-size: 10px 10px; }`, '.t');
+    expect(one('var(--void-texture-ink) 0 2px, transparent 2px'), 'a hard disc is its own area').toBeCloseTo((Math.PI * 4) / 100, 12);
+    expect(one('var(--void-texture-ink), transparent 3px'), 'a pure fade is a cone').toBeCloseTo((Math.PI * 9) / 3 / 100, 12);
+    for (const [selector, old] of [[FLECKS, OLD_FLECKS], [ASH, OLD_ASH]] as const) {
+      const ratio = inkCoverage(ALL_CSS, selector) / inkCoverage(old, selector);
+      expect(Math.abs(ratio - 1), `${selector} carries ${ratio} of the ink it had`).toBeLessThanOrEqual(0.1);
+    }
+    // The first scatter ran light: its dots' soft edges were thinner than the old ones.
+    expect(inkCoverage(FIRST_BUILD_FLECKS, FLECKS) / inkCoverage(OLD_FLECKS, FLECKS), 'the first build').toBeLessThan(0.9);
+  });
+
+  it('...and that silence is not blindness: un-placing one shipped dot is reported', () => {
+    for (const selector of [FLECKS, ASH]) {
+      const body = rulesFor(ALL_CSS, selector)[0]!.body;
+      const unplaced = body.replace(/circle at [\d.]+% [\d.]+%/, 'circle');
+      expect(unplaced, `${selector} has no placed dot to un-place`).not.toBe(body);
+      expect(codes(latticeFaults(`${selector} { ${unplaced} }`, selector)), selector).toContain('centred');
+    }
+  });
+
+  describe('the detector fires on each fault alone, and passes a compliant rule', () => {
+    // Two tiles, every side prime (101x103, 107x109), four dots each, every dot reaching 2px.
+    //   P: x 18 32 66 87 (gaps 14 34 21, spread 20)   y 21 59 74 87 (gaps 38 15 13, spread 25)
+    //   Q: x 15 41 69 88 (gaps 26 28 19, spread 9)    y 12 30 58 79 (gaps 18 28 21, spread 10)
+    //   Nearest edge: P 13.13px (13% of 101), Q 12.84px (12% of 107) — all far over 2px.
+    //   Closest pair, neighbour copies included: P 32.1px, Q 42.0px — over the clump lines,
+    //   half of √(101·103/4) = 25.5 and half of √(107·109/4) = 27.0.
+    //   Line strength: P 0.64, Q 0.79 — under 0.9. (An earlier P, 12 61 · 33 20 · 64 88 · 86 47,
+    //   was picked by eye as "scattered" and scored 0.993: a near-perfect diagonal. Hence the rule.)
+    // Each case changes ONE thing — nearly always P's 32% 87% — and beside it is the arithmetic for
+    // why that, and only that, fires.
+    const dot = (at: string | null): string =>
+      `radial-gradient(circle${at === null ? '' : ` at ${at}`}, var(--void-texture-ink) 0 1px, transparent 2px)`;
+    const speckRule = (tiles: { size: string; dots: (string | null)[] }[], extra = ''): string => {
+      const layers = tiles.flatMap((t) => t.dots.map((at) => ({ size: t.size, image: dot(at) })));
+      return `.t { background: ${layers.map((l) => l.image).join(', ')}; background-size: ${layers.map((l) => l.size).join(', ')};${extra} }`;
+    };
+    const P = { size: '101px 103px', dots: ['18% 59%', '32% 87%', '66% 21%', '87% 74%'] as (string | null)[] };
+    // Q's dot at 41% 79% is listed LAST on purpose — see the `list` case.
+    const Q = { size: '107px 109px', dots: ['69% 12%', '88% 58%', '15% 30%', '41% 79%'] as (string | null)[] };
+    const withP = (dots: (string | null)[]): string => speckRule([{ ...P, dots }, Q]);
+    const judge = (css: string): string[] => codes(latticeFaults(css, '.t'));
+    const COMPLIANT = speckRule([P, Q]);
+
+    it('a compliant rule has no faults — with a still haze beside it, and one position for every layer', () => {
+      expect(judge(COMPLIANT)).toEqual([]);
+      const hazed = COMPLIANT.replace('background: ', 'background: radial-gradient(110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%), ')
+        .replace('background-size: ', 'background-size: 150% 150%, ');
+      expect(judge(hazed), 'a % haze is not a speck').toEqual([]);
+      expect(judge(speckRule([P, Q], ' background-position: 7px 3px;')), 'one position repeats for every layer').toEqual([]);
+    });
+
+    it('a dot dead centre — however it is written', () => {
+      // 32% 87% moved to 50 50: x 18 50 66 87 (gaps 32 16 21), y 21 50 59 74 (gaps 29 9 15);
+      // 50% of 103 is 9.27px from the 59% row, and the nearest dot (18 59) is 33.6px away.
+      for (const at of ['center', 'center center', '50%', '50% 50%', null]) {
+        expect(judge(withP(['18% 59%', at, '66% 21%', '87% 74%'])), String(at)).toEqual(['centred']);
+      }
+    });
+
+    it('the tricks: every dot centred, or every dot stacked on one spot', () => {
+      // Four dots on one spot: every pair shares a column and a row, is 0px apart (a clump), and
+      // sits exactly on every family of lines (strength 1). Three dots on one spot are not counted
+      // as a straight line — that is the clump.
+      const pile = ['clump', 'column', 'lines', 'row'];
+      expect(judge(withP(['center', 'center', 'center', 'center'])), 'all centre').toEqual(['centred', 'centred', 'centred', 'centred', ...pile]);
+      expect(judge(withP(['50% 50%', '50% 50%', '50% 50%', '50% 50%'])), 'all 50% 50%').toEqual(['centred', 'centred', 'centred', 'centred', ...pile]);
+      expect(judge(withP(['18% 59%', '18% 59%', '18% 59%', '18% 59%'])), 'stacked').toEqual(pile);
+    });
+
+    it('three dots on a tile', () => {
+      // P without 32% 87%: x 18 66 87 (gaps 48 21), y 21 59 74 (gaps 38 15).
+      expect(judge(withP(['18% 59%', '66% 21%', '87% 74%']))).toEqual(['sparse']);
+    });
+
+    it('two dots sharing a column, or a row — exactly, 1% apart, or across the tile edge', () => {
+      expect(judge(withP(['18% 59%', '18% 87%', '66% 21%', '87% 74%'])), 'x 18 twice').toEqual(['column']);
+      expect(judge(withP(['18% 59%', '19% 87%', '66% 21%', '87% 74%'])), '1% of 101 = 1.01px').toEqual(['column']);
+      expect(judge(withP(['18% 59%', '32% 21%', '66% 21%', '87% 74%'])), 'y 21 twice').toEqual(['row']);
+      expect(judge(withP(['18% 59%', '32% 22%', '66% 21%', '87% 74%'])), '1% of 103 = 1.03px').toEqual(['row']);
+      // 4% and 97%: 4 + 3 = 7% of 101 = 7.07px apart the short way, across the edge.
+      expect(judge(withP(['18% 59%', '4% 32%', '66% 21%', '97% 74%'])), 'across the edge').toEqual(['column']);
+    });
+
+    it('evenly spaced columns, or rows — and where uneven begins', () => {
+      // x 18 42 66 87: gaps 24 24 21, spread 3.
+      expect(judge(withP(['18% 59%', '42% 87%', '66% 21%', '87% 74%']))).toEqual(['even-x']);
+      // y 21 38 59 74: gaps 17 21 15, spread 6.
+      expect(judge(withP(['18% 59%', '32% 38%', '66% 21%', '87% 74%']))).toEqual(['even-y']);
+      // x 18 38.5 66 87: gaps 20.5 27.5 21, spread 7 — under 8, still a grid.
+      expect(judge(withP(['18% 59%', '38.5% 87%', '66% 21%', '87% 74%'])), 'spread 7').toEqual(['even-x']);
+      // x 18 38 66 87: gaps 20 28 21, spread 8 — uneven enough.
+      expect(judge(withP(['18% 59%', '38% 87%', '66% 21%', '87% 74%'])), 'spread 8').toEqual([]);
+    });
+
+    it('a dot cut by its tile edge, on each of the four edges', () => {
+      // 1% of 101 = 1.01px and 1% of 103 = 1.03px, both under the 2px reach.
+      expect(judge(withP(['18% 59%', '1% 33%', '66% 21%', '87% 74%'])), 'left').toEqual(['clipped']);
+      expect(judge(withP(['18% 59%', '99% 33%', '66% 21%', '87% 74%'])), 'right').toEqual(['clipped']);
+      expect(judge(withP(['18% 59%', '32% 87%', '66% 1%', '87% 74%'])), 'top').toEqual(['clipped']);
+      expect(judge(withP(['18% 59%', '32% 99%', '66% 21%', '87% 74%'])), 'bottom').toEqual(['clipped']);
+    });
+
+    it('two dots in a clump, though a column and a row apart', () => {
+      // 37 50 is 19% (19.19px) across and 9% (9.27px) down from 18 59 — both over 8px — but
+      // √(19.19² + 9.27²) = 21.3px apart, under half of √(101·103/4) = 25.5.
+      expect(judge(withP(['18% 59%', '37% 50%', '66% 21%', '87% 74%']))).toEqual(['clump']);
+      // 32% 87% -> 4% 87%: inside the tile its nearest dot (18 59) is 32.1px away — but the copy of
+      // 87% 74% in the tile to its LEFT is 4 + 13 = 17% (17.17px) across and 13% (13.39px) up:
+      // 21.8px. Only a check that counts the neighbouring tiles' copies sees it.
+      expect(judge(withP(['18% 59%', '4% 87%', '66% 21%', '87% 74%'])), 'across the edge').toEqual(['clump']);
+    });
+
+    it('three dots on one straight line', () => {
+      // 66 21, 77 48, 87 74 are (66.66, 21.63), (77.77, 49.44), (87.87, 76.22) px: the middle one
+      // is |21.21·27.81 − 54.59·11.11| / 58.57 = 0.28px off the line through the other two, under
+      // one dot-width (twice the 2px reach).
+      expect(judge(withP(['18% 59%', '77% 48%', '66% 21%', '87% 74%']))).toEqual(['collinear']);
+    });
+
+    it('a tile whose dots line up across its edges — or fall in column bands', () => {
+      // The first build's B, in percentages, on P's tile: 0.980 on (1,2), whatever the tile, as
+      // long as that family is seen — here its lines are 45.9px apart, its dots 56.7px along one.
+      expect(judge(withP(['19% 38%', '41% 79%', '72% 9%', '91% 52%'])), 'the first B').toEqual(['lines']);
+      // Two column bands per tile: 20/24 and 70/74, 4% of 227 = 9.08px apart (over 8). Only the
+      // harmonic (2,0) — lines 113.5px apart — sees it: phases .40 .48 .40 .48 of a turn, strength
+      // cos(0.08π) = 0.969. The verifier's own families top out at 0.743 on this tile.
+      const bands = speckRule([{ size: '227px 197px', dots: ['20% 8%', '24% 35%', '70% 40%', '74% 75%'] }]);
+      expect(judge(bands), 'column bands').toEqual(['lines']);
+      expect(latticeFaults(bands, '.t')[0]).toMatch(/\(2,0\) family of parallel lines, 113\.5px apart, at strength 0\.97/);
+    });
+
+    it('two tiles sharing a width, or a factor across or down', () => {
+      expect(judge(speckRule([P, { ...Q, size: '101px 109px' }])), 'the same width').toEqual(['widths']);
+      expect(judge(speckRule([P, { ...Q, size: '202px 109px' }])), '202 = 2 x 101').toEqual(['widths']);
+      expect(judge(speckRule([P, { ...Q, size: '107px 206px' }])), '206 = 2 x 103').toEqual(['heights']);
+    });
+
+    it('a dot that is not a measurable circle', () => {
+      expect(judge(COMPLIANT.replace('circle at 32% 87%', 'ellipse at 32% 87%')), 'an ellipse').toEqual(['shape']);
+      expect(judge(COMPLIANT.replace('circle at 32% 87%', 'circle at 33px 90px')), 'placed in px').toEqual(['position']);
+      expect(judge(COMPLIANT.replace('32% 87%, var(--void-texture-ink) 0 1px, transparent 2px', '32% 87%, var(--void-texture-ink) 0 1px')), 'no transparent end').toEqual(['radius']);
+      expect(judge(COMPLIANT.replace('32% 87%, var(--void-texture-ink) 0 1px, transparent 2px', '32% 87%, var(--void-texture-ink) 0 1px, transparent')), 'an end with no length').toEqual(['radius']);
+      expect(judge(speckRule([P, Q, { size: '5% 5%', dots: ['20% 30%'] }])), 'a px dot on a % tile').toEqual(['relative']);
+      expect(judge(speckRule([{ ...P, size: '101.5px 103px' }, Q])), 'a fractional tile').toEqual(['tile']);
+    });
+
+    it('a per-layer list one entry short — judged where CSS would put the orphan', () => {
+      // Seven sizes for eight layers: the eighth layer (Q's 41% 79%) takes the FIRST size and
+      // lands on P's tile, where it crowds what is there: 5% of 103 = 5.15px from P's 74% row, and
+      // 9.09px across and 8.24px down from P's 32% 87% — 12.3px, under half of √(101·103/5) = 22.8.
+      // Q is left three dots: sparse. (Q: x 15 69 88, gaps 54 19; y 12 30 58, gaps 18 28.)
+      expect(judge(COMPLIANT.replace(/, 107px 109px;/, ';'))).toEqual(['clump', 'list', 'row', 'sparse']);
+    });
+
+    it('one dot of a tile placed or moved apart from the others', () => {
+      const apart = ' background-position: 0px 0px, 5px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px;';
+      expect(judge(speckRule([P, Q], apart)), 'placed apart').toEqual(['drift']);
+      const loop = (to: string): string =>
+        `${speckRule([P, Q], ' animation: m 10s linear infinite;')}\n@keyframes m { from { background-position: 0px 0px; } to { background-position: ${to}; } }`;
+      const together = '101px 103px, 101px 103px, 101px 103px, 101px 103px, 107px 109px, 107px 109px, 107px 109px, 107px 109px';
+      expect(judge(loop(together)), 'each tile moves as one').toEqual([]);
+      expect(judge(loop(together.replace('101px 103px, 101px 103px', '101px 103px, 101px 0px'))), 'moved apart').toEqual(['drift']);
+    });
+
+    it('no rule, or a rule that paints nothing', () => {
+      expect(judge('.u { background: none; }')).toEqual(['rules']);
+      expect(judge('.t { background: none; }')).toEqual(['no-gradient']);
+    });
   });
 });
 

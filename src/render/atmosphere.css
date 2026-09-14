@@ -78,39 +78,119 @@
   animation: void-fog-drift 96s ease-in-out infinite alternate;
 }
 
+/* HOW A SPECK FIELD IS BUILT (REVISED 2026-09-14, `speck-scatter` — floors 2 and 3 below).
+ * The author, having played them: "the design were correct but I felt they were too grid like.
+ * like every speckle is on the same x and y axis level." They were. Each speck layer was ONE
+ * positionless `radial-gradient(circle, …)` on its own tile, which puts one dot at the centre of
+ * every tile — a perfect grid of rows and columns. Tile sizes that share no factor only stop the
+ * COMBINED pattern repeating; they cannot hide any single layer's rows.
+ *
+ * So each tile now carries SEVERAL dots, one gradient layer each, all layers of a tile sharing
+ * its `background-size`: `circle at X% Y%` places a dot inside the tile, at uneven positions
+ * where no two dots share a column or a row and the gaps between them are unequal. No dot sits
+ * closer to its tile's edge than its own radius, because a dot does not wrap onto the next tile
+ * — it is cut, and a half-moon at a straight edge would draw the grid back in. Every tile side
+ * is a prime, so no two tiles of a floor ever fall into step.
+ *
+ * ⚠ A TILE IS NEVER SEEN ALONE (fix round 1, 2026-09-14). Tiles sit edge to edge, so a dot lines
+ * up with dots of the NEIGHBOURING tiles too. The first scatter passed every rule about one tile
+ * and still drew lines: floor 2's B tile had all four dots in a strip 1.22 px wide and 250 px long
+ * across its edges, every B fleck within ~3 px of parallel lines rising at ~24 degrees. Positions
+ * picked by eye cannot see this. The dots are now CHOSEN BY MEASUREMENT — for each tile, how
+ * strongly its dots line up along any family of parallel lines that runs across the tile edges
+ * (`lineStrength` in `styleDiscipline.test.ts`, limit 0.9) — along with no clumps (counting the
+ * neighbouring tiles' copies), no three dots on one straight line, and no two within 8 px of a
+ * column or a row. Moving a dot means re-running those tests, not trusting the eye.
+ *
+ * ⚠ EVERY DOT STAYS IN THIS ONE ELEMENT'S BACKGROUND. The layer's `opacity` is applied once to
+ * everything it paints, so two dots overlapping are still exactly the ink at the token's alpha,
+ * never darker — which is what keeps floor 2's contrast gate (the tightest in the game) true
+ * without re-measuring it. A pseudo-element would be a second surface with its own paint and
+ * its own animation that the reduced-motion rules below do not name; there is none, and
+ * `styleDiscipline.test.ts` asserts there is none.
+ *
+ * Every per-layer list (`background-size`, and both keyframe ends) has exactly one entry per
+ * layer, in the same order. CSS repeats a short list without complaint, so a missing entry
+ * would pair a dot with another tile's size or move; the tests count them. */
+
 /* FLECKS — the Entrance to the Void, the one LIGHT floor (REVISED 2026-09-12; it was a scanline
  * grid on near-black, which the author, having played it, called "only lines in the
- * background"). Red flecks on the white: three layers of tiny dots on three tiles whose sizes
- * share no factor (47x61, 83x71, 131x157 px), set off from one another so the marks read as
- * scattered rather than gridded. They drift slowly on a diagonal, each layer by exactly ONE
- * tile per cycle, so the loop has no seam. The alpha stops at the layer's 0.3 — the densest the
- * composite gate allows before the blood-red accent drops under AA on a fleck. */
+ * background"). Red flecks on the white: twelve dots, four on each of three tiles —
+ * A 131x109, B 173x151, C 227x197 px. Each tile drifts by exactly ONE tile per 90 s cycle, so the
+ * loop has no seam, and the three drift in different directions — A down-right, B down-left,
+ * C up-right (REVISED 2026-09-14: all three used to go down-right, so the field slid as one
+ * sheet). The alpha stops at the layer's 0.3 — the densest the composite gate allows before the
+ * blood-red accent drops under AA on a fleck.
+ *
+ * Fix round 1 (2026-09-14): A and B re-placed by measurement (line strength 0.94 -> 0.64 and
+ * 0.98 -> 0.65; C, at 0.83, was already typical of a random tile and is unchanged). Each fleck's
+ * soft edge grows 0.2 px, back to the old dots' 1 px of fade, which brings the ink back to within
+ * ~1% of what the author approved — the first scatter carried 11% less. The size of a dot does
+ * not touch the contrast gate: the peak is one dot's ink at the layer's single opacity, whatever
+ * its radius. The three tiles START apart (0 0, 31 34, 16 110 px), placed so that at rest — what
+ * a reduced-motion player always sees, and every 90 s as the loop comes round — no three tiles'
+ * rows fall within 6 px of each other on a screen up to 2160 px tall, nor their columns up to
+ * 5120 px wide. Starting together, they made a 35-fleck band 119 px from the top. */
 [data-texture='flecks'] .void-texture {
   background:
-    radial-gradient(circle, var(--void-texture-ink) 0 1.5px, transparent 2.5px),
-    radial-gradient(circle, var(--void-texture-ink) 0 1px, transparent 2px),
-    radial-gradient(circle, var(--void-texture-ink) 0 2px, transparent 3px);
-  background-size: 47px 61px, 83px 71px, 131px 157px;
-  background-position: 0px 0px, 19px 37px, 61px 23px;
-  animation: void-flecks-drift 60s linear infinite;
+    radial-gradient(circle at 12% 49%, var(--void-texture-ink) 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 47% 80%, var(--void-texture-ink) 0 1.6px, transparent 2.7px),
+    radial-gradient(circle at 58% 12%, var(--void-texture-ink) 0 1px, transparent 2px),
+    radial-gradient(circle at 87% 68%, var(--void-texture-ink) 0 1.4px, transparent 2.4px),
+    radial-gradient(circle at 10% 74%, var(--void-texture-ink) 0 1px, transparent 2px),
+    radial-gradient(circle at 22% 27%, var(--void-texture-ink) 0 1.8px, transparent 3px),
+    radial-gradient(circle at 45% 8%, var(--void-texture-ink) 0 1.3px, transparent 2.3px),
+    radial-gradient(circle at 77% 62%, var(--void-texture-ink) 0 1.5px, transparent 2.6px),
+    radial-gradient(circle at 8% 22%, var(--void-texture-ink) 0 2px, transparent 3.2px),
+    radial-gradient(circle at 39% 63%, var(--void-texture-ink) 0 1.4px, transparent 2.5px),
+    radial-gradient(circle at 66% 33%, var(--void-texture-ink) 0 1.7px, transparent 2.8px),
+    radial-gradient(circle at 88% 86%, var(--void-texture-ink) 0 2.2px, transparent 3.4px);
+  background-size:
+    131px 109px, 131px 109px, 131px 109px, 131px 109px,
+    173px 151px, 173px 151px, 173px 151px, 173px 151px,
+    227px 197px, 227px 197px, 227px 197px, 227px 197px;
+  background-position:
+    0px 0px, 0px 0px, 0px 0px, 0px 0px,
+    31px 34px, 31px 34px, 31px 34px, 31px 34px,
+    16px 110px, 16px 110px, 16px 110px, 16px 110px;
+  animation: void-flecks-drift 90s linear infinite;
 }
 
 /* ASH — the Ash City (REVISED 2026-09-12; it was a crosshatch of 1px lines). The fire has
  * settled already; this is what is left over everything. A soft colourless haze — two still
  * radial layers, like floor 1's fog but neutral — with fine specks falling slowly through it:
- * two speck layers on their own tiles (41x53 and 67x89 px), each falling exactly ONE tile per
- * cycle, so the loop is seamless and the nearer, larger specks fall faster than the far ones.
- * One animation per element: the haze's two positions are repeated unchanged in both keyframes
- * so it holds still while the specks move — a haze that looped would visibly jump. */
+ * twelve specks, six on a far tile (113x127 px) and six larger ones on a near tile (179x181 px),
+ * each tile falling exactly ONE tile straight down per 30 s cycle, so the loop is seamless and
+ * the nearer, larger specks fall faster than the far ones. It falls straight: a sideways lean
+ * would also have to be a whole tile per cycle, which on any tile is a lean of 20 degrees or
+ * more — a wind, not settling ash. One animation per element: the haze's two positions are
+ * repeated unchanged in both keyframes so it holds still while the specks move — a haze that
+ * looped would visibly jump. Specks first, haze last. */
 [data-texture='ash'] .void-texture {
   background:
-    radial-gradient(circle, var(--void-texture-ink) 0 0.8px, transparent 1.4px),
-    radial-gradient(circle, var(--void-texture-ink) 0 1.3px, transparent 2px),
+    radial-gradient(circle at 7% 58%, var(--void-texture-ink) 0 0.7px, transparent 1.2px),
+    radial-gradient(circle at 31% 12%, var(--void-texture-ink) 0 0.9px, transparent 1.5px),
+    radial-gradient(circle at 42% 81%, var(--void-texture-ink) 0 0.8px, transparent 1.4px),
+    radial-gradient(circle at 66% 39%, var(--void-texture-ink) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 74% 93%, var(--void-texture-ink) 0 0.75px, transparent 1.3px),
+    radial-gradient(circle at 92% 24%, var(--void-texture-ink) 0 0.85px, transparent 1.45px),
+    radial-gradient(circle at 12% 33%, var(--void-texture-ink) 0 1.1px, transparent 1.7px),
+    radial-gradient(circle at 24% 86%, var(--void-texture-ink) 0 1.4px, transparent 2.1px),
+    radial-gradient(circle at 46% 9%, var(--void-texture-ink) 0 1.2px, transparent 1.9px),
+    radial-gradient(circle at 57% 68%, var(--void-texture-ink) 0 1.6px, transparent 2.3px),
+    radial-gradient(circle at 79% 47%, var(--void-texture-ink) 0 1.3px, transparent 2px),
+    radial-gradient(circle at 90% 18%, var(--void-texture-ink) 0 1.5px, transparent 2.2px),
     radial-gradient(110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%),
     radial-gradient(90% 72% at 82% 92%, var(--void-texture-ink), transparent 68%);
-  background-size: 41px 53px, 67px 89px, 150% 150%, 140% 140%;
-  background-position: 0px 0px, 23px 11px, 20% 10%, 80% 90%;
-  animation: void-ash-fall 14s linear infinite;
+  background-size:
+    113px 127px, 113px 127px, 113px 127px, 113px 127px, 113px 127px, 113px 127px,
+    179px 181px, 179px 181px, 179px 181px, 179px 181px, 179px 181px, 179px 181px,
+    150% 150%, 140% 140%;
+  background-position:
+    0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px,
+    23px 11px, 23px 11px, 23px 11px, 23px 11px, 23px 11px, 23px 11px,
+    20% 10%, 80% 90%;
+  animation: void-ash-fall 30s linear infinite;
 }
 
 /* GLOW — the Angelic Underground. The one stage that reveals rather than distorts, and the
@@ -134,16 +214,40 @@
   from { background-position: 0% 100%, 100% 100%; }
   to { background-position: 12% 88%, 88% 84%; }
 }
-/* Each fleck layer advances by exactly its own tile (47,61) (83,71) (131,157): seamless. */
+/* Each fleck tile advances by exactly its own size, all four of its dots together: A (+131,+109)
+ * down-right, B (-173,+151) down-left, C (+227,-197) up-right — about 1.9, 2.6 and 3.3 px a
+ * second over 90 s. Whole tiles, so the loop is seamless in any direction. `from` is the rule's
+ * own still frame, so the loop comes round on the picture reduced motion shows. */
 @keyframes void-flecks-drift {
-  from { background-position: 0px 0px, 19px 37px, 61px 23px; }
-  to { background-position: 47px 61px, 102px 108px, 192px 180px; }
+  from {
+    background-position:
+      0px 0px, 0px 0px, 0px 0px, 0px 0px,
+      31px 34px, 31px 34px, 31px 34px, 31px 34px,
+      16px 110px, 16px 110px, 16px 110px, 16px 110px;
+  }
+  to {
+    background-position:
+      131px 109px, 131px 109px, 131px 109px, 131px 109px,
+      -142px 185px, -142px 185px, -142px 185px, -142px 185px,
+      243px -87px, 243px -87px, 243px -87px, 243px -87px;
+  }
 }
-/* Each speck layer falls exactly one tile DOWN (53px, 89px — about 4 and 6 px a second); the
- * haze's two layers hold the same position at both ends, so they never move. */
+/* Each speck tile falls exactly one tile DOWN, its six specks together (127px, 181px per 30 s —
+ * about 4 and 6 px a second); the haze's two layers hold the same position at both ends, so
+ * they never move. */
 @keyframes void-ash-fall {
-  from { background-position: 0px 0px, 23px 11px, 20% 10%, 80% 90%; }
-  to { background-position: 0px 53px, 23px 100px, 20% 10%, 80% 90%; }
+  from {
+    background-position:
+      0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px,
+      23px 11px, 23px 11px, 23px 11px, 23px 11px, 23px 11px, 23px 11px,
+      20% 10%, 80% 90%;
+  }
+  to {
+    background-position:
+      0px 127px, 0px 127px, 0px 127px, 0px 127px, 0px 127px, 0px 127px,
+      23px 192px, 23px 192px, 23px 192px, 23px 192px, 23px 192px, 23px 192px,
+      20% 10%, 80% 90%;
+  }
 }
 @keyframes void-glow-breathe {
   from { background-position: 50% 0%; }
