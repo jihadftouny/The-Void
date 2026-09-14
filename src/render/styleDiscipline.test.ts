@@ -977,6 +977,314 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
 });
 
 // =========================================================================================
+// `speck-scatter` (2026-09-14) — NO SPECK LAYER IS A CENTRED LATTICE.
+//
+// The author, having played floors 2 and 3 after `floor-looks`: "the design were correct but I
+// felt they were too grid like. like every speckle is on the same x and y axis level." They
+// were: every speck layer was ONE positionless `radial-gradient(circle, …)` on its own tile, so
+// every tile held one dot at its centre and every layer was a perfect grid of rows and columns.
+// The tile sizes sharing no factor — the one defence the old comment claimed — only stops the
+// COMBINED pattern repeating; it cannot hide any single layer's rows.
+//
+// So the detector below judges each TILE's own arrangement, from the CSS text and geometry only
+// (tile size × percentage, dot radius), never from a render. It is proven red against the two
+// rules exactly as `floor-looks` shipped them before it is trusted to pass the new ones.
+// =========================================================================================
+
+/** Greatest common divisor of two positive integers. */
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+/** A position that puts a dot dead centre. CSS's default, when there is no `at`, is the same. */
+const CENTRED_AT = /^(?:center(?:\s+center)?|50%)$/;
+
+/** The least a tile's column (or row) gaps must differ by, in percentage points, to read as uneven. */
+const UNEVEN_GAP = 8;
+
+/**
+ * Every way the speck layers of the rule styling `selector` ITSELF still read as a grid, or `[]`.
+ * Each fault opens with a one-word code, then says what a player would see.
+ *
+ * A layer on a px tile is a DOT; the dots sharing one `background-size` are one TILE of dots,
+ * judged together: at least four; each placed `circle at X% Y%` and none dead centre; no two
+ * sharing a column or a row; the column gaps, and the row gaps, not all alike; none nearer its
+ * tile's edge than its own reach (a dot does not wrap onto the next tile, it is cut). Tiles of one
+ * rule share no factor across or down. A layer on a relative (%) tile is a still haze and is
+ * skipped — unless it draws a px dot, which would be a grid this cannot measure, and says so.
+ *
+ * Short per-layer lists are read the way CSS reads them — repeated from the top — so a dropped
+ * entry is judged where the browser would really put that dot. And every dot of a tile must be
+ * PLACED and MOVED as one (the rule's `background-position` and both ends of its loop): a dot
+ * offset from its siblings is not where its percentage says, and would make everything judged
+ * above a statement about a picture nobody sees.
+ */
+function latticeFaults(css: string, selector: string): string[] {
+  const found = rulesFor(css, selector);
+  if (found.length !== 1) return [`rules — ${selector} is styled by ${found.length} rules, not one`];
+  const decls = declarations(found[0]!.body);
+  const last = (prop: string): string => decls.filter((d) => d.prop === prop).at(-1)?.value ?? '';
+  const calls = gradientCalls(last('background'));
+  if (calls.length === 0) return [`no-gradient — ${selector} paints no gradient at all`];
+  const faults: string[] = [];
+  const sizes = splitTop(last('background-size'));
+  if (sizes.length !== calls.length) {
+    faults.push(`list — ${calls.length} gradient layers but ${sizes.length} background-size entries: CSS repeats the list, pairing dots with the wrong tile`);
+  }
+  const nth = (list: readonly string[], i: number): string =>
+    list.length === 0 ? '' : (list[i % list.length] as string).replace(/\s+/g, ' ');
+
+  const tiles = new Map<string, { w: number; h: number; layers: number[]; xs: number[]; ys: number[] }>();
+  const unjudged = new Set<string>();
+  for (const [i, args] of calls.entries()) {
+    const layer = i + 1;
+    const size = nth(sizes, i);
+    const [w, h] = size.split(' ').map(pxOf);
+    const parts = splitTop(args);
+    const preamble = parts.length > 0 && GRADIENT_PREAMBLE.test(parts[0] as string) ? (parts[0] as string) : '';
+    const stops = preamble ? parts.slice(1) : parts;
+    const reach = stops.flatMap((stop) => [...stop.matchAll(/(-?[\d.]+)px\b/g)].map((m) => Number(m[1])));
+    if (w == null || h == null) {
+      if (reach.length > 0) faults.push(`relative — layer ${layer} draws a px dot on a "${size}" tile, a grid this cannot measure`);
+      continue;
+    }
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w <= 0 || h <= 0) {
+      if (!unjudged.has(size)) faults.push(`tile — the "${size}" tile (layer ${layer} on) is not a whole number of px each way`);
+      unjudged.add(size);
+      continue;
+    }
+    if (!/^circle\b/.test(preamble)) {
+      faults.push(`shape — layer ${layer} is not a circle ("${preamble || 'no shape'}"), so its px stops are not its reach`);
+    }
+    let x: number | null = null;
+    let y: number | null = null;
+    const at = /\bat\s+(.+)$/.exec(preamble)?.[1]?.trim();
+    const xy = at === undefined ? null : /^(-?[\d.]+)%\s+(-?[\d.]+)%$/.exec(at);
+    if (at === undefined || CENTRED_AT.test(at) || (xy && Number(xy[1]) === 50 && Number(xy[2]) === 50)) {
+      faults.push(`centred — layer ${layer} ${at === undefined ? 'has no position' : `sits at "${at}"`}: one dot dead centre in every ${w}x${h} tile, a grid`);
+      x = 50;
+      y = 50;
+    } else if (!xy) {
+      faults.push(`position — layer ${layer} sits at "${at}", not X% Y%, so where it lands in its tile cannot be judged`);
+    } else {
+      x = Number(xy[1]);
+      y = Number(xy[2]);
+    }
+    // How far the dot's ink reaches: the last stop must be `transparent` AT a px length, or the
+    // fade runs on to the far corner of the tile. CSS clamps a stop to the one before it, so the
+    // reach is the largest px length among the stops.
+    const r = /^transparent\s+-?[\d.]+px$/.test(stops.at(-1) ?? '') ? Math.max(...reach) : null;
+    if (r === null) {
+      faults.push(`radius — layer ${layer} does not end on a transparent px stop, so how far its ink reaches is unknown`);
+    } else if (x !== null && y !== null) {
+      const margin = Math.min((x * w) / 100, ((100 - x) * w) / 100, (y * h) / 100, ((100 - y) * h) / 100);
+      if (margin < r) {
+        faults.push(`clipped — layer ${layer} at ${x}% ${y}% reaches ${r}px but sits ${Number(margin.toFixed(2))}px from its ${w}x${h} tile's edge: cut into a half-moon`);
+      }
+    }
+    const key = `${w}x${h}`;
+    const tile = tiles.get(key) ?? { w, h, layers: [], xs: [], ys: [] };
+    tile.layers.push(i);
+    if (x !== null && y !== null) {
+      tile.xs.push(x);
+      tile.ys.push(y);
+    }
+    tiles.set(key, tile);
+  }
+
+  for (const [key, tile] of tiles) {
+    if (tile.layers.length < 4) {
+      faults.push(`sparse — the ${key} tile holds ${tile.layers.length} dot(s); fewer than four cannot hide the tile's own rows and columns`);
+    }
+    for (const [axis, values, line] of [['x', tile.xs, 'column'], ['y', tile.ys, 'row']] as const) {
+      const shared = values.filter((v, k) => values.indexOf(v) !== k);
+      if (shared.length > 0) {
+        faults.push(`${line} — two dots of the ${key} tile share ${axis} = ${shared[0]}%: every tile repeats them, a ${line} of dots across the floor`);
+      }
+      const distinct = [...new Set(values)].sort((a, b) => a - b);
+      const gaps = distinct.slice(1).map((v, k) => v - (distinct[k] as number));
+      if (gaps.length >= 2 && Math.max(...gaps) - Math.min(...gaps) < UNEVEN_GAP) {
+        faults.push(`even-${axis} — the ${key} tile's dots are evenly spaced in ${axis} (gaps ${gaps.join(', ')}): a finer grid`);
+      }
+    }
+  }
+
+  const all = [...tiles.entries()];
+  for (const [k, [ka, a]] of all.entries()) {
+    for (const [kb, b] of all.slice(k + 1)) {
+      if (gcd(a.w, b.w) !== 1) faults.push(`widths — the ${ka} and ${kb} tiles share a factor of ${gcd(a.w, b.w)} across: their columns fall into step`);
+      if (gcd(a.h, b.h) !== 1) faults.push(`heights — the ${ka} and ${kb} tiles share a factor of ${gcd(a.h, b.h)} down: their rows fall into step`);
+    }
+  }
+
+  const loop = loopPositions(css, selector);
+  for (const [name, list] of [
+    ['its background-position', splitTop(last('background-position'))],
+    ["its loop's from", loop?.from ?? []],
+    ["its loop's to", loop?.to ?? []],
+  ] as const) {
+    if (list.length === 0) continue;
+    for (const [key, tile] of tiles) {
+      const placed = new Set(tile.layers.map((i) => nth(list, i)));
+      if (placed.size > 1) {
+        faults.push(`drift — ${name} puts the ${key} tile's dots in different places (${[...placed].join(' | ')}): they are not one tile`);
+      }
+    }
+  }
+  return faults;
+}
+
+describe('no speck layer is a centred lattice (speck-scatter)', () => {
+  const FLECKS = "[data-texture='flecks'] .void-texture";
+  const ASH = "[data-texture='ash'] .void-texture";
+  /** The faults' codes, sorted — what each case below is judged on. */
+  const codes = (faults: readonly string[]): string[] => faults.map((f) => f.split(' ')[0] as string).sort();
+
+  // THE TWO RULES AS `floor-looks` SHIPPED THEM — TRANSCRIBED from `atmosphere.css` at 39ea7b1,
+  // whitespace-normalised, never read back from the file under test. They are the defect the
+  // author saw, and the detector must report it before its silence on the new rules means a thing.
+  const OLD_FLECKS =
+    "[data-texture='flecks'] .void-texture { background: radial-gradient(circle, var(--void-texture-ink) 0 1.5px, transparent 2.5px), radial-gradient(circle, var(--void-texture-ink) 0 1px, transparent 2px), radial-gradient(circle, var(--void-texture-ink) 0 2px, transparent 3px); background-size: 47px 61px, 83px 71px, 131px 157px; background-position: 0px 0px, 19px 37px, 61px 23px; animation: void-flecks-drift 60s linear infinite; }";
+  const OLD_ASH =
+    "[data-texture='ash'] .void-texture { background: radial-gradient(circle, var(--void-texture-ink) 0 0.8px, transparent 1.4px), radial-gradient(circle, var(--void-texture-ink) 0 1.3px, transparent 2px), radial-gradient(110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%), radial-gradient(90% 72% at 82% 92%, var(--void-texture-ink), transparent 68%); background-size: 41px 53px, 67px 89px, 150% 150%, 140% 140%; background-position: 0px 0px, 23px 11px, 20% 10%, 80% 90%; animation: void-ash-fall 14s linear infinite; }";
+
+  it('reports the grid the author saw: the flecks as floor-looks shipped them', () => {
+    // Three layers, not one with an `at` — three dots dead centre; each on its own tile — three
+    // tiles of ONE dot. The tiles (47, 83, 131 across; 61, 71, 157 down) are all prime, so the
+    // one clause the old comment relied on passes, and was never going to be enough.
+    expect(codes(latticeFaults(OLD_FLECKS, FLECKS))).toEqual(['centred', 'centred', 'centred', 'sparse', 'sparse', 'sparse']);
+  });
+
+  it('...and the ash as floor-looks shipped it', () => {
+    // Two speck layers, centred, one per tile. The two haze layers are on % tiles: not specks.
+    expect(codes(latticeFaults(OLD_ASH, ASH))).toEqual(['centred', 'centred', 'sparse', 'sparse']);
+  });
+
+  it('the shipped flecks and ash are not a lattice', () => {
+    expect(latticeFaults(ALL_CSS, FLECKS)).toEqual([]);
+    expect(latticeFaults(ALL_CSS, ASH)).toEqual([]);
+  });
+
+  it('...and that silence is not blindness: un-placing one shipped dot is reported', () => {
+    for (const selector of [FLECKS, ASH]) {
+      const body = rulesFor(ALL_CSS, selector)[0]!.body;
+      const unplaced = body.replace(/circle at [\d.]+% [\d.]+%/, 'circle');
+      expect(unplaced, `${selector} has no placed dot to un-place`).not.toBe(body);
+      expect(codes(latticeFaults(`${selector} { ${unplaced} }`, selector)), selector).toContain('centred');
+    }
+  });
+
+  describe('the detector fires on each fault alone, and passes a compliant rule', () => {
+    // Two tiles, every side prime (101x103, 107x109), four dots each, every dot reaching 2px.
+    //   P: x 12 33 64 86 (gaps 21 31 22, spread 10)   y 20 47 61 88 (gaps 27 14 27, spread 13)
+    //   Q: x 15 41 69 88 (gaps 26 28 19, spread 9)    y 12 30 58 79 (gaps 18 28 21, spread 10)
+    //   Nearest edge: P 12.12px (12% of 101), Q 12.84px (12% of 107) — all far over 2px.
+    // Each case changes ONE thing; beside it, the arithmetic for why that and only that fires.
+    const dot = (at: string | null): string =>
+      `radial-gradient(circle${at === null ? '' : ` at ${at}`}, var(--void-texture-ink) 0 1px, transparent 2px)`;
+    const speckRule = (tiles: { size: string; dots: (string | null)[] }[], extra = ''): string => {
+      const layers = tiles.flatMap((t) => t.dots.map((at) => ({ size: t.size, image: dot(at) })));
+      return `.t { background: ${layers.map((l) => l.image).join(', ')}; background-size: ${layers.map((l) => l.size).join(', ')};${extra} }`;
+    };
+    const P = { size: '101px 103px', dots: ['12% 61%', '33% 20%', '64% 88%', '86% 47%'] as (string | null)[] };
+    // Q's dot at 15% is listed LAST on purpose — see the `list` case.
+    const Q = { size: '107px 109px', dots: ['41% 79%', '69% 12%', '88% 58%', '15% 30%'] as (string | null)[] };
+    const withP = (dots: (string | null)[]): string => speckRule([{ ...P, dots }, Q]);
+    const judge = (css: string): string[] => codes(latticeFaults(css, '.t'));
+    const COMPLIANT = speckRule([P, Q]);
+
+    it('a compliant rule has no faults — with a still haze beside it, and one position for every layer', () => {
+      expect(judge(COMPLIANT)).toEqual([]);
+      const hazed = COMPLIANT.replace('background: ', 'background: radial-gradient(110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%), ')
+        .replace('background-size: ', 'background-size: 150% 150%, ');
+      expect(judge(hazed), 'a % haze is not a speck').toEqual([]);
+      expect(judge(speckRule([P, Q], ' background-position: 7px 3px;')), 'one position repeats for every layer').toEqual([]);
+    });
+
+    it('a dot dead centre — however it is written', () => {
+      // P's 64% 88% moved to 50 50: x 12 33 50 86 (gaps 21 17 36), y 20 47 50 61 (gaps 27 3 11).
+      for (const at of ['center', 'center center', '50%', '50% 50%', null]) {
+        expect(judge(withP(['12% 61%', '33% 20%', at, '86% 47%'])), String(at)).toEqual(['centred']);
+      }
+    });
+
+    it('the tricks: every dot centred, or every dot stacked on one spot', () => {
+      expect(judge(withP(['center', 'center', 'center', 'center'])), 'all centre').toEqual(['centred', 'centred', 'centred', 'centred', 'column', 'row']);
+      expect(judge(withP(['50% 50%', '50% 50%', '50% 50%', '50% 50%'])), 'all 50% 50%').toEqual(['centred', 'centred', 'centred', 'centred', 'column', 'row']);
+      expect(judge(withP(['12% 61%', '12% 61%', '12% 61%', '12% 61%'])), 'stacked').toEqual(['column', 'row']);
+    });
+
+    it('three dots on a tile', () => {
+      // P without 64% 88%: x 12 33 86 (gaps 21 53), y 20 47 61 (gaps 27 14).
+      expect(judge(withP(['12% 61%', '33% 20%', '86% 47%']))).toEqual(['sparse']);
+    });
+
+    it('two dots sharing a column, or a row', () => {
+      // 64% 88% -> 33% 88%: x 12 33 33 86; distinct 12 33 86 (gaps 21 53).
+      expect(judge(withP(['12% 61%', '33% 20%', '33% 88%', '86% 47%']))).toEqual(['column']);
+      // 64% 88% -> 64% 20%: y 20 20 47 61; distinct 20 47 61 (gaps 27 14).
+      expect(judge(withP(['12% 61%', '33% 20%', '64% 20%', '86% 47%']))).toEqual(['row']);
+    });
+
+    it('evenly spaced columns, or rows — and where uneven begins', () => {
+      // x 12 37 62 87: gaps 25 25 25. (Nearest edge 13% of 101 = 13.13px.)
+      expect(judge(withP(['12% 61%', '37% 20%', '62% 88%', '87% 47%']))).toEqual(['even-x']);
+      // y 20 42 64 86: gaps 22 22 22. (Nearest edge 14% of 103 = 14.42px.)
+      expect(judge(withP(['12% 64%', '33% 20%', '64% 86%', '86% 42%']))).toEqual(['even-y']);
+      // x 12 32 59 79: gaps 20 27 20, spread 7 — under 8, still a grid.
+      expect(judge(withP(['12% 61%', '32% 20%', '59% 88%', '79% 47%'])), 'spread 7').toEqual(['even-x']);
+      // x 12 32 60 80: gaps 20 28 20, spread 8 — uneven enough.
+      expect(judge(withP(['12% 61%', '32% 20%', '60% 88%', '80% 47%'])), 'spread 8').toEqual([]);
+    });
+
+    it('a dot cut by its tile edge, on each of the four edges', () => {
+      // 1% of 101 = 1.01px and 1% of 103 = 1.03px, both under the 2px reach.
+      expect(judge(withP(['1% 61%', '33% 20%', '64% 88%', '86% 47%'])), 'left').toEqual(['clipped']);
+      expect(judge(withP(['12% 61%', '33% 20%', '64% 88%', '99% 47%'])), 'right').toEqual(['clipped']);
+      expect(judge(withP(['12% 61%', '33% 1%', '64% 88%', '86% 47%'])), 'top').toEqual(['clipped']);
+      expect(judge(withP(['12% 61%', '33% 20%', '64% 99%', '86% 47%'])), 'bottom').toEqual(['clipped']);
+    });
+
+    it('two tiles sharing a width, or a factor across or down', () => {
+      expect(judge(speckRule([P, { ...Q, size: '101px 109px' }])), 'the same width').toEqual(['widths']);
+      expect(judge(speckRule([P, { ...Q, size: '202px 109px' }])), '202 = 2 x 101').toEqual(['widths']);
+      expect(judge(speckRule([P, { ...Q, size: '107px 206px' }])), '206 = 2 x 103').toEqual(['heights']);
+    });
+
+    it('a dot that is not a measurable circle', () => {
+      expect(judge(COMPLIANT.replace('circle at 64% 88%', 'ellipse at 64% 88%')), 'an ellipse').toEqual(['shape']);
+      expect(judge(COMPLIANT.replace('circle at 64% 88%', 'circle at 65px 91px')), 'placed in px').toEqual(['position']);
+      expect(judge(COMPLIANT.replace('64% 88%, var(--void-texture-ink) 0 1px, transparent 2px', '64% 88%, var(--void-texture-ink) 0 1px')), 'no transparent end').toEqual(['radius']);
+      expect(judge(COMPLIANT.replace('64% 88%, var(--void-texture-ink) 0 1px, transparent 2px', '64% 88%, var(--void-texture-ink) 0 1px, transparent')), 'an end with no length').toEqual(['radius']);
+      expect(judge(speckRule([P, Q, { size: '5% 5%', dots: ['20% 30%'] }])), 'a px dot on a % tile').toEqual(['relative']);
+      expect(judge(speckRule([{ ...P, size: '101.5px 103px' }, Q])), 'a fractional tile').toEqual(['tile']);
+    });
+
+    it('a per-layer list one entry short — judged where CSS would put the orphan', () => {
+      // Seven sizes for eight layers: the eighth layer (Q's 15% 30%) takes the FIRST size and
+      // joins P as a fifth dot — x 12 15 33 64 86, y 20 30 47 61 88, all distinct and uneven —
+      // and leaves Q three dots: sparse. (Q: x 41 69 88, gaps 28 19; y 12 58 79, gaps 46 21.)
+      expect(judge(COMPLIANT.replace(/, 107px 109px;/, ';'))).toEqual(['list', 'sparse']);
+    });
+
+    it('one dot of a tile placed or moved apart from the others', () => {
+      const apart = ' background-position: 0px 0px, 5px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px;';
+      expect(judge(speckRule([P, Q], apart)), 'placed apart').toEqual(['drift']);
+      const loop = (to: string): string =>
+        `${speckRule([P, Q], ' animation: m 10s linear infinite;')}\n@keyframes m { from { background-position: 0px 0px; } to { background-position: ${to}; } }`;
+      const together = '101px 103px, 101px 103px, 101px 103px, 101px 103px, 107px 109px, 107px 109px, 107px 109px, 107px 109px';
+      expect(judge(loop(together)), 'each tile moves as one').toEqual([]);
+      expect(judge(loop(together.replace('101px 103px, 101px 103px', '101px 103px, 101px 0px'))), 'moved apart').toEqual(['drift']);
+    });
+
+    it('no rule, or a rule that paints nothing', () => {
+      expect(judge('.u { background: none; }')).toEqual(['rules']);
+      expect(judge('.t { background: none; }')).toEqual(['no-gradient']);
+    });
+  });
+});
+
+// =========================================================================================
 // `floor-looks` (2026-09-12) — THE RE-THEME DISSOLVE, coupled at both ends (AC-11), KEPT under
 // reduced motion (AC-10), and the light ground's inverted strike flash (AC-14).
 //
