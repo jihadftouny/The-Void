@@ -712,30 +712,41 @@ interface LoopLayer {
 }
 
 /**
- * The layers of a texture's loop: `background-size` from the rule styling `selector` itself, and
- * the `from` / `to` `background-position` lists of the keyframes its animation names.
+ * The raw `from` / `to` `background-position` lists of the keyframes the rule styling `selector`
+ * itself animates with — one entry per comma, NOT one per layer: a short list is returned short,
+ * so a check can see what CSS would silently repeat. Null when there is no such rule or loop.
  */
-function textureLoop(css: string, selector: string): LoopLayer[] {
+function loopPositions(css: string, selector: string): { from: string[]; to: string[] } | null {
   const rule = rulesFor(css, selector)[0];
-  if (!rule) return [];
+  if (!rule) return null;
   const decls = declarations(rule.body);
-  const size = decls.filter((d) => d.prop === 'background-size').at(-1)?.value ?? '';
   const animation = decls.filter((d) => d.prop === 'animation' || d.prop === 'animation-name').at(-1)?.value ?? '';
   const frames = keyframes(css);
   const name = animation.split(/[\s,]+/).find((token) => frames.has(token));
-  if (!name) return [];
+  if (!name) return null;
   const body = frames.get(name) as string;
   const at = (which: string): string[] => {
     const block = new RegExp(`(?:^|\\})\\s*(?:${which})\\s*\\{([^}]*)\\}`).exec(body)?.[1] ?? '';
     const position = declarations(block).filter((d) => d.prop === 'background-position').at(-1)?.value ?? '';
     return splitTop(position);
   };
-  const from = at('from|0%');
-  const to = at('to|100%');
+  return { from: at('from|0%'), to: at('to|100%') };
+}
+
+/**
+ * The layers of a texture's loop: `background-size` from the rule styling `selector` itself, and
+ * the `from` / `to` `background-position` lists of the keyframes its animation names.
+ */
+function textureLoop(css: string, selector: string): LoopLayer[] {
+  const rule = rulesFor(css, selector)[0];
+  if (!rule) return [];
+  const size = declarations(rule.body).filter((d) => d.prop === 'background-size').at(-1)?.value ?? '';
+  const loop = loopPositions(css, selector);
+  if (!loop) return [];
   return splitTop(size).map((tile, i) => ({
     tile: tile.split(/\s+/),
-    from: (from[i] ?? '').split(/\s+/),
-    to: (to[i] ?? '').split(/\s+/),
+    from: (loop.from[i] ?? '').split(/\s+/),
+    to: (loop.to[i] ?? '').split(/\s+/),
   }));
 }
 
@@ -772,6 +783,49 @@ function seam(layers: readonly LoopLayer[], down: boolean): string | null {
   return null;
 }
 
+/**
+ * The widest angle, in degrees, between the per-cycle moves of any two layers that move in px: 0
+ * when every layer slides the same way (the whole field travels as one rigid sheet), 180 when two
+ * slide in opposite directions. A layer that does not move, or is not in px, has no direction.
+ */
+function directionSpread(layers: readonly LoopLayer[]): number {
+  const moves: [number, number][] = [];
+  for (const layer of layers) {
+    const [fx, fy] = layer.from.map(pxOf);
+    const [tx, ty] = layer.to.map(pxOf);
+    if (fx == null || fy == null || tx == null || ty == null) continue;
+    if (tx === fx && ty === fy) continue;
+    moves.push([tx - fx, ty - fy]);
+  }
+  let widest = 0;
+  for (const [i, [ax, ay]] of moves.entries()) {
+    for (const [bx, by] of moves.slice(i + 1)) {
+      const cos = (ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by));
+      widest = Math.max(widest, (Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI);
+    }
+  }
+  return widest;
+}
+
+/**
+ * Every comma-split selector that gives the texture element ITSELF a `::before` / `::after` (or
+ * the legacy one-colon form). The element is `.void-texture` everywhere and also `#atmosphere` on
+ * the full-screen instance, so both names count; a pseudo-element on some other element does not.
+ */
+function texturePseudoElements(css: string): string[] {
+  const out: string[] = [];
+  for (const rule of rules(css)) {
+    for (const part of rule.selector.split(',')) {
+      const selector = part.trim();
+      const compounds = selector.split(/\s*[\s>+~]\s*/);
+      if (compounds.some((c) => /(?:\.void-texture|#atmosphere)(?![-\w])/.test(c) && /::?(?:before|after)\b/i.test(c))) {
+        out.push(selector);
+      }
+    }
+  }
+  return out;
+}
+
 describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC-9)', () => {
   const FLECKS = "[data-texture='flecks'] .void-texture";
   const ASH = "[data-texture='ash'] .void-texture";
@@ -795,9 +849,11 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
       .toEqual(['circle, var(--void-texture-ink) 0 1px, transparent 2px', 'red, blue']);
   });
 
+  // `speck-scatter` (2026-09-14): 3 -> 12 and 4 -> 14. Each speck tile now carries four (flecks)
+  // or six (ash) dots, and a dot is one gradient layer; the ash's two haze layers are unchanged.
   for (const [floor, selector, layers] of [
-    ['floor 2, the flecks', FLECKS, 3],
-    ['floor 3, the ash', ASH, 4],
+    ['floor 2, the flecks', FLECKS, 12],
+    ['floor 3, the ash', ASH, 14],
   ] as const) {
     it(`${floor}: every gradient stop is the flat texture ink or transparent`, () => {
       const found = rulesFor(ALL_CSS, selector);
@@ -817,25 +873,91 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
     it(`${floor}: it really moves — background-position, and only that`, () => {
       expect(animatesWith(ALL_CSS, selector, 'background-position'), `${selector} is still`).toBe(true);
     });
+
+    // `speck-scatter` (AC-4). A per-layer list shorter than the layers is valid CSS: the browser
+    // repeats it from the top, silently pairing a dot with ANOTHER group's tile or move — a dot
+    // that jumps at the loop's seam, or a haze that drifts. Every list is counted, not trusted.
+    it(`${floor}: every per-layer list has exactly one entry per gradient layer`, () => {
+      const decls = declarations(rulesFor(ALL_CSS, selector)[0]!.body);
+      const last = (prop: string): string => decls.filter((d) => d.prop === prop).at(-1)?.value ?? '';
+      expect(gradientCalls(last('background')), 'the layer count moved under this test').toHaveLength(layers);
+      expect(splitTop(last('background-size')), 'background-size').toHaveLength(layers);
+      const loop = loopPositions(ALL_CSS, selector);
+      expect(loop, `${selector} has no loop`).not.toBeNull();
+      expect(loop!.from, 'the keyframes’ from list').toHaveLength(layers);
+      expect(loop!.to, 'the keyframes’ to list').toHaveLength(layers);
+      // The rule's own list is what reduced motion shows. One entry is the one safe short form —
+      // every layer takes it; anything between one and all of them misplaces some layer.
+      expect([1, layers], 'the still frame’s background-position').toContain(splitTop(last('background-position')).length);
+    });
   }
 
   it('the ash FALLS: each speck layer drops exactly one tile, straight down, and the haze holds still', () => {
     const layers = textureLoop(ALL_CSS, ASH);
-    expect(layers, 'the ash has no loop to judge').toHaveLength(4);
+    expect(layers, 'the ash has no loop to judge').toHaveLength(14);
     expect(seam(layers, true)).toBeNull();
     // Down means the `to` y-offset is the LARGER one (a CSS y grows downward).
-    for (const layer of layers.filter((l) => pxOf(l.tile[1]) !== null)) {
+    const specks = layers.filter((l) => pxOf(l.tile[1]) !== null);
+    expect(specks, 'the ash has no speck layers').toHaveLength(12);
+    for (const layer of specks) {
       expect(pxOf(layer.to[1])!, 'a speck layer rises').toBeGreaterThan(pxOf(layer.from[1])!);
     }
+    // `speck-scatter` (AC-3): straight down stays, but the ash is not one rigid sheet — the far
+    // and near specks fall different distances per cycle, so they visibly pass each other.
+    const falls = new Set(specks.map((l) => pxOf(l.to[1])! - pxOf(l.from[1])!));
+    expect(falls.size, 'every speck falls at one speed — the ash moves as one sheet').toBeGreaterThanOrEqual(2);
   });
 
-  it('the flecks drift by exactly one tile per layer, so the loop has no seam', () => {
+  // `speck-scatter` (AC-3), replacing "exactly one tile across and one tile down": that rule sent
+  // every fleck layer down-right, so the field slid as one sheet. Whole tiles still (no seam);
+  // the direction is now free, and the layers must not all share one.
+  it('the flecks drift whole tiles per cycle (no seam), and not all in one direction', () => {
     const layers = textureLoop(ALL_CSS, FLECKS);
-    expect(layers, 'the flecks have no loop to judge').toHaveLength(3);
+    expect(layers, 'the flecks have no loop to judge').toHaveLength(12);
     expect(seam(layers, false)).toBeNull();
-    for (const layer of layers) {
-      expect(pxOf(layer.to[0])! - pxOf(layer.from[0])!, 'not one tile across').toBe(pxOf(layer.tile[0]));
-      expect(pxOf(layer.to[1])! - pxOf(layer.from[1])!, 'not one tile down').toBe(pxOf(layer.tile[1]));
+    expect(directionSpread(layers), 'every fleck layer slides the same way — the field moves as one sheet')
+      .toBeGreaterThanOrEqual(45);
+  });
+
+  it('the direction spread measures angles between moves, not their lengths', () => {
+    const loop = (...to: string[]): LoopLayer[] =>
+      to.map((t) => ({ tile: ['41px', '53px'], from: ['0px', '0px'], to: t.split(' ') }));
+    expect(directionSpread(loop('41px 0px', '0px 53px')), 'right and down are a right angle').toBeCloseTo(90, 6);
+    expect(directionSpread(loop('41px 0px', '-41px 0px')), 'right and left are opposite').toBeCloseTo(180, 6);
+    expect(directionSpread(loop('41px 53px', '82px 106px')), 'one direction at two speeds').toBeCloseTo(0, 6);
+    expect(directionSpread(loop('41px 53px', '0px 0px')), 'a still layer has no direction').toBe(0);
+    // The flecks as `floor-looks` shipped them: (47,61) (83,71) (131,157), all down-right. The
+    // steepest is atan(61/47) = 52.4 deg, the shallowest atan(71/83) = 40.5 deg — 11.8 apart.
+    const old = [['47px', '61px'], ['83px', '71px'], ['131px', '157px']].map((t) => ({ tile: t, from: ['0px', '0px'], to: t }));
+    expect(directionSpread(old), 'the old flecks were one sheet').toBeCloseTo(11.8, 0);
+  });
+
+  // `speck-scatter` (AC-5). The route that keeps the contrast gate honest is that every dot is
+  // painted in the ONE `.void-texture` background, under the one opacity. A pseudo-element would
+  // be a second surface: its own paint the stop scan above never reads, and its own animation the
+  // reduced-motion rules (which name `.void-texture`) never reach.
+  it('no stylesheet gives the texture element a ::before or ::after', () => {
+    expect(texturePseudoElements(ALL_CSS)).toEqual([]);
+  });
+
+  it('the pseudo-element scan fires on every way of writing one, and nowhere else', () => {
+    for (const planted of [
+      '.void-texture::before { content: ""; }',
+      "[data-texture='flecks'] .void-texture::after { content: ''; }",
+      '.void-texture:after { content: ""; }',
+      '#atmosphere::before { content: ""; }',
+      '.a, .void-texture.is-x::after { content: ""; }',
+      "@media (min-width: 1px) { [data-texture='ash'] .void-texture::before { content: ''; } }",
+    ]) {
+      expect(texturePseudoElements(planted), planted).toHaveLength(1);
+    }
+    for (const clean of [
+      '.void-art-frame::after { content: ""; }',
+      '.void-texture { opacity: 0; }',
+      '.void-texture-glow::before { content: ""; }',
+      "[data-texture='flecks'] .void-texture { background: none; }",
+    ]) {
+      expect(texturePseudoElements(clean), clean).toEqual([]);
     }
   });
 
