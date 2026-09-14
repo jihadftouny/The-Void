@@ -86,11 +86,21 @@
  * COMBINED pattern repeating; they cannot hide any single layer's rows.
  *
  * So each tile now carries SEVERAL dots, one gradient layer each, all layers of a tile sharing
- * its `background-size`: `circle at X% Y%` places a dot inside the tile, at hand-picked uneven
- * positions where no two dots share a column or a row and the gaps between them are unequal.
- * No dot sits closer to its tile's edge than its own radius, because a dot does not wrap onto
- * the next tile — it is cut, and a half-moon at a straight edge would draw the grid back in.
- * Every tile side is a prime, so no two tiles of a floor ever fall into step.
+ * its `background-size`: `circle at X% Y%` places a dot inside the tile, at uneven positions
+ * where no two dots share a column or a row and the gaps between them are unequal. No dot sits
+ * closer to its tile's edge than its own radius, because a dot does not wrap onto the next tile
+ * — it is cut, and a half-moon at a straight edge would draw the grid back in. Every tile side
+ * is a prime, so no two tiles of a floor ever fall into step.
+ *
+ * ⚠ A TILE IS NEVER SEEN ALONE (fix round 1, 2026-09-14). Tiles sit edge to edge, so a dot lines
+ * up with dots of the NEIGHBOURING tiles too. The first scatter passed every rule about one tile
+ * and still drew lines: floor 2's B tile had all four dots in a strip 1.22 px wide and 250 px long
+ * across its edges, every B fleck within ~3 px of parallel lines rising at ~24 degrees. Positions
+ * picked by eye cannot see this. The dots are now CHOSEN BY MEASUREMENT — for each tile, how
+ * strongly its dots line up along any family of parallel lines that runs across the tile edges
+ * (`lineStrength` in `styleDiscipline.test.ts`, limit 0.9) — along with no clumps (counting the
+ * neighbouring tiles' copies), no three dots on one straight line, and no two within 8 px of a
+ * column or a row. Moving a dot means re-running those tests, not trusting the eye.
  *
  * ⚠ EVERY DOT STAYS IN THIS ONE ELEMENT'S BACKGROUND. The layer's `opacity` is applied once to
  * everything it paints, so two dots overlapping are still exactly the ink at the token's alpha,
@@ -110,26 +120,39 @@
  * loop has no seam, and the three drift in different directions — A down-right, B down-left,
  * C up-right (REVISED 2026-09-14: all three used to go down-right, so the field slid as one
  * sheet). The alpha stops at the layer's 0.3 — the densest the composite gate allows before the
- * blood-red accent drops under AA on a fleck. */
+ * blood-red accent drops under AA on a fleck.
+ *
+ * Fix round 1 (2026-09-14): A and B re-placed by measurement (line strength 0.94 -> 0.64 and
+ * 0.98 -> 0.65; C, at 0.83, was already typical of a random tile and is unchanged). Each fleck's
+ * soft edge grows 0.2 px, back to the old dots' 1 px of fade, which brings the ink back to within
+ * ~1% of what the author approved — the first scatter carried 11% less. The size of a dot does
+ * not touch the contrast gate: the peak is one dot's ink at the layer's single opacity, whatever
+ * its radius. The three tiles START apart (0 0, 31 34, 16 110 px), placed so that at rest — what
+ * a reduced-motion player always sees, and every 90 s as the loop comes round — no three tiles'
+ * rows fall within 6 px of each other on a screen up to 2160 px tall, nor their columns up to
+ * 5120 px wide. Starting together, they made a 35-fleck band 119 px from the top. */
 [data-texture='flecks'] .void-texture {
   background:
-    radial-gradient(circle at 11% 67%, var(--void-texture-ink) 0 1.2px, transparent 2px),
-    radial-gradient(circle at 29% 14%, var(--void-texture-ink) 0 1.6px, transparent 2.5px),
-    radial-gradient(circle at 58% 46%, var(--void-texture-ink) 0 1px, transparent 1.8px),
-    radial-gradient(circle at 83% 88%, var(--void-texture-ink) 0 1.4px, transparent 2.2px),
-    radial-gradient(circle at 19% 38%, var(--void-texture-ink) 0 1px, transparent 1.8px),
-    radial-gradient(circle at 41% 79%, var(--void-texture-ink) 0 1.8px, transparent 2.8px),
-    radial-gradient(circle at 72% 9%, var(--void-texture-ink) 0 1.3px, transparent 2.1px),
-    radial-gradient(circle at 91% 52%, var(--void-texture-ink) 0 1.5px, transparent 2.4px),
-    radial-gradient(circle at 8% 22%, var(--void-texture-ink) 0 2px, transparent 3px),
-    radial-gradient(circle at 39% 63%, var(--void-texture-ink) 0 1.4px, transparent 2.3px),
-    radial-gradient(circle at 66% 33%, var(--void-texture-ink) 0 1.7px, transparent 2.6px),
-    radial-gradient(circle at 88% 86%, var(--void-texture-ink) 0 2.2px, transparent 3.2px);
+    radial-gradient(circle at 12% 49%, var(--void-texture-ink) 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 47% 80%, var(--void-texture-ink) 0 1.6px, transparent 2.7px),
+    radial-gradient(circle at 58% 12%, var(--void-texture-ink) 0 1px, transparent 2px),
+    radial-gradient(circle at 87% 68%, var(--void-texture-ink) 0 1.4px, transparent 2.4px),
+    radial-gradient(circle at 10% 74%, var(--void-texture-ink) 0 1px, transparent 2px),
+    radial-gradient(circle at 22% 27%, var(--void-texture-ink) 0 1.8px, transparent 3px),
+    radial-gradient(circle at 45% 8%, var(--void-texture-ink) 0 1.3px, transparent 2.3px),
+    radial-gradient(circle at 77% 62%, var(--void-texture-ink) 0 1.5px, transparent 2.6px),
+    radial-gradient(circle at 8% 22%, var(--void-texture-ink) 0 2px, transparent 3.2px),
+    radial-gradient(circle at 39% 63%, var(--void-texture-ink) 0 1.4px, transparent 2.5px),
+    radial-gradient(circle at 66% 33%, var(--void-texture-ink) 0 1.7px, transparent 2.8px),
+    radial-gradient(circle at 88% 86%, var(--void-texture-ink) 0 2.2px, transparent 3.4px);
   background-size:
     131px 109px, 131px 109px, 131px 109px, 131px 109px,
     173px 151px, 173px 151px, 173px 151px, 173px 151px,
     227px 197px, 227px 197px, 227px 197px, 227px 197px;
-  background-position: 0px 0px;
+  background-position:
+    0px 0px, 0px 0px, 0px 0px, 0px 0px,
+    31px 34px, 31px 34px, 31px 34px, 31px 34px,
+    16px 110px, 16px 110px, 16px 110px, 16px 110px;
   animation: void-flecks-drift 90s linear infinite;
 }
 
@@ -193,19 +216,20 @@
 }
 /* Each fleck tile advances by exactly its own size, all four of its dots together: A (+131,+109)
  * down-right, B (-173,+151) down-left, C (+227,-197) up-right — about 1.9, 2.6 and 3.3 px a
- * second over 90 s. Whole tiles, so the loop is seamless in any direction. */
+ * second over 90 s. Whole tiles, so the loop is seamless in any direction. `from` is the rule's
+ * own still frame, so the loop comes round on the picture reduced motion shows. */
 @keyframes void-flecks-drift {
   from {
     background-position:
       0px 0px, 0px 0px, 0px 0px, 0px 0px,
-      0px 0px, 0px 0px, 0px 0px, 0px 0px,
-      0px 0px, 0px 0px, 0px 0px, 0px 0px;
+      31px 34px, 31px 34px, 31px 34px, 31px 34px,
+      16px 110px, 16px 110px, 16px 110px, 16px 110px;
   }
   to {
     background-position:
       131px 109px, 131px 109px, 131px 109px, 131px 109px,
-      -173px 151px, -173px 151px, -173px 151px, -173px 151px,
-      227px -197px, 227px -197px, 227px -197px, 227px -197px;
+      -142px 185px, -142px 185px, -142px 185px, -142px 185px,
+      243px -87px, 243px -87px, 243px -87px, 243px -87px;
   }
 }
 /* Each speck tile falls exactly one tile DOWN, its six specks together (127px, 181px per 30 s —
