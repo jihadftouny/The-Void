@@ -1,5 +1,11 @@
 # Human Checks — The Void
 
+> ## ✨ From `speck-scatter` (merged 2026-09-14) — the specks should no longer sit on a grid
+>
+> **You said the floors were right but "too grid like — every speckle on the same x and y axis level."** Each tile now holds several specks at measured, uneven spots, and floor 2's three fleck layers drift three different ways. Colours, the white-out, the haze and the fade are unchanged.
+>
+> - [ ] **Floor 2 (F3 → `act2-illusion`, a fight with the flecks behind it) and floor 3 (F3 → the floor-3 rest preset): watch the background for 15 s.** *Pass* if the specks read as scattered. *Fail* if you can trace a row, a column or a diagonal string of dots, if any speck is a half-moon cut at a straight edge, if the drift stutters — above all at the loop point (every 90 s on floor 2, every 30 s on floor 3) — or if the density looks wrong. **Density:** floor 2's flecks are within ~1% of what you approved; **floor 3's ash is about 5% denser**, because the nearer specks are slightly bigger.
+
 > ## 🎨 From `floor-looks` (merged 2026-09-13) — floor 2 is a white-out and floor 3 is ash; only your eyes can judge them
 >
 > **You asked for this after playing:** floors 2 and 3 were *"only lines in the background."* Now floor 2 is the only light floor — white, dark ink, a deep red, red flecks — and floor 3 is a grey haze with ash falling through it. **Moving between floors dissolves over 1.2 s instead of snapping.** Readability is machine-checked on every floor; **whether it looks right is not.** Start with `npm run desktop`, most-likely-wrong first.

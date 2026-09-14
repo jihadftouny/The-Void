@@ -19,13 +19,32 @@ Format per entry:
 
 ---
 
+## 2026-09-14 — speck-scatter (G67 opened) [branch `agentic/speck-scatter`, **merged to `main` 2026-09-14**]
+- Verdict: **PASS** after **1 fix round** — raised by the orchestrator on a PASS, because the verifier found a pattern the author would very likely reject. 2767 → **2796 tests**. 4 commits, each green.
+- **Why it exists:** the `floor-looks` escape above.
+- Test failures before fixes: the first build **placed dots by eye and formed parallel diagonals across tile edges** — one layer lined up more than 98.7% of 4,000 random layouts. The per-tile guard could not see across tile edges. Also a 35-dot band at rest and ~11% less ink.
+- Plan open-questions: none.
+- Manual engineer fixes: none yet.
+
+### What worked — and should become standard
+
+- **Speed.** ~1 h build and ~45 min verification per round, against ~14 h for #2. **The difference is one instruction: run each mutation against the one fast test file meant to catch it (~0.5–3 s), and the full suite once per commit.** Propose it for the agent definitions at the retro.
+- **Sending a PASS back.** The verifier's finding was formally a manual-check item, but it was predictable that the author would reject it. Spending a cheap fix round saved the author's time. **When a verifier can predict a looks-rejection, fix it before it reaches the author.**
+- **The eye cannot see a line family.** The build agent's own "compliant" hand-placed tile scored 0.993. Placement by measurement, with a statistical threshold derived from random layouts, replaced placement by eye.
+
+### An orchestrator slip
+
+The worktree would not delete (*"Permission denied"*) because **the orchestrator's own session had its working directory inside it** since creation. Nothing else held it; the five `node` processes found were other sessions' MCP servers with live parents. **Leave a worktree before removing it.**
+
+---
+
 ## 2026-09-13 — floor-looks (G64 fixed; G65, G66 opened) [branch `agentic/floor-looks`, **merged to `main` 2026-09-13**]
 - Verdict: **PASS**, first time, **0 fix rounds**. 2688 → **2767 tests**, 113 files. 4 commits, each green on its own.
 - **Why it exists:** a pipeline escape from `visual-identity`, found by the author in play (*"floor 3 and 2 are only lines in the background"*). Floor 2 became the only light floor; floor 3 a greyscale haze with ash; the change of floor now dissolves over 1.2 s.
 - Build-agent deviations: floor 3's panels re-stepped (`#181818` / `#1d1d1d`) because the new audit found **a live AA failure on `main`** (the Abandon row, 4.39:1); four commits instead of five, since a texture rename must land in TS and CSS together; the audit's per-screen count rule replaced an impossible one. All judged sound.
 - Test failures before fixes: none.
 - Plan open-questions: none.
-- Manual engineer fixes: none yet.
+- **Manual engineer fixes — ⚠ ONE ESCAPE, found by the author in play 2026-09-14:** *"the design were correct but I felt they were too grid like. like every speckle is on the same x and y axis level."* Each speck layer was one positionless `radial-gradient(circle, …)` — one dot dead centre per tile — so every layer was a perfect lattice; mismatched tile sizes (already used) cannot hide an individual layer's lattice. *Which agent should have caught it:* none by test as built — it is a looks-judgement — **but the lattice was mechanically detectable**, and `speck-scatter` now detects it. Fixed there.
 
 ### What went right
 

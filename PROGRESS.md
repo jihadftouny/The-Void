@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2767 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2796 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,12 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-14 — the specks no longer sit on a grid ✅
+
+**`speck-scatter` merged. 2767 → 2796 tests.** You played floors 2 and 3 and said the design was right but *"too grid like — every speckle is on the same x and y axis level."* Each speck layer had one dot dead centre per tile, so every layer was a perfect grid. **Each tile now holds several specks at measured, uneven positions**, and floor 2's three layers drift three different ways. **A first attempt formed diagonal lines across tile edges**, placed by eye — verification caught it before you saw it, and the specks are now placed by measurement, with checks for lines, clumps, specks in a row and bands at rest. **It took ~1 h of build and ~45 min of verification** — far faster than recent units, because each deliberate breakage was tested against the one small file meant to catch it rather than the whole suite.
+
+**Next:** one check at the top of `HUMAN-CHECKS.md` — whether the specks now read as scattered.
 
 ### 2026-09-13 — floor 2 is a white-out, floor 3 is ash, and floors fade into each other ✅
 
