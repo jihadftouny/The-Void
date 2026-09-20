@@ -628,13 +628,14 @@ describe('the atmosphere is ON — the control, before anything is measured agai
     }
   });
 
-  it('each texture pushes its ground the way its KIND says: fog, ash and glow lighten; flecks and absence darken', () => {
+  it('each texture pushes its ground the way its KIND says: fog, ash and glow lighten; the tear and absence darken', () => {
     // The direction is the meaning, not a detail. Fog, ash and the sacred glow lie on top of a
     // dark ground and make it paler — which is precisely why the gate has to run against the
     // composite. The True Void's is a vignette in pure black — absence, not destruction — so it
-    // darkens its ground. REVISED 2026-09-12: floor 2's red flecks lie on a WHITE ground, so
-    // they darken it too — and on the light floor darkening is what COSTS contrast, because
-    // its ink is the dark one. (This used to read "four textures add light".)
+    // darkens its ground. REVISED 2026-09-12: floor 2's red texture lies on a WHITE ground, so
+    // it darkens it too — and on the light floor darkening is what COSTS contrast, because its
+    // ink is the dark one. (This used to read "four textures add light".) The kind was renamed
+    // `flecks` -> `tear` on 2026-09-20; the ink and the alpha it darkens by did not move.
     //
     // Transcribed from the design rather than derived from the data, so a kind that quietly
     // changed direction fails here.
@@ -642,7 +643,7 @@ describe('the atmosphere is ON — the control, before anything is measured agai
       fog: 'lighten',
       ash: 'lighten',
       glow: 'lighten',
-      flecks: 'darken',
+      tear: 'darken',
       absence: 'darken',
     };
     for (const floor of FLOOR_THEMES) {
@@ -737,7 +738,7 @@ describe('every floor is legible in its own environment', () => {
     }
   });
 
-  it('floor 2’s TIGHTEST gate is its accent on the fleck composite, at the hand-derived 5.18:1', () => {
+  it('floor 2’s TIGHTEST gate is its accent on the TEXTURE composite, at the hand-derived 5.18:1', () => {
     // The worst case on the light floor, pinned to two decimals so a later alpha or ink tweak
     // shows in the diff rather than sliding silently toward 4.5.
     //   composite = 0.3 * (192, 24, 26) + 0.7 * (244, 245, 249)      [#c0181a over #f4f5f9]
@@ -747,13 +748,18 @@ describe('every floor is legible in its own environment', () => {
     //     (blue 10/255 = 0.039216 sits just under the 0.03928 knee: 0.039216 / 12.92)
     //   (0.521116 + 0.05) / (0.060357 + 0.05) = 0.571116 / 0.110357 = 5.1752
     // (The plan's text wrote the composite's first operand as (142, 12, 10), the ACCENT's
-    // channels; the result it reached, #e4b3b6, is the fleck ink's — this derivation is that.)
+    // channels; the result it reached, #e4b3b6, is the texture ink's — this derivation is that.)
+    // UNCHANGED 2026-09-20 (`signal-tear`): floor 2's texture became a tear instead of flecks,
+    // and neither `texture.ink` nor `texture.opacity` moved — so every figure below is the same
+    // arithmetic on the same two numbers, and no gate had to be re-measured. A hard-edged 1px
+    // streak's densest pixel is the same colour a fleck's centre was: thickness never enters a
+    // contrast ratio, only the ink and the alpha do.
     const f = FLOOR_THEMES[1]!;
     expect(compositeGround(f)).toBe('#e4b3b6');
     expect(contrastRatio(f.accent, compositeGround(f))).toBeCloseTo(5.175, 2);
     // On the bare white it is far roomier: (0.913775 + 0.05) / 0.110357 = 8.7333.
     expect(contrastRatio(f.accent, f.bg)).toBeCloseTo(8.733, 2);
-    // ...and the body ink on the composite, the other thing the fleck alpha is capped by:
+    // ...and the body ink on the composite, the other thing the texture's alpha is capped by:
     // #15171d on #e4b3b6 = 9.74:1, clear of AAA.
     expect(contrastRatio(f.ink, compositeGround(f))).toBeCloseTo(9.744, 2);
   });

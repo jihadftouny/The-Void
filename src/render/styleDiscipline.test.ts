@@ -827,7 +827,11 @@ function texturePseudoElements(css: string): string[] {
 }
 
 describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC-9)', () => {
-  const FLECKS = "[data-texture='flecks'] .void-texture";
+  // `signal-tear` (2026-09-20): floor 2's kind is `tear`, not `flecks`. What this block asks of
+  // it is unchanged and is about the ALPHA, not the shape — every stop flat ink or transparent,
+  // the layer really moving, and one entry per layer in every per-layer list — so it holds
+  // word for word over a rule that paints bands instead of dots.
+  const TEAR = "[data-texture='tear'] .void-texture";
   const ASH = "[data-texture='ash'] .void-texture";
 
   it('the stop detector fires on a foreign colour in any position, and passes the house shapes', () => {
@@ -837,6 +841,7 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
       '110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%',
       '118% 104% at 50% 46%, transparent 34%, var(--void-texture-ink)',
       '24deg, var(--void-texture-ink) 0 1px, transparent 1px 7px',
+      'to right, transparent 0px 43px, var(--void-texture-ink) 43px 190px, transparent 190px',
     ]) {
       expect(foreignStops(args), args).toEqual([]);
     }
@@ -849,10 +854,12 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
       .toEqual(['circle, var(--void-texture-ink) 0 1px, transparent 2px', 'red, blue']);
   });
 
-  // `speck-scatter` (2026-09-14): 3 -> 12 and 4 -> 14. Each speck tile now carries four (flecks)
-  // or six (ash) dots, and a dot is one gradient layer; the ash's two haze layers are unchanged.
+  // `speck-scatter` (2026-09-14): 3 -> 12 and 4 -> 14. Each speck tile carries four (floor 2 as
+  // it then was) or six (ash) dots, and a dot is one gradient layer; the ash's two haze layers
+  // are unchanged. `signal-tear` (2026-09-20): floor 2's 12 dots became 9 ROWS — six slices, three
+  // of which show both of their torn edges.
   for (const [floor, selector, layers] of [
-    ['floor 2, the flecks', FLECKS, 12],
+    ['floor 2, the tear', TEAR, 9],
     ['floor 3, the ash', ASH, 14],
   ] as const) {
     it(`${floor}: every gradient stop is the flat texture ink or transparent`, () => {
@@ -908,16 +915,12 @@ describe('floors 2 and 3 are really painted, and only by the layer’s alpha (AC
     expect(falls.size, 'every speck falls at one speed — the ash moves as one sheet').toBeGreaterThanOrEqual(2);
   });
 
-  // `speck-scatter` (AC-3), replacing "exactly one tile across and one tile down": that rule sent
-  // every fleck layer down-right, so the field slid as one sheet. Whole tiles still (no seam);
-  // the direction is now free, and the layers must not all share one.
-  it('the flecks drift whole tiles per cycle (no seam), and not all in one direction', () => {
-    const layers = textureLoop(ALL_CSS, FLECKS);
-    expect(layers, 'the flecks have no loop to judge').toHaveLength(12);
-    expect(seam(layers, false)).toBeNull();
-    expect(directionSpread(layers), 'every fleck layer slides the same way — the field moves as one sheet')
-      .toBeGreaterThanOrEqual(45);
-  });
+  // DELETED 2026-09-20 (`signal-tear`): "the flecks drift whole tiles per cycle (no seam), and
+  // not all in one direction". Whole-tile drift is the CONCEPT this unit removed — floor 2 does
+  // not drift at all now, it holds and snaps, and a horizontal snap of a `repeat-x` row has no
+  // seam at any distance. What replaces it is `tearFaults`'s `seam` clause, which asks the
+  // stronger question: that the loop comes round on the frame the rule itself rests on.
+  // `directionSpread` keeps its self-test below, on its own inline fixtures.
 
   it('the direction spread measures angles between moves, not their lengths', () => {
     const loop = (...to: string[]): LoopLayer[] =>
@@ -1345,6 +1348,11 @@ function inkCoverage(css: string, selector: string): number {
 }
 
 describe('no speck layer is a centred lattice (speck-scatter)', () => {
+  // ⚠ `[data-texture='flecks']` NO LONGER EXISTS IN THE SHIPPED CSS (`signal-tear`, 2026-09-20).
+  // It survives here only as the selector the three historical FIXTURES below were written
+  // against — the grid the author saw, and floor 2 as this pipeline first scattered it. Every
+  // assertion about a SHIPPED rule in this block is now about the ash, which is the only speck
+  // field left; floor 2 answers to `tearFaults` instead.
   const FLECKS = "[data-texture='flecks'] .void-texture";
   const ASH = "[data-texture='ash'] .void-texture";
   /** The faults' codes, sorted — what each case below is judged on. */
@@ -1383,9 +1391,11 @@ describe('no speck layer is a centred lattice (speck-scatter)', () => {
     expect(latticeFaults(FIRST_BUILD_FLECKS, FLECKS).join('\n')).toMatch(/131x109 tile's dots line up along the \(1,2\) family[\s\S]*173x151 tile's dots line up along the \(1,2\) family/);
   });
 
-  it('the shipped flecks and ash are not a lattice', () => {
-    expect(latticeFaults(ALL_CSS, FLECKS)).toEqual([]);
+  it('the shipped ash is not a lattice', () => {
     expect(latticeFaults(ALL_CSS, ASH)).toEqual([]);
+    // ...and floor 2 is gone from this guard because it is gone from this LANGUAGE, not because
+    // it was excused: nothing in the shipped CSS carries the selector these fixtures use.
+    expect(ALL_CSS, 'a speck field is still selected as `flecks`').not.toContain("[data-texture='flecks']");
   });
 
   it('line strength: 1 for one dot, 1 for a finer grid inside a tile, and the first build by hand', () => {
@@ -1404,7 +1414,7 @@ describe('no speck layer is a centred lattice (speck-scatter)', () => {
     expect([a.m, a.n]).toEqual([1, 2]);
   });
 
-  it('at rest, no 6-px band gathers rows (or columns) from all three fleck tiles', () => {
+  it('at rest, a 6-px band CAN gather rows from three tiles — and this is what that looks like', () => {
     // The first build started all three tiles at 0 0. Its rows met at 119.29px — B's 79% of 151 —
     // with C's 63% of 197 (124.11) and A's 14% of 109 one tile down (124.26): 4.97px, one band.
     const first = restingBands(FIRST_BUILD_FLECKS, FLECKS, 1920, 1080);
@@ -1412,15 +1422,16 @@ describe('no speck layer is a centred lattice (speck-scatter)', () => {
     expect(first.rowAt).toBeCloseTo(119.29, 2);
     // ...and its columns, at 75.98 + 3x131, 124.56 + 2x173 and 18.16 + 2x227: 468.98 to 472.16.
     expect(first.columns, 'columns').toBe(3);
-    // The shipped offsets were chosen so no three tiles' rows meet on screens up to 2160 CSS px
-    // tall, nor their columns up to 5120 wide (the largest a desktop gives at 100% scaling).
-    const now = restingBands(ALL_CSS, FLECKS, 5120, 2160);
-    expect(now.rows, `rows meet at ${now.rowAt}px`).toBeLessThanOrEqual(2);
-    expect(now.columns, `columns meet at ${now.columnAt}px`).toBeLessThanOrEqual(2);
+    // ⚠ 2026-09-20 (`signal-tear`): the half of this that asked the SHIPPED floor 2 the same
+    // question is gone with the flecks. It cannot be asked of the tear, and does not need to
+    // be: the defect was several tiles' rows falling into one band, and a tear has no tiles
+    // repeating down the screen at all — every row is `repeat-x`, drawn exactly once at its own
+    // height. `tearFaults`'s `repeat` clause is what holds that, and its `even-y` clause is what
+    // asks the same underlying question of the tear: that the rows are not evenly spaced.
   });
 
   it('every loop begins on the still frame, so the moment it comes round is the picture above', () => {
-    for (const selector of [FLECKS, ASH]) {
+    for (const selector of ["[data-texture='tear'] .void-texture", ASH]) {
       const own = splitTop(declarations(rulesFor(ALL_CSS, selector)[0]!.body).filter((d) => d.prop === 'background-position').at(-1)?.value ?? '');
       const from = loopPositions(ALL_CSS, selector)?.from ?? [];
       expect(from.length, selector).toBeGreaterThan(0);
@@ -1433,7 +1444,10 @@ describe('no speck layer is a centred lattice (speck-scatter)', () => {
       inkCoverage(`.t { background: radial-gradient(circle at 50% 50%, ${stops}); background-size: 10px 10px; }`, '.t');
     expect(one('var(--void-texture-ink) 0 2px, transparent 2px'), 'a hard disc is its own area').toBeCloseTo((Math.PI * 4) / 100, 12);
     expect(one('var(--void-texture-ink), transparent 3px'), 'a pure fade is a cone').toBeCloseTo((Math.PI * 9) / 3 / 100, 12);
-    for (const [selector, old] of [[FLECKS, OLD_FLECKS], [ASH, OLD_ASH]] as const) {
+    // 2026-09-20 (`signal-tear`): floor 2 has left this measure — `inkCoverage` sums discs, and
+    // the tear paints no discs. Its ink is held to 0.3–1.2% of a 1920x1080 screen by
+    // `tearFaults`'s `ink` clause instead, and it lands at 0.69% against the flecks' 0.66%.
+    for (const [selector, old] of [[ASH, OLD_ASH]] as const) {
       const ratio = inkCoverage(ALL_CSS, selector) / inkCoverage(old, selector);
       expect(Math.abs(ratio - 1), `${selector} carries ${ratio} of the ink it had`).toBeLessThanOrEqual(0.1);
     }
@@ -1442,7 +1456,7 @@ describe('no speck layer is a centred lattice (speck-scatter)', () => {
   });
 
   it('...and that silence is not blindness: un-placing one shipped dot is reported', () => {
-    for (const selector of [FLECKS, ASH]) {
+    for (const selector of [ASH]) {
       const body = rulesFor(ALL_CSS, selector)[0]!.body;
       const unplaced = body.replace(/circle at [\d.]+% [\d.]+%/, 'circle');
       expect(unplaced, `${selector} has no placed dot to un-place`).not.toBe(body);
@@ -2606,6 +2620,151 @@ describe('the band guard turns away every lazy way to draw a torn signal (signal
       ),
       'both at once',
     ).toEqual({ dots: true, bands: true });
+  });
+});
+
+describe('the shipped floor 2 IS a signal tearing, and its safety margin is measured (signal-tear)', () => {
+  const TEAR = "[data-texture='tear'] .void-texture";
+
+  /** WCAG 2.3.1: no more than three flashes in any one second, a flash being a PAIR of changes. */
+  const WCAG_FLASHES_PER_SECOND = 3;
+  /**
+   * WCAG's "small safe area": 25% of a 10-degree field, which the guideline quotes as about
+   * 21,824px² — measured on a 1024x768 screen, where it is 2.78% of the whole. Below it the
+   * flash thresholds do not apply at all.
+   */
+  const WCAG_SMALL_SAFE_AREA_PX = 21824;
+
+  it('reports nothing at all against the band guard', () => {
+    expect(tearFaults(ALL_CSS, TEAR)).toEqual([]);
+  });
+
+  it('and it is six slices of nine rows, snapping at seventeen instants — not a dot anywhere', () => {
+    const safety = tearSafety(ALL_CSS, TEAR);
+    expect(safety.rows, 'rows: six slices, three of which show BOTH of their torn edges').toBe(9);
+    expect(safety.slices, 'slices').toBe(6);
+    expect(safety.stops, 'the stops at which anything moves, in one 53s cycle').toBe(17);
+    // AC-2. Floor 2 keeps no dots: that language is floor 3's alone, and the whole reason this
+    // unit exists is that floor 2 had borrowed it.
+    const background = declarations(rulesFor(ALL_CSS, TEAR)[0]!.body)
+      .filter((d) => d.prop === 'background')
+      .map((d) => d.value)
+      .join(', ');
+    expect(gradientLayers(background).filter((l) => l.fn !== 'linear-gradient'), 'floor 2 paints something that is not a horizontal gradient')
+      .toEqual([]);
+    expect(background, 'floor 2 paints a dot').not.toContain('radial-gradient');
+    expect(background, 'floor 2 paints a dot').not.toContain('circle');
+  });
+
+  it('THE SAFETY CASE, in the numbers the CSS really comes to', () => {
+    const safety = tearSafety(ALL_CSS, TEAR);
+
+    // (1) THE SCREEN. The closest two stops are 4% of 53s. Nothing else on floor 2 moves, so
+    // that is also the fastest anything anywhere on the screen changes: 0.47 times a second.
+    expect(safety.closestStopsSeconds, '4% of 53s').toBeCloseTo(2.12, 6);
+    expect(1 / safety.closestStopsSeconds, 'changes a second, anywhere on the screen').toBeLessThan(0.5);
+
+    // (2) ONE BAND. The shortest any slice holds between its own snaps is 17% of 53s — slice F,
+    // which snaps at 14%, 56% and 97% and so waits 17% of the cycle from its last snap round to
+    // its first. A pixel under that band therefore goes white→red→white at most once in
+    // 2 x 9.01s, which is 0.055 flashes a second: fifty-four times under WCAG's three. This is
+    // the clause that matters, because a flash is a PAIR of opposing changes, and only one band
+    // returning to where it was can make a pair.
+    expect(safety.shortestSliceHoldSeconds, '17% of 53s, slice F across the wrap').toBeCloseTo(9.01, 6);
+    const flashesPerSecond = 1 / (2 * safety.shortestSliceHoldSeconds);
+    // A THIRTIETH of WCAG's line, not the line itself: `tearFaults` would already permit a 2s
+    // hold, which is 0.25 flashes a second, so asserting merely "under three" would be asserting
+    // something the guard has already forced. This asserts the SCHEDULE's own margin.
+    expect(flashesPerSecond, `${flashesPerSecond} flashes a second`).toBeLessThan(WCAG_FLASHES_PER_SECOND / 30);
+
+    // (3) HOW MUCH CHANGES. The worst stop is 14%, where slices C and F move together: both
+    // positions of every row that moves, at 1920px wide — C is 3px of rows at 662/1151 ink, F is
+    // 2px at 458/971. 10,249px², which is 0.49% of a 1920x1080 screen and under half of WCAG's
+    // small safe area in absolute px² as well.
+    expect(safety.worstMovedPx, "slices C and F at the 14% stop").toBeCloseTo(((662 / 1151) * 3 + (458 / 971) * 2) * 3840, 6);
+    expect(safety.worstMovedShare, 'of a 1920x1080 screen').toBeLessThan(0.005);
+    expect(safety.worstMovedPx / WCAG_SMALL_SAFE_AREA_PX, "of WCAG's small safe area").toBeLessThan(0.5);
+
+    // (4) THE RED ITSELF. Σ(the share of its period each row inks x its thickness) / 1080 —
+    // 0.69% of the screen, against the 0.66% the flecks laid, so the floor carries about the
+    // density the author already approved.
+    const inkByHand =
+      ((411 / 907) * 3 + (606 / 1039) * 2 + (662 / 1151) * 3 + (719 / 1283) * 1 + (777 / 1409) * 3 + (458 / 971) * 2) / 1080;
+    expect(safety.inkShare).toBeCloseTo(inkByHand, 12);
+    expect(safety.inkShare, 'the flecks laid 0.66%').toBeCloseTo(0.0069, 4);
+  });
+
+  it('...and NOTHING in its keyframes is opacity, colour, brightness or a filter', () => {
+    // Stated once more directly, because it is the clause the three above rest on: if position
+    // were not the only thing that changed, none of those numbers would bound a flash.
+    const body = keyframes(ALL_CSS).get('void-tear-snap');
+    expect(body, 'void-tear-snap is gone').toBeDefined();
+    for (const d of declarations(body as string)) {
+      expect(d.prop, `a tear keyframe declares ${d.prop}`).toBe('background-position');
+    }
+    expect(declarations(body as string).length, 'the keyframes declare nothing at all').toBe(19);
+  });
+
+  it('the closing hold IS the rest frame, so the loop point is invisible and reduced motion shows it', () => {
+    // AC-7, said in full: the rule's own `background-position` — which is what a player with
+    // reduced motion sees, because both reduced-motion rules set `animation: none` — is also the
+    // value at 0%, at the last stop before 100%, and at 100%. So the 53s cycle ends on the still
+    // picture, comes round to the same still picture, and changes nothing where it joins.
+    const own = declarations(rulesFor(ALL_CSS, TEAR)[0]!.body).filter((d) => d.prop === 'background-position').at(-1)?.value ?? '';
+    const stops = keyframeStops(keyframes(ALL_CSS).get('void-tear-snap') as string);
+    const positionOf = (at: number): string =>
+      splitTop(stops.find((s) => s.at === at)?.decls.filter((d) => d.prop === 'background-position').at(-1)?.value ?? '')
+        .map((e) => e.replace(/\s+/g, ' ').trim())
+        .join(', ');
+    const rest = splitTop(own).map((e) => e.replace(/\s+/g, ' ').trim()).join(', ');
+    expect(rest, 'the rule rests on nothing').not.toBe('');
+    expect(positionOf(0), '0% is not the rest frame').toBe(rest);
+    expect(positionOf(100), '100% is not the rest frame').toBe(rest);
+    const lastBefore = [...stops].reverse().find((s) => s.at < 100);
+    expect(lastBefore?.at, 'the last stop before 100%').toBe(97);
+    expect(positionOf(97), 'the closing hold is not the rest frame').toBe(rest);
+    // ...and reduced motion really does stop it, in both contexts (the control for all of this).
+    expect(stopsMotion(ALL_CSS, "[data-motion='reduce']", '.void-texture')).toBe(true);
+    expect(stopsMotion(reducedMotionBlock(ALL_CSS), "data-motion='full'", '.void-texture')).toBe(true);
+  });
+
+  it('...and that silence is not blindness: filling in one shipped row is reported', () => {
+    // The shipped rule passing `tearFaults` means nothing unless the guard would speak up about
+    // THIS rule. Every one of its nine rows, un-broken in turn, must be reported.
+    const rule = rulesFor(ALL_CSS, TEAR)[0]!.body;
+    const layers = gradientLayers(declarations(rule).filter((d) => d.prop === 'background').at(-1)?.value ?? '');
+    expect(layers, 'the tear has no rows to break').toHaveLength(9);
+    for (const [i, layer] of layers.entries()) {
+      const marks = [...layer.args.matchAll(/(-?[\d.]+)px/g)].map((m) => Number(m[1]));
+      const first = Math.min(...marks.filter((v) => v > 0));
+      const last = Math.max(...marks);
+      const filled = `linear-gradient(to right, transparent 0px ${first}px, var(--void-texture-ink) ${first}px ${last}px, transparent ${last}px)`;
+      const spoiled = ALL_CSS.replace(`linear-gradient(${layer.args})`, filled);
+      expect(spoiled, `row ${i + 1} was not found to fill in`).not.toBe(ALL_CSS);
+      expect(tearFaults(spoiled, TEAR).map((f) => f.split(' ')[0]), `row ${i + 1} filled in`).toContain('unbroken');
+    }
+  });
+
+  it('every floor texture is judged by the guard for what it PAINTS, not for which floor it is', () => {
+    // The dispatch. Floor 3 keeps the lattice guard it already had and floor 2 is not merely
+    // excused from it: each rule is classified by the shapes in its own `background`, and a rule
+    // that drew both dots and bands would answer to both guards.
+    const painted = FLOOR_THEMES.map((floor) => {
+      const selector = `[data-texture='${floor.texture.kind}'] .void-texture`;
+      const paints = texturePaints(ALL_CSS, selector);
+      if (paints.dots) expect(latticeFaults(ALL_CSS, selector), `${selector} as dots`).toEqual([]);
+      if (paints.bands) expect(tearFaults(ALL_CSS, selector), `${selector} as bands`).toEqual([]);
+      return paints;
+    });
+    // ...and the sweep is not vacuous: exactly one floor paints dots, exactly one paints bands,
+    // and the other three are hazes that neither guard has anything to say about.
+    expect(painted.filter((p) => p.dots).length, 'floors painting dots').toBe(1);
+    expect(painted.filter((p) => p.bands).length, 'floors painting bands').toBe(1);
+    expect(painted.filter((p) => !p.dots && !p.bands).length, 'floors painting a haze').toBe(3);
+    // The one that paints dots is floor 3, and the one that paints bands is floor 2 — stated by
+    // index rather than by kind name, so a future rename cannot quietly swap them.
+    expect(painted[2], 'floor 3').toEqual({ dots: true, bands: false });
+    expect(painted[1], 'floor 2').toEqual({ dots: false, bands: true });
   });
 });
 
