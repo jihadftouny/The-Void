@@ -82,8 +82,19 @@ export const PALETTE = {
  * flecks on the white), and `ash` changed its paint from a crosshatch to a haze with falling
  * specks. The author, having played it: floors 2 and 3 were "only lines in the background, no
  * gradient colors or anything".
+ *
+ * REVISED 2026-09-20 (`signal-tear`): `flecks` became `tear`. The author, having played floor 2
+ * again: it "should read more as glitches than similar to ash" — the flecks were floor 3's
+ * language on floor 2's floor, and floor 2's register is FRACTURE. It is now slices of the white
+ * that have slipped sideways, showing their torn edges as broken rows of red.
+ *
+ * ⚠ THIS STRING IS A CSS SELECTOR. It picks `[data-texture='tear']` in `atmosphere.css`, a
+ * coupling neither the compiler nor the runtime can see, so renaming it here alone leaves the
+ * floor with no atmosphere at all, and renaming it there alone leaves a rule nothing matches.
+ * Both halves are guarded — `styleDiscipline.test.ts` from the CSS side, `theme.test.ts` from
+ * the applier's — so a split rename is red, not silent.
  */
-export type TextureKind = 'fog' | 'flecks' | 'ash' | 'glow' | 'absence';
+export type TextureKind = 'fog' | 'tear' | 'ash' | 'glow' | 'absence';
 
 /**
  * Whether a floor's ground is LIGHT or DARK — declared, and asserted against the maths
@@ -151,7 +162,7 @@ export interface FloorTheme {
   /**
    * The accent HIGH CONTRAST paints instead, on a floor whose own accent is illegible on black.
    * Only a light floor needs one, and it needs one by arithmetic rather than taste: AA on the
-   * white ground needs L <= 0.183, AA on black needs L >= 0.175, and the fleck composite
+   * white ground needs L <= 0.183, AA on black needs L >= 0.175, and the texture composite
    * tightens the first to L <= 0.164 — so no single colour clears both. `settingsVars` swaps it
    * in under high contrast. Absent means "the floor's own accent already reads on black".
    */
@@ -254,16 +265,18 @@ export const FLOOR_THEMES: readonly FloorTheme[] = [
   // did not read as white at all. The revision keeps the gate and moves the ACCENT instead:
   //   - GROUND #f4f5f9, a cool white (blue leads red by 5), L = 0.914. Panels are DARKER than
   //     the ground here, not lighter: on a light floor, nearer reads as denser.
-  //   - ACCENT #8e0c0a, a deep blood red: 8.73:1 on the ground, and 5.18:1 on the fleck
-  //     composite — the tightest gate on the floor, and the reason the flecks stop at 0.3.
+  //   - ACCENT #8e0c0a, a deep blood red: 8.73:1 on the ground, and 5.18:1 on the TEXTURE
+  //     composite — the tightest gate on the floor, and the reason the red stops at 0.3.
   //   - ROLES of its own, because PALETTE's fail on white: harm #9b1b52 is a dark CRIMSON, hue-
   //     separated from the accent's pure red so the HP bar and the charges bar are never two
   //     identical reds; heal #1f5c33 and foe #6b4a0c are the sage and amber, darkened.
   //   - FURNITURE of its own: hairlines at 1.36 / 1.98 on the panel, as the dark floors' are
   //     1.1-1.7, where PALETTE's rule would draw a 13:1 black line round every panel.
-  //   - FLECKS in #c0181a at 0.3: the densest peak the composite gate allows (at 0.35 the
-  //     accent drops to ~4.7 on it, at 0.5 the body ink drops under AAA). So the flecks read
-  //     as small pale-red marks, not vivid red — a feel question the author is asked to judge.
+  //   - THE TEXTURE in #c0181a at 0.3: the densest peak the composite gate allows (at 0.35 the
+  //     accent drops to ~4.7 on it, at 0.5 the body ink drops under AAA). So the red reads as
+  //     pale — a feel question the author is asked to judge. REVISED 2026-09-20 (`signal-tear`):
+  //     the SHAPE changed from flecks to a tear and these two numbers did NOT, which is exactly
+  //     why every contrast figure here still holds without being re-measured.
   //   - HIGH CONTRAST: the scarlet returns as `accentOnBlack`, 5.92:1 on black.
   {
     place: 1,
@@ -282,7 +295,7 @@ export const FLOOR_THEMES: readonly FloorTheme[] = [
     harm: '#9b1b52',
     heal: '#1f5c33',
     foe: '#6b4a0c',
-    texture: { kind: 'flecks', ink: '#c0181a', opacity: 0.3 },
+    texture: { kind: 'tear', ink: '#c0181a', opacity: 0.3 },
   },
   // FLOOR 3 — THE ASH CITY. "grief", not fear (WORLD.md §6). "purely white gray and black,
   // the fire has settled already and it's just ash." The palest DARK ground of the five — the
@@ -425,7 +438,7 @@ export const RETHEME_FADE_MS = 1200;
  * ⚠ THE TEXTURE'S INK AND OPACITY ARE DELIBERATELY NOT HERE. `data-texture` swaps the gradient
  * PATTERN, and a pattern cannot interpolate, so the atmosphere changes at once (at no more than
  * 0.3 alpha) while the ground dissolves beneath it. Fading the new pattern from the OLD floor's
- * colour would paint floor 2's flecks in floor 1's green for half a second — worse than a snap.
+ * colour would paint floor 2's tear in floor 1's green for half a second — worse than a snap.
  */
 export const FADED_VARS: readonly string[] = [
   '--void-bg',
@@ -623,7 +636,7 @@ export function blendHex(over: string, under: string, alpha: number): string {
  * atmosphere composited over it at the texture's peak alpha. This is what the contrast gate
  * measures, alongside the bare ground. Which way the texture pushes the ground decides who
  * pays: on a DARK floor a lightening texture (fog, ash, the sacred glow) costs the light ink
- * contrast; on the LIGHT floor the red flecks DARKEN the white and cost the dark ink and the
+ * contrast; on the LIGHT floor the red tear DARKENS the white and costs the dark ink and the
  * accent contrast — which is why floor 2's composite is its tightest gate; and the True Void's
  * black vignette darkens a dark ground and so gains its ink some. Taking the worse of the bare
  * ground and the composite is the only honest reading.

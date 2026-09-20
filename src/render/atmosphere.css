@@ -30,6 +30,9 @@
  *      and it is a transition between two gated palettes, not a keyframe in a steady state:
  *      at rest every floor is exactly the palette the gate measured. The keyframe guard in
  *      `styleDiscipline.test.ts` (no `@keyframes void-*` touches opacity or colour) still holds.
+ *      STRENGTHENED 2026-09-20 (`signal-tear`) for floor 2, which is a WHITE SCREEN: its
+ *      keyframes may declare `background-position` and nothing else whatever, so no opacity,
+ *      colour, brightness or filter can be animated there at all (`tearFaults`, code `only`).
  *
  * HIGH CONTRAST REMOVES THIS ENTIRELY — `settingsVars` forces the opacity token to 0, and the
  * rule at the bottom hides the layer outright. Both, deliberately: one is the value the gate
@@ -40,15 +43,24 @@
  *
  * ART-BIBLE.md rule 4 governs here as much as in the prose: floor 2's register is mirrors,
  * doubles, static and signal. Degradation is a TEXTURE, not a diagnosis. Nothing below
- * flickers, strobes or pulses; the fastest thing in the file is the nearer layer of floor 3's
- * ash, falling about six pixels a second (REVISED 2026-09-12 — it used to be floor 2's static,
- * which took six seconds to crawl three pixels, and is gone with the static).
+ * flickers, strobes or pulses. The fastest thing that SLIDES is the nearer layer of floor 3's
+ * ash, about six pixels a second. The only thing that JUMPS is floor 2's tear (REVISED
+ * 2026-09-20, `signal-tear`), and it is held to arithmetic rather than to care: its stops are at
+ * least 2.12s apart, each slice holds at least 9s between its own snaps, and no one stop
+ * changes more than 0.49% of a 1920x1080 screen. See the tear's own block for the derivation
+ * from WCAG 2.3.1; `styleDiscipline.test.ts` measures every figure from the CSS text.
  *
  * REVISED 2026-09-12 (`floor-looks`), the author's verdict after playing it: floors 2 and 3
  * were "only lines in the background, no gradient colors or anything" — 1px repeating lines at
  * 7%, the weakest atmosphere of any floor. Floor 2 is now the one LIGHT floor with red flecks,
  * floor 3 a grey haze with falling ash. Floors 1, 4 and 5 are untouched, and
  * `styleDiscipline.test.ts` pins their three rules and two keyframes to the text they had.
+ *
+ * REVISED 2026-09-20 (`signal-tear`), the author's verdict after playing floor 2 again: it
+ * "should read more as glitches than similar to ash". The flecks were floor 3's language on
+ * floor 2's floor. Floor 2 is now a SIGNAL TEAR — slices of the white that snap sideways and
+ * hold. Floors 1, 3, 4 and 5 are untouched, and `styleDiscipline.test.ts` now pins FOUR rules
+ * and three keyframes, floor 3's ash among them.
  * --------------------------------------------------------------------------------------- */
 
 /* The layer itself. Painted by the `[data-texture='…']` rules below; `theme.ts` writes that
@@ -78,9 +90,120 @@
   animation: void-fog-drift 96s ease-in-out infinite alternate;
 }
 
-/* HOW A SPECK FIELD IS BUILT (REVISED 2026-09-14, `speck-scatter` — floors 2 and 3 below).
- * The author, having played them: "the design were correct but I felt they were too grid like.
- * like every speckle is on the same x and y axis level." They were. Each speck layer was ONE
+/* TEAR — the Entrance to the Void, the one LIGHT floor. This floor's register is FRACTURE
+ * (WORLD.md §6, ART-BIBLE §4: "mirrors, doubles, static, signal"), and this is the third go at
+ * painting it. It began as a SCANLINE GRID, which the author, having played it, called "only
+ * lines in the background"; `floor-looks` made it red FLECKS on the white; the author then
+ * called those "too grid like", and `speck-scatter` scattered them — into DOTS, which is floor
+ * 3's language, so both floors ended up speaking as particles. Having played that: floor 2
+ * "should read more as glitches than similar to ash". So it is a SIGNAL TEAR. Not particles.
+ *
+ * WHAT A SLICE IS. A slice is a horizontal band of the picture that has SLIPPED SIDEWAYS. On a
+ * flat white ground the only visible evidence of a slipped band is its TORN EDGES, so a slice
+ * is drawn as one or two thin rows of red dashes — its upper fringe, its lower fringe, or both.
+ * Three of the six show both, at 1px and 2px: the chromatic double this floor's register asks
+ * for. Six slices, nine rows, and each row is one background layer:
+ *
+ *   linear-gradient(to right, …)   dashes of flat ink, TRANSPARENT AT BOTH ENDS of the period,
+ *                                  so no dash ever joins its own copy next door into one line
+ *   background-size: Wpx tpx       W is the dash pattern's period (907–1409px, every one prime,
+ *                                  so no two rows fall into step); t is the fringe, 1 or 2px
+ *   background-repeat: repeat-x    ACROSS ONLY. A 1px tile repeating in y IS the scanline grid
+ *                                  this floor started as; plain `repeat` here brings it back
+ *   background-position: 0px Y%    x in px is the slice's slip; y in % so the rows spread over
+ *                                  any screen height and every art frame gets the same picture
+ *
+ * THE EDGES ARE HARD, and that is the whole differentiator from floor 3: a glitch is
+ * hard-edged, ash is soft. The paired rows at 11/12%, 38/39% and 71/72% share one gradient and
+ * one x at every instant, because they are the two edges of ONE band.
+ *
+ * HOW IT MOVES: HOLD, SNAP, HOLD. `step-end` holds a position through each segment and jumps at
+ * its end — never interpolated — so the picture is perfectly still except at seventeen instants
+ * in 53 seconds. At each of those ONE slice moves (once, C and F move together) by 19 to 153px,
+ * and the rows of a slice always move together. The last stop, at 97%, brings the last
+ * displaced slice home, so THE CLOSING HOLD IS THE REST FRAME: 0%, 97% and 100% are all the
+ * rule's own `background-position`. The loop comes round with no change at all, and reduced
+ * motion — the OS signal or the player's override — shows that same still picture.
+ *
+ * ⚠ NOTHING HERE FLASHES, AND THAT IS MEASURED RATHER THAN INTENDED. This is the one floor that
+ * is a white screen, so flicker on it could genuinely harm somebody. WCAG 2.3.1 allows three
+ * flashes a second, a flash being a PAIR of opposing luminance changes, and exempts anything
+ * under the "small safe area", about 21,824px². What the numbers below actually come to — and
+ * `styleDiscipline.test.ts` measures every one of them FROM THIS TEXT rather than taking it on
+ * trust:
+ *   - the closest two stops are 4% of 53s = 2.12s apart, so the screen changes at most 0.47
+ *     times a second, and no single change is a flash because no pixel changes twice;
+ *   - the shortest any ONE slice holds between its own snaps is 17% = 9.01s (slice F, across
+ *     the wrap), so a pixel goes white→red→white at most once in 18s: 0.055 flashes a second,
+ *     fifty-four times under the line;
+ *   - the most any one stop changes is 10,248px² on a 1920x1080 screen — 0.49%, and under the
+ *     small safe area in absolute px² as well as in share;
+ *   - and POSITION IS THE ONLY THING THAT EVER CHANGES. No keyframe here declares opacity,
+ *     colour, brightness or filter, and the guard fails the build if one ever does.
+ *
+ * The ink is `--void-texture-ink` at the layer's 0.3, UNCHANGED from the flecks — which is what
+ * keeps floor 2's contrast gate (the tightest in the game: the accent at 5.18:1 on the
+ * composite) true without re-measuring anything. A fringe's densest pixel is #e4b3b6, exactly
+ * what a fleck's centre was; the red covers 0.69% of a 1920x1080 screen against the flecks'
+ * 0.66%. A 1px hairline of #e4b3b6 is faint BY DESIGN — if the author finds it too faint, the
+ * ready fix is thicker rows, which moves no readability gate at all. Raising the red does. */
+[data-texture='tear'] .void-texture {
+  background:
+    linear-gradient(to right, transparent 0px 43px, var(--void-texture-ink) 43px 190px,
+      transparent 190px 247px, var(--void-texture-ink) 247px 265px, transparent 265px 421px,
+      var(--void-texture-ink) 421px 626px, transparent 626px 711px, var(--void-texture-ink) 711px 752px,
+      transparent 752px),
+    linear-gradient(to right, transparent 0px 43px, var(--void-texture-ink) 43px 190px,
+      transparent 190px 247px, var(--void-texture-ink) 247px 265px, transparent 265px 421px,
+      var(--void-texture-ink) 421px 626px, transparent 626px 711px, var(--void-texture-ink) 711px 752px,
+      transparent 752px),
+    linear-gradient(to right, transparent 0px 67px, var(--void-texture-ink) 67px 289px,
+      transparent 289px 352px, var(--void-texture-ink) 352px 398px, transparent 398px 533px,
+      var(--void-texture-ink) 533px 741px, transparent 741px 806px, var(--void-texture-ink) 806px 879px,
+      transparent 879px 931px, var(--void-texture-ink) 931px 988px, transparent 988px),
+    linear-gradient(to right, transparent 0px 29px, var(--void-texture-ink) 29px 94px,
+      transparent 94px 173px, var(--void-texture-ink) 173px 462px, transparent 462px 517px,
+      var(--void-texture-ink) 517px 543px, transparent 543px 664px, var(--void-texture-ink) 664px 853px,
+      transparent 853px 908px, var(--void-texture-ink) 908px 1001px, transparent 1001px),
+    linear-gradient(to right, transparent 0px 29px, var(--void-texture-ink) 29px 94px,
+      transparent 94px 173px, var(--void-texture-ink) 173px 462px, transparent 462px 517px,
+      var(--void-texture-ink) 517px 543px, transparent 543px 664px, var(--void-texture-ink) 664px 853px,
+      transparent 853px 908px, var(--void-texture-ink) 908px 1001px, transparent 1001px),
+    linear-gradient(to right, transparent 0px 97px, var(--void-texture-ink) 97px 331px,
+      transparent 331px 404px, var(--void-texture-ink) 404px 437px, transparent 437px 611px,
+      var(--void-texture-ink) 611px 884px, transparent 884px 947px,
+      var(--void-texture-ink) 947px 1012px, transparent 1012px 1097px,
+      var(--void-texture-ink) 1097px 1211px, transparent 1211px),
+    linear-gradient(to right, transparent 0px 53px, var(--void-texture-ink) 53px 121px,
+      transparent 121px 218px, var(--void-texture-ink) 218px 497px, transparent 497px 566px,
+      var(--void-texture-ink) 566px 601px, transparent 601px 733px, var(--void-texture-ink) 733px 946px,
+      transparent 946px 1043px, var(--void-texture-ink) 1043px 1096px, transparent 1096px 1198px,
+      var(--void-texture-ink) 1198px 1327px, transparent 1327px),
+    linear-gradient(to right, transparent 0px 53px, var(--void-texture-ink) 53px 121px,
+      transparent 121px 218px, var(--void-texture-ink) 218px 497px, transparent 497px 566px,
+      var(--void-texture-ink) 566px 601px, transparent 601px 733px, var(--void-texture-ink) 733px 946px,
+      transparent 946px 1043px, var(--void-texture-ink) 1043px 1096px, transparent 1096px 1198px,
+      var(--void-texture-ink) 1198px 1327px, transparent 1327px),
+    linear-gradient(to right, transparent 0px 37px, var(--void-texture-ink) 37px 158px,
+      transparent 158px 223px, var(--void-texture-ink) 223px 247px, transparent 247px 346px,
+      var(--void-texture-ink) 346px 509px, transparent 509px 577px, var(--void-texture-ink) 577px 634px,
+      transparent 634px 719px, var(--void-texture-ink) 719px 812px, transparent 812px);
+  background-size:
+    907px 1px, 907px 2px, 1039px 2px, 1151px 1px, 1151px 2px, 1283px 1px, 1409px 2px, 1409px 1px, 971px 2px;
+  background-repeat: repeat-x;
+  background-position:
+    0px 11%, 0px 12%, 0px 27%, 0px 38%, 0px 39%, 0px 56%, 0px 71%, 0px 72%, 0px 90%;
+  animation: void-tear-snap 53s step-end infinite;
+}
+
+/* HOW A SPECK FIELD IS BUILT (REVISED 2026-09-14, `speck-scatter`; floor 3, below, is the
+ * last of them).
+ *
+ * ⚠ MOVED HERE 2026-09-20 (`signal-tear`): this used to introduce floors 2 AND 3. Floor 2 is
+ * not a speck field any more — it is the tear above — and dots are floor 3's language alone.
+ *
+ * The author, having played the two of them: "the design were correct but I felt they were
+ * too grid like. like every speckle is on the same x and y axis level." They were. Each speck layer was ONE
  * positionless `radial-gradient(circle, …)` on its own tile, which puts one dot at the centre of
  * every tile — a perfect grid of rows and columns. Tile sizes that share no factor only stop the
  * COMBINED pattern repeating; they cannot hide any single layer's rows.
@@ -94,8 +217,8 @@
  *
  * ⚠ A TILE IS NEVER SEEN ALONE (fix round 1, 2026-09-14). Tiles sit edge to edge, so a dot lines
  * up with dots of the NEIGHBOURING tiles too. The first scatter passed every rule about one tile
- * and still drew lines: floor 2's B tile had all four dots in a strip 1.22 px wide and 250 px long
- * across its edges, every B fleck within ~3 px of parallel lines rising at ~24 degrees. Positions
+ * and still drew lines: floor 2's B tile (as it then was) had four dots in a strip 1.22 px wide and 250 px long
+ * across its edges, every one of them within ~3 px of parallel lines rising at ~24 degrees. Positions
  * picked by eye cannot see this. The dots are now CHOSEN BY MEASUREMENT — for each tile, how
  * strongly its dots line up along any family of parallel lines that runs across the tile edges
  * (`lineStrength` in `styleDiscipline.test.ts`, limit 0.9) — along with no clumps (counting the
@@ -104,57 +227,14 @@
  *
  * ⚠ EVERY DOT STAYS IN THIS ONE ELEMENT'S BACKGROUND. The layer's `opacity` is applied once to
  * everything it paints, so two dots overlapping are still exactly the ink at the token's alpha,
- * never darker — which is what keeps floor 2's contrast gate (the tightest in the game) true
- * without re-measuring it. A pseudo-element would be a second surface with its own paint and
- * its own animation that the reduced-motion rules below do not name; there is none, and
+ * never darker — which is what keeps a floor's contrast gate true without re-measuring it.
+ * A pseudo-element would be a second surface with its own paint and its own animation that
+ * the reduced-motion rules below do not name; there is none, and
  * `styleDiscipline.test.ts` asserts there is none.
  *
  * Every per-layer list (`background-size`, and both keyframe ends) has exactly one entry per
  * layer, in the same order. CSS repeats a short list without complaint, so a missing entry
  * would pair a dot with another tile's size or move; the tests count them. */
-
-/* FLECKS — the Entrance to the Void, the one LIGHT floor (REVISED 2026-09-12; it was a scanline
- * grid on near-black, which the author, having played it, called "only lines in the
- * background"). Red flecks on the white: twelve dots, four on each of three tiles —
- * A 131x109, B 173x151, C 227x197 px. Each tile drifts by exactly ONE tile per 90 s cycle, so the
- * loop has no seam, and the three drift in different directions — A down-right, B down-left,
- * C up-right (REVISED 2026-09-14: all three used to go down-right, so the field slid as one
- * sheet). The alpha stops at the layer's 0.3 — the densest the composite gate allows before the
- * blood-red accent drops under AA on a fleck.
- *
- * Fix round 1 (2026-09-14): A and B re-placed by measurement (line strength 0.94 -> 0.64 and
- * 0.98 -> 0.65; C, at 0.83, was already typical of a random tile and is unchanged). Each fleck's
- * soft edge grows 0.2 px, back to the old dots' 1 px of fade, which brings the ink back to within
- * ~1% of what the author approved — the first scatter carried 11% less. The size of a dot does
- * not touch the contrast gate: the peak is one dot's ink at the layer's single opacity, whatever
- * its radius. The three tiles START apart (0 0, 31 34, 16 110 px), placed so that at rest — what
- * a reduced-motion player always sees, and every 90 s as the loop comes round — no three tiles'
- * rows fall within 6 px of each other on a screen up to 2160 px tall, nor their columns up to
- * 5120 px wide. Starting together, they made a 35-fleck band 119 px from the top. */
-[data-texture='flecks'] .void-texture {
-  background:
-    radial-gradient(circle at 12% 49%, var(--void-texture-ink) 0 1.2px, transparent 2.2px),
-    radial-gradient(circle at 47% 80%, var(--void-texture-ink) 0 1.6px, transparent 2.7px),
-    radial-gradient(circle at 58% 12%, var(--void-texture-ink) 0 1px, transparent 2px),
-    radial-gradient(circle at 87% 68%, var(--void-texture-ink) 0 1.4px, transparent 2.4px),
-    radial-gradient(circle at 10% 74%, var(--void-texture-ink) 0 1px, transparent 2px),
-    radial-gradient(circle at 22% 27%, var(--void-texture-ink) 0 1.8px, transparent 3px),
-    radial-gradient(circle at 45% 8%, var(--void-texture-ink) 0 1.3px, transparent 2.3px),
-    radial-gradient(circle at 77% 62%, var(--void-texture-ink) 0 1.5px, transparent 2.6px),
-    radial-gradient(circle at 8% 22%, var(--void-texture-ink) 0 2px, transparent 3.2px),
-    radial-gradient(circle at 39% 63%, var(--void-texture-ink) 0 1.4px, transparent 2.5px),
-    radial-gradient(circle at 66% 33%, var(--void-texture-ink) 0 1.7px, transparent 2.8px),
-    radial-gradient(circle at 88% 86%, var(--void-texture-ink) 0 2.2px, transparent 3.4px);
-  background-size:
-    131px 109px, 131px 109px, 131px 109px, 131px 109px,
-    173px 151px, 173px 151px, 173px 151px, 173px 151px,
-    227px 197px, 227px 197px, 227px 197px, 227px 197px;
-  background-position:
-    0px 0px, 0px 0px, 0px 0px, 0px 0px,
-    31px 34px, 31px 34px, 31px 34px, 31px 34px,
-    16px 110px, 16px 110px, 16px 110px, 16px 110px;
-  animation: void-flecks-drift 90s linear infinite;
-}
 
 /* ASH — the Ash City (REVISED 2026-09-12; it was a crosshatch of 1px lines). The fire has
  * settled already; this is what is left over everything. A soft colourless haze — two still
@@ -201,8 +281,8 @@
   animation: void-glow-breathe 70s ease-in-out infinite alternate;
 }
 
-/* ABSENCE — the True Void. The only texture that SUBTRACTS from a dark ground (floor 2's flecks
- * darken too, but on white): a vignette in pure black eating
+/* ABSENCE — the True Void. The only texture that SUBTRACTS from a dark ground (floor 2's tear
+ * darkens too, but on white): a vignette in pure black eating
  * the edges, so the interface is visibly smaller than it was. Negative space and things
  * missing, which is what ART-BIBLE rule 3 asks for and the opposite of gore or ruin.
  * It does not move. Absence does not move. */
@@ -214,23 +294,31 @@
   from { background-position: 0% 100%, 100% 100%; }
   to { background-position: 12% 88%, 88% 84%; }
 }
-/* Each fleck tile advances by exactly its own size, all four of its dots together: A (+131,+109)
- * down-right, B (-173,+151) down-left, C (+227,-197) up-right — about 1.9, 2.6 and 3.3 px a
- * second over 90 s. Whole tiles, so the loop is seamless in any direction. `from` is the rule's
- * own still frame, so the loop comes round on the picture reduced motion shows. */
-@keyframes void-flecks-drift {
-  from {
-    background-position:
-      0px 0px, 0px 0px, 0px 0px, 0px 0px,
-      31px 34px, 31px 34px, 31px 34px, 31px 34px,
-      16px 110px, 16px 110px, 16px 110px, 16px 110px;
-  }
-  to {
-    background-position:
-      131px 109px, 131px 109px, 131px 109px, 131px 109px,
-      -142px 185px, -142px 185px, -142px 185px, -142px 185px,
-      243px -87px, 243px -87px, 243px -87px, 243px -87px;
-  }
+/* THE SCHEDULE, as a table: which slice snaps when, and where to. Every block declares the
+ * full nine-entry list (one per row, x in px, y untouched), because CSS repeats a short list
+ * from the top and would silently pair a row with another slice’s move. A horizontal snap of a
+ * repeat-x row has no seam at any distance, so the offsets are free; they are 19 to 153px, all
+ * different, and every slice goes out, moves again, and comes home. */
+@keyframes void-tear-snap {
+    0% { background-position: 0px 11%, 0px 12%, 0px 27%, 0px 38%, 0px 39%, 0px 56%, 0px 71%, 0px 72%, 0px 90%; } /* rest */
+    3% { background-position: 47px 11%, 47px 12%, 0px 27%, 0px 38%, 0px 39%, 0px 56%, 0px 71%, 0px 72%, 0px 90%; } /* A */
+   10% { background-position: 47px 11%, 47px 12%, -112px 27%, 0px 38%, 0px 39%, 0px 56%, 0px 71%, 0px 72%, 0px 90%; } /* B */
+   14% { background-position: 47px 11%, 47px 12%, -112px 27%, 71px 38%, 71px 39%, 0px 56%, 0px 71%, 0px 72%, -64px 90%; } /* C+F */
+   19% { background-position: 47px 11%, 47px 12%, -112px 27%, 71px 38%, 71px 39%, -29px 56%, 0px 71%, 0px 72%, -64px 90%; } /* D */
+   27% { background-position: -38px 11%, -38px 12%, -112px 27%, 71px 38%, 71px 39%, -29px 56%, 0px 71%, 0px 72%, -64px 90%; } /* A */
+   31% { background-position: -38px 11%, -38px 12%, -112px 27%, 71px 38%, 71px 39%, -29px 56%, 153px 71%, 153px 72%, -64px 90%; } /* E */
+   36% { background-position: -38px 11%, -38px 12%, -23px 27%, 71px 38%, 71px 39%, -29px 56%, 153px 71%, 153px 72%, -64px 90%; } /* B */
+   45% { background-position: -38px 11%, -38px 12%, -23px 27%, 134px 38%, 134px 39%, -29px 56%, 153px 71%, 153px 72%, -64px 90%; } /* C */
+   49% { background-position: -38px 11%, -38px 12%, -23px 27%, 134px 38%, 134px 39%, 96px 56%, 153px 71%, 153px 72%, -64px 90%; } /* D */
+   56% { background-position: -38px 11%, -38px 12%, -23px 27%, 134px 38%, 134px 39%, 96px 56%, 153px 71%, 153px 72%, 19px 90%; } /* F */
+   63% { background-position: 0px 11%, 0px 12%, -23px 27%, 134px 38%, 134px 39%, 96px 56%, 153px 71%, 153px 72%, 19px 90%; } /* A */
+   67% { background-position: 0px 11%, 0px 12%, -23px 27%, 134px 38%, 134px 39%, 96px 56%, 41px 71%, 41px 72%, 19px 90%; } /* E */
+   76% { background-position: 0px 11%, 0px 12%, -23px 27%, 0px 38%, 0px 39%, 96px 56%, 41px 71%, 41px 72%, 19px 90%; } /* C */
+   82% { background-position: 0px 11%, 0px 12%, 0px 27%, 0px 38%, 0px 39%, 96px 56%, 41px 71%, 41px 72%, 19px 90%; } /* B */
+   86% { background-position: 0px 11%, 0px 12%, 0px 27%, 0px 38%, 0px 39%, 0px 56%, 41px 71%, 41px 72%, 19px 90%; } /* D */
+   93% { background-position: 0px 11%, 0px 12%, 0px 27%, 0px 38%, 0px 39%, 0px 56%, 0px 71%, 0px 72%, 19px 90%; } /* E */
+   97% { background-position: 0px 11%, 0px 12%, 0px 27%, 0px 38%, 0px 39%, 0px 56%, 0px 71%, 0px 72%, 0px 90%; } /* F */
+  100% { background-position: 0px 11%, 0px 12%, 0px 27%, 0px 38%, 0px 39%, 0px 56%, 0px 71%, 0px 72%, 0px 90%; } /* rest; the loop comes round with no change at all */
 }
 /* Each speck tile falls exactly one tile DOWN, its six specks together (127px, 181px per 30 s —
  * about 4 and 6 px a second); the haze's two layers hold the same position at both ends, so

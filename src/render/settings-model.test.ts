@@ -409,7 +409,7 @@ describe('high contrast is a real accessibility feature, not a flag', () => {
 describe('high contrast paints floor 2 black, not white', () => {
   const high = settingsVars(settings({ contrast: 'high' }), 1);
 
-  it('the ground and the ink are black and white, and the flecks are gone', () => {
+  it('the ground and the ink are black and white, and the tear is gone', () => {
     expect(high['--void-bg'], 'the white ground survived high contrast').toBe('#000000');
     expect(high['--void-panel']).toBe('#000000');
     expect(high['--void-ink']).toBe('#ffffff');
