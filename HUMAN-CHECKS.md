@@ -1,5 +1,13 @@
 # Human Checks — The Void
 
+> ## ⚡ From `signal-tear` (merged 2026-09-20) — floor 2 is a glitch again, not dust
+>
+> **You said floor 2 *"should read more as glitches than similar to ash."* It was our regression:** floor 2 was scanlines, a glitch; when you rejected the grid, the speck fix replaced them with dots — which is floor 3's language. Floor 2 now carries **six slices of uneven red dashes at uneven heights; one snaps sideways every few seconds and holds.** No dots. Colours unchanged.
+>
+> - [ ] **1. Are the 1 px fringes visible enough?** *(most likely to need a fix)* `npm run desktop` → F3 → `act2-illusion`. Look at the **white background**, not the text, for 30 s — top third, then bottom third. *Fail if* you cannot see the thin broken red lines without hunting, or you only ever see the thicker rows and never the fine ones. **Ready fix: thicker rows — it moves no readability gate.** Making the red stronger is not available; it is already as dense as the gate allows.
+> - [ ] **2. Does it read as a signal TEARING?** Same screen, in order: do you see **dots or specks**? → *fail* (that is floor 3's language, the thing this removes). Do they look like **blinds or ruled paper**, even and unbroken? → *fail*. Do they look like **edges of the white that slid sideways** — broken, uneven, some doubled? → *pass*. **Then walk to floor 3 and back. Fail if the two floors read as the same kind of thing** — only you can make that comparison.
+> - [ ] **3. Does the cadence feel like a glitch, or a nagging tick?** Watch a full **60 s** (the loop is 53 s). A slice should snap and hold, every 2–5 s, never rhythmic. *Fail if* it feels like a metronome, if a snap pulls your eye off the narration, or if **three or more slices jump at once** (two moving together is by design). *(The loop seam, the cadence spacing and reduced motion are already machine-proven — no need to check those.)*
+
 > ## ✨ From `speck-scatter` (merged 2026-09-14) — the specks should no longer sit on a grid
 >
 > **You said the floors were right but "too grid like — every speckle on the same x and y axis level."** Each tile now holds several specks at measured, uneven spots, and floor 2's three fleck layers drift three different ways. Colours, the white-out, the haze and the fade are unchanged.

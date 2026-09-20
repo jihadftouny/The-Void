@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2796 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2833 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,18 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-20 — floor 2 is a glitch again, not dust ✅
+
+**`signal-tear` merged. 2796 → 2833 tests.** You played floor 2 and said it *"should read more as glitches than similar to ash."* **It was our regression:** floor 2 was scanlines — a glitch — and when you rejected the grid, the speck fix replaced them with dots, which is floor 3's language. Both floors had started speaking the same way.
+
+**Floor 2 now tears.** Six slices of uneven red dashes at uneven heights; one snaps sideways every few seconds and holds; three show both torn edges, a fine line and a thicker one, for the floor's mirrors-and-doubles register. **No dots.** Colours untouched, so every readability figure holds, and floors 1, 3, 4 and 5 are byte-identical.
+
+**Safety was derived and independently re-measured, not asserted:** the closest two snaps are 2.12 s apart, the shortest slice holds 9.01 s — **54× under the flashing limit** — and at most 0.49% of the screen moves at once, against a 2.78% safe area. Only position animates; nothing changes brightness.
+
+**The new guard is proven to reject the original scanline grid**, recovered from git history — the look you rejected — plus blinds and even dashes. ⚠ It is still blind to one shape of regularity (`FINDINGS.md` G68); nothing shipped is affected.
+
+**Next:** three checks at the top of `HUMAN-CHECKS.md` — above all, whether it reads as a signal tearing rather than dust or blinds.
 
 ### 2026-09-14 — the specks no longer sit on a grid ✅
 

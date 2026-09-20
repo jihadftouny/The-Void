@@ -19,6 +19,30 @@ Format per entry:
 
 ---
 
+## 2026-09-20 — signal-tear (G68 opened) [branch `agentic/signal-tear`, **merged to `main` 2026-09-20**]
+- Verdict: **PASS**, first pass, **0 fix rounds**. 2796 → **2833 tests**. 2 commits, each green.
+- **Why it exists: OUR OWN REGRESSION, caught by the author in play.** Floor 2's texture was `static` — scanlines, a glitch. When the author rejected the grid look, `speck-scatter` replaced it with scattered dots — **floor 3's language** — and nobody noticed the two floors had started to read alike until the author said *"floor 2 should read more as glitches than similar to ash."*
+- Build-agent deviations: five, all judged sound; one (`repeat` hoisted to rule level) judged **better than the plan**, because a `shape` fault's `continue` would have swallowed it.
+- Test failures before fixes: none.
+- Manual engineer fixes: none yet.
+
+### The lesson: a fix can carry a regression its own guard cannot see
+
+`speck-scatter` did exactly what it was asked — remove the lattice — and in doing so **erased floor 2's identity**, because the new guard only knew "is this a grid?", never "does this floor still look like itself?". **Nothing in the pipeline compares a floor against its own design intent**; `ART-BIBLE.md` §4 holds the intent, and no test reads it. That is the same shape as the `visual-identity` escape: gates prove a property (readable; not a lattice), never fidelity.
+
+### What worked
+
+- **The control was the rejected artefact itself.** `tearFaults` is proven red on the original scanline CSS recovered verbatim from `7b907c4^`. **Testing a guard against the actual thing the author rejected is stronger than any synthetic fixture**, and cost one `git show`.
+- **Safety derived, then independently re-derived.** The build agent corrected the plan's own optimistic figure (shortest hold 24% → 17%) rather than quoting it; the test-agent recomputed all four numbers from the shipped CSS and confirmed the correction.
+- **Speed held:** ~40 min build, ~13 min verification, mutations against the fast test file. Third unit in a row at ~1 h.
+
+### For the retro
+
+- **G68:** the verifier got five regular layouts past the new guard because its regularity statistic is `max − min`, blind to alternation. **A guard that measures spread cannot see bimodal regularity** — worth stating as a general trap.
+- **Ask whether a unit that changes a floor's look should have to state, and test, what that floor is supposed to read as** — the one thing that would have caught this regression.
+
+---
+
 ## 2026-09-14 — speck-scatter (G67 opened) [branch `agentic/speck-scatter`, **merged to `main` 2026-09-14**]
 - Verdict: **PASS** after **1 fix round** — raised by the orchestrator on a PASS, because the verifier found a pattern the author would very likely reject. 2767 → **2796 tests**. 4 commits, each green.
 - **Why it exists:** the `floor-looks` escape above.
