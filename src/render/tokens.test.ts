@@ -393,7 +393,7 @@ describe('themeVars', () => {
 // these floors updates its row here and says why.
 // ---------------------------------------------------------------------------------------
 
-describe('floors 1, 4 and 5 emit exactly what they emitted before this unit', () => {
+describe('floors 1, 3, 4 and 5 emit exactly what they emitted before this unit', () => {
   /** The floor-scoped values of `themeVars` on `main` at 6ebfa42, transcribed. */
   const FURNITURE = {
     '--void-rule': '#23232e',
@@ -410,6 +410,23 @@ describe('floors 1, 4 and 5 emit exactly what they emitted before this unit', ()
         '--void-accent': '#9dc043', '--void-bg': '#060a09', '--void-panel': '#0b100e',
         '--void-panel-raised': '#111815', '--void-ink': '#e6ece7', '--void-ink-dim': '#89968e',
         '--void-texture-ink': '#4f8f6a', '--void-texture-opacity': '0.1', ...FURNITURE,
+      },
+    },
+    // ADDED 2026-09-20 by `signal-tear`, transcribed from `tokens.ts` on `main` at 51ed45f —
+    // NOT from 6ebfa42, because floor 3 was re-painted after that by `floor-looks`. That unit
+    // renames floor 2's texture kind and repaints floor 2 alone; floor 3 is the floor sitting
+    // closest to it in every file it touches, so it gets the same protection the other three
+    // have had. Its furniture is its OWN (the dark greys below), and only its three ROLES are
+    // `PALETTE`'s — so it cannot spread `FURNITURE` the way floors 1, 4 and 5 do.
+    2: {
+      kind: 'ash',
+      vars: {
+        '--void-accent': '#b8b8b8', '--void-bg': '#141414', '--void-panel': '#181818',
+        '--void-panel-raised': '#1d1d1d', '--void-ink': '#dcdcdc', '--void-ink-dim': '#909090',
+        '--void-texture-ink': '#bdbdbd', '--void-texture-opacity': '0.2',
+        '--void-rule': '#242424', '--void-rule-strong': '#3c3c3c', '--void-ink-faint': '#585858',
+        '--void-harm': FURNITURE['--void-harm'], '--void-heal': FURNITURE['--void-heal'],
+        '--void-foe': FURNITURE['--void-foe'],
       },
     },
     3: {

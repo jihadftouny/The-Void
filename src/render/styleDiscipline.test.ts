@@ -1603,6 +1603,1013 @@ describe('no speck layer is a centred lattice (speck-scatter)', () => {
 });
 
 // =========================================================================================
+// `signal-tear` (2026-09-20) — FLOOR 2 TEARS. IT DOES NOT FALL, AND IT NEVER FLASHES.
+//
+// The author, having played floor 2 after `speck-scatter`: it "should read more as glitches
+// than similar to ash". They are right, and it is this pipeline's own regression. Floor 2 was
+// a SCANLINE GRID — which is a glitch; the author called that grid "too grid like", and
+// `speck-scatter` answered by scattering DOTS, which is floor 3's language, so both floors
+// ended up speaking as particles. Floor 2's register is FRACTURE (`WORLD.md` §6,
+// `ART-BIBLE.md` §4: mirrors, doubles, static, signal), so it is now a SIGNAL TEAR: irregular
+// horizontal slices of the white that have slipped sideways, each showing its torn edges as a
+// thin broken row of red — and now and then one of them snaps to a new offset and holds there.
+//
+// ⚠ THE SAFETY LINE, AND WHY IT IS ARITHMETIC RATHER THAN CARE. Floor 2 is a full WHITE
+// SCREEN. Flicker on it is not a taste question; it is the one thing in this game that could
+// actually harm somebody. WCAG 2.3.1 allows no more than THREE flashes in any one second,
+// where a flash is a PAIR of opposing changes in relative luminance, and it exempts anything
+// smaller than the "small safe area" — 25% of a 10-degree field, about 21,824px², which on the
+// 1024x768 that figure is quoted against is 2.78% of the screen. Every limit below is derived
+// from those two numbers, with margin, and every one of them is a limit on POSITION:
+//
+//   * MIN_STOP_GAP_S 1.0     — nothing anywhere on the screen changes oftener than once a
+//                              second, so the screen itself cannot reach one flash a second
+//   * MIN_SLICE_HOLD_S 2.0   — one slice cannot snap and snap back inside 2s, so a pixel goes
+//                              white→red→white at most every 4s: 0.25 flashes a second, twelve
+//                              times under the WCAG limit
+//   * MAX_MOVED_SHARE 0.01   — the area that changes at any one stop, counting a row's old
+//                              position AND its new one, stays under 1% of a 1920x1080 screen
+//                              (20,736px²) — under the small safe area in absolute px² as well
+//                              as in share, so the flash thresholds do not even apply
+//   * `only`                 — a keyframe block may declare `background-position` and NOTHING
+//                              else, so opacity, colour, brightness and filter cannot be
+//                              animated here at all. That clause is what makes the others
+//                              sufficient: position is the only thing that ever changes.
+//
+// The detector is proven red on the ORIGINAL SCANLINE GRID — recovered verbatim from the
+// commit before it was replaced — before its silence on the new rule means anything. That grid
+// is precisely what the author rejected; a guard that passed it would be worthless.
+//
+// AND IT IS DISPATCHED BY WHAT A RULE PAINTS, NOT BY WHICH FLOOR IT IS. A rule with `circle`
+// layers is judged as dots by `latticeFaults`; a rule with `to right` layers is judged as bands
+// by `tearFaults`; a haze on % tiles is neither. So floor 3's ash keeps the guard it already
+// had, floor 2 is not merely EXEMPTED from that guard, and the next re-texture of any floor is
+// judged for what it draws without either guard being rewritten.
+// =========================================================================================
+
+/** The screen the safety limits are derived against, and the ink budget is measured on. */
+const TEAR_SCREEN = { w: 1920, h: 1080 } as const;
+
+/** No two stops of the loop nearer than this, in seconds. See the block above. */
+const MIN_STOP_GAP_S = 1;
+/** No ONE slice snapping twice inside this, in seconds. See the block above. */
+const MIN_SLICE_HOLD_S = 2;
+/** The most of the screen that may change at any one stop. WCAG's small safe area is 2.78%. */
+const MAX_MOVED_SHARE = 0.01;
+/** Intervals (between stops, or between one slice's own snaps) this alike are a metronome. */
+const MIN_INTERVAL_SPREAD_S = 1.5;
+/** The least a dash pattern may repeat in: under this the repeat reads as a pattern, not a tear. */
+const MIN_TILE_PX = 600;
+/** A fringe is a hairline. Thicker than this is a band of colour, not a torn edge. */
+const MAX_ROW_PX = 3;
+/** One slice's rows, added up: two edges of a slipped band, never a slab. */
+const MAX_SLICE_PX = 5;
+/** A break the eye reads as a break rather than as an artefact of the rendering. */
+const MIN_GAP_PX = 24;
+/** Dashes (or gaps) all within this of each other are a Morse rhythm. */
+const EVEN_RUN_PX = 8;
+/** Two slices nearer than this in y are one slice torn in half; a slice's rows must be inside it. */
+const SLICE_GAP_PP = 3;
+/** Fewer slices than this is a couple of rules on a page, not a picture losing sync. */
+const MIN_SLICES = 5;
+/** A snap shorter than this is a shimmer, not a tear. */
+const MIN_SNAP_PX = 6;
+/** The share of a 1920x1080 screen the red may cover. The flecks it replaces laid 0.66%. */
+const INK_SHARE = { least: 0.003, most: 0.012 } as const;
+/** The share of one row's period its dashes may cover: over, it is a line; under, it is nothing. */
+const COVERAGE = { least: 0.3, most: 0.75 } as const;
+
+/** Largest minus smallest — how unalike a set of lengths, gaps or intervals is. */
+function spread(values: readonly number[]): number {
+  return Math.max(...values) - Math.min(...values);
+}
+
+/** A duration token (`53s`, `800ms`) in seconds, or null for anything else. */
+function secondsOf(token: string): number | null {
+  const m = /^(-?[\d.]+)(ms|s)$/.exec(token);
+  return m ? Number(m[1]) * (m[2] === 'ms' ? 0.001 : 1) : null;
+}
+
+/**
+ * Every `name(args)` gradient in a value, in order, with its FUNCTION NAME as well as its
+ * arguments — which `gradientCalls` drops, and which matters here: the original floor-2 grid was
+ * `repeating-linear-gradient`, and a repeating gradient tiles INSIDE its own layer, so reading
+ * only the arguments would let `repeating-linear-gradient(to right, ink 0 1px, transparent 1px
+ * 9px)` — a picket fence of vertical bars — pass as a row of dashes.
+ */
+function gradientLayers(value: string): { fn: string; args: string }[] {
+  const out: { fn: string; args: string }[] = [];
+  for (const m of value.matchAll(/([a-z-]*gradient)\(/g)) {
+    const open = (m.index as number) + m[0].length - 1;
+    let depth = 0;
+    for (let i = open; i < value.length; i += 1) {
+      if (value[i] === '(') depth += 1;
+      else if (value[i] === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          out.push({ fn: m[1] as string, args: value.slice(open + 1, i) });
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** One keyframe block of a stepped loop: where it sits in the cycle, and what it declares. */
+interface TearStop {
+  at: number;
+  decls: { prop: string; value: string }[];
+}
+
+/** Every `N% { … }` block of a `@keyframes` body, in cycle order; `from` / `to` count as 0 / 100. */
+function keyframeStops(body: string): TearStop[] {
+  const out: TearStop[] = [];
+  for (const m of body.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const decls = declarations(m[2] as string);
+    for (const part of (m[1] as string).split(',')) {
+      const text = part.trim();
+      const at = text === 'from' ? 0 : text === 'to' ? 100 : Number(/^(-?[\d.]+)%$/.exec(text)?.[1] ?? Number.NaN);
+      if (Number.isFinite(at)) out.push({ at, decls });
+    }
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+
+/** A `background-position` entry as `Xpx Y%` — the only shape a slice's position may take. */
+function slipPosition(text: string): { x: number | null; y: number | null } {
+  const m = /^(-?[\d.]+)px\s+(-?[\d.]+)%$/.exec(text);
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : { x: null, y: null };
+}
+
+/** One torn edge: the row of dashes that draws it, and where it sits at rest and at every stop. */
+interface TearRow {
+  layer: number;
+  w: number;
+  t: number;
+  y: number;
+  coverage: number;
+  /** x at rest, then x at each keyframe stop in cycle order. */
+  x: number[];
+}
+
+/** Rows that share one x-timeline are one SLICE: they are the two edges of one slipped band. */
+interface TearSlice {
+  rows: TearRow[];
+  /** The slice's height down the screen, in %: its topmost row. */
+  y: number;
+}
+
+/**
+ * Every way the rule styling `selector` ITSELF still reads as something other than a signal
+ * tearing, or `[]`. Each fault opens with a one-word code, then says what a player would see.
+ *
+ * A layer is a ROW: `linear-gradient(to right, …)` on a `Wpx tpx` tile that repeats across the
+ * screen only, its ink broken into uneven dashes with uneven gaps, placed at `Xpx Y%`. Rows
+ * whose x-timeline — rest plus every keyframe stop — is identical are one SLICE, because that is
+ * what makes them the two edges of one band rather than two unrelated rules; a slice's rows must
+ * sit within 3pp of each other, and no two slices may.
+ *
+ * The motion is judged as a SCHEDULE: `step-end`, so a position holds and then jumps with no
+ * interpolation ever; stops far enough apart, and each slice's own snaps far enough apart, that
+ * nothing approaches a flash; no stop moving more than a third of the slices or more than 1% of
+ * the screen; intervals uneven enough not to tick; and `0%`, the last stop before `100%` and
+ * `100%` all equal to the rule's own `background-position`, so the loop comes round on the frame
+ * it rests on and reduced motion shows that same still picture.
+ *
+ * Short per-layer lists are read the way CSS reads them — repeated from the top — and reported,
+ * because a dropped entry silently pairs one row with another row's tile or another slice's move.
+ */
+function tearFaults(css: string, selector: string): string[] {
+  const found = rulesFor(css, selector);
+  if (found.length !== 1) return [`rules — ${selector} is styled by ${found.length} rules, not one`];
+  const decls = declarations(found[0]!.body);
+  const last = (prop: string): string => decls.filter((d) => d.prop === prop).at(-1)?.value ?? '';
+  const layers = gradientLayers(last('background'));
+  if (layers.length === 0) return [`no-gradient — ${selector} paints no gradient at all`];
+
+  const faults: string[] = [];
+  const fixed = (v: number): number => Number(v.toFixed(2));
+  const sizes = splitTop(last('background-size'));
+  const repeats = splitTop(last('background-repeat'));
+  const rest = splitTop(last('background-position'));
+  const nth = (list: readonly string[], i: number): string =>
+    list.length === 0 ? '' : (list[i % list.length] as string).replace(/\s+/g, ' ').trim();
+
+  // --- the animation, and the stops of its loop ---------------------------------------------
+  const animation = decls.filter((d) => d.prop === 'animation' || d.prop === 'animation-name').at(-1)?.value ?? '';
+  const words = animation.split(/[\s,]+/).filter(Boolean);
+  const frames = keyframes(css);
+  const name = words.find((w) => frames.has(w));
+  const duration = words.map(secondsOf).find((s): s is number => s !== null && s > 0) ?? null;
+  const stops = name === undefined ? [] : keyframeStops(frames.get(name) as string);
+  if (!words.includes('step-end')) {
+    faults.push(
+      `smooth — the animation is timed "${animation || 'not at all'}" and not step-end: the slices would SLIDE ` +
+        'between positions, which is the drift this replaced',
+    );
+  }
+  const positionsAt = (stop: TearStop): string[] =>
+    splitTop(stop.decls.filter((d) => d.prop === 'background-position').at(-1)?.value ?? '');
+
+  // A keyframe may move POSITION and nothing else — the clause the whole safety case rests on.
+  for (const stop of stops) {
+    for (const d of stop.decls) {
+      if (d.prop === 'background-position') continue;
+      faults.push(
+        `only — the ${stop.at}% keyframe declares ${d.prop}, and a tear may animate background-position and NOTHING ` +
+          'else: on a full white screen an animated opacity, colour or filter is a flash',
+      );
+    }
+  }
+
+  // A short per-layer list is valid CSS, and silently repeated from the top.
+  const lists: { what: string; list: string[]; short: boolean }[] = [
+    { what: 'background-size', list: sizes, short: false },
+    { what: 'background-repeat', list: repeats, short: true },
+    { what: "the rule's own background-position", list: rest, short: true },
+    ...stops.map((s) => ({ what: `the ${s.at}% stop`, list: positionsAt(s), short: false })),
+  ];
+  for (const { what, list, short } of lists) {
+    if (list.length === 0 || list.length === layers.length || (short && list.length === 1)) continue;
+    faults.push(
+      `list — ${what} has ${list.length} entries for ${layers.length} layers: CSS repeats the list from the top, ` +
+        "pairing a row with another row's tile or another slice's move",
+    );
+  }
+
+  // `background-repeat` is read once, for the whole rule: a row that repeats DOWN the screen is
+  // the scanline grid coming back, whatever else is right about it.
+  if (repeats.length === 0) {
+    faults.push(
+      `repeat — ${selector} declares no background-repeat, so every row tiles DOWN the screen as well as across: ` +
+        'that is the scanline grid this replaced',
+    );
+  }
+  for (const [i, r] of repeats.entries()) {
+    if (r.replace(/\s+/g, ' ').trim() === 'repeat-x') continue;
+    faults.push(
+      `repeat — background-repeat entry ${i + 1} is "${r.trim()}", not repeat-x: a row that repeats in y is a grid ` +
+        'of rules down the page',
+    );
+  }
+
+  // --- the rows ------------------------------------------------------------------------------
+  const rows: TearRow[] = [];
+  for (const [i, layer] of layers.entries()) {
+    const n = i + 1;
+    const parts = splitTop(layer.args);
+    const preamble =
+      parts.length > 0 && GRADIENT_PREAMBLE.test(parts[0] as string) ? (parts[0] as string).replace(/\s+/g, ' ').trim() : '';
+    if (layer.fn !== 'linear-gradient' || !/^to right$/.test(preamble)) {
+      faults.push(
+        `shape — layer ${n} is "${layer.fn}(${preamble || 'no direction'}, …)" and not "linear-gradient(to right, …)": ` +
+          "floor 2 carries no dots and no vertical rules — dots are floor 3's language, rules are the old grid's",
+      );
+      continue;
+    }
+    const size = nth(sizes, i);
+    const [w, t] = size.split(' ').map(pxOf);
+    if (w == null || t == null || !Number.isInteger(w) || !Number.isInteger(t) || w <= 0 || t <= 0) {
+      faults.push(`tile — layer ${n}'s tile is "${size || 'not declared'}", not a whole number of px across and down`);
+      continue;
+    }
+    if (w < MIN_TILE_PX) {
+      faults.push(
+        `tile — layer ${n}'s dash pattern repeats every ${w}px, ${fixed(TEAR_SCREEN.w / w)} times across a ` +
+          `${TEAR_SCREEN.w}px screen (the least period is ${MIN_TILE_PX}px): the eye reads the repeat as a pattern`,
+      );
+    }
+    if (t > MAX_ROW_PX) {
+      faults.push(
+        `tile — layer ${n} is ${t}px thick (the most is ${MAX_ROW_PX}px): a torn edge is a hairline, not a band of colour`,
+      );
+    }
+    const restPos = slipPosition(nth(rest, i));
+    if (restPos.x === null || restPos.y === null) {
+      faults.push(
+        `seam — layer ${n} rests at "${nth(rest, i) || 'nothing'}", not "Xpx Y%": the rule's own position is the frame ` +
+          'reduced motion shows, and it cannot be compared with the loop unless it is written that way',
+      );
+      continue;
+    }
+    // Where its ink is. A dash is `ink Apx Bpx`; everything else must be a transparent stop.
+    const dashes: [number, number][] = [];
+    let unreadable = '';
+    for (const stop of parts.slice(1)) {
+      const dash = /^var\(\s*--void-texture-ink\s*\)\s+(-?[\d.]+)px\s+(-?[\d.]+)px$/.exec(stop);
+      if (dash) dashes.push([Number(dash[1]), Number(dash[2])]);
+      else if (!/^transparent(?:\s+-?[\d.]+px){0,2}$/.test(stop)) unreadable = unreadable || stop;
+    }
+    const lengths = dashes.map(([a, b]) => b - a);
+    const coverage = lengths.reduce((a, b) => a + b, 0) / w;
+    const gaps = dashes.slice(1).map(([a], k) => a - (dashes[k] as [number, number])[1]);
+    if (dashes.length > 0) gaps.push(w - (dashes.at(-1) as [number, number])[1] + (dashes[0] as [number, number])[0]);
+    const why: string[] = [];
+    if (unreadable !== '') why.push(`the stop "${unreadable}" is not a dash between two px marks`);
+    if (dashes.length < 2) why.push(`${dashes.length} dash(es), where a row needs at least 2`);
+    if (dashes.length > 0 && (dashes[0]![0] <= 0 || (dashes.at(-1) as [number, number])[1] >= w)) {
+      why.push('a dash runs to the end of the period, where it joins its own copy next door into one unbroken line');
+    }
+    if (coverage > COVERAGE.most) why.push(`${fixed(coverage * 100)}% of the period is ink (the most is ${COVERAGE.most * 100}%)`);
+    if (coverage < COVERAGE.least) why.push(`only ${fixed(coverage * 100)}% of the period is ink (the least is ${COVERAGE.least * 100}%)`);
+    if (gaps.filter((g) => g >= MIN_GAP_PX).length < 2) why.push(`fewer than two gaps of ${MIN_GAP_PX}px`);
+    if (why.length > 0) faults.push(`unbroken — layer ${n} is not a broken row: ${why.join('; ')}. An unbroken row is a scanline`);
+    if (lengths.length >= 2 && spread(lengths) <= EVEN_RUN_PX) {
+      faults.push(
+        `even-dash — layer ${n}'s dashes are all within ${EVEN_RUN_PX}px of each other (${lengths.join(', ')}): a Morse ` +
+          'rhythm, not a tear',
+      );
+    }
+    if (gaps.length >= 2 && spread(gaps) <= EVEN_RUN_PX) {
+      faults.push(
+        `even-gap — layer ${n}'s gaps are all within ${EVEN_RUN_PX}px of each other (${gaps.join(', ')}): a Morse ` +
+          'rhythm, not a tear',
+      );
+    }
+    // Its x through the cycle — and its y, which must never change: a tear slips SIDEWAYS.
+    const x = [restPos.x];
+    for (const stop of stops) {
+      const here = slipPosition(nth(positionsAt(stop), i));
+      if (here.y !== null && here.y !== restPos.y) {
+        faults.push(
+          `only — the ${stop.at}% stop moves layer ${n} from ${restPos.y}% to ${here.y}% DOWN the screen: a tear slips ` +
+            'sideways; a row that rolls is a different effect, and one that chases the eye',
+        );
+      }
+      x.push(here.x ?? restPos.x);
+    }
+    rows.push({ layer: n, w, t, y: restPos.y, coverage, x });
+  }
+
+  // --- the slices -----------------------------------------------------------------------------
+  const grouped = new Map<string, TearRow[]>();
+  for (const row of rows) grouped.set(row.x.join('|'), [...(grouped.get(row.x.join('|')) ?? []), row]);
+  const slices: TearSlice[] = [...grouped.values()]
+    .map((rs) => ({ rows: rs, y: Math.min(...rs.map((r) => r.y)) }))
+    .sort((a, b) => a.y - b.y);
+  if (slices.length < MIN_SLICES) {
+    faults.push(
+      `sparse — the rule draws ${slices.length} slice(s); under ${MIN_SLICES} reads as a couple of rules on a page, ` +
+        'not as a picture coming apart',
+    );
+  }
+  for (const slice of slices) {
+    const ys = slice.rows.map((r) => r.y);
+    if (spread(ys) > SLICE_GAP_PP) {
+      faults.push(
+        `crowd — the rows at ${ys.join('%, ')}% move as one slice but stand ${fixed(spread(ys))}pp apart (the most is ` +
+          `${SLICE_GAP_PP}pp): a slice that deep is a slab, and its edges stop reading as one band`,
+      );
+    }
+    const deep = slice.rows.reduce((a, r) => a + r.t, 0);
+    if (deep > MAX_SLICE_PX) {
+      faults.push(
+        `tile — the slice at ${slice.y}% is ${deep}px of ink deep (the most is ${MAX_SLICE_PX}px): a slab, not two torn edges`,
+      );
+    }
+  }
+  for (const [i, a] of slices.entries()) {
+    for (const b of slices.slice(i + 1)) {
+      let nearest = Infinity;
+      for (const ra of a.rows) for (const rb of b.rows) nearest = Math.min(nearest, Math.abs(ra.y - rb.y));
+      if (nearest <= SLICE_GAP_PP) {
+        faults.push(
+          `crowd — the slices at ${a.y}% and ${b.y}% come within ${fixed(nearest)}pp of each other (the least is over ` +
+            `${SLICE_GAP_PP}pp): two slices that near read as one slice torn in half`,
+        );
+      }
+    }
+  }
+  const heights = slices.map((s) => s.y);
+  const heightGaps = heights.slice(1).map((v, k) => v - (heights[k] as number));
+  if (heightGaps.length >= 2 && spread(heightGaps) < SLICE_GAP_PP) {
+    faults.push(
+      `even-y — the slices are evenly spaced down the screen (at ${heights.join('%, ')}%, gaps ${heightGaps.join(', ')}): ` +
+        'venetian blinds or ruled paper, which is the grid the author rejected, in band form',
+    );
+  }
+
+  // Nothing here is a row, so there is no picture to judge the schedule, the ink or the rest
+  // frame of — the faults above have already said what it is instead.
+  if (rows.length === 0) return faults;
+
+  // --- the ink budget --------------------------------------------------------------------------
+  const inkShare = rows.reduce((a, r) => a + r.coverage * r.t, 0) / TEAR_SCREEN.h;
+  if (inkShare < INK_SHARE.least || inkShare > INK_SHARE.most) {
+    faults.push(
+      `ink — the red covers ${fixed(inkShare * 100)}% of a ${TEAR_SCREEN.w}x${TEAR_SCREEN.h} screen, outside ` +
+        `${INK_SHARE.least * 100}–${INK_SHARE.most * 100}%: too faint to see at all, or a red screen`,
+    );
+  }
+
+  // --- the loop rests where the rule rests -------------------------------------------------------
+  const lastBefore = [...stops].reverse().find((s) => s.at < 100);
+  for (const { what, stop } of [
+    { what: '0%', stop: stops.find((s) => s.at === 0) },
+    { what: `the last stop before 100%${lastBefore ? ` (${lastBefore.at}%)` : ''}`, stop: lastBefore },
+    { what: '100%', stop: stops.find((s) => s.at === 100) },
+  ] as const) {
+    if (stop === undefined) {
+      faults.push(`seam — the loop has no ${what}, so it cannot be shown to come round on the frame the rule rests on`);
+      continue;
+    }
+    const list = positionsAt(stop);
+    const off = rows.find((r) => {
+      const here = slipPosition(nth(list, r.layer - 1));
+      return here.x !== r.x[0] || here.y !== r.y;
+    });
+    if (off !== undefined) {
+      const here = slipPosition(nth(list, off.layer - 1));
+      faults.push(
+        `seam — at ${what} layer ${off.layer} sits at "${here.x}px ${here.y}%" while the rule rests it at ` +
+          `"${off.x[0]}px ${off.y}%": the loop visibly jumps where it comes round, and reduced motion shows a frame ` +
+          'the loop never rests on',
+      );
+    }
+  }
+
+  // --- the schedule -------------------------------------------------------------------------------
+  if (duration === null) {
+    faults.push('flicker — the animation declares no duration, so how often the slices snap cannot be judged at all');
+    return faults;
+  }
+  const seconds = (percent: number): number => (percent * duration) / 100;
+  const snapsOf = (slice: TearSlice): { at: number; by: number }[] => {
+    const row = slice.rows[0] as TearRow;
+    const out: { at: number; by: number }[] = [];
+    for (const [k, stop] of stops.entries()) {
+      const before = row.x[k] as number;
+      const now = row.x[k + 1] as number;
+      if (now !== before) out.push({ at: stop.at, by: now - before });
+    }
+    return out;
+  };
+  const movedArea = (slice: TearSlice): number =>
+    slice.rows.reduce((a, r) => a + 2 * r.coverage * TEAR_SCREEN.w * r.t, 0);
+
+  const changeAts: number[] = [];
+  for (const stop of stops) {
+    const movers = slices.filter((s) => snapsOf(s).some((snap) => snap.at === stop.at));
+    if (movers.length === 0) continue;
+    changeAts.push(stop.at);
+    if (movers.length > slices.length / 3) {
+      faults.push(
+        `jolt — ${movers.length} of the ${slices.length} slices move at ${stop.at}% (the most is a third): the whole ` +
+          'screen jumping at once is not a signal tearing, it is a cut',
+      );
+    }
+    const area = movers.reduce((a, s) => a + movedArea(s), 0);
+    if (area > MAX_MOVED_SHARE * TEAR_SCREEN.w * TEAR_SCREEN.h) {
+      faults.push(
+        `area — the ${stop.at}% stop changes ${fixed(area)}px² of a ${TEAR_SCREEN.w}x${TEAR_SCREEN.h} screen, ` +
+          `${fixed((area * 100) / (TEAR_SCREEN.w * TEAR_SCREEN.h))}% (the most is ${MAX_MOVED_SHARE * 100}%; WCAG's ` +
+          'small safe area is 2.78%): a slab that big changing at once is a flash',
+      );
+    }
+  }
+  if (changeAts.length >= 2) {
+    const intervals = changeAts.slice(1).map((v, k) => v - (changeAts[k] as number));
+    intervals.push(100 - (changeAts.at(-1) as number) + (changeAts[0] as number));
+    const closest = seconds(Math.min(...intervals));
+    if (closest < MIN_STOP_GAP_S) {
+      faults.push(
+        `flicker — two stops are ${fixed(closest)}s apart (the least is ${MIN_STOP_GAP_S}s): on a full white screen ` +
+          'that is how a tear becomes a flicker',
+      );
+    }
+    if (seconds(spread(intervals)) < MIN_INTERVAL_SPREAD_S) {
+      faults.push(
+        `metronome — the stops are within ${fixed(seconds(spread(intervals)))}s of one interval (the least spread is ` +
+          `${MIN_INTERVAL_SPREAD_S}s): a glitch is irregular; an even beat is a nagging tick`,
+      );
+    }
+  }
+  for (const slice of slices) {
+    const snaps = snapsOf(slice);
+    if (snaps.length < 2) {
+      faults.push(`still — the slice at ${slice.y}% snaps ${snaps.length} time(s) a cycle: a fixed red rule across the page`);
+      continue;
+    }
+    for (const snap of snaps) {
+      if (Math.abs(snap.by) < MIN_SNAP_PX) {
+        faults.push(
+          `small — the slice at ${slice.y}% moves ${snap.by}px at ${snap.at}% (the least is ${MIN_SNAP_PX}px): a shimmer, not a tear`,
+        );
+      }
+    }
+    const ats = snaps.map((s) => s.at);
+    const holds = ats.slice(1).map((v, k) => v - (ats[k] as number));
+    holds.push(100 - (ats.at(-1) as number) + (ats[0] as number));
+    const shortest = seconds(Math.min(...holds));
+    if (shortest < MIN_SLICE_HOLD_S) {
+      faults.push(
+        `flicker — the slice at ${slice.y}% holds only ${fixed(shortest)}s between its own snaps (the least is ` +
+          `${MIN_SLICE_HOLD_S}s): out and straight back is a flash of that band`,
+      );
+    }
+    if (seconds(spread(holds)) < MIN_INTERVAL_SPREAD_S) {
+      faults.push(
+        `metronome — the slice at ${slice.y}% holds for ${holds.map((h) => fixed(seconds(h))).join('s, ')}s, all within ` +
+          `${MIN_INTERVAL_SPREAD_S}s of each other: that slice ticks`,
+      );
+    }
+  }
+  return faults;
+}
+
+/**
+ * What a tear really measures, so the safety margins in the tests below are MEASURED from the
+ * CSS rather than asserted about it. Every number is the same arithmetic `tearFaults` judges on;
+ * this returns it instead of comparing it, so a test can print the margin it has.
+ */
+function tearSafety(
+  css: string,
+  selector: string,
+): {
+  rows: number;
+  slices: number;
+  stops: number;
+  closestStopsSeconds: number;
+  shortestSliceHoldSeconds: number;
+  worstMovedPx: number;
+  worstMovedShare: number;
+  inkShare: number;
+} {
+  const decls = declarations(rulesFor(css, selector)[0]?.body ?? '');
+  const last = (prop: string): string => decls.filter((d) => d.prop === prop).at(-1)?.value ?? '';
+  const layers = gradientLayers(last('background'));
+  const sizes = splitTop(last('background-size'));
+  const rest = splitTop(last('background-position'));
+  const nth = (list: readonly string[], i: number): string =>
+    list.length === 0 ? '' : (list[i % list.length] as string).replace(/\s+/g, ' ').trim();
+  const words = last('animation').split(/[\s,]+/).filter(Boolean);
+  const frames = keyframes(css);
+  const name = words.find((w) => frames.has(w));
+  const duration = words.map(secondsOf).find((s): s is number => s !== null && s > 0) ?? 0;
+  const stops = name === undefined ? [] : keyframeStops(frames.get(name) as string);
+
+  const rows: TearRow[] = [];
+  for (const [i, layer] of layers.entries()) {
+    const parts = splitTop(layer.args);
+    const [w, t] = nth(sizes, i).split(' ').map(pxOf);
+    const at = slipPosition(nth(rest, i));
+    if (w == null || t == null || at.x === null || at.y === null) continue;
+    const coverage =
+      parts
+        .slice(1)
+        .map((s) => /^var\(\s*--void-texture-ink\s*\)\s+(-?[\d.]+)px\s+(-?[\d.]+)px$/.exec(s))
+        .filter((m): m is RegExpExecArray => m !== null)
+        .reduce((a, m) => a + Number(m[2]) - Number(m[1]), 0) / w;
+    const x = [
+      at.x,
+      ...stops.map((s) => {
+        const list = splitTop(s.decls.filter((d) => d.prop === 'background-position').at(-1)?.value ?? '');
+        return slipPosition(nth(list, i)).x ?? (at.x as number);
+      }),
+    ];
+    rows.push({ layer: i + 1, w, t, y: at.y, coverage, x });
+  }
+  const grouped = new Map<string, TearRow[]>();
+  for (const row of rows) grouped.set(row.x.join('|'), [...(grouped.get(row.x.join('|')) ?? []), row]);
+  const slices = [...grouped.values()];
+  const seconds = (percent: number): number => (percent * duration) / 100;
+
+  const changeAts: number[] = [];
+  let worstMovedPx = 0;
+  for (const [k, stop] of stops.entries()) {
+    const movers = slices.filter((rs) => (rs[0] as TearRow).x[k + 1] !== (rs[0] as TearRow).x[k]);
+    if (movers.length === 0) continue;
+    changeAts.push(stop.at);
+    worstMovedPx = Math.max(
+      worstMovedPx,
+      movers.reduce((a, rs) => a + rs.reduce((b, r) => b + 2 * r.coverage * TEAR_SCREEN.w * r.t, 0), 0),
+    );
+  }
+  const intervals = changeAts.slice(1).map((v, k) => v - (changeAts[k] as number));
+  if (changeAts.length >= 2) intervals.push(100 - (changeAts.at(-1) as number) + (changeAts[0] as number));
+  let shortestHold = Infinity;
+  for (const rs of slices) {
+    const row = rs[0] as TearRow;
+    const ats = stops.filter((_, k) => row.x[k + 1] !== row.x[k]).map((s) => s.at);
+    if (ats.length < 2) continue;
+    const holds = ats.slice(1).map((v, k) => v - (ats[k] as number));
+    holds.push(100 - (ats.at(-1) as number) + (ats[0] as number));
+    shortestHold = Math.min(shortestHold, Math.min(...holds));
+  }
+  return {
+    rows: rows.length,
+    slices: slices.length,
+    stops: changeAts.length,
+    closestStopsSeconds: intervals.length > 0 ? seconds(Math.min(...intervals)) : Number.NaN,
+    shortestSliceHoldSeconds: seconds(shortestHold),
+    worstMovedPx,
+    worstMovedShare: worstMovedPx / (TEAR_SCREEN.w * TEAR_SCREEN.h),
+    inkShare: rows.reduce((a, r) => a + r.coverage * r.t, 0) / TEAR_SCREEN.h,
+  };
+}
+
+/**
+ * What a texture rule PAINTS, which is what decides who judges it — never which floor it is. A
+ * `circle` layer is a dot and answers to `latticeFaults`; a `to right` layer is a band and
+ * answers to `tearFaults`; a rule with neither is a haze on % tiles and is judged by neither. A
+ * rule may be BOTH, and is then judged by both: that is how a dot smuggled onto floor 2, or a
+ * band smuggled onto floor 3, meets the guard built for the thing it actually draws.
+ */
+function texturePaints(css: string, selector: string): { dots: boolean; bands: boolean } {
+  const decls = declarations(rulesFor(css, selector)[0]?.body ?? '');
+  const background = decls.filter((d) => d.prop === 'background').at(-1)?.value ?? '';
+  const preambles = gradientLayers(background).map(({ args }) => (splitTop(args)[0] ?? '').replace(/\s+/g, ' ').trim());
+  return { dots: preambles.some((p) => /^circle\b/.test(p)), bands: preambles.some((p) => /^to right\b/.test(p)) };
+}
+
+describe('the band guard turns away every lazy way to draw a torn signal (signal-tear)', () => {
+  /** The faults' codes, sorted — what each case below is judged on. */
+  const codes = (faults: readonly string[]): string[] => faults.map((f) => f.split(' ')[0] as string).sort();
+  const judge = (css: string): string[] => codes(tearFaults(css, '.t'));
+
+  // THE ORIGINAL FLOOR-2 SCANLINE GRID — TRANSCRIBED from `atmosphere.css` at 7b907c4^, the
+  // commit before `floor-looks` replaced it, whitespace-normalised and never read back from the
+  // file under test. This is exactly the picture the author rejected as "too grid like"; if the
+  // guard passed it, the guard would be worth nothing.
+  const ORIGINAL_STATIC =
+    "[data-texture='static'] .void-texture { background: " +
+    'repeating-linear-gradient(0deg, var(--void-texture-ink) 0 1px, transparent 1px 3px), ' +
+    'repeating-linear-gradient(90deg, var(--void-texture-ink) 0 1px, transparent 1px 9px); ' +
+    'animation: void-static-crawl 6s steps(3) infinite; }\n' +
+    '@keyframes void-static-crawl { from { background-position: 0 0, 0 0; } to { background-position: 0 3px, 9px 0; } }';
+
+  // --- a fixture builder, so each case below changes exactly ONE thing -------------------------
+  interface FixtureRow {
+    w: number;
+    t: number;
+    y: number;
+    dashes: [number, number][];
+  }
+  interface FixtureSlice {
+    rows: FixtureRow[];
+    /** `[at%, the x it moves TO]`, in cycle order. */
+    snaps: [number, number][];
+  }
+  const gradientOf = (r: FixtureRow): string => {
+    const parts: string[] = [];
+    let mark = 0;
+    for (const [a, b] of r.dashes) {
+      parts.push(`transparent ${mark}px ${a}px`, `var(--void-texture-ink) ${a}px ${b}px`);
+      mark = b;
+    }
+    parts.push(`transparent ${mark}px`);
+    return `linear-gradient(to right, ${parts.join(', ')})`;
+  };
+  const tearCss = (slices: readonly FixtureSlice[], timing = 'step-end'): string => {
+    const rows = slices.flatMap((s) => s.rows.map((row) => ({ row, slice: s })));
+    const xAt = (slice: FixtureSlice, when: number): number => {
+      let x = 0;
+      for (const [at, to] of slice.snaps) if (at <= when) x = to;
+      return x;
+    };
+    const at = (when: number): string => rows.map(({ row, slice }) => `${xAt(slice, when)}px ${row.y}%`).join(', ');
+    const blocks = [...new Set([0, ...slices.flatMap((s) => s.snaps.map(([a]) => a)), 100])].sort((a, b) => a - b);
+    return (
+      `.t { background: ${rows.map(({ row }) => gradientOf(row)).join(', ')};` +
+      ` background-size: ${rows.map(({ row }) => `${row.w}px ${row.t}px`).join(', ')};` +
+      ' background-repeat: repeat-x;' +
+      ` background-position: ${at(0)};` +
+      ` animation: tear 53s ${timing} infinite; }\n` +
+      `@keyframes tear {\n${blocks.map((b) => `  ${b}% { background-position: ${at(b)}; }`).join('\n')}\n}`
+    );
+  };
+
+  // THE COMPLIANT FIXTURE, placed by hand and checked by arithmetic before it was written down.
+  // Six slices, seven rows — the first slice shows BOTH of its torn edges, at 1px and 2px:
+  //   slice  period  t    ink of it  dashes            gaps (the last wraps round the period)
+  //   0      613     1+2  46.33%     111, 28, 145      61, 79, 189
+  //   1      727     2    48.69%     192, 36, 126      72, 125, 176
+  //   2      839     1    46.13%     138, 29, 163, 57  87, 115, 83, 167
+  //   3      953     3    44.60%     222, 39, 164      69, 118, 341
+  //   4     1061     2    51.46%     246, 39, 195, 66  85, 119, 84, 227
+  //   5     1229     1    44.91%     218, 38, 221, 75  88, 124, 94, 371
+  // Red on screen: Σ(ink of it x thickness) / 1080 = 5.6413 / 1080 = 0.52%, inside 0.3–1.2%.
+  // Heights 9, 24, 37, 51, 68, 88% — gaps 15, 13, 14, 17, 20, a spread of 7pp, so not blinds.
+  // Stops 4, 11, 17, 26, 33, 39, 48, 57, 63, 74, 82, 91% of 53s: the closest two are 6% = 3.18s
+  // apart (the least is 1.0s) and the intervals spread 7% = 3.71s (the least is 1.5s). One slice
+  // moves at each; the worst stop changes 5,337px² = 0.26% of a 1920x1080 screen (the most is 1%,
+  // and WCAG's small safe area is 2.78%). Every slice goes out and comes home, the last of them
+  // at 91%, so the closing hold IS the rest frame and the loop point is invisible.
+  const D0: [number, number][] = [[31, 142], [203, 231], [310, 455]];
+  const D1: [number, number][] = [[47, 239], [311, 347], [472, 598]];
+  const D2: [number, number][] = [[29, 167], [254, 283], [398, 561], [644, 701]];
+  const D3: [number, number][] = [[61, 283], [352, 391], [509, 673]];
+  const D4: [number, number][] = [[73, 319], [404, 443], [562, 757], [841, 907]];
+  const D5: [number, number][] = [[53, 271], [359, 397], [521, 742], [836, 911]];
+  const COMPLIANT_SLICES: FixtureSlice[] = [
+    { rows: [{ w: 613, t: 1, y: 9, dashes: D0 }, { w: 613, t: 2, y: 10, dashes: D0 }], snaps: [[4, 37], [48, 0]] },
+    { rows: [{ w: 727, t: 2, y: 24, dashes: D1 }], snaps: [[11, -58], [57, 0]] },
+    { rows: [{ w: 839, t: 1, y: 37, dashes: D2 }], snaps: [[17, 91], [63, 0]] },
+    { rows: [{ w: 953, t: 3, y: 51, dashes: D3 }], snaps: [[26, -24], [74, 0]] },
+    { rows: [{ w: 1061, t: 2, y: 68, dashes: D4 }], snaps: [[33, 112], [91, 0]] },
+    { rows: [{ w: 1229, t: 1, y: 88, dashes: D5 }], snaps: [[39, -45], [82, 0]] },
+  ];
+  const COMPLIANT = tearCss(COMPLIANT_SLICES);
+  /** The compliant fixture with one thing changed — deep-copied, so no case leaks into another. */
+  const vary = (change: (slices: FixtureSlice[]) => void): string => {
+    const copy = COMPLIANT_SLICES.map((s) => ({
+      rows: s.rows.map((r) => ({ ...r, dashes: r.dashes.map((d) => [...d] as [number, number]) })),
+      snaps: s.snaps.map((p) => [...p] as [number, number]),
+    }));
+    change(copy);
+    return tearCss(copy);
+  };
+
+  it('a compliant tear has no faults at all', () => {
+    expect(tearFaults(COMPLIANT, '.t')).toEqual([]);
+  });
+
+  it('...and the margins it really has are the ones the arithmetic above claims', () => {
+    // Without this the compliant fixture could be silently comfortable — passing every limit by
+    // a mile, so that the cases below say nothing about where the lines actually fall.
+    const safety = tearSafety(COMPLIANT, '.t');
+    expect(safety).toMatchObject({ rows: 7, slices: 6, stops: 12 });
+    expect(safety.closestStopsSeconds, '6% of 53s').toBeCloseTo(3.18, 2);
+    expect(safety.shortestSliceHoldSeconds, "42% of 53s — slice 4's shorter hold").toBeCloseTo(22.26, 2);
+    expect(safety.worstMovedPx, "slice 0's two edges, old place and new: 2 x (284/613) x 1920 x 3px")
+      .toBeCloseTo((284 / 613) * 1920 * 6, 6);
+    expect(safety.inkShare, '5.6413 / 1080').toBeCloseTo(0.0052234, 6);
+  });
+
+  it('reports the ORIGINAL scanline grid — the picture the author rejected', () => {
+    // Two `repeating-linear-gradient`s, at 0deg and at 90deg: neither is a horizontal run of
+    // dashes, so neither is a row (`shape` twice — and with no rows there are no slices at all,
+    // `sparse`). The rule declares no `background-repeat`, so both tile DOWN the page as well as
+    // across (`repeat`). And it is timed `steps(3)`, which interpolates in three jumps rather
+    // than holding a position and jumping at the end of it (`smooth`).
+    expect(codes(tearFaults(ORIGINAL_STATIC, "[data-texture='static'] .void-texture")))
+      .toEqual(['repeat', 'shape', 'shape', 'smooth', 'sparse']);
+  });
+
+  it('...and BLINDS: six unbroken rows, evenly spaced down the page', () => {
+    // The author's "too grid like" complaint in band form. Each row is one dash covering its
+    // whole period — one dash where two are needed, running to both ends of the period (so it
+    // joins its own copy next door into one line right across the screen), 100% ink where 75% is
+    // the most, and leaving no gap at all: one `unbroken` fault each, six times. At 10, 25, 40,
+    // 55, 70 and 85% the gaps are 15pp five times over, a spread of 0 — `even-y`.
+    const blinds = vary((s) => {
+      const ys = [10, 25, 40, 55, 70, 85];
+      const thick = [1, 2, 1, 3, 2, 1];
+      for (const [i, slice] of s.entries()) {
+        const first = slice.rows[0] as FixtureRow;
+        slice.rows = [{ w: first.w, t: thick[i] as number, y: ys[i] as number, dashes: [[0, first.w]] }];
+      }
+    });
+    expect(judge(blinds)).toEqual(['even-y', 'unbroken', 'unbroken', 'unbroken', 'unbroken', 'unbroken', 'unbroken']);
+  });
+
+  it('...and rows spaced evenly down the page even when they ARE broken', () => {
+    // `even-y` on its own, with nothing else touched: blinds drawn in dashes are still blinds.
+    expect(judge(vary((s) => {
+      const ys = [10, 25, 40, 55, 70, 85];
+      for (const [i, slice] of s.entries()) for (const [k, row] of slice.rows.entries()) row.y = (ys[i] as number) + k;
+    }))).toEqual(['even-y']);
+  });
+
+  it('a Morse rhythm: every dash 40px, every gap 40px, the wrap included', () => {
+    // Eight 40px dashes from 20px, spaced 40px, the last ending at 620 of a 640px period — so the
+    // wrap gap is (640 - 620) + 20 = 40 as well, and all eight dashes and all eight gaps are
+    // equal. Coverage is 320/640 = 50%, inside the band, and both ends of the period are
+    // transparent: every other rule about the row passes, and only its RHYTHM gives it away.
+    expect(judge(vary((s) => {
+      const row = (s[2] as FixtureSlice).rows[0] as FixtureRow;
+      row.w = 640;
+      row.dashes = [20, 100, 180, 260, 340, 420, 500, 580].map((a) => [a, a + 40] as [number, number]);
+    }))).toEqual(['even-dash', 'even-gap']);
+  });
+
+  it('a row with its gaps filled in — one scanline among six good rows', () => {
+    // Slice 2's four dashes become one run from 29 to 701 of its 839px period: 80.1% ink where
+    // 75% is the most, one dash where two are needed, and one gap where two are needed.
+    expect(judge(vary((s) => {
+      ((s[2] as FixtureSlice).rows[0] as FixtureRow).dashes = [[29, 701]];
+    }))).toEqual(['unbroken']);
+  });
+
+  it('three of the six slices moving at one stop', () => {
+    // Slices 1 and 2 snap out at 4% with slice 0, instead of at 11% and 17%. Three of six is more
+    // than a third. It is NOT also an `area` fault: the three together change 10,848px² = 0.52%.
+    expect(judge(vary((s) => {
+      (s[1] as FixtureSlice).snaps[0] = [4, -58];
+      (s[2] as FixtureSlice).snaps[0] = [4, 91];
+    }))).toEqual(['jolt']);
+  });
+
+  it('a stop that changes too much of the screen at once', () => {
+    // Two slices is inside the third `jolt` allows, so this is the OTHER limit. Both are made 5px
+    // deep (the most a slice may be) at ~74% ink (just inside the 75% most), and both snap at 4%:
+    // 2 x 1920 x 5 x (0.7406 + 0.7400) = 28,428px², 1.37% of a 1920x1080 screen, over the 1%.
+    expect(judge(vary((s) => {
+      const cut: [number, [number, number][]][] = [
+        [613, [[11, 261], [271, 312], [358, 521]]],
+        [727, [[11, 307], [317, 365], [411, 605]]],
+      ];
+      for (const [i, slice] of s.slice(0, 2).entries()) {
+        const [w, dashes] = cut[i] as [number, [number, number][]];
+        const y = (slice.rows[0] as FixtureRow).y;
+        slice.rows = [{ w, t: 2, y, dashes }, { w, t: 3, y: y + 1, dashes }];
+      }
+      (s[1] as FixtureSlice).snaps[0] = [4, -58];
+    }))).toEqual(['area']);
+  });
+
+  it('an even beat: ten stops, every one the same distance from the last', () => {
+    // 4, 14, 24 … 94% — nine intervals of 10% and a wrap of (100 - 94) + 4 = 10%, so the spread is
+    // zero. Each slice's OWN holds are still 40/60% or 80/20%, well clear of the same limit, so
+    // only the whole schedule's beat is reported.
+    expect(judge(vary((s) => {
+      const when: [number, number][][] = [
+        [[4, 37], [44, 0]],
+        [[14, -58], [54, 0]],
+        [[24, 91], [64, 0]],
+        [[34, -24], [74, 0]],
+        [[4, 112], [84, 0]],
+        [[14, -45], [94, 0]],
+      ];
+      for (const [i, slice] of s.entries()) slice.snaps = when[i] as [number, number][];
+    }))).toEqual(['metronome']);
+  });
+
+  it('a tear that slides instead of snapping', () => {
+    for (const timing of ['linear', 'ease-in-out', 'steps(4)']) {
+      expect(judge(tearCss(COMPLIANT_SLICES, timing)), timing).toEqual(['smooth']);
+    }
+  });
+
+  it('THE SAFETY LINE: two stops half a second apart', () => {
+    // Slice 1 snaps out at 5% rather than 11% — one percent, 0.53s of 53s, after slice 0.
+    expect(judge(vary((s) => { (s[1] as FixtureSlice).snaps[0] = [5, -58]; }))).toEqual(['flicker']);
+  });
+
+  it('THE SAFETY LINE: one slice out and back inside two seconds', () => {
+    // Slice 0 snaps at 4% and again at 7%: 3% of 53s = 1.59s, over the 1.0s the WHOLE SCREEN is
+    // held to and under the 2.0s ONE band is — because one band going out and coming back is the
+    // white→red→white pair WCAG counts as a flash. Only the per-slice clause can see this one.
+    expect(judge(vary((s) => { (s[0] as FixtureSlice).snaps = [[4, 37], [7, -20], [48, 0]]; }))).toEqual(['flicker']);
+  });
+
+  it('THE SAFETY LINE: a keyframe that animates anything but position', () => {
+    // The three shapes this would really be written in. Every one of them is a flash on a floor
+    // that is a white screen, and none of them is a position, so nothing else here would notice.
+    for (const planted of ['opacity: 0.55;', 'filter: brightness(1.4);', 'background-color: var(--void-texture-ink);']) {
+      const spoiled = COMPLIANT.replace('  33% { background-position:', `  33% { ${planted} background-position:`);
+      expect(spoiled, 'the 33% stop was not found to plant a flash in').not.toBe(COMPLIANT);
+      expect(judge(spoiled), planted).toEqual(['only']);
+    }
+  });
+
+  it('a slice that ROLLS down the screen instead of slipping sideways', () => {
+    // One stop moves layer 1 from its 9% to 12%; its x is untouched, so nothing else notices.
+    const rolled = COMPLIANT.replace('  4% { background-position: 37px 9%,', '  4% { background-position: 37px 12%,');
+    expect(rolled, 'the 4% stop was not found to plant a roll in').not.toBe(COMPLIANT);
+    expect(judge(rolled)).toEqual(['only']);
+  });
+
+  it('a loop whose closing hold is not the frame the rule rests on', () => {
+    // Slice 4 snaps at 91% to 64px rather than home, and only reaches 0 at 100% — so the last
+    // thing a player sees before the loop comes round is a frame the still picture does not
+    // match, and reduced motion shows a different picture from the one the loop settles on.
+    expect(judge(vary((s) => { (s[4] as FixtureSlice).snaps = [[33, 112], [91, 64], [100, 0]]; }))).toEqual(['seam']);
+  });
+
+  it('a dot smuggled into the tear', () => {
+    // A `radial-gradient` layer, given its own tile and position entries so that no list is short
+    // and ONLY its shape is wrong. Dots are floor 3's language; floor 2 keeps none at all.
+    const dotted = COMPLIANT.replace(
+      'background: linear-gradient',
+      'background: radial-gradient(circle at 20% 30%, var(--void-texture-ink) 0 1.4px, transparent 2.4px), linear-gradient',
+    )
+      .replace('background-size: ', 'background-size: 131px 109px, ')
+      .replaceAll('background-position: ', 'background-position: 0px 0px, ');
+    expect(judge(dotted)).toEqual(['shape']);
+  });
+
+  it('a vertical rule, a downward fill, and a repeating gradient that only LOOKS like dashes', () => {
+    const swapFirstLayer = (layer: string): string =>
+      COMPLIANT.replace(gradientOf((COMPLIANT_SLICES[0] as FixtureSlice).rows[0] as FixtureRow), layer);
+    expect(swapFirstLayer('x'), 'the first layer was not found to swap').not.toBe(COMPLIANT);
+    expect(judge(swapFirstLayer('linear-gradient(90deg, var(--void-texture-ink) 0 1px, transparent 1px 9px)')), '90deg')
+      .toEqual(['shape']);
+    expect(judge(swapFirstLayer('linear-gradient(to bottom, var(--void-texture-ink) 0 1px, transparent 1px 9px)')), 'to bottom')
+      .toEqual(['shape']);
+    // The trap the function NAME closes: `to right` and dashes, but a REPEATING gradient tiles
+    // inside its own layer, so this paints a picket fence of bars right across the screen.
+    expect(
+      judge(swapFirstLayer('repeating-linear-gradient(to right, var(--void-texture-ink) 0 40px, transparent 40px 90px)')),
+      'repeating',
+    ).toEqual(['shape']);
+  });
+
+  it('a row that repeats DOWN the page — the scanline grid, in one declaration', () => {
+    for (const [planted, why] of [
+      ['background-repeat: repeat;', 'the CSS default'],
+      ['background-repeat: repeat-y;', 'down only'],
+      ['background-repeat: repeat-x, repeat-x, repeat-x, repeat-x, repeat-x, repeat-x, repeat;', 'one entry of a full list'],
+    ] as const) {
+      expect(judge(COMPLIANT.replace('background-repeat: repeat-x;', planted)), why).toEqual(['repeat']);
+    }
+    expect(judge(COMPLIANT.replace(' background-repeat: repeat-x;', '')), 'not declared at all').toEqual(['repeat']);
+  });
+
+  it('a fringe thicker than a hairline, a period too short to hide its repeat, and a slab', () => {
+    expect(judge(vary((s) => { ((s[2] as FixtureSlice).rows[0] as FixtureRow).t = 4; })), '4px thick').toEqual(['tile']);
+    // 577px repeats 3.33 times across a 1920px screen; its dashes still end at 455, so the row
+    // itself is unchanged and only the period is at fault.
+    expect(judge(vary((s) => { ((s[0] as FixtureSlice).rows[0] as FixtureRow).w = 577; })), 'a 577px period').toEqual(['tile']);
+    // Three 2px edges within 3pp: every row is a legal hairline, and together they are 6px of
+    // solid red where five is the most — a slab of colour, not the two edges of a slipped band.
+    expect(judge(vary((s) => {
+      const first = (s[0] as FixtureSlice).rows[0] as FixtureRow;
+      (s[0] as FixtureSlice).rows = [
+        { ...first, t: 2 },
+        { ...first, t: 2, y: first.y + 1 },
+        { ...first, t: 2, y: first.y + 2 },
+      ];
+    })), 'a 6px slice').toEqual(['tile']);
+  });
+
+  it('four slices instead of six', () => {
+    // Slices 2 and 4 removed, which leaves heights 9, 24, 51, 88 — gaps 15, 27, 37, so this is
+    // not also an `even-y`, and the schedule the remaining four keep still holds.
+    expect(judge(tearCss(COMPLIANT_SLICES.filter((_, i) => i !== 2 && i !== 4)))).toEqual(['sparse']);
+  });
+
+  it('two slices crowded together, and one slice torn in half', () => {
+    // Slice 1 moved to 11%, one point from slice 0's lower edge at 10%.
+    expect(judge(vary((s) => { ((s[1] as FixtureSlice).rows[0] as FixtureRow).y = 11; })), 'two slices').toEqual(['crowd']);
+    // Slice 0's two edges 11pp apart: they move as one band and have stopped looking like one.
+    expect(judge(vary((s) => { ((s[0] as FixtureSlice).rows[1] as FixtureRow).y = 20; })), 'one slice').toEqual(['crowd']);
+  });
+
+  it('a slice that never moves', () => {
+    expect(judge(vary((s) => { (s[5] as FixtureSlice).snaps = []; }))).toEqual(['still']);
+  });
+
+  it('a snap too small to read as a tear', () => {
+    // Slice 3 goes out 40px, shuffles 5px, and comes home: only the 5px move is reported.
+    expect(judge(vary((s) => { (s[3] as FixtureSlice).snaps = [[26, -40], [52, -45], [74, 0]]; }))).toEqual(['small']);
+  });
+
+  it('too little red on the screen, and too much', () => {
+    // Every slice thinned to a single 1px hairline: the ink is (0.4633 + 0.4869 + 0.4613 +
+    // 0.4460 + 0.5146 + 0.4491) / 1080 = 0.26%, under the 0.3% floor — a floor with an
+    // atmosphere nobody can see. (Dropping ONE of slice 0's two edges is not enough: that still
+    // leaves 4.7147 / 1080 = 0.44%, comfortably inside the band.)
+    expect(judge(vary((s) => {
+      for (const slice of s) slice.rows = [{ ...(slice.rows[0] as FixtureRow), t: 1 }];
+    })), 'too faint').toEqual(['ink']);
+    // Every slice given both edges at 2px and 3px — 5px deep, the most allowed — puts the ink at
+    // 5 x 2.8212 / 1080 = 1.31%, over the 1.2% ceiling: a red wash, not a white floor.
+    expect(judge(vary((s) => {
+      for (const slice of s) {
+        const first = slice.rows[0] as FixtureRow;
+        slice.rows = [{ ...first, t: 2 }, { ...first, t: 3, y: first.y + 1 }];
+      }
+    })), 'too much').toEqual(['ink']);
+  });
+
+  it('a per-layer list one entry short — judged where CSS would really put the orphan', () => {
+    // Six tiles for seven rows: the seventh (slice 5's row, its dashes reaching 911px) takes the
+    // FIRST tile, 613px — so its ink runs off the end of the period, joining its own copy next
+    // door, and covers 90% of it. Both the dropped entry and what the browser does with it.
+    expect(judge(COMPLIANT.replace(', 1229px 1px;', ';'))).toEqual(['list', 'unbroken']);
+  });
+
+  it('no rule, or a rule that paints nothing', () => {
+    expect(judge('.u { background: none; }')).toEqual(['rules']);
+    expect(judge('.t { background: none; }')).toEqual(['no-gradient']);
+  });
+
+  it('the paint classifier reads what a rule DRAWS, never which floor it is on', () => {
+    const rule = (background: string): string => `.t { background: ${background}; }`;
+    expect(texturePaints(rule('radial-gradient(circle at 7% 58%, var(--void-texture-ink) 0 1px, transparent 2px)'), '.t'), 'a dot')
+      .toEqual({ dots: true, bands: false });
+    expect(texturePaints(COMPLIANT, '.t'), 'the compliant tear').toEqual({ dots: false, bands: true });
+    expect(texturePaints(rule('radial-gradient(110% 80% at 26% 18%, var(--void-texture-ink), transparent 64%)'), '.t'), 'a haze')
+      .toEqual({ dots: false, bands: false });
+    expect(texturePaints(ORIGINAL_STATIC, "[data-texture='static'] .void-texture"), 'the old grid is neither')
+      .toEqual({ dots: false, bands: false });
+    // A rule that does both is judged by both, so neither guard can be dodged by mixing.
+    expect(
+      texturePaints(
+        rule(
+          'radial-gradient(circle at 7% 58%, var(--void-texture-ink) 0 1px, transparent 2px), ' +
+            'linear-gradient(to right, var(--void-texture-ink) 0px 9px, transparent 9px)',
+        ),
+        '.t',
+      ),
+      'both at once',
+    ).toEqual({ dots: true, bands: true });
+  });
+});
+
+// =========================================================================================
 // `floor-looks` (2026-09-12) — THE RE-THEME DISSOLVE, coupled at both ends (AC-11), KEPT under
 // reduced motion (AC-10), and the light ground's inverted strike flash (AC-14).
 //
@@ -1816,13 +2823,37 @@ describe('the strike flash inverts on the light ground (AC-14)', () => {
   });
 });
 
-describe('floors 1, 4 and 5 keep the paint they had (AC-8b)', () => {
+describe('floors 1, 3, 4 and 5 keep the paint they had (AC-8b)', () => {
   // TRANSCRIBED from `atmosphere.css` on `main` at 6ebfa42 (the plan's "unchanged CSS" block),
   // whitespace-normalised — never read back from the file under test. A unit that DELIBERATELY
   // re-paints one of these floors updates its line here, and says why in the commit.
+  //
+  // FLOOR 3 ADDED 2026-09-20 by `signal-tear`, transcribed from `atmosphere.css` on `main` at
+  // 51ed45f. That unit re-paints floor 2 and nothing else, and floor 3 is the floor it could
+  // most easily damage by accident: the two sat in one comment block, one `speck-scatter`
+  // section and one shared set of tests, so "floor 2 only" needed something that would notice.
   const PINNED_RULES: Record<string, string> = {
     "[data-texture='fog'] .void-texture":
       "[data-texture='fog'] .void-texture { background: radial-gradient(120% 70% at 18% 108%, var(--void-texture-ink), transparent 62%), radial-gradient(95% 62% at 86% 96%, var(--void-texture-ink), transparent 66%); background-size: 160% 160%, 150% 150%; animation: void-fog-drift 96s ease-in-out infinite alternate; }",
+    "[data-texture='ash'] .void-texture":
+      "[data-texture='ash'] .void-texture { background: radial-gradient(circle at 7% 58%, " +
+      "var(--void-texture-ink) 0 0.7px, transparent 1.2px), radial-gradient(circle at 31% 12%, " +
+      "var(--void-texture-ink) 0 0.9px, transparent 1.5px), radial-gradient(circle at 42% 81%, " +
+      "var(--void-texture-ink) 0 0.8px, transparent 1.4px), radial-gradient(circle at 66% 39%, " +
+      "var(--void-texture-ink) 0 1px, transparent 1.6px), radial-gradient(circle at 74% 93%, " +
+      "var(--void-texture-ink) 0 0.75px, transparent 1.3px), radial-gradient(circle at 92% 24%, " +
+      "var(--void-texture-ink) 0 0.85px, transparent 1.45px), radial-gradient(circle at 12% 33%, " +
+      "var(--void-texture-ink) 0 1.1px, transparent 1.7px), radial-gradient(circle at 24% 86%, " +
+      "var(--void-texture-ink) 0 1.4px, transparent 2.1px), radial-gradient(circle at 46% 9%, " +
+      "var(--void-texture-ink) 0 1.2px, transparent 1.9px), radial-gradient(circle at 57% 68%, " +
+      "var(--void-texture-ink) 0 1.6px, transparent 2.3px), radial-gradient(circle at 79% 47%, " +
+      "var(--void-texture-ink) 0 1.3px, transparent 2px), radial-gradient(circle at 90% 18%, " +
+      "var(--void-texture-ink) 0 1.5px, transparent 2.2px), radial-gradient(110% 80% at 26% 18%, " +
+      "var(--void-texture-ink), transparent 64%), radial-gradient(90% 72% at 82% 92%, var(--void-texture-ink), " +
+      "transparent 68%); background-size: 113px 127px, 113px 127px, 113px 127px, 113px 127px, 113px 127px, " +
+      "113px 127px, 179px 181px, 179px 181px, 179px 181px, 179px 181px, 179px 181px, 179px 181px, 150% 150%, " +
+      "140% 140%; background-position: 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 23px 11px, 23px 11px, " +
+      "23px 11px, 23px 11px, 23px 11px, 23px 11px, 20% 10%, 80% 90%; animation: void-ash-fall 30s linear infinite; }",
     "[data-texture='glow'] .void-texture":
       "[data-texture='glow'] .void-texture { background: radial-gradient(72% 58% at 50% 4%, var(--void-texture-ink), transparent 72%); background-size: 130% 130%; animation: void-glow-breathe 70s ease-in-out infinite alternate; }",
     "[data-texture='absence'] .void-texture":
@@ -1831,6 +2862,11 @@ describe('floors 1, 4 and 5 keep the paint they had (AC-8b)', () => {
   const PINNED_KEYFRAMES: Record<string, string> = {
     'void-fog-drift':
       '@keyframes void-fog-drift { from { background-position: 0% 100%, 100% 100%; } to { background-position: 12% 88%, 88% 84%; } }',
+    'void-ash-fall':
+      "@keyframes void-ash-fall { from { background-position: 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, 0px 0px, " +
+      "23px 11px, 23px 11px, 23px 11px, 23px 11px, 23px 11px, 23px 11px, 20% 10%, " +
+      "80% 90%; } to { background-position: 0px 127px, 0px 127px, 0px 127px, 0px 127px, 0px 127px, 0px 127px, " +
+      "23px 192px, 23px 192px, 23px 192px, 23px 192px, 23px 192px, 23px 192px, 20% 10%, 80% 90%; } }",
     'void-glow-breathe':
       '@keyframes void-glow-breathe { from { background-position: 50% 0%; } to { background-position: 50% 12%; } }',
   };
