@@ -42,6 +42,7 @@ import type { Secret } from './secret.ts';
 import {
   formatRunId,
   type ResumeOptions,
+  type ResumePoint,
   type RunDeps,
   type RunFs,
   type RunOutcome,
@@ -448,6 +449,11 @@ export interface MainDeps {
   createTransport(secret: Secret, args: Args, log: Logger): Provider;
   runGeneration(plan: RunPlan, deps: RunDeps): Promise<RunOutcome>;
   resumeRun(options: ResumeOptions, deps: RunDeps): Promise<RunOutcome>;
+  /**
+   * Read the run's manifest and find the batch it left running. Called BEFORE `loadSecret`, so a
+   * mistyped run id costs nothing and never opens `.env`.
+   */
+  resumePreflight(runId: string, outDir: string): Promise<ResumePoint>;
   makeFs(): RunFs;
   now(): number;
   log: Logger;
@@ -540,14 +546,18 @@ export async function main(argv: readonly string[], deps: MainDeps): Promise<num
   // the run was never going to happen. (Found by the no-spend test, which caught `loadSecret`
   // being reached on a run that the shipped prompt-less catalogue was always going to refuse.)
   let planned: PlannedRun | null = null;
-  if (decision.kind === 'generate') {
-    try {
-      planned = planRun(catalogue, args);
-    } catch (err) {
-      deps.stderr((err as Error).message);
-      deps.stderr('Nothing was sent and nothing was spent.');
-      return EXIT_REFUSED;
+  let resumePoint: ResumePoint | null = null;
+  try {
+    if (decision.kind === 'generate') planned = planRun(catalogue, args);
+    // The same rule for a resume: a mistyped run id, or a run with nothing left to collect, must
+    // fail without opening `.env`. `findResumePoint` only reads the manifest — no key, no client.
+    if (decision.kind === 'resume') {
+      resumePoint = await deps.resumePreflight(args.resume as string, args.out);
     }
+  } catch (err) {
+    deps.stderr((err as Error).message);
+    deps.stderr('Nothing was sent and nothing was spent.');
+    return EXIT_REFUSED;
   }
 
   // The spending branches. THIS is the first line of the program that reads the key.
@@ -569,8 +579,11 @@ export async function main(argv: readonly string[], deps: MainDeps): Promise<num
               runId: args.resume as string,
               outDir: args.out,
               catalogue,
-              assets: catalogue.assets,
               spendAllowed: decision.spendAllowed,
+              // The asset SET comes from the manifest inside `resumeRun`, never from here. This
+              // used to pass `catalogue.assets` — the whole catalogue — which let a resume build
+              // a retake round for 50 assets that were never part of the run.
+              resumePoint: resumePoint as ResumePoint,
             },
             runDeps,
           )

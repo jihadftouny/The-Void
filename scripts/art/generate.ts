@@ -22,7 +22,7 @@ import { consoleSink, Logger, formatEntry } from '../../src/log/logger.ts';
 import { main, type Args, type MainDeps } from './cli.ts';
 import { createBatchProvider, createInteractiveProvider, type FetchLike, type Provider } from './gemini.ts';
 import { loadSecretFrom, type Secret } from './secret.ts';
-import { resumeRun, runGeneration, type RunFs } from './run.ts';
+import { findResumePoint, resumeRun, runGeneration, type RunFs } from './run.ts';
 
 const argv = process.argv.slice(2);
 
@@ -94,6 +94,7 @@ const deps: MainDeps = {
   createTransport,
   runGeneration,
   resumeRun,
+  resumePreflight: (runId, outDir) => findResumePoint(runId, outDir, realFs),
   makeFs: () => realFs,
   now: () => Date.now(),
   log,

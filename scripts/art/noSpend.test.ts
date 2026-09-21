@@ -80,6 +80,11 @@ function depsThatExplode(recorder: Recorder, over: Partial<MainDeps> = {}): Main
     runGeneration: async () => explode('runGeneration'),
     resumeRun: async () => explode('resumeRun'),
     makeFs: () => explode('makeFs'),
+    // Reading a manifest off disk is not spending — it is what lets a mistyped run id fail
+    // before the key is touched. By default there is no such run, which is the common case.
+    resumePreflight: async (runId) => {
+      throw new Error(`No manifest at art-candidates/${runId}/manifest.json — nothing to resume`);
+    },
     now: () => 1_700_000_000_000,
     log: new Logger(),
     logLines: [],
@@ -282,6 +287,55 @@ describe('--confirm-spend alone is not enough (AC-7, AC-8)', () => {
       expect(code, argv.join(' ')).toBe(0);
       expect(rec.out.join('\n'), argv.join(' ')).toContain('DRY RUN');
     }
+  });
+
+  it('--resume checks the run EXISTS before it reads the key (D3)', async () => {
+    // A mistyped run id used to load `.env` and build the transport first, and only then discover
+    // there was no such run. There is no reason to touch a secret to find out a name was wrong —
+    // and this is the same ordering defect already fixed on the generate path.
+    const rec = recorder();
+    const code = await main(['--resume', 'typo-in-the-run-id', '--confirm-spend'], depsThatExplode(rec));
+
+    expect(rec.touched).toEqual([]); // no key, no transport
+    expect(code).toBe(2);
+    expect(rec.err.join('\n')).toContain('nothing to resume');
+    expect(rec.err.join('\n')).toContain('Nothing was sent and nothing was spent.');
+  });
+
+  it('a run with nothing left to collect is refused the same way (D3)', async () => {
+    const rec = recorder();
+    const code = await main(
+      ['--resume', 'finished-run', '--confirm-spend'],
+      depsThatExplode(rec, {
+        resumePreflight: async (runId) => {
+          throw new Error(`Run ${runId} has no unfinished batch to collect.`);
+        },
+      }),
+    );
+    expect(rec.touched).toEqual([]);
+    expect(code).toBe(2);
+    expect(rec.err.join('\n')).toContain('no unfinished batch');
+  });
+
+  it('the preflight runs BEFORE loadSecret, not merely before the provider (D3)', async () => {
+    // Ordering, observed rather than inferred: record the sequence of dependency calls and
+    // require the disk read to come first.
+    const order: string[] = [];
+    const rec = recorder();
+    await main(
+      ['--resume', 'some-run', '--confirm-spend'],
+      depsThatExplode(rec, {
+        resumePreflight: async (runId) => {
+          order.push('resumePreflight');
+          throw new Error(`No manifest for ${runId} — nothing to resume`);
+        },
+        loadSecret: async () => {
+          order.push('loadSecret');
+          throw new Error('loadSecret');
+        },
+      }),
+    );
+    expect(order).toEqual(['resumePreflight']);
   });
 
   it('--resume without --confirm-spend is refused and reaches nothing', async () => {

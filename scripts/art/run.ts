@@ -506,12 +506,55 @@ async function processResult(
 // Resume
 // =========================================================================================
 
+/**
+ * Everything a resume needs from disk, read BEFORE the API key is.
+ *
+ * Separated from `resumeRun` so `main` can establish that the run exists, and that it has
+ * something left to collect, without opening `.env`. There is no reason to touch a secret to
+ * discover that a run id was mistyped. (Same defect, same fix, as the generate path.)
+ */
+export interface ResumePoint {
+  manifest: Manifest;
+  runDir: string;
+  manifestPath: string;
+  round: number;
+  handle: string;
+}
+
+export async function findResumePoint(
+  runId: string,
+  outDir: string,
+  fs: RunFs,
+): Promise<ResumePoint> {
+  const runDir = join(outDir, runId);
+  const manifestPath = join(runDir, 'manifest.json');
+
+  if (!(await fs.exists(manifestPath))) {
+    throw new Error(`No manifest at ${manifestPath} — nothing to resume`);
+  }
+
+  const manifest = JSON.parse(Buffer.from(await fs.readFile(manifestPath)).toString('utf8')) as Manifest;
+
+  const open = [...manifest.rounds].reverse().find((r) => r.handle !== null && r.finishedAt === null);
+  if (open === undefined || open.handle === null) {
+    throw new Error(
+      `Run ${runId} has no unfinished batch to collect. Nothing was submitted and nothing was spent.`,
+    );
+  }
+
+  return { manifest, runDir, manifestPath, round: open.round, handle: open.handle };
+}
+
 export interface ResumeOptions {
   runId: string;
   outDir: string;
   catalogue: Catalogue;
-  assets: AssetEntry[];
   spendAllowed: boolean;
+  /**
+   * Produced by `findResumePoint`. REQUIRED, so the manifest has necessarily been read — and the
+   * run proven to exist — before this function, and therefore before the key, is reached.
+   */
+  resumePoint: ResumePoint;
 }
 
 /**
@@ -519,40 +562,53 @@ export interface ResumeOptions {
  *
  * The case this exists for: a batch runs up to 24 hours, the tool was closed, and the images are
  * paid for whether or not anyone collects them. The handle in the manifest is the route back.
+ *
+ * A RESUME CANNOT WIDEN ITS OWN ASSET SET. The assets are the ones named in the manifest — the
+ * run's own record of what it submitted — and this function takes no asset list from its caller,
+ * so there is no argument through which a wider set could arrive. It previously took one, and
+ * `main` passed `catalogue.assets`, the WHOLE catalogue: a resume could then build a retake round
+ * for 50 assets that were never part of the run. Nothing was spent only because `recordSubmission`
+ * throws on an unknown asset before the provider is called, and on the full catalogue the round
+ * that exception blocked was 153 images, about $10.25 — very nearly the entire art budget, stopped
+ * by an error that happened to fire first. That is not a safeguard.
+ *
+ * The catalogue is still needed, for the RAW prompts and the class rules: the manifest stores the
+ * ASSEMBLED prompt, and re-assembling that would wrap the style string and the framing append
+ * around themselves a second time. So the catalogue supplies the content and the manifest supplies
+ * the set, which is the right way round — the manifest is the record of what was paid for.
  */
 export async function resumeRun(options: ResumeOptions, deps: RunDeps): Promise<RunOutcome> {
-  const runDir = join(options.outDir, options.runId);
-  const manifestPath = join(runDir, 'manifest.json');
+  const { manifest, runDir, manifestPath, round: openRound, handle } = options.resumePoint;
 
-  if (!(await deps.fs.exists(manifestPath))) {
-    throw new Error(`No manifest at ${manifestPath} — nothing to resume`);
-  }
+  deps.log.info('art.poll', 'resuming', { runId: options.runId, round: openRound, handle });
 
-  const manifest = JSON.parse(
-    Buffer.from(await deps.fs.readFile(manifestPath)).toString('utf8'),
-  ) as Manifest;
-
-  const open = [...manifest.rounds].reverse().find((r) => r.handle !== null && r.finishedAt === null);
-  if (open === undefined || open.handle === null) {
+  const recorded = manifest.assets.map((a) => a.id);
+  const byId = new Map(options.catalogue.assets.map((a) => [a.id, a]));
+  const missing = recorded.filter((id) => !byId.has(id));
+  if (missing.length > 0) {
     throw new Error(
-      `Run ${options.runId} has no unfinished batch to collect. Nothing was submitted and nothing was spent.`,
+      `Run ${options.runId} covered assets that are not in this catalogue: ${missing.join(', ')}. ` +
+        `Point --catalogue at the one the run used. Nothing was submitted and nothing was spent.`,
     );
   }
 
-  deps.log.info('art.poll', 'resuming', { runId: options.runId, round: open.round, handle: open.handle });
+  // The SET comes from the manifest, in the manifest's order. Never from the catalogue, and never
+  // from an argument.
+  const assets: AssetEntry[] = recorded.map((id) => byId.get(id) as AssetEntry);
 
-  const states: AssetState[] = options.assets.map((asset) => {
-    const record = manifest.assets.find((a) => a.id === asset.id);
-    const passed = record?.passing.length ?? 0;
-    return { asset, reference: null, passed, owed: 0 };
-  });
+  const states: AssetState[] = manifest.assets.map((record, index) => ({
+    asset: assets[index] as AssetEntry,
+    reference: null,
+    passed: record.passing.length,
+    owed: 0,
+  }));
 
-  const results = await deps.provider.resume(open.handle);
+  const results = await deps.provider.resume(handle);
 
   const plan: RunPlan = {
     runId: options.runId,
     catalogue: options.catalogue,
-    assets: options.assets,
+    assets,
     mode: manifest.mode,
     takes: manifest.takes,
     retakeRounds: manifest.retakeRounds,
@@ -574,14 +630,14 @@ export async function resumeRun(options: ResumeOptions, deps: RunDeps): Promise<
       take,
       body: buildRequest(options.catalogue, state.asset, null),
     };
-    const kept = await processResult(plan, deps, manifest, state, request, open.round, runDir, result);
+    const kept = await processResult(plan, deps, manifest, state, request, openRound, runDir, result);
     if (!kept) state.owed += 1;
     await flush();
   }
 
-  recordRoundFinished(manifest, open.round, deps.now());
+  recordRoundFinished(manifest, openRound, deps.now());
 
-  const rest = await executeRounds(plan, deps, manifest, states, runDir, flush, open.round + 1);
+  const rest = await executeRounds(plan, deps, manifest, states, runDir, flush, openRound + 1);
   finishManifest(manifest, rest.stoppedShort ? 'stopped' : 'complete');
   await flush();
 

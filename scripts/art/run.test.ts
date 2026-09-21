@@ -16,7 +16,15 @@ import { Logger, createRingBuffer, formatEntry, type LogEntry } from '../../src/
 import { validateCatalogue, type AssetEntry, type Catalogue } from './catalogue.ts';
 import { decodeImage, type Raster } from './image.ts';
 import type { GenerateHooks, ImageRequest, ImageResult, Provider } from './gemini.ts';
-import { formatRunId, resumeRun, runGeneration, type RunDeps, type RunFs, type RunPlan } from './run.ts';
+import {
+  findResumePoint,
+  formatRunId,
+  resumeRun,
+  runGeneration,
+  type RunDeps,
+  type RunFs,
+  type RunPlan,
+} from './run.ts';
 import { serializeManifest, type Manifest } from './manifest.ts';
 
 // =========================================================================================
@@ -586,6 +594,13 @@ describe('resume (AC-27)', () => {
     return { h, provider };
   }
 
+  /** `resumeRun` now requires a ResumePoint, which only `findResumePoint` can produce. */
+  async function resume(h: Harness, spendAllowed: boolean, over: Partial<{ runId: string }> = {}) {
+    const runId = over.runId ?? 'testrun';
+    const resumePoint = await findResumePoint(runId, 'art-candidates', h.deps.fs);
+    return resumeRun({ runId, outDir: 'art-candidates', catalogue, spendAllowed, resumePoint }, h.deps);
+  }
+
   it('polls the existing handle and submits nothing new', async () => {
     const { h, provider } = resumeHarness([
       { id: 'a-r1-t1', ok: true, mimeType: 'image/jpeg', bytes: SPRITE_OK() },
@@ -593,10 +608,7 @@ describe('resume (AC-27)', () => {
       { id: 'a-r1-t3', ok: true, mimeType: 'image/jpeg', bytes: SPRITE_OK() },
     ]);
 
-    const outcome = await resumeRun(
-      { runId: 'testrun', outDir: 'art-candidates', catalogue, assets: catalogue.assets, spendAllowed: false },
-      h.deps,
-    );
+    const outcome = await resume(h, false);
 
     expect(provider.observed).toEqual(['batches/left-running']);
     expect(provider.batches).toEqual([]); // nothing submitted
@@ -611,10 +623,7 @@ describe('resume (AC-27)', () => {
       { id: 'a-r1-t3', ok: true, mimeType: 'image/jpeg', bytes: SPRITE_OK() },
     ]);
 
-    const outcome = await resumeRun(
-      { runId: 'testrun', outDir: 'art-candidates', catalogue, assets: catalogue.assets, spendAllowed: false },
-      h.deps,
-    );
+    const outcome = await resume(h, false);
 
     expect(provider.batches).toEqual([]); // THE POINT: nothing was submitted
     expect(outcome.stoppedShort).toBe(true);
@@ -630,28 +639,27 @@ describe('resume (AC-27)', () => {
       { id: 'a-r1-t3', ok: true, mimeType: 'image/jpeg', bytes: SPRITE_OK() },
     ]);
 
-    const outcome = await resumeRun(
-      { runId: 'testrun', outDir: 'art-candidates', catalogue, assets: catalogue.assets, spendAllowed: true },
-      h.deps,
-    );
+    const outcome = await resume(h, true);
 
     expect(provider.batches).toEqual([['a-r2-t1']]);
     expect(outcome.stoppedShort).toBe(false);
     expect(outcome.manifest.assets[0]?.passing.length).toBe(3);
   });
 
-  it('refuses a run id with no manifest, and one with nothing left running', async () => {
+  it('refuses a run id with no manifest, and one with nothing left running (D3)', async () => {
+    // Both refusals now live in `findResumePoint`, which reads the manifest and nothing else —
+    // no key, no transport. That is what lets `main` call it before `loadSecret`.
     const h = harness(fakeProvider({}));
-    await expect(
-      resumeRun({ runId: 'nope', outDir: 'art-candidates', catalogue, assets: catalogue.assets, spendAllowed: false }, h.deps),
-    ).rejects.toThrow(/nothing to resume/);
+    await expect(findResumePoint('nope', 'art-candidates', h.deps.fs)).rejects.toThrow(
+      /nothing to resume/,
+    );
 
     const finished = unfinishedManifest();
     finished.rounds[0]!.finishedAt = 5;
     h.files.set('art-candidates/testrun/manifest.json', serializeManifest(finished));
-    await expect(
-      resumeRun({ runId: 'testrun', outDir: 'art-candidates', catalogue, assets: catalogue.assets, spendAllowed: false }, h.deps),
-    ).rejects.toThrow(/no unfinished batch/);
+    await expect(findResumePoint('testrun', 'art-candidates', h.deps.fs)).rejects.toThrow(
+      /no unfinished batch/,
+    );
   });
 });
 
