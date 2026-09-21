@@ -19,6 +19,41 @@ Format per entry:
 
 ---
 
+## 2026-09-21 — text-hygiene (G71 closed, G72 opened, C1 widened) [branch `agentic/text-hygiene`, **merged to `main` 2026-09-21**]
+- Verdict: PASS, PASS, **FAIL**, then merged. 3210 → **3362 tests**. 13 commits, each green.
+- **Why it exists:** the author asked whether the manual checks could be logged so they surface in later tests, then asked to add the model's own output. The answer turned out to be yes — **what the model said can be replayed even though the model cannot run in CI.**
+- Build-agent deviations: many, all reasoned and all disclosed. Two were **better than the instruction**; one was a **method error it later owned in the code**.
+- Manual engineer fixes: none yet.
+
+### ⚠ Doctrine deviation, recorded per `CLAUDE.md`: FOUR rounds, not two
+
+The skill caps a unit at **2 fix rounds, then re-plan**. This unit had **three** plus a conflict resolution. **Three of the four were raised by the orchestrator on a PASS**, not triggered by a FAIL — discretionary hardening, not a build defending a broken approach, which is the failure the 2-round cap exists to stop. Each round was cheap and each found something real (the corpus trap, the recap hole, a 3× error in a pinned number). **Worth asking at the retro whether the cap should count FAIL-triggered rounds only**, since a cap that also counts voluntary hardening discourages exactly the behaviour that paid here.
+
+### The lesson: a guard can measure its own instrument instead of the world
+
+The build widened a rule, priced the cost, and **pinned the number as a test**. The number was wrong by 3×, and the way it was wrong is the valuable part:
+
+- It defined *“worst case”* as **the recap carrying the most condition names** — a proxy — and priced against that single recap. **Cost is not ordered by name count:** a five-name recap costs one sentence, an ordinary two-name recap costs two. So `Burn`, the commonest offender at **1,330 beats**, never entered the measurement at all.
+- Its companion claim, *“per-beat costs zero”*, was **a property of the fixture's hand-written facts, not of the gate.** Against real engine facts the per-beat gate already misfired on 4.2% of beats.
+
+Verification re-derived both over **27,119 real narrated beats** and failed the unit. **A confidently stated, test-enforced number that is wrong is worse than no number, because the next person has no reason to re-derive it.** The correction is now in the module header **as a recorded mistake, not just a corrected figure**, and the non-monotonicity is asserted directly (the two-name recap must cost MORE than the five-name one).
+
+### What worked
+
+- **Fixes that compound.** Round 1 gave the corpus sweep an allowance table; round 2 then widened a rule *aggressively* on the strength of it. The build's own argument: **an over-fire costs one audited row and a reviewer's minute; an under-fire is silent forever with no remedy — given a remedy for one and none for the other, fire.** Verification judged it sound **and named its limit**, now written beside it: it holds only while allowances stay cheap and audited; push toward most beats needing one and *“a table nobody reads accepts sentences nobody looked at.”*
+- **Measuring instead of guessing.** Asked whether to widen the echo gate, the build instrumented 20 seeded runs rather than reasoning about it — and found the “hole” was the common case: **15 of 25 display names reach a recap.**
+- **Re-running old mutations against NEW pins.** That is how the substring-echo mutation was caught staying green after the pins changed. **A guard proven red once is not proven red forever.**
+- **A cross-check instead of a presence scan.** The new preload guard compares every channel the preload uses against the handlers that exist — and **caught its own vacuity on the first attempt** (it read zero channels because of a line wrap, and would have compared two empty lists forever). Catalogue #10, *“not zero is not visible”*, caught by the agent writing it.
+- **Sweeping the author's real prose.** 565 authored strings, **zero false positives**, and it surfaced two player-facing uses of the fiction's two locked words — including **the title-screen button, the first string any player reads**, which no guard had ever covered.
+
+### For the retro
+
+- **Propose a rule: when a unit pins a measured number, the verifier must re-derive it independently.** It was only caught because this one was told to.
+- **“Worst case” must be defined by the quantity being priced, never by a proxy for it.**
+- **Ask whether the fix-round cap should count FAIL-triggered rounds only** (see the deviation above).
+
+---
+
 ## 2026-09-21 — machine-text (G71 opened; C4, C7, C9, C10, C11 closed) [branch `agentic/machine-text`, **merged to `main` 2026-09-21**]
 - Verdict: **FAIL**, then merged — see below. 3130 → **3210 tests**. 6 commits + a rebase merge, each green.
 - **Why it exists:** phase 0 of the author's no-placeholder first playable. Five text defects live in every model prompt and in what the player reads when the model fails.
