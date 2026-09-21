@@ -665,20 +665,36 @@ describe('THE CLEAN-PROSE BODY — good narration produces no faults at all', ()
 // beat was blind to exactly that. The renderer therefore passes `[...prompt.facts, ...recap]`,
 // and each corpus record carries its own recap so the sweep uses the identical gate.
 //
-// THE COST WAS MEASURED BEFORE IT WAS ACCEPTED, and it is pinned below rather than described:
-// against the 55-sentence clean-prose body a real recap costs EXACTLY ONE sentence. If a rule
-// change ever makes it two, this goes red and the trade has to be re-argued.
+// THE COST WAS MEASURED BEFORE IT WAS ACCEPTED, and it is pinned below PER FIXTURE rather
+// than as one headline number — because the first attempt pinned a headline number and it was
+// wrong by 3x. See `DetectOptions.echoOf` for the full figures and the method error.
+//
+// ⚠ WHY THERE ARE TWO RECAPS HERE, AND WHY NEITHER IS CALLED "THE WORST". Cost is NOT monotone
+// in how many display names a recap carries. The first fixture below carries FIVE names and
+// costs ONE sentence; the second carries TWO and costs TWO. WHICH names decide the cost, not
+// how many — and picking the most-names recap as "worst" is exactly how `Burn`, the single
+// commonest cost over 27 119 real beats, was missed entirely the first time.
 // =========================================================================================
 
 /**
- * A recap transcribed from a MEASURED run — the worst of 2 822 sampled across 20 seeded runs
- * (five classes x four seeds), carrying five display names at once. Hand-shortened to the
- * fact lines that matter; the names in it are the ones real recaps really carry.
+ * A recap transcribed from a real run, carrying FIVE display names at once (Bleed, Exposed,
+ * Insanity, Poison, Weak). It is here because it was the first fixture measured, and keeping
+ * it beside the cheaper-looking one below is what makes the non-monotonicity visible.
  */
-const WORST_REAL_RECAP: readonly string[] = [
+const FIVE_NAME_RECAP: readonly string[] = [
   'The enemy unleashes Covetous Strike. You are afflicted with Weak. You suffer 2 harm from Poison.',
   'The enemy unleashes Sinful Whisper. You are afflicted with Insanity. You cannot act — Insanity holds you.',
   'You suffer 1 harm from Bleed. The enemy is Exposed.',
+];
+
+/**
+ * An ORDINARY recap carrying only two display names — and costing twice as much. 145 of the
+ * 51 211 real recaps measured cost two sentences like this one, and `Burn` alone accounts for
+ * 1 330 of the misfiring beats.
+ */
+const SLEEP_AND_BURN_RECAP: readonly string[] = [
+  'The enemy unleashes Numbing Cold. You are afflicted with Sleep. The enemy connect for 1 harm. ' +
+    'You suffer 3 harm from Burn. You cannot act — Sleep holds you.',
 ];
 
 /** The clean-prose sentences that fault under a given extra echo body. */
@@ -710,6 +726,30 @@ describe('the echo gate reaches the RECAP, not only this beat', () => {
     ).toEqual(['Exposed']);
   });
 
+  it('an INFLECTED name in the recap does not make the bare token echoable', () => {
+    // The echo test is WHOLE-WORD, and this is what that buys. A recap saying "Burning" or
+    // "Slowed" does not contain the label `Burn` or `Slow` — it contains English — so the
+    // narrator using the bare word is not echoing anything. A substring test here would
+    // quietly re-open the false positives the whole gate exists to close, and it is the one
+    // mutation this file could not previously detect.
+    expect(
+      rulesFiredBy('Burn. That is all the dark ever asks of you.', 'condition-label', [
+        'The wound is Burning.',
+      ]),
+    ).toEqual([]);
+    expect(
+      rulesFiredBy('Slow down. There is no hurry left in you.', 'condition-label', [
+        'The enemy is Slowed.',
+      ]),
+    ).toEqual([]);
+    // ...and the control: the WHOLE word in the recap does make it echoable.
+    expect(
+      rulesFiredBy('Burn. That is all the dark ever asks of you.', 'condition-label', [
+        'You suffer 3 harm from Burn.',
+      ]),
+    ).toEqual(['Burn']);
+  });
+
   it('...and still fires on nothing the model was never shown', () => {
     // The gate widened, it did not open. A name in neither the facts nor the recap is prose.
     expect(
@@ -720,24 +760,56 @@ describe('the echo gate reaches the RECAP, not only this beat', () => {
     ).toEqual([]);
   });
 
-  it('THE MEASURED COST: a real recap costs exactly ONE clean-prose sentence', () => {
-    // Per-beat costs nothing...
-    expect(offencesUnder([]), 'the body is no longer clean under the per-beat gate').toEqual([]);
-    // ...and the widened gate costs precisely this, which is the trade that was accepted:
-    // a narrator using the engine's exact word, in the engine's exact capitalisation, two
-    // lines after being shown it. A reviewer SHOULD look at that sentence.
-    expect(offencesUnder(WORST_REAL_RECAP)).toEqual([
+  it('the FIVE-name recap costs exactly one sentence', () => {
+    // The trade that was accepted: a narrator using the engine's exact word, in the engine's
+    // exact capitalisation, two lines after being shown it. A reviewer SHOULD look at that.
+    expect(offencesUnder(FIVE_NAME_RECAP)).toEqual([
       '[condition-label] "Exposed" in: The Exposed wiring hums somewhere above you.',
     ]);
   });
 
-  it('...and the recap fixture really is one — or the cost above is measured against air', () => {
-    // Non-vacuity: the recap must actually contain display names, or "costs one" is a fact
-    // about an empty array rather than about the gate.
-    const carried = VOCAB.conditionNames.filter((n) =>
-      new RegExp(`\\b${n}\\b`).test(WORST_REAL_RECAP.join('\n')),
-    );
-    expect(carried.sort()).toEqual(['Bleed', 'Exposed', 'Insanity', 'Poison', 'Weak']);
+  it('the TWO-name recap costs exactly two — cost is not ordered by name count', () => {
+    // ⚠ THE CORRECTION THIS FILE EXISTS TO CARRY. Fewer names, more cost. Pinning only the
+    // five-name recap produced a headline figure that was wrong by 3x and missed `Burn`, the
+    // commonest cost of all.
+    expect(offencesUnder(SLEEP_AND_BURN_RECAP)).toEqual([
+      '[condition-label] "Burn" in: Burn. That is all the dark ever asks of you.',
+      '[condition-label] "Sleep" in: Sleep. You have earned nothing else.',
+    ]);
+    expect(
+      offencesUnder(SLEEP_AND_BURN_RECAP).length,
+      'the two-name recap no longer costs MORE than the five-name one — re-read the note above',
+    ).toBeGreaterThan(offencesUnder(FIVE_NAME_RECAP).length);
+  });
+
+  it('the widening costs THREE of the 55 sentences in all, and these are they', () => {
+    // The union over both fixtures, which is the figure the module header states. Over 200
+    // seeded runs these same three are the only clean-prose sentences any real recap costs.
+    const union = [
+      ...new Set([...offencesUnder(FIVE_NAME_RECAP), ...offencesUnder(SLEEP_AND_BURN_RECAP)]),
+    ].sort();
+    expect(union).toEqual([
+      '[condition-label] "Burn" in: Burn. That is all the dark ever asks of you.',
+      '[condition-label] "Exposed" in: The Exposed wiring hums somewhere above you.',
+      '[condition-label] "Sleep" in: Sleep. You have earned nothing else.',
+    ]);
+  });
+
+  it('the body is clean under the fixture\'s OWN facts — a property of the fixture, not the gate', () => {
+    // ⚠ NOT "the per-beat gate costs nothing". Against REAL engine facts the per-beat gate
+    // already misfires on 4.2% of beats; the widening takes that to 11.5%. Zero here means
+    // only that these 55 sentences were written with facts that do not name their own words,
+    // which is what makes the two recap fixtures above the meaningful measurements.
+    expect(offencesUnder([]), 'the body is no longer clean under its own facts').toEqual([]);
+  });
+
+  it('both recap fixtures really are recaps — or every cost above is measured against air', () => {
+    // Non-vacuity: each must actually contain display names, or "costs N" is a fact about an
+    // empty array rather than about the gate.
+    const carried = (recap: readonly string[]): string[] =>
+      VOCAB.conditionNames.filter((n) => new RegExp(`\\b${n}\\b`).test(recap.join('\n'))).sort();
+    expect(carried(FIVE_NAME_RECAP)).toEqual(['Bleed', 'Exposed', 'Insanity', 'Poison', 'Weak']);
+    expect(carried(SLEEP_AND_BURN_RECAP)).toEqual(['Burn', 'Sleep']);
   });
 });
 

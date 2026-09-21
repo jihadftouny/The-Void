@@ -430,21 +430,50 @@ export interface DetectOptions {
    * saw only this beat would be blind to exactly that, and a recap is precisely the kind of
    * text a model paraphrases from.
    *
+   * ---------------------------------------------------------------------------------------
    * MEASURED, because widening a gate re-opens false-positive surface and the trade had to be
-   * priced rather than assumed:
-   *   · across 2 822 real recaps (20 seeded runs, five classes x four seeds), TWELVE of the
-   *     twenty-five display names appear in a recap at some point — Bleed, Burn, Electrify,
-   *     Exposed, Fool, Fracture, Insanity, Poison, Sleep, Slow, Stun, Weak — and the worst
-   *     single recap carries five at once. The hole is the common case, not an edge.
-   *   · against the 55-sentence clean-prose body in `textHygiene.test.ts`, widening costs
-   *     EXACTLY ONE sentence: "The Exposed wiring hums somewhere above you." (a recap
-   *     carrying `Exposed` makes the narrator's grammatical use of the word look like an
-   *     echo). Per-beat costs zero; an impossible recap carrying all 25 names would cost six.
+   * priced rather than assumed. Every number below is from 200 seeded runs — 51 211 recaps and
+   * 27 119 real narrated beats, five classes x ten seeds x two policies, each beat scored with
+   * ITS OWN real facts and ITS OWN real recap.
+   *
+   * THE HOLE:
+   *   · FIFTEEN of the twenty-five display names appear in a recap at some point, and the
+   *     worst single recap carries SIX. The hole is the common case, not an edge.
+   *
+   * THE COST, against the 55-sentence clean-prose body in `textHygiene.test.ts`:
+   *   · widening costs THREE sentences — "Burn. That is all the dark ever asks of you.",
+   *     "Sleep. You have earned nothing else." and "The Exposed wiring hums somewhere above
+   *     you." `Burn` is by far the commonest (1 330 beats), then `Exposed` (588), then `Sleep`
+   *     (105);
+   *   · over real beats, the share where at least one clean sentence would misfire rises from
+   *     4.2% (per-beat) to 11.5% (widened).
+   *
+   * ⚠ NOT "PER-BEAT COSTS ZERO". It costs zero against the clean-prose body's own hand-written
+   * facts, which is a property of that FIXTURE and not of the gate: against real engine facts
+   * the per-beat gate already misfires on 4.2% of beats. The widening roughly triples that; it
+   * does not create it.
+   *
+   * ⚠ AND THE METHOD ERROR THAT PRODUCED A WRONG NUMBER FIRST, recorded because it is worth
+   * more than the number: the first pricing took "the worst recap" to mean THE ONE CARRYING
+   * THE MOST DISPLAY NAMES, and scored the cost against that. COST IS NOT MONOTONE IN NAME
+   * COUNT. A five-name recap costs one sentence; an ordinary TWO-name recap carrying `Sleep`
+   * and `Burn` costs two, and 145 real recaps cost two. Which names a recap carries decides
+   * the cost, not how many — so `Burn`, the single commonest cost of all, never appeared in
+   * the first measurement. Both fixtures are pinned in the test file for exactly this reason.
    *
    * WIDENED ANYWAY, and the asymmetry is the whole argument: the corpus sweep has an
    * ALLOWANCE TABLE, so an over-fire costs one recorded row with a reason and a reviewer's
    * minute. An under-fire is silent forever and has no remedy at all. Given a remedy for one
    * failure and none for the other, fire.
+   *
+   * ⚠ THE LIMIT OF THAT ARGUMENT, and it is a real one. It holds only while adding an
+   * allowance stays CHEAP and, more importantly, stays AUDITED — which means while the
+   * over-fire rate is low enough that reviewing rows is not itself the job. At 11.5% of beats
+   * that still holds. If a future widening pushes toward most beats needing an allowance, the
+   * argument inverts: a table nobody reads accepts sentences nobody looked at, which is the
+   * same silence the gate was built to prevent, only now with a paper trail. Re-price before
+   * widening again; do not reach for this paragraph as a licence.
+   * ---------------------------------------------------------------------------------------
    */
   echoOf?: readonly string[];
 }

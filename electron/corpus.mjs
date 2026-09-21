@@ -49,10 +49,13 @@ import { shouldRotate } from './log.mjs';
 /**
  * Hard ceiling per file; two files exist at most, so the total is ~16 MiB.
  *
- * Sized for the worst case, not the typical one. A narration beat serializes to roughly
- * 600–1 000 bytes with its facts and faults, so 8 MiB is on the order of 8 000–13 000 beats
- * per file — well over a hundred complete runs — and two files is more history than any
- * regression sweep needs.
+ * Sized for the worst case, not the typical one. MEASURED at a mean of 849 bytes per record —
+ * roughly DOUBLE the 420 bytes it was before each record started carrying its own five-beat
+ * recap (which it must, so the sweep can judge a sentence with the same echo gate the runtime
+ * used; see `src/llm/textHygiene.ts`). So 8 MiB is on the order of 10 000 beats per file —
+ * about a hundred complete runs — and two files is more history than any regression sweep
+ * needs. ⚠ The retained history HALVED when the recap was added; if a record ever grows
+ * again, re-measure this number rather than trusting the sentence above it.
  */
 export const CORPUS_CAP_BYTES = 8 * 1024 * 1024;
 
