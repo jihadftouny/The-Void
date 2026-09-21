@@ -14,7 +14,15 @@ import type { GameState, GameInput, Phase } from '../game/game.ts';
 import type { Player } from '../game/player.ts';
 import type { RunSummary, NewlyUnlocked } from '../game/unlockStore.ts';
 import type { Inventory } from '../game/inventory.ts';
-import type { EquipSlot, ItemEffect, ItemInstance } from '../game/item.ts';
+import type {
+  EffectAction,
+  EffectActionKind,
+  EquipSlot,
+  ItemEffect,
+  ItemInstance,
+  PassiveEffectType,
+  TriggerType,
+} from '../game/item.ts';
 import type { ItemKind } from '../game/item.ts';
 import type { Rarity } from '../game/weapon.ts';
 import type { SkillId } from '../game/skill.ts';
@@ -32,6 +40,7 @@ import { describeCost, describeReward, roomShortfall } from '../game/deal.ts';
 import { describeDraftOption } from '../game/draft.ts';
 import { summarizeLoot } from '../game/loot.ts';
 import { CLASSES } from '../game/classKit.ts';
+import { CONDITION_DATA, isBeneficial, type ConditionType } from '../game/condition.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import { BOSSES } from '../game/boss.ts';
 
@@ -139,48 +148,144 @@ export interface ItemView {
   effects: string[];
 }
 
+// ---------------------------------------------------------------------------
+// C9 — an item's effect reads as a sentence, never as the engine's own enum ids.
+//
+// `describeItemEffect` shipped `On ${effect.trigger}: ${effect.action.kind}`, so 41% of
+// victory drops and every triggered relic rendered as "On onHit: dealDamage" on the
+// inventory screen. The passive half had the same hole one step further down: a `switch`
+// with `default: return type`, which printed `healMultiplier` verbatim the moment PLAN.md
+// #2 added that type — a second leak nobody wrote and nobody could see.
+//
+// THE FIX IS THE SHAPE, not the strings. Three `Record`s keyed on the three unions, with NO
+// `default` and no `switch`: a seventh trigger, a thirteenth action kind or a fourteenth
+// passive type is a TYPE ERROR here, pointing at the exact table that needs a phrase. That
+// is the one form the compiler will not let go stale.
+//
+// RECORDED DEVIATION (PRINCIPLES §A11/§A12): the reference pattern next door in
+// `format.ts`'s `formatEvent` is an exhaustive `switch` with no `default`. A `switch` is
+// only exhaustive while nobody adds a `default` to it, and `default: return type` is
+// precisely how `healMultiplier` leaked. A `Record<Union, …>` cannot be softened that way.
+//
+// `TRIGGER_LEAD` is deliberately NOT shared with `format.ts`'s `TRIGGER_MOMENT`: the log
+// says WHEN it fired ("as your blow lands"), the inventory says WHAT the item does ("On
+// hit: …"). Different sentences — and `src/desktop` importing render-layer prose would be
+// the wrong direction anyway.
+// ---------------------------------------------------------------------------
+
+/** When a triggered effect fires, as the inventory says it. EXHAUSTIVE over `TriggerType`. */
+const TRIGGER_LEAD: Record<TriggerType, string> = {
+  startOfBattle: 'As the battle opens',
+  onHit: 'On hit',
+  onCrit: 'On a critical hit',
+  onCast: 'When you cast',
+  onKill: 'When the enemy falls',
+  onTakeDamage: 'When you are struck',
+};
+
+/** The player-facing name of a condition — the engine's display name, never the raw id. */
+function conditionLabel(type: ConditionType | undefined, fallback: string): string {
+  return type ? CONDITION_DATA[type].displayName : fallback;
+}
+
+/** "one charge" / "two charges" — English, from a number the engine already knows. */
+function charges(n: number): string {
+  return `${n} skill charge${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * What a triggered effect DOES, as a verb phrase with no leading capital and no full stop
+ * (the caller supplies both). EXHAUSTIVE over `EffectActionKind`.
+ *
+ * Each phrase reads whichever `params` keys its kind actually ships (mapped from the real
+ * data: `amount`, `pctMaxHp`, `pctOfDamageTaken`, `perEnemyCondition`). Where a kind can
+ * carry more than one, the clauses join with " and " rather than one winning silently, and
+ * an action with none of them still produces a true sentence rather than "NaN" or a blank.
+ */
+const ACTION_PHRASE: Record<EffectActionKind, (a: EffectAction) => string> = {
+  dealDamage: (a) => {
+    const parts: string[] = [];
+    if (a.params.amount !== undefined) parts.push(`deals ${a.params.amount} extra damage`);
+    if (a.params.pctOfDamageTaken !== undefined)
+      parts.push(`deals ${a.params.pctOfDamageTaken}% of the damage taken back`);
+    if (a.params.perEnemyCondition !== undefined)
+      parts.push(
+        `deals ${a.params.perEnemyCondition} extra damage per condition on the enemy`,
+      );
+    return parts.length > 0 ? parts.join(' and ') : 'deals extra damage';
+  },
+  healSelf: (a) => {
+    const parts: string[] = [];
+    if (a.params.amount !== undefined) parts.push(`heals you ${a.params.amount}`);
+    if (a.params.pctMaxHp !== undefined)
+      parts.push(`heals ${a.params.pctMaxHp}% of your max HP`);
+    return parts.length > 0 ? parts.join(' and ') : 'heals you';
+  },
+  // A buff and an affliction land on the same person here, so they cannot share a verb:
+  // "afflicts you with Regeneration" is the C10(b) defect wearing a different hat.
+  applyConditionSelf: (a) =>
+    a.condition === undefined
+      ? 'affects you'
+      : isBeneficial(a.condition)
+        ? `grants you ${CONDITION_DATA[a.condition].displayName}`
+        : `afflicts you with ${CONDITION_DATA[a.condition].displayName}`,
+  applyConditionEnemy: (a) =>
+    a.condition === undefined
+      ? 'afflicts the enemy'
+      : `inflicts ${CONDITION_DATA[a.condition].displayName} on the enemy`,
+  gainShield: (a) => `raises a ${a.params.amount ?? 0}-point shield`,
+  // `StatKey` is already the player-facing STR/DEX/… the draft cards and the sheet use.
+  gainStat: (a) => `+${a.params.amount ?? 0} ${a.stat ?? 'STR'}`,
+  restoreCharge: (a) => `restores ${charges(a.params.amount ?? 0)}`,
+  drainCharge: (a) => `drains ${charges(a.params.amount ?? 0)}`,
+  revive: (a) =>
+    a.params.pctMaxHp !== undefined
+      ? `revives you once per battle at ${a.params.pctMaxHp}% of your max HP`
+      : 'revives you once per battle',
+  cure: (a) => `cures ${conditionLabel(a.condition, 'an affliction')}`,
+  flee: () => 'lets you slip away from the fight',
+  // An inert flag today (consumable.ts): it is only ever shipped on a consumable's `use`.
+  reroll: () => 'rerolls your next draw',
+};
+
+/**
+ * A passive effect in one phrase. EXHAUSTIVE over `PassiveEffectType`.
+ *
+ * Every phrase that existed before C9 is BYTE-IDENTICAL, so no inventory row the player has
+ * already learned to read changes wording. The one new entry is `healMultiplier` — the type
+ * PLAN.md #2 added, which had no case and fell through `default: return type`.
+ */
+const PASSIVE_PHRASE: Record<PassiveEffectType, (p: Record<string, number>) => string> = {
+  bonusDamage: (p) => `+${p.amount ?? 0} damage`,
+  bonusArmorClass: (p) => `+${p.amount ?? 0} armor class`,
+  heal: (p) => `Heal ${p.amount ?? 0} HP`,
+  bonusStat: (p) => {
+    const parts = Object.entries(p).map(([k, v]) => `+${v} ${k.toUpperCase()}`);
+    return parts.length > 0 ? parts.join(', ') : 'Stat bonus';
+  },
+  bonusResist: (p) => `+${p.amount ?? 0} resistance`,
+  skillChargeDiscount: (p) => `Skills cost ${(p.amount ?? 0) || 1} less charge`,
+  firstHitReduction: () => 'Reduces the first enemy hit each battle',
+  lowHpDamageBonus: (p) => `+${p.amount ?? 0} damage while wounded`,
+  dotTickMultiplier: () => 'Amplifies damage-over-time',
+  chargePerTurn: (p) => `+${(p.amount ?? 0) || 1} skill charge each turn`,
+  damageDealtMultiplier: () => 'Amplifies damage dealt',
+  cannotHeal: () => 'Cannot heal',
+  healMultiplier: (p) => `Healing works at ${p.pct ?? 100}%`,
+};
+
 /**
  * A short player-facing phrase for one item effect — DISPLAY ONLY, no mechanics — PURE.
- * Covers each passive effect type and the `triggered` variant; an unhandled type falls
- * back to its raw discriminant so nothing renders blank.
+ *
+ * TOTAL over `ItemEffect` with NO fallback branch: every trigger, action kind and passive
+ * type has a phrase, and the compiler proves it. There is deliberately nowhere for a raw
+ * discriminant to escape through (C9).
  */
 export function describeItemEffect(effect: ItemEffect): string {
   if (effect.type === 'triggered') {
-    return `On ${effect.trigger}: ${effect.action.kind}`;
+    return `${TRIGGER_LEAD[effect.trigger]}: ${ACTION_PHRASE[effect.action.kind](effect.action)}.`;
   }
-  const type: string = effect.type;
-  const p = effect.params;
-  const amt = p.amount ?? 0;
-  switch (type) {
-    case 'bonusDamage':
-      return `+${amt} damage`;
-    case 'bonusArmorClass':
-      return `+${amt} armor class`;
-    case 'heal':
-      return `Heal ${amt} HP`;
-    case 'bonusStat': {
-      const parts = Object.entries(p).map(([k, v]) => `+${v} ${k.toUpperCase()}`);
-      return parts.length > 0 ? parts.join(', ') : 'Stat bonus';
-    }
-    case 'bonusResist':
-      return `+${amt} resistance`;
-    case 'skillChargeDiscount':
-      return `Skills cost ${amt || 1} less charge`;
-    case 'firstHitReduction':
-      return 'Reduces the first enemy hit each battle';
-    case 'lowHpDamageBonus':
-      return `+${amt} damage while wounded`;
-    case 'dotTickMultiplier':
-      return 'Amplifies damage-over-time';
-    case 'chargePerTurn':
-      return `+${amt || 1} skill charge each turn`;
-    case 'damageDealtMultiplier':
-      return 'Amplifies damage dealt';
-    case 'cannotHeal':
-      return 'Cannot heal';
-    default:
-      return type;
-  }
+  return PASSIVE_PHRASE[effect.type](effect.params);
 }
 
 /**

@@ -10,6 +10,11 @@ import { mulberry32, type Rng } from '../game/rng.ts';
 import type { GameEvent, GameEventKind } from '../game/gameEvent.ts';
 import type { Stats, Character } from '../game/character.ts';
 import type { TriggerType } from '../game/item.ts';
+import { createPlayer } from '../game/player.ts';
+import { createKarma } from '../game/karma.ts';
+import { createRng } from '../game/rng.ts';
+import { buildRandomBattle } from '../game/encounter.ts';
+import { step, type GameState } from '../game/game.ts';
 import {
   CONDITION_DATA,
   INSANITY_STRINGS,
@@ -611,5 +616,74 @@ describe('formatEvent — the floor mechanics (PLAN.md #2)', () => {
   it('rest-found and skills-warped', () => {
     expect(formatEvent(SAMPLES['rest-found'])).toBe('You find a place to rest: a still room.');
     expect(formatEvent(SAMPLES['skills-warped'])).toBe('Your skills twist into something else (4 changed).');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C10(a) — "affliction(s)" was a note-to-self that shipped.
+//
+// The engine KNOWS how many afflictions it consumed, so the sentence can agree with the
+// count instead of offering the player both spellings. Both cases come from a REAL
+// Neuromancer `synapse` cast through the engine `step`: one mental condition on the enemy,
+// then two. The expected damage is derived from skill.ts (`synapse.detonate.damagePer = 2`),
+// not read off the run.
+// ---------------------------------------------------------------------------
+
+/** Cast `synapse` at an enemy already carrying `marks`, through the real engine step. */
+function detonateThroughStep(marks: ConditionType[]): GameEvent[] {
+  const player = {
+    ...createPlayer({
+      name: 'Anchor',
+      classId: 'Neuromancer',
+      stats: { STR: 12, DEX: 12, CON: 12, INT: 12, WIS: 12, CHA: 12 },
+    }),
+    skillCharges: 3,
+  };
+  const { rng } = createRng(909);
+  const base = buildRandomBattle(player, 1, rng);
+  const battle = {
+    ...base,
+    player,
+    enemy: { ...base.enemy, activeConditions: marks.map(makeCondition) },
+  };
+  const state: GameState = {
+    version: 9,
+    rngState: 0,
+    player,
+    act: 1,
+    place: 0,
+    karma: createKarma(),
+    phase: { kind: 'battle', battle, started: true, final: false },
+  };
+  return step(state, {
+    kind: 'battle-action',
+    action: { kind: 'cast', skillId: 'synapse' },
+  }).events;
+}
+
+describe('detonate agrees with the number it detonated (C10a)', () => {
+  it('one affliction is singular', () => {
+    const events = detonateThroughStep(['insanity']);
+    const blast = events.find((e) => e.kind === 'detonate');
+    expect(blast, 'the real cast detonated nothing').toBeDefined();
+    // damagePer 2 × 1 consumed = 2.
+    expect(blast).toMatchObject({ consumed: 1, bonusDamage: 2 });
+    expect(formatEvent(blast!)).toBe('You detonate 1 affliction for 2 damage.');
+  });
+
+  it('two afflictions are plural', () => {
+    const events = detonateThroughStep(['insanity', 'sleep']);
+    const blast = events.find((e) => e.kind === 'detonate');
+    expect(blast).toBeDefined();
+    // damagePer 2 × 2 consumed = 4.
+    expect(blast).toMatchObject({ consumed: 2, bonusDamage: 4 });
+    expect(formatEvent(blast!)).toBe('You detonate 2 afflictions for 4 damage.');
+  });
+
+  it('never offers the player both spellings at once', () => {
+    for (const marks of [['insanity'], ['insanity', 'sleep'], ['insanity', 'sleep', 'freeze']]) {
+      const blast = detonateThroughStep(marks as ConditionType[]).find((e) => e.kind === 'detonate');
+      expect(formatEvent(blast!)).not.toContain('(s)');
+    }
   });
 });

@@ -409,15 +409,26 @@ Gaze*, *White-Noise Gaze*).
 *(Original blocker note:)* A8 settled the endings' voice and whether the player has a name (you
 cannot write the endings before that); A9 settled whether `insanity` can be named at all, which
 decides a condition name, a skill name and an item name.
-**Also carries all TWELVE content defects, C1–C12:** the two reserved words used casually in shipped
-strings · the class picker giving away the concealed fact · the intro sending you to the wrong place ·
-the narrator never being told which floor it is on · **the line that makes the floor-4 angels a
-hallucination** · two different items both named "Clarity Draught" · the combat log printing raw
-condition ids · **the Inventory screen printing raw enum identifiers (`On onHit: dealDamage`) on 41%
-of all loot** · **`"You suffer(s) 1 bleed damage."` and buffs described as afflictions in the LIVE
-narration facts** · **neither player-facing projector having a single test** · and four smaller text
-defects (a typo, one string filling 43% of the insanity table, and "The Husk Husk" as a reachable
-generated name). **And per §22.9: author MORE weapons and armour than the current 12 + 12** — the
+**Also carries all TWELVE content defects, C1–C12** — ✅ **five of them are FIXED by the
+`machine-text` unit (2026-09-21) and are no longer #13's**: ~~the narrator never being told which
+floor it is on (C4)~~ · ~~the combat log printing raw condition ids (C7)~~ · ~~the Inventory screen
+printing raw enum identifiers (`On onHit: dealDamage`) on 41% of all loot (C9)~~ · ~~`"You suffer(s)
+1 bleed damage."` and buffs described as afflictions in the LIVE narration facts (C10)~~ ·
+~~neither player-facing projector having a single test (C11)~~. **These are ENGINE text, not
+authored prose, which is why they left #13 ahead of the author's block.** What remains here is the
+author's: the two reserved words used casually in shipped strings · the class picker giving away the
+concealed fact · the intro sending you to the wrong place · **the line that makes the floor-4 angels
+a hallucination** · two different items both named "Clarity Draught" · and four smaller text defects
+(a typo, one string filling 43% of the insanity table, and "The Husk Husk" as a reachable generated
+name).
+
+> **`machine-text` left #13 a PUNCH-LIST it can work against.**
+> `src/dev/placeholderRatchet.test.ts` freezes every deliberate placeholder that ships today as an
+> exact, named inventory — the ten empty act bodies, the four `PLACEHOLDER` headers, the twelve
+> weapon and twelve armour joke names (plus the ten spellings of them in `classKit.ts`), and the six
+> repeats of `"~Don't fall~"` in the insanity table. **Writing one makes the test go red and tell you
+> to lower the count**, which is the intended workflow; adding one makes it go red the other way.
+> The inventory never goes up. **And per §22.9: author MORE weapons and armour than the current 12 + 12** — the
 icon obligation is gone, so item count is no longer an art-budget question; exact counts land here.
 
 **#14 package and ship** — `electron-builder.json` is an N1 stub; the first-run model download needs

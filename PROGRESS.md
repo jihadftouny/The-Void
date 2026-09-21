@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3130 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3210 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -148,6 +148,57 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 **⚠ Two things for you, in `HUMAN-CHECKS.md`:** the tool can now spend from the main checkout, where your key lives; and **two `[LOCKED]` documents disagree about the shape of 43 of the 50 assets** (`FINDINGS.md` G70) — **$7.03** if settled after the batch instead of before.
 
 **Phase 0 (`machine-text`) is verified and waiting on your play-test**, not merged: the narrator now names conditions instead of printing code ids, buffs no longer read as afflictions, and it is told it is in **Ash City** rather than *“the Fifth Floor”*. A new ratchet freezes every placeholder you still owe words for, so none can be added and none can be quietly removed.
+
+### 2026-09-21 — the game stops speaking to the player in code ✅
+
+**`machine-text` built. 2833 → 2913 tests.** Five things the player (and the local model) were
+being shown that no human wrote. Every one of these strings does double duty: it is the ground
+truth handed to the narrator in every prompt, AND it is what the player reads verbatim whenever
+the model fails and the fallback prints the facts.
+
+- **"You suffer(s) 1 bleed damage."** The optional-plural marker was a note-to-self that shipped.
+  There are two subjects and English gives them two verb forms, so the sentence picks one now:
+  *"You suffer 1 harm from Bleed."* / *"The enemy suffers 1 harm from Bleed."* The same marker in
+  the combat log's detonate line ("N affliction(s)") agrees with its number too.
+- **"You are afflicted with healthy."** Casting Brace — the Enforcer's own defensive skill — told
+  the narrator the player's best round was a misfortune. The seven conditions that HELP their
+  bearer are now named in the engine (`BENEFICIAL_CONDITIONS`) and get their own sentence:
+  *"You steady yourself — Healthy."*
+- **Raw internal ids instead of names.** The narrator was given `quick` and `smart`; the game
+  calls them **Agile** and **Brainy**. Both read the engine's own display table now, as the
+  combat log already did.
+- **"Act 1, the First Floor."** The narrator was never told where it was — those are the legacy
+  Java level names, and the fallback was *"the Void"*, which names the Void as a place the
+  world's own fiction locks as the one thing it is not. It reads `floors.json` now: *"Act 1, the
+  Undercity."* A malformed floor says *"somewhere further down"* rather than guessing.
+- **"On onHit: dealDamage" on the Inventory screen** — on every triggered relic and 41% of
+  victory drops. Item effects are sentences now (*"When you are struck: deals 25% of the damage
+  taken back."*), built from three tables the compiler will not let go stale. A second leak was
+  found behind the same hole and closed with it.
+
+**The tests are the point, not just the fixes.** Both of these projectors were already "covered",
+and both shipped the same defects through thirteen audit rounds and 1029 green tests — because
+every test fed them hand-built fixtures written to match the code, so the pair agreed with each
+other and neither agreed with the game. The new tests start from events the **real engine emitted**
+(a real Brace, Slip, Consecrate, Backstab, a real stunned round, real bleed ticks on both sides, a
+real drink, a real detonate) and from **real `generateItem` / loot-roll output** over 9 slots × 3
+rarities × 24 seeds and 5 acts × 120 seeds.
+
+**And a ratchet, so this family cannot come back.** `src/dev/placeholderRatchet.test.ts` freezes
+today's DELIBERATE placeholders — the ten empty act bodies, the four PLACEHOLDER headers, the
+twenty-four joke gear names, the six repeats of one insanity line — as an exact, named inventory
+that can only ever shrink. It scans every data file and every shipping string literal (comments
+stripped, so a `// TODO` note never fires and a `'TODO'` in player text always does), and it drives
+twenty real seeded runs checking every string that reaches a player or the model. Every detector
+was broken before it was trusted.
+
+**Three things the sweep found that are NOT fixed here** (outside the unit's declared territory,
+and reported for routing): the condition-chip tooltip still says *"N turn(s) left"*; the altar
+still offers a relic by its raw id (*"the altar offers mirror-shard"*); and *"Clarity Draught"* is
+the name of two different items.
+
+**Next:** one check in `HUMAN-CHECKS.md` — only a real model can show whether the narrator now
+names the floor and stops parroting "Healthy" as a mechanic.
 
 ### 2026-09-20 — floor 2 is a glitch again, not dust ✅
 

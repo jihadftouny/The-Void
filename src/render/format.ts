@@ -149,7 +149,10 @@ export function formatEvent(e: GameEvent): string {
     case 'lifesteal':
       return `You drain ${e.amount} HP.`;
     case 'detonate':
-      return `You detonate ${e.consumed} affliction(s) for ${e.bonusDamage} damage.`;
+      // C10(a)'s sibling in the log. "affliction(s)" is a note-to-self that shipped: the
+      // engine KNOWS the count, so the line agrees with it. (`verbFor` does the same job
+      // for subjects a few cases up; this is the noun half.)
+      return `You detonate ${e.consumed} affliction${e.consumed === 1 ? '' : 's'} for ${e.bonusDamage} damage.`;
     case 'fled':
       return `You escape into the Void.`;
     case 'escape-failed':
