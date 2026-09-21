@@ -270,15 +270,30 @@ export function hasSelection(args: Args): boolean {
  *
  * The order of these branches IS the rule:
  *   1. `--help` / `--list` never touch anything.
- *   2. `--resume` needs `--confirm-spend`, because collecting still calls the API.
- *   3. A DRY RUN WINS over `--confirm-spend`. Someone who typed both wants to look first.
- *   4. No `--confirm-spend` is a dry run, whatever else was typed.
- *   5. `--confirm-spend` with no selection is REFUSED — never "everything". A flag that means
+ *   2. `--preview` is a LOOK, not a send. It forces a dry run from wherever it is passed.
+ *   3. `--resume` needs `--confirm-spend`, because collecting still calls the API.
+ *   4. A DRY RUN WINS over `--confirm-spend`. Someone who typed both wants to look first.
+ *   5. No `--confirm-spend` is a dry run, whatever else was typed.
+ *   6. `--confirm-spend` with no selection is REFUSED — never "everything". A flag that means
  *      "yes" must never also decide WHAT it is saying yes to.
  */
 export function decideRun(args: Args): Decision {
   if (args.help) return { kind: 'help', spendAllowed: false, reason: '' };
   if (args.list) return { kind: 'list', spendAllowed: false, reason: '' };
+
+  // `--preview` IS A DRY RUN, FROM WHEREVER IT IS PASSED.
+  //
+  // `--help` promises it will "write the exact request bodies to a file and exit". It used to be
+  // honoured only on a path that was already a dry run, so
+  // `--confirm-spend --asset altar --preview p.json` read the key, built the transport, submitted
+  // three images and never wrote p.json — the user did the careful thing and was billed for it.
+  //
+  // That is worse than its size. `--preview` is the designated FREE way to check the request
+  // shape against the live REST documentation, and the field names in `gemini.ts` have never met
+  // a real call (see its header). The one command that exists to avoid an unverified send must
+  // not itself be an unverified send. It is decided HERE, in the pure decision, so the rule holds
+  // for every combination rather than for the combinations `main` happens to reach.
+  if (args.preview !== null) return { kind: 'dry-run', spendAllowed: false, reason: '' };
 
   if (args.resume !== null) {
     if (!args.confirmSpend) {
@@ -349,7 +364,7 @@ export function planRun(catalogue: Catalogue, args: Args): PlannedRun {
   };
 }
 
-export function formatDryRun(catalogue: Catalogue, planned: PlannedRun): string[] {
+export function formatDryRun(catalogue: Catalogue, planned: PlannedRun, args: Args): string[] {
   const price = PRICE_MILLI_USD[planned.mode];
   const names = planned.assets.map((a) => a.id).join(', ');
   const lines = [
@@ -360,11 +375,21 @@ export function formatDryRun(catalogue: Catalogue, planned: PlannedRun): string[
     `Retake ceiling: ${planned.retakeRounds} round(s) x up to ${planned.roundOneImages} images = ${formatDollars(planned.roundOneMilliUsd * planned.retakeRounds)}`,
     `Maximum this run can spend: ${formatDollars(planned.maximumMilliUsd)}`,
   ];
-  lines.push(
-    planned.assets.length === 0
-      ? 'Nothing is selected. Choose assets with --asset, --assets or --stage.'
-      : 'To generate, re-run with --confirm-spend (and keep the asset list).',
-  );
+  // Say WHY this was a dry run. Telling someone who already typed --confirm-spend to "re-run with
+  // --confirm-spend" reads like the tool ignored them, which is exactly the impression D1 left.
+  if (planned.assets.length === 0) {
+    lines.push('Nothing is selected. Choose assets with --asset, --assets or --stage.');
+  } else if (args.preview !== null) {
+    lines.push(
+      args.confirmSpend
+        ? `--preview is a look, never a send, so --confirm-spend was ignored. Drop --preview to generate.`
+        : 'To generate, re-run with --confirm-spend and without --preview.',
+    );
+  } else if (args.dryRun && args.confirmSpend) {
+    lines.push('--dry-run was given as well, so nothing was sent. Drop --dry-run to generate.');
+  } else {
+    lines.push('To generate, re-run with --confirm-spend (and keep the asset list).');
+  }
   return lines;
 }
 
@@ -479,7 +504,7 @@ export async function main(argv: readonly string[], deps: MainDeps): Promise<num
     }
 
     if (!hasSelection(args)) deps.stdout(USAGE);
-    for (const line of formatDryRun(catalogue, planned)) deps.stdout(line);
+    for (const line of formatDryRun(catalogue, planned, args)) deps.stdout(line);
 
     if (args.preview !== null) {
       const references = new Map<string, { path: string; sha256: string; bytes: number }>();

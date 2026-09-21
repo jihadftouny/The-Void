@@ -224,6 +224,50 @@ describe('--confirm-spend alone is not enough (AC-7, AC-8)', () => {
     }
   });
 
+  it('--preview NEVER spends, even beside --confirm-spend and a selection (D1)', async () => {
+    // THE OBSERVED DEFECT, verbatim: this command used to read .env, build the transport, submit
+    // three images and never write the preview file — while --help promised it would "write the
+    // exact request bodies to a file and exit".
+    const rec = recorder();
+    const written: { path: string; text: string }[] = [];
+    const code = await main(
+      ['--confirm-spend', '--asset', 'altar', '--retake-rounds', '0', '--preview', 'p.json'],
+      depsThatExplode(rec, {
+        writeText: async (p, text) => {
+          written.push({ path: p, text });
+        },
+      }),
+    );
+
+    expect(rec.touched).toEqual([]); // no key read, no transport built
+    expect(code).toBe(0);
+    expect(rec.out.join('\n')).toContain('DRY RUN');
+    // …and it actually did the thing it promised.
+    expect(written.map((w) => w.path)).toEqual(['p.json']);
+    expect(written[0]?.text).toContain('NOTHING WAS SENT');
+    expect(written[0]?.text).toContain('altar');
+    expect(rec.out.join('\n')).toContain('Wrote the exact request bodies to p.json');
+  });
+
+  it('--preview forces a dry run across every spending shape (D1)', async () => {
+    // The rule is decided in `decideRun`, so it must hold for combinations `main` never
+    // otherwise reaches — including --resume, which has its own branch.
+    for (const argv of [
+      ['--confirm-spend', '--asset', 'altar', '--preview', 'p.json'],
+      ['--confirm-spend', '--stage', '1', '--preview', 'p.json'],
+      ['--confirm-spend', '--assets', 'altar,shrine', '--mode', 'interactive', '--preview', 'p.json'],
+      ['--confirm-spend', '--preview', 'p.json'], // no selection: still a dry run, not a refusal
+      ['--confirm-spend', '--resume', 'run-1', '--preview', 'p.json'],
+      ['--resume', 'run-1', '--preview', 'p.json'],
+    ]) {
+      const rec = recorder();
+      const code = await main(argv, depsThatExplode(rec));
+      expect(rec.touched, argv.join(' ')).toEqual([]);
+      expect(code, argv.join(' ')).toBe(0);
+      expect(rec.out.join('\n'), argv.join(' ')).toContain('DRY RUN');
+    }
+  });
+
   it('--resume without --confirm-spend is refused and reaches nothing', async () => {
     const rec = recorder();
     const code = await main(['--resume', '20260921-090000-batch-3'], depsThatExplode(rec));

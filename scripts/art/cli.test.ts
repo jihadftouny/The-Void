@@ -176,7 +176,7 @@ describe('takes and retake rounds are bounded (AC-12)', () => {
 describe('the dry-run report states the exact count and the exact cost (AC-10)', () => {
   function report(catalogue: Catalogue, argv: string[]): string {
     const args = argsFor(argv);
-    return formatDryRun(catalogue, planRun(catalogue, args)).join('\n');
+    return formatDryRun(catalogue, planRun(catalogue, args), args).join('\n');
   }
 
   it('9 batched images are $0.603', () => {
@@ -257,6 +257,21 @@ describe('the dry-run report states the exact count and the exact cost (AC-10)',
     expect(text).toContain('To generate, re-run with --confirm-spend (and keep the asset list).');
   });
 
+  it('says WHY it was a dry run when --confirm-spend was already given (D1)', () => {
+    // Telling someone who typed --confirm-spend to "re-run with --confirm-spend" reads as though
+    // the tool ignored them — which is the impression the --preview defect actually left.
+    const preview = report(ALL_50, ['--asset', 'altar', '--confirm-spend', '--preview', 'p.json']);
+    expect(preview).toContain('--preview is a look, never a send, so --confirm-spend was ignored');
+    expect(preview).not.toContain('To generate, re-run with --confirm-spend (and keep the asset list).');
+
+    const forced = report(ALL_50, ['--asset', 'altar', '--confirm-spend', '--dry-run']);
+    expect(forced).toContain('--dry-run was given as well, so nothing was sent');
+
+    // Without --confirm-spend the preview line points at both changes needed.
+    const lookOnly = report(ALL_50, ['--asset', 'altar', '--preview', 'p.json']);
+    expect(lookOnly).toContain('re-run with --confirm-spend and without --preview');
+  });
+
   it('one take of one asset is $0.067 — the smallest thing that can be bought', () => {
     const text = report(ALL_50, ['--asset', 'altar', '--takes', '1', '--retake-rounds', '0']);
     expect(text).toContain('Round 1: 1 images = $0.067');
@@ -331,6 +346,32 @@ describe('decideRun', () => {
       kind: 'generate',
       spendAllowed: true,
     });
+  });
+
+  it('--preview is a LOOK, not a send: it forces a dry run from anywhere (D1)', () => {
+    // `--help` promises "write the exact request bodies to a file and exit". It is also the only
+    // free way to check the wire format before money moves, so it must never be the thing that
+    // moves it.
+    for (const argv of [
+      ['--preview', 'p.json'],
+      ['--preview', 'p.json', '--confirm-spend', '--asset', 'altar'],
+      ['--confirm-spend', '--stage', '3', '--preview', 'p.json'],
+      ['--confirm-spend', '--resume', 'run-1', '--preview', 'p.json'],
+      ['--preview', 'p.json', '--confirm-spend'],
+    ]) {
+      expect(decide(argv), argv.join(' ')).toMatchObject({
+        kind: 'dry-run',
+        spendAllowed: false,
+      });
+    }
+  });
+
+  it('…and without --preview those same commands are NOT dry runs', () => {
+    // The control: if these were dry runs anyway, the assertions above would prove nothing.
+    expect(decide(['--confirm-spend', '--asset', 'altar']).kind).toBe('generate');
+    expect(decide(['--confirm-spend', '--stage', '3']).kind).toBe('generate');
+    expect(decide(['--confirm-spend', '--resume', 'run-1']).kind).toBe('resume');
+    expect(decide(['--confirm-spend']).kind).toBe('refuse');
   });
 
   it('refuses --resume without --confirm-spend, because collecting still calls the API', () => {
