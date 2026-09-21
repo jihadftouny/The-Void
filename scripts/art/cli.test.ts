@@ -431,3 +431,75 @@ describe('the usage text', () => {
     expect(USAGE).toContain('Required, every time');
   });
 });
+
+// =========================================================================================
+// The shipped spec and the shipped binary must agree
+// =========================================================================================
+
+describe('docs/ART-BIBLE.md §1c describes what the tool actually does', () => {
+  // WHY THIS EXISTS. §1c states the spending rules in prose, and that file ships with this unit.
+  // Two of those sentences were false when they were written: `--dry-run` did not in fact beat
+  // `--confirm-spend` on `--resume`, and `--preview` was silently ignored on a spending path. A
+  // spec the binary contradicts is worse than no spec — the reader cannot tell which one is
+  // lying, and every other line in the document becomes less trustworthy with it.
+  //
+  // So each claim is checked twice: that §1c still MAKES it (delete the sentence and this goes
+  // red, rather than the guard quietly covering nothing), and that `decideRun` HONOURS it.
+  const SECTION = (() => {
+    const start = BIBLE.indexOf('### 1c. The tool');
+    expect(start, '§1c not found in ART-BIBLE.md').toBeGreaterThan(-1);
+    const raw = BIBLE.slice(start, BIBLE.indexOf('## 2. The house style string', start));
+    // Whitespace-normalised, and with Markdown's blockquote markers dropped, so re-wrapping a
+    // paragraph or re-indenting a callout cannot turn a true claim into a red test.
+    return raw.replace(/^>\s?/gm, '').replace(/\s+/g, ' ');
+  })();
+
+  const decide = (argv: string[]) => decideRun(argsFor(argv));
+
+  it('§1c claims a dry run always wins — and it does, even on --resume', () => {
+    expect(SECTION).toContain('`--dry-run` always wins');
+    expect(SECTION).toContain('including alongside `--resume`');
+    expect(decide(['--resume', 'R1', '--confirm-spend', '--dry-run']).kind).toBe('dry-run');
+    expect(decide(['--stage', '1', '--confirm-spend', '--dry-run']).kind).toBe('dry-run');
+  });
+
+  it('§1c claims --preview is a look, never a send — and it is', () => {
+    expect(SECTION).toContain('`--preview` is a look, never a send');
+    expect(decide(['--stage', '1', '--confirm-spend', '--preview', 'p.json']).kind).toBe('dry-run');
+    expect(decide(['--resume', 'R1', '--confirm-spend', '--preview', 'p.json']).kind).toBe('dry-run');
+  });
+
+  it('§1c claims --confirm-spend alone is refused — and it is', () => {
+    expect(SECTION).toContain('`--confirm-spend` on its own is **refused**');
+    expect(decide(['--confirm-spend']).kind).toBe('refuse');
+  });
+
+  it('§1c claims --resume needs --confirm-spend — and it does', () => {
+    expect(SECTION).toContain('`--resume` needs `--confirm-spend` too');
+    expect(decide(['--resume', 'R1']).kind).toBe('refuse');
+    expect(decide(['--resume', 'R1', '--confirm-spend']).kind).toBe('resume');
+  });
+
+  it('§1c claims generation needs BOTH the flag and a selection — and it does', () => {
+    expect(SECTION).toContain('**both** `--confirm-spend` **and** an explicit selection');
+    expect(decide(['--stage', '1']).kind).toBe('dry-run'); // selection alone
+    expect(decide(['--confirm-spend']).kind).toBe('refuse'); // flag alone
+    expect(decide(['--stage', '1', '--confirm-spend']).kind).toBe('generate'); // both
+  });
+
+  it('§1c warns that the request shape has never met a live call', () => {
+    // This is the one open item the unit cannot close (it needs a paid call), so the document
+    // must carry the warning and point at the free way to check.
+    expect(SECTION).toContain('has never met a live call');
+    expect(SECTION).toContain('--preview');
+  });
+
+  it('§1c quotes the gate thresholds the code actually ships', () => {
+    // The numbers live in catalogue.json; §1c reprints them for a reader. They must agree.
+    const gates = ALL_50.gates;
+    expect(gates.corners).toEqual({ patch: 8, maxLevel: 20, maxChroma: 10 });
+    expect(gates.bottomThird).toEqual({ stride: 8, maxLevel: 40, minDarkFraction: 0.8 });
+    expect(SECTION).toContain('`patch 8`, `maxLevel 20`, `maxChroma 10`');
+    expect(SECTION).toContain('`stride 8`, `maxLevel 40`, `minDarkFraction 0.8`');
+  });
+});

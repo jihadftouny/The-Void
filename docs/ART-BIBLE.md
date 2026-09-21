@@ -66,21 +66,34 @@ The script that enforces everything above lives in **`scripts/art/`**. It is dev
 game never imports it, and a test asserts that nothing under `src/` does.
 
 ```
-npm run art -- --help                       # what it can do
-npm run art -- --list                       # every asset id in the catalogue
-npm run art -- --stage 1                    # DRY RUN: what stage 1 would send, and what it would cost
-npm run art -- --stage 1 --confirm-spend    # actually send it
+npm run art -- --help                            # what it can do
+npm run art -- --list                            # every asset id in the catalogue
+npm run art -- --stage 1                         # DRY RUN: what stage 1 would send, and the cost
+npm run art -- --stage 1 --preview bodies.json   # the EXACT request bodies, written to a file
+npm run art -- --stage 1 --confirm-spend         # actually send it
 ```
 
 > **⚠ IT SPENDS NOTHING UNLESS YOU SAY SO TWICE.** A dry run is the default. Real generation needs
 > **both** `--confirm-spend` **and** an explicit selection (`--asset`, `--assets` or `--stage`).
 > `--confirm-spend` on its own is **refused** — the tool will never read "yes" as "all 50 assets".
-> `--dry-run` beats `--confirm-spend` if you type both. `--resume` needs `--confirm-spend` too,
-> because collecting a batch still calls the API. **Approval never carries from one run to the
-> next** (`PRINCIPLES.md` §A1); every invocation must say it again.
+> **`--dry-run` always wins**, with no exception — including alongside `--resume`. **`--preview` is
+> a look, never a send**: passing it forces a dry run from wherever it appears, even beside
+> `--confirm-spend`. `--resume` needs `--confirm-spend` too, because collecting a batch still calls
+> the API. **Approval never carries from one run to the next** (`PRINCIPLES.md` §A1); every
+> invocation must say it again.
 >
 > The dry run prints the exact image count, the exact cost, **and the maximum the run could spend**
 > if every retake round were needed — that last figure is the one you are actually agreeing to.
+>
+> The API key is read **only** on a path that can spend, and only after everything that can fail
+> for free already has: an unknown asset id, a missing prompt, or a `--resume` naming a run that
+> does not exist all stop before `.env` is opened.
+
+> **⚠ USE `--preview` BEFORE THE FIRST REAL RUN — the request shape has never met a live call.**
+> The field names in the tool were taken from the v1beta REST reference and have not been verified
+> against the API, because verifying costs money. `--preview` writes the exact bodies (no key, no
+> base64) so they can be read beside the live documentation first. A wrong field name is an HTTP
+> 400 — a rejected request rather than a wrong charge — but the check is free and the batch is not.
 
 **Nothing can be generated yet, by design.** Every `prompt` in `scripts/art/catalogue.json` is
 `null`, and the tool refuses an asset without one. Authoring them is **#4 (probe 04) and #5**, and
