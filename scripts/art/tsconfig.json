@@ -1,0 +1,17 @@
+{
+  // The art tool is typechecked, unlike the rest of `scripts/`.
+  //
+  // `tsconfig.json` at the repo root includes `src` only, and `vite.config.ts` records the
+  // reason: everything under `scripts/` is RUN by Vitest but NOT typechecked. That gap is the
+  // status quo and widening the root include would drag the balance-report scripts into strict
+  // checking — a restructure this unit has no business doing.
+  //
+  // This tool is the exception because of what it handles: an API key and a real bill. A
+  // `strict` typecheck over exactly these files costs one config and changes nothing else.
+  // Run by `npm run typecheck:art`.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["./**/*.ts"]
+}
