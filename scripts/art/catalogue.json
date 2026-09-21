@@ -1,0 +1,481 @@
+{
+  "version": 1,
+  "note": "THE ART CATALOGUE. Every id the tool can generate, and the per-class rules it generates under. The authority is docs/ART-BIBLE.md — §1 for the model and settings, §2 for the style string, §3 for the per-class framing and aspect ratios, §4b for the asset list, §5 for the gates. EVERY `prompt` IS null AND THE TOOL REFUSES TO PLAN AN ASSET WITHOUT ONE: authoring the prompts is PLAN.md #4 (probe 04) and #5, not this unit. The `gates` and `keying` numbers are STARTING VALUES to be tuned once probe 04 has real images to look at; record any change in ART-BIBLE §8.",
+  "model": "gemini-3-pro-image",
+  "imageSize": "1K",
+  "temperature": 1,
+  "responseModalities": [
+    "IMAGE"
+  ],
+  "styleString": "Pre-rendered 2D game sprite art in the visual style of late-1990s 32-bit era games — Diablo 1, Fallout, early PlayStation. Rendered from 3D and flattened into a 2D sprite: chunky low-fidelity forms, visible dithering instead of smooth gradients, a limited muted palette, hard crisp edges, deliberately coarse resolution. Dark, grim, murky, heavy shadow. Low fidelity that hides detail rather than showing it. NOT photorealistic, NOT smooth modern rendering, NOT soft or blurry, NOT cel-shaded, NOT anime. No caption text, no watermark, no signature, no logo overlay, no border, no user-interface elements.",
+  "referenceInstruction": "Match the style, palette, rendering, framing and scale of the reference image exactly. Depict the subject described above, not the reference’s subject.",
+  "backgroundSentence": "Isolated on a pure flat black background.",
+  "classes": {
+    "enemy-sprite": {
+      "aspectRatio": "1:1",
+      "gate": "corners",
+      "key": "luminance",
+      "append": "Full body, head and feet inside the frame, centered, facing the viewer, isolated on a pure flat black background. No ground, no shadow, no scenery."
+    },
+    "boss-portrait": {
+      "aspectRatio": "1:1",
+      "gate": "corners",
+      "key": "luminance",
+      "append": "Full body, head and feet inside the frame, centered, facing the viewer, isolated on a pure flat black background. No ground, no shadow, no scenery."
+    },
+    "class-portrait": {
+      "aspectRatio": "1:1",
+      "gate": "corners",
+      "key": "luminance",
+      "append": "Full body, head and feet inside the frame, roughly ten percent margin, centered, turned slightly off-axis in three-quarter view, never square to the viewer, isolated on a pure flat black background. No ground, no shadow, no scenery."
+    },
+    "altar": {
+      "aspectRatio": "1:1",
+      "gate": "corners",
+      "key": "luminance",
+      "append": "The object whole and centered, roughly ten percent margin, isolated on a pure flat black background. No ground, no shadow, no scenery."
+    },
+    "backdrop": {
+      "aspectRatio": "16:9",
+      "gate": "bottomThird",
+      "key": "none",
+      "append": "Environment only: no creatures, no people, no focal character. A deep-shadow, near-black foreground occupying roughly the bottom third of the frame. Heavily darkened overall."
+    }
+  },
+  "gates": {
+    "corners": {
+      "patch": 8,
+      "maxLevel": 20,
+      "maxChroma": 10
+    },
+    "bottomThird": {
+      "stride": 8,
+      "maxLevel": 40,
+      "minDarkFraction": 0.8
+    }
+  },
+  "keying": {
+    "lo": 16,
+    "hi": 48
+  },
+  "assets": [
+    {
+      "id": "backdrop-undercity",
+      "class": "backdrop",
+      "name": "The Undercity",
+      "stage": 1,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "backdrop-entrance",
+      "class": "backdrop",
+      "name": "Entrance to the Void",
+      "stage": 1,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "backdrop-ash-city",
+      "class": "backdrop",
+      "name": "The Ash City",
+      "stage": 1,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "backdrop-angelic-underground",
+      "class": "backdrop",
+      "name": "The Angelic Underground",
+      "stage": 1,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "backdrop-true-void",
+      "class": "backdrop",
+      "name": "The True Void",
+      "stage": 1,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "altar",
+      "class": "altar",
+      "name": "The Altar",
+      "stage": 1,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "shrine",
+      "class": "altar",
+      "name": "The Shrine",
+      "stage": 1,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "class-enforcer",
+      "class": "class-portrait",
+      "name": "Enforcer",
+      "stage": 2,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "class-neuromancer",
+      "class": "class-portrait",
+      "name": "Neuromancer",
+      "stage": 2,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "class-scavver",
+      "class": "class-portrait",
+      "name": "Scavver",
+      "stage": 2,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "class-penitent",
+      "class": "class-portrait",
+      "name": "Penitent",
+      "stage": 2,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "class-hollow",
+      "class": "class-portrait",
+      "name": "Hollow",
+      "stage": 2,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-gangers",
+      "class": "enemy-sprite",
+      "name": "Ganger",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-securityDrones",
+      "class": "enemy-sprite",
+      "name": "Security Drone",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-mutantStrays",
+      "class": "enemy-sprite",
+      "name": "Mutant Stray",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-cyberEnforcers",
+      "class": "enemy-sprite",
+      "name": "Cyber-Enforcer",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-fixers",
+      "class": "enemy-sprite",
+      "name": "Fixer",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-reflections",
+      "class": "enemy-sprite",
+      "name": "Reflection",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-mirrorSelves",
+      "class": "enemy-sprite",
+      "name": "Mirror-Self",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-distortions",
+      "class": "enemy-sprite",
+      "name": "Distortion",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-staticWraiths",
+      "class": "enemy-sprite",
+      "name": "Static Wraith",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-grief",
+      "class": "enemy-sprite",
+      "name": "Grief",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-rage",
+      "class": "enemy-sprite",
+      "name": "Rage",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-dread",
+      "class": "enemy-sprite",
+      "name": "Dread",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-numbness",
+      "class": "enemy-sprite",
+      "name": "Numbness",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-ashWraiths",
+      "class": "enemy-sprite",
+      "name": "Ash-Wraith",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-choir",
+      "class": "enemy-sprite",
+      "name": "Choir",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-guardians",
+      "class": "enemy-sprite",
+      "name": "Guardian",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-theJudged",
+      "class": "enemy-sprite",
+      "name": "The Judged",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-seraphWardens",
+      "class": "enemy-sprite",
+      "name": "Seraph-Warden",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-demons",
+      "class": "enemy-sprite",
+      "name": "Demon",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-voidHorrors",
+      "class": "enemy-sprite",
+      "name": "Void-Horror",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-theUnmade",
+      "class": "enemy-sprite",
+      "name": "The Unmade",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-echoesOfYou",
+      "class": "enemy-sprite",
+      "name": "Echo of You",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-theHollowed",
+      "class": "enemy-sprite",
+      "name": "The Hollowed",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "sin-pride",
+      "class": "enemy-sprite",
+      "name": "Pride",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "sin-envy",
+      "class": "enemy-sprite",
+      "name": "Envy",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "sin-wrath",
+      "class": "enemy-sprite",
+      "name": "Wrath",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "sin-sloth",
+      "class": "enemy-sprite",
+      "name": "Sloth",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "sin-greed",
+      "class": "enemy-sprite",
+      "name": "Greed",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "sin-gluttony",
+      "class": "enemy-sprite",
+      "name": "Gluttony",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "sin-lust",
+      "class": "enemy-sprite",
+      "name": "Lust",
+      "stage": 3,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "enemy-ashWretch",
+      "class": "enemy-sprite",
+      "name": "Ash-Wretch",
+      "stage": 3,
+      "prompt": null,
+      "reference": null,
+      "deferred": "Needs an enemyFamilies.json entry first — ART-BIBLE §4b, the engine-first ruling of 2026-08-26. Art does not run ahead of the engine."
+    },
+    {
+      "id": "boss-kingpin",
+      "class": "boss-portrait",
+      "name": "Undercity Kingpin",
+      "stage": 4,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "boss-reflection",
+      "class": "boss-portrait",
+      "name": "The Reflection",
+      "stage": 4,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "boss-desecration",
+      "class": "boss-portrait",
+      "name": "The Desecration",
+      "stage": 4,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "boss-warden-judge",
+      "class": "boss-portrait",
+      "name": "The Warden (judge)",
+      "stage": 4,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "boss-hollow-self",
+      "class": "boss-portrait",
+      "name": "Hollow Self",
+      "stage": 4,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "boss-cruelty",
+      "class": "boss-portrait",
+      "name": "The Cruelty",
+      "stage": 4,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "boss-avarice",
+      "class": "boss-portrait",
+      "name": "The Avarice",
+      "stage": 4,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "boss-delusion",
+      "class": "boss-portrait",
+      "name": "The Delusion",
+      "stage": 4,
+      "prompt": null,
+      "reference": null
+    },
+    {
+      "id": "boss-warden-executioner",
+      "class": "boss-portrait",
+      "name": "The Warden (executioner)",
+      "stage": 4,
+      "prompt": null,
+      "reference": null,
+      "deferred": "The floor-4 executioner fight does not exist in code — ART-BIBLE §4b. There are four combat bosses, not five."
+    }
+  ]
+}
