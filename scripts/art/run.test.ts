@@ -664,6 +664,183 @@ describe('resume (AC-27)', () => {
 });
 
 // =========================================================================================
+// D4 — a resume can never widen its own asset set
+// =========================================================================================
+
+describe('a resume is confined to the assets the run actually covered (D4)', () => {
+  // The catalogue is WIDER than the run. That is the whole point: the run covered one asset, the
+  // catalogue holds three, and the resume must not reach the other two.
+  const wideCatalogue = testCatalogue([
+    { id: 'a', class: 'enemy-sprite' },
+    { id: 'shrine', class: 'enemy-sprite' },
+    { id: 'class-hollow', class: 'enemy-sprite' },
+  ]);
+
+  /** A manifest for a run that covered ONLY `a`, with round 1 submitted and uncollected. */
+  function manifestForA(): Manifest {
+    return {
+      version: 1,
+      runId: 'onlyA',
+      mode: 'batch',
+      model: 'gemini-3-pro-image',
+      state: 'running',
+      createdAt: 1,
+      takes: 3,
+      retakeRounds: 2,
+      pricePerImageMilliUsd: 67,
+      imagesSubmitted: 3,
+      imagesReturned: 0,
+      milliUsd: 201,
+      usd: '0.201',
+      assets: [
+        {
+          id: 'a',
+          name: 'a',
+          class: 'enemy-sprite',
+          prompt: 'a a',
+          params: {
+            aspectRatio: '1:1',
+            imageSize: '1K',
+            temperature: 1,
+            takes: 3,
+            gate: 'corners',
+            keyMode: 'luminance',
+          },
+          reference: null,
+          candidates: [],
+          passing: [],
+          costMilliUsd: 201,
+          runningMilliUsd: 201,
+          imagesSubmitted: 3,
+        },
+      ],
+      rounds: [
+        {
+          round: 1,
+          requested: 3,
+          handle: 'batches/left-running',
+          startedAt: 1,
+          finishedAt: null,
+          durationMs: null,
+        },
+      ],
+    };
+  }
+
+  async function resumeWide(
+    results: ImageResult[],
+    spendAllowed: boolean,
+    generated: Record<string, Uint8Array | 'error'> = {},
+  ) {
+    const provider = fakeProvider(generated);
+    provider.resume = async () => results;
+    const h = harness(provider);
+    h.files.set('art-candidates/onlyA/manifest.json', serializeManifest(manifestForA()));
+    const resumePoint = await findResumePoint('onlyA', 'art-candidates', h.deps.fs);
+    const outcome = await resumeRun(
+      { runId: 'onlyA', outDir: 'art-candidates', catalogue: wideCatalogue, spendAllowed, resumePoint },
+      h.deps,
+    );
+    return { outcome, provider, h };
+  }
+
+  it('a retake round covers ONLY the run’s own assets, never the rest of the catalogue', async () => {
+    // Every take of `a` fails in EVERY round, so both retake rounds actually run — the condition
+    // under which the defect appeared, and across more than one round. `shrine` and
+    // `class-hollow` were never part of this run and must appear in no request, in any round.
+    const white = SPRITE_WHITE_TOP();
+    const alwaysFails: Record<string, Uint8Array> = {};
+    for (const round of [2, 3]) {
+      for (const take of [1, 2, 3]) alwaysFails[`a-r${round}-t${take}`] = white;
+    }
+    const { outcome, provider } = await resumeWide(
+      [
+        { id: 'a-r1-t1', ok: true, mimeType: 'image/jpeg', bytes: white },
+        { id: 'a-r1-t2', ok: true, mimeType: 'image/jpeg', bytes: white },
+        { id: 'a-r1-t3', ok: true, mimeType: 'image/jpeg', bytes: white },
+      ],
+      true,
+      alwaysFails,
+    );
+
+    const everyRequest = provider.batches.flat();
+    expect(everyRequest.length).toBeGreaterThan(0); // it really did submit retakes
+    expect(everyRequest.every((id) => id.startsWith('a-'))).toBe(true);
+    expect(everyRequest.filter((id) => id.includes('shrine'))).toEqual([]);
+    expect(everyRequest.filter((id) => id.includes('class-hollow'))).toEqual([]);
+
+    // Two retake rounds of three takes, all for `a` and nothing else.
+    expect(provider.batches).toEqual([
+      ['a-r2-t1', 'a-r2-t2', 'a-r2-t3'],
+      ['a-r3-t1', 'a-r3-t2', 'a-r3-t3'],
+    ]);
+    // The manifest never grew an asset either.
+    expect(outcome.manifest.assets.map((x) => x.id)).toEqual(['a']);
+    // 3 submitted before the resume + 6 retakes = 9 x 67 = 603 by hand.
+    expect(outcome.manifest.imagesSubmitted).toBe(9);
+    expect(outcome.manifest.milliUsd).toBe(603);
+  });
+
+  it('the cost of a resume is bounded by the RUN, not by the catalogue', async () => {
+    // The observed near-miss: a resume seeded from the full catalogue built a round of 153
+    // images, about $10.25, and was stopped only because `recordSubmission` throws on an unknown
+    // asset before the provider is reached. An exception that happens to fire first is not a
+    // budget control. The bound is now structural — 1 asset x 3 takes x 2 retake rounds.
+    const white = SPRITE_WHITE_TOP();
+    const alwaysFails: Record<string, Uint8Array> = {};
+    for (const round of [2, 3]) {
+      for (const take of [1, 2, 3]) alwaysFails[`a-r${round}-t${take}`] = white;
+    }
+    const { outcome } = await resumeWide(
+      [
+        { id: 'a-r1-t1', ok: true, mimeType: 'image/jpeg', bytes: white },
+        { id: 'a-r1-t2', ok: true, mimeType: 'image/jpeg', bytes: white },
+        { id: 'a-r1-t3', ok: true, mimeType: 'image/jpeg', bytes: white },
+      ],
+      true,
+      alwaysFails,
+    );
+    const ceiling = 1 * 3 * (1 + 2); // assets x takes x (1 + retakeRounds)
+    expect(outcome.manifest.imagesSubmitted).toBeLessThanOrEqual(ceiling);
+    expect(ceiling).toBe(9);
+    // What it would have been with the whole catalogue in play, for contrast.
+    expect(3 * 3 * (1 + 2)).toBe(27);
+  });
+
+  it('refuses outright if the catalogue no longer holds an asset the run covered', async () => {
+    // Pointing --catalogue at the wrong file must not silently drop assets from a run that has
+    // already been paid for.
+    const provider = fakeProvider({});
+    provider.resume = async () => [];
+    const h = harness(provider);
+    h.files.set('art-candidates/onlyA/manifest.json', serializeManifest(manifestForA()));
+    const resumePoint = await findResumePoint('onlyA', 'art-candidates', h.deps.fs);
+    const narrower = testCatalogue([{ id: 'shrine', class: 'enemy-sprite' }]);
+
+    await expect(
+      resumeRun(
+        { runId: 'onlyA', outDir: 'art-candidates', catalogue: narrower, spendAllowed: true, resumePoint },
+        h.deps,
+      ),
+    ).rejects.toThrow(/not in this catalogue: a/);
+    expect(provider.batches).toEqual([]);
+  });
+
+  it('a resume with nothing owed submits nothing at all', async () => {
+    const { outcome, provider } = await resumeWide(
+      [
+        { id: 'a-r1-t1', ok: true, mimeType: 'image/jpeg', bytes: SPRITE_OK() },
+        { id: 'a-r1-t2', ok: true, mimeType: 'image/jpeg', bytes: SPRITE_OK() },
+        { id: 'a-r1-t3', ok: true, mimeType: 'image/jpeg', bytes: SPRITE_OK() },
+      ],
+      true,
+    );
+    expect(provider.batches).toEqual([]);
+    expect(outcome.manifest.imagesSubmitted).toBe(3);
+  });
+});
+
+// =========================================================================================
 // AC-37 / AC-38 — logging at the boundary
 // =========================================================================================
 
