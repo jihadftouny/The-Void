@@ -493,6 +493,72 @@ describe('narrate() times the round trip to the model', () => {
     );
   });
 
+  it('...and it records WHAT THE MODEL SAID, with its faults and the seed to reproduce them', () => {
+    // `text-hygiene`: the timings alone could not answer "what did it actually write?", which
+    // is the only question a narration defect on real hardware can be debugged from.
+    const done = logCalls(body).find((c) => c.includes("'narrate: done'"));
+    expect(done, 'the narration result line is gone').toBeDefined();
+    for (const key of ['text', 'faults', 'seed', 'floorName', 'beat', 'facts']) {
+      expect(done, `narrate: done no longer records ${key}`).toContain(key);
+    }
+    // The faults are the DETECTOR'S, not a hand-rolled second opinion — and they are read
+    // with the MODEL rule list, not the engine one (which would flag the engine's own
+    // deliberate "— Healthy." label on every beat and miss what the model invents).
+    expect(body, 'the renderer no longer runs the shared detector').toMatch(
+      /detectTextFaults\s*\(\s*text\s*,\s*buildVocabulary\(\s*\)\s*,/,
+    );
+    expect(body, 'the renderer runs the wrong rule list over the model’s prose').toMatch(
+      /rules:\s*MODEL_TEXT_RULES/,
+    );
+    // ...and the beat's own facts are handed in, or a model obediently echoing a reserved
+    // word the engine gave it is reported as a violation.
+    expect(body, 'the detector is not told what the engine said first').toMatch(
+      /echoOf:\s*prompt\.facts/,
+    );
+  });
+
+  it('a text fault RAISES the level, and a clean beat keeps the duration-derived one', () => {
+    // Pinned by EXPRESSION. `log.warn(...)` unconditionally, or the duration level alone,
+    // both read as "a level is passed" to a guard that only checks presence.
+    expect(body, 'a text fault no longer raises the level of the line that records it').toMatch(
+      /hygiene\.faults\.length\s*>\s*0\s*\?\s*'warn'\s*:\s*levelForDuration\(\s*roundTripMs\s*,\s*SLOW_MS\.narrate\s*,\s*'info'\s*\)/,
+    );
+  });
+
+  it('the beat INDEX is read before the await, not after it', () => {
+    // `memory.beats` grows while the model generates. Read afterwards, every corpus record
+    // and every log line would carry whatever the memory held by then instead of the beat
+    // that produced it — and a corpus indexed by the wrong beat cannot be replayed.
+    const read = body.search(/const beat\s*=\s*memory\.beats\.length/);
+    const call = body.search(/await\s+window\.void\.generate\s*\(/);
+    expect(read, 'the beat index is no longer captured at all').toBeGreaterThan(-1);
+    expect(call, 'narrate() no longer calls the model — this guard has gone stale').toBeGreaterThan(-1);
+    expect(read, 'the beat index is read AFTER the generation it labels').toBeLessThan(call);
+    // ...and nothing downstream re-reads it live, which would be the same defect by another
+    // route (the `narrate: request` line above is `beats:`, a different key, deliberately).
+    expect(
+      body.slice(call),
+      'the beat index is re-read after the await — use the captured `beat`',
+    ).not.toMatch(/beat:\s*memory\.beats\.length/);
+  });
+
+  it('the corpus send is fire-and-forget, and its absence logs before it is ignored', () => {
+    expect(body, 'the narration is no longer sent to the corpus').toMatch(/sendCorpus\s*\(/);
+    // Never awaited: a corpus write may not stall a turn.
+    expect(body, 'the corpus write blocks the turn').not.toMatch(/await\s+sendCorpus/);
+    const send = bodyOf('function sendCorpus(');
+    expect(send, 'sendCorpus does not use the optional bridge channel').toMatch(
+      /window\.void\.corpus/,
+    );
+    // Principle 7: both failure paths say something before recovering.
+    expect(send, 'a missing corpus channel is ignored in silence').toMatch(/log\.debug\s*\(/);
+    expect(send, 'a failed corpus send is swallowed without a word').toMatch(/log\.error\s*\(/);
+    // ...and the "no channel" notice is latched, so it cannot spam one line per beat.
+    expect(send, 'the missing-channel notice is not latched to once per session').toMatch(
+      /warnedNoCorpus/,
+    );
+  });
+
   it('the FAILURE path reports how long it waited before falling back', () => {
     const catchAt = body.search(/\}\s*catch\s*\(/);
     expect(catchAt, 'narrate() no longer catches — this guard has gone stale').toBeGreaterThan(-1);

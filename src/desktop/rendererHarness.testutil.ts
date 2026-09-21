@@ -34,6 +34,8 @@ export interface Bridge {
   onStatus: ReturnType<typeof vi.fn>;
   generate: ReturnType<typeof vi.fn>;
   log: ReturnType<typeof vi.fn>;
+  /** The narration corpus channel. Optional in the REAL preload, so removable here too. */
+  corpus?: ReturnType<typeof vi.fn>;
 }
 
 /**
@@ -46,9 +48,19 @@ export function installBridge(): Bridge {
     onStatus: vi.fn(() => () => undefined),
     generate: vi.fn(() => Promise.reject(new Error('renderer harness: no narrator'))),
     log: vi.fn(),
+    corpus: vi.fn(),
   };
   (window as unknown as { void: Bridge }).void = bridge;
   return bridge;
+}
+
+/**
+ * Take the corpus channel off the bridge — an OLDER PRELOAD, which has no `corpus` at all.
+ * The renderer must still boot and still narrate; `window.void.corpus` is optional by type
+ * and by behaviour, and this is what proves the second half.
+ */
+export function removeCorpusChannel(bridge: Bridge): void {
+  delete bridge.corpus;
 }
 
 export function removeBridge(): void {
