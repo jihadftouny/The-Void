@@ -16,6 +16,12 @@ import {
   passesLevel,
   LOG_CAP_BYTES,
 } from './log.mjs';
+import {
+  CORPUS_CAP_BYTES,
+  appendCorpus,
+  configureCorpusDir,
+  resolveCorpusDir,
+} from './corpus.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.VITE_DEV_SERVER_URL; // set by scripts/desktop-dev.mjs
@@ -223,6 +229,13 @@ ipcMain.handle('llm:generate', async (event, { requestId, prompt, system }) => {
 // Renderer forwards its log entries here so everything lands in one file.
 ipcMain.on('log:entry', (_e, entry) => fileLog(entry));
 
+// ...and one narration beat per generation to the NARRATION CORPUS — what the model actually
+// said, kept so `src/dev/narrationCorpus.test.ts` can re-run today's text rules over it. A
+// separate channel and a separate file because the session log truncates `data` at 2 000
+// characters, which is exactly the text we want to keep. `appendCorpus` validates the record
+// and never throws.
+ipcMain.on('corpus:record', (_e, record) => appendCorpus(record));
+
 app.whenReady().then(async () => {
   // FIRST, before anything else can want to log. G6: the log directory MUST come from
   // `app.getPath('userData')` — a path derived from `__dirname` lands inside the asar in a
@@ -238,6 +251,19 @@ app.whenReady().then(async () => {
     level: LOG_LEVEL,
   });
   console.log(`[void] logging to ${logFilePath()}`);
+
+  // The narration corpus, configured the same way and for the same G6 reason: in dev it goes
+  // into the CHECKOUT (`<cwd>/logs/corpus`, gitignored) because the sweep that reads it is an
+  // `npm test` in the repo; in a packaged build there is no repo, so it goes to user-data.
+  // `VOID_CORPUS_DIR` overrides both. No path here comes from `__dirname`.
+  const corpusDir = resolveCorpusDir({
+    env: process.env,
+    dev: !!DEV_URL,
+    cwd: process.cwd(),
+    userDataDir: app.getPath('userData'),
+  });
+  configureCorpusDir(corpusDir, { log: mlog });
+  mlog('info', 'corpus', 'corpus configured', { dir: corpusDir, capBytes: CORPUS_CAP_BYTES });
 
   if (SMOKE) {
     // Verify node-llama-cpp loads and runs INSIDE Electron's runtime (the ABI

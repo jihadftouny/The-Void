@@ -314,6 +314,68 @@ describe('main.mjs configures the log FIRST, inside whenReady (G6)', () => {
   });
 });
 
+describe('main.mjs records the narration corpus, from user-data and never __dirname', () => {
+  it('registers the corpus channel beside the log channel', () => {
+    // The anchor first: the log channel, which has been there since G6 and is the thing the
+    // new one sits next to.
+    expect(MAIN, 'the log:entry handler is gone — this guard has gone stale').toMatch(
+      /ipcMain\.on\s*\(\s*'log:entry'/,
+    );
+    expect(MAIN, 'the renderer can send a beat but nothing receives it').toMatch(
+      /ipcMain\.on\s*\(\s*'corpus:record'/,
+    );
+    // ...and it really appends, rather than being registered and dropped on the floor.
+    const handler = callsTo(MAIN, 'ipcMain.on').find((c) => c.includes("'corpus:record'"));
+    expect(handler, 'the corpus handler is not a call to ipcMain.on').toBeDefined();
+    expect(handler, 'the corpus channel receives beats and throws them away').toMatch(
+      /appendCorpus\s*\(/,
+    );
+  });
+
+  it('takes the corpus directory from resolveCorpusDir with userData, never __dirname', () => {
+    // Follow the VALUE, not the call site — the same rule the log-dir guard above learned
+    // the hard way. The directory is computed one statement earlier and handed in.
+    const assignment = MAIN.match(/const\s+corpusDir\s*=\s*([\s\S]*?);\n/);
+    expect(assignment, 'the corpus directory is no longer computed — this guard is stale').not.toBeNull();
+    expect(
+      assignment[1],
+      'the corpus dir is not resolved by the module that owns the policy',
+    ).toMatch(/resolveCorpusDir\s*\(/);
+    expect(
+      assignment[1],
+      'the corpus dir is no longer derived from userData — in a packaged build that path is ' +
+        'read-only and every corpus write becomes a silent no-op (G6, in a new file)',
+    ).toMatch(/app\.getPath\s*\(\s*['"]userData['"]\s*\)/);
+    expect(assignment[1], 'the corpus dir is derived from __dirname — that is G6 verbatim').not.toMatch(
+      /__dirname/,
+    );
+    const call = callsTo(MAIN, 'configureCorpusDir')[0];
+    expect(call, 'configureCorpusDir is never called').toBeDefined();
+    expect(argsOf(call)[0], 'configureCorpusDir is handed some other directory').toBe('corpusDir');
+    // The writer's failure paths log, so it is handed the main process's own logger.
+    expect(argsOf(call)[1], 'the corpus writer has no logger — its failures would be silent').toMatch(
+      /log:\s*mlog/,
+    );
+  });
+
+  it('...inside whenReady, and says where it is writing', () => {
+    const ready = MAIN.search(/app\.whenReady\s*\(\s*\)/);
+    const configure = MAIN.search(/configureCorpusDir\s*\(/);
+    expect(ready, 'app.whenReady is gone').toBeGreaterThan(-1);
+    expect(configure, 'the corpus is never configured').toBeGreaterThan(-1);
+    expect(
+      configure,
+      'the corpus is configured before the app is ready — userData is not valid yet',
+    ).toBeGreaterThan(ready);
+    // The path a human needs in order to find the file, in `data` and never interpolated
+    // into the message (principle 7).
+    const line = MAIN.match(/mlog\s*\(\s*'info',\s*'corpus',\s*'corpus configured',\s*\{[^}]*\}/);
+    expect(line, 'nothing records where the corpus is being written').not.toBeNull();
+    expect(line[0]).toMatch(/dir:\s*corpusDir/);
+    expect(line[0]).toMatch(/capBytes:\s*CORPUS_CAP_BYTES/);
+  });
+});
+
 describe('main.mjs memoises the narrator PROMISE (G37)', () => {
   it('uses the gate, and no longer keeps a resolved-value guard', () => {
     expect(MAIN, 'main.mjs no longer uses the narrator gate').toMatch(/createNarratorGate\s*\(/);
