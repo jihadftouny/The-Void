@@ -37,6 +37,7 @@ import { generateEnemy } from '../game/enemy.ts';
 import { pickUp } from '../game/equipment.ts';
 import { playerArmorClass } from '../game/defense.ts';
 import { createRng } from '../game/rng.ts';
+import { generateItem } from '../game/rarityGen.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { Stats } from '../game/character.ts';
 import type { ItemInstance } from '../game/item.ts';
@@ -237,19 +238,44 @@ describe('displayItem / describeInventory (inventory screen)', () => {
     expect(view.backpack.map((b) => b.item.name)).toEqual(['Void Draught', 'Suture Kit']);
   });
 
-  it('projects a rolled item by its rolled name/rarity/kind/slot', () => {
-    const rolled: ItemInstance = {
-      defId: 'gen-1',
-      rolled: { name: 'Whispering Band', rarity: 'Rare', slot: 'ring', kind: 'trinket', effects: [] },
-    };
-    expect(displayItem(rolled)).toEqual({
-      defId: 'gen-1',
-      name: 'Whispering Band',
-      rarity: 'Rare',
-      kind: 'trinket',
+  it('projects a REAL rolled item by its rolled name/rarity/kind/slot', () => {
+    // C11: this used to be a hand-built `{ name: 'Whispering Band', … effects: [] }` — an
+    // item no catalog contains, with no effects, so it proved nothing about the one thing
+    // `displayItem` has to get right on a rolled drop. Every expectation below is derived
+    // from the REQUEST plus `rarityGen.ts`'s own documented rules: the defId is
+    // `gen:<rarity>:<slot>`, the name is `<rarity> <slot>`, the kind follows the slot
+    // (ring → trinket) and a Rare's primary magnitude is `statBase 3 + randInt(0..2)` = 3..5
+    // on the requested stat.
+    const rolled: ItemInstance = generateItem(createRng(7).rng, {
       slot: 'ring',
-      effects: [],
+      rarity: 'Rare',
+      stat: 'WIS',
     });
+    const view = displayItem(rolled);
+    expect(view.defId).toBe('gen:Rare:ring');
+    expect(view.name).toBe('Rare ring');
+    expect(view.rarity).toBe('Rare');
+    expect(view.kind).toBe('trinket');
+    expect(view.slot).toBe('ring');
+    expect(view.effects[0]).toMatch(/^\+[3-5] WIS$/);
+    // Rare's procChance is 0.5, so whether this seed rolled one is a coin flip — but if it
+    // did, it is the proc sentence, not an enum id. (`itemEffects.test.ts` sweeps both.)
+    expect(view.effects.length === 1 || view.effects.length === 2).toBe(true);
+    if (view.effects.length === 2) {
+      expect(view.effects[1]).toBe('On hit: deals 2 extra damage.');
+    }
+  });
+
+  it('a rolled name is the one place a camelCase slot id still reaches the player', () => {
+    // NOT this unit's to fix, and recorded so it is not mistaken for something C9 missed:
+    // `rarityGen.ts` names a drop `${rarity} ${slot}`, so a mainHand roll is literally
+    // "Legendary mainHand" on the inventory screen. That is the register's naming defect
+    // (PLAN.md #13), and it lives in the NAME — the EFFECTS beside it are now English.
+    const view = displayItem(generateItem(createRng(3).rng, { slot: 'mainHand', rarity: 'Legendary' }));
+    expect(view.name).toBe('Legendary mainHand');
+    for (const phrase of view.effects) {
+      expect(phrase).not.toMatch(/\b[a-z]+[A-Z][A-Za-z]*\b/);
+    }
   });
 });
 
