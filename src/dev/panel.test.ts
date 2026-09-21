@@ -635,14 +635,24 @@ describe('statusText', () => {
     expect(a).not.toBe(b);
   });
 
-  it('keeps the four lines that were there before it', () => {
-    // The hygiene line is ADDITIVE: the act/place/xp line, the phase line and the karma line
+  it('keeps the three lines that were there before it, unchanged', () => {
+    // The hygiene line is ADDITIVE: the act/place/xp line, the phase line and the ledger line
     // are what the panel has always shown, and none of them moved.
+    //
+    // ⚠ The third line is asserted by INVARIANCE rather than by pattern, deliberately: writing
+    // its words out here would be a private copy of the hidden-ledger vocabulary, which
+    // `src/game/karmaVocabulary.test.ts` forbids in every test file but its own (and caught,
+    // when the first version of this test did exactly that).
     const lines = statusText(fresh(), { faults: 0, narrations: 0 }).split('\n');
+    const other = statusText(fresh(), { faults: 5, narrations: 6 }).split('\n');
     expect(lines).toHaveLength(4);
     expect(lines[0]).toMatch(/^act \d+ \/ place \d+ · xp \d+ · level \d+ · hp \d+\/\d+$/);
     expect(lines[1]).toMatch(/^phase [a-z-]+$/);
-    expect(lines[2]).toMatch(/^karma  mercy -?\d+  restraint -?\d+  reverence -?\d+  clarity -?\d+$/);
+    expect(lines.slice(0, 3), 'the tally changed a line that is not about text').toEqual(
+      other.slice(0, 3),
+    );
+    // ...and the last line is the only one that moved (or "unchanged" is trivially true).
+    expect(lines[3]).not.toBe(other[3]);
   });
 
   it('the panel builds its readout THROUGH this function, not beside it', () => {

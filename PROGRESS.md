@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3210 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3327 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,47 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-21 — the game starts keeping a record of what the narrator says ✅
+
+**`text-hygiene` built. 3210 → 3327 tests, three of them skipped until you play.** Two more strings nobody wrote are gone, and — more
+importantly — the game now *writes down* what the local model actually says, so the next narrator
+change can be judged against evidence instead of a guess.
+
+- **The altar was offering you `mirror-shard`.** A bargain that hands over a fixed relic has no
+  generated name to read, so the code fell back to the item's internal id — on the altar screen, in
+  the combat log, in the facts the narrator is given, and in the text you see when the model fails.
+  It reads *“An altar in the dark offers **Mirror Shard**, and demands 1 CHA in return.”* now.
+- **A condition chip's tooltip said “N turn(s) left”.** The game knows the number, so it picks the
+  word: *“Burn — 1 turn left”*, *“Burn — 2 turns left”*.
+- **One rule set, two places it runs.** The nine rules that decide whether a sentence is fit for a
+  player to read used to live inside the placeholder ratchet, where only the test suite could use
+  them. They are now a single pure module the ratchet AND the running game both call — so the
+  renderer checks every beat the model produces against exactly the rules the build enforces, and
+  there is no second copy to drift. Three of the nine are new and come straight from the world
+  bible: **a floor named by a number** (*“the second floor”*), **the Void treated as a place**
+  (*“deeper into the Void”* — it is a condition, not somewhere you stand), and **a reserved word
+  used casually** (lowercase *hollow*, *made whole*).
+- **The ratchet now walks four screens it never saw:** the altar, the full-pack bargain screen, the
+  level-up draft, the battle's Use-item list and the end-of-run summary — each with a counter that
+  fails if the screen was never reached, so “nothing found” can no longer mean “nothing looked at”.
+  Every exception it grants now lives in one table, and a loop fails any exception nothing actually
+  hits and tells you to delete it. **It did that immediately**, on the first row written for it.
+- **The narration corpus.** Every beat the model narrates is appended to
+  `logs/corpus/narration.jsonl` — capped at 8 MiB across exactly two files, **gitignored**, and a
+  test fails if that line ever leaves `.gitignore` (this repository is public and the corpus is your
+  own play). `npm test` re-runs the rules over it and fails naming the seed, the beat, the floor and
+  the sentence. With no corpus it **skips, visibly** — so the parser and the reporter are proved
+  against a hand-written fixture on every run, and “skipped” can never be mistaken for “passed”.
+- **F3 shows a live count:** *“text faults N in M narrations this run.”*
+
+**⚠ Found while doing it** (`FINDINGS.md` **G72**, for you): the combat log ships *“You escape into
+the Void.”* and *“You sacrifice N of your max HP to the Void.”* The narrator's own versions of both
+events are already right. It is your prose, so it was frozen with a reason rather than rewritten.
+
+**Four checks are waiting in `HUMAN-CHECKS.md`** — they need one play session with the real model,
+and check 3 is the interesting one: if the corpus sweep goes red, that is the first hard evidence of
+what the narrator really gets wrong.
 
 ### 2026-09-21 — the art tool is built, and it is built to refuse ✅
 
