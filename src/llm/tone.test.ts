@@ -160,12 +160,16 @@ describe('the rest scene reaches the model — through the REAL step (AC-24)', (
 });
 
 describe('every OTHER beat is byte-for-byte what it was (AC-24 off-equivalence)', () => {
+  // The pinned string below MOVED ONCE, in exactly one clause: C4 replaced the legacy Java
+  // level ordinal in the header with the floor's real name from `floors.json` ("the
+  // Undercity" for place 0). The test's PURPOSE is unchanged — a non-rest beat still carries
+  // no scene block and no tone word — and every other byte of the prompt is what it was.
   it('a fixed non-rest event list builds exactly the pre-#2 prompt, written out by hand', () => {
     const events: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Feral Cryo Rat' }];
     const state: GameState = { ...createGame(1), player: hero(), karma: MERCIFUL, phase: { kind: 'main-menu' } };
     const prompt = buildNarrationPrompt(events, state)!;
     expect(prompt.user).toBe(
-      'Act 1, the First Floor. What just happened:\n- A Feral Cryo Rat emerges to bar your way.' +
+      'Act 1, the Undercity. What just happened:\n- A Feral Cryo Rat emerges to bar your way.' +
         '\n\nNarrate this new moment in 2-4 vivid second-person sentences. ' +
         'Stay consistent with what came before; do not repeat earlier narration.',
     );

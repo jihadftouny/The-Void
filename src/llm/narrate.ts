@@ -6,7 +6,7 @@ import type { GameEvent } from '../game/gameEvent.ts';
 import type { GameState } from '../game/game.ts';
 import type { Player } from '../game/player.ts';
 import { restBrief } from '../game/restBrief.ts';
-import { floorOf } from '../game/floors.ts';
+import { floorDef, floorOf, FLOOR_IDS, type FloorId } from '../game/floors.ts';
 import { summarizeLoot } from '../game/loot.ts';
 import {
   CONDITION_DATA,
@@ -22,13 +22,35 @@ export const VOID_PERSONA =
   'Concrete and unsettling. Never break character, never list choices, never ' +
   'ask the player questions, never mention game mechanics, dice, or numbers.';
 
-const FLOORS = [
-  'the First Floor',
-  'the Second Floor',
-  'the Third Floor',
-  'the Fourth Floor',
-  'the Fifth Floor',
-];
+/**
+ * Where a malformed `place` reads — C4. WORLD.md §6 [LOCKED]: "The Void is not a place. It
+ * is what happens to a mind that goes far enough down." The old fallback named the Void
+ * ITSELF as the place you were standing in — in the one sentence of the prompt whose whole
+ * job is to say where you are.
+ */
+export const UNPLACED = 'somewhere further down';
+
+/**
+ * The place phrase for the prompt header — "the Undercity" … "the True Void" — C4.
+ *
+ * The narrator used to be handed the legacy Java level ordinals — the Nth-floor phrasing —
+ * rather than the world's own names. It reads `floors.json` through `floors.ts` now — the SAME
+ * data the engine's own floor mechanics run on — so what the model is told about where it
+ * is cannot drift from where the rules think it is.
+ *
+ * (`src/render/tokens.ts` carries a second, hand-typed copy of these names for the theme
+ * table. A pure core may not import the render layer, so the two copies are held together
+ * by a guard — `src/render/floorNames.test.ts` — rather than by an import.)
+ *
+ * A malformed `place` reads UNPLACED rather than the nearest real floor. `floorOf` CLAMPS,
+ * which is right for the engine (a bad save still resolves to rules that exist) and wrong
+ * here: a clamp would have the narrator state, with confidence, that you are on floor 1.
+ * #18's ascent keeps `place` in 0..4, so the names stay right whichever way the run runs.
+ */
+export function placeName(place: number): string {
+  if (!Number.isInteger(place) || place < 0 || place >= FLOOR_IDS.length) return UNPLACED;
+  return `the ${floorDef((place + 1) as FloorId).name}`;
+}
 
 /**
  * The player-facing name of a condition — C7/C10(c). Reads the ENGINE's own
@@ -537,7 +559,6 @@ export function buildNarrationPrompt(
 ): { system: string; user: string; facts: readonly string[] } | null {
   const facts = eventsToFacts(events);
   if (facts.length === 0) return null;
-  const floor = FLOORS[state.place] ?? 'the Void';
   let context = '';
   if (memory) {
     const run = runSummary(memory);
@@ -551,7 +572,7 @@ export function buildNarrationPrompt(
   const scene = restScene(events, state);
   const user =
     context +
-    `Act ${state.act}, ${floor}. What just happened:\n- ` +
+    `Act ${state.act}, ${placeName(state.place)}. What just happened:\n- ` +
     facts.join('\n- ') +
     (scene === null
       ? `\n\nNarrate this new moment in 2-4 vivid second-person sentences. ` +

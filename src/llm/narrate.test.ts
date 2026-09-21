@@ -3,8 +3,10 @@ import {
   buildNarrationPrompt,
   describeEvent,
   createStoryMemory,
+  placeName,
   rememberBeat,
   runSummary,
+  UNPLACED,
 } from './narrate.ts';
 import type { GameState } from '../game/game.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
@@ -86,7 +88,7 @@ describe('buildNarrationPrompt', () => {
     const p = buildNarrationPrompt(events, baseState);
     expect(p).not.toBeNull();
     expect(p!.user).toContain('Feral Cryo Rat');
-    expect(p!.user).toContain('First Floor');
+    expect(p!.user).toContain('the Undercity');
     expect(p!.user.toLowerCase()).toContain('second-person');
     expect(p!.system).toContain('Void');
   });
@@ -131,5 +133,67 @@ describe('story memory', () => {
   it('returns the same memory object for an empty event list', () => {
     const m0 = createStoryMemory();
     expect(rememberBeat(m0, [])).toBe(m0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C4 — the narrator is told which floor it is on, by the floor's real name.
+//
+// The five names are transcribed BY HAND from `docs/WORLD.md` §6's stage table (the
+// [LOCKED] fiction), not read from `floors.json` — so if someone renames a floor in the
+// data this fails and asks whether the fiction moved too. `src/render/floorNames.test.ts`
+// closes the other end of the same join (the render layer's copy of the names).
+// ---------------------------------------------------------------------------
+
+describe('the prompt header names the floor (C4)', () => {
+  /** WORLD.md §6: "1 — The Undercity" … "5 — The True Void", minus the leading article. */
+  const NAMES = ['Undercity', 'Entrance to the Void', 'Ash City', 'Angelic Underground', 'True Void'];
+
+  /** One narratable event, so `buildNarrationPrompt` never returns null. */
+  const EVENTS: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Feral Cryo Rat' }];
+
+  function headerFor(place: number): string {
+    const p = buildNarrationPrompt(EVENTS, { ...baseState, act: place + 1, place });
+    expect(p, `place ${place} produced no prompt`).not.toBeNull();
+    return p!.user;
+  }
+
+  it('reads "Act N, the <floor>." for each of the five floors', () => {
+    for (let i = 0; i < NAMES.length; i += 1) {
+      expect(headerFor(i)).toContain(`Act ${i + 1}, the ${NAMES[i]}.`);
+    }
+  });
+
+  it('never names the Void itself as the place you are standing in (WORLD.md §6)', () => {
+    // "The Void is not a place" is LOCKED fiction, and this header is the one sentence in
+    // the whole prompt whose job is to say where you are.
+    for (let i = 0; i < NAMES.length; i += 1) {
+      expect(placeName(i)).not.toBe('the Void');
+    }
+    expect(UNPLACED).not.toBe('the Void');
+  });
+
+  it('a malformed place says "somewhere further down" rather than guessing a floor', () => {
+    // `floorOf` clamps for the ENGINE (a bad save still resolves to rules that exist).
+    // The narrator must not clamp: naming floor 1 would be a confident lie about where
+    // the player is.
+    for (const bad of [-1, 5, 1.5, NaN, Infinity, -0.5, 99]) {
+      expect(placeName(bad), `place ${bad}`).toBe('somewhere further down');
+    }
+    expect(headerFor(-1)).toContain('somewhere further down');
+  });
+
+  it('every real floor gets a DISTINCT name — no two floors read alike', () => {
+    const phrases = NAMES.map((_, i) => placeName(i));
+    expect(new Set(phrases).size).toBe(5);
+    expect(phrases).not.toContain(UNPLACED);
+  });
+
+  it('the header carries no legacy ordinal phrasing', () => {
+    // The shipped line was the Java level ordinal ("the First Floor"), built by hand in
+    // this file and drifting from both the data and the fiction.
+    for (let i = 0; i < 5; i += 1) {
+      expect(headerFor(i)).not.toMatch(/the (First|Second|Third|Fourth|Fifth) Floor/);
+    }
   });
 });
