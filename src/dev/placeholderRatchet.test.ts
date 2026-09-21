@@ -36,7 +36,10 @@
 //             .ts under src/ (every string LITERAL, comments and regex literals stripped),
 //             following the `src/log/sourceBytes.test.ts` convention.
 //   DYNAMIC — real seeded runs through the shipped `heuristicPolicy`, checking every string
-//             that reaches a player or the model for a raw engine id.
+//             that reaches a player or the model against the SHARED text-hygiene rules
+//             (`src/llm/textHygiene.ts`) — raw engine ids, and the three prose rules
+//             WORLD.md turns on. The renderer runs the very same detector over what the
+//             local model says, so there is one rule set and no second copy to drift.
 //
 // The detectors are tested BEFORE they are trusted (each has a planted positive that must
 // trip it and a must-not-fire control), because a scanner that matches nothing passes
@@ -57,17 +60,32 @@ import {
   castOptions,
   chestReveal,
   characterSheet,
+  consumableOptions,
+  dealDiscardView,
+  dealView,
   describeInventory,
   displayPlayer,
+  draftCards,
   fallbackNarration,
+  runSummaryView,
 } from '../desktop/view-model.ts';
-import { CONDITION_DATA, INSANITY_STRINGS } from '../game/condition.ts';
+import { INSANITY_STRINGS } from '../game/condition.ts';
 import {
-  getAllItems,
-  getAllRelics,
-  getAllUniques,
-  getAllConsumables,
-} from '../game/item.ts';
+  applyRunSummary,
+  createUnlockStore,
+  emptyRunSummary,
+  foldRunEvents,
+} from '../game/unlockStore.ts';
+// PART 2's rules and vocabulary. ONE definition, shared with the renderer and with the
+// narration-corpus sweep — see the note at the top of PART 2.
+import {
+  ALL_TEXT_RULES,
+  ENGINE_TEXT_RULES,
+  ROLLED_NAME_ALLOWANCE,
+  buildVocabulary,
+  detectTextFaults,
+  type TextRuleId,
+} from '../llm/textHygiene.ts';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -352,15 +370,14 @@ const FROZEN_TS: Record<RuleName, Record<string, string[]>> = {
       'Jooj Armor 1', 'Jaaj Sword 1', 'Jaaj Armor 1', 'Jooj Gun 1', 'Jooj Armor 1',
     ],
   },
-  // ⚠ ONE ENTRY, AND IT IS NOT DELIBERATE. `components.ts` builds a condition chip's
-  // tooltip as "<Name> — N turn(s) left". It is a live instance of exactly the defect
-  // FINDINGS.md C10(a) closed in `narrate.ts` and `format.ts`, and the fix is the same one
-  // line those two got. It is frozen at 1 rather than fixed ONLY because this unit's
-  // declared territory did not include `src/render/components.ts`; it is reported in the
-  // unit's handoff for routing. LOWER THIS TO ZERO when it is fixed. Never raise it.
-  parenS: {
-    'src/render/components.ts': ['${} — ${} turn(s) left'],
-  },
+  // ZERO, and that is the ratchet having TURNED. `components.ts` used to build a condition
+  // chip's tooltip as "<Name> — N turn(s) left" — a live instance of the defect FINDINGS.md
+  // C10(a) closed in `narrate.ts` and `format.ts`, frozen at 1 by the unit that found it
+  // because `src/render/components.ts` was outside its territory. `text-hygiene` fixed it:
+  // the tooltip is now decided by the pure `chipTitle`, which picks the plural. The entry is
+  // deleted rather than lowered to an empty list, because the FILE has nothing to declare.
+  // Never raise it.
+  parenS: {},
 };
 
 /** Files the static scan does not police, and why. */
@@ -514,12 +531,17 @@ describe('STATIC — the string literals in shipping TypeScript are exactly thes
     expectFrozen('Jooj/Jaaj/Jiij literals', measured.joke, FROZEN_TS.joke);
   });
 
-  it('the "(s)" marker survives in exactly one place, and it is a defect, not a decision', () => {
+  it('the "(s)" marker is in NO shipping literal, anywhere', () => {
     expectFrozen('"(s)" literals', measured.parenS, FROZEN_TS.parenS);
-    // The two the narrator and the log shipped are GONE and may not come back.
+    // The three the narrator, the log and the view model shipped are GONE and may not come
+    // back — and so, since `text-hygiene` (G71b), is the condition chip's tooltip.
     expect(measured.parenS['src/llm/narrate.ts']).toBeUndefined();
     expect(measured.parenS['src/render/format.ts']).toBeUndefined();
     expect(measured.parenS['src/desktop/view-model.ts']).toBeUndefined();
+    expect(
+      measured.parenS['src/render/components.ts'],
+      'the condition chip ships "turn(s)" again — G71(b) verbatim',
+    ).toBeUndefined();
   });
 });
 
@@ -541,90 +563,109 @@ describe('STATIC — the duplicated insanity lines are frozen as written', () =>
 // ===========================================================================
 // PART 2 — the DYNAMIC sweep: no raw engine id reaches a player, on any run
 // ===========================================================================
+//
+// THE RULES LIVE IN `src/llm/textHygiene.ts` NOW, not here.
+//
+// `text-hygiene` needed the same judgement applied to what the local MODEL says at run time,
+// and the obvious shortcut — a second copy of these rules in the renderer — is the failure
+// this project has already been bitten by: a duplicated guard that drifts. So the rules, and
+// every word list they read, moved into a pure module that BOTH consumers import. This file
+// selects `ENGINE_TEXT_RULES` (everything but `condition-label`, which the engine's own buff
+// line "You steady yourself — Healthy." is deliberately shaped like); the renderer selects
+// `MODEL_TEXT_RULES`; `src/dev/narrationCorpus.test.ts` re-runs the model list over what the
+// real model actually produced.
+//
+// WHAT THIS FILE STILL OWNS: the SURFACES (which projectors a real run is swept through), the
+// non-vacuity counters, and the ALLOWANCES — the named, reasoned exceptions, each of which
+// must be EXERCISED or the loop below says to delete it.
 
-const CONDITION_IDS = Object.keys(CONDITION_DATA);
+const VOCAB = buildVocabulary();
 
-/**
- * Every member of the three effect unions, by hand from `src/game/item.ts` (they are types;
- * there is no runtime array to iterate, and a hand list is what keeps this independent of
- * the tables it checks).
- */
-const EFFECT_IDS: readonly string[] = [
-  'startOfBattle', 'onHit', 'onCrit', 'onCast', 'onKill', 'onTakeDamage',
-  'dealDamage', 'healSelf', 'applyConditionSelf', 'applyConditionEnemy', 'gainShield',
-  'gainStat', 'restoreCharge', 'revive', 'cure', 'flee', 'reroll', 'drainCharge',
-  'bonusStat', 'bonusArmorClass', 'bonusDamage', 'bonusResist', 'skillChargeDiscount',
-  'firstHitReduction', 'lowHpDamageBonus', 'dotTickMultiplier', 'chargePerTurn',
-  'damageDealtMultiplier', 'cannotHeal', 'healMultiplier',
-];
-
-/** Every catalog defId that ships — the ids `summarizeLoot` and friends must never print. */
-const CATALOG_IDS: readonly string[] = [
-  ...getAllItems(), ...getAllRelics(), ...getAllUniques(), ...getAllConsumables(),
-].map((d) => d.id);
-
-/** A camelCase token: a shape English never produces, and every engine id wears it. */
-const CAMEL_TOKEN = /\b[a-z]+[A-Z][A-Za-z]*\b/g;
-
-/**
- * FROZEN ALLOWANCES for the dynamic sweep. Each is a KNOWN hit with a reason; anything else
- * fails. Like the static inventory, these only ever come off the list.
- */
-const ALLOWED_CAMEL = new Set(['mainHand', 'offHand']);
+/** A named, reasoned exception to one rule, matched against the WHOLE offending string. */
+interface Allowance {
+  rule: TextRuleId;
+  where: RegExp;
+  reason: string;
+}
 
 /**
- * `rarityGen.ts` names a rolled drop `${rarity} ${slot}`, so the SLOT ID is the item's
- * player-facing name: "Legendary mainHand". That is the register's naming defect (PLAN.md
- * #13) and it is allowed here ONLY in that exact shape — a camelCase token loose in a
- * sentence is not covered by it.
- */
-const ROLLED_NAME = /\b(Common|Rare|Legendary) (mainHand|offHand)\b/;
-
-/**
- * A condition ID is also, for almost all twenty-five, an ordinary English word, so a
- * whole-word scan over free prose has false positives. Exactly one exists today and it is
- * correct English: `boss-summon` counts the crew ("the crew is now 2 strong"). The precise
- * check that a condition FACT never prints an id lives in `src/llm/conditionFacts.test.ts`,
- * which sweeps all 25 × both subjects × every condition-carrying event kind.
- */
-const ALLOWED_CONDITION_PHRASE: readonly { id: string; where: RegExp }[] = [
-  { id: 'strong', where: /\bthe crew is now \d+ strong\b/ },
-];
-
-/**
- * ⚠ A KNOWN LIVE DEFECT, frozen rather than fixed. `deal.ts` `describeReward` renders an
- * item reward as `instance.rolled?.name ?? instance.defId`. A relic offered by the grace
- * pool has no `rolled` overlay, so the raw catalog id prints — on the altar screen, in the
- * combat log, in the narrator's facts, and in the model-failure fallback. It is the same
- * defect `summarizeLoot` already fixed for loot (its own comment records that), and the fix
- * is the same one line: fall back through `getCatalogItemById(defId)?.name`.
+ * THE ONE ALLOWANCE TABLE. Every exception the dynamic sweep grants lives here and nowhere
+ * else, so the complete list of "things we know we print and have decided to live with" is
+ * four rows of text rather than four scattered `if`s.
  *
- * Frozen at exactly this id ONLY because `src/game/deal.ts` is outside this unit's declared
- * territory; reported in the handoff. DELETE this entry when it is fixed.
+ * Each row is counted. The loop under `the allowances are all EXERCISED` fails any row that
+ * matched nothing, with a message saying to delete it — because an allowance nothing hits is
+ * an allowance nobody can tell is wrong, and it keeps quietly widening the guard forever.
  */
-const ALLOWED_CATALOG_IDS = new Set(['mirror-shard']);
+const ALLOWANCES: readonly Allowance[] = [
+  // Imported, not re-typed: the shared module owns the shape of the rolled-item name, so the
+  // renderer's sweep and this one cannot disagree about what a legitimate `mainHand` is.
+  ROLLED_NAME_ALLOWANCE,
+  {
+    rule: 'condition-id',
+    where: /\bthe crew is now \d+ strong\b/,
+    reason:
+      'boss-summon counts the crew ("the crew is now 2 strong"); correct English that happens ' +
+      'to contain the condition id `strong`. The precise check that a condition FACT never ' +
+      'prints an id lives in src/llm/conditionFacts.test.ts, over all 25 x both subjects.',
+  },
+  // ⚠ A LIVE DEFECT, FROZEN RATHER THAN FIXED. It is AUTHORED PROSE, which is PLAN.md #13 /
+  // FINDINGS.md C1's territory and not this unit's — this unit's job was to make it
+  // DETECTABLE, and this row is the proof that it worked: no guard could see these two
+  // sentences before the prose rules existed. DELETE the row when #13 rewrites them.
+  {
+    rule: 'void-as-place',
+    where: /\bYou (escape into|sacrifice \d+ of your max HP to) the Void\b/,
+    reason:
+      'format.ts, the combat log: "You escape into the Void." and "You sacrifice N of your max ' +
+      'HP to the Void." WORLD.md §6 — the Void is not a place you can enter or give things to. ' +
+      'AUTHORED PROSE: PLAN.md #13 / FINDINGS.md C1. Reported in the text-hygiene handoff.',
+  },
+  // ⚠ NOT LISTED, AND DELIBERATELY SO: `narrate.ts`'s empty-cache fact, "You pry it open, but
+  // it is hollow." — a third reserved-word instance, and the one narrate.ts's own comment
+  // already records as C1. A row for it was written and then DELETED, because the exercised
+  // loop below failed it: in twenty real runs an opened cache is never empty, so that sentence
+  // is unreachable from this sweep and the row would have been dead weight from birth. That is
+  // the loop doing exactly its job. Catching that line needs a STATIC prose scan over the
+  // shipping literals, which `text-hygiene` deliberately left to a later unit — the detector
+  // it would call already exists.
+];
 
 interface Sighting {
   surface: string;
   text: string;
+  /** What the rule matched, so a failure names the offending WORD as well as the sentence. */
+  match: string;
 }
 
 interface Sweep {
   runs: number;
   steps: number;
   surfaces: number;
-  conditionHits: Sighting[];
-  effectHits: Sighting[];
-  catalogHits: (Sighting & { id: string })[];
-  camelHits: (Sighting & { token: string })[];
-  parenSHits: Sighting[];
-  /** How often the frozen `mainHand`/`offHand` rolled-name allowance actually matched. */
-  allowedCamelSightings: number;
+  /** Every fault, bucketed by the rule that produced it. */
+  hits: Record<TextRuleId, Sighting[]>;
+  /** How often each row of `ALLOWANCES` actually matched, in the table's own order. */
+  allowanceSightings: number[];
   conditionApplied: number;
   conditionDamage: number;
   unableToAct: number;
   triggeredEffectsShown: number;
   itemNamesSeen: number;
+  // ---- the five projectors `text-hygiene` added to the sweep ----
+  dealViews: number;
+  /** Deals whose reward is an UN-ROLLED catalog item — the surface G71(a) lived on. */
+  catalogRewardDeals: number;
+  dealDiscardViews: number;
+  draftCards: number;
+  consumableOptions: number;
+  runSummaries: number;
+}
+
+/** An empty bucket per rule, so a rule that never fires is an empty array, not `undefined`. */
+function emptyHits(): Record<TextRuleId, Sighting[]> {
+  const out = {} as Record<TextRuleId, Sighting[]>;
+  for (const rule of ALL_TEXT_RULES) out[rule] = [];
+  return out;
 }
 
 /**
@@ -638,36 +679,32 @@ interface Sweep {
 function runSweep(): Sweep {
   const s: Sweep = {
     runs: 0, steps: 0, surfaces: 0,
-    conditionHits: [], effectHits: [], catalogHits: [], camelHits: [], parenSHits: [],
-    allowedCamelSightings: 0,
+    hits: emptyHits(),
+    allowanceSightings: ALLOWANCES.map(() => 0),
     conditionApplied: 0, conditionDamage: 0, unableToAct: 0,
     triggeredEffectsShown: 0, itemNamesSeen: 0,
+    dealViews: 0, catalogRewardDeals: 0, dealDiscardViews: 0,
+    draftCards: 0, consumableOptions: 0, runSummaries: 0,
   };
 
   const scan = (surface: string, text: string): void => {
     if (!text) return;
     s.surfaces += 1;
-    for (const id of CONDITION_IDS) {
-      if (!new RegExp(`\\b${id}\\b`).test(text)) continue;
-      if (ALLOWED_CONDITION_PHRASE.some((a) => a.id === id && a.where.test(text))) continue;
-      s.conditionHits.push({ surface, text });
-    }
-    for (const id of EFFECT_IDS) {
-      if (new RegExp(`\\b${id}\\b`).test(text)) s.effectHits.push({ surface, text });
-    }
-    for (const id of CATALOG_IDS) {
-      if (!text.includes(id)) continue;
-      if (ALLOWED_CATALOG_IDS.has(id)) continue;
-      s.catalogHits.push({ surface, text, id });
-    }
-    for (const token of text.match(CAMEL_TOKEN) ?? []) {
-      if (ALLOWED_CAMEL.has(token) && ROLLED_NAME.test(text)) {
-        s.allowedCamelSightings += 1;
+    const { faults, allowed } = detectTextFaults(text, VOCAB, { rules: ENGINE_TEXT_RULES });
+    for (const fault of faults) {
+      const row = ALLOWANCES.findIndex((a) => a.rule === fault.rule && a.where.test(text));
+      if (row >= 0) {
+        s.allowanceSightings[row] = (s.allowanceSightings[row] ?? 0) + 1;
         continue;
       }
-      s.camelHits.push({ surface, text, token });
+      s.hits[fault.rule].push({ surface, text, match: fault.match });
     }
-    if (text.includes('(s)')) s.parenSHits.push({ surface, text });
+    // The detector resolves the rolled-item-name allowance itself (it needs the match's
+    // POSITION, which only it has), and reports what it absolved. Count it on the same table.
+    for (const a of allowed) {
+      const row = ALLOWANCES.findIndex((x) => x.rule === a.rule && x.reason === a.allowance);
+      if (row >= 0) s.allowanceSightings[row] = (s.allowanceSightings[row] ?? 0) + 1;
+    }
   };
 
   for (const classId of ALL_CLASSES as readonly PlayerClass[]) {
@@ -677,10 +714,14 @@ function runSweep(): Sweep {
       let res: StepResult = { state: initial, events: [], awaiting: awaitingFor(initial.phase) };
       s.runs += 1;
       let guard = 0;
+      // The run-summary subscriber, folded exactly the way `game.ts`'s `dispatch` folds it,
+      // so the summary the end-of-run screen is projected from is the REAL one.
+      let summary = emptyRunSummary();
       while (res.awaiting !== 'game-over' && guard < 50_000) {
         res = step(res.state, policy(res));
         guard += 1;
         s.steps += 1;
+        summary = foldRunEvents(summary, res.events, res.state);
 
         for (const e of res.events) {
           if (e.kind === 'condition-applied') s.conditionApplied += 1;
@@ -717,7 +758,59 @@ function runSweep(): Sweep {
           }
           for (const option of castOptions(player)) scan('castOptions.name', option.name);
           for (const skill of characterSheet(player).skills) scan('sheet.skill', skill.name);
+          // THE BATTLE "Use item" LIST. `consumableOptions` reads the catalog def's NAME, so
+          // it is on exactly the resolution path G71(a) broke for the altar.
+          for (const option of consumableOptions(res.state.player!)) {
+            s.consumableOptions += 1;
+            scan('consumableOptions.name', option.name);
+          }
         }
+
+        // THE ALTAR. `dealView` is where G71(a) printed `mirror-shard` at the player.
+        const phase = res.state.phase;
+        if (phase.kind === 'deal' || phase.kind === 'deal-discard') {
+          const view = dealView(phase.deal);
+          s.dealViews += 1;
+          if (phase.deal.reward.kind === 'item' && !phase.deal.reward.instance.rolled) {
+            s.catalogRewardDeals += 1;
+          }
+          scan('dealView.cost', view.cost);
+          scan('dealView.reward', view.reward);
+          // THE FULL-PACK SCREEN, projected on EVERY deal phase and not only on the real
+          // `deal-discard` ones. It is a pure function of player + deal, so this is exactly
+          // what the screen WOULD show if the pack were full — and a full pack is rare enough
+          // in twenty heuristic runs that waiting for one would leave the surface unswept.
+          if (res.state.player) {
+            const leaving = phase.kind === 'deal-discard' ? (phase.leaving ?? []) : [];
+            const dd = dealDiscardView(res.state.player, phase.deal, leaving);
+            s.dealDiscardViews += 1;
+            scan('dealDiscardView.prompt', dd.prompt);
+            scan('dealDiscardView.cost', dd.cost);
+            scan('dealDiscardView.choose', dd.choose);
+            scan('dealDiscardView.refuse', dd.refuse);
+            for (const row of dd.leave) scan('dealDiscardView.leave', row.label);
+          }
+        }
+        // THE LEVEL-UP DRAFT. Its labels come from the engine's `describeDraftOption`, which
+        // reads skill and perk tables full of camelCase ids.
+        if (phase.kind === 'level-up-draft') {
+          for (const card of draftCards(phase.offers)) {
+            s.draftCards += 1;
+            scan('draftCards.label', card.label);
+          }
+        }
+      }
+
+      // THE END-OF-RUN SCREEN, from the REAL fold and the REAL unlock application against a
+      // fresh store — not a hand-built summary, because the whole point is the rows a real
+      // run produces (a boss name, a newly-unlocked relic name, the class and level).
+      const newly = applyRunSummary(createUnlockStore(), summary, seed).newlyUnlocked;
+      const view = runSummaryView(summary, res.state.player, newly, seed);
+      s.runSummaries += 1;
+      scan('runSummaryView.headline', view.headline);
+      for (const row of view.rows) {
+        scan('runSummaryView.label', row.label);
+        scan('runSummaryView.value', row.value);
       }
     }
   }
@@ -728,7 +821,7 @@ function runSweep(): Sweep {
 function report(hits: readonly Sighting[]): string {
   return hits
     .slice(0, 12)
-    .map((h) => `  ${h.surface}: "${h.text}"`)
+    .map((h) => `  ${h.surface} [${h.match}]: "${h.text}"`)
     .join('\n');
 }
 
@@ -751,39 +844,87 @@ describe('DYNAMIC — nothing a real run shows the player is an engine id', () =
     ).toBeGreaterThan(0);
   });
 
+  it('...and every one of the five projectors added by text-hygiene was reached', () => {
+    // A surface nobody reaches is a surface this sweep does not guard, however many rules
+    // run over it. Each of these was counted while the sweep ran.
+    expect(sweep.dealViews, 'no bargain was ever projected — dealView is unswept').toBeGreaterThan(0);
+    expect(
+      sweep.catalogRewardDeals,
+      'no bargain with an UN-ROLLED catalog reward was projected — the exact surface G71(a) ' +
+        'lived on is unswept, so "no catalog id is shown" proves nothing about it',
+    ).toBeGreaterThan(0);
+    expect(sweep.dealDiscardViews, 'the full-pack bargain screen is unswept').toBeGreaterThan(0);
+    expect(sweep.draftCards, 'no level-up draft was ever offered — draftCards is unswept').toBeGreaterThan(0);
+    expect(sweep.consumableOptions, 'no Use-item list was ever built').toBeGreaterThan(0);
+    // One summary per run, and every run ends: 20.
+    expect(sweep.runSummaries, 'a run ended without its summary being projected').toBe(20);
+  });
+
   it('no trigger, action kind or passive type is ever shown (C9)', () => {
-    expect(report(sweep.effectHits), `${sweep.effectHits.length} sighting(s)`).toBe('');
+    expect(report(sweep.hits['effect-id']), `${sweep.hits['effect-id'].length} sightings`).toBe('');
   });
 
   it('no condition id is ever shown (C7 / C10)', () => {
-    expect(report(sweep.conditionHits), `${sweep.conditionHits.length} sighting(s)`).toBe('');
+    expect(report(sweep.hits['condition-id']), `${sweep.hits['condition-id'].length} sightings`).toBe('');
   });
 
-  it('no catalog defId is ever shown, beyond the one frozen above', () => {
-    const lines = sweep.catalogHits.slice(0, 12).map((h) => `  ${h.surface} [${h.id}]: "${h.text}"`);
-    expect(lines.join('\n')).toBe('');
+  it('no catalog defId is ever shown — and there is no allowance left for one (G71a)', () => {
+    expect(report(sweep.hits['catalog-id']), `${sweep.hits['catalog-id'].length} sightings`).toBe('');
+    // The allowance for `mirror-shard` is GONE, not merely unused: `deal.ts` resolves the
+    // catalog name now, so nothing needs absolving.
+    expect(ALLOWANCES.some((a) => a.rule === 'catalog-id')).toBe(false);
   });
 
-  it('no camelCase token is shown outside a rolled item name', () => {
-    const lines = sweep.camelHits.slice(0, 12).map((h) => `  ${h.surface} [${h.token}]: "${h.text}"`);
-    expect(lines.join('\n')).toBe('');
+  it('no camelCase or snake_case token is shown outside a rolled item name', () => {
+    expect(report(sweep.hits['id-shape']), `${sweep.hits['id-shape'].length} sightings`).toBe('');
   });
 
   it('no "(s)" optional-plural marker reaches any run surface', () => {
-    expect(report(sweep.parenSHits), `${sweep.parenSHits.length} sighting(s)`).toBe('');
+    expect(report(sweep.hits['paren-s']), `${sweep.hits['paren-s'].length} sightings`).toBe('');
   });
 
-  it('the camelCase allowance is EXERCISED, so it is not dead weight', () => {
-    // An allowance nothing hits is an allowance nobody can tell is wrong. `Legendary
-    // mainHand` really does reach the inventory, the victory line and the chest screen — so
-    // the day `rarityGen`'s naming is fixed, `allowedCamelSightings` drops to zero and this
-    // test says so, which is the signal to delete the allowance.
-    expect(
-      sweep.allowedCamelSightings,
-      'the rolled-name allowance matched nothing — either rarityGen no longer names drops ' +
-        'after their slot (delete ALLOWED_CAMEL and ROLLED_NAME) or the sweep stopped ' +
-        'reaching the inventory',
-    ).toBeGreaterThan(0);
-    expect([...ALLOWED_CAMEL].sort()).toEqual(['mainHand', 'offHand']);
+  it('no floor is named by its ordinal', () => {
+    // WORLD.md: a floor has a NAME ("the Ash City"), and the player is never told a number.
+    expect(report(sweep.hits['ordinal-floor']), `${sweep.hits['ordinal-floor'].length} sightings`).toBe('');
+  });
+
+  it('the Void is never a place you enter or leave', () => {
+    // WORLD.md §6: "The Void is not a place — it is a condition, and the condition is the
+    // Hollow." The two engine lines that break this are in the ALLOWANCES table above, with
+    // their reason and their routing; anything else fails here.
+    expect(report(sweep.hits['void-as-place']), `${sweep.hits['void-as-place'].length} sightings`).toBe('');
+  });
+
+  it('no reserved word is used casually', () => {
+    // WORLD.md §0 reserves `hollow` and `made whole`. A capitalised Hollow is a NAME (the
+    // class, the boss, the floor-5 family) and passes.
+    expect(report(sweep.hits['reserved-word']), `${sweep.hits['reserved-word'].length} sightings`).toBe('');
+  });
+
+  // ---- the allowance table, one `it` per row ----------------------------------
+  //
+  // A loop, so adding a row to the table adds its own test automatically and a row can never
+  // be added without being proved live. An allowance nothing hits is an allowance nobody can
+  // tell is wrong — and the day the engine stops printing the phrase, THIS is what says so.
+  describe('the allowances are all EXERCISED, so none is dead weight', () => {
+    it('the table is not empty, and every row names a real rule', () => {
+      expect(ALLOWANCES.length).toBeGreaterThan(0);
+      for (const a of ALLOWANCES) {
+        expect(ALL_TEXT_RULES, `${a.reason}: unknown rule ${a.rule}`).toContain(a.rule);
+        expect(a.reason.length, 'an allowance with no reason is an unexplained hole').toBeGreaterThan(20);
+      }
+      expect(sweep.allowanceSightings).toHaveLength(ALLOWANCES.length);
+    });
+
+    ALLOWANCES.forEach((allowance, i) => {
+      it(`[${allowance.rule}] ${allowance.where.source} is exercised`, () => {
+        expect(
+          sweep.allowanceSightings[i],
+          `this allowance matched NOTHING in twenty real runs. Either the engine no longer ` +
+            `prints it — in which case DELETE the row, that is the ratchet turning — or the ` +
+            `sweep stopped reaching the surface it lived on. Reason on file: ${allowance.reason}`,
+        ).toBeGreaterThan(0);
+      });
+    });
   });
 });

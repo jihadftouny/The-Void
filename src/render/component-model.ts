@@ -182,6 +182,20 @@ export function conditionChip(active: ActiveCondition): ConditionChipModel {
 }
 
 /**
+ * The chip's hover tooltip — PURE, so the plural is a tested value rather than a guess.
+ *
+ * G71(b): `components.ts` built this inline as `"<Name> — N turn(s) left"`. The engine KNOWS
+ * the number, so "(s)" is a note-to-self that shipped to the player's screen — the same defect
+ * FINDINGS.md C10(a) closed in `narrate.ts` and `format.ts`, surviving here because that unit's
+ * territory did not include this file. One turn reads "1 turn left"; every other count, zero
+ * included, reads "turns".
+ */
+export function chipTitle(model: ConditionChipModel): string {
+  const plural = model.remainingTurns === 1 ? 'turn' : 'turns';
+  return `${model.name} — ${model.remainingTurns} ${plural} left`;
+}
+
+/**
  * Model a combatant's whole condition row, ordered control -> harm -> boon. Within a tone
  * the engine's own storage order is preserved (a STABLE sort), so the row never reshuffles
  * for reasons the player cannot see.

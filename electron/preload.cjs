@@ -31,4 +31,14 @@ contextBridge.exposeInMainWorld('void', {
       /* ignore */
     }
   },
+  // Forward ONE narration beat to the main process, which appends it to the capped,
+  // gitignored narration corpus. Fire-and-forget: a corpus write must never be able to
+  // stall or break a turn.
+  corpus(record) {
+    try {
+      ipcRenderer.send('corpus:record', record);
+    } catch {
+      /* ignore */
+    }
+  },
 });

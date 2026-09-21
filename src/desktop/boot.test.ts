@@ -48,6 +48,7 @@ import {
   labels,
   reach,
   removeBridge,
+  removeCorpusChannel,
   screen,
 } from './rendererHarness.testutil.ts';
 
@@ -498,5 +499,150 @@ describe('the entry script is the one place the page starts', () => {
     expect(HTML, 'the page still loads the renderer module directly').not.toMatch(
       /src="\/src\/desktop\/game\.ts"/,
     );
+  });
+});
+
+
+// =========================================================================================
+// TEXT HYGIENE AT THE BOUNDARY — what the model said, read against the shared rules, logged,
+// and written to the narration corpus (`text-hygiene`).
+//
+// BEHAVIOURAL, through the real `boot()`: a source scan can see that the detector is CALLED
+// and is structurally blind to what it is called WITH — the wrong rule list, the wrong text,
+// or a level that is computed and then thrown away all read identically in source.
+//
+// The narration below is written BY HAND to contain exactly two faults, each derived from the
+// rules in `src/llm/textHygiene.ts` and from this game's own fiction:
+//   * "second floor"    — `ordinal-floor`. A floor has a NAME; floor 1 is "Undercity".
+//   * "into the Void"   — `void-as-place`. `WORLD.md` §6: the Void is a condition, not
+//                         somewhere you can walk into.
+//
+// ⚠ BOTH ARE FACT-INDEPENDENT, and that is why they were chosen. `condition-label` — the
+// obvious third candidate — fires only when the beat's own facts contain the label (the echo
+// gate; see that rule's note, and the clean-prose body in `textHygiene.test.ts` that forced
+// it). This harness cannot choose the engine facts for the hub-arrival beat, only the model's
+// reply, so a condition-label case here would be asserting the engine's fact stream rather
+// than this file's subject, which is the WIRING. That rule's behaviour is proved directly, in
+// the detector's own tests, where `echoOf` is an argument.
+// =========================================================================================
+
+/** The stats an Electron main process returns for one generation. */
+function generated(text: string) {
+  return { text, tokens: 9, tokensPerSecond: 40, ttftMs: 100, totalMs: 300 };
+}
+
+/** Walk a fresh profile from the content warning to the hub, which is the first narrated beat. */
+async function walkToHub(): Promise<void> {
+  choiceButtons()[0]!.click(); // the content warning
+  click('Descend into the Void');
+  await reach('enter-name');
+  document.getElementById('choices')!.querySelector('input')!.value = 'Probe';
+  click('Enter the Void');
+  await reach('choose-class');
+  click('Enforcer');
+  await reach('accept-or-reroll-stats');
+  click('Accept these');
+  await reach('main-menu');
+}
+
+interface Fault {
+  rule: string;
+  match: string;
+  index: number;
+}
+interface Done {
+  text: string;
+  faults: Fault[];
+  seed: number;
+  act: number;
+  floor: number;
+  floorName: string;
+  beat: number;
+  facts: string[];
+}
+
+describe('the renderer reads what the model said, and keeps it (text-hygiene)', () => {
+  it('a faulty beat is logged at warn, with both faults named, and sent to the corpus', async () => {
+    const bridge = installBridge();
+    const narration = 'You reach the second floor, and sink deeper into the Void.';
+    bridge.generate.mockResolvedValue(generated(narration));
+    const { game, entries } = await freshRenderer();
+    game.boot();
+    await walkToHub();
+
+    const done = entries.filter((e) => e.category === 'llm' && e.message === 'narrate: done');
+    expect(done.length, 'the model was never asked, or its result was never logged').toBeGreaterThan(0);
+    for (const entry of done) {
+      const data = entry.data as unknown as Done;
+      expect(
+        entry.level,
+        'a narration carrying text faults was logged as if nothing were wrong',
+      ).toBe('warn');
+      expect(data.text, 'the log no longer records what the model said').toBe(narration);
+      expect(data.faults.map((f) => `${f.rule}:${f.match}`)).toEqual([
+        'ordinal-floor:second floor',
+        'void-as-place:into the Void',
+      ]);
+      // The context a fault needs to be reproducible: the seed (this run's, from the pinned
+      // fake clock), the floor by NAME as well as by number, and this beat's index.
+      expect(data.seed).toBe(4242);
+      expect(data.act).toBe(1);
+      expect(data.floor).toBe(1);
+      expect(data.floorName).toBe('Undercity');
+      expect(typeof data.beat).toBe('number');
+      expect(Array.isArray(data.facts)).toBe(true);
+    }
+
+    // ONE CORPUS RECORD PER NARRATION — derived from the design ("a beat is a corpus line"),
+    // not from a measured call count.
+    expect(bridge.corpus!.mock.calls).toHaveLength(done.length);
+    const record = bridge.corpus!.mock.calls[0]![0] as Done & { v: number };
+    expect(record.v, 'the corpus record is unversioned — the sweep would refuse it').toBe(1);
+    expect(record.text).toBe(narration);
+    expect(record.seed).toBe(4242);
+    expect(record.floor).toBe(1);
+    expect(record.floorName).toBe('Undercity');
+    expect(record.faults.map((f) => f.rule)).toEqual(['ordinal-floor', 'void-as-place']);
+  });
+
+  it('a clean beat is NOT a warning — and is still corpus', async () => {
+    // THE CONTROL. Without it "level is warn" is satisfied by a renderer that warns on every
+    // narration, and "the corpus is written" by one that only records failures — which would
+    // make the sweep a survey of defects rather than of the model's output.
+    const bridge = installBridge();
+    const narration = 'The dark closes over you.';
+    bridge.generate.mockResolvedValue(generated(narration));
+    const { game, entries } = await freshRenderer();
+    game.boot();
+    await walkToHub();
+
+    const done = entries.filter((e) => e.category === 'llm' && e.message === 'narrate: done');
+    expect(done.length).toBeGreaterThan(0);
+    for (const entry of done) {
+      const data = entry.data as unknown as Done;
+      expect(entry.level, 'a clean narration was logged as a warning').not.toBe('warn');
+      expect(data.faults).toEqual([]);
+      expect(data.text).toBe(narration);
+    }
+    expect(bridge.corpus!.mock.calls).toHaveLength(done.length);
+    expect((bridge.corpus!.mock.calls[0]![0] as Done).faults).toEqual([]);
+  });
+
+  it('an OLDER PRELOAD with no corpus channel still boots, still narrates, and says so once', async () => {
+    const bridge = installBridge();
+    removeCorpusChannel(bridge);
+    bridge.generate.mockResolvedValue(generated('The dark closes over you.'));
+    const { game, entries } = await freshRenderer();
+    game.boot();
+    await walkToHub();
+
+    // The run is unharmed: the walk reached the hub, and the result was still logged.
+    expect(screen()).toBe('main-menu');
+    const done = entries.filter((e) => e.message === 'narrate: done');
+    expect(done.length).toBeGreaterThan(0);
+    // ...and the missing channel logged BEFORE it was ignored — ONCE, however many beats.
+    const said = entries.filter((e) => e.message === 'corpus: bridge has no corpus channel');
+    expect(said, 'a missing corpus channel was ignored in silence').toHaveLength(1);
+    expect(said[0]!.level).toBe('debug');
   });
 });

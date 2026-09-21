@@ -6,6 +6,13 @@ models/
 logs/
 scripts/*.log
 
+# THE NARRATION CORPUS — what the local model said, during the AUTHOR'S OWN PLAY. Written by
+# `electron/corpus.mjs` as logs/corpus/narration.jsonl (+ .1). `logs/` above already covers it;
+# this line is here so the intent is stated where somebody restructuring `logs/` will see it,
+# and `src/dev/narrationCorpus.test.ts` asserts BOTH lines are present. THIS REPOSITORY IS
+# PUBLIC — the corpus is never committed.
+logs/corpus/
+
 # API keys — the art-generation pipeline reads GOOGLE_API_KEY from here. NEVER commit a key.
 .env
 .env.*

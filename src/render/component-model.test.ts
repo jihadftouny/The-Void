@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { actionButton, appendLogLine } from './components.ts';
+import { actionButton, appendLogLine, chip } from './components.ts';
 import {
   hpFraction,
   barModel,
@@ -9,6 +9,7 @@ import {
   resourceBarModel,
   conditionChip,
   conditionChips,
+  chipTitle,
   CONDITION_TONE,
   rowModel,
   buttonModel,
@@ -392,6 +393,8 @@ interface FakeElement {
   tagName: string;
   className: string;
   textContent: string;
+  /** The hover tooltip. Modelled because G71(b) shipped a "(s)" into exactly this attribute. */
+  title: string;
   disabled: boolean;
   classes: string[];
   classList: { add(name: string): void };
@@ -407,6 +410,7 @@ function fakeElement(tagName: string): FakeElement {
     tagName: tagName.toUpperCase(),
     className: '',
     textContent: '',
+    title: '',
     disabled: false,
     classes: [],
     listeners: [],
@@ -438,6 +442,11 @@ function withFakeDocument<T>(body: () => T): T {
     if (had) g.document = previous;
     else delete g.document;
   }
+}
+
+/** Build a chip through the real `chip()` and read what came out. */
+function builtChip(model: Parameters<typeof chip>[0]): FakeElement {
+  return withFakeDocument(() => chip(model) as unknown as FakeElement);
 }
 
 /** Build a button through the real `actionButton` and read what came out. */
@@ -518,5 +527,50 @@ describe('appendLogLine — the expander appears exactly when there are dice', (
     const el = appended({ text: 'beat', detail: 'nat 20 → critical, 1d8 + 1d8 = 9' });
     const rendered = JSON.stringify(el);
     expect(rendered, 'the roll detail never reached the page').toContain('nat 20 → critical');
+  });
+});
+
+
+// =========================================================================================
+// G71(b) — THE CONDITION CHIP PLURALISES ITS TURNS
+//
+// `components.ts` built the tooltip inline as "<Name> — N turn(s) left". The engine knows the
+// number, so the optional-plural marker is a note-to-self that reached the player's screen —
+// the same defect FINDINGS.md C10(a) closed in `narrate.ts` and `format.ts`, which survived
+// here only because that unit's declared territory did not include this file.
+//
+// The expected strings are ENGLISH, derived from the rule "one takes the singular", and the
+// name is read from `CONDITION_DATA.burn.displayName` rather than re-typed.
+// =========================================================================================
+
+describe('chipTitle — the tooltip the player hovers (G71b)', () => {
+  it('one turn is singular, two are plural', () => {
+    expect(chipTitle(conditionChip(cond('burn', 1)))).toBe('Burn — 1 turn left');
+    expect(chipTitle(conditionChip(cond('burn', 2)))).toBe('Burn — 2 turns left');
+  });
+
+  it('zero is plural too — "0 turn left" is not English', () => {
+    expect(chipTitle(conditionChip(cond('burn', 0)))).toBe('Burn — 0 turns left');
+  });
+
+  it('carries NO optional-plural marker, at any count the engine can hold', () => {
+    // The whole family, not one example: `maxTurns` reaches 100 (`fracture`), so the sweep
+    // covers every count a chip can actually show.
+    for (const type of Object.keys(CONDITION_DATA) as ConditionType[]) {
+      for (const turns of [0, 1, 2, 3, 100]) {
+        const title = chipTitle(conditionChip(cond(type, turns)));
+        expect(title, `${type} @ ${turns}`).not.toContain('(s)');
+        expect(title.startsWith(CONDITION_DATA[type].displayName), `${type} @ ${turns}`).toBe(true);
+      }
+    }
+  });
+
+  it('and the REAL chip element sets its title attribute from it', () => {
+    // Through `components.ts`'s own builder, not the helper alone — the defect lived in the
+    // assignment, so the assignment is what is asserted.
+    const el = builtChip(conditionChip(cond('burn', 1)));
+    expect(el.tagName).toBe('SPAN');
+    expect(el.title).toBe('Burn — 1 turn left');
+    expect(builtChip(conditionChip(cond('burn', 3))).title).toBe('Burn — 3 turns left');
   });
 });

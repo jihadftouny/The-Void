@@ -12,8 +12,12 @@ import type { PlayerClass } from '../game/player.ts';
 import { STAT_KEYS } from '../game/character.ts';
 import type { GameEvent } from '../game/gameEvent.ts';
 import type { ActiveCondition } from '../game/condition.ts';
-import { floorOf } from '../game/floors.ts';
+import { floorDef, floorOf } from '../game/floors.ts';
 import { buildNarrationPrompt, createStoryMemory, rememberBeat } from '../llm/narrate.ts';
+// The SHARED text-hygiene rules. The placeholder ratchet runs the ENGINE list over twenty
+// seeded runs at test time; this file runs the MODEL list over what the local model actually
+// says, at run time. One rule set, two consumers, no second copy to drift.
+import { MODEL_TEXT_RULES, buildVocabulary, detectTextFaults } from '../llm/textHygiene.ts';
 import { loadRun, saveRun, clearRun, type RunMeta, type SavedRun } from './persist.ts';
 import {
   snapshotUnlocks,
@@ -94,6 +98,11 @@ interface VoidApi {
   onStatus(cb: (s: { phase: string; gpu?: unknown; device?: string | null; message?: string }) => void): () => void;
   generate(o: { prompt: string; system?: string; onToken?: (c: string) => void }): Promise<GenStats>;
   log?(entry: unknown): void;
+  /**
+   * Append one narration beat to the capped, gitignored narration corpus. OPTIONAL because an
+   * older preload has no such channel, and the game must still run against one.
+   */
+  corpus?(record: unknown): void;
 }
 declare global { interface Window { void: VoidApi } }
 
@@ -164,6 +173,12 @@ let settings: Settings;
 // The run's identity. Seeded from the wall clock in `boot()` and `start()` — the two places a
 // run begins — and restored from the save envelope on resume.
 let runSeed = 0;
+// THE RUN'S TEXT-HYGIENE TALLY — how many faults the shared detector found, in how many
+// narrations, since this run began. RENDERER state, not game state: it is not saved, so a
+// resumed run starts its count at zero, which is exactly what "this run" means on a developer
+// panel that reads "since this session started narrating it".
+let textFaults = 0;
+let narrations = 0;
 let state: GameState;
 let memory = createStoryMemory(); // rolling "story so far" fed to the narrator
 // The pure run-summary subscriber: folded from each step's events, applied to the store at the
@@ -383,6 +398,8 @@ export function boot(): void {
           adopt: adoptFromPanel,
           env: { protocol: location.protocol },
           unlockStorage: localStorage,
+          // This run's text-hygiene tally, read fresh on every status refresh.
+          hygiene: () => ({ faults: textFaults, narrations }),
         }),
       )
       // A failure here is a dev-tooling failure and must never take the game down — but it must
@@ -703,6 +720,35 @@ async function replayRound(plan: RoundPlan, before: GameState, tickerBefore: str
   });
 }
 
+/**
+ * Said once per session, the first time the bridge turns out to have no corpus channel. A
+ * missing channel is not an error — an older preload simply has none — but it is the reason
+ * the sweep will find nothing later, so it is logged BEFORE it is ignored.
+ */
+let warnedNoCorpus = false;
+
+/**
+ * Send one narration beat to the main process, which appends it to the capped, gitignored
+ * narration corpus. FIRE AND FORGET: a corpus write may never stall or break a turn, so
+ * nothing awaits it and every failure is swallowed — after it is logged.
+ */
+function sendCorpus(record: unknown): void {
+  try {
+    if (!window.void.corpus) {
+      if (!warnedNoCorpus) {
+        warnedNoCorpus = true;
+        log.debug('llm', 'corpus: bridge has no corpus channel', {});
+      }
+      return;
+    }
+    window.void.corpus(record);
+  } catch (err) {
+    log.error('llm', 'corpus: send FAILED', {
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 async function narrate(events: readonly GameEvent[]): Promise<void> {
   const prompt = buildNarrationPrompt(events, state, memory);
   // G42 — CHECK BEFORE CLEARING. This used to clear the pane first and discover the null
@@ -724,6 +770,14 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
   // Show ONLY the current moment: replace the narration area each turn rather
   // than accumulating a growing scroll of past beats (bug 2).
   narrationEl.innerHTML = '';
+  // THIS beat's index AND THIS beat's recap, read BEFORE the await. `memory.beats` grows
+  // while the model is generating, so reading either afterwards would describe a beat that
+  // had not happened yet when the prompt was built.
+  const beat = memory.beats.length;
+  // The "Recent moments" block `buildNarrationPrompt` just put in front of the model. It is
+  // part of what the model was SHOWN, so it is part of what it can be echoing — see the note
+  // on `DetectOptions.echoOf` for the measurement that settled widening the gate to it.
+  const recap = memory.beats;
   log.debug('llm', 'narrate: request', { promptChars: prompt.user.length, beats: memory.beats.length });
   const block = document.createElement('p');
   block.className = 'beat';
@@ -744,13 +798,78 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
     });
     const roundTripMs = genTimer.stop();
     const generateMs = Math.round(stats.totalMs ?? 0);
-    log.log(levelForDuration(roundTripMs, SLOW_MS.narrate, 'info'), 'llm', 'narrate: done', {
-      roundTripMs,
-      generateMs,
-      ipcOverheadMs: Math.round(roundTripMs) - generateMs,
-      ttftMs: Math.round(stats.ttftMs),
+    // WHAT THE MODEL SAID, AND WHETHER IT WAS FIT TO SHOW. The detector is pure and shared
+    // with the placeholder ratchet; `echoOf` hands it this beat's own engine facts, because a
+    // model repeating a reserved word the engine gave it is obedience, not a violation.
+    // WHICH TEXT. `stats.text` is the main process's own complete output — the whole
+    // generation, not the token stream the pane accumulated. The pane is the fallback for a
+    // generation that returned NOTHING (an empty string is a real outcome: a model that
+    // stopped immediately still resolves), in which case whatever was streamed is all the
+    // evidence there is.
+    //
+    // The `typeof` guard is NOT redundant with `GenStats.text: string`. That type is a
+    // promise about the other side of an IPC channel, and a channel cannot keep one: an
+    // older or misbehaving main process can hand back an object without `text`, and
+    // `stats.text.length` on `undefined` would throw INSIDE the try — turning a narration
+    // that actually succeeded into a `narrate: FAILED` line blaming the model.
+    const text =
+      typeof stats.text === 'string' && stats.text.length > 0 ? stats.text : (block.textContent ?? '');
+    const hygiene = detectTextFaults(text, buildVocabulary(), {
+      rules: MODEL_TEXT_RULES,
+      echoOf: [...prompt.facts, ...recap],
+    });
+    narrations += 1;
+    textFaults += hygiene.faults.length;
+    const floor = floorOf(state);
+    const floorName = floorDef(floor).name;
+    // WARN ON A FAULT, even though nothing was slow or broken: a text fault is a defect
+    // sighting on real hardware that no test can produce, and `warn` is the level a packaged
+    // build still records. It changes nothing the player sees.
+    //
+    // (`electron/log.mjs` caps one `data` payload at DATA_MAX_CHARS, so a long beat is
+    // TRUNCATED in the session log. Accepted: this line exists to be grepped for `"faults":`
+    // on a real machine, and the CORPUS below keeps the text in full.)
+    log.log(
+      hygiene.faults.length > 0 ? 'warn' : levelForDuration(roundTripMs, SLOW_MS.narrate, 'info'),
+      'llm',
+      'narrate: done',
+      {
+        roundTripMs,
+        generateMs,
+        ipcOverheadMs: Math.round(roundTripMs) - generateMs,
+        ttftMs: Math.round(stats.ttftMs),
+        tokens: stats.tokens,
+        tokPerSec: Math.round(stats.tokensPerSecond),
+        seed: runSeed,
+        act: state.act,
+        floor,
+        floorName,
+        beat,
+        facts: prompt.facts,
+        text,
+        faults: hygiene.faults,
+      },
+    );
+    sendCorpus({
+      v: 1,
+      seed: runSeed,
+      act: state.act,
+      floor,
+      floorName,
+      beat,
+      facts: prompt.facts,
+      // The recap travels WITH the beat so a record is self-contained. The sweep cannot
+      // reconstruct it from neighbouring records: the corpus rotates, so a record's
+      // predecessors may be in the other file or gone, and the gate would then silently
+      // narrow at exactly the rotation boundary.
+      recap,
+      text,
+      faults: hygiene.faults,
       tokens: stats.tokens,
       tokPerSec: Math.round(stats.tokensPerSecond),
+      ttftMs: Math.round(stats.ttftMs),
+      generateMs,
+      roundTripMs,
     });
   } catch (err) {
     // Resilience: if the model fails, fall back to the plain facts so the game
@@ -1173,6 +1292,9 @@ function start(): void {
   runSummary = emptyRunSummary();
   runApplied = false;
   lastNewlyUnlocked = null;
+  // The text-hygiene tally is per RUN: a new descent starts from zero.
+  textFaults = 0;
+  narrations = 0;
   // A fresh run starts on the plain game view, whatever screen the last one ended on. Set
   // rather than assumed: `renderChoices` routes the settings screen ahead of the phase
   // switch, so a stale `'settings'` here would put the settings screen where the title
@@ -1526,6 +1648,10 @@ function adoptRun(saved: SavedRun): void {
   // stale, a run adopted after a finished one would never apply its outcome.
   runApplied = false;
   lastNewlyUnlocked = null;
+  // An adopted run has narrated nothing YET in this session, so its tally starts at zero —
+  // the same rule as `start()`, and the reason the panel says "this run".
+  textFaults = 0;
+  narrations = 0;
   retheme(); // an adopted run may be deep in the descent — adopt ITS floor, not floor 0
   renderSheet();
 }

@@ -35,8 +35,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = (f) => fs.readFileSync(path.join(HERE, f), 'utf8');
 const RAW_MAIN = read('main.mjs');
 const RAW_LLM = read('llm.mjs');
+const RAW_PRELOAD = read('preload.cjs');
 const MAIN = stripComments(RAW_MAIN);
 const LLM = stripComments(RAW_LLM);
+const PRELOAD = stripComments(RAW_PRELOAD);
 
 /** The body of a top-level function, up to the first closing brace in column 0. */
 function bodyOf(source, declaration) {
@@ -311,6 +313,152 @@ describe('main.mjs configures the log FIRST, inside whenReady (G6)', () => {
     expect(MAIN, 'main.mjs imports the old module-scope LOG_FILE constant again').not.toMatch(
       /\bLOG_FILE\b/,
     );
+  });
+});
+
+// =========================================================================================
+// preload.cjs — THE LINK NO OTHER TEST IN THIS REPOSITORY COVERS.
+//
+// ⚠ WHY THIS BLOCK EXISTS. Until it did, `electron/preload.cjs` was pinned by NOTHING. Deleting
+// a method from the bridge left the entire suite green while the feature became a permanent
+// no-op in the real game — because the preload runs in Electron's isolated context, imports
+// `electron` at module scope, and therefore cannot be imported by a test any more than
+// `main.mjs` can. That made every one of its methods the author's manual check by default,
+// which is exactly the kind of gap that is only noticed after a play session.
+//
+// The strongest guard available without an Electron runtime is a CROSS-CHECK rather than a
+// presence scan: every channel the preload sends or invokes on must have a handler in
+// `main.mjs`, and vice versa. A presence scan is satisfied by a method that sends into the
+// void; this is not.
+// =========================================================================================
+
+/**
+ * Every channel name a source passes to `<object>.<method>('channel', …)`, sorted.
+ *
+ * ⚠ THE WHITESPACE IS LOAD-BEARING, and it is not defensive: `preload.cjs` really does write
+ * `return ipcRenderer\n  .invoke('llm:generate', …)`, so a pattern without `\s*` around the
+ * dot silently reads ZERO invokes and the cross-check below compares two empty lists — which
+ * is exactly the vacuous pass this whole block exists to avoid. It was caught that way.
+ */
+function channels(source, object, method) {
+  const re = new RegExp(String.raw`\b${object}\s*\.\s*${method}\s*\(\s*'([^']+)'`, 'g');
+  return [...source.matchAll(re)].map((m) => m[1]).sort();
+}
+
+describe('preload.cjs — the bridge the renderer actually has', () => {
+  it('survived the comment strip, imports and last statement intact (rule 2)', () => {
+    expect(PRELOAD).toMatch(/require\s*\(\s*'electron'\s*\)/);
+    expect(PRELOAD).toMatch(/contextBridge\.exposeInMainWorld\s*\(\s*'void'/);
+    expect(PRELOAD, 'the strip ate the tail of preload.cjs').toMatch(/\}\s*\)\s*;?\s*$/);
+    expect(stripReachesEndOfFile(RAW_PRELOAD)).toBe(true);
+    expect(PRELOAD.length).toBeLessThan(RAW_PRELOAD.length);
+  });
+
+  it('exposes the corpus channel, and it really sends', () => {
+    // THE DEFECT THIS CATCHES, in the shape it comes in: someone deletes `corpus(record)`
+    // from the bridge. `window.void.corpus` becomes undefined, the renderer's optional call
+    // takes its "older preload" branch, one debug line is written, and the narration corpus
+    // is silently never written again — with every test in the repository still green.
+    expect(PRELOAD, 'the preload no longer exposes a corpus channel — the corpus is a no-op').toMatch(
+      /\bcorpus\s*\(\s*record\s*\)\s*\{/,
+    );
+    expect(PRELOAD, 'the corpus method exists but sends nothing').toMatch(
+      /ipcRenderer\.send\s*\(\s*'corpus:record'\s*,\s*record\s*\)/,
+    );
+    // ...and a failing send cannot take a turn down with it.
+    const body = PRELOAD.slice(PRELOAD.indexOf('corpus(record)'));
+    expect(body.slice(0, body.indexOf('},')), 'an IPC failure would propagate into the turn').toMatch(
+      /try\s*\{/,
+    );
+  });
+
+  it('every channel the preload uses has a handler in main.mjs, and vice versa', () => {
+    // The cross-check. A presence scan passes for a method that sends into a channel nobody
+    // listens on; this does not.
+    const sends = channels(PRELOAD, 'ipcRenderer', 'send');
+    const invokes = channels(PRELOAD, 'ipcRenderer', 'invoke');
+    const listens = channels(MAIN, 'ipcMain', 'on');
+    const handles = channels(MAIN, 'ipcMain', 'handle');
+    // Non-vacuity first: all four lists are real, or every comparison below is empty == empty.
+    expect(sends, 'the preload sends on nothing — this guard reads air').toContain('corpus:record');
+    expect(sends).toContain('log:entry');
+    expect(invokes).toEqual(['llm:generate']);
+    expect(listens.length).toBeGreaterThan(0);
+    expect(handles.length).toBeGreaterThan(0);
+
+    expect(sends, 'a preload send has no listener in the main process').toEqual(listens);
+    expect(invokes, 'a preload invoke has no handler in the main process').toEqual(handles);
+  });
+
+  it('...and the renderer-bound channels main SENDS on are the ones the preload subscribes to', () => {
+    // The other direction: status and token streams flow main -> renderer.
+    const subscribes = channels(PRELOAD, 'ipcRenderer', 'on');
+    expect(subscribes, 'the preload subscribes to nothing').toEqual(['llm:status', 'llm:token']);
+    for (const channel of subscribes) {
+      expect(MAIN + LLM, `nothing ever sends on ${channel}`).toContain(`'${channel}'`);
+    }
+  });
+});
+
+describe('main.mjs records the narration corpus, from user-data and never __dirname', () => {
+  it('registers the corpus channel beside the log channel', () => {
+    // The anchor first: the log channel, which has been there since G6 and is the thing the
+    // new one sits next to.
+    expect(MAIN, 'the log:entry handler is gone — this guard has gone stale').toMatch(
+      /ipcMain\.on\s*\(\s*'log:entry'/,
+    );
+    expect(MAIN, 'the renderer can send a beat but nothing receives it').toMatch(
+      /ipcMain\.on\s*\(\s*'corpus:record'/,
+    );
+    // ...and it really appends, rather than being registered and dropped on the floor.
+    const handler = callsTo(MAIN, 'ipcMain.on').find((c) => c.includes("'corpus:record'"));
+    expect(handler, 'the corpus handler is not a call to ipcMain.on').toBeDefined();
+    expect(handler, 'the corpus channel receives beats and throws them away').toMatch(
+      /appendCorpus\s*\(/,
+    );
+  });
+
+  it('takes the corpus directory from resolveCorpusDir with userData, never __dirname', () => {
+    // Follow the VALUE, not the call site — the same rule the log-dir guard above learned
+    // the hard way. The directory is computed one statement earlier and handed in.
+    const assignment = MAIN.match(/const\s+corpusDir\s*=\s*([\s\S]*?);\n/);
+    expect(assignment, 'the corpus directory is no longer computed — this guard is stale').not.toBeNull();
+    expect(
+      assignment[1],
+      'the corpus dir is not resolved by the module that owns the policy',
+    ).toMatch(/resolveCorpusDir\s*\(/);
+    expect(
+      assignment[1],
+      'the corpus dir is no longer derived from userData — in a packaged build that path is ' +
+        'read-only and every corpus write becomes a silent no-op (G6, in a new file)',
+    ).toMatch(/app\.getPath\s*\(\s*['"]userData['"]\s*\)/);
+    expect(assignment[1], 'the corpus dir is derived from __dirname — that is G6 verbatim').not.toMatch(
+      /__dirname/,
+    );
+    const call = callsTo(MAIN, 'configureCorpusDir')[0];
+    expect(call, 'configureCorpusDir is never called').toBeDefined();
+    expect(argsOf(call)[0], 'configureCorpusDir is handed some other directory').toBe('corpusDir');
+    // The writer's failure paths log, so it is handed the main process's own logger.
+    expect(argsOf(call)[1], 'the corpus writer has no logger — its failures would be silent').toMatch(
+      /log:\s*mlog/,
+    );
+  });
+
+  it('...inside whenReady, and says where it is writing', () => {
+    const ready = MAIN.search(/app\.whenReady\s*\(\s*\)/);
+    const configure = MAIN.search(/configureCorpusDir\s*\(/);
+    expect(ready, 'app.whenReady is gone').toBeGreaterThan(-1);
+    expect(configure, 'the corpus is never configured').toBeGreaterThan(-1);
+    expect(
+      configure,
+      'the corpus is configured before the app is ready — userData is not valid yet',
+    ).toBeGreaterThan(ready);
+    // The path a human needs in order to find the file, in `data` and never interpolated
+    // into the message (principle 7).
+    const line = MAIN.match(/mlog\s*\(\s*'info',\s*'corpus',\s*'corpus configured',\s*\{[^}]*\}/);
+    expect(line, 'nothing records where the corpus is being written').not.toBeNull();
+    expect(line[0]).toMatch(/dir:\s*corpusDir/);
+    expect(line[0]).toMatch(/capBytes:\s*CORPUS_CAP_BYTES/);
   });
 });
 

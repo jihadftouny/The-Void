@@ -9,6 +9,7 @@ import {
   applyDeal,
   canAfford,
   describeCost,
+  describeReward,
   type SacrificeDeal,
   type DealReward,
   type DealRewardSpec,
@@ -18,6 +19,10 @@ import { createPlayer, type Player } from './player.ts';
 import { createKarma, type KarmaState } from './karma.ts';
 import { computeStatMod } from './character.ts';
 import { mulberry32, type Rng } from './rng.ts';
+// G71(a) is asserted on the PLAYER-FACING SENTENCE, not on the helper alone, so the real
+// projection path (`describeEvent` -> the narrator's facts and the model-failure fallback)
+// is what goes red if the fallback ever loses a step again.
+import { describeEvent } from '../llm/narrate.ts';
 
 function scriptedRng(values: number[]): Rng {
   let i = 0;
@@ -552,5 +557,79 @@ describe('G20 — no deal leaves maxHp, hp or a stat below 1', () => {
     // Hand-derived: at maxHp 2 / hp 2 with a relic and a sword in the pack, every one of the
     // nine kinds is payable (hp 1 < 2, maxHp 1 < 2, a relic is held, the pack is non-empty).
     expect(taken).toBe(9);
+  });
+});
+
+
+// =========================================================================================
+// G71(a) — THE ALTAR NAMES ITS RELIC, NEVER ITS CATALOG ID
+//
+// `describeReward` read `instance.rolled?.name ?? instance.defId`. A fixed-relic reward has
+// no `rolled` overlay, so the grace pool's `mirror-shard` printed as `mirror-shard` on the
+// altar screen, in the combat log, in the narrator's facts and in the model-failure fallback.
+//
+// EVERY EXPECTED NAME BELOW IS READ BY HAND from `src/data/relics.json` — `"id":
+// "mirror-shard"` carries `"name": "Mirror Shard"` (the same pair `catalog.test.ts:96` pins).
+// None of it is computed from `getCatalogItemById`, which is the function under test.
+// =========================================================================================
+
+describe('describeReward names a catalog item (G71a)', () => {
+  it('a fixed relic reward reads its NAME', () => {
+    expect(describeReward({ kind: 'item', instance: { defId: 'mirror-shard' } })).toBe('Mirror Shard');
+  });
+
+  it('...and so does a consumable, whose id and name differ just as badly', () => {
+    // `void-draught` -> "Void Draught" in src/data/consumables.json. Two catalogs, so the
+    // fix is a resolution through ALL of them and not a special case for relics.
+    expect(describeReward({ kind: 'item', instance: { defId: 'void-draught' } })).toBe('Void Draught');
+  });
+
+  it('a ROLLED item still reads its rolled name — the overlay still wins', () => {
+    // The register's known naming defect (PLAN.md #13) is unchanged by this fix: `rarityGen`
+    // names a drop `${rarity} ${slot}`, so this really is what the player sees today.
+    expect(
+      describeReward({
+        kind: 'item',
+        instance: {
+          defId: 'gen',
+          rolled: { name: 'Legendary mainHand', rarity: 'Legendary', slot: 'mainHand', kind: 'weapon', effects: [] },
+        },
+      }),
+    ).toBe('Legendary mainHand');
+  });
+
+  it('an id that resolves in NO catalog falls back to itself', () => {
+    // The third step of the same three-step fallback `summarizeLoot` uses. Nothing on the
+    // deal path can produce it; it exists so an unknown id is visible rather than blank.
+    expect(describeReward({ kind: 'item', instance: { defId: 'no-such-thing' } })).toBe('no-such-thing');
+  });
+
+  it('the other two reward kinds are untouched', () => {
+    expect(describeReward({ kind: 'statPoint', stat: 'CHA' })).toBe('+1 CHA');
+    expect(describeReward({ kind: 'skillCharge', amount: 1 })).toBe('1 skill charge');
+    expect(describeReward({ kind: 'skillCharge', amount: 3 })).toBe('3 skill charges');
+  });
+});
+
+describe('the sentence the player and the model actually read (G71a)', () => {
+  it('a grace-pool bargain, built by the real buildDeal, offers Mirror Shard', () => {
+    // The grace pool opens at reverenceDesecration >= 3 (`selectPool`). `pick` is
+    // `items[floor(x * len)]`, the grace list has three templates, and the mirror-shard
+    // bargain is the SECOND, so x = 0.5 lands on it (floor(0.5 * 3) = 1). A fixed-item
+    // reward draws nothing further, so one scripted value is the whole run.
+    const deal = buildDeal({ ...NEUTRAL, reverenceDesecration: 3 }, 1, scriptedRng([0.5]));
+    expect(deal.pool).toBe('grace');
+    expect(deal.cost).toEqual({ kind: 'statPoint', stat: 'CHA' });
+    expect(deal.reward).toEqual({ kind: 'item', instance: { defId: 'mirror-shard' } });
+
+    // ...and through the real event path, which is where G71(a) was seen.
+    const sentence = describeEvent({
+      kind: 'deal-offer',
+      pool: deal.pool,
+      cost: describeCost(deal.cost),
+      reward: describeReward(deal.reward),
+    });
+    expect(sentence).toBe('An altar in the dark offers Mirror Shard, and demands 1 CHA in return.');
+    expect(sentence, 'the raw catalog id is back on the altar screen').not.toContain('mirror-shard');
   });
 });

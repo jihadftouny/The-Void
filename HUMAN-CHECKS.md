@@ -1,5 +1,54 @@
 # Human Checks — The Void
 
+> ## 📓 From `text-hygiene` (2026-09-21) — the game now keeps a record of what the model says
+>
+> **Two things you were being shown that nobody wrote are fixed and machine-proven:** the altar now
+> offers **Mirror Shard** instead of `mirror-shard`, and a condition chip's tooltip reads **“Burn — 1
+> turn left”** instead of “1 turn(s) left”. Neither needs your eyes.
+>
+> **What is new and needs one play session:** every beat the local model narrates is now written to
+> `logs/corpus/narration.jsonl` in this checkout — a capped, rotating, **gitignored** file (8 MiB × 2
+> files maximum; it can never be committed, and a test fails if that line ever leaves `.gitignore`).
+> `npm test` re-reads it and fails if anything the model wrote breaks a text rule. **Until you play,
+> that sweep is SKIPPED** — which is exactly why the checks below matter.
+>
+> - [ ] **1. Play three beats with the real model.** `npm run desktop`, get past the class picker to
+>       the hub and take a few actions. Then check `logs/corpus/narration.jsonl` exists and has
+>       **one line per narration** — each line a single JSON object containing the narration text,
+>       the seed, the floor name and the beat number. *Fail if* the file is missing, empty, or has
+>       fewer lines than you had narrated beats. (If it is missing, look in the session log for
+>       `corpus configured` — it names the directory it chose — and for
+>       `corpus: bridge has no corpus channel`.)
+> - [ ] **2. Open F3 and read the last line of the status block.** It should say
+>       **`text faults N in M narrations this run`**, with M matching roughly how many beats you have
+>       seen. *Fail if* the line is absent or M stays at 0 while the Void is clearly speaking.
+> - [ ] **3. Run `npm test` from that same checkout.** The corpus sweep should now RUN instead of
+>       being skipped — look for the describe block named *“CORPUS — what the real model said”*.
+>       **If it goes RED, that is the feature working, not a broken build:** it prints the seed, the
+>       beat, the floor and the exact sentence, and the rule it broke. Send that output; it is the
+>       first hard evidence of what the narrator actually does wrong, and it is what #12 needs.
+>       **⚠ And if the sentence it flags is actually GOOD writing — which will happen — do NOT
+>       delete the corpus to get a green suite.** The corpus is the evidence and it cannot be
+>       regenerated. Add a row to the `ALLOWANCES` table at the top of
+>       `src/dev/narrationCorpus.test.ts` with a reason; the file's header walks you through it.
+>       That makes accepting a sentence a recorded decision, and a later test fails the row if the
+>       model ever stops writing it.
+> - [ ] **4. If nothing is flagged, read three beats yourself anyway** and ask the two questions no
+>       rule can: does it name a floor by its NAME, and does it ever treat the Void as somewhere you
+>       are standing? (`WORLD.md` §6 locks that.) The detector catches *“into the Void”* and *“the
+>       second floor”*; it cannot catch a paragraph that is merely wrong in spirit.
+>       **Two things it deliberately does NOT flag**, so you know to watch for them yourself: a
+>       condition name the narrator bends into English (*“the wound Burns”*, *“you move Slowly”* —
+>       a label is never conjugated, so bending it is writing), and the word **Poison**, which is
+>       both a condition and a damage type and so can never be told apart from the game's own
+>       elemental vocabulary.
+>
+> **One thing the detector found that is yours to decide** (`FINDINGS.md` **G72**): the combat log
+> itself ships *“You escape into the Void.”* and *“You sacrifice N of your max HP to the Void.”* —
+> two lines that treat the Void as a place. The narrator's versions of the same two events are
+> already correct. They are **authored prose**, so this unit froze them with a reason rather than
+> rewriting your words; rewording `src/render/format.ts` closes it.
+
 > ## 💰 From `art-pipeline` (merged 2026-09-21) — the art tool is in, and it is armed
 >
 > **Nothing here is urgent: no image can be generated until you author the prompts** (all 52 ship empty). But two of these are cheap now and expensive later.

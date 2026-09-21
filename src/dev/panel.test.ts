@@ -11,7 +11,17 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { callsTo, stripComments, stripReachesEndOfFile } from '../log/sourceScan.testutil.ts';
-import { PANEL_ID, SLOW_JUMP_MS, bootPanel, handlePanelKey, panelAllowed, togglesPanel } from './panel.ts';
+import {
+  PANEL_ID,
+  SLOW_JUMP_MS,
+  bootPanel,
+  handlePanelKey,
+  panelAllowed,
+  statusText,
+  togglesPanel,
+} from './panel.ts';
+import { devStatus } from './devState.ts';
+import { createGame } from '../game/game.ts';
 import { togglesOverlay } from '../desktop/debug-overlay.ts';
 
 /** A stand-in for an element, carrying only what the predicate reads. */
@@ -584,5 +594,88 @@ describe('the panel marker', () => {
       'utf8',
     );
     expect(renderer).not.toContain(PANEL_ID);
+  });
+});
+
+
+// =========================================================================================
+// THE STATUS READOUT — and the text-fault counter `text-hygiene` added to it.
+//
+// The panel's DOM is not unit-tested here (the file's standing rule), so the readout is a
+// PURE function and this is what asserts its text. Every expected value below is written by
+// hand from the format in `statusText` itself and from the engine's own numbers.
+// =========================================================================================
+
+describe('statusText', () => {
+  /** The status of a real fresh game, so the karma and phase halves are not fabricated. */
+  const fresh = () => devStatus(createGame(7));
+
+  it('ends with the run’s text-fault tally, in words a developer can read', () => {
+    const line = statusText(fresh(), { faults: 3, narrations: 7 }).split('\n').at(-1);
+    expect(line).toBe('text faults 3 in 7 narrations this run');
+  });
+
+  it('reads the same way at zero — a quiet run says so rather than showing nothing', () => {
+    // A counter that hides itself when it is zero cannot be told apart from a counter that
+    // is not wired up at all, which is the failure this whole line exists to make visible.
+    expect(statusText(fresh(), { faults: 0, narrations: 0 }).split('\n').at(-1)).toBe(
+      'text faults 0 in 0 narrations this run',
+    );
+    expect(statusText(fresh(), { faults: 0, narrations: 12 }).split('\n').at(-1)).toBe(
+      'text faults 0 in 12 narrations this run',
+    );
+  });
+
+  it('the two numbers are not interchangeable', () => {
+    // Swapped arguments produce a sentence that is still grammatical and completely wrong.
+    const a = statusText(fresh(), { faults: 1, narrations: 9 }).split('\n').at(-1);
+    const b = statusText(fresh(), { faults: 9, narrations: 1 }).split('\n').at(-1);
+    expect(a).toBe('text faults 1 in 9 narrations this run');
+    expect(b).toBe('text faults 9 in 1 narrations this run');
+    expect(a).not.toBe(b);
+  });
+
+  it('keeps the three lines that were there before it, unchanged', () => {
+    // The hygiene line is ADDITIVE: the act/place/xp line, the phase line and the ledger line
+    // are what the panel has always shown, and none of them moved.
+    //
+    // ⚠ The third line is asserted by INVARIANCE rather than by pattern, deliberately: writing
+    // its words out here would be a private copy of the hidden-ledger vocabulary, which
+    // `src/game/karmaVocabulary.test.ts` forbids in every test file but its own (and caught,
+    // when the first version of this test did exactly that).
+    const lines = statusText(fresh(), { faults: 0, narrations: 0 }).split('\n');
+    const other = statusText(fresh(), { faults: 5, narrations: 6 }).split('\n');
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toMatch(/^act \d+ \/ place \d+ · xp \d+ · level \d+ · hp \d+\/\d+$/);
+    expect(lines[1]).toMatch(/^phase [a-z-]+$/);
+    expect(lines.slice(0, 3), 'the tally changed a line that is not about text').toEqual(
+      other.slice(0, 3),
+    );
+    // ...and the last line is the only one that moved (or "unchanged" is trivially true).
+    expect(lines[3]).not.toBe(other[3]);
+  });
+
+  it('the panel builds its readout THROUGH this function, not beside it', () => {
+    // The scan half: a second inline copy inside `refreshStatus` would leave this file green
+    // while the on-screen panel said something else entirely.
+    const body = SOURCE.slice(SOURCE.indexOf('const refreshStatus'));
+    const end = body.indexOf('};');
+    expect(end, 'refreshStatus is gone — this guard has gone stale').toBeGreaterThan(-1);
+    const refresh = body.slice(0, end);
+    expect(refresh, 'refreshStatus no longer uses the pure statusText').toMatch(/statusText\s*\(/);
+    expect(refresh, 'refreshStatus reassembles the readout inline').not.toMatch(/karma  mercy/);
+    // ...and it reads the tally FRESH, through the dependency, rather than a captured value.
+    expect(refresh, 'the fault count is captured once instead of read per refresh').toMatch(
+      /deps\.hygiene\(\s*\)/,
+    );
+  });
+
+  it('...and the panel refreshes its status when it is OPENED', () => {
+    // A stale count on open is worse than no count: it reports the state of the run at the
+    // moment the panel was built, which is almost never the moment it is read.
+    const toggle = SOURCE.slice(SOURCE.indexOf('const toggle = (): void =>'));
+    expect(toggle.slice(0, toggle.indexOf('};')), 'opening the panel shows a stale status').toMatch(
+      /refreshStatus\(\s*\)/,
+    );
   });
 });

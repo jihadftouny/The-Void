@@ -24,7 +24,7 @@ import type {
   ResourceBarModel,
   RowModel,
 } from './component-model.ts';
-import { barCells } from './component-model.ts';
+import { barCells, chipTitle } from './component-model.ts';
 import type { LogLine } from './log-model.ts';
 
 /** Default segment count for a bar — the number of cells a player can count at a glance. */
@@ -92,7 +92,9 @@ export function chip(model: ConditionChipModel): HTMLElement {
   const el = document.createElement('span');
   el.className = `void-chip void-chip-${model.tone}`;
   el.textContent = model.label;
-  el.title = `${model.name} — ${model.remainingTurns} turn(s) left`;
+  // G71(b): the tooltip's text is decided by the PURE `chipTitle`, which picks the plural
+  // the engine's own number requires. It used to be built inline here as "N turn(s) left".
+  el.title = chipTitle(model);
   return el;
 }
 
