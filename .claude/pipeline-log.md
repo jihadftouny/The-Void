@@ -19,6 +19,33 @@ Format per entry:
 
 ---
 
+## 2026-09-21 — machine-text (G71 opened; C4, C7, C9, C10, C11 closed) [branch `agentic/machine-text`, **merged to `main` 2026-09-21**]
+- Verdict: **FAIL**, then merged — see below. 3130 → **3210 tests**. 6 commits + a rebase merge, each green.
+- **Why it exists:** phase 0 of the author's no-placeholder first playable. Five text defects live in every model prompt and in what the player reads when the model fails.
+- Build-agent deviations: four, all sound. It also **corrected the register twice** (the `format.ts` half of C7 was already closed by #0c; there are four `PLACEHOLDER` headers, not two) and found **a second leak in the same function** as C9 that nobody had reported.
+- Test failures before fixes: none.
+- Manual engineer fixes: none yet.
+
+### ⚠ The FAIL was the ORCHESTRATOR's fault, and it is the lesson of this run
+
+The plan's AC-14 required the unit to update `docs/FINDINGS.md` inside its worktree. **The orchestrator explicitly told the build agent that file was off limits**, because a parallel unit was open and the orchestrator had just committed to it on `main`. The build obeyed and failed its own acceptance criterion. Verification caught it precisely and called it what it was.
+
+**The instruction was right; issuing it without amending the plan was not.** A constraint handed to a build agent after planning can silently invalidate an acceptance criterion, and nothing in the pipeline reconciles the two. **Proposal for the retro: when the orchestrator adds a constraint at build time that contradicts the plan, it must amend `plan.md` in the same breath** — or accept that the verdict will be a FAIL it caused itself. The register update was done by the orchestrator on `main` instead, which is where it belonged once the constraint existed.
+
+### What worked
+
+- **The ratchet turns both ways.** It freezes the author's remaining writing job exactly as it stands and fails when a placeholder is ADDED *or* quietly REMOVED — the second direction is the one that matters, because a guard that only detects growth rots the moment someone does the right thing. Verification proved both, and proved a `// TODO` in a comment does not fire it.
+- **Verification hunted for what the unit MISSED**, not only for what it claimed: an independent probe swept six projectors the unit did not own, across 5 classes × 8 seeds, with no allowances. It found nothing on the surfaces the unit owned — and found the `mirror-shard` leak on one it did not.
+- **The compile error is the real gate.** Three exhaustive tables with no `default` mean the next trigger or effect kind is a type error at the projector. A test cannot add a union member; the compiler can refuse one.
+- **Declining to widen scope.** Two live defects were found outside the declared territory and left alone, recorded as G71 rather than quietly fixed — which kept the diff reviewable and the territory honest while a parallel unit was open.
+
+### For the retro
+
+- **A plan-time acceptance criterion and a build-time constraint can contradict each other, and nothing detects it.** See above.
+- **`git diff --name-only main...branch` answers the wrong question for clash-avoidance.** The orchestrator compared the two BRANCHES and found no overlap — true — then committed docs to `main` itself, creating the overlap it had just ruled out. **The comparison must include what the orchestrator intends to commit to `main`.** Both conflicted files were docs and the unit resolved them correctly, so it cost nothing this time.
+
+---
+
 ## 2026-09-21 — art-pipeline (G70 opened; D6, D8-residual left open) [branch `agentic/art-pipeline-2`, **merged to `main` 2026-09-21**]
 - Verdict: **PASS**, then **three fix rounds** raised by the orchestrator on passing verdicts. 2833 → **3130 tests**. 17 commits, each green.
 - **Why it exists:** the author chose a no-placeholder first playable and asked for the art to be sequenced in. This is `PLAN.md` #3, the tooling, at **$0**.
