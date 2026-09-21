@@ -12,6 +12,16 @@
 // `skill.ts` say which condition a cast applies, `CONDITION_DATA` says what that condition is
 // called, and English says how the sentence reads for each of the two subjects. Nothing here
 // was obtained by printing the implementation's output.
+//
+// ⚠ THIS TEST IMPORTS ACROSS LAYERS, ON PURPOSE, and it does not weaken the purity rule.
+// `src/llm` is a pure core and no SHIPPING file in it may import `src/render` or
+// `src/desktop` — `src/log/purity.test.ts` and `src/game/offEquivalence.test.ts` hold that
+// line over shipping code. A TEST is not shipping code, and C7 has two surfaces that must
+// agree: the narrator's fact and the combat log's line come from two different files, so a
+// test that only checked one would be checking half the defect. `fallbackNarration` is here
+// for the same reason — it is the string the PLAYER reads when the model fails, so a wrong
+// fact is wrong on screen and not only in a prompt. `src/game/karmaActions.test.ts` already
+// reaches into `format.ts` and `view-model.ts` the same way; this follows that convention.
 
 import { describe, it, expect } from 'vitest';
 import { describeEvent, eventsToFacts, buildNarrationPrompt } from './narrate.ts';

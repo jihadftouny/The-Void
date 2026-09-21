@@ -1,5 +1,23 @@
 # Human Checks — The Void
 
+> ## 🗣️ From `machine-text` (2026-09-21) — does the narrator sound like it knows where it is?
+>
+> **Everything about the PROMPT is machine-proven** — that it now carries the floor's real name, and
+> that a buff is never described as an affliction. What no test can show is what the model DOES with
+> it. One check, with the real model (`npm run desktop`, play until a floor change and a Brace):
+>
+> - [ ] **1. On arriving at a new floor, does the narration place you?** It should read like the
+>       Undercity / the Entrance to the Void / the Ash City / the Angelic Underground / the True
+>       Void — not "the first floor", not a number, and above all never *"the Void"* as somewhere you
+>       are standing (`WORLD.md` §6 locks that: the Void is a condition, not a place). *Fail if* the
+>       prose names a floor by ordinal or treats the Void as a location.
+> - [ ] **2. On a round where you cast a defensive buff — Brace (Enforcer), Slip (Scavver),
+>       Consecrate (Penitent) — does the narrator treat it as something GOOD?** The fact it is given
+>       now reads *"You steady yourself — Healthy."* *Fail if* the prose parrots the word **"Healthy"**
+>       back as a mechanic, or describes the moment as an affliction, a wound or a curse. **Ready fix
+>       if so:** drop the display name from the buff sentence — it is one table in
+>       `src/llm/narrate.ts` — so the model gets the image without the label.
+
 > ## ⚡ From `signal-tear` (merged 2026-09-20) — floor 2 is a glitch again, not dust
 >
 > **You said floor 2 *"should read more as glitches than similar to ash."* It was our regression:** floor 2 was scanlines, a glitch; when you rejected the grid, the speck fix replaced them with dots — which is floor 3's language. Floor 2 now carries **six slices of uneven red dashes at uneven heights; one snaps sideways every few seconds and holds.** No dots. Colours unchanged.
