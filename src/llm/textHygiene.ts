@@ -53,7 +53,15 @@
 //     the data, so a future colliding element is handled with no edit here. The cost: a real
 //     `Poison` label echo is missed.
 //  1c. A LOWERCASE echo is ordinary English and is NOT caught. "you feel healthy" is a
-//     sentence; only the capitalised form is considered at all.
+//     sentence. The CAPITALISED form ("Healthy") and the SHOUTED form ("HEALTHY") both are —
+//     a status word in caps is not prose — and both go through the same echo gate.
+//  1d. AN INFLECTED FORM IS NOT CAUGHT, AND THAT IS THE POINT, not an oversight. `Burns`,
+//     `Burning`, `Fractures`, `Slowly`, `Wiser`, `Stronger` — a label is a FIXED TOKEN; it is
+//     never conjugated. The moment the model inflects the word it is using it as English,
+//     which is the one thing this rule must not punish. Matching `\bName\w*` would flag
+//     "the wound Burns" and "you move Slowly", which are writing, not leaks. Disclosed here
+//     because an undisclosed blind spot is worse than a disclosed one: the next reader would
+//     assume it was covered.
 //  2. A capitalised casual `Hollow` is NOT caught. `Hollow` is a class id, a boss name and a
 //     family name, so capitalisation is the only signal available, and the reserved word
 //     `WORLD.md` §0 protects is the lowercase adjective.
@@ -371,9 +379,16 @@ function compile(vocab: TextVocabulary): Compiled {
   if (hit) return hit;
   const built: Compiled = {
     conditionId: alternation(vocab.conditionIds) ?? /(?!)/g,
-    conditionName: alternation(vocab.conditionNames) ?? /(?!)/g,
+    // THE LABEL, AND THE LABEL SHOUTED. `HEALTHY` is not English prose — it is a status
+    // word in caps — so the upper-case form of every display name is scanned as well. It
+    // goes through the same echo gate, and it cost NOTHING on the clean-prose body.
+    conditionName:
+      alternation([...vocab.conditionNames, ...vocab.conditionNames.map((n) => n.toUpperCase())]) ??
+      /(?!)/g,
     ambiguousNames: new Set(
-      vocab.conditionNames.filter((n) => vocab.elementNames.includes(n)),
+      vocab.conditionNames
+        .filter((n) => vocab.elementNames.includes(n))
+        .flatMap((n) => [n, n.toUpperCase()]),
     ),
     effectId: alternation(vocab.effectIds) ?? /(?!)/g,
     // Only an id that DIFFERS from its own name can be a mistake: `antidote` IS the
@@ -408,6 +423,28 @@ export interface DetectOptions {
    *
    * Omitted (or empty) therefore means: nothing was echoed. `reserved-word` fires freely,
    * and `condition-label` cannot fire at all.
+   *
+   * ⚠ PASS THE RECAP, NOT ONLY THIS BEAT'S FACTS. `buildNarrationPrompt` puts the last five
+   * beats' fact lines into the prompt under "Recent moments", so a model can copy a display
+   * name out of text it was shown WITHOUT that name being in this beat's facts. A gate that
+   * saw only this beat would be blind to exactly that, and a recap is precisely the kind of
+   * text a model paraphrases from.
+   *
+   * MEASURED, because widening a gate re-opens false-positive surface and the trade had to be
+   * priced rather than assumed:
+   *   · across 2 822 real recaps (20 seeded runs, five classes x four seeds), TWELVE of the
+   *     twenty-five display names appear in a recap at some point — Bleed, Burn, Electrify,
+   *     Exposed, Fool, Fracture, Insanity, Poison, Sleep, Slow, Stun, Weak — and the worst
+   *     single recap carries five at once. The hole is the common case, not an edge.
+   *   · against the 55-sentence clean-prose body in `textHygiene.test.ts`, widening costs
+   *     EXACTLY ONE sentence: "The Exposed wiring hums somewhere above you." (a recap
+   *     carrying `Exposed` makes the narrator's grammatical use of the word look like an
+   *     echo). Per-beat costs zero; an impossible recap carrying all 25 names would cost six.
+   *
+   * WIDENED ANYWAY, and the asymmetry is the whole argument: the corpus sweep has an
+   * ALLOWANCE TABLE, so an over-fire costs one recorded row with a reason and a reviewer's
+   * minute. An under-fire is silent forever and has no remedy at all. Given a remedy for one
+   * failure and none for the other, fire.
    */
   echoOf?: readonly string[];
 }
@@ -488,7 +525,9 @@ export function detectTextFaults(
       // 1b: also an element name, so no echo test can tell a label from a damage type.
       if (c.ambiguousNames.has(name)) continue;
       // The echo gate. Nothing the engine did not say this beat can be an echo of it.
-      if (said === '' || !new RegExp(`\\b${escapeRe(name)}\\b`).test(said)) continue;
+      // Case-INSENSITIVE: the engine writes `Healthy`, and a model shouting `HEALTHY` is
+      // echoing it just the same.
+      if (said === '' || !new RegExp(`\\b${escapeRe(name)}\\b`, 'i').test(said)) continue;
       // TWO SHAPES ARE FAULTS, and one shape is not.
       //
       //   MID-SENTENCE — "you are Agile now", "You feel — Healthy." A capitalised engine

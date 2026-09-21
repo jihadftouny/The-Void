@@ -37,6 +37,11 @@
 >       rule can: does it name a floor by its NAME, and does it ever treat the Void as somewhere you
 >       are standing? (`WORLD.md` §6 locks that.) The detector catches *“into the Void”* and *“the
 >       second floor”*; it cannot catch a paragraph that is merely wrong in spirit.
+>       **Two things it deliberately does NOT flag**, so you know to watch for them yourself: a
+>       condition name the narrator bends into English (*“the wound Burns”*, *“you move Slowly”* —
+>       a label is never conjugated, so bending it is writing), and the word **Poison**, which is
+>       both a condition and a damage type and so can never be told apart from the game's own
+>       elemental vocabulary.
 >
 > **One thing the detector found that is yours to decide** (`FINDINGS.md` **G72**): the combat log
 > itself ships *“You escape into the Void.”* and *“You sacrifice N of your max HP to the Void.”* —

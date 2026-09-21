@@ -74,6 +74,13 @@ interface CorpusRecord {
   floor?: number;
   floorName?: string;
   facts?: readonly string[];
+  /**
+   * The "Recent moments" block the model was shown with this beat. ADDITIVE within v1: a
+   * record written before it existed simply has none, and the gate is then narrower for that
+   * record — which under-reports rather than over-reports, the safe direction for a
+   * back-compatible field.
+   */
+  recap?: readonly string[];
 }
 
 /** The version this sweep understands. A record from the future is a migration, not a line. */
@@ -194,7 +201,13 @@ export function sweepRecords(
       problems.push({ kind: 'shape', line, why: 'no text' });
       continue;
     }
-    const echoOf = Array.isArray(record.facts) ? record.facts : [];
+    // THE SAME GATE THE RENDERER USED: this beat's facts AND the recap it was shown. A
+    // narrower gate here would make the sweep disagree with the runtime about the same
+    // sentence, which is the one thing two consumers of one rule set may not do.
+    const echoOf = [
+      ...(Array.isArray(record.facts) ? record.facts : []),
+      ...(Array.isArray(record.recap) ? record.recap : []),
+    ];
     const { faults } = detectTextFaults(record.text, vocab, {
       rules: MODEL_TEXT_RULES,
       echoOf,
@@ -375,6 +388,26 @@ describe('the sweep FIRES — proved against a fixture, so a skipped disk sweep 
     const swept = sweepRecords(parseCorpus(FIXTURE_TEXT).records, VOCAB, table);
     expect(swept.problems).toHaveLength(2);
     expect(swept.allowed).toEqual([0]);
+  });
+
+  it('a record\'s OWN RECAP feeds the echo gate, the way the renderer fed it', () => {
+    // The sweep must judge a sentence exactly as the runtime did. The beat's facts never
+    // mention Exposed; the recap the model was shown does.
+    const text = 'You press the advantage. Exposed.';
+    const withRecap =
+      JSON.stringify(record({ text, facts: ['You deal 4 damage.'], recap: ['You strike. The enemy is Exposed.'] })) + '\n';
+    const problems = sweepRecords(parseCorpus(withRecap).records, VOCAB, []).problems;
+    expect(problems.map((p) => (p.kind === 'fault' ? `${p.rule}:${p.match}` : p.kind))).toEqual([
+      'condition-label:Exposed',
+    ]);
+  });
+
+  it('...and a record written BEFORE the recap field simply has a narrower gate', () => {
+    // Additive within v1: an older record under-reports rather than over-reports, which is
+    // the safe direction — it can never invent a fault that the runtime did not see.
+    const text = 'You press the advantage. Exposed.';
+    const older = JSON.stringify(record({ text, facts: ['You deal 4 damage.'] })) + '\n';
+    expect(sweepRecords(parseCorpus(older).records, VOCAB, []).problems).toEqual([]);
   });
 
   it('a record from a FUTURE version says to migrate this test, rather than passing', () => {

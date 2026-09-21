@@ -770,10 +770,14 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
   // Show ONLY the current moment: replace the narration area each turn rather
   // than accumulating a growing scroll of past beats (bug 2).
   narrationEl.innerHTML = '';
-  // THIS beat's index, read BEFORE the await. `memory.beats` grows while the model is
-  // generating, so reading it afterwards would label every corpus record with whatever the
-  // memory happened to hold by then rather than with the beat that produced it.
+  // THIS beat's index AND THIS beat's recap, read BEFORE the await. `memory.beats` grows
+  // while the model is generating, so reading either afterwards would describe a beat that
+  // had not happened yet when the prompt was built.
   const beat = memory.beats.length;
+  // The "Recent moments" block `buildNarrationPrompt` just put in front of the model. It is
+  // part of what the model was SHOWN, so it is part of what it can be echoing — see the note
+  // on `DetectOptions.echoOf` for the measurement that settled widening the gate to it.
+  const recap = memory.beats;
   log.debug('llm', 'narrate: request', { promptChars: prompt.user.length, beats: memory.beats.length });
   const block = document.createElement('p');
   block.className = 'beat';
@@ -812,7 +816,7 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
       typeof stats.text === 'string' && stats.text.length > 0 ? stats.text : (block.textContent ?? '');
     const hygiene = detectTextFaults(text, buildVocabulary(), {
       rules: MODEL_TEXT_RULES,
-      echoOf: prompt.facts,
+      echoOf: [...prompt.facts, ...recap],
     });
     narrations += 1;
     textFaults += hygiene.faults.length;
@@ -854,6 +858,11 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
       floorName,
       beat,
       facts: prompt.facts,
+      // The recap travels WITH the beat so a record is self-contained. The sweep cannot
+      // reconstruct it from neighbouring records: the corpus rotates, so a record's
+      // predecessors may be in the other file or gone, and the gate would then silently
+      // narrow at exactly the rotation boundary.
+      recap,
       text,
       faults: hygiene.faults,
       tokens: stats.tokens,

@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3346 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3358 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -139,7 +139,7 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ### 2026-09-21 — the game starts keeping a record of what the narrator says ✅
 
-**`text-hygiene` built. 3210 → 3346 tests, four of them skipped until you play.** Two more strings nobody wrote are gone, and — more
+**`text-hygiene` built. 3210 → 3358 tests, four of them skipped until you play.** Two more strings nobody wrote are gone, and — more
 importantly — the game now *writes down* what the local model actually says, so the next narrator
 change can be judged against evidence instead of a guess.
 
@@ -184,6 +184,20 @@ change can be judged against evidence instead of a guess.
 - **The corpus sweep has the same allowance table the ratchet has.** When a sentence it flags
   really is fine, you add a row with a reason — you never delete the corpus, which is the only
   copy of the evidence. A row that stops matching fails and tells you to remove it.
+- **Then the narrowed rule turned out to be too narrow, in one specific way.** The narrator is
+  shown the last five beats' facts under *“Recent moments”*, so it can copy a condition name
+  out of text it was just shown without that name being in the current beat at all — and the
+  check was looking at the current beat only. **Measured before changing it:** across 2 822
+  real recaps from 20 seeded runs, twelve of the twenty-five names turn up in a recap, so the
+  gap is the normal case rather than an edge; closing it costs **one** of the 55 good sentences
+  (*“The Exposed wiring hums somewhere above you.”* — which, two lines after the game said
+  *“The enemy is Exposed”*, is genuinely worth a second look). Closed, because a wrong flag now
+  costs you one line in an allowance table and a missed one costs you nothing you can ever see.
+- **A shouted label is caught too** (*“you are HEALTHY now”* — that is a status word, not
+  writing), and it cost nothing. **A conjugated one is deliberately NOT** (*“the wound Burns”*,
+  *“you move Slowly”*) — the moment the narrator bends the word it is using it as English, and
+  that is the one thing this must never punish. Both are written into the rule's own header, so
+  nobody later assumes the second was an oversight.
 
 **⚠ Found while doing it** (`FINDINGS.md` **G72**, for you): the combat log ships *“You escape into
 the Void.”* and *“You sacrifice N of your max HP to the Void.”* The narrator's own versions of both

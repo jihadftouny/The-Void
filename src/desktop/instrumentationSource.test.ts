@@ -510,10 +510,12 @@ describe('narrate() times the round trip to the model', () => {
     expect(body, 'the renderer runs the wrong rule list over the model’s prose').toMatch(
       /rules:\s*MODEL_TEXT_RULES/,
     );
-    // ...and the beat's own facts are handed in, or a model obediently echoing a reserved
-    // word the engine gave it is reported as a violation.
-    expect(body, 'the detector is not told what the engine said first').toMatch(
-      /echoOf:\s*prompt\.facts/,
+    // ...and the detector is told EVERYTHING the model was shown: this beat's facts AND the
+    // "Recent moments" recap. Two failures ride on this one expression — dropping `facts`
+    // reports an obedient echo of a reserved word as a violation, and dropping `recap` goes
+    // blind to a display name copied out of the block the prompt just showed the model.
+    expect(body, 'the detector is not told what the model was shown').toMatch(
+      /echoOf:\s*\[\s*\.\.\.prompt\.facts\s*,\s*\.\.\.recap\s*\]/,
     );
   });
 
@@ -530,8 +532,11 @@ describe('narrate() times the round trip to the model', () => {
     // and every log line would carry whatever the memory held by then instead of the beat
     // that produced it — and a corpus indexed by the wrong beat cannot be replayed.
     const read = body.search(/const beat\s*=\s*memory\.beats\.length/);
+    const recap = body.search(/const recap\s*=\s*memory\.beats/);
     const call = body.search(/await\s+window\.void\.generate\s*\(/);
     expect(read, 'the beat index is no longer captured at all').toBeGreaterThan(-1);
+    expect(recap, 'the recap is no longer captured at all').toBeGreaterThan(-1);
+    expect(recap, 'the recap is read AFTER the generation it belongs to').toBeLessThan(call);
     expect(call, 'narrate() no longer calls the model — this guard has gone stale').toBeGreaterThan(-1);
     expect(read, 'the beat index is read AFTER the generation it labels').toBeLessThan(call);
     // ...and nothing downstream re-reads it live, which would be the same defect by another
@@ -540,6 +545,17 @@ describe('narrate() times the round trip to the model', () => {
       body.slice(call),
       'the beat index is re-read after the await — use the captured `beat`',
     ).not.toMatch(/beat:\s*memory\.beats\.length/);
+  });
+
+  it('the corpus record carries the recap, so the sweep can use the SAME gate', () => {
+    // Without it the sweep judges the same sentence with a narrower gate than the runtime
+    // did — two consumers of one rule set, disagreeing. It cannot be reconstructed from
+    // neighbouring records either: the corpus rotates, so a record's predecessors may be in
+    // the other file or gone, and the gate would silently narrow at that boundary.
+    const send = body.slice(body.indexOf('sendCorpus({'));
+    expect(send.slice(0, send.indexOf('});')), 'the corpus record has no recap').toMatch(
+      /\brecap\b/,
+    );
   });
 
   it('the corpus send is fire-and-forget, and its absence logs before it is ignored', () => {

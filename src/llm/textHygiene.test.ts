@@ -655,3 +655,127 @@ describe('THE CLEAN-PROSE BODY — good narration produces no faults at all', ()
     ).toEqual(['condition-label']);
   });
 });
+
+// =========================================================================================
+// THE RECAP — the echo gate's reach, and the one sentence it costs.
+//
+// `buildNarrationPrompt` shows the model the last five beats' fact lines under "Recent
+// moments". Those are text the model was SHOWN, so a display name copied out of them is an
+// echo just as surely as one copied out of this beat's facts — and a gate that saw only this
+// beat was blind to exactly that. The renderer therefore passes `[...prompt.facts, ...recap]`,
+// and each corpus record carries its own recap so the sweep uses the identical gate.
+//
+// THE COST WAS MEASURED BEFORE IT WAS ACCEPTED, and it is pinned below rather than described:
+// against the 55-sentence clean-prose body a real recap costs EXACTLY ONE sentence. If a rule
+// change ever makes it two, this goes red and the trade has to be re-argued.
+// =========================================================================================
+
+/**
+ * A recap transcribed from a MEASURED run — the worst of 2 822 sampled across 20 seeded runs
+ * (five classes x four seeds), carrying five display names at once. Hand-shortened to the
+ * fact lines that matter; the names in it are the ones real recaps really carry.
+ */
+const WORST_REAL_RECAP: readonly string[] = [
+  'The enemy unleashes Covetous Strike. You are afflicted with Weak. You suffer 2 harm from Poison.',
+  'The enemy unleashes Sinful Whisper. You are afflicted with Insanity. You cannot act — Insanity holds you.',
+  'You suffer 1 harm from Bleed. The enemy is Exposed.',
+];
+
+/** The clean-prose sentences that fault under a given extra echo body. */
+function offencesUnder(extra: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const { text, facts } of CLEAN_PROSE) {
+    const { faults } = detectTextFaults(text, VOCAB, {
+      rules: MODEL_TEXT_RULES,
+      echoOf: [...facts, ...extra],
+    });
+    for (const f of faults) out.push(`[${f.rule}] "${f.match}" in: ${text}`);
+  }
+  return out;
+}
+
+describe('the echo gate reaches the RECAP, not only this beat', () => {
+  it('closes the hole: a label copied out of the recap is caught', () => {
+    // THE FALSE NEGATIVE THIS FIXES. The beat's own facts never mention Exposed; the recap
+    // the model was just shown does. Before the widening this was invisible.
+    const beatFacts = ['You deal 4 damage.'];
+    const recap = ['You strike. The enemy is Exposed.'];
+    expect(
+      rulesFiredBy('You press the advantage. Exposed.', 'condition-label', beatFacts),
+      'the per-beat gate should not see it — this is the hole',
+    ).toEqual([]);
+    expect(
+      rulesFiredBy('You press the advantage. Exposed.', 'condition-label', [...beatFacts, ...recap]),
+      'the widened gate is blind to the recap it was given',
+    ).toEqual(['Exposed']);
+  });
+
+  it('...and still fires on nothing the model was never shown', () => {
+    // The gate widened, it did not open. A name in neither the facts nor the recap is prose.
+    expect(
+      rulesFiredBy('You press the advantage. Exposed.', 'condition-label', [
+        'You deal 4 damage.',
+        'You strike, and it staggers.',
+      ]),
+    ).toEqual([]);
+  });
+
+  it('THE MEASURED COST: a real recap costs exactly ONE clean-prose sentence', () => {
+    // Per-beat costs nothing...
+    expect(offencesUnder([]), 'the body is no longer clean under the per-beat gate').toEqual([]);
+    // ...and the widened gate costs precisely this, which is the trade that was accepted:
+    // a narrator using the engine's exact word, in the engine's exact capitalisation, two
+    // lines after being shown it. A reviewer SHOULD look at that sentence.
+    expect(offencesUnder(WORST_REAL_RECAP)).toEqual([
+      '[condition-label] "Exposed" in: The Exposed wiring hums somewhere above you.',
+    ]);
+  });
+
+  it('...and the recap fixture really is one — or the cost above is measured against air', () => {
+    // Non-vacuity: the recap must actually contain display names, or "costs one" is a fact
+    // about an empty array rather than about the gate.
+    const carried = VOCAB.conditionNames.filter((n) =>
+      new RegExp(`\\b${n}\\b`).test(WORST_REAL_RECAP.join('\n')),
+    );
+    expect(carried.sort()).toEqual(['Bleed', 'Exposed', 'Insanity', 'Poison', 'Weak']);
+  });
+});
+
+describe('condition-label also catches the label SHOUTED', () => {
+  const HEALTHY = ['You steady yourself — Healthy.'];
+
+  it('fires on the all-caps form, which is a status word and not prose', () => {
+    expect(rulesFiredBy('you are HEALTHY now', 'condition-label', HEALTHY)).toEqual(['HEALTHY']);
+    expect(rulesFiredBy('You reach the Undercity. EXPOSED.', 'condition-label', [
+      'The enemy is Exposed.',
+    ])).toEqual(['EXPOSED']);
+  });
+
+  it('...through the SAME echo gate — a shout the engine never made is still prose', () => {
+    expect(rulesFiredBy('you are HEALTHY now', 'condition-label', ['You take 3 damage.'])).toEqual([]);
+  });
+
+  it('...and an element name is excluded in caps too', () => {
+    expect(rulesFiredBy('Its bite carries POISON.', 'condition-label', [
+      'The enemy is afflicted — Poison.',
+    ])).toEqual([]);
+  });
+
+  it('costs the clean-prose body NOTHING (measured, like everything else here)', () => {
+    // Asserted as a body-wide claim rather than by example: shouting is rare in this
+    // narrator's voice, so the risk was believed low and then checked.
+    expect(offencesUnder([])).toEqual([]);
+  });
+
+  it('an INFLECTED form is deliberately NOT caught', () => {
+    // Blind spot 1d, asserted so it is a decision rather than a gap somebody assumes closed.
+    // A label is a fixed token; the moment the model conjugates the word it is writing
+    // English, which is the one thing this rule must not punish.
+    const burning = ['The enemy suffers 2 harm from Burn.'];
+    expect(rulesFiredBy('The wound Burns.', 'condition-label', burning)).toEqual([]);
+    expect(rulesFiredBy('It is Burning still.', 'condition-label', burning)).toEqual([]);
+    expect(rulesFiredBy('You move Slowly.', 'condition-label', ['You slow — Slow.'])).toEqual([]);
+    // ...and the control: the bare token, in the same beat, still fires.
+    expect(rulesFiredBy('The wound bites. Burn.', 'condition-label', burning)).toEqual(['Burn']);
+  });
+});
