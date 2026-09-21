@@ -512,11 +512,18 @@ describe('the entry script is the one place the page starts', () => {
 // or a level that is computed and then thrown away all read identically in source.
 //
 // The narration below is written BY HAND to contain exactly two faults, each derived from the
-// rules in `src/llm/textHygiene.ts` and from this game's own data:
-//   * "second floor"  — `ordinal-floor`. A floor has a NAME; floor 1 is "Undercity".
-//   * "Healthy."      — `condition-label`. `CONDITION_DATA.healthy.displayName` is "Healthy",
-//                       standing here as a bare one-word fragment: the engine's chip text
-//                       appended to a beat, which is the commonest shape of this leak.
+// rules in `src/llm/textHygiene.ts` and from this game's own fiction:
+//   * "second floor"    — `ordinal-floor`. A floor has a NAME; floor 1 is "Undercity".
+//   * "into the Void"   — `void-as-place`. `WORLD.md` §6: the Void is a condition, not
+//                         somewhere you can walk into.
+//
+// ⚠ BOTH ARE FACT-INDEPENDENT, and that is why they were chosen. `condition-label` — the
+// obvious third candidate — fires only when the beat's own facts contain the label (the echo
+// gate; see that rule's note, and the clean-prose body in `textHygiene.test.ts` that forced
+// it). This harness cannot choose the engine facts for the hub-arrival beat, only the model's
+// reply, so a condition-label case here would be asserting the engine's fact stream rather
+// than this file's subject, which is the WIRING. That rule's behaviour is proved directly, in
+// the detector's own tests, where `echoOf` is an argument.
 // =========================================================================================
 
 /** The stats an Electron main process returns for one generation. */
@@ -557,7 +564,7 @@ interface Done {
 describe('the renderer reads what the model said, and keeps it (text-hygiene)', () => {
   it('a faulty beat is logged at warn, with both faults named, and sent to the corpus', async () => {
     const bridge = installBridge();
-    const narration = 'You reach the second floor. Healthy.';
+    const narration = 'You reach the second floor, and sink deeper into the Void.';
     bridge.generate.mockResolvedValue(generated(narration));
     const { game, entries } = await freshRenderer();
     game.boot();
@@ -574,7 +581,7 @@ describe('the renderer reads what the model said, and keeps it (text-hygiene)', 
       expect(data.text, 'the log no longer records what the model said').toBe(narration);
       expect(data.faults.map((f) => `${f.rule}:${f.match}`)).toEqual([
         'ordinal-floor:second floor',
-        'condition-label:Healthy',
+        'void-as-place:into the Void',
       ]);
       // The context a fault needs to be reproducible: the seed (this run's, from the pinned
       // fake clock), the floor by NAME as well as by number, and this beat's index.
@@ -595,7 +602,7 @@ describe('the renderer reads what the model said, and keeps it (text-hygiene)', 
     expect(record.seed).toBe(4242);
     expect(record.floor).toBe(1);
     expect(record.floorName).toBe('Undercity');
-    expect(record.faults.map((f) => f.rule)).toEqual(['ordinal-floor', 'condition-label']);
+    expect(record.faults.map((f) => f.rule)).toEqual(['ordinal-floor', 'void-as-place']);
   });
 
   it('a clean beat is NOT a warning — and is still corpus', async () => {

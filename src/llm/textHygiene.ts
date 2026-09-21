@@ -31,11 +31,29 @@
 // ---------------------------------------------------------------------------------------
 // DELIBERATE BLIND SPOTS — written down so they are decisions, not oversights.
 //
-//  1. A LOWERCASE echo of a condition's display name is ordinary English and is NOT caught.
-//     "you feel healthy" is a sentence; "you feel Healthy" is the engine's label leaking into
-//     prose. Only the capitalised form fires, and only mid-sentence or as a bare fragment —
-//     a capitalised label that OPENS a sentence which then continues is ordinary English.
-//     The cost, accepted: a one-word imperative ("Sleep.") reads as a fragment and fires.
+//  1. A CONDITION LABEL IS ONLY A FAULT WHEN THE MODEL ECHOED IT. This is the rule's whole
+//     shape, and it was rewritten after measurement: an earlier version flagged the
+//     capitalised name wherever it appeared, and on 54 hand-written sentences in the
+//     narrator's own voice that break no rule it fired on roughly one in five. At least nine
+//     of the twenty-five display names are ordinary English imperatives (`Burn.` `Sleep.`
+//     `Stun.` `Push.` `Freeze.` …), and several are ordinary capitalised nouns ("The Wise do
+//     not come down here."). None of those is a leak — they are a narrator writing English.
+//
+//     What IS a leak is the model repeating a word the ENGINE just handed it: the fact line
+//     "You steady yourself — Healthy." going back out as prose. So the rule consults
+//     `echoOf`, the beat's own facts: `Healthy` in a beat where nothing made you healthy is
+//     English; `Healthy` in a beat whose facts say `Healthy` is the label leaking.
+//     THE RESIDUAL COST, disclosed: a genuine imperative in a beat that really did apply
+//     that condition ("Burn." while the enemy burns) still fires. It is narrow, and it is
+//     the price of catching the leak at all.
+//  1b. A DISPLAY NAME THAT IS ALSO AN ELEMENT NAME NEVER FIRES. `Poison` is both a condition
+//     display name and an entry in `elements.json`, so "its bite carries Poison" is the
+//     game's own elemental vocabulary, not a leaked label — and no echo test can tell the
+//     two apart, because a poison condition and Poison damage arrive together. Derived from
+//     the data, so a future colliding element is handled with no edit here. The cost: a real
+//     `Poison` label echo is missed.
+//  1c. A LOWERCASE echo is ordinary English and is NOT caught. "you feel healthy" is a
+//     sentence; only the capitalised form is considered at all.
 //  2. A capitalised casual `Hollow` is NOT caught. `Hollow` is a class id, a boss name and a
 //     family name, so capitalisation is the only signal available, and the reserved word
 //     `WORLD.md` §0 protects is the lowercase adjective.
@@ -45,6 +63,7 @@
 // ---------------------------------------------------------------------------------------
 
 import { CONDITION_DATA } from '../game/condition.ts';
+import { ELEMENTS } from '../game/element.ts';
 import { FLOOR_IDS, floorDef } from '../game/floors.ts';
 import {
   getAllItems,
@@ -152,6 +171,11 @@ export interface TextVocabulary {
   conditionIds: readonly string[];
   /** Their display names, e.g. `Exposed`, `Agile` (whose id is `quick`). */
   conditionNames: readonly string[];
+  /**
+   * The damage-type names from `elements.json`. A display name that is ALSO one of these is
+   * ambiguous in prose and is never read as a leaked label — see blind spot 1b.
+   */
+  elementNames: readonly string[];
   /** The three effect unions, by hand — see the comment on `EFFECT_IDS`. */
   effectIds: readonly string[];
   /** Every catalog entry, id and name together, so the rule can skip the ones that match. */
@@ -226,6 +250,7 @@ export function buildVocabulary(): TextVocabulary {
   cached = {
     conditionIds,
     conditionNames,
+    elementNames: ELEMENTS,
     effectIds: EFFECT_IDS,
     catalogIds: catalog,
     floorNames,
@@ -247,9 +272,20 @@ const SNAKE_TOKEN = /\b[a-z]+_[a-z_]+\b/g;
 /**
  * A floor named by its position rather than by its name. Two shapes, because English has
  * two: the ordinal before the noun, and the number after it.
+ *
+ * ⚠ `level` IS NOT IN THE NOUN LIST, and that is a decision, not an omission. This game never
+ * calls a floor a level — `floors.json` gives all five proper names — but it DOES have a
+ * character level, and `level` is an ordinary English measure-word besides. With it in the
+ * list the rule fired on "the deepest level of exhaustion" and "your last level of restraint",
+ * neither of which names a floor at all. It bought nothing and cost prose.
+ *
+ * ⚠ `top` and `bottom` are out for the same reason: they are building words ("the top floor of
+ * the tenement" is a place in the Undercity, not the run's floor), and nobody describes a
+ * DESCENT by its top. The ordinals that actually name a floor here — first..fifth, next, last,
+ * final, lower, lowest, upper, deeper, deepest — all remain.
  */
 const ORDINAL_BEFORE =
-  /\b(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th|next|last|final|lower|lowest|upper|deeper|deepest|bottom|top)\s+(floor|storey|level)s?\b/gi;
+  /\b(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th|next|last|final|lower|lowest|upper|deeper|deepest)\s+(floor|storey)s?\b/gi;
 const NUMBER_AFTER = /\b(floor|storey)\s+(one|two|three|four|five|[1-9])\b/gi;
 
 /**
@@ -305,6 +341,8 @@ export const ROLLED_NAME_ALLOWANCE: {
 interface Compiled {
   conditionId: RegExp;
   conditionName: RegExp;
+  /** The display names that are also element names, and therefore never a leak. */
+  ambiguousNames: ReadonlySet<string>;
   effectId: RegExp;
   catalogId: RegExp | null;
   sanctioned: readonly string[];
@@ -334,6 +372,9 @@ function compile(vocab: TextVocabulary): Compiled {
   const built: Compiled = {
     conditionId: alternation(vocab.conditionIds) ?? /(?!)/g,
     conditionName: alternation(vocab.conditionNames) ?? /(?!)/g,
+    ambiguousNames: new Set(
+      vocab.conditionNames.filter((n) => vocab.elementNames.includes(n)),
+    ),
     effectId: alternation(vocab.effectIds) ?? /(?!)/g,
     // Only an id that DIFFERS from its own name can be a mistake: `antidote` IS the
     // Antidote's name, so seeing it is seeing the name.
@@ -356,9 +397,17 @@ export interface DetectOptions {
   /** Which rules to apply. Default: all of them. */
   rules?: readonly TextRuleId[];
   /**
-   * Strings the text may legitimately echo — the beat's own engine facts. Only
-   * `reserved-word` consults it: if the engine handed the model "made whole", the model
-   * repeating it is obedience, not a violation.
+   * The beat's OWN ENGINE FACTS — what the model was handed before it wrote.
+   *
+   * TWO RULES CONSULT IT, in opposite directions, and the asymmetry is deliberate:
+   *  - `reserved-word` treats an echo as INNOCENT. If the engine said "made whole", the
+   *    model repeating it is obedience.
+   *  - `condition-label` treats an echo as THE OFFENCE. A display name the engine just
+   *    printed, coming back out as prose, is the label leaking; the same capitalised word
+   *    in a beat that never mentioned the condition is ordinary English.
+   *
+   * Omitted (or empty) therefore means: nothing was echoed. `reserved-word` fires freely,
+   * and `condition-label` cannot fire at all.
    */
   echoOf?: readonly string[];
 }
@@ -430,7 +479,16 @@ export function detectTextFaults(
 
   if (rules.has('condition-label')) {
     const scan = new RegExp(c.conditionName.source, 'g');
+    // The beat's own facts, as one body of text. A label the ENGINE said this turn is a
+    // label the model can only be repeating; the same word in a beat that never mentioned
+    // the condition is the narrator writing English (see blind spot 1).
+    const said = (opts.echoOf ?? []).join('\n');
     for (const m of stripped.matchAll(scan)) {
+      const name = m[0];
+      // 1b: also an element name, so no echo test can tell a label from a damage type.
+      if (c.ambiguousNames.has(name)) continue;
+      // The echo gate. Nothing the engine did not say this beat can be an echo of it.
+      if (said === '' || !new RegExp(`\\b${escapeRe(name)}\\b`).test(said)) continue;
       // TWO SHAPES ARE FAULTS, and one shape is not.
       //
       //   MID-SENTENCE — "you are Agile now", "You feel — Healthy." A capitalised engine
@@ -448,7 +506,7 @@ export function detectTextFaults(
       const after = stripped.slice(m.index + m[0].length);
       const standsAlone = after.trim() === '' || /^\s*[.!?]/.test(after);
       if (opensSentence && !standsAlone) continue;
-      faults.push({ rule: 'condition-label', match: m[0], index: m.index });
+      faults.push({ rule: 'condition-label', match: name, index: m.index });
     }
   }
 

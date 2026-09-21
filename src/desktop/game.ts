@@ -398,7 +398,7 @@ export function boot(): void {
           adopt: adoptFromPanel,
           env: { protocol: location.protocol },
           unlockStorage: localStorage,
-          // This run'''s text-hygiene tally, read fresh on every status refresh.
+          // This run's text-hygiene tally, read fresh on every status refresh.
           hygiene: () => ({ faults: textFaults, narrations }),
         }),
       )
@@ -797,9 +797,19 @@ async function narrate(events: readonly GameEvent[]): Promise<void> {
     // WHAT THE MODEL SAID, AND WHETHER IT WAS FIT TO SHOW. The detector is pure and shared
     // with the placeholder ratchet; `echoOf` hands it this beat's own engine facts, because a
     // model repeating a reserved word the engine gave it is obedience, not a violation.
-    // `stats.text` is the main process's complete output; the streamed pane is the fallback
-    // for an older main process that does not return it.
-    const text = stats.text.length > 0 ? stats.text : (block.textContent ?? '');
+    // WHICH TEXT. `stats.text` is the main process's own complete output — the whole
+    // generation, not the token stream the pane accumulated. The pane is the fallback for a
+    // generation that returned NOTHING (an empty string is a real outcome: a model that
+    // stopped immediately still resolves), in which case whatever was streamed is all the
+    // evidence there is.
+    //
+    // The `typeof` guard is NOT redundant with `GenStats.text: string`. That type is a
+    // promise about the other side of an IPC channel, and a channel cannot keep one: an
+    // older or misbehaving main process can hand back an object without `text`, and
+    // `stats.text.length` on `undefined` would throw INSIDE the try — turning a narration
+    // that actually succeeded into a `narrate: FAILED` line blaming the model.
+    const text =
+      typeof stats.text === 'string' && stats.text.length > 0 ? stats.text : (block.textContent ?? '');
     const hygiene = detectTextFaults(text, buildVocabulary(), {
       rules: MODEL_TEXT_RULES,
       echoOf: prompt.facts,

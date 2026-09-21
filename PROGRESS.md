@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3327 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3346 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -139,7 +139,7 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ### 2026-09-21 — the game starts keeping a record of what the narrator says ✅
 
-**`text-hygiene` built. 3210 → 3327 tests, three of them skipped until you play.** Two more strings nobody wrote are gone, and — more
+**`text-hygiene` built. 3210 → 3346 tests, four of them skipped until you play.** Two more strings nobody wrote are gone, and — more
 importantly — the game now *writes down* what the local model actually says, so the next narrator
 change can be judged against evidence instead of a guess.
 
@@ -169,6 +169,21 @@ change can be judged against evidence instead of a guess.
   the sentence. With no corpus it **skips, visibly** — so the parser and the reporter are proved
   against a hand-written fixture on every run, and “skipped” can never be mistaken for “passed”.
 - **F3 shows a live count:** *“text faults N in M narrations this run.”*
+- **Two of the rules were then narrowed, because they cried wolf.** Verification wrote 54
+  sentences in the Void's own voice that break no rule, and the first version of the rules
+  flagged about one in five of them — nine of the twenty-five condition names are ordinary
+  English imperatives (*“Burn.”*, *“Sleep.”*, *“Freeze.”*), several are ordinary capitalised
+  nouns (*“The Wise do not come down here.”*), `Poison` is also a damage type, and *“the
+  deepest **level** of exhaustion”* is not a floor. So: **a condition name is only a fault when
+  the model is echoing one the engine handed it that beat** — inventing the word is writing,
+  repeating the label is a leak; a name that is also an element never fires; and `level`, `top`
+  and `bottom` left the floor rule. Those 54 sentences are now a committed test, so the rules
+  cannot quietly widen again. **This matters because the rule fails the build:** a rule that
+  flags good writing makes you rewrite it or exempt it, and neither should be the price of a
+  green suite.
+- **The corpus sweep has the same allowance table the ratchet has.** When a sentence it flags
+  really is fine, you add a row with a reason — you never delete the corpus, which is the only
+  copy of the evidence. A row that stops matching fails and tells you to remove it.
 
 **⚠ Found while doing it** (`FINDINGS.md` **G72**, for you): the combat log ships *“You escape into
 the Void.”* and *“You sacrifice N of your max HP to the Void.”* The narrator's own versions of both

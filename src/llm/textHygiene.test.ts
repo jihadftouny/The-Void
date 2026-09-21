@@ -162,28 +162,88 @@ describe('condition-id — a raw id where the label belonged', () => {
   });
 });
 
-describe('condition-label — the engine label loose in model prose', () => {
+describe('condition-label — the engine label ECHOED back as prose', () => {
+  // The facts the engine hands the model for a beat where it really did apply the condition.
+  // Written the way `format.ts` writes them, not copied out of any table.
+  const HEALTHY = ['You steady yourself — Healthy.'];
+  const AGILE = ['You move quicker — Agile.'];
+  const MAD = ['You cannot act — Insanity holds you.'];
+  const EXPOSED = ['The enemy is Exposed.'];
+
   it('fires mid-sentence, after a dash and after an ordinary word', () => {
-    expect(rulesFiredBy('You feel — Healthy.', 'condition-label')).toEqual(['Healthy']);
-    expect(rulesFiredBy('you are Agile now', 'condition-label')).toEqual(['Agile']);
-    expect(rulesFiredBy('the Insanity takes you', 'condition-label')).toEqual(['Insanity']);
+    expect(rulesFiredBy('You feel — Healthy.', 'condition-label', HEALTHY)).toEqual(['Healthy']);
+    expect(rulesFiredBy('you are Agile now', 'condition-label', AGILE)).toEqual(['Agile']);
+    expect(rulesFiredBy('the Insanity takes you', 'condition-label', MAD)).toEqual(['Insanity']);
   });
 
   it('fires on a BARE FRAGMENT — the status readout appended to a beat', () => {
     // The commonest leak: the model ends the beat with the chip's own word. It opens a
     // "sentence", so a mid-sentence-only rule would never see it.
-    expect(rulesFiredBy('You reach the Undercity. Healthy.', 'condition-label')).toEqual(['Healthy']);
-    expect(rulesFiredBy('Exposed', 'condition-label')).toEqual(['Exposed']);
+    expect(rulesFiredBy('You reach the Undercity. Healthy.', 'condition-label', HEALTHY)).toEqual([
+      'Healthy',
+    ]);
+    expect(rulesFiredBy('Exposed', 'condition-label', EXPOSED)).toEqual(['Exposed']);
   });
 
   it('does NOT fire when a sentence STARTS with the word and then continues', () => {
-    expect(rulesFiredBy('Healthy is not a word here.', 'condition-label')).toEqual([]);
-    expect(rulesFiredBy('You are hurt. Healthy no longer.', 'condition-label')).toEqual([]);
-    expect(rulesFiredBy('"Agile," it says.', 'condition-label')).toEqual([]);
+    expect(rulesFiredBy('Healthy is not a word here.', 'condition-label', HEALTHY)).toEqual([]);
+    expect(rulesFiredBy('You are hurt. Healthy no longer.', 'condition-label', HEALTHY)).toEqual([]);
+    expect(rulesFiredBy('"Agile," it says.', 'condition-label', AGILE)).toEqual([]);
   });
 
   it('does NOT fire on the lowercase English word — the documented blind spot', () => {
-    expect(rulesFiredBy('you feel healthy', 'condition-label')).toEqual([]);
+    expect(rulesFiredBy('you feel healthy', 'condition-label', HEALTHY)).toEqual([]);
+  });
+
+  // ---- THE ECHO GATE. Measured: without it this rule fired on roughly one in five ----
+  // ---- sentences of ordinary narrator prose (see the clean-prose body below).     ----
+
+  it('does NOT fire when the engine never said the word — that is the narrator writing English', () => {
+    // NINE of the twenty-five display names are ordinary English imperatives. In a beat where
+    // nothing is burning, "Burn." is an instruction, not a status readout.
+    for (const [text, name] of [
+      ['Burn.', 'Burn'],
+      ['Sleep.', 'Sleep'],
+      ['Stun.', 'Stun'],
+      ['Push.', 'Push'],
+      ['Freeze.', 'Freeze'],
+    ] as const) {
+      expect(rulesFiredBy(text, 'condition-label', ['You take 3 damage.']), name).toEqual([]);
+      expect(rulesFiredBy(text, 'condition-label'), `${name} with no facts at all`).toEqual([]);
+    }
+    // ...and plain capitalised-noun English, which no engine fact accompanies.
+    expect(rulesFiredBy('The Wise do not come down here.', 'condition-label', [])).toEqual([]);
+    expect(rulesFiredBy('The Strong do not survive here.', 'condition-label', [])).toEqual([]);
+    expect(rulesFiredBy('He is a Charming liar.', 'condition-label', [])).toEqual([]);
+  });
+
+  it('THE CONTROL: the same sentences DO fire when the engine did say the word', () => {
+    // Without this, "the echo gate suppresses it" is satisfied by a rule that never fires.
+    expect(rulesFiredBy('Burn.', 'condition-label', ['The enemy suffers 2 harm from Burn.'])).toEqual([
+      'Burn',
+    ]);
+    expect(
+      rulesFiredBy('The Wise do not come down here.', 'condition-label', ['You sharpen — Wise.']),
+      'the gate is now suppressing a real echo',
+    ).toEqual(['Wise']);
+  });
+
+  it('NEVER fires on a name that is also an ELEMENT — Poison is both', () => {
+    // `Poison` is a condition display name AND an entry in elements.json, so a poison
+    // condition and Poison damage arrive in the same beat and no echo test can separate
+    // them. Derived from the data: a future colliding element needs no edit here.
+    expect(VOCAB.elementNames).toContain('Poison');
+    expect(VOCAB.conditionNames).toContain('Poison');
+    const facts = ['The enemy is afflicted — Poison.'];
+    expect(rulesFiredBy('Its bite carries Poison.', 'condition-label', facts)).toEqual([]);
+    expect(rulesFiredBy('Poison.', 'condition-label', facts)).toEqual([]);
+    // ...and the exclusion is NARROW: a non-colliding name in the same sentence still fires.
+    expect(
+      rulesFiredBy('Its bite carries Poison, and you are Weak.', 'condition-label', [
+        ...facts,
+        'You weaken — Weak.',
+      ]),
+    ).toEqual(['Weak']);
   });
 });
 
@@ -261,7 +321,7 @@ describe('ordinal-floor — a floor named by its number instead of its name', ()
   it('fires on the ordinal before the noun, and the number after it', () => {
     expect(rulesFiredBy('You step onto the second floor.', 'ordinal-floor')).toEqual(['second floor']);
     expect(rulesFiredBy('Floor 3 is colder.', 'ordinal-floor')).toEqual(['Floor 3']);
-    expect(rulesFiredBy('the deepest level', 'ordinal-floor')).toEqual(['deepest level']);
+    expect(rulesFiredBy('the deepest floor', 'ordinal-floor')).toEqual(['deepest floor']);
     expect(rulesFiredBy('the final floor', 'ordinal-floor')).toEqual(['final floor']);
   });
 
@@ -275,6 +335,24 @@ describe('ordinal-floor — a floor named by its number instead of its name', ()
     // `runSummaryView` prints both: "Enforcer, level 3" and "Act 3 of 5".
     expect(rulesFiredBy('Enforcer, level 3', 'ordinal-floor')).toEqual([]);
     expect(rulesFiredBy('Act 3 of 5', 'ordinal-floor')).toEqual([]);
+  });
+
+  it('does NOT fire on "level" as an English measure-word', () => {
+    // MEASURED false positives. This game never calls a floor a level — `floors.json` gives
+    // all five proper names — so the noun bought nothing and cost prose.
+    expect(rulesFiredBy('the deepest level of exhaustion', 'ordinal-floor')).toEqual([]);
+    expect(rulesFiredBy('your last level of restraint', 'ordinal-floor')).toEqual([]);
+    expect(rulesFiredBy('You reach level 3.', 'ordinal-floor')).toEqual([]);
+  });
+
+  it('does NOT fire on a BUILDING\'s top or bottom floor', () => {
+    // The Undercity has tenements. Nobody describes a DESCENT by its top, so these two
+    // ordinals were all risk and no reach.
+    expect(rulesFiredBy('the top floor of the tenement', 'ordinal-floor')).toEqual([]);
+    expect(rulesFiredBy('the bottom floor of the stairwell', 'ordinal-floor')).toEqual([]);
+    // ...and the control: the ordinals that DO name this run's floor still fire.
+    expect(rulesFiredBy('the lowest floor', 'ordinal-floor')).toEqual(['lowest floor']);
+    expect(rulesFiredBy('the deepest floor', 'ordinal-floor')).toEqual(['deepest floor']);
   });
 });
 
@@ -355,6 +433,8 @@ describe('what a fault carries', () => {
   it('faults come back in the order they appear in the text', () => {
     const { faults } = detectTextFaults('You reach the second floor. Healthy.', VOCAB, {
       rules: MODEL_TEXT_RULES,
+      // The label is a fault only because the engine said it this beat (the echo gate).
+      echoOf: ['You steady yourself — Healthy.'],
     });
     expect(faults.map((f) => `${f.rule}:${f.match}`)).toEqual([
       'ordinal-floor:second floor',
@@ -421,5 +501,157 @@ describe('the rolled-name allowance is a named, reasoned exception', () => {
     expect(ROLLED_NAME_ALLOWANCE.where.test('Legendary mainHand')).toBe(true);
     expect(ROLLED_NAME_ALLOWANCE.where.test('Rare offHand')).toBe(true);
     expect(ROLLED_NAME_ALLOWANCE.where.test('a mainHand')).toBe(false);
+  });
+});
+
+
+// =========================================================================================
+// THE CLEAN-PROSE BODY — the guard must not cry wolf.
+//
+// WHY THIS EXISTS, and it is the most load-bearing test in this file. A text rule is only
+// half-tested by planted positives: a rule that fires on EVERYTHING passes every one of them.
+// The other half is a body of prose that is unambiguously GOOD — written in the narrator's
+// own voice, about this game, using this game's own words — which must produce ZERO faults.
+//
+// It was written against a measurement. An earlier version of `condition-label` and
+// `ordinal-floor` fired on roughly ONE IN FIVE of these sentences: nine of the twenty-five
+// condition display names are ordinary English imperatives, several are ordinary capitalised
+// nouns, `Poison` is also an element, and `level` is an English measure-word. Every one of
+// those was a sentence the author would have had to either rewrite or exempt — on a rule that
+// fails the build. The rules were narrowed; these sentences are what holds them narrow.
+//
+// EVERY SENTENCE IS HAND-WRITTEN. None came from a model, and none was adjusted after running
+// the detector on it: where one fired, the RULE was changed, not the sentence.
+// =========================================================================================
+
+/** Prose in the Void's voice that breaks no rule. Each entry: the text, and its facts. */
+const CLEAN_PROSE: readonly { text: string; facts: readonly string[] }[] = [
+  // --- the imperatives that share a display name -------------------------------------
+  { text: 'Burn. That is all the dark ever asks of you.', facts: ['You take 3 damage.'] },
+  { text: 'Sleep. You have earned nothing else.', facts: [] },
+  { text: 'Stun the thing before it speaks again.', facts: [] },
+  { text: 'Push, and keep pushing, until the door gives.', facts: [] },
+  { text: 'Freeze here and you will not start again.', facts: [] },
+  { text: 'Slow down. There is no hurry left in you.', facts: [] },
+  { text: 'Weak light, weaker resolve, and the stairs going on.', facts: [] },
+  { text: 'Quick now — it has not seen you.', facts: [] },
+  { text: 'Fool yourself once more and you will believe it.', facts: [] },
+  // --- capitalised nouns that share a display name ------------------------------------
+  { text: 'The Wise do not come down here.', facts: [] },
+  { text: 'The Strong do not survive here either.', facts: [] },
+  { text: 'He is a Charming liar, and you knew that going in.', facts: [] },
+  { text: 'The Exposed wiring hums somewhere above you.', facts: [] },
+  // --- Poison, which is also an element ------------------------------------------------
+  { text: 'Its bite carries Poison, and it knows it.', facts: ['The enemy is afflicted — Poison.'] },
+  { text: 'Poison is the Undercity\'s oldest argument.', facts: [] },
+  // --- "level" as English, and the character level -------------------------------------
+  { text: 'You have reached the deepest level of exhaustion.', facts: [] },
+  { text: 'That was your last level of restraint, spent.', facts: [] },
+  { text: 'You reach level 3, and the dark does not care.', facts: [] },
+  // --- buildings have floors; the run has names ----------------------------------------
+  { text: 'The top floor of the tenement is open to the sky.', facts: [] },
+  { text: 'Something drags itself across the floor above.', facts: [] },
+  { text: 'The floor is cold, and it is the only honest thing here.', facts: [] },
+  { text: 'The master of this floor is not finished with you.', facts: [] },
+  // --- the Void, as the condition it is -------------------------------------------------
+  { text: 'The Void is listening. It always was.', facts: [] },
+  { text: 'The Void speaks in the only voice you have left.', facts: [] },
+  { text: 'You are the Void, and that is the whole of the problem.', facts: [] },
+  { text: 'The Void claims its own, and it is patient about it.', facts: [] },
+  { text: 'You reach the True Void, and it is quieter than you hoped.', facts: [] },
+  { text: 'Past the Entrance to the Void, the walls stop pretending.', facts: [] },
+  // --- the reserved words, used as names --------------------------------------------
+  { text: 'The Hollowed close in, and none of them has a face.', facts: [] },
+  { text: 'Hollow Self wears your gait badly.', facts: [] },
+  { text: 'You put on Hollow Regalia and it fits, which is worse.', facts: [] },
+  { text: 'Hollow Grasp closes on your wrist.', facts: [] },
+  { text: 'You are judged worthy and rise from the Void, made whole.', facts: [] },
+  // --- the floors, named ----------------------------------------------------------------
+  { text: 'The Undercity does not end so much as stop.', facts: [] },
+  { text: 'Ash City takes the light and gives back grey.', facts: [] },
+  { text: 'The Angelic Underground is lit, and the light is not kind.', facts: [] },
+  // --- items and skills by their names ---------------------------------------------
+  { text: 'The altar offers Mirror Shard, and asks for something you cannot spare.', facts: [] },
+  { text: 'You swallow a Void Draught and wait to stop shaking.', facts: [] },
+  { text: 'Rusted Blade is a generous name for it.', facts: [] },
+  { text: 'Heavy Strike lands, and the sound arrives late.', facts: [] },
+  { text: 'You drink the Clarity Draught. Nothing clarifies.', facts: [] },
+  // --- ordinary combat prose ---------------------------------------------------------
+  { text: 'You strike, and it staggers, and it does not fall.', facts: ['You deal 4 damage.'] },
+  { text: 'Blood in your mouth. Keep moving.', facts: ['You take 2 damage.'] },
+  { text: 'The wound closes over, slowly, badly.', facts: ['You heal 3.'] },
+  { text: 'It steadies itself, and something in you does not.', facts: [] },
+  { text: 'Act 3 of 5, and you have stopped counting.', facts: [] },
+  { text: 'You escape into the dark and it lets you.', facts: [] },
+  { text: 'A cache, half-buried. The cache is empty.', facts: [] },
+  { text: 'Your own reflection steps down off the wall.', facts: [] },
+  { text: 'The crew is now 3 strong, and none of them blinks.', facts: [] },
+  { text: 'You spend your own blood as fuel, and it works.', facts: [] },
+  { text: 'Something in you hardens; you are stronger than before.', facts: [] },
+  { text: 'The dark closes over you.', facts: [] },
+  { text: 'There is no escape from this one.', facts: [] },
+  { text: 'You turn from the altar untouched.', facts: [] },
+];
+
+describe('THE CLEAN-PROSE BODY — good narration produces no faults at all', () => {
+  it('is a real body of prose, not three sentences (non-vacuity)', () => {
+    expect(CLEAN_PROSE.length).toBeGreaterThanOrEqual(50);
+    const words = CLEAN_PROSE.reduce((n, p) => n + p.text.split(/\s+/).length, 0);
+    expect(words).toBeGreaterThan(400);
+    // Every sentence is distinct, so the count is not padded by repeats.
+    expect(new Set(CLEAN_PROSE.map((p) => p.text)).size).toBe(CLEAN_PROSE.length);
+  });
+
+  it('...and it really does use this game\'s own vocabulary (or it tests nothing)', () => {
+    // A body of generic English would pass whatever the rules did. These are the words the
+    // rules are ABOUT, so the body has to contain them.
+    const all = CLEAN_PROSE.map((p) => p.text).join(' ');
+    for (const word of [
+      'Burn', 'Sleep', 'Wise', 'Charming', 'Poison', //  display names
+      'level', 'floor', //                               the ordinal-floor nouns
+      'the Void', 'Hollow', 'made whole', //             the reserved fiction
+      'Mirror Shard', 'Undercity', 'Ash City', //        names the game owns
+    ]) {
+      expect(all, `the clean body never uses "${word}", so it proves nothing about it`).toContain(word);
+    }
+  });
+
+  it('EVERY sentence is clean under the MODEL rules', () => {
+    const offences: string[] = [];
+    for (const { text, facts } of CLEAN_PROSE) {
+      const { faults } = detectTextFaults(text, VOCAB, { rules: MODEL_TEXT_RULES, echoOf: facts });
+      for (const f of faults) offences.push(`  [${f.rule}] "${f.match}" in: ${text}`);
+    }
+    expect(
+      offences.join('\n'),
+      `${offences.length} false positive(s) on prose that breaks no rule — a rule that fires ` +
+        'here makes the author rewrite good writing, or exempt it, on a test that fails the build',
+    ).toBe('');
+  });
+
+  it('THE CONTROL: the body is not clean because the detector is asleep', () => {
+    // Breaking each sentence in the way its own vocabulary invites proves the sweep above is
+    // a real scan and not a loop over nothing.
+    const broken = [
+      'You step onto the second floor.', //          ordinal-floor
+      'You sink deeper into the Void.', //           void-as-place
+      'a hollow ache behind the eyes', //            reserved-word
+      'The altar offers mirror-shard.', //           catalog-id
+      'mainHand hangs loose at your side.', //       id-shape
+      '1 turn(s) left', //                           paren-s
+    ];
+    for (const text of broken) {
+      expect(
+        detectTextFaults(text, VOCAB, { rules: MODEL_TEXT_RULES }).faults.length,
+        text,
+      ).toBeGreaterThan(0);
+    }
+    // ...and the echo-gated rule, which needs its facts to fire at all.
+    expect(
+      detectTextFaults('You feel — Healthy.', VOCAB, {
+        rules: MODEL_TEXT_RULES,
+        echoOf: ['You steady yourself — Healthy.'],
+      }).faults.map((f) => f.rule),
+    ).toEqual(['condition-label']);
   });
 });

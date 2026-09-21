@@ -23,20 +23,47 @@
 // to `logs/corpus/narration.jsonl` (gitignored — this repository is public and the corpus is
 // the author's own play). `VOID_CORPUS_DIR` points this test at any other folder, including
 // another checkout's.
+//
+// ---------------------------------------------------------------------------------------
+// ⚠ IT WENT RED AND THE SENTENCE IS FINE. WHAT NOW? — read this before deleting anything.
+//
+// The rules are narrow but they are not perfect, and this test runs over PROSE A MODEL WROTE.
+// Sooner or later it will flag a sentence that is actually good. When it does there are three
+// answers, and only one of them is right:
+//
+//   ✗ DELETE THE CORPUS. Never. The corpus IS the evidence — it is the only record of what
+//     the narrator really does, on real hardware, and it cannot be regenerated. Deleting it to
+//     get a green suite destroys the thing the suite exists to protect.
+//   ✗ REWRITE THE RULE to let that one sentence through. Only if the rule is genuinely wrong
+//     for a whole CLASS of prose — and then it belongs in `src/llm/textHygiene.ts` with a
+//     planted case and an entry in that file's clean-prose body, not here.
+//   ✓ ADD A ROW TO `ALLOWANCES` BELOW, with a reason. That makes accepting the sentence a
+//     RECORDED, REVIEWABLE DECISION rather than a silent one, and the exercised-loop keeps it
+//     honest: a row that stops matching fails and tells you to delete it.
+//
+// This is the same mechanism, and the same discipline, as `placeholderRatchet.test.ts`'s
+// allowance table. It is here because without it the first good sentence that trips a rule
+// makes `npm test` permanently red on the author's own machine, with deleting the evidence as
+// the only way out — which is a trap, not a guard.
+// ---------------------------------------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  ALL_TEXT_RULES,
   MODEL_TEXT_RULES,
   buildVocabulary,
   detectTextFaults,
+  type TextRuleId,
   type TextVocabulary,
 } from '../llm/textHygiene.ts';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const VOCAB = buildVocabulary();
+/** This file, read as text — for the one guard that must check its own wiring. */
+const SOURCE = readFileSync(fileURLToPath(import.meta.url), 'utf8');
 
 /** The record shape `electron/corpus.mjs` writes. Only `v` and `text` are load-bearing. */
 interface CorpusRecord {
@@ -54,6 +81,28 @@ const SUPPORTED_VERSION = 1;
 
 /** The most offending lines a failure prints. Beyond this the list stops being readable. */
 const MAX_REPORTED = 20;
+
+/** A named, reasoned exception to one rule, matched against the WHOLE narration. */
+export interface CorpusAllowance {
+  rule: TextRuleId;
+  /** Matched against the record's `text`. Keep it TIGHT — a broad pattern is a hole. */
+  where: RegExp;
+  /** Why this sentence is accepted. An allowance with no reason is an unexplained hole. */
+  reason: string;
+}
+
+/**
+ * THE ONE ALLOWANCE TABLE for the corpus sweep — see the header for when to add to it.
+ *
+ * EMPTY TODAY, and that is the honest state: no corpus has been swept yet, so nothing has been
+ * accepted. The mechanism is NOT untested for being empty — `the allowance mechanism works`
+ * below drives it against a fixture, because a loop over an empty table proves nothing about
+ * the table.
+ *
+ * Every row is counted; inside the disk sweep a loop fails any row that matched NOTHING and
+ * says to delete it. An allowance nobody hits is an allowance nobody can tell is wrong.
+ */
+export const ALLOWANCES: readonly CorpusAllowance[] = [];
 
 // =========================================================================================
 // The parser and the reporter — the two pure halves PART 1 exercises
@@ -117,11 +166,20 @@ type Problem =
  * so a model that obediently repeated a reserved word the engine handed it is not reported
  * a second time by a sweep that has forgotten the context.
  */
+/** What one sweep found, and which allowances absorbed something along the way. */
+export interface SweepResult {
+  problems: Problem[];
+  /** How often each row of the supplied table matched, in the table's own order. */
+  allowed: number[];
+}
+
 export function sweepRecords(
   records: readonly { line: number; value: unknown }[],
   vocab: TextVocabulary,
-): Problem[] {
+  allowances: readonly CorpusAllowance[],
+): SweepResult {
   const problems: Problem[] = [];
+  const allowed = allowances.map(() => 0);
   for (const { line, value } of records) {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) {
       problems.push({ kind: 'shape', line, why: 'not a JSON object' });
@@ -142,6 +200,14 @@ export function sweepRecords(
       echoOf,
     });
     for (const fault of faults) {
+      // An accepted sentence is counted, not reported. The row's reason is on file above.
+      const row = allowances.findIndex(
+        (a) => a.rule === fault.rule && a.where.test(record.text as string),
+      );
+      if (row >= 0) {
+        allowed[row] = (allowed[row] ?? 0) + 1;
+        continue;
+      }
       problems.push({
         kind: 'fault',
         line,
@@ -155,7 +221,7 @@ export function sweepRecords(
       });
     }
   }
-  return problems;
+  return { problems, allowed };
 }
 
 /** The failure message: one line per problem, capped, each naming where to look. */
@@ -237,7 +303,7 @@ describe('the sweep FIRES — proved against a fixture, so a skipped disk sweep 
   });
 
   it('THE FAULTY RECORD IS FOUND, and only it', () => {
-    const problems = sweepRecords(parseCorpus(FIXTURE_TEXT).records, VOCAB);
+    const problems = sweepRecords(parseCorpus(FIXTURE_TEXT).records, VOCAB, []).problems;
     expect(problems.map((p) => (p.kind === 'fault' ? `${p.rule}:${p.match}` : p.kind))).toEqual([
       'ordinal-floor:second floor',
       'void-as-place:floor of the Void',
@@ -256,7 +322,7 @@ describe('the sweep FIRES — proved against a fixture, so a skipped disk sweep 
     // Without this, "the faulty record is found" is satisfied by a sweep that flags every
     // record it reads.
     const clean = [FIXTURE[0]!, FIXTURE[2]!].map((r) => JSON.stringify(r)).join('\n') + '\n';
-    expect(sweepRecords(parseCorpus(clean).records, VOCAB)).toEqual([]);
+    expect(sweepRecords(parseCorpus(clean).records, VOCAB, []).problems).toEqual([]);
   });
 
   it('a beat that ECHOES an engine fact is not reported for the echo', () => {
@@ -264,25 +330,68 @@ describe('the sweep FIRES — proved against a fixture, so a skipped disk sweep 
     const body = 'You are judged worthy and rise from the Void, made whole.';
     const echoing = JSON.stringify(record({ text: 'You are made whole.', facts: [body] })) + '\n';
     const inventing = JSON.stringify(record({ text: 'You are made whole.', facts: [] })) + '\n';
-    expect(sweepRecords(parseCorpus(echoing).records, VOCAB)).toEqual([]);
-    expect(sweepRecords(parseCorpus(inventing).records, VOCAB)).toHaveLength(1);
+    expect(sweepRecords(parseCorpus(echoing).records, VOCAB, []).problems).toEqual([]);
+    expect(sweepRecords(parseCorpus(inventing).records, VOCAB, []).problems).toHaveLength(1);
+  });
+
+  it('THE ALLOWANCE MECHANISM WORKS — a row absorbs a fault, and is counted', () => {
+    // The real table is EMPTY, so a loop over it would prove nothing. This drives it
+    // directly, which is the only way an empty guard can be known to work.
+    const table: CorpusAllowance[] = [
+      {
+        rule: 'ordinal-floor',
+        where: /You step onto the second floor of the Void\./,
+        reason: 'a fixture sentence, accepted so the mechanism can be exercised at all',
+      },
+    ];
+    const swept = sweepRecords(parseCorpus(FIXTURE_TEXT).records, VOCAB, table);
+    // The ordinal-floor fault is gone and counted; the void-as-place fault, which the row
+    // does NOT name, survives. An allowance covers ONE rule, not a whole sentence.
+    expect(swept.problems.map((p) => (p.kind === 'fault' ? p.rule : p.kind))).toEqual([
+      'void-as-place',
+    ]);
+    expect(swept.allowed).toEqual([1]);
+  });
+
+  it('...and a row that matches nothing absorbs nothing and counts zero', () => {
+    const table: CorpusAllowance[] = [
+      { rule: 'ordinal-floor', where: /never in this corpus/, reason: 'a row that is dead weight' },
+    ];
+    const swept = sweepRecords(parseCorpus(FIXTURE_TEXT).records, VOCAB, table);
+    expect(swept.problems).toHaveLength(2);
+    expect(swept.allowed, 'a dead row must be visibly dead, so the loop can fail it').toEqual([0]);
+  });
+
+  it('...and a row for the WRONG RULE absorbs nothing either', () => {
+    // The tightening that matters: `where` alone would let one row quietly cover every rule
+    // a sentence happens to trip.
+    const table: CorpusAllowance[] = [
+      {
+        rule: 'reserved-word',
+        where: /You step onto the second floor of the Void\./,
+        reason: 'right sentence, wrong rule — must not absorb anything',
+      },
+    ];
+    const swept = sweepRecords(parseCorpus(FIXTURE_TEXT).records, VOCAB, table);
+    expect(swept.problems).toHaveLength(2);
+    expect(swept.allowed).toEqual([0]);
   });
 
   it('a record from a FUTURE version says to migrate this test, rather than passing', () => {
     const future = JSON.stringify({ ...record({ text: 'anything at all' }), v: 2 }) + '\n';
-    const problems = sweepRecords(parseCorpus(future).records, VOCAB);
+    const problems = sweepRecords(parseCorpus(future).records, VOCAB, []).problems;
     expect(problems).toHaveLength(1);
     expect(problems[0]!.kind).toBe('version');
     expect(describeProblems(problems)).toContain('MIGRATE THIS TEST');
   });
 
   it('a line that is valid JSON but not a record is reported by shape', () => {
-    const problems = sweepRecords(parseCorpus('[1,2,3]\n"a string"\n{"v":1}\n').records, VOCAB);
+    const problems = sweepRecords(parseCorpus('[1,2,3]\n"a string"\n{"v":1}\n').records, VOCAB, []).problems;
     expect(problems.map((p) => p.kind)).toEqual(['shape', 'shape', 'shape']);
   });
 
   it('the report names the seed, the beat, the floor, the rule and the sentence', () => {
-    const message = describeProblems(sweepRecords(parseCorpus(FIXTURE_TEXT).records, VOCAB));
+    const message = describeProblems(sweepRecords(parseCorpus(FIXTURE_TEXT).records, VOCAB, []).problems);
     for (const needle of [
       'seed 4242',
       'beat 1',
@@ -300,7 +409,7 @@ describe('the sweep FIRES — proved against a fixture, so a skipped disk sweep 
     const many = Array.from({ length: MAX_REPORTED + 10 }, (_, i) =>
       JSON.stringify(record({ text: 'You step onto the second floor.', beat: i })),
     ).join('\n');
-    const problems = sweepRecords(parseCorpus(many).records, VOCAB);
+    const problems = sweepRecords(parseCorpus(many).records, VOCAB, []).problems;
     expect(problems).toHaveLength(MAX_REPORTED + 10);
     const message = describeProblems(problems);
     expect(message).toContain('...and 10 more');
@@ -317,6 +426,28 @@ describe('the sweep FIRES — proved against a fixture, so a skipped disk sweep 
 // =========================================================================================
 // The corpus can never be committed. THIS REPOSITORY IS PUBLIC.
 // =========================================================================================
+
+describe('the allowance table is disciplined, however many rows it has', () => {
+  it('every row names a real rule and carries a reason', () => {
+    for (const a of ALLOWANCES) {
+      expect(ALL_TEXT_RULES, `unknown rule ${a.rule}: ${a.reason}`).toContain(a.rule);
+      expect(
+        a.reason.length,
+        `an allowance with no reason is an unexplained hole: ${a.where.source}`,
+      ).toBeGreaterThan(20);
+      // A row that matches everything is not an allowance, it is a disabled rule.
+      expect(a.where.source.length, `${a.reason}: the pattern is too broad`).toBeGreaterThan(8);
+    }
+  });
+
+  it('the sweep really consults it (the disk sweep below passes the real table)', () => {
+    // Anchored, so that emptying the table is not the same as unplugging the mechanism.
+    expect(Array.isArray(ALLOWANCES)).toBe(true);
+    expect(SOURCE, 'the disk sweep no longer passes the allowance table').toMatch(
+      /sweepRecords\(p\.records, VOCAB, ALLOWANCES\)/,
+    );
+  });
+});
 
 describe('the corpus can never be committed', () => {
   const gitignore = readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
@@ -366,9 +497,38 @@ describe.skipIf(FILES.length === 0)(
       expect(total, `${CORPUS_DIR} exists but holds no records`).toBeGreaterThan(0);
     });
 
+    const swept = parsed.map((p) => sweepRecords(p.records, VOCAB, ALLOWANCES));
+
     it('nothing the model said breaks a text rule', () => {
-      const problems = parsed.flatMap((p) => sweepRecords(p.records, VOCAB));
-      expect(describeProblems(problems), `${problems.length} problems in ${CORPUS_DIR}`).toBe('');
+      const problems = swept.flatMap((r) => r.problems);
+      expect(
+        describeProblems(problems),
+        `${problems.length} problems in ${CORPUS_DIR}. THESE SENTENCES ARE REAL — read the ` +
+          'block at the top of this file before you do anything to the corpus. If one of them ' +
+          'is good writing, add a row to ALLOWANCES with a reason; never delete the corpus.',
+      ).toBe('');
+    });
+
+    // One `it` per allowance row, generated — so a row can never be added without being
+    // proved live, and the day the model stops writing the accepted sentence, this says so.
+    describe('the allowances are all EXERCISED, so none is dead weight', () => {
+      it('the table was applied to every file', () => {
+        expect(swept).toHaveLength(parsed.length);
+        for (const r of swept) expect(r.allowed).toHaveLength(ALLOWANCES.length);
+      });
+
+      ALLOWANCES.forEach((allowance, i) => {
+        it(`[${allowance.rule}] ${allowance.where.source} is exercised`, () => {
+          const hits = swept.reduce((n, r) => n + (r.allowed[i] ?? 0), 0);
+          expect(
+            hits,
+            'this allowance matched NOTHING in the corpus on this machine. Either the model no ' +
+              'longer writes the sentence it accepts — in which case DELETE the row, that is the ' +
+              'ratchet turning — or the corpus was replaced. Reason on file: ' +
+              allowance.reason,
+          ).toBeGreaterThan(0);
+        });
+      });
     });
   },
 );

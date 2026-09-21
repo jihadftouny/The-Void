@@ -27,6 +27,12 @@
 >       **If it goes RED, that is the feature working, not a broken build:** it prints the seed, the
 >       beat, the floor and the exact sentence, and the rule it broke. Send that output; it is the
 >       first hard evidence of what the narrator actually does wrong, and it is what #12 needs.
+>       **⚠ And if the sentence it flags is actually GOOD writing — which will happen — do NOT
+>       delete the corpus to get a green suite.** The corpus is the evidence and it cannot be
+>       regenerated. Add a row to the `ALLOWANCES` table at the top of
+>       `src/dev/narrationCorpus.test.ts` with a reason; the file's header walks you through it.
+>       That makes accepting a sentence a recorded decision, and a later test fails the row if the
+>       model ever stops writing it.
 > - [ ] **4. If nothing is flagged, read three beats yourself anyway** and ask the two questions no
 >       rule can: does it name a floor by its NAME, and does it ever treat the Void as somewhere you
 >       are standing? (`WORLD.md` §6 locks that.) The detector catches *“into the Void”* and *“the
