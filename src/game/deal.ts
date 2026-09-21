@@ -39,7 +39,7 @@
 
 import { type StatKey, computeStatMods } from './character.ts';
 import { type Player } from './player.ts';
-import { type EquipSlot, type ItemInstance, getAllRelics } from './item.ts';
+import { type EquipSlot, type ItemInstance, getAllRelics, getCatalogItemById } from './item.ts';
 import { type Rarity } from './weapon.ts';
 import { generateItem } from './rarityGen.ts';
 import { pick, type Rng } from './rng.ts';
@@ -453,11 +453,26 @@ export function describeCost(cost: DealCost): string {
   }
 }
 
-/** A serializable one-line summary of a deal's reward, for the `deal-offer` event. */
+/**
+ * A serializable one-line summary of a deal's reward, for the `deal-offer` event.
+ *
+ * G71(a) — THE THREE-STEP FALLBACK, and why it has to be three steps. This read
+ * `instance.rolled?.name ?? instance.defId`, so a FIXED-RELIC reward — which has no `rolled`
+ * overlay, because nothing was rolled — printed the raw catalog id. The grace pool offers
+ * `mirror-shard` for 1 CHA, so the altar screen, the combat log, the narrator's facts and the
+ * model-failure fallback all read "An altar in the dark offers mirror-shard". It is the same
+ * defect `summarizeLoot` fixed for loot (G14), and this is the same fix: a ROLLED item reads
+ * its rolled name, an authored CATALOG item resolves through the catalogs, and only an id that
+ * resolves in NO catalog falls back to itself — which nothing on the deal path can produce.
+ */
 export function describeReward(reward: DealReward): string {
   switch (reward.kind) {
     case 'item':
-      return reward.instance.rolled?.name ?? reward.instance.defId;
+      return (
+        reward.instance.rolled?.name ??
+        getCatalogItemById(reward.instance.defId)?.name ??
+        reward.instance.defId
+      );
     case 'statPoint':
       return `+1 ${reward.stat}`;
     case 'skillCharge':
