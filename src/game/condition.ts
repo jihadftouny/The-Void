@@ -160,6 +160,43 @@ export const CONTROL_CONDITIONS: ReadonlySet<ConditionType> = new Set<ConditionT
   'insanity',
 ]);
 
+/**
+ * The seven conditions that HELP their bearer: the six `+` augments of `statEffects.ts`'s
+ * AUGMENT_DEPRIVATION table (strong/quick/healthy/smart/wise/charming) plus regeneration,
+ * the one healing DoT. Everything else in `CONDITION_DATA` works against its bearer.
+ *
+ * This is the one fact about a condition that the display tables need and `ConditionData`
+ * does not hold. It lives here, beside `CONTROL_CONDITIONS`, because it is a property of the
+ * condition itself — not of any one screen. Read by the narrator (C10: a buff is never
+ * "afflicted with") and by the inventory's effect phrases (C9: "grants you" vs "afflicts you
+ * with").
+ *
+ * Declared `as const` so `BeneficialCondition` is a literal union and a
+ * `Record<BeneficialCondition, …>` is exhaustive at COMPILE TIME: an eighth buff fails the
+ * build at every table keyed on it, rather than falling through a `default` the way
+ * `healMultiplier` did (C9). `satisfies readonly ConditionType[]` keeps every entry a real
+ * condition id, so PLAN.md #1.5's rename walks the compiler through here too.
+ */
+export const BENEFICIAL_CONDITIONS = [
+  'regeneration',
+  'strong',
+  'quick',
+  'healthy',
+  'smart',
+  'wise',
+  'charming',
+] as const satisfies readonly ConditionType[];
+
+/** One of the seven conditions that help their bearer — a literal union, for exhaustive tables. */
+export type BeneficialCondition = (typeof BENEFICIAL_CONDITIONS)[number];
+
+const BENEFICIAL: ReadonlySet<ConditionType> = new Set<ConditionType>(BENEFICIAL_CONDITIONS);
+
+/** True if this condition helps the character carrying it (narrows to `BeneficialCondition`). */
+export function isBeneficial(type: ConditionType): type is BeneficialCondition {
+  return BENEFICIAL.has(type);
+}
+
 /** Insanity flavor lines, ported from `Condition.insanityStrings`. */
 export const INSANITY_STRINGS: readonly string[] = [
   '~Useless. You are useless.~',

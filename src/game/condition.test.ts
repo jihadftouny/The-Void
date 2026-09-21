@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BENEFICIAL_CONDITIONS,
   CONDITION_DATA,
   CONTROL_CONDITIONS,
+  isBeneficial,
   addCondition,
   applyCondition,
   cureCondition,
@@ -13,6 +15,7 @@ import {
 } from './condition.ts';
 import { type Character } from './character.ts';
 import { type Rng } from './rng.ts';
+import { AUGMENT_DEPRIVATION } from './statEffects.ts';
 
 // A deterministic RNG scripted from a fixed list of floats. Each call returns the
 // next value; drawing past the end throws (so a test that expects "no draws" proves
@@ -484,6 +487,47 @@ describe('ActiveCondition JSON round-trip', () => {
     for (const t of types) {
       const c = makeCondition(t);
       expect(JSON.parse(JSON.stringify(c))).toEqual(c);
+    }
+  });
+});
+
+describe('BENEFICIAL_CONDITIONS — which conditions help their bearer', () => {
+  // The expectation is DERIVED, not copied: a condition helps its bearer exactly when it
+  // raises a stat (a `+` row of statEffects.ts's AUGMENT_DEPRIVATION table) or it heals
+  // (regeneration, the one healing DoT — named by hand from the tick chain, which adds hp
+  // for it and subtracts for every other damage-over-time).
+  const derived = new Set<ConditionType>(['regeneration']);
+  for (const [type, entry] of Object.entries(AUGMENT_DEPRIVATION)) {
+    if (entry && entry.delta > 0) derived.add(type as ConditionType);
+  }
+
+  it('is exactly the stat-raising augments plus regeneration', () => {
+    expect([...BENEFICIAL_CONDITIONS].sort()).toEqual([...derived].sort());
+    // Seven, derived independently: six `+` augments (one per stat) and regeneration.
+    expect(BENEFICIAL_CONDITIONS).toHaveLength(7);
+  });
+
+  it('isBeneficial answers true for those seven and false for the other eighteen', () => {
+    const all = Object.keys(CONDITION_DATA) as ConditionType[];
+    expect(all).toHaveLength(25);
+    for (const type of all) {
+      expect(isBeneficial(type)).toBe(derived.has(type));
+    }
+    expect(all.filter((t) => !isBeneficial(t))).toHaveLength(18);
+  });
+
+  it('holds no control condition and no damage-over-time', () => {
+    for (const type of BENEFICIAL_CONDITIONS) {
+      expect(CONTROL_CONDITIONS.has(type)).toBe(false);
+      // A condition that stacks as a DoT deals its intensity per tick; none of these do.
+      expect(CONDITION_DATA[type].stacking).toBe('refresh');
+    }
+  });
+
+  it('every entry is a real condition with a display name', () => {
+    for (const type of BENEFICIAL_CONDITIONS) {
+      expect(CONDITION_DATA[type]).toBeDefined();
+      expect(CONDITION_DATA[type].displayName.length).toBeGreaterThan(0);
     }
   });
 });
