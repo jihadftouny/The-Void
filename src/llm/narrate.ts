@@ -8,6 +8,12 @@ import type { Player } from '../game/player.ts';
 import { restBrief } from '../game/restBrief.ts';
 import { floorOf } from '../game/floors.ts';
 import { summarizeLoot } from '../game/loot.ts';
+import {
+  CONDITION_DATA,
+  isBeneficial,
+  type BeneficialCondition,
+  type ConditionType,
+} from '../game/condition.ts';
 import { karmaTone } from './tone.ts';
 
 export const VOID_PERSONA =
@@ -25,6 +31,47 @@ const FLOORS = [
 ];
 
 /**
+ * The player-facing name of a condition — C7/C10(c). Reads the ENGINE's own
+ * `CONDITION_DATA` display name rather than the raw union id, so the model is told
+ * "Agile" and "Brainy" (the two ids whose display name genuinely differs from the id)
+ * instead of `quick` and `smart`. The facts are ground truth: a raw id in one reads to
+ * the model as the condition's real name, and it narrates the id back at the player.
+ *
+ * The name is READ and never re-spelled here, so PLAN.md #1.5's `insanity` → `Static`
+ * rename lands in `condition.ts` alone. `format.ts` holds the identical helper for the
+ * combat log; the two are deliberately separate files, not a shared render import —
+ * `src/llm` is a pure core and may not depend on `src/render`.
+ */
+function conditionName(type: ConditionType): string {
+  return CONDITION_DATA[type].displayName;
+}
+
+/**
+ * How a BUFF lands, per buff and per subject — C10(b).
+ *
+ * `condition-applied` used to read "You are afflicted with healthy." for Brace, the
+ * Enforcer's own defensive skill: the model was told the player's best round was a
+ * misfortune, and narrated it that way. A buff is not an affliction, so it gets its own
+ * sentence.
+ *
+ * WHY A TABLE PER BUFF rather than one generic "X settles over you": the display names
+ * are a mix of adjectives (Healthy, Agile, Brainy) and a noun (Regeneration), so no
+ * single verb reads right for all seven, and the register asks for the specific
+ * steadies/quickens phrasing. Keyed on the ID (never the display name), and EXHAUSTIVE
+ * over `BeneficialCondition` — an eighth buff fails the build right here instead of
+ * silently falling back to "afflicted".
+ */
+const BUFF_ONSET: Record<BeneficialCondition, { you: string; enemy: string }> = {
+  healthy: { you: 'You steady yourself', enemy: 'The enemy steadies' },
+  quick: { you: 'You quicken', enemy: 'The enemy quickens' },
+  strong: { you: 'You harden', enemy: 'The enemy hardens' },
+  smart: { you: 'Your thoughts sharpen', enemy: "The enemy's thoughts sharpen" },
+  wise: { you: 'Your sight clears', enemy: "The enemy's sight clears" },
+  charming: { you: 'You brighten', enemy: 'The enemy brightens' },
+  regeneration: { you: 'Your wounds begin to knit', enemy: "The enemy's wounds begin to knit" },
+};
+
+/**
  * One short factual clause describing an event, or '' if it needs no narration.
  *
  * TOTAL over the `GameEvent` union — every one of its kinds (counted in `narrationCoverage.test.ts`) has an explicit case, and
@@ -37,8 +84,9 @@ const FLOORS = [
  * THE CLASSIFICATION RULE. A kind earns a FACT LINE if and only if all three hold:
  *   1. it is player-observable — someone acted, HP moved, or the world offered or
  *      resolved something; and
- *   2. its clause can be written from the event's OWN fields, with no display-name or
- *      pluralisation table (that work is C7/C10, routed to PLAN.md #13); and
+ *   2. its clause can be written from the event's OWN fields plus the ENGINE's own display
+ *      tables — `CONDITION_DATA` for a condition's name, `BENEFICIAL_CONDITIONS` for
+ *      whether it helps or hurts (C7/C10 built both into this file); and
  *   3. it prints no internal enum id (the C9 defect: "On onHit: dealDamage").
  * Everything else returns '' from the DELIBERATE SILENCE block at the bottom, which
  * carries a reason per group. A WRONG fact line is worse than no fact line, because the
@@ -80,12 +128,25 @@ export function describeEvent(e: GameEvent): string {
       const dmg = e.damage ? ` for ${e.damage} harm` : '';
       return `${who} ${verb}${dmg}.`;
     }
-    case 'condition-applied':
-      return `${e.subject === 'player' ? 'You are' : 'The enemy is'} afflicted with ${e.conditionType}.`;
+    case 'condition-applied': {
+      // C10(b) + C10(c). A buff gets its own sentence (BUFF_ONSET); everything else is an
+      // affliction. Either way the DISPLAY name is what reaches the model, never the id.
+      const name = conditionName(e.conditionType);
+      if (isBeneficial(e.conditionType)) {
+        const onset = BUFF_ONSET[e.conditionType];
+        return `${e.subject === 'player' ? onset.you : onset.enemy} — ${name}.`;
+      }
+      return `${e.subject === 'player' ? 'You are' : 'The enemy is'} afflicted with ${name}.`;
+    }
     case 'condition-damage':
-      return `${e.subject === 'player' ? 'You' : 'The enemy'} suffer(s) ${e.amount} ${e.conditionType} damage.`;
+      // C10(a): the literal "(s)" optional-plural marker reached the model and, on the
+      // fallback path, the player. English has two subjects here and they take two verb
+      // forms, so the sentence picks one. "harm from X" rather than "X damage" matches the
+      // vocabulary every sibling fact already uses (`attack`, `escape-failed`,
+      // `boss-minion-damage`) — one word for hurt, for a 4B model.
+      return `${e.subject === 'player' ? 'You suffer' : 'The enemy suffers'} ${e.amount} harm from ${conditionName(e.conditionType)}.`;
     case 'player-unable-to-act':
-      return `You cannot act — ${e.conditionType} holds you.`;
+      return `You cannot act — ${conditionName(e.conditionType)} holds you.`;
     case 'fled':
       return `You break away into the dark.`;
     case 'escape-failed':
@@ -256,12 +317,15 @@ export function describeEvent(e: GameEvent): string {
     case 'consumable-unavailable':
       return '';
 
-    // The condition family. Narrating these properly needs CONDITION_DATA display names
-    // and subject-aware plurals — that is FINDINGS.md C10/C7, routed to PLAN.md #13 #12.
-    // Writing them here would ship four NEW instances of a known defect straight into the
-    // model's ground truth. `condition-applied` (cased above) already tells the model that
-    // a condition landed, so the beat is not invisible. Keeping the whole family silent
-    // also means PLAN.md #1.5's `insanity` -> `Static` rename touches nothing in this file.
+    // The condition family. These four STAY SILENT — and the reason has changed, so the
+    // note has to. The tools they were waiting on now exist in this file (`conditionName`,
+    // `BUFF_ONSET`), so writing them is no longer blocked by C7/C10. What keeps them
+    // silent is PROMPT BUDGET: `condition-applied` (cased above) already tells the model
+    // a condition landed, and `condition-damage` tells it what that cost. Adding onset,
+    // heal, skip and expiry would put up to four more condition lines in a single round's
+    // facts — for a 4B model with a fixed, near-full prompt, that crowds out the beat the
+    // round was actually about. Changing the fact/silent split is a narrator-spec decision
+    // (PLAN.md #12), not a text fix, so it is made there with the budget in view.
     case 'condition-onset':
     case 'condition-heal':
     case 'condition-skip':
