@@ -1,5 +1,15 @@
 # Human Checks — The Void
 
+> ## 💰 From `art-pipeline` (merged 2026-09-21) — the art tool is in, and it is armed
+>
+> **Nothing here is urgent: no image can be generated until you author the prompts** (all 52 ship empty). But two of these are cheap now and expensive later.
+>
+> - [ ] **1. Settle the two LOCKED contradictions — $7.03 rides on them.** `docs/ART-BIBLE.md` §3 draws **enemy sprites at 1:1, full body**; `src/data/artSlots.json` commits the on-screen enemy region to **3:4** and calls itself *“the shape a future sprite is drawn to”* — a 1:1 sprite letterboxes in it (**30 sprites + 5 bosses + 3 Sin identities = $6.03**). Separately §3 says class portraits are **full body** (an explicit 2026-08-28 correction rejecting *“waist-up”*), while `artSlots.json` says the square means *“a chest-up crop, not a full figure”* and sized its 140px slot on that (**$1.005**). **Decide which wins and edit the loser.** Recorded as `FINDINGS.md` **G70**. Changing the region is free; regenerating art is not.
+> - [ ] **2. ⚠ The tool can now spend money from the main checkout.** Your real `GOOGLE_API_KEY` is in `<MAIN>/.env`, and the tool reads `.env` from wherever it is run. Every verification in this unit ran from a worktree with no `.env`. It still needs `--confirm-spend` **and** an explicit asset **and** an authored prompt — but the safety is no longer *“there is no key here.”* Run `npm run art` once and confirm it prints a **DRY RUN** and `$0.000`.
+> - [ ] **3. Before the first paid call, check the request shape for free.** `npm run art -- --stage 1 --preview bodies.json` writes the exact bodies and sends nothing. Compare field-by-field against Google's live `batchGenerateContent` reference: `generationConfig.responseModalities`, `imageConfig.aspectRatio`, `imageConfig.imageSize`, `temperature`, `batch.inputConfig.requests[].metadata.key`. **The format has never met a live call.** A wrong request field is an HTTP 400 — rejected, not billed. A wrong *response* shape is the expensive one: the batch is submitted, billed, and parsing keeps nothing. (Needs prompts first.)
+> - [ ] **4. Make the first real call interactive, one asset, one take — never a batch.** `--mode interactive --takes 1 --retake-rounds 0 --confirm-spend`. **Expect exactly $0.134 and one image.** It is the one mode where the expensive failure cannot happen.
+> - [ ] **5. On the first paid batch, capture the raw response.** Run with `--verbose`, keep `art-candidates/<runId>/run.log.jsonl`, and check the response holds **exactly one entry per submitted request** with `metadata.key` echoed verbatim and no duplicates. This is the only way to close the last open unknown (`D6`).
+
 > ## ⚡ From `signal-tear` (merged 2026-09-20) — floor 2 is a glitch again, not dust
 >
 > **You said floor 2 *"should read more as glitches than similar to ash."* It was our regression:** floor 2 was scanlines, a glitch; when you rejected the grid, the speck fix replaced them with dots — which is floor 3's language. Floor 2 now carries **six slices of uneven red dashes at uneven heights; one snaps sideways every few seconds and holds.** No dots. Colours unchanged.

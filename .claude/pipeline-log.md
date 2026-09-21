@@ -19,6 +19,34 @@ Format per entry:
 
 ---
 
+## 2026-09-21 — art-pipeline (G70 opened; D6, D8-residual left open) [branch `agentic/art-pipeline-2`, **merged to `main` 2026-09-21**]
+- Verdict: **PASS**, then **three fix rounds** raised by the orchestrator on passing verdicts. 2833 → **3130 tests**. 17 commits, each green.
+- **Why it exists:** the author chose a no-placeholder first playable and asked for the art to be sequenced in. This is `PLAN.md` #3, the tooling, at **$0**.
+- Build-agent deviations: several, all sound; two were **stricter than the plan** (`--resume` made to require `--confirm-spend` because collecting still calls the API; `key` renamed `keyMode` so a `grep -i key` audit of a manifest stays meaningful).
+- Test failures before fixes: none. Every defect below was found by a guard or by verification, never by the suite going red on its own.
+- Manual engineer fixes: none yet.
+
+### Eight money-path defects, and what they have in common
+
+`--preview` ignored on a spending path (and the images sent) · `--dry-run` not beating `--confirm-spend` on resume · the key read before the decision to spend · a resume widening to the whole catalogue (**153 images ≈ $10.25**, stopped only by an unrelated throw) · a dry run quoting a different run's cost · **the spend ceiling decided by untrusted network input** · a re-queue rule enforced by two expressions computing one number · guards scanning the test files whose job is to contain the forbidden text.
+
+**Not one of them was a wrong calculation.** Every one was a *decision made in the wrong place*: a rule living in `main` instead of the pure decision function, an ordering assumed instead of asserted, an authority (the manifest) established for one question and not applied to its twin. **The fix in every case was to move the rule to where it could not be routed around**, which is also what made each one testable.
+
+### What worked
+
+- **Making the money guarantee a property of a pure function** (`decideRun`) rather than of the command-line handler. Once the rule lived there, 216 exhaustive flag combinations could prove it, and the later fixes inherited it for free.
+- **Dependencies that throw if reached.** The test asserts the secret loader was never *called*, not that the exit code looked right — which is how the "key read before the decision" defect surfaced at all.
+- **Verification that reproduces the defect against the real binary** rather than reading the test that claims it. Every round's findings came from running the tool, not from reading it.
+- **Three rounds of diminishing returns, deliberately stopped.** Round findings went $10.25 → $0.402 → a case needing a hostile server. The orchestrator called the third the last and merged.
+
+### For the retro
+
+- **A guard anchored to a function's ARITY is not a guard.** `expect(planResume.length).toBe(1)` passes a default parameter straight through. Same family as #10 ("not zero is not visible") — it measures a proxy, not the property.
+- **When a document and a binary both state a rule, pin them to each other** — §1c's guard goes red from either end, which is the two-ended-coupling rule (#9) applied to documentation.
+- **An unclamped tally over untrusted input is the anti-pattern the same file already warned about**, one function away. The build wrote that comment itself during an earlier fix and did not apply it where it also belonged. **Worth asking whether a fix should end with: where else does this reasoning hold?**
+
+---
+
 ## 2026-09-20 — signal-tear (G68 opened) [branch `agentic/signal-tear`, **merged to `main` 2026-09-20**]
 - Verdict: **PASS**, first pass, **0 fix rounds**. 2796 → **2833 tests**. 2 commits, each green.
 - **Why it exists: OUR OWN REGRESSION, caught by the author in play.** Floor 2's texture was `static` — scanlines, a glitch. When the author rejected the grid look, `speck-scatter` replaced it with scattered dots — **floor 3's language** — and nobody noticed the two floors had started to read alike until the author said *"floor 2 should read more as glitches than similar to ash."*
