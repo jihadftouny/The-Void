@@ -272,8 +272,15 @@ const HOLLOW_CASUAL = /\bhollow(?:ed|ing|s|ness)?\b/g;
 /** The other reserved phrase. Case-insensitive: it is a phrase, not a name. */
 const MADE_WHOLE = /\bmade whole\b/gi;
 
-/** The optional-plural marker. */
-const PAREN_S = '(s)';
+/**
+ * The optional-plural marker.
+ *
+ * Written as a REGEX and not as a string literal on purpose: the ratchet's static half scans
+ * every shipping string literal for this exact marker, and it deliberately does not scan regex
+ * literals ("a guard AGAINST a marker is not an instance of it"). A string here would put this
+ * module on the frozen inventory of files that ship a "(s)", which is the opposite of true.
+ */
+const PAREN_S = /\(s\)/g;
 
 /**
  * `rarityGen.ts` names a rolled drop `${rarity} ${slot}`, so the SLOT ID is the item's
@@ -460,13 +467,7 @@ export function detectTextFaults(
     }
   }
 
-  if (rules.has('paren-s')) {
-    let at = stripped.indexOf(PAREN_S);
-    while (at >= 0) {
-      faults.push({ rule: 'paren-s', match: PAREN_S, index: at });
-      at = stripped.indexOf(PAREN_S, at + PAREN_S.length);
-    }
-  }
+  if (rules.has('paren-s')) push(faults, 'paren-s', stripped, PAREN_S);
 
   if (rules.has('ordinal-floor')) {
     push(faults, 'ordinal-floor', stripped, ORDINAL_BEFORE);

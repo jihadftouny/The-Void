@@ -352,15 +352,14 @@ const FROZEN_TS: Record<RuleName, Record<string, string[]>> = {
       'Jooj Armor 1', 'Jaaj Sword 1', 'Jaaj Armor 1', 'Jooj Gun 1', 'Jooj Armor 1',
     ],
   },
-  // ⚠ ONE ENTRY, AND IT IS NOT DELIBERATE. `components.ts` builds a condition chip's
-  // tooltip as "<Name> — N turn(s) left". It is a live instance of exactly the defect
-  // FINDINGS.md C10(a) closed in `narrate.ts` and `format.ts`, and the fix is the same one
-  // line those two got. It is frozen at 1 rather than fixed ONLY because this unit's
-  // declared territory did not include `src/render/components.ts`; it is reported in the
-  // unit's handoff for routing. LOWER THIS TO ZERO when it is fixed. Never raise it.
-  parenS: {
-    'src/render/components.ts': ['${} — ${} turn(s) left'],
-  },
+  // ZERO, and that is the ratchet having TURNED. `components.ts` used to build a condition
+  // chip's tooltip as "<Name> — N turn(s) left" — a live instance of the defect FINDINGS.md
+  // C10(a) closed in `narrate.ts` and `format.ts`, frozen at 1 by the unit that found it
+  // because `src/render/components.ts` was outside its territory. `text-hygiene` fixed it:
+  // the tooltip is now decided by the pure `chipTitle`, which picks the plural. The entry is
+  // deleted rather than lowered to an empty list, because the FILE has nothing to declare.
+  // Never raise it.
+  parenS: {},
 };
 
 /** Files the static scan does not police, and why. */
@@ -514,12 +513,17 @@ describe('STATIC — the string literals in shipping TypeScript are exactly thes
     expectFrozen('Jooj/Jaaj/Jiij literals', measured.joke, FROZEN_TS.joke);
   });
 
-  it('the "(s)" marker survives in exactly one place, and it is a defect, not a decision', () => {
+  it('the "(s)" marker is in NO shipping literal, anywhere', () => {
     expectFrozen('"(s)" literals', measured.parenS, FROZEN_TS.parenS);
-    // The two the narrator and the log shipped are GONE and may not come back.
+    // The three the narrator, the log and the view model shipped are GONE and may not come
+    // back — and so, since `text-hygiene` (G71b), is the condition chip's tooltip.
     expect(measured.parenS['src/llm/narrate.ts']).toBeUndefined();
     expect(measured.parenS['src/render/format.ts']).toBeUndefined();
     expect(measured.parenS['src/desktop/view-model.ts']).toBeUndefined();
+    expect(
+      measured.parenS['src/render/components.ts'],
+      'the condition chip ships "turn(s)" again — G71(b) verbatim',
+    ).toBeUndefined();
   });
 });
 
