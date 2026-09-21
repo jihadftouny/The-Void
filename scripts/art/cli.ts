@@ -394,6 +394,15 @@ export function planRun(catalogue: Catalogue, args: Args): PlannedRun {
  * passes, never remove them — so the shortfall now bounds the shortfall after collection, and
  * multiplying by the rounds left bounds the whole resume. §A8: size for the worst case, because
  * the worst case is the number the author is actually agreeing to.
+ *
+ * THAT BOUND IS A PROPERTY OF `resumeRun`, NOT A PROMISE MADE HERE, and it was briefly false. It
+ * holds because `resumeRun` accepts only the results the manifest says were asked for, and then
+ * derives what is still owed from each asset's own passing count. An earlier version TALLIED the
+ * failures among whatever the API returned, so a response containing each failing take twice —
+ * which nothing rules out, since the wire format has never met a live call — doubled the real
+ * spend against an unchanged quote. `run.test.ts` now drives duplicates, invented ids, foreign
+ * assets and an empty response through the real `resumeRun` and requires the money to stay under
+ * what this function quoted.
  */
 export interface PlannedResume {
   runId: string;

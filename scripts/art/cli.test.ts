@@ -22,6 +22,7 @@ import path from 'node:path';
 import {
   decideRun,
   formatDryRun,
+  formatResumeDryRun,
   planResume,
   MAX_RETAKE_ROUNDS,
   MAX_TAKES,
@@ -31,6 +32,8 @@ import {
   type Args,
 } from './cli.ts';
 import { validateCatalogue, type Catalogue } from './catalogue.ts';
+import type { ResumePoint } from './run.ts';
+import type { Manifest } from './manifest.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../..');
@@ -457,6 +460,66 @@ describe('docs/ART-BIBLE.md §1c describes what the tool actually does', () => {
 
   const decide = (argv: string[]) => decideRun(argsFor(argv));
 
+  /**
+   * A run owing one retake round: 2 assets x 3 takes, none passing, one retake round left.
+   * By hand: 6 images still owed x 67 = 402 milli = $0.402.
+   */
+  function resumePointForDoc(): ResumePoint {
+    const asset = (id: string) => ({
+      id,
+      name: id,
+      class: 'altar',
+      prompt: `a ${id}`,
+      params: {
+        aspectRatio: '1:1',
+        imageSize: '1K',
+        temperature: 1,
+        takes: 3,
+        gate: 'corners',
+        keyMode: 'luminance',
+      },
+      reference: null,
+      candidates: [],
+      passing: [] as string[],
+      costMilliUsd: 201,
+      runningMilliUsd: 201,
+      imagesSubmitted: 3,
+    });
+    const manifest: Manifest = {
+      version: 1,
+      runId: 'R1',
+      mode: 'batch',
+      model: 'gemini-3-pro-image',
+      state: 'running',
+      createdAt: 1,
+      takes: 3,
+      retakeRounds: 1,
+      pricePerImageMilliUsd: 67,
+      imagesSubmitted: 6,
+      imagesReturned: 0,
+      milliUsd: 402,
+      usd: '0.402',
+      assets: [asset('altar'), asset('shrine')],
+      rounds: [
+        {
+          round: 1,
+          requested: 6,
+          handle: 'batches/left-running',
+          startedAt: 1,
+          finishedAt: null,
+          durationMs: null,
+        },
+      ],
+    };
+    return {
+      manifest,
+      runDir: 'art-candidates/R1',
+      manifestPath: 'art-candidates/R1/manifest.json',
+      round: 1,
+      handle: 'batches/left-running',
+    };
+  }
+
   it('§1c claims a dry run always wins — and it does, even on --resume', () => {
     expect(SECTION).toContain('`--dry-run` always wins');
     expect(SECTION).toContain('including alongside `--resume`');
@@ -488,12 +551,38 @@ describe('docs/ART-BIBLE.md §1c describes what the tool actually does', () => {
     expect(decide(['--stage', '1', '--confirm-spend']).kind).toBe('generate'); // both
   });
 
-  it('§1c claims a selection is ignored by --resume — and the quote proves it', () => {
+  it('§1c claims a selection is ignored by --resume — and the OUTPUT proves it', () => {
     expect(SECTION).toContain('**ignored by `--resume`**');
     expect(SECTION).toContain('prices that run from its own manifest');
-    // `planResume` reads only the manifest — there is no `args` in its signature at all, so a
-    // selection cannot reach the figure even in principle.
-    expect(planResume.length).toBe(1);
+
+    // This used to be `expect(planResume.length).toBe(1)` — an arity check, which is not the
+    // claim. A default parameter keeps `Function.length` at 1, so `planResume(point, args = null)`
+    // wired to move the figure left it green. The claim is about the number the author reads, so
+    // that is what is compared now: the money lines, across every selection shape.
+    const point = resumePointForDoc();
+    const moneyLines = (selection: string[]): string[] =>
+      formatResumeDryRun(ALL_50, planResume(point), argsFor(['--resume', 'R1', ...selection])).filter(
+        (line) => line.includes('$'),
+      );
+
+    const base = moneyLines([]);
+    expect(base.join('\n')).toContain('Maximum this resume can still spend: $0.402');
+    for (const selection of [
+      ['--stage', '1'],
+      ['--stage', '4'],
+      ['--asset', 'altar'],
+      ['--assets', 'altar,shrine,class-hollow'],
+    ]) {
+      expect(moneyLines(selection), selection.join(' ')).toEqual(base);
+    }
+
+    // And the shape the arity check was blind to: a second argument cannot change the figure,
+    // because passing one changes nothing about what comes back.
+    const withArgs = (planResume as (p: typeof point, extra?: unknown) => unknown)(
+      point,
+      argsFor(['--resume', 'R1', '--stage', '1']),
+    );
+    expect(withArgs).toEqual(planResume(point));
   });
 
   it('§1c warns that the request shape has never met a live call', () => {

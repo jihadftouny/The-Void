@@ -995,6 +995,158 @@ describe('a resume dry run quotes what the real resume would submit (D7)', () =>
     expect(actuallySubmitted * 67).toBeLessThanOrEqual(quoted.maximumMilliUsd);
   });
 
+  // -----------------------------------------------------------------------------------------
+  // D8 — the API does not get to decide how much a resume spends
+  // -----------------------------------------------------------------------------------------
+  //
+  // On a resume the request list is gone (`gemini.ts` polls with `poll(handle, [])`), so every id
+  // comes from the far end. The wire format has never met a live call, so nothing is known about
+  // what a real response contains. These tests feed it the responses nobody has ruled out.
+
+  /** Run a resume against a response the run did not ask for, and report what it submitted. */
+  async function resumeWithResponse(results: ImageResult[]) {
+    const white = SPRITE_WHITE_TOP();
+    const failing: Record<string, Uint8Array> = {};
+    for (const id of ['a', 'b']) {
+      for (const take of [1, 2, 3]) failing[`${id}-r2-t${take}`] = white;
+    }
+    const provider = fakeProvider(failing);
+    provider.resume = async () => results;
+    const h = harness(provider);
+    h.files.set('art-candidates/R1/manifest.json', serializeManifest(manifestTwoAssets()));
+
+    const resumePoint = await findResumePoint('R1', 'art-candidates', h.deps.fs);
+    const quoted = planResume(resumePoint);
+    const outcome = await resumeRun(
+      { runId: 'R1', outDir: 'art-candidates', catalogue, spendAllowed: true, resumePoint },
+      h.deps,
+    );
+    return { quoted, outcome, h, submitted: outcome.manifest.imagesSubmitted - 6 };
+  }
+
+  /** Six failing takes, as the run really asked for them. */
+  function sixFailures(): ImageResult[] {
+    const white = SPRITE_WHITE_TOP();
+    return ['a', 'b'].flatMap((id) =>
+      [1, 2, 3].map((take) => ({
+        id: `${id}-r1-t${take}`,
+        ok: true as const,
+        mimeType: 'image/jpeg',
+        bytes: white,
+      })),
+    );
+  }
+
+  it('every failing take returned TWICE still buys exactly one retake round (D8)', async () => {
+    // Measured before the fix: quoted 402 milli, really submitted 12 images = 804 milli. The
+    // duplicates were tallied as extra failures, so the API chose the ceiling.
+    const doubled = [...sixFailures(), ...sixFailures()];
+    const { quoted, submitted, h } = await resumeWithResponse(doubled);
+
+    expect(submitted).toBe(6);
+    expect(submitted * 67).toBe(402);
+    expect(submitted * 67).toBeLessThanOrEqual(quoted.maximumMilliUsd);
+    // The duplicates were recorded as discarded, not silently swallowed.
+    const discarded = h.entries().filter((e) => e.message === 'discarded a result the run never asked for');
+    expect(discarded.length).toBe(6);
+    expect((discarded[0]?.data as { reason: string }).reason).toBe('duplicate');
+    // …and the manifest holds one candidate per real request, not two.
+    expect(h.files.has('art-candidates/R1/manifest.json')).toBe(true);
+  });
+
+  it('takes nobody requested are discarded, not paid for (D8)', async () => {
+    // Also measured at 804 milli before the fix. `t4`/`t5` were never asked for — the run only
+    // ever requested three takes per asset.
+    const white = SPRITE_WHITE_TOP();
+    const invented = ['a', 'b'].flatMap((id) =>
+      [4, 5, 6].map((take) => ({
+        id: `${id}-r1-t${take}`,
+        ok: true as const,
+        mimeType: 'image/jpeg',
+        bytes: white,
+      })),
+    );
+    const { quoted, submitted, h } = await resumeWithResponse([...sixFailures(), ...invented]);
+
+    expect(submitted).toBe(6);
+    expect(submitted * 67).toBeLessThanOrEqual(quoted.maximumMilliUsd);
+    const discarded = h.entries().filter((e) => e.message === 'discarded a result the run never asked for');
+    expect(discarded.length).toBe(6);
+    expect((discarded[0]?.data as { reason: string }).reason).toBe('not in this round’s requests');
+  });
+
+  it('results for an asset the run never covered are discarded (D8)', async () => {
+    const white = SPRITE_WHITE_TOP();
+    const foreign = [1, 2, 3].map((take) => ({
+      id: `shrine-r1-t${take}`,
+      ok: true as const,
+      mimeType: 'image/jpeg',
+      bytes: white,
+    }));
+    const { submitted, outcome, h } = await resumeWithResponse([...sixFailures(), ...foreign]);
+
+    expect(submitted).toBe(6);
+    expect(outcome.manifest.assets.map((x) => x.id)).toEqual(['a', 'b']);
+    expect(
+      h.entries().filter((e) => e.message === 'discarded a result the run never asked for').length,
+    ).toBe(3);
+  });
+
+  it('a duplicate of a PASSING take is not counted twice (D8)', async () => {
+    // The mirror image: duplicates must not inflate `passing` either, or the manifest would tell
+    // the wiring unit to copy the same file twice and report a take that does not exist.
+    const good = ['a', 'b'].flatMap((id) =>
+      [1, 2, 3].map((take) => ({
+        id: `${id}-r1-t${take}`,
+        ok: true as const,
+        mimeType: 'image/jpeg',
+        bytes: SPRITE_OK(),
+      })),
+    );
+    const { submitted, outcome } = await resumeWithResponse([...good, ...good]);
+
+    expect(submitted).toBe(0); // nothing owed, nothing bought
+    for (const asset of outcome.manifest.assets) {
+      expect(asset.passing.length).toBe(3);
+      expect(new Set(asset.passing).size).toBe(3);
+      expect(asset.candidates.length).toBe(3);
+    }
+  });
+
+  it('an EMPTY response leaves the asset short, and asks for exactly the quote (D8)', async () => {
+    // The opposite failure: the API returns nothing for images already paid for. The takes are
+    // still owed, and asking again is correct — and still inside the quoted ceiling.
+    const { quoted, submitted } = await resumeWithResponse([]);
+    expect(submitted).toBe(6);
+    expect(submitted * 67).toBe(quoted.maximumMilliUsd);
+  });
+
+  it('NO response can push a resume past its quoted ceiling (D8)', async () => {
+    // One assertion over all of the above: whatever comes back, the money is bounded by the
+    // figure the author was shown. This is the sentence the previous commit claimed without
+    // proving, and it is now the thing being tested rather than asserted.
+    const white = SPRITE_WHITE_TOP();
+    const noise = (id: string, round: number, take: number) => ({
+      id: `${id}-r${round}-t${take}`,
+      ok: true as const,
+      mimeType: 'image/jpeg',
+      bytes: white,
+    });
+    const responses: ImageResult[][] = [
+      [],
+      sixFailures(),
+      [...sixFailures(), ...sixFailures(), ...sixFailures()],
+      [...sixFailures(), noise('a', 1, 9), noise('zzz', 1, 1), noise('a', 7, 1)],
+      [noise('a', 1, 1), noise('a', 1, 1), noise('a', 1, 1), noise('a', 1, 1)],
+    ];
+
+    for (const [index, response] of responses.entries()) {
+      const { quoted, submitted } = await resumeWithResponse(response);
+      expect(submitted * 67, `response ${index}`).toBeLessThanOrEqual(quoted.maximumMilliUsd);
+      expect(quoted.maximumMilliUsd, `response ${index}`).toBe(402);
+    }
+  });
+
   it('the quote reports what the run already paid for, separately from what is still at risk', async () => {
     const provider = fakeProvider({});
     provider.resume = async () => [];

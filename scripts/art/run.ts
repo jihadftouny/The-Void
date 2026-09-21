@@ -620,20 +620,72 @@ export async function resumeRun(options: ResumeOptions, deps: RunDeps): Promise<
     await deps.fs.writeFile(manifestPath, serializeManifest(manifest));
   }
 
+  // WHAT THE RUN ASKED FOR, REBUILT FROM THE MANIFEST — never inferred from what came back.
+  //
+  // On a resume the request list is gone: `gemini.ts` polls with `poll(handle, [])`, so every id
+  // in the response is the API's own echoed `metadata.key`. Matching those by PREFIX, and tallying
+  // the failures among them, let the far end decide how many retakes this run would buy. Measured:
+  // an API returning each failing take twice, or returning takes nobody asked for, drove a quoted
+  // ceiling of 402 milli to 804 milli of real submissions. The wire format has never met a live
+  // call (see `gemini.ts`'s header), so "it will not send duplicates" is an assumption with no
+  // evidence behind it — and what it guards is how much money a resume may spend without asking
+  // again.
+  //
+  // The ids are deterministic, so they can be reconstructed: `executeRounds` asks each asset for
+  // `takes - passed` images, numbered `t1..tN`, and the open round has no candidates recorded yet,
+  // so `passing.length` is still what it was at submission time. That makes the manifest — the
+  // record of what was paid for — the authority for what may be accepted, exactly as it is the
+  // authority for which assets a resume covers.
+  const expected = new Map<string, { state: AssetState; take: number }>();
+  for (const [index, record] of manifest.assets.entries()) {
+    const state = states[index] as AssetState;
+    for (let take = 1; take <= Math.max(0, manifest.takes - record.passing.length); take += 1) {
+      expected.set(requestId(record.id, openRound, take), { state, take });
+    }
+  }
+
+  const requested = manifest.rounds.find((r) => r.round === openRound)?.requested ?? expected.size;
+  if (expected.size !== requested) {
+    // The manifest disagrees with itself — hand-edited, or written by an older version. Say so
+    // and go with the reconstruction, which is the conservative of the two.
+    deps.log.warn('art.error', 'manifest round count does not match its own asset records', {
+      round: openRound,
+      requested,
+      reconstructed: expected.size,
+    });
+  }
+
+  const seen = new Set<string>();
   for (const result of results) {
-    const state = states.find((s) => result.id.startsWith(`${s.asset.id}-r`));
-    if (state === undefined) continue;
-    const take = Number(/-t(\d+)$/.exec(result.id)?.[1] ?? '1');
+    const match = expected.get(result.id);
+    if (match === undefined || seen.has(result.id)) {
+      // Log before discarding: a response carrying things nobody asked for is exactly the kind of
+      // surprise that must leave evidence the first time it happens on real hardware.
+      deps.log.warn('art.error', 'discarded a result the run never asked for', {
+        id: result.id,
+        reason: match === undefined ? 'not in this round’s requests' : 'duplicate',
+        round: openRound,
+      });
+      continue;
+    }
+    seen.add(result.id);
+
     const request: ImageRequest = {
       id: result.id,
-      assetId: state.asset.id,
-      take,
-      body: buildRequest(options.catalogue, state.asset, null),
+      assetId: match.state.asset.id,
+      take: match.take,
+      body: buildRequest(options.catalogue, match.state.asset, null),
     };
-    const kept = await processResult(plan, deps, manifest, state, request, openRound, runDir, result);
-    if (!kept) state.owed += 1;
+    await processResult(plan, deps, manifest, match.state, request, openRound, runDir, result);
     await flush();
   }
+
+  // ONE derivation of what is still owed, the same one `executeRounds` uses: each asset's own
+  // shortfall. Never a tally over the response — that was the defect above, and it is the same
+  // anti-pattern the comment in `executeRounds` already warns about. A take that was paid for and
+  // came back as nothing still leaves the asset short, and asking for it again is both correct and
+  // inside the ceiling `planResume` quoted.
+  for (const state of states) state.owed = Math.max(0, plan.takes - state.passed);
 
   recordRoundFinished(manifest, openRound, deps.now());
 
