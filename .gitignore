@@ -12,8 +12,10 @@ scripts/*.log
 !.env.example
 
 # Generated art candidates awaiting the engineer's pick. Only the chosen finals get committed.
-# (The destination directory does not exist yet — it is created by PLAN.md #3.)
-# See docs/ART-BIBLE.md.
+# Created by `npm run art` (scripts/art/, PLAN.md #3) as art-candidates/<runId>/, holding the raw
+# JPEGs, the keyed PNGs, the run manifest and the run log. NOTHING HAS BEEN GENERATED YET — a dry
+# run creates no directory at all, and the shipped catalogue has no prompts to send.
+# See docs/ART-BIBLE.md §1c.
 art-candidates/
 
 # Legacy Java/Python/Pixi ports: kept on disk for reference, not tracked by this

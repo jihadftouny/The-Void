@@ -60,6 +60,60 @@ sit here is superseded and was never updated when the batch grew.
 Image generation is **not available on the free tier at all** (`limit: 0`) — billing must be enabled
 on the project or every request returns HTTP 429.
 
+### 1c. The tool — how to run it **[BUILT 2026-09-21, `PLAN.md` #3]**
+
+The script that enforces everything above lives in **`scripts/art/`**. It is developer tooling: the
+game never imports it, and a test asserts that nothing under `src/` does.
+
+```
+npm run art -- --help                       # what it can do
+npm run art -- --list                       # every asset id in the catalogue
+npm run art -- --stage 1                    # DRY RUN: what stage 1 would send, and what it would cost
+npm run art -- --stage 1 --confirm-spend    # actually send it
+```
+
+> **⚠ IT SPENDS NOTHING UNLESS YOU SAY SO TWICE.** A dry run is the default. Real generation needs
+> **both** `--confirm-spend` **and** an explicit selection (`--asset`, `--assets` or `--stage`).
+> `--confirm-spend` on its own is **refused** — the tool will never read "yes" as "all 50 assets".
+> `--dry-run` beats `--confirm-spend` if you type both. `--resume` needs `--confirm-spend` too,
+> because collecting a batch still calls the API. **Approval never carries from one run to the
+> next** (`PRINCIPLES.md` §A1); every invocation must say it again.
+>
+> The dry run prints the exact image count, the exact cost, **and the maximum the run could spend**
+> if every retake round were needed — that last figure is the one you are actually agreeing to.
+
+**Nothing can be generated yet, by design.** Every `prompt` in `scripts/art/catalogue.json` is
+`null`, and the tool refuses an asset without one. Authoring them is **#4 (probe 04) and #5**, and
+§9.7 still blocks any conditioned batch until a reference is approved.
+
+| Where | What |
+|---|---|
+| `scripts/art/catalogue.json` | **The data.** Every asset id, the five classes, their aspect ratios and framing sentences, both gates' thresholds, the keying thresholds, and the §2 style string. Tuning a gate or signing off §2 is an edit here — never a code change |
+| `art-candidates/<runId>/manifest.json` | What was sent, every candidate's gate result, which passed, and the running cost in milli-dollars. `passing` lists the file to use per asset |
+| `art-candidates/<runId>/run.log.jsonl` | One JSON object per line: every timing, every rejection, every error |
+| `art-candidates/<runId>/<assetId>/` | The raw JPEGs and, for the flat-black classes, the keyed PNGs |
+
+**The gates as shipped** (§5), all in `catalogue.json` and all **starting values to be tuned once
+probe 04 has real images to look at** — record any change in §8:
+
+| Gate | Applies to | Thresholds | Rejects when |
+|---|---|---|---|
+| **corners** | enemy sprites, boss portraits, class portraits, altar/shrine | `patch 8`, `maxLevel 20`, `maxChroma 10` | any 8×8 corner patch averages brighter than 20, **or** more than 10 off neutral — the second catches probe 03's "slightly green-tinted ground", which passes any brightness test |
+| **bottomThird** | floor backdrops only | `stride 8`, `maxLevel 40`, `minDarkFraction 0.8` | fewer than 80% of samples in the rows from ⌊2H/3⌋ down are at or below level 40 |
+
+Rejections name **which corners failed** and are re-queued **within the same asset**, bounded by
+`--retake-rounds` (0–2, default 1). The bound is what makes the maximum spend knowable in advance.
+
+**Keying (§5.3)** turns the flat black into an alpha channel and writes a PNG beside the JPEG.
+**Recorded deviation:** alpha comes from `max(r,g,b)`, not Rec.709 luminance. An ember at
+`(120,0,0)` has luminance ≈25 and would come out ~70% transparent — the creature's own ember veins
+erased by the step meant to erase the background behind them. The background is near-zero in every
+channel, so both formulas key it identically; only dark saturated *subject* pixels differ.
+
+**The key** is read from gitignored `.env` (`GOOGLE_API_KEY`) **only on a spending path**, is held
+in a wrapper that renders `[redacted]` under every string conversion, and reaches the wire only as
+the `x-goog-api-key` header — never a query string, never a body field, never a log line.
+
 ---
 
 ## 2. The house style string
@@ -638,6 +692,12 @@ Every deviation from §1 or §2 gets a line here, with the reason. An undocument
   per the author's *"full body shots always"* and §6's recursion-legibility requirement.
 - **2026-08-28** — **§5 corner-pixel gate scoped** to the flat-black asset classes; floor backdrops
   are exempt (their grounds are per-floor white by §4) and get a bottom-third gate instead.
+- **2026-09-21** — **The generation tool is built** (`PLAN.md` #3, §1c). It enforces §5's two gates,
+  §3's framing appends, §2's style string and §1's settings from `scripts/art/catalogue.json`.
+  **$0 spent: every prompt ships as `null` and the tool refuses an asset without one.** Two
+  deviations recorded, both with their reasoning in §1c: the alpha key is **max-channel, not Rec.709
+  luminance** (luminance erases dark saturated subject pixels such as embers), and **`--resume`
+  requires `--confirm-spend`** (collecting a batch still calls the API).
 - **Watch item, open:** the full-bleed floor backdrops are the one asset class that might want 2K on
   a large desktop window. If a 1K backdrop looks soft in review, **raise only the backdrops** to 2K —
   not the whole batch. Same price either way.
