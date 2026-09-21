@@ -32,6 +32,8 @@ import { createSecret, type Secret } from './secret.ts';
 import { runGeneration, type RunFs } from './run.ts';
 import type { GenerateHooks, ImageRequest, ImageResult, Provider } from './gemini.ts';
 import { validateCatalogue } from './catalogue.ts';
+import type { ResumePoint } from './run.ts';
+import type { Manifest } from './manifest.ts';
 import { encode as encodeJpeg } from 'jpeg-js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -96,6 +98,77 @@ function depsThatExplode(recorder: Recorder, over: Partial<MainDeps> = {}): Main
 
 function recorder(): Recorder {
   return { touched: [], out: [], err: [] };
+}
+
+/**
+ * A run that was submitted and never collected, owing a full retake round.
+ *
+ * Hand-derived: 2 assets x 3 takes = 6 images already submitted and billed (6 x 67 = 402 milli).
+ * Nothing has passed yet, so the shortfall is 6, and `retakeRounds: 1` with round 1 still open
+ * leaves exactly one retake round — so the most this resume can still spend is another 6 images,
+ * 402 milli, $0.402. This is the exact shape D7 was measured on.
+ */
+function resumePointFixture(): ResumePoint {
+  const asset = (id: string) => ({
+    id,
+    name: id,
+    class: 'enemy-sprite',
+    prompt: `a ${id}`,
+    params: {
+      aspectRatio: '1:1',
+      imageSize: '1K',
+      temperature: 1,
+      takes: 3,
+      gate: 'corners',
+      keyMode: 'luminance',
+    },
+    reference: null,
+    candidates: [],
+    passing: [] as string[],
+    costMilliUsd: 201,
+    runningMilliUsd: 201,
+    imagesSubmitted: 3,
+  });
+
+  const manifest: Manifest = {
+    version: 1,
+    runId: 'R1',
+    mode: 'batch',
+    model: 'gemini-3-pro-image',
+    state: 'running',
+    createdAt: 1,
+    takes: 3,
+    retakeRounds: 1,
+    pricePerImageMilliUsd: 67,
+    imagesSubmitted: 6,
+    imagesReturned: 0,
+    milliUsd: 402,
+    usd: '0.402',
+    assets: [asset('altar'), asset('shrine')],
+    rounds: [
+      {
+        round: 1,
+        requested: 6,
+        handle: 'batches/left-running',
+        startedAt: 1,
+        finishedAt: null,
+        durationMs: null,
+      },
+    ],
+  };
+
+  return {
+    manifest,
+    runDir: 'art-candidates/R1',
+    manifestPath: 'art-candidates/R1/manifest.json',
+    round: 1,
+    handle: 'batches/left-running',
+  };
+}
+
+/** Deps whose resume preflight finds the fixture above rather than nothing. */
+function depsWithARun(rec: Recorder, over: Partial<MainDeps> = {}): MainDeps {
+  return depsThatExplode(rec, { resumePreflight: async () => resumePointFixture(), ...over });
 }
 
 // =========================================================================================
@@ -262,11 +335,11 @@ describe('--confirm-spend alone is not enough (AC-7, AC-8)', () => {
       ['--confirm-spend', '--stage', '1', '--preview', 'p.json'],
       ['--confirm-spend', '--assets', 'altar,shrine', '--mode', 'interactive', '--preview', 'p.json'],
       ['--confirm-spend', '--preview', 'p.json'], // no selection: still a dry run, not a refusal
-      ['--confirm-spend', '--resume', 'run-1', '--preview', 'p.json'],
-      ['--resume', 'run-1', '--preview', 'p.json'],
+      ['--confirm-spend', '--resume', 'R1', '--preview', 'p.json'],
+      ['--resume', 'R1', '--preview', 'p.json'],
     ]) {
       const rec = recorder();
-      const code = await main(argv, depsThatExplode(rec));
+      const code = await main(argv, depsWithARun(rec));
       expect(rec.touched, argv.join(' ')).toEqual([]);
       expect(code, argv.join(' ')).toBe(0);
       expect(rec.out.join('\n'), argv.join(' ')).toContain('DRY RUN');
@@ -282,7 +355,7 @@ describe('--confirm-spend alone is not enough (AC-7, AC-8)', () => {
       ['--resume', 'R1', '--dry-run'],
     ]) {
       const rec = recorder();
-      const code = await main(argv, depsThatExplode(rec));
+      const code = await main(argv, depsWithARun(rec));
       expect(rec.touched, argv.join(' ')).toEqual([]);
       expect(code, argv.join(' ')).toBe(0);
       expect(rec.out.join('\n'), argv.join(' ')).toContain('DRY RUN');
@@ -336,6 +409,105 @@ describe('--confirm-spend alone is not enough (AC-7, AC-8)', () => {
       }),
     );
     expect(order).toEqual(['resumePreflight']);
+  });
+
+  it('a dry run on --resume quotes THAT RUN’S cost, not a selection’s (D7)', async () => {
+    // The fixture owes exactly one retake round of 6 images = 402 milli = $0.402.
+    // Before the fix this printed "Round 1: 0 images = $0.000" while the same command without
+    // --dry-run submitted 6. A dry run that under-reports by the entire cost of the command
+    // teaches the author not to trust the dry run, which is the only safety mechanism there is.
+    const rec = recorder();
+    const code = await main(['--resume', 'R1', '--confirm-spend', '--dry-run'], depsWithARun(rec));
+    const out = rec.out.join('\n');
+
+    expect(rec.touched).toEqual([]);
+    expect(code).toBe(0);
+    expect(out).toContain('Resuming R1: round 1, batch batches/left-running');
+    expect(out).toContain('Already submitted by that run: 6 images = $0.402');
+    expect(out).toContain('Still short: up to 6 images across 2 asset(s), with 1 retake round(s) left.');
+    expect(out).toContain('Maximum this resume can still spend: $0.402');
+    // The generate-path shape must not appear at all — it is the wrong question for a resume.
+    expect(out).not.toContain('Round 1:');
+    expect(out).not.toContain('$0.000');
+  });
+
+  it('a selection on a --resume command line does NOT move the quoted figure (D7)', async () => {
+    // The real resume ignores --stage/--asset/--assets entirely, so the dry run must too.
+    // Previously `--resume R1 --confirm-spend --dry-run --stage 1` printed "6 images = $0.402"
+    // computed from stage 1 — a generate-path figure under a command that would never use it.
+    // The number being coincidentally similar is exactly why this is checked by VARYING the
+    // selection and requiring the figure to hold still.
+    const quoted: string[] = [];
+    for (const selection of [
+      [],
+      ['--stage', '1'],
+      ['--stage', '3'],
+      ['--asset', 'altar'],
+      ['--assets', 'altar,shrine,class-hollow,backdrop-true-void'],
+    ]) {
+      const rec = recorder();
+      const argv = ['--resume', 'R1', '--confirm-spend', '--dry-run', ...selection];
+      expect(await main(argv, depsWithARun(rec)), argv.join(' ')).toBe(0);
+      expect(rec.touched, argv.join(' ')).toEqual([]);
+      const line = rec.out.find((l) => l.startsWith('Maximum this resume can still spend:'));
+      quoted.push(line ?? '(missing)');
+    }
+
+    // Every selection, one and the same figure.
+    expect(new Set(quoted).size).toBe(1);
+    expect(quoted[0]).toBe('Maximum this resume can still spend: $0.402');
+  });
+
+  it('…and says out loud that the selection is being ignored (D7)', async () => {
+    const rec = recorder();
+    await main(['--resume', 'R1', '--confirm-spend', '--dry-run', '--stage', '1'], depsWithARun(rec));
+    expect(rec.out.join('\n')).toContain('IGNORED by --resume');
+
+    const clean = recorder();
+    await main(['--resume', 'R1', '--confirm-spend', '--dry-run'], depsWithARun(clean));
+    expect(clean.out.join('\n')).not.toContain('IGNORED by --resume');
+  });
+
+  it('a dry run on a resume with nothing owed says so, and quotes $0.000 truthfully (D7)', async () => {
+    // The only case where $0.000 is the right answer: every asset already has its takes, so a
+    // collect-and-continue cannot submit anything.
+    const rec = recorder();
+    const point = resumePointFixture();
+    for (const asset of point.manifest.assets) asset.passing = ['a.png', 'b.png', 'c.png'];
+
+    await main(
+      ['--resume', 'R1', '--confirm-spend', '--dry-run'],
+      depsThatExplode(rec, { resumePreflight: async () => point }),
+    );
+    const out = rec.out.join('\n');
+    expect(out).toContain('Still short: nothing. Every asset already has all its takes.');
+    expect(out).toContain('Maximum this resume can still spend: $0.000');
+    expect(out).toContain('It cannot spend anything.');
+  });
+
+  it('--preview on a resume writes nothing and says why (D7)', async () => {
+    const written: string[] = [];
+    const rec = recorder();
+    const code = await main(
+      ['--resume', 'R1', '--preview', 'p.json'],
+      depsWithARun(rec, {
+        writeText: async (p) => {
+          written.push(p);
+        },
+      }),
+    );
+    expect(code).toBe(0);
+    expect(written).toEqual([]); // writing the selection's bodies would be the same lie in a file
+    expect(rec.out.join('\n')).toContain('--preview has nothing to write for a resume');
+  });
+
+  it('a dry run on a run that does not exist refuses, rather than quoting $0.000 (D7)', async () => {
+    const rec = recorder();
+    const code = await main(['--resume', 'nope', '--confirm-spend', '--dry-run'], depsThatExplode(rec));
+    expect(rec.touched).toEqual([]);
+    expect(code).toBe(2);
+    expect(rec.err.join('\n')).toContain('nothing to resume');
+    expect(rec.out.join('\n')).not.toContain('$0.000');
   });
 
   it('--resume without --confirm-spend is refused and reaches nothing', async () => {

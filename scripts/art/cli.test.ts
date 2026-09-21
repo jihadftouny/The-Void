@@ -22,6 +22,7 @@ import path from 'node:path';
 import {
   decideRun,
   formatDryRun,
+  planResume,
   MAX_RETAKE_ROUNDS,
   MAX_TAKES,
   parseArgs,
@@ -485,6 +486,14 @@ describe('docs/ART-BIBLE.md §1c describes what the tool actually does', () => {
     expect(decide(['--stage', '1']).kind).toBe('dry-run'); // selection alone
     expect(decide(['--confirm-spend']).kind).toBe('refuse'); // flag alone
     expect(decide(['--stage', '1', '--confirm-spend']).kind).toBe('generate'); // both
+  });
+
+  it('§1c claims a selection is ignored by --resume — and the quote proves it', () => {
+    expect(SECTION).toContain('**ignored by `--resume`**');
+    expect(SECTION).toContain('prices that run from its own manifest');
+    // `planResume` reads only the manifest — there is no `args` in its signature at all, so a
+    // selection cannot reach the figure even in principle.
+    expect(planResume.length).toBe(1);
   });
 
   it('§1c warns that the request shape has never met a live call', () => {

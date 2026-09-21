@@ -26,6 +26,7 @@ import {
   type RunPlan,
 } from './run.ts';
 import { serializeManifest, type Manifest } from './manifest.ts';
+import { planResume } from './cli.ts';
 
 // =========================================================================================
 // Fixtures
@@ -837,6 +838,175 @@ describe('a resume is confined to the assets the run actually covered (D4)', () 
     );
     expect(provider.batches).toEqual([]);
     expect(outcome.manifest.imagesSubmitted).toBe(3);
+  });
+});
+
+// =========================================================================================
+// D7 — the quoted cost of a resume matches what the resume actually submits
+// =========================================================================================
+
+describe('a resume dry run quotes what the real resume would submit (D7)', () => {
+  // This is the check that ties the two halves together. `planResume` reads a manifest and says
+  // what a resume could cost; `resumeRun` reads the same manifest and does it. If those two ever
+  // disagree, the dry run is lying — and the dry run is the only thing standing between the
+  // author and an unapproved charge.
+  const catalogue = testCatalogue([
+    { id: 'a', class: 'enemy-sprite' },
+    { id: 'b', class: 'enemy-sprite' },
+  ]);
+
+  /** Two assets, three takes each, round 1 submitted and uncollected, one retake round left. */
+  function manifestTwoAssets(): Manifest {
+    const asset = (id: string) => ({
+      id,
+      name: id,
+      class: 'enemy-sprite',
+      prompt: `a ${id}`,
+      params: {
+        aspectRatio: '1:1',
+        imageSize: '1K',
+        temperature: 1,
+        takes: 3,
+        gate: 'corners',
+        keyMode: 'luminance',
+      },
+      reference: null,
+      candidates: [],
+      passing: [] as string[],
+      costMilliUsd: 201,
+      runningMilliUsd: 201,
+      imagesSubmitted: 3,
+    });
+    return {
+      version: 1,
+      runId: 'R1',
+      mode: 'batch',
+      model: 'gemini-3-pro-image',
+      state: 'running',
+      createdAt: 1,
+      takes: 3,
+      retakeRounds: 1,
+      pricePerImageMilliUsd: 67,
+      imagesSubmitted: 6,
+      imagesReturned: 0,
+      milliUsd: 402,
+      usd: '0.402',
+      assets: [asset('a'), asset('b')],
+      rounds: [
+        {
+          round: 1,
+          requested: 6,
+          handle: 'batches/left-running',
+          startedAt: 1,
+          finishedAt: null,
+          durationMs: null,
+        },
+      ],
+    };
+  }
+
+  async function quoteAndRun(collected: ImageResult[], retakesFail: boolean) {
+    const white = SPRITE_WHITE_TOP();
+    const failing: Record<string, Uint8Array> = {};
+    if (retakesFail) {
+      for (const id of ['a', 'b']) {
+        for (const take of [1, 2, 3]) failing[`${id}-r2-t${take}`] = white;
+      }
+    }
+    const provider = fakeProvider(failing);
+    provider.resume = async () => collected;
+    const h = harness(provider);
+    h.files.set('art-candidates/R1/manifest.json', serializeManifest(manifestTwoAssets()));
+
+    const resumePoint = await findResumePoint('R1', 'art-candidates', h.deps.fs);
+    // What the dry run WOULD say, from the same manifest, before anything runs.
+    const quoted = planResume(resumePoint);
+
+    const outcome = await resumeRun(
+      { runId: 'R1', outDir: 'art-candidates', catalogue, spendAllowed: true, resumePoint },
+      h.deps,
+    );
+    // What the resume actually submitted, beyond what the original run had already paid for.
+    const actuallySubmitted = outcome.manifest.imagesSubmitted - 6;
+    return { quoted, actuallySubmitted, provider };
+  }
+
+  it('every collected take fails: the quote is exact, to the milli-dollar', async () => {
+    // 2 assets x 3 takes all fail -> shortfall 6, one retake round left -> 6 images, 6 x 67 = 402.
+    const white = SPRITE_WHITE_TOP();
+    const collected = ['a', 'b'].flatMap((id) =>
+      [1, 2, 3].map((take) => ({
+        id: `${id}-r1-t${take}`,
+        ok: true as const,
+        mimeType: 'image/jpeg',
+        bytes: white,
+      })),
+    );
+    const { quoted, actuallySubmitted, provider } = await quoteAndRun(collected, true);
+
+    expect(quoted.owedImages).toBe(6);
+    expect(quoted.roundsLeft).toBe(1);
+    expect(quoted.maximumMilliUsd).toBe(402);
+    // THE POINT: the number the author approved against is the number that was spent.
+    expect(actuallySubmitted).toBe(6);
+    expect(actuallySubmitted * 67).toBe(quoted.maximumMilliUsd);
+    expect(provider.batches.flat().length).toBe(6);
+  });
+
+  it('when some collected takes pass, the quote is an upper bound — never an under-estimate', async () => {
+    // `a` passes all three, `b` fails all three -> only 3 owed, against a quote of 6. A dry run
+    // may over-state (collecting can only ADD passes, and that is not knowable in advance); it
+    // must never under-state, which is the direction that costs money unapproved.
+    const white = SPRITE_WHITE_TOP();
+    const collected = [
+      ...[1, 2, 3].map((take) => ({
+        id: `a-r1-t${take}`,
+        ok: true as const,
+        mimeType: 'image/jpeg',
+        bytes: SPRITE_OK(),
+      })),
+      ...[1, 2, 3].map((take) => ({
+        id: `b-r1-t${take}`,
+        ok: true as const,
+        mimeType: 'image/jpeg',
+        bytes: white,
+      })),
+    ];
+    const { quoted, actuallySubmitted } = await quoteAndRun(collected, true);
+
+    expect(actuallySubmitted).toBe(3);
+    expect(actuallySubmitted * 67).toBe(201);
+    expect(actuallySubmitted * 67).toBeLessThanOrEqual(quoted.maximumMilliUsd);
+    expect(quoted.maximumMilliUsd).toBe(402);
+  });
+
+  it('a resume that needs no retakes submits nothing, and the quote allows for that', async () => {
+    const collected = ['a', 'b'].flatMap((id) =>
+      [1, 2, 3].map((take) => ({
+        id: `${id}-r1-t${take}`,
+        ok: true as const,
+        mimeType: 'image/jpeg',
+        bytes: SPRITE_OK(),
+      })),
+    );
+    const { quoted, actuallySubmitted, provider } = await quoteAndRun(collected, false);
+    expect(actuallySubmitted).toBe(0);
+    expect(provider.batches).toEqual([]);
+    expect(actuallySubmitted * 67).toBeLessThanOrEqual(quoted.maximumMilliUsd);
+  });
+
+  it('the quote reports what the run already paid for, separately from what is still at risk', async () => {
+    const provider = fakeProvider({});
+    provider.resume = async () => [];
+    const h = harness(provider);
+    h.files.set('art-candidates/R1/manifest.json', serializeManifest(manifestTwoAssets()));
+    const quoted = planResume(await findResumePoint('R1', 'art-candidates', h.deps.fs));
+
+    expect(quoted.alreadySubmitted).toBe(6); // sunk: billed when the run was created
+    expect(quoted.alreadyMilliUsd).toBe(402);
+    expect(quoted.maximumMilliUsd).toBe(402); // at risk: a further retake round
+    expect(quoted.runId).toBe('R1');
+    expect(quoted.handle).toBe('batches/left-running');
   });
 });
 

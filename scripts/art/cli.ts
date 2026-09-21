@@ -377,6 +377,99 @@ export function planRun(catalogue: Catalogue, args: Args): PlannedRun {
   };
 }
 
+/**
+ * What a `--resume` would cost, read from the run's OWN manifest.
+ *
+ * A resume ignores `--asset`, `--assets` and `--stage` entirely — it covers exactly the assets its
+ * run covered — so pricing it through `planRun` quotes a figure from a plan the real command will
+ * never execute. That is worse than saying nothing: the dry run is this tool's whole safety
+ * mechanism, and its one job is to answer "what will this cost me?" with the true number.
+ *
+ * COLLECTING IS FREE. The open batch was submitted and billed when the run was created; polling it
+ * costs nothing. The only money a resume can still spend is on retake rounds.
+ *
+ * THE OWED FIGURE IS AN UPPER BOUND, and deliberately so. Which takes are still owed depends on
+ * how the uncollected batch turns out, and that is not knowable until it is collected. What IS
+ * knowable is that no asset can ever need more than `takes - passing` — collecting can only ADD
+ * passes, never remove them — so the shortfall now bounds the shortfall after collection, and
+ * multiplying by the rounds left bounds the whole resume. §A8: size for the worst case, because
+ * the worst case is the number the author is actually agreeing to.
+ */
+export interface PlannedResume {
+  runId: string;
+  handle: string;
+  round: number;
+  mode: RunMode;
+  takes: number;
+  assetsShort: number;
+  /** Images already submitted by the original run — already billed, collected for free. */
+  alreadySubmitted: number;
+  alreadyMilliUsd: number;
+  roundsLeft: number;
+  /** Upper bound on the images one retake round could submit. */
+  owedImages: number;
+  /** Upper bound on everything this resume can still spend. */
+  maximumMilliUsd: number;
+}
+
+export function planResume(resumePoint: ResumePoint): PlannedResume {
+  const { manifest } = resumePoint;
+  const shortfalls = manifest.assets.map((asset) =>
+    Math.max(0, manifest.takes - asset.passing.length),
+  );
+  const owedImages = shortfalls.reduce((n, short) => n + short, 0);
+  // `executeRounds` runs from `openRound + 1` to `retakeRounds + 1`.
+  const roundsLeft = Math.max(0, manifest.retakeRounds + 1 - resumePoint.round);
+
+  return {
+    runId: manifest.runId,
+    handle: resumePoint.handle,
+    round: resumePoint.round,
+    mode: manifest.mode,
+    takes: manifest.takes,
+    assetsShort: shortfalls.filter((short) => short > 0).length,
+    alreadySubmitted: manifest.imagesSubmitted,
+    alreadyMilliUsd: manifest.milliUsd,
+    roundsLeft,
+    owedImages,
+    maximumMilliUsd: owedImages * roundsLeft * manifest.pricePerImageMilliUsd,
+  };
+}
+
+export function formatResumeDryRun(
+  catalogue: Catalogue,
+  planned: PlannedResume,
+  args: Args,
+): string[] {
+  const price = PRICE_MILLI_USD[planned.mode];
+  const lines = [
+    'DRY RUN — Nothing was sent and nothing was spent.',
+    `Mode: ${planned.mode} (${formatDollars(price)} per image, ${catalogue.model}, ${catalogue.imageSize})`,
+    `Resuming ${planned.runId}: round ${planned.round}, batch ${planned.handle}`,
+    `Already submitted by that run: ${planned.alreadySubmitted} images = ${formatDollars(planned.alreadyMilliUsd)} — already billed, and collecting it costs nothing more.`,
+    planned.owedImages === 0
+      ? 'Still short: nothing. Every asset already has all its takes.'
+      : `Still short: up to ${planned.owedImages} images across ${planned.assetsShort} asset(s), with ${planned.roundsLeft} retake round(s) left.`,
+    `Maximum this resume can still spend: ${formatDollars(planned.maximumMilliUsd)}`,
+  ];
+
+  if (hasSelection(args)) {
+    // Never silently dropped. A resume covers the assets its run covered, and a reader who typed
+    // a selection has a wrong model of what is about to happen.
+    lines.push(
+      'NOTE: --asset, --assets and --stage are IGNORED by --resume — a resume covers exactly the ' +
+        'assets its own run covered. The figures above are that run’s, not your selection’s.',
+    );
+  }
+
+  lines.push(
+    planned.maximumMilliUsd === 0
+      ? 'To collect it, re-run with --confirm-spend and without --dry-run. It cannot spend anything.'
+      : 'To collect and continue, re-run with --confirm-spend and without --dry-run.',
+  );
+  return lines;
+}
+
 export function formatDryRun(catalogue: Catalogue, planned: PlannedRun, args: Args): string[] {
   const price = PRICE_MILLI_USD[planned.mode];
   const names = planned.assets.map((a) => a.id).join(', ');
@@ -511,7 +604,43 @@ export async function main(argv: readonly string[], deps: MainDeps): Promise<num
   // without ever mentioning `deps.loadSecret` or `deps.createTransport`.
   // ---------------------------------------------------------------------------------------
 
+  let planned: PlannedRun | null = null;
+  let resumePoint: ResumePoint | null = null;
+  try {
+    if (decision.kind === 'generate') planned = planRun(catalogue, args);
+    // The same rule for a resume: a mistyped run id, or a run with nothing left to collect, must
+    // fail without opening `.env`. `findResumePoint` only reads the manifest — no key, no client.
+    //
+    // Read for a DRY RUN on a resume too, not just the real thing: that is how the dry run gets
+    // the resume's own numbers instead of quoting a plan the resume will never execute.
+    if (decision.kind === 'resume' || (decision.kind === 'dry-run' && args.resume !== null)) {
+      resumePoint = await deps.resumePreflight(args.resume as string, args.out);
+    }
+  } catch (err) {
+    deps.stderr((err as Error).message);
+    deps.stderr('Nothing was sent and nothing was spent.');
+    return EXIT_REFUSED;
+  }
+
   if (decision.kind === 'dry-run') {
+    // A RESUME PRICES ITSELF, from the manifest read above. `planRun` knows nothing about a
+    // resume: it costs the SELECTION, and a resume ignores the selection entirely — so routing a
+    // resume through it quoted either $0.000 for a run that was about to submit six images, or a
+    // generate-path figure under a command that would never use it.
+    if (resumePoint !== null) {
+      for (const line of formatResumeDryRun(catalogue, planResume(resumePoint), args)) {
+        deps.stdout(line);
+      }
+      if (args.preview !== null) {
+        // There is nothing new to preview: this run's request bodies were built and sent when it
+        // was created. Writing the selection's bodies here would be the same lie in a file.
+        deps.stdout(
+          `--preview has nothing to write for a resume: the request bodies were sent when ${args.resume as string} was created. ${args.preview} was not written.`,
+        );
+      }
+      return EXIT_OK;
+    }
+
     let planned: PlannedRun;
     try {
       planned = planRun(catalogue, args);
@@ -545,21 +674,6 @@ export async function main(argv: readonly string[], deps: MainDeps): Promise<num
   // must fail without ever opening `.env` — there is no reason to touch a secret to discover that
   // the run was never going to happen. (Found by the no-spend test, which caught `loadSecret`
   // being reached on a run that the shipped prompt-less catalogue was always going to refuse.)
-  let planned: PlannedRun | null = null;
-  let resumePoint: ResumePoint | null = null;
-  try {
-    if (decision.kind === 'generate') planned = planRun(catalogue, args);
-    // The same rule for a resume: a mistyped run id, or a run with nothing left to collect, must
-    // fail without opening `.env`. `findResumePoint` only reads the manifest — no key, no client.
-    if (decision.kind === 'resume') {
-      resumePoint = await deps.resumePreflight(args.resume as string, args.out);
-    }
-  } catch (err) {
-    deps.stderr((err as Error).message);
-    deps.stderr('Nothing was sent and nothing was spent.');
-    return EXIT_REFUSED;
-  }
-
   // The spending branches. THIS is the first line of the program that reads the key.
   try {
     const secret = await deps.loadSecret();

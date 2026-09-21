@@ -85,6 +85,11 @@ npm run art -- --stage 1 --confirm-spend         # actually send it
 > The dry run prints the exact image count, the exact cost, **and the maximum the run could spend**
 > if every retake round were needed — that last figure is the one you are actually agreeing to.
 >
+> **A dry run on `--resume` prices that run from its own manifest** — what it has already paid for
+> (collecting it costs nothing more) and the most a further retake round could still cost. A resume
+> covers exactly the assets its own run covered, so `--asset`, `--assets` and `--stage` are
+> **ignored by `--resume`**, and the dry run says so rather than quoting a figure from them.
+>
 > The API key is read **only** on a path that can spend, and only after everything that can fail
 > for free already has: an unknown asset id, a missing prompt, or a `--resume` naming a run that
 > does not exist all stop before `.env` is opened.
