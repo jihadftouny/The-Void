@@ -103,7 +103,7 @@ Each of these stays fully specified in `ROADMAP.md`/`PLAN.md`. Cut means *not in
 | Cut | `PLAN.md` | Back in | Why it can wait |
 |---|---|---|---|
 | **Floor-specific mechanics + balance re-run** | #2 | **v1.2** | Ships with a **sanity check**, not a simulated re-tune. `BALANCE-REPORT.md` stays invalidated and says so |
-| **All generated art** | #3 #4 #5 | **v2.0** | **Forbidden by plan rule 2 until ~Apr 2028** — see §5.2. Not an effort question; a money one |
+| **All generated art** | ~~#3~~ #4 #5 | **v2.0** | **Forbidden by plan rule 2 until ~Apr 2028** — see §5.2. Not an effort question; a money one |
 | **Battle-screen redesign** | #6 | **v1.3** | The current screen is functional. A restyle is not a shipping blocker |
 | **The Kaplay canvas/atmosphere layer** | #7 | **v2.0** | Kaplay is a dependency nothing imports; it stays that way. Wants the art to sit on top of |
 | **Screens restyle** | #8 | **v1.3** | Typography and CSS only, so it is affordable — just not essential |
@@ -132,6 +132,13 @@ Plan v3 rule 2 says *"web/itch distribution"*, and `b1` asks devlog #1 to explai
 **Consequence for the devlog:** devlog #1 cannot honestly be titled "why web-first". It should be *"why I'm shipping the one that's 80% built, and what that costs me in reach."*
 
 ### 5.2 "$0 game spending" vs. the ~$10.05 art budget
+
+> **⚠ REOPENED 2026-09-21 — the author has chosen a no-placeholder first playable, and asked for the images to be sequenced in.** The costing was redone from the bible's own locked figures: **~$13.67 one-off** — $10.05 for the 50-asset batch (150 images at $0.067 batched), $1.21 for a 9-image style probe, ~$0.40 of technical re-runs against a 1-in-3 white-background fault, and ~$2.01 allowed for rejecting and re-rolling a fifth of the assets. **Everything else remains $0**: the model is Apache-2.0 and player-downloaded, the typeface is bundled under its open licence, itch is free, audio is CC0-only and cut, item icons are cancelled, and the interface is typographic by design. *(Unbudgeted and optional: a Windows code-signing certificate, a few hundred dollars a year, without which the installer shows a SmartScreen warning. The plan ships unsigned.)*
+>
+> **This still contradicts Plan v3 rule 2 ($0 game spending until ~Apr 2028), and the rule is the author's to overrule — not mine.** The $0 alternative, which also satisfies *“no placeholders”*, is to **delete the three reserved art regions for v1** and ship text-only. **Undecided as of 2026-09-21.**
+>
+> **What has already landed at $0:** `PLAN.md` **#3, the tooling**, merged 2026-09-21 — it generates nothing, spends nothing, and ships all 52 prompts empty. **The batches (#4, #5) remain out of v1** until the author rules on the spend. The sequence, if they do: pipeline (done, $0) → **probe 04, $1.21, the real decision point** → the authored pass in parallel → four gated batches, $10.05 → a wiring unit that hides any region whose image is missing, so late art can never block the date.
+
 
 Plan v3 rule 2 forbids **all** game spending until **~2028**. The art plan (`GAME-DESIGN.md` §22.8) budgets ~$10.05 across four generation batches. That money cannot be spent until 2028, which is after `b2`, `b3`, `b4` *and* `b5`.
 

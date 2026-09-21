@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 2913 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3210 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -136,6 +136,18 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-21 — the art tool is built, and it is built to refuse ✅
+
+**`art-pipeline` merged. 2833 → 3130 tests.** You asked what a no-placeholder first playable would cost: **~$13.67 one-off**, all of it art, and you asked for the images to be in the plan. This is the tooling half of phase 1 — **it generates nothing and spends nothing.**
+
+**What it does:** three takes per asset at half price in batch mode, the corner-pixel gate that catches the white-background fault seen **1 in 3** across two probes, keying to transparent PNG, and a manifest recording what was sent, what passed, and what it cost. **What it refuses:** everything, unless you pass `--confirm-spend` *and* name assets *and* those assets have authored prompts — and all 52 prompts ship empty.
+
+**Eight defects were found and fixed on the paths that touch money**, across three verification rounds. The two worth naming: a resumed run could have built a retake round for **every asset in the catalogue** — 153 images, about **$10.25**, stopped only by an unrelated error firing first; and the resume's spend ceiling was decided by **whatever the API sent back**, so a response repeating each failed take would have submitted double what the dry run quoted. Also: `--preview`, the free way to check the request format, silently sent the images instead when paired with `--confirm-spend` — charging you for doing the careful thing.
+
+**⚠ Two things for you, in `HUMAN-CHECKS.md`:** the tool can now spend from the main checkout, where your key lives; and **two `[LOCKED]` documents disagree about the shape of 43 of the 50 assets** (`FINDINGS.md` G70) — **$7.03** if settled after the batch instead of before.
+
+**Phase 0 (`machine-text`) is verified and waiting on your play-test**, not merged: the narrator now names conditions instead of printing code ids, buffs no longer read as afflictions, and it is told it is in **Ash City** rather than *“the Fifth Floor”*. A new ratchet freezes every placeholder you still owe words for, so none can be added and none can be quietly removed.
 
 ### 2026-09-21 — the game stops speaking to the player in code ✅
 
