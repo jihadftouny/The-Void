@@ -73,6 +73,43 @@ describe('Secret — every string conversion yields [redacted] (AC-13)', () => {
     expect(inspect(secret)).toBe(REDACTED);
   });
 
+  it('EVERY redacting hook is pinned individually, called directly (D5)', () => {
+    // The conversions above go through whichever hook the language picks, and `Symbol.toPrimitive`
+    // gets first refusal on all of them. So `toString` could be changed to return the key and the
+    // whole file above would stay green — which it did, when this was mutated.
+    //
+    // These four are deliberately REDUNDANT layers, and that is the point: if one is ever removed
+    // or bypassed, the next must already be correct. A redundant layer that nothing pins is free
+    // to rot quietly, and then the redundancy is discovered to have been gone for months at the
+    // moment it was needed. Each one is therefore asserted on its own terms.
+    const hooks = secret as unknown as Record<symbol, (hint?: string) => string> & {
+      toString(): string;
+      toJSON(): string;
+    };
+
+    const direct: [string, string][] = [
+      ['toString()', hooks.toString()],
+      ['toJSON()', hooks.toJSON()],
+      ['[Symbol.toPrimitive]("string")', hooks[Symbol.toPrimitive]?.('string') ?? ''],
+      ['[Symbol.toPrimitive]("number")', hooks[Symbol.toPrimitive]?.('number') ?? ''],
+      ['[Symbol.toPrimitive]("default")', hooks[Symbol.toPrimitive]?.('default') ?? ''],
+      [
+        '[nodejs.util.inspect.custom]()',
+        hooks[Symbol.for('nodejs.util.inspect.custom')]?.() ?? '',
+      ],
+    ];
+
+    for (const [name, produced] of direct) {
+      expect(produced, name).toBe(REDACTED);
+      expect(produced, name).not.toContain(FAKE_KEY);
+    }
+    // All six really were found — an optional-call chain that silently produced '' for a missing
+    // hook would otherwise pass every assertion above.
+    expect(direct.length).toBe(6);
+    expect(typeof hooks[Symbol.toPrimitive]).toBe('function');
+    expect(typeof hooks[Symbol.for('nodejs.util.inspect.custom')]).toBe('function');
+  });
+
   it('holds the value in no property, so there is nothing to enumerate or spread', () => {
     expect(Object.keys(secret)).not.toContain('value');
     const everything = [
