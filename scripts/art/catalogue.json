@@ -14,31 +14,31 @@
     "enemy-sprite": {
       "aspectRatio": "1:1",
       "gate": "corners",
-      "key": "luminance",
+      "keyMode": "luminance",
       "append": "Full body, head and feet inside the frame, centered, facing the viewer, isolated on a pure flat black background. No ground, no shadow, no scenery."
     },
     "boss-portrait": {
       "aspectRatio": "1:1",
       "gate": "corners",
-      "key": "luminance",
+      "keyMode": "luminance",
       "append": "Full body, head and feet inside the frame, centered, facing the viewer, isolated on a pure flat black background. No ground, no shadow, no scenery."
     },
     "class-portrait": {
       "aspectRatio": "1:1",
       "gate": "corners",
-      "key": "luminance",
+      "keyMode": "luminance",
       "append": "Full body, head and feet inside the frame, roughly ten percent margin, centered, turned slightly off-axis in three-quarter view, never square to the viewer, isolated on a pure flat black background. No ground, no shadow, no scenery."
     },
     "altar": {
       "aspectRatio": "1:1",
       "gate": "corners",
-      "key": "luminance",
+      "keyMode": "luminance",
       "append": "The object whole and centered, roughly ten percent margin, isolated on a pure flat black background. No ground, no shadow, no scenery."
     },
     "backdrop": {
       "aspectRatio": "16:9",
       "gate": "bottomThird",
-      "key": "none",
+      "keyMode": "none",
       "append": "Environment only: no creatures, no people, no focal character. A deep-shadow, near-black foreground occupying roughly the bottom third of the frame. Heavily darkened overall."
     }
   },

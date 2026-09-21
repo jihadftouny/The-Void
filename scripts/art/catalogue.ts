@@ -29,8 +29,15 @@ export interface AssetClassDef {
   aspectRatio: string;
   /** Which gate its candidates face (§5). */
   gate: GateKind;
-  /** Whether passing candidates are keyed to alpha (§5.3). */
-  key: 'luminance' | 'none';
+  /**
+   * Whether passing candidates are keyed to alpha (§5.3).
+   *
+   * Named `keyMode`, never `key`. In a tool whose central rule is that the API key cannot leak, a
+   * field called `key` meaning "alpha keying mode" is a genuine hazard: it makes a `grep -i key`
+   * audit of a manifest noisy, and it is the kind of collision a reader resolves wrongly at
+   * exactly the wrong moment. (Deviation from the plan's D2 field name, for that reason.)
+   */
+  keyMode: 'luminance' | 'none';
   /** The framing sentence appended to every prompt in the class (§3). */
   append: string;
 }
@@ -116,9 +123,9 @@ export function validateCatalogue(raw: unknown): Catalogue {
     if (!GATE_KINDS.includes(gate as GateKind)) {
       fail(`classes.${name}.gate is "${gate}", expected one of ${GATE_KINDS.join(', ')}`);
     }
-    const key = asString(def['key'], `classes.${name}.key`);
-    if (!(KEY_KINDS as readonly string[]).includes(key)) {
-      fail(`classes.${name}.key is "${key}", expected one of ${KEY_KINDS.join(', ')}`);
+    const keyMode = asString(def['keyMode'], `classes.${name}.keyMode`);
+    if (!(KEY_KINDS as readonly string[]).includes(keyMode)) {
+      fail(`classes.${name}.keyMode is "${keyMode}", expected one of ${KEY_KINDS.join(', ')}`);
     }
     const aspectRatio = asString(def['aspectRatio'], `classes.${name}.aspectRatio`);
     if (!/^\d+:\d+$/.test(aspectRatio)) {
@@ -127,7 +134,7 @@ export function validateCatalogue(raw: unknown): Catalogue {
     classes[name] = {
       aspectRatio,
       gate: gate as GateKind,
-      key: key as 'luminance' | 'none',
+      keyMode: keyMode as 'luminance' | 'none',
       append: asString(def['append'], `classes.${name}.append`),
     };
   }
