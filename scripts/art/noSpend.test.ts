@@ -268,6 +268,22 @@ describe('--confirm-spend alone is not enough (AC-7, AC-8)', () => {
     }
   });
 
+  it('--dry-run beats --confirm-spend on --resume too, reaching nothing (D2)', async () => {
+    // The observed defect: `--resume R1 --confirm-spend --dry-run` read the key and built the
+    // transport, because the dry-run check sat below the resume branch.
+    for (const argv of [
+      ['--resume', 'R1', '--confirm-spend', '--dry-run'],
+      ['--dry-run', '--resume', 'R1', '--confirm-spend'],
+      ['--resume', 'R1', '--dry-run'],
+    ]) {
+      const rec = recorder();
+      const code = await main(argv, depsThatExplode(rec));
+      expect(rec.touched, argv.join(' ')).toEqual([]);
+      expect(code, argv.join(' ')).toBe(0);
+      expect(rec.out.join('\n'), argv.join(' ')).toContain('DRY RUN');
+    }
+  });
+
   it('--resume without --confirm-spend is refused and reaches nothing', async () => {
     const rec = recorder();
     const code = await main(['--resume', '20260921-090000-batch-3'], depsThatExplode(rec));

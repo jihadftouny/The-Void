@@ -270,9 +270,9 @@ export function hasSelection(args: Args): boolean {
  *
  * The order of these branches IS the rule:
  *   1. `--help` / `--list` never touch anything.
- *   2. `--preview` is a LOOK, not a send. It forces a dry run from wherever it is passed.
- *   3. `--resume` needs `--confirm-spend`, because collecting still calls the API.
- *   4. A DRY RUN WINS over `--confirm-spend`. Someone who typed both wants to look first.
+ *   2. `--dry-run` WINS, unconditionally and before every other consideration.
+ *   3. `--preview` is a LOOK, not a send. It forces a dry run from wherever it is passed.
+ *   4. `--resume` needs `--confirm-spend`, because collecting still calls the API.
  *   5. No `--confirm-spend` is a dry run, whatever else was typed.
  *   6. `--confirm-spend` with no selection is REFUSED — never "everything". A flag that means
  *      "yes" must never also decide WHAT it is saying yes to.
@@ -280,6 +280,19 @@ export function hasSelection(args: Args): boolean {
 export function decideRun(args: Args): Decision {
   if (args.help) return { kind: 'help', spendAllowed: false, reason: '' };
   if (args.list) return { kind: 'list', spendAllowed: false, reason: '' };
+
+  // `--dry-run` BEATS EVERYTHING, AND IT IS CHECKED HERE SO THAT IS LITERALLY TRUE.
+  //
+  // It used to be checked AFTER the `--resume` branch, so `--resume R1 --confirm-spend --dry-run`
+  // returned `resume` and went on to read the key and build the transport. Two written promises
+  // said otherwise — this file's own header, and `docs/ART-BIBLE.md` §1c, which ships with this
+  // unit. A spec the binary contradicts is worse than no spec, because the reader has no way to
+  // tell which one is lying.
+  //
+  // An exception to "a dry run always wins" is not a thing worth having. The flag exists so that
+  // someone who is unsure can type it and be certain, and a rule with a carve-out cannot make
+  // anyone certain of anything.
+  if (args.dryRun) return { kind: 'dry-run', spendAllowed: false, reason: '' };
 
   // `--preview` IS A DRY RUN, FROM WHEREVER IT IS PASSED.
   //
@@ -308,7 +321,6 @@ export function decideRun(args: Args): Decision {
     return { kind: 'resume', spendAllowed: true, reason: '' };
   }
 
-  if (args.dryRun) return { kind: 'dry-run', spendAllowed: false, reason: '' };
   if (!args.confirmSpend) return { kind: 'dry-run', spendAllowed: false, reason: '' };
 
   if (!hasSelection(args)) {

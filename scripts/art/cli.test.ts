@@ -330,6 +330,34 @@ describe('decideRun', () => {
     });
   });
 
+  it('a dry run wins over EVERYTHING, with no exception for --resume (D2)', () => {
+    // `--dry-run` used to be checked after the `--resume` branch, so this combination read the
+    // key and built the transport — contradicting this file's own header AND docs/ART-BIBLE.md
+    // §1c, which ships with it. A rule with a carve-out cannot make anyone certain of anything.
+    for (const argv of [
+      ['--resume', 'R1', '--confirm-spend', '--dry-run'],
+      ['--dry-run', '--resume', 'R1', '--confirm-spend'],
+      ['--resume', 'R1', '--dry-run'],
+      ['--confirm-spend', '--dry-run'], // no selection: a dry run, not the refusal
+      ['--confirm-spend', '--stage', '1', '--dry-run', '--mode', 'interactive'],
+      ['--dry-run'],
+    ]) {
+      expect(decide(argv), argv.join(' ')).toMatchObject({
+        kind: 'dry-run',
+        spendAllowed: false,
+      });
+    }
+  });
+
+  it('…and without --dry-run those same commands are NOT dry runs', () => {
+    // The control for the sweep above.
+    expect(decide(['--resume', 'R1', '--confirm-spend']).kind).toBe('resume');
+    expect(decide(['--confirm-spend']).kind).toBe('refuse');
+    expect(decide(['--confirm-spend', '--stage', '1', '--mode', 'interactive']).kind).toBe(
+      'generate',
+    );
+  });
+
   it('refuses --confirm-spend with no selection', () => {
     const decision = decide(['--confirm-spend']);
     expect(decision.kind).toBe('refuse');
