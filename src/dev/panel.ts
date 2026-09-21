@@ -39,6 +39,7 @@ import {
   catalogOptions,
   createOnce,
   devStatus,
+  type DevStatus,
   editsFrom,
   encodeBundle,
   encounterTarget,
@@ -131,6 +132,37 @@ export interface PanelDeps {
   env: PanelEnv;
   /** The persistent unlock store's storage, for the reset button. */
   unlockStorage: RemovableStore | null;
+  /**
+   * This run's text-hygiene tally, read FRESH on every status refresh (never captured once at
+   * mount — the same rule `getBundle` follows). The renderer owns the counters and the shared
+   * detector produces them; the panel only reports.
+   */
+  hygiene(): HygieneCounts;
+}
+
+/** How many text faults the shared detector found, in how many narrations, this run. */
+export interface HygieneCounts {
+  faults: number;
+  narrations: number;
+}
+
+/**
+ * The panel's whole status readout — PURE, so the line a developer reads is a tested value
+ * rather than a string assembled inside a DOM builder that no test can reach.
+ *
+ * The last line is the F3 half of `text-hygiene`: the renderer counts what the shared
+ * detector found in the local model's narration, and this is where the author sees it without
+ * opening the log file. A DEVELOPER SURFACE ONLY — the player never sees it, and the panel is
+ * absent from every packaged build by construction.
+ */
+export function statusText(s: DevStatus, hygiene: HygieneCounts): string {
+  return (
+    `act ${s.act} / place ${s.place} · xp ${s.xp} · level ${s.level} · hp ${s.hp}/${s.maxHp}\n` +
+    `phase ${s.phase}\n` +
+    `karma  mercy ${s.karma.mercyCruelty}  restraint ${s.karma.restraintGreed}  ` +
+    `reverence ${s.karma.reverenceDesecration}  clarity ${s.karma.clarityDelusion}\n` +
+    `text faults ${hygiene.faults} in ${hygiene.narrations} narrations this run`
+  );
 }
 
 // ------- Small DOM builders ----------------------------------------------------
@@ -241,12 +273,7 @@ function buildPanel(deps: PanelDeps): void {
   };
 
   const refreshStatus = (): void => {
-    const s = devStatus(deps.getBundle().state);
-    status.textContent =
-      `act ${s.act} / place ${s.place} · xp ${s.xp} · level ${s.level} · hp ${s.hp}/${s.maxHp}\n` +
-      `phase ${s.phase}\n` +
-      `karma  mercy ${s.karma.mercyCruelty}  restraint ${s.karma.restraintGreed}  ` +
-      `reverence ${s.karma.reverenceDesecration}  clarity ${s.karma.clarityDelusion}`;
+    status.textContent = statusText(devStatus(deps.getBundle().state), deps.hygiene());
   };
 
   // Emitted once per session, the first time a jump lands. A jumped session's log is

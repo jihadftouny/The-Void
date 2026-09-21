@@ -398,6 +398,8 @@ export function boot(): void {
           adopt: adoptFromPanel,
           env: { protocol: location.protocol },
           unlockStorage: localStorage,
+          // This run'''s text-hygiene tally, read fresh on every status refresh.
+          hygiene: () => ({ faults: textFaults, narrations }),
         }),
       )
       // A failure here is a dev-tooling failure and must never take the game down — but it must
