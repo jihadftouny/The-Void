@@ -161,16 +161,15 @@ author's ruling → build finished. Not merged.
 - **The §16.1 tempo gauge is real.** One number per side, in integer tenths, filled by Dexterity,
   ±0.3 for Quick/Slow, plus each enemy family's speed from `enemyFamilies.json` (24 values the
   build proposed and the author accepted). Full: a **second move of your choice** (the round
-  pauses for it). Empty: a lost turn. Reset every fight. Capped at **±0.3 — the author's ruling**
-  after the first cap (±0.7) held the winnability anchor at 0.182 against its 0.20 floor.
+  pauses for it). Empty: a lost turn. Reset every fight. The ENEMY's rate is capped at **±0.3 —
+  the author's ruling** after the first cap (±0.7) held the winnability anchor at 0.182 against its
+  0.20 floor; the player's rate is never capped (the author's third ruling, G78).
 - **It is on screen** on both combatants, and the bars now move **at each blow** (a doubled enemy
   drops your bar twice, to the engine's numbers) — G63's three live items closed; the
   reduced-motion flash hole G65 closed and proved in real Chromium.
-- **Balance, re-measured, nothing retuned:** 30.6% → **29.8%**; Scavver 57.4 → 49.4, Enforcer
-  32.0 → 37.8, Hollow 27.8 → 27.2, Neuromancer 17.8 → 18.4, Penitent 18.2 → 16.2 — the class
-  spread narrows from 39.6 to 33.2 points (G59's input). Variants in FINDINGS G62.
-- **New author question G78:** the ±0.3 cap is symmetric, so it also caps a fast PLAYER (DEX 18
-  and 18 + Quick both fill at +0.3). Does not block the merge.
+- **Balance, re-measured, nothing retuned:** 30.6% → **29.5%**; Scavver 57.4 → 48.4, Enforcer
+  32.0 → 37.8, Hollow 27.8 → 26.6, Neuromancer 17.8 → 18.0, Penitent 18.2 → 16.6 — the class
+  spread narrows from 39.6 to 31.8 points (G59's input). Variants in FINDINGS G62.
 - **Also:** the combat log no longer calls the Void a place (G72); every step's gauges, a crossed
   threshold and each side's action count are logged at the boundary (principle 7).
 

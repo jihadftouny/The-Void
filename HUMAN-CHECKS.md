@@ -23,8 +23,9 @@
 > - [ ] **4. Does the ENEMY's double action read as intended, not as a glitch?** From floor 2 down,
 >       some enemy turns are two blows (*“The enemy moves again.”* between them) and your HP bar
 >       drops twice. *Fail if* it reads as the same hit logged twice.
-> - [ ] **5. The cap you chose also caps YOU (FINDINGS G78).** A DEX-18 character fills its gauge
->       at +0.3 a round like a DEX-16 one, and Quick adds nothing on top. Decide whether that is fine.
+> - [ ] **5. Does a FAST character feel fast?** Your gauge is never capped (you ruled, G78): a
+>       DEX-18 character under Quick fills +0.7 a round and acts twice almost every other round.
+>       *Fail if* that feels like a different, easier game rather than a reward for Dexterity.
 
 > ## 📓 From `text-hygiene` (2026-09-21) — the game now keeps a record of what the model says
 >

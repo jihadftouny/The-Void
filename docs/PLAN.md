@@ -551,7 +551,7 @@ banner.)*
 
 | # | Item |
 |---|---|
-| **#1.6** | **Sequential rounds + the §16.1 tempo gauge** (`round-order`, built 2026-09-26, awaiting merge). Covers **G62 G63(1–3) G65 G72**, and raised **G78** (the ±0.3 cap clips the player's fast rates — an author question, not blocking). You act, then it acts; a killing blow ends the round; the gauge grants a freely chosen extra action or costs a turn, capped at ±0.3 (author), with each enemy family's data speed on top; resets every fight. `resolveEnemyTurn` is #11's seam. Balance re-measured, nothing retuned: 30.6% → 29.8% |
+| **#1.6** | **Sequential rounds + the §16.1 tempo gauge** (`round-order`, built 2026-09-26, awaiting merge). Covers **G62 G63(1–3) G65 G72 G78** (G78 raised and closed in the unit: the ±0.3 cap is the enemy's only — author, third round). You act, then it acts; a killing blow ends the round; the gauge grants a freely chosen extra action or costs a turn, the enemy's rate capped at ±0.3 (author) with each family's data speed on top, the player's uncapped; resets every fight. `resolveEnemyTurn` is #11's seam. Balance re-measured, nothing retuned: 30.6% → 29.5% |
 | **#15** | The audio layer — effects, ambient beds, and the thinning score (Lyria is on the same key) |
 | **#16** | Bundle **JetBrains Mono**, re-check the type scale against a real face |
 | **#17** | Ship assets — app icon, title art, store art, cursors |
