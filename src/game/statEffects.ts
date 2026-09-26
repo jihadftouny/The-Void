@@ -132,6 +132,16 @@ export function statModDelta(char: Conditioned, stat: StatKey): number {
 }
 
 /**
+ * The mod of one stat from the STORED stat plus EQUIPPED gear only — the augment/deprivation
+ * conditions deliberately NOT layered in. PLAN.md #1.6: the §16.1 tempo rate reads Dexterity
+ * this way so the Quick/Slow augment counts once, as its flat ±0.3, and not a second time
+ * through its own ±2 DEX (`tempo.ts`, deviation 2). Everything else keeps `effectiveMods`.
+ */
+export function baseStatMod(char: Conditioned, stat: StatKey): number {
+  return computeStatMod(char.stats[stat] + equipStatDelta(char, stat));
+}
+
+/**
  * Effective armor class: stored AC + the CON-mod delta (Hardy/Frail) + the DEX-mod
  * delta (Quick/Slow evasion). Off-equivalent (returns stored AC) when no augment is
  * active. Used NOW as the enemy AC a player attack tests against; the player-side use
