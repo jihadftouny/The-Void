@@ -55,6 +55,16 @@ export interface FamilyTheme {
   resistAmount?: number;
   /** Flat per-stat bias folded into the enemy's stat roll (does not add a draw). */
   statBias?: Partial<Stats>;
+  /**
+   * PLAN.md #1.6 (author, 2026-09-26): the family's own SPEED on the §16.1 tempo gauge, in
+   * integer TENTHS per round, added to the Dexterity-driven rate before the ±0.7 cap
+   * (`tempo.ts`). Scale: +2 quick · +1 brisk · 0 ordinary · −1 deliberate · −2 slow — so +2
+   * alone is "an extra action every five rounds" in §16.1's terms. Absent ⇒ 0.
+   *
+   * ⚠ PROPOSED VALUES, NOT DESIGN. Every one of the 24 was proposed by the `round-order` build
+   * from the family's description and kit and awaits the author's confirmation (FINDINGS.md).
+   */
+  speedTenths?: number;
   /** Prose note on the deferred/provisional real behavior (M10 floor hooks). */
   behaviorNote: string;
 }

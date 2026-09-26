@@ -167,6 +167,27 @@ describe('the karma seam — mercy↔cruelty everywhere, plus reverence on The J
   });
 });
 
+describe('the family speed on the tempo gauge (PLAN.md #1.6, author 2026-09-26)', () => {
+  it('every one of the 24 families carries an explicit speed, a small integer in tenths', () => {
+    // Data-complete on purpose: a family with NO speed would silently read as 0, and the
+    // author is confirming a value for each of the 24, not for some of them.
+    for (const f of FAMILIES) {
+      expect(f.theme.speedTenths, `${f.id} has no speedTenths`).toBeTypeOf('number');
+      expect(Number.isInteger(f.theme.speedTenths), f.id).toBe(true);
+      expect(Math.abs(f.theme.speedTenths as number), `${f.id} is off the ±2 scale`).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('a family the description calls fast is fast, and one it calls tanky or immovable is slow', () => {
+    // Anchored to the behaviour notes and skill names in enemyFamilies.json, read by hand:
+    // "fast, poison-tinged", "evasive, Electro-charged", "tanky front line", `immovableSlam`.
+    expect(getFamily('mutantStrays')?.theme.speedTenths).toBe(2);
+    expect(getFamily('staticWraiths')?.theme.speedTenths).toBe(2);
+    expect(getFamily('cyberEnforcers')?.theme.speedTenths).toBe(-2);
+    expect(getFamily('guardians')?.theme.speedTenths).toBe(-2);
+  });
+});
+
 describe('getFamily', () => {
   it('returns the named family and undefined for an unknown id', () => {
     expect(getFamily('sevenSins')?.name).toBe('Sin');
