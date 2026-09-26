@@ -20,13 +20,13 @@ win-rate in the **25.0%–35.0% band (aim ~30%)** — with deaths **spread acros
 descent** rather than bunched on floor 1. The band is judged on the **baseline** policy; the
 merciful policy is kept for the grace-path view.
 
-**Result — MET.** Baseline overall win-rate **29.8%**; floor 1 holds
-**31.3%** of all baseline deaths, the modal death floor holds
-**33.5%** (floor 4), and floors 1, 3, 4 each hold ≥ 10% of deaths.
+**Result — MET.** Baseline overall win-rate **29.5%**; floor 1 holds
+**31.0%** of all baseline deaths, the modal death floor holds
+**33.1%** (floor 4), and floors 1, 3, 4 each hold ≥ 10% of deaths.
 Every class wins (lowest baseline win-rate is Penitent). Committed anchor tests (`src/game/balance.test.ts`) hold the
 floor-1 "~3–4 hits" feel and a winnability floor.
 
-**The classes furthest below one in three:** **Penitent** wins 16.2%, and floor 2 took 11.5% of its deaths; **Neuromancer** wins 18.4%, and floor 2 took 10.8% of its deaths. Per §22.27 no class was tuned to close this. The three remedies on the table — strengthen that class elsewhere, accept it as a real build trade-off, or soften floor 2 for low-Wisdom builds — are the author's to choose, and the tables below are the evidence.
+**The classes furthest below one in three:** **Penitent** wins 16.6%, and floor 2 took 11.8% of its deaths; **Neuromancer** wins 18.0%, and floor 2 took 11.0% of its deaths. Per §22.27 no class was tuned to close this. The three remedies on the table — strengthen that class elsewhere, accept it as a real build trade-off, or soften floor 2 for low-Wisdom builds — are the author's to choose, and the tables below are the evidence.
 
 ## What was measured
 
@@ -52,16 +52,16 @@ floor-1 "~3–4 hits" feel and a winnability floor.
 
 ## Headline
 
-- **Baseline overall win-rate: 29.8%** (28 grace + 717 damnation of 2500).
-- **Merciful overall win-rate: 44.2%** (1099 grace + 5 damnation of 2500).
-- Deaths peak on **floor 4** (33.5% of all baseline deaths).
+- **Baseline overall win-rate: 29.5%** (27 grace + 710 damnation of 2500).
+- **Merciful overall win-rate: 44.5%** (1107 grace + 5 damnation of 2500).
+- Deaths peak on **floor 4** (33.1% of all baseline deaths).
 
 ## Balance read (from the data)
 
-- **Winnability vs the target.** The baseline wins 29.8% of runs — inside the 25.0%–35.0% "about 1 in 3" target. See the caveats above for what these numbers do and do not model.
-- **Where deaths fall.** Floor 1 holds 31.3% of all deaths; the modal death floor is 4 at 33.5%, and 3 of the 5 floors each hold ≥ 10% of deaths (floors 1, 3, 4).
-- **The grace path stays a mercy choice.** The kill-everything baseline reaches grace 28 time(s); the merciful policy (spares ⚖ foes) reaches grace 1099 time(s), for an overall win-rate of 44.2%. Grace ends the run at floor 4; damnation descends to floor 5.
-- **Per-class shape (author call, §22.27).** strongest **Scavver** (49.4%), weakest **Penitent** (16.2%); every class wins at least once over the sample.
+- **Winnability vs the target.** The baseline wins 29.5% of runs — inside the 25.0%–35.0% "about 1 in 3" target. See the caveats above for what these numbers do and do not model.
+- **Where deaths fall.** Floor 1 holds 31.0% of all deaths; the modal death floor is 4 at 33.1%, and 3 of the 5 floors each hold ≥ 10% of deaths (floors 1, 3, 4).
+- **The grace path stays a mercy choice.** The kill-everything baseline reaches grace 27 time(s); the merciful policy (spares ⚖ foes) reaches grace 1107 time(s), for an overall win-rate of 44.5%. Grace ends the run at floor 4; damnation descends to floor 5.
+- **Per-class shape (author call, §22.27).** strongest **Scavver** (48.4%), weakest **Penitent** (16.6%); every class wins at least once over the sample.
 
 ## Floor 2 — the Wisdom question (the author's evidence, §22.27)
 
@@ -73,59 +73,59 @@ the fight with no XP and no loot (plan Appendix A.1 — a pure cost, not softene
 
 | Class | Runs reaching floor 2 | Illusions per run there | Rounds per illusion | HP lost per illusion | Seen through | Deaths inside an illusion | Floor-2 share of deaths |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Enforcer | 453 | 2.25 | 2.29 | 0.55 | 99.6% | 2 | 10.3% |
-| Neuromancer | 316 | 2.29 | 2.28 | 0.58 | 98.8% | 1 | 10.8% |
-| Scavver | 487 | 2.49 | 2.28 | 0.30 | 99.8% | 2 | 2.4% |
-| Penitent | 308 | 2.44 | 2.42 | 1.34 | 99.3% | 2 | 11.5% |
-| Hollow | 386 | 2.42 | 2.34 | 0.71 | 99.5% | 4 | 10.4% |
+| Enforcer | 453 | 2.26 | 2.30 | 0.55 | 99.6% | 2 | 10.3% |
+| Neuromancer | 317 | 2.28 | 2.29 | 0.58 | 98.8% | 1 | 11.0% |
+| Scavver | 487 | 2.48 | 2.28 | 0.30 | 99.8% | 2 | 2.3% |
+| Penitent | 310 | 2.45 | 2.42 | 1.35 | 99.3% | 2 | 11.8% |
+| Hollow | 386 | 2.43 | 2.35 | 0.71 | 99.5% | 4 | 10.4% |
 
 ### Illusions per class (merciful)
 
 | Class | Runs reaching floor 2 | Illusions per run there | Rounds per illusion | HP lost per illusion | Seen through | Deaths inside an illusion | Floor-2 share of deaths |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Enforcer | 465 | 2.35 | 2.36 | 0.54 | 99.7% | 1 | 8.8% |
-| Neuromancer | 331 | 2.43 | 2.38 | 0.63 | 99.3% | 2 | 10.0% |
+| Enforcer | 465 | 2.35 | 2.35 | 0.54 | 99.7% | 1 | 9.3% |
+| Neuromancer | 332 | 2.43 | 2.39 | 0.65 | 99.3% | 2 | 10.1% |
 | Scavver | 482 | 2.42 | 2.37 | 0.28 | 99.8% | 0 | 2.7% |
-| Penitent | 328 | 2.32 | 2.27 | 1.27 | 98.6% | 5 | 11.0% |
-| Hollow | 413 | 2.41 | 2.36 | 0.67 | 99.1% | 5 | 8.4% |
+| Penitent | 329 | 2.33 | 2.28 | 1.26 | 98.6% | 5 | 11.0% |
+| Hollow | 413 | 2.40 | 2.36 | 0.66 | 99.1% | 5 | 8.5% |
 
 ### By starting Wisdom (baseline)
 
 | Starting Wisdom | Runs | Win% | Floor-2 share of deaths |
 | --- | ---: | ---: | ---: |
-| ≤ 9 | 395 | 28.1% | 12.3% |
-| 10–13 | 1215 | 30.9% | 8.6% |
-| ≥ 14 | 890 | 29.0% | 9.7% |
+| ≤ 9 | 395 | 27.6% | 12.6% |
+| 10–13 | 1215 | 31.0% | 8.7% |
+| ≥ 14 | 890 | 28.2% | 9.5% |
 
-Starting Wisdom ≥ 14 wins 29.0%; ≤ 9 wins 28.1% — a gap of 0.9 percentage points in favour of high Wisdom. Floor 2 took 9.7% of the high bucket's deaths and 12.3% of the low one's.
+Starting Wisdom ≥ 14 wins 28.2%; ≤ 9 wins 27.6% — a gap of 0.6 percentage points in favour of high Wisdom. Floor 2 took 9.5% of the high bucket's deaths and 12.6% of the low one's.
 
 ### By starting Wisdom (merciful)
 
 | Starting Wisdom | Runs | Win% | Floor-2 share of deaths |
 | --- | ---: | ---: | ---: |
-| ≤ 9 | 395 | 44.8% | 9.6% |
-| 10–13 | 1215 | 44.9% | 7.9% |
-| ≥ 14 | 890 | 42.9% | 9.4% |
+| ≤ 9 | 395 | 45.3% | 9.7% |
+| 10–13 | 1215 | 45.1% | 8.1% |
+| ≥ 14 | 890 | 43.3% | 9.5% |
 
 ### `ILLUSION_DC` sensitivity — measured, NOT applied
 
 | Illusion DC | Win% | Floor-2 deaths | Rounds per illusion | Win% at Wisdom ≤ 9 | Win% at Wisdom ≥ 14 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 11 | 29.5% | 162 | 1.89 | 26.8% | 28.5% |
-| 13 (shipped) | 29.8% | 168 | 2.32 | 28.1% | 29.0% |
-| 15 | 30.3% | 182 | 3.02 | 28.1% | 29.7% |
+| 11 | 29.7% | 163 | 1.89 | 26.3% | 28.3% |
+| 13 (shipped) | 29.5% | 170 | 2.32 | 27.6% | 28.2% |
+| 15 | 30.4% | 184 | 3.03 | 27.8% | 29.7% |
 
-From DC 11 to DC 15 the baseline win rate moves 29.5% → 30.3% (a swing of -0.8 points) — a SMALL lever on the overall rate. The shipped DC 13 measures 29.8%. Measured with the DC injected into the sim; `ILLUSION_DC` was not edited.
+From DC 11 to DC 15 the baseline win rate moves 29.7% → 30.4% (a swing of -0.7 points) — a SMALL lever on the overall rate. The shipped DC 13 measures 29.5%. Measured with the DC injected into the sim; `ILLUSION_DC` was not edited.
 
 ## Floor length (G9) — over the runs that cleared each floor
 
 | Floor | Runs that cleared it | Encounters | Battle rounds | Steps | Est. minutes (at 10 s/step) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 1 · Undercity | 1950 | 13.3 | 26.2 | 66.1 | ~11 |
-| 2 · Entrance to the Void | 1782 | 14.9 | 26.6 | 70.4 | ~12 |
-| 3 · Ash City | 1473 | 13.8 | 32.9 | 83.8 | ~14 |
-| 4 · Angelic Underground | 885 | 13.1 | 42.8 | 98.2 | ~16 |
-| 5 · True Void | 717 | 15.3 | 69.4 | 140.7 | ~23 |
+| 1 · Undercity | 1953 | 13.3 | 26.1 | 66.1 | ~11 |
+| 2 · Entrance to the Void | 1783 | 14.8 | 26.5 | 70.4 | ~12 |
+| 3 · Ash City | 1460 | 13.9 | 32.8 | 83.9 | ~14 |
+| 4 · Angelic Underground | 877 | 13.1 | 42.7 | 98.3 | ~16 |
+| 5 · True Void | 710 | 15.4 | 69.6 | 141.3 | ~24 |
 
 Minutes are an **estimate** at 10 seconds per step (`SECONDS_PER_STEP`); the counts are measured. Floor 5 "cleared" means the Hollow fell (damnation); grace ends the run on floor 4.
 
@@ -133,11 +133,11 @@ Minutes are an **estimate** at 10 seconds per step (`SECONDS_PER_STEP`); the cou
 
 | Floor | Runs reaching it | Died there | Rests found | Bargains offered | Bargains taken | Heal items used | Loot left behind | Bargains per cleared floor | Bargain share of the table |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 2500 | 22.0% | 1.89 | 1.86 | 1.36 | 1.08 | 0.00 | 2.07 | 16.7% |
-| 2 | 1950 | 8.6% | 1.25 | 2.47 | 1.69 | 0.55 | 0.00 | 2.57 | 18.2% |
-| 3 | 1782 | 17.3% | 1.09 | 2.20 | 1.46 | 1.34 | 0.04 | 2.33 | 18.2% |
-| 4 | 1473 | 39.9% | 1.03 | 2.01 | 1.48 | 1.09 | 0.13 | 2.34 | 18.2% |
-| 5 | 857 | 16.3% | 1.19 | 2.36 | 1.68 | 1.70 | 0.49 | 2.53 | 18.2% |
+| 1 | 2500 | 21.9% | 1.89 | 1.87 | 1.36 | 1.08 | 0.00 | 2.07 | 16.7% |
+| 2 | 1953 | 8.7% | 1.25 | 2.47 | 1.69 | 0.55 | 0.00 | 2.57 | 18.2% |
+| 3 | 1783 | 18.1% | 1.09 | 2.21 | 1.48 | 1.34 | 0.04 | 2.34 | 18.2% |
+| 4 | 1460 | 39.9% | 1.05 | 2.02 | 1.47 | 1.09 | 0.13 | 2.36 | 18.2% |
+| 5 | 850 | 16.5% | 1.19 | 2.40 | 1.71 | 1.72 | 0.47 | 2.59 | 18.2% |
 
 The last column is the data's expectation: a bargain is one weight in the floor's encounter table (`floors.json`), and bosses are not drawn from it.
 
@@ -145,57 +145,57 @@ The last column is the data's expectation: a bargain is one weight in the floor'
 
 Equip found gear at the hub (greedy rarity rule), drink a found healing item at <= 35% HP, cast the best affordable skill, flee a near-certain death when no heal is left, otherwise fight; take any bargain not paid in HP, and shed the worst gear when the pack is full. Kills every foe.
 
-- **Overall win-rate:** 29.8% (745 of 2500 runs) — 28 grace, 717 damnation, 1755 deaths.
-- **Average final level:** 13.39 · **average floors cleared:** 2.42 (of 4 concluded floors on a full descent).
+- **Overall win-rate:** 29.5% (737 of 2500 runs) — 27 grace, 710 damnation, 1763 deaths.
+- **Average final level:** 13.34 · **average floors cleared:** 2.42 (of 4 concluded floors on a full descent).
 
 ### Per class
 
 | Class | Runs | Win% | Grace | Damnation | Deaths | Avg level | Avg floors cleared |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Enforcer | 500 | 37.8% | 6 | 183 | 311 | 15.75 | 2.88 |
-| Neuromancer | 500 | 18.4% | 5 | 87 | 408 | 10.00 | 1.80 |
-| Scavver | 500 | 49.4% | 11 | 236 | 253 | 19.05 | 3.40 |
-| Penitent | 500 | 16.2% | 3 | 78 | 419 | 9.38 | 1.72 |
-| Hollow | 500 | 27.2% | 3 | 133 | 364 | 12.78 | 2.32 |
+| Enforcer | 500 | 37.8% | 6 | 183 | 311 | 15.78 | 2.87 |
+| Neuromancer | 500 | 18.0% | 5 | 85 | 410 | 9.89 | 1.79 |
+| Scavver | 500 | 48.4% | 11 | 231 | 258 | 18.96 | 3.39 |
+| Penitent | 500 | 16.6% | 3 | 80 | 417 | 9.42 | 1.73 |
+| Hollow | 500 | 26.6% | 2 | 131 | 367 | 12.67 | 2.31 |
 
 ### Deaths per class × floor (where runs end)
 
 | | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| **All classes** | 550 | 168 | 309 | 588 | 140 |
-| Enforcer | 47 | 32 | 70 | 132 | 30 |
-| Neuromancer | 184 | 44 | 70 | 86 | 24 |
-| Scavver | 13 | 6 | 35 | 147 | 52 |
-| Penitent | 192 | 48 | 61 | 103 | 15 |
-| Hollow | 114 | 38 | 73 | 120 | 19 |
+| **All classes** | 547 | 170 | 323 | 583 | 140 |
+| Enforcer | 47 | 32 | 72 | 129 | 31 |
+| Neuromancer | 183 | 45 | 73 | 86 | 23 |
+| Scavver | 13 | 6 | 36 | 150 | 53 |
+| Penitent | 190 | 49 | 64 | 99 | 15 |
+| Hollow | 114 | 38 | 78 | 119 | 18 |
 
 ## Merciful policy (spares ⚖ foes — exercises the grace path)
 
 Identical to the baseline, except it releases a living ⚖ karma-weighted non-boss enemy on sight. It trades kill XP for positive karma, so it reaches the grace ending more often.
 
-- **Overall win-rate:** 44.2% (1104 of 2500 runs) — 1099 grace, 5 damnation, 1396 deaths.
-- **Average final level:** 11.74 · **average floors cleared:** 2.30 (of 4 concluded floors on a full descent).
+- **Overall win-rate:** 44.5% (1112 of 2500 runs) — 1107 grace, 5 damnation, 1388 deaths.
+- **Average final level:** 11.76 · **average floors cleared:** 2.30 (of 4 concluded floors on a full descent).
 
 ### Per class
 
 | Class | Runs | Win% | Grace | Damnation | Deaths | Avg level | Avg floors cleared |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Enforcer | 500 | 57.0% | 283 | 2 | 215 | 13.68 | 2.71 |
-| Neuromancer | 500 | 32.2% | 161 | 0 | 339 | 9.56 | 1.82 |
-| Scavver | 500 | 62.4% | 310 | 2 | 188 | 14.63 | 2.87 |
-| Penitent | 500 | 31.0% | 154 | 1 | 345 | 9.21 | 1.78 |
-| Hollow | 500 | 38.2% | 191 | 0 | 309 | 11.63 | 2.32 |
+| Enforcer | 500 | 57.2% | 284 | 2 | 214 | 13.66 | 2.70 |
+| Neuromancer | 500 | 32.8% | 164 | 0 | 336 | 9.60 | 1.83 |
+| Scavver | 500 | 62.6% | 311 | 2 | 187 | 14.65 | 2.87 |
+| Penitent | 500 | 31.0% | 154 | 1 | 345 | 9.22 | 1.79 |
+| Hollow | 500 | 38.8% | 194 | 0 | 306 | 11.65 | 2.32 |
 
 ### Deaths per class × floor (where runs end)
 
 | | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| **All classes** | 481 | 122 | 65 | 727 | 1 |
-| Enforcer | 35 | 19 | 6 | 154 | 1 |
-| Neuromancer | 169 | 34 | 13 | 123 | 0 |
-| Scavver | 18 | 5 | 2 | 163 | 0 |
-| Penitent | 172 | 38 | 18 | 117 | 0 |
-| Hollow | 87 | 26 | 26 | 170 | 0 |
+| **All classes** | 479 | 123 | 66 | 719 | 1 |
+| Enforcer | 35 | 20 | 7 | 151 | 1 |
+| Neuromancer | 168 | 34 | 13 | 121 | 0 |
+| Scavver | 18 | 5 | 2 | 162 | 0 |
+| Penitent | 171 | 38 | 18 | 118 | 0 |
+| Hollow | 87 | 26 | 26 | 167 | 0 |
 
 ---
 

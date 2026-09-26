@@ -714,12 +714,12 @@ async function classesTheFrameCarries(animate: boolean): Promise<Carried> {
  * views of a real engine state, and two real `resolveRound` steps replayed on it through the
  * real sequencer, a clone of the page taken at mount, at every beat, at each round's end, and
  * with the Record log opened. Dice by hand (face f of n is (f − 0.5) / n):
- *   the player: Enforcer, DEX 18 (tempo +0.3 a round, shipped cap), 10/20 HP, Siphon known,
+ *   the player: Enforcer, DEX 18 (tempo +0.4 a round — the player is never capped), 10/20 HP, Siphon known,
  *     no conditions (so its chips row is `:empty`);
  *   the enemy:  DEX 6 (tempo −0.2 a round), STR 13, AC 10, Pyro Ball, no conditions.
  *   round 1 — the player casts Siphon (no draw): 3 to the enemy (a HARM float, the flash or the
  *     tint) and lifesteal floor(3 × 0.5) = 1 (a HEAL float); the enemy's d20 face 15 + 1 = 16 ≥
- *     AC 14, Pyro Ball for 2 (a HARM float, the shake or the tint). Gauges: player +0.3 (the
+ *     AC 14, Pyro Ball for 2 (a HARM float, the shake or the tint). Gauges: player +0.4 (the
  *     quick half lit), enemy −0.2 (the slow half lit) — both by the engine.
  *   round 2 — the player's d20 face 2 + 4 = 6 < 10, a MISS (a plain float); the enemy's d20
  *     face 1, a fumble.

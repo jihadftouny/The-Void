@@ -24,7 +24,7 @@ import { createKarma, type KarmaState } from './karma.ts';
 import { hasControlCondition, makeCondition } from './condition.ts';
 import { resolveSkill, type SkillId } from './skill.ts';
 import { generateDraft } from './draft.ts';
-import { gearUpAtHub } from './sim.ts';
+import { gearUpAtHub, heuristicPolicy } from './sim.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- Fixtures ------------------------------------------------------------
@@ -1058,7 +1058,7 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
 
 describe('AC-15 (PLAN.md #1.6) — a boss gets exactly one post-round per COMPLETED round', () => {
   // The Kingpin with a crew of 2 announces `boss-minion-damage` once per round it runs. The
-  // player (DEX 18, shipped rate +3 under the ±0.3 cap) opens at gauge 7: 7 + 3 = 10 crosses, so the first Fight PAUSES the
+  // player (DEX 18, rate +4 — the player's is never capped, G78) opens at gauge 6: 6 + 4 = 10 crosses, so the first Fight PAUSES the
   // round for the extra action (`roundComplete: false`) — and the crew must NOT strike. The
   // second Fight completes the round, and the crew strikes exactly once.
   it('the paused step fires nothing; the completing step fires it once; boss.round counts rounds', () => {
@@ -1067,7 +1067,7 @@ describe('AC-15 (PLAN.md #1.6) — a boss gets exactly one post-round per COMPLE
     if (built.state.phase.kind !== 'battle') throw new Error('not a battle');
     const start: GameState = {
       ...built.state,
-      phase: { ...built.state.phase, battle: { ...built.state.phase.battle, tempo: { player: 7, enemy: 0 } } },
+      phase: { ...built.state.phase, battle: { ...built.state.phase.battle, tempo: { player: 6, enemy: 0 } } },
     };
     const first = step(start, { kind: 'battle-action', action: 'fight' });
     expect(first.events).toContainEqual({ kind: 'tempo-extra-action', subject: 'player' });
@@ -1082,6 +1082,35 @@ describe('AC-15 (PLAN.md #1.6) — a boss gets exactly one post-round per COMPLE
     if (second.state.phase.kind !== 'battle') throw new Error('the fight ended early');
     expect(second.state.phase.battle.boss?.round).toBe(1);
     expect(second.state.phase.battle.extraAction).toBeUndefined();
+  });
+});
+
+describe('PLAN.md #1.6 (author, 2026-09-26) — the gauge and a pending extra action reset every fight', () => {
+  it('through step: a fight left mid-pause with both gauges moved; the next fight opens with neither', () => {
+    // A floor-1 fight whose round is PAUSED for the player's extra action, with both gauges off
+    // zero. The second action is a Smoke Vial — a guaranteed escape (consumables.json) — so the
+    // fight ends with the pause and the gauges still set on it.
+    const base = makePlayer({ hp: 20, maxHp: 20 });
+    const player = { ...base, inventory: { ...base.inventory, backpack: [{ defId: 'smoke-vial' }] } };
+    const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(1));
+    const battle: BattleState = { ...createBattle(player, enemy, 1), tempo: { player: 5, enemy: -4 }, extraAction: true };
+    const fighting: GameState = { ...menuState(player, 11), phase: { kind: 'battle', battle, started: true, final: false } };
+    const fled = step(fighting, { kind: 'battle-action', action: { kind: 'useConsumable', source: { index: 0 } } });
+    expect(fled.events).toContainEqual({ kind: 'consumable-used', itemId: 'smoke-vial' });
+    expect(fled.state.phase.kind, 'the escape did not end the fight').toBe('main-menu');
+
+    // Walk on, the way the sim plays, until the NEXT fight is on — and read the battle it opens.
+    const policy = heuristicPolicy('Enforcer');
+    let r: StepResult = fled;
+    for (let i = 0; i < 200 && r.state.phase.kind !== 'battle'; i += 1) {
+      r = step(r.state, policy(r));
+    }
+    expect(r.state.phase.kind, 'no second fight was reached — the check read nothing').toBe('battle');
+    if (r.state.phase.kind !== 'battle') return;
+    expect(r.state.phase.battle.tempo, 'the gauges carried into the next fight').toBeUndefined();
+    expect(r.state.phase.battle.extraAction, 'the pending extra action carried into the next fight').toBeUndefined();
+    // ...and a player at rest has nothing on it either: the gauge lives on the battle, never the player.
+    expect(JSON.stringify(r.state.player)).not.toMatch(/tempo|extraAction/);
   });
 });
 

@@ -345,12 +345,21 @@
 //  OBSERVED: FIVE rows moved and ONE did not — the prediction was WRONG for Hollow seed 3,
 //  and the reason is worth keeping. That run's one fight is eight rounds in which the player
 //  never drew: two Siphon casts (no draw), then six rounds held by a condition (no draw). The
-//  only draws were the enemy's, in their old order, and the enemy's gauge (+0.1 a round) never
-//  reached +1.0 — so the stream is byte-identical, rngState 1951871910 unchanged. The other
+//  only draws were the enemy's, in their old order, and the enemy's gauge (−0.1 a round: DEX
+//  +1, its Cyber-Enforcer family −2 — corrected in the test agent's review) never reached −1.0
+//  in eight rounds — so the stream is byte-identical, rngState 1951871910 unchanged. The other
 //  five moved: Enforcer 1 still dies to The Counselor on floor 4 (level 15 -> 11, 368 -> 257
 //  steps); Enforcer 2 went damnation -> a floor-2 death; Enforcer 3 went a floor-1 death ->
 //  damnation; Hollow 1 died on floor 3 -> floor 4; Hollow 2 died on floor 4 -> floor 1 (to the
 //  Kingpin). Wins 1/6 -> 1/6, avg level 61/6 -> 58/6, floors cleared 12/6 -> 11/6.
+//  THIRD ROUND (author, G78 — the ±0.3 cap is the ENEMY's only; the player's rate is §16.1's in
+//  full). NO PREDICTION IS CLAIMED: the suite ran the lock before this row was written. A run
+//  can move only if its player ever plays a rate above +0.3 (DEX 18+, or Quick on DEX 12+).
+//  OBSERVED: NO row moved — all six are
+//  byte-identical (rngState, steps, outcome). Measured why: the highest player rate any of the
+//  six held at a battle step is +0.2 (Enforcer 1, Hollow 1), under the cap, so the clip never
+//  touched them. Not re-baselined, because nothing changed. The 2,500-run report did move
+//  (FINDINGS G62).
 // ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`

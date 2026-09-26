@@ -23,25 +23,25 @@
 //     +2 DEX (= +1 mod) through `statEffects.ts`; counted, the row would read +0.8. The rate
 //     therefore reads the DEX of the stored stat plus gear (`baseStatMod`) and adds the flat ±3.
 //     The augment's +2 keeps its evasion effect on AC, unchanged.
-//  3. A SYMMETRIC RATE CAP, ±0.3 (`TEMPO_RATE_CAP_TENTHS`) — the AUTHOR'S RULING, 2026-09-26
-//     (second round). `enemy.ts` inflates enemy stats with the player's XP (an inherited Java
-//     formula, FINDINGS G77), so from floor 3 on an enemy's DEX reaches 27–108 and §16.1's literal
-//     rate (+0.8 to +4.9) gives it an extra action nearly every round. The build first shipped
-//     ±0.7 (the largest magnitude in §16.1's own table); measured, that held the winnability
-//     anchor at 0.182 against its 0.20 floor, and the author chose ±0.3 (measured 0.282). It
-//     applies to the COMBINED rate, family speed included, and to BOTH sides.
-//     ⚠ It therefore CLIPS THE PLAYER TOO: a DEX-16+ player (§16.1: DEX 18 → +0.4, 18 + Quick →
-//     +0.7) gains +0.3 a round, like a DEX-16 one; the negative rows (DEX 6 → −0.2, Slow → −0.3)
-//     are untouched. Recorded in FINDINGS G62 for the author. One constant to change.
+//  3. AN ENEMY-ONLY RATE CAP, ±0.3 (`TEMPO_RATE_CAP_TENTHS`) — the AUTHOR'S RULINGS, 2026-09-26.
+//     `enemy.ts` inflates enemy stats with the player's XP (an inherited Java formula, FINDINGS
+//     G77), so from floor 3 on an enemy's DEX reaches 27–108 and §16.1's literal rate (+0.8 to
+//     +4.9) gives it an extra action nearly every round. The build first shipped ±0.7 (the
+//     largest magnitude in §16.1's own table) on both sides; measured, that held the winnability
+//     anchor at 0.182 against its 0.20 floor. The author chose ±0.3 (second round), on the
+//     COMBINED enemy rate, family speed included — and then (third round, G78) ruled that it
+//     applies to ENEMIES ONLY: the player gets §16.1's full rate, uncapped (DEX 18 + Quick →
+//     +0.7). `battle.ts` passes the cap for the enemy's rate and `Infinity` for the player's.
 //  4. AN ENEMY FAMILY'S OWN SPEED (author, 2026-09-26): an enemy's rate is its DEX-driven rate
 //     exactly like the player's, PLUS its family's `speedTenths` from the data. The player has
 //     no family, so passes 0.
 //
 // Two smaller choices where §16.1 is silent, recorded rather than asked:
 //  - A CONTROLLED combatant's gauge still drifts, but spends no threshold (`canAct` false).
-//  - At most ONE threshold crossing per round. Under the default cap (7 < 10) the remainder can
-//    never reach a threshold by itself, so this matters only when the cap is lifted for a
-//    measurement (a rate of 20 would otherwise act three times a round).
+//  - At most ONE threshold crossing per round. Under the enemy cap (3 < 10), and at any rate a
+//    player reaches without extraordinary gear (§16.1 tops out at +0.7), the remainder can never
+//    reach a threshold by itself, so this matters only for a rate of 10 or more — the uncapped
+//    measurement seam, or a player with DEX 30+ — which would otherwise act three times a round.
 
 import { baseStatMod, type Conditioned } from './statEffects.ts';
 
@@ -53,7 +53,7 @@ export const TEMPO_TENTHS_PER_DEX_MOD = 1;
 export const TEMPO_QUICK_TENTHS = 3;
 /** §16.1: −0.3 while Slow. */
 export const TEMPO_SLOW_TENTHS = -3;
-/** DEVIATION 3 above (author's ruling): |rate| never exceeds 0.3 on the shipped path. Measurement may lift it. */
+/** DEVIATION 3 above (author's rulings): an ENEMY's |rate| never exceeds 0.3 on the shipped path. Measurement may lift it. */
 export const TEMPO_RATE_CAP_TENTHS = 3;
 
 /**

@@ -112,11 +112,14 @@ describe('tempoRate — §16.1’s table, row by row (the formula, uncapped)', (
   });
 });
 
-describe('the SHIPPED ±0.3 cap — what it does to §16.1’s rows, the player’s included', () => {
+// The shipped cap applies to the ENEMY's rate only (author, G78 — `battle.ts` passes `Infinity`
+// for the player; `battle.test.ts` pins that end to end). These cases are what the cap does to a
+// rate it IS applied to — an enemy with the same stats as each §16.1 row.
+describe('the SHIPPED ±0.3 enemy cap — what it does to a rate it is applied to', () => {
   const CAP = TEMPO_RATE_CAP_TENTHS;
   it('clips every fast row to +0.3: DEX 16, DEX 18 and 18 + Quick all fill alike', () => {
-    // The cap is symmetric and applies to the player too. §16.1: DEX 18 → +0.4, 18 + Quick →
-    // +0.7; shipped, both read +0.3 — the same as DEX 16 (floor(6/2) = 3).
+    // §16.1: DEX 18 → +0.4, 18 + Quick → +0.7; an enemy with either reads +0.3 — the same as
+    // DEX 16 (floor(6/2) = 3).
     expect(tempoRate(fighter(16), CAP)).toBe(3);
     expect(tempoRate(fighter(18), CAP)).toBe(3);
     expect(tempoRate(fighter(18, ['quick']), CAP)).toBe(3);
@@ -135,7 +138,7 @@ describe('the SHIPPED ±0.3 cap — what it does to §16.1’s rows, the player�
     expect(tempoRate(fighter(18), CAP, 2)).toBe(3); // a quick family on a fast enemy: 4 + 2 → 3
   });
 
-  it('a DEX-18 player, shipped: 3, 6, 9, 12→2, 5, 8, 11→1, 4, 7, 10→0 — extras on 4, 7, 10', () => {
+  it('a DEX-18 enemy, shipped: 3, 6, 9, 12→2, 5, 8, 11→1, 4, 7, 10→0 — extras on 4, 7, 10', () => {
     const r = run(tempoRate(fighter(18), CAP), 10);
     expect(r.gauge).toEqual([3, 6, 9, 2, 5, 8, 1, 4, 7, 0]);
     expect(r.extra).toEqual([4, 7, 10]);

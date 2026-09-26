@@ -128,8 +128,9 @@ export interface RoundRules {
   /** The Difficulty Class of the passive Wisdom roll against an illusion (`floors.ts`). */
   illusionDc: number;
   /**
-   * PLAN.md #1.6: the |rate| clamp of the tempo gauge, in tenths. Shipped:
-   * `TEMPO_RATE_CAP_TENTHS`. MEASUREMENT ONLY may pass `Infinity` (§16.1's literal rate).
+   * PLAN.md #1.6: the |rate| clamp of the ENEMY's tempo gauge, in tenths (the player's rate is
+   * never capped — author, G78). Shipped: `TEMPO_RATE_CAP_TENTHS`. MEASUREMENT ONLY may pass
+   * `Infinity` (§16.1's literal rate).
    */
   tempoRateCapTenths: number;
   /** Whether the ENEMY's gauge moves at all. Shipped: true. MEASUREMENT ONLY. */
@@ -731,7 +732,8 @@ function playRound(state: BattleState, action: PlayerAction, rng: Rng, rules: Ro
     }
 
     // 2. The player's gauge. A controlled player's gauge drifts but spends nothing (tempo.ts).
-    const moved = moveGauge(ctx, 'player', tempoRate(ctx.player, rules.tempoRateCapTenths), !ptc.skipTurn);
+    // The PLAYER's rate is §16.1's in full — the cap is the enemy's alone (author, G78).
+    const moved = moveGauge(ctx, 'player', tempoRate(ctx.player, Infinity), !ptc.skipTurn);
     actions = moved.actions;
     if (ptc.skipTurn) {
       ctx.events.push({ kind: 'player-unable-to-act', conditionType: skipCause(ptc.events) });
