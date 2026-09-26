@@ -1144,6 +1144,42 @@ export function fadeTo(options: FadeOptions): string {
   return bodyBackground();
 }
 
+/** What the struck figure and the shaken stat box animate with, under one motion setting. */
+export interface StrikeReading {
+  motion: MotionSetting;
+  place: number;
+  /** `data-ground` as painted — floor 2 is the light ground with its own flash rule. */
+  ground: string;
+  /** The computed `animation-name` of `.arena-figure.is-struck`. */
+  flash: string;
+  /** The computed `animation-name` of `.vitals-inner.is-shaking`. */
+  shake: string;
+}
+
+/**
+ * G65 (PLAN.md #1.6): mount the real battle frame, apply the PLAYER's motion setting through the
+ * real `applySettings` (the OS is left at its own setting — normal motion in the probe window),
+ * put the strike classes on the real figure and stat box, and read what the built stylesheet
+ * really animates them with. The classes are taken off again afterwards.
+ */
+export function strikeMotion(options: { motion: MotionSetting; place: number }): StrikeReading {
+  run({ scenario: 'battle', scale: 'normal', place: options.place });
+  const root = document.documentElement;
+  applySettings(root, { ...DEFAULT_SETTINGS, motion: options.motion }, options.place);
+  const figure = document.querySelector<HTMLElement>('#arena .arena-figure');
+  const vitals = document.querySelector<HTMLElement>('#vitals .vitals-inner');
+  if (!figure || !vitals) throw new Error('layout probe: the battle frame has no figure or stat box');
+  figure.classList.add('is-struck');
+  vitals.classList.add('is-shaking');
+  const flash = getComputedStyle(figure).animationName;
+  const shake = getComputedStyle(vitals).animationName;
+  figure.classList.remove('is-struck');
+  vitals.classList.remove('is-shaking');
+  const reading = { motion: options.motion, place: options.place, ground: root.dataset['ground'] ?? '', flash, shake };
+  applySettings(root, DEFAULT_SETTINGS, options.place);
+  return reading;
+}
+
 /** Put the probe's override back, so anything measured afterwards reads settled colours. */
 export function fadeEnd(): void {
   document.documentElement.style.transition = 'none';
@@ -1159,6 +1195,7 @@ declare global {
       fadeTo: typeof fadeTo;
       bodyBackground: typeof bodyBackground;
       fadeEnd: typeof fadeEnd;
+      strikeMotion: typeof strikeMotion;
     };
   }
 }
@@ -1173,4 +1210,5 @@ window.__voidLayoutProbe = {
   fadeTo,
   bodyBackground,
   fadeEnd,
+  strikeMotion,
 };

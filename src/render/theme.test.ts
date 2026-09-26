@@ -46,7 +46,12 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applySettings, applyTheme, shouldAnimate } from './theme.ts';
 import { arenaEls, buildArena, buildBattleMenu, buildVitals, playRound, setLogOpen } from '../desktop/battle.ts';
-import { tempoGauge, type BattleMenuRow, type RoundPlan } from '../desktop/battle-model.ts';
+import { roundPlan, stageView, tempoGauge, vitalsView, type BattleMenuRow, type RoundPlan } from '../desktop/battle-model.ts';
+import { createBattle, resolveRound, type BattleState } from '../game/battle.ts';
+import { createPlayer } from '../game/player.ts';
+import { createKarma } from '../game/karma.ts';
+import type { GameState } from '../game/game.ts';
+import type { Enemy } from '../game/enemy.ts';
 import { barUpdateAt, beatSchedule, groupBeats } from './beat-model.ts';
 import { conditionChips, resourceBarModel } from './component-model.ts';
 import { makeCondition } from '../game/condition.ts';
@@ -704,6 +709,97 @@ async function classesTheFrameCarries(animate: boolean): Promise<Carried> {
   return { classes: seen, lists };
 }
 
+/**
+ * G63-3 (PLAN.md #1.6): DOM SNAPSHOTS OF A REAL REPLAYED ROUND — the frame built from the real
+ * views of a real engine state, and two real `resolveRound` steps replayed on it through the
+ * real sequencer, a clone of the page taken at mount, at every beat, at each round's end, and
+ * with the Record log opened. Dice by hand (face f of n is (f − 0.5) / n):
+ *   the player: Enforcer, DEX 18 (tempo +0.3 a round, shipped cap), 10/20 HP, Siphon known,
+ *     no conditions (so its chips row is `:empty`);
+ *   the enemy:  DEX 6 (tempo −0.2 a round), STR 13, AC 10, Pyro Ball, no conditions.
+ *   round 1 — the player casts Siphon (no draw): 3 to the enemy (a HARM float, the flash or the
+ *     tint) and lifesteal floor(3 × 0.5) = 1 (a HEAL float); the enemy's d20 face 15 + 1 = 16 ≥
+ *     AC 14, Pyro Ball for 2 (a HARM float, the shake or the tint). Gauges: player +0.3 (the
+ *     quick half lit), enemy −0.2 (the slow half lit) — both by the engine.
+ *   round 2 — the player's d20 face 2 + 4 = 6 < 10, a MISS (a plain float); the enemy's d20
+ *     face 1, a fumble.
+ */
+async function realRoundSnapshots(animate: boolean): Promise<Element[]> {
+  const face = (f: number, sides: number): number => (f - 0.5) / sides;
+  document.body.innerHTML =
+    '<div id="column"><div id="log"></div></div><div id="arena"></div><div id="vitals"></div><div id="choices"></div>';
+  const player = {
+    ...createPlayer({ name: 'Probe', classId: 'Enforcer', stats: { STR: 14, DEX: 18, CON: 12, INT: 10, WIS: 10, CHA: 10 } }),
+    hp: 10,
+    maxHp: 20,
+    skillPool: ['siphon'],
+    skillCharges: 5,
+  };
+  const stats = { STR: 13, DEX: 6, CON: 13, INT: 13, WIS: 13, CHA: 13 };
+  const enemy: Enemy = {
+    name: 'Beast', type: 'Beast', fullName: 'Rust Chorister', stats,
+    mods: { STR: 1, DEX: -2, CON: 1, INT: 1, WIS: 1, CHA: 1 },
+    hp: 30, maxHp: 30, xp: 2, armorClass: 10, skillCharges: 5, maxSkillCharges: 5,
+    hitDie: { quantity: 1, sides: 8 }, resistances: [0, 0, 0, 0, 0, 0, 0], skillPool: ['pyroBall'],
+    activeConditions: [], familyId: 'Beast', karmaWeighted: false,
+  };
+  const wrap = (b: BattleState): GameState => ({
+    version: 9, rngState: 1, player: b.player, act: 1, place: 0, karma: createKarma(),
+    phase: { kind: 'battle', battle: b, started: true, final: false },
+  });
+  const scripted = (values: number[]) => {
+    let i = 0;
+    return (): number => {
+      if (i >= values.length) throw new Error('over-drawn');
+      return values[i++]!;
+    };
+  };
+  const arena = document.getElementById('arena')!;
+  const vitals = document.getElementById('vitals')!;
+  let battle = createBattle(player, enemy, 1);
+  arena.appendChild(buildArena(stageView(wrap(battle))!, { line: '' }));
+  vitals.appendChild(buildVitals(vitalsView(wrap(battle))!));
+  const rows: BattleMenuRow[] = [
+    { kind: 'fight' },
+    { kind: 'run', enabled: false, reason: 'There is nowhere to go' },
+    { kind: 'cast-skill', option: { skillId: 'brace', name: 'Brace', chargeCost: 9, affordable: false } },
+  ];
+  document.getElementById('choices')!.appendChild(buildBattleMenu(rows, () => undefined));
+  const snaps: Element[] = [];
+  const snap = (): void => {
+    snaps.push(document.body.cloneNode(true) as Element);
+  };
+  snap();
+  const els = arenaEls(arena, vitals)!;
+  const rounds = [
+    { action: { kind: 'cast', skillId: 'siphon' } as const, draws: [face(15, 20), 0.5] },
+    { action: 'fight' as const, draws: [face(2, 20), face(1, 20)] },
+  ];
+  for (const { action, draws } of rounds) {
+    const r = resolveRound(battle, action, scripted(draws));
+    const plan = roundPlan(wrap(battle), wrap(r.state), r.events)!;
+    await playRound(plan, els, { wait: () => Promise.resolve(), audio: { play: () => undefined }, animate, onBeat: snap });
+    snap();
+    battle = r.state;
+  }
+  setLogOpen(document.getElementById('column')!, arena.querySelector<HTMLElement>('.ticker-toggle')!, true);
+  snap();
+  document.body.innerHTML = '';
+  return snaps;
+}
+
+/** The selectors to judge: every comma-split selector but keyframe stops, user-action states stripped. */
+function judgedSelectors(sheets: readonly { css: string }[]): string[] {
+  return selectorsOf(sheets)
+    .filter((s) => !/^(?:from|to|\d+(?:\.\d+)?%)$/.test(s))
+    .map((s) => s.replace(/::?(?:hover|focus-visible|focus-within|focus|active|before|after)\b/g, '').trim());
+}
+
+/** The selectors that match no element of any snapshot — through the browser's own `matches`. */
+function unmatchedSelectors(selectors: readonly string[], snaps: readonly Element[]): string[] {
+  return selectors.filter((sel) => !snaps.some((root) => root.matches(sel) || root.querySelector(sel) !== null));
+}
+
 /** True when some element, at some moment, carried every one of `classes` at once. */
 const carriedTogether = (carried: Carried, classes: readonly string[]): boolean =>
   carried.lists.some((list) => classes.every((c) => list.includes(c)));
@@ -744,23 +840,31 @@ describe('every class the battle frame carries is one a stylesheet selects on �
     expect(reduced.classes, 'the reduced-motion round flashed').not.toContain('is-struck');
   });
 
-  it('FORWARD: every rule in battle.css reaches an element the frame really carries', async () => {
-    // The other end of the same join: a rule keyed to a class — or a COMBINATION of classes —
-    // that no element ever carries never matches. Judged on each selector's subject (its last
-    // compound), so `.tempo-quick .tempo-cell.is-filled` needs a tempo cell that was really lit,
-    // not merely some element somewhere carrying `is-filled`. Ids, attributes and pseudo-classes
-    // in the subject are states this fixture does not all reach, and are not judged here.
+  it('FORWARD (G63-3): every battle.css selector MATCHES an element of a real replayed round', async () => {
+    // The other end of the same join, judged the way the browser judges it: the WHOLE selector,
+    // through `Element.matches`, against DOM snapshots of the real frame replaying real engine
+    // steps (`realRoundSnapshots`) — so `.tempo-quick .tempo-cell.is-filled` needs a lit cell
+    // INSIDE the quick half, not a lit cell anywhere and a quick half anywhere.
     const battleCss = SHEETS.filter((s) => s.name === 'battle.css');
     expect(battleCss, 'battle.css is not among the scanned stylesheets').toHaveLength(1);
-    const full = await classesTheFrameCarries(true);
-    const reduced = await classesTheFrameCarries(false);
-    const everything = new Set([...full.classes, ...reduced.classes]);
-    const orphans = [...selectedClasses(battleCss)].filter((c) => !everything.has(c));
-    expect(orphans, 'battle.css styles a class the battle frame never carries').toEqual([]);
-    const judged = selectorsOf(battleCss).filter((s) => subjectClasses(s).length > 0);
-    const unreached = judged.filter((s) => !carriedTogether(full, subjectClasses(s)) && !carriedTogether(reduced, subjectClasses(s)));
-    expect(unreached, 'a battle.css rule reaches no element the frame ever carries').toEqual([]);
-    expect(judged.length, 'battle.css has almost no class-keyed rules — this swept nothing').toBeGreaterThan(25);
+    const snaps = [...(await realRoundSnapshots(true)), ...(await realRoundSnapshots(false))];
+    const judged = judgedSelectors(battleCss);
+    expect(unmatchedSelectors(judged, snaps), 'a battle.css rule matches no element of a real round').toEqual([]);
+    expect(judged.length, 'battle.css has almost no rules — this swept nothing').toBeGreaterThan(25);
+    // Non-vacuity for the two rules G63-3 named: both gauge halves were really lit BY THE ENGINE.
+    expect(snaps.some((s) => s.querySelector('.tempo-quick .tempo-cell.is-filled'))).toBe(true);
+    expect(snaps.some((s) => s.querySelector('.tempo-slow .tempo-cell.is-filled'))).toBe(true);
+  });
+
+  it('MUTATION (recorded): a stray space inside `.tempo-cell.is-filled` turns the check red', async () => {
+    // The shape the defect really takes: a compound split into a descendant selector. The
+    // shipped rule matches; the mutated copy of the same sheet matches nothing and is reported.
+    const [sheet] = SHEETS.filter((s) => s.name === 'battle.css');
+    const mutated = { name: 'battle.css', css: sheet!.css.replace('.tempo-quick .tempo-cell.is-filled', '.tempo-quick .tempo-cell .is-filled') };
+    expect(mutated.css, 'the mutation found nothing to change').not.toBe(sheet!.css);
+    const snaps = [...(await realRoundSnapshots(true)), ...(await realRoundSnapshots(false))];
+    expect(unmatchedSelectors(judgedSelectors([sheet!]), snaps)).toEqual([]);
+    expect(unmatchedSelectors(judgedSelectors([mutated]), snaps)).toEqual(['.tempo-quick .tempo-cell .is-filled']);
   });
 
   it('the selector readers read selectors only, and every way a class is written in one', () => {

@@ -372,6 +372,8 @@ interface ProbeResult {
   paint: (Report & { paint: Paint })[];
   /** `floor-looks`: the timed floor-1 -> floor-2 re-theme, three ways. */
   fade: FadeRun[];
+  /** G65: the strike classes' computed animation, per player motion setting and ground. */
+  strike: { motion: string; place: number; ground: string; flash: string; shake: string }[];
   phaseC: { steps: WalkStep[]; fontLoaded: boolean; fontCount: number; logs: LogEntry[] };
   minWindow: {
     options: Record<string, unknown>;
@@ -1735,6 +1737,38 @@ describe('the battle is a framed stage', () => {
     // Non-vacuity: every battle state was measured, and the helper measures a real overlap.
     expect(STAGE_SCENARIOS.length).toBeGreaterThanOrEqual(7);
     expect(visibleProse(report(960, 640, 'battle', 'normal'))).toBeGreaterThanOrEqual(proseFloorPx('stage', 'normal') - SLACK);
+  });
+});
+
+// =========================================================================================
+// G65 (PLAN.md #1.6) — the reduced-motion backstop holds for the PLAYER's own setting.
+// =========================================================================================
+
+describe('G65 — under the player’s reduced motion a strike never animates, on any ground', () => {
+  const reading = (motion: string, place: number) => {
+    const found = RESULT.strike.find((r) => r.motion === motion && r.place === place);
+    if (!found) throw new Error(`no strike reading for ${motion} on place ${place}`);
+    return found;
+  };
+
+  it('the player’s "reduce" with the OS at normal motion: no flash, no shake — dark and light ground', () => {
+    for (const place of [0, 1]) {
+      const r = reading('reduce', place);
+      expect(r.flash, `floor ${place + 1}: the struck enemy still flashes`).toBe('none');
+      expect(r.shake, `floor ${place + 1}: the struck stat box still shakes`).toBe('none');
+    }
+    // Non-vacuity: floor 2 really is the light ground whose own flash rule was the second hole.
+    expect(reading('reduce', 1).ground).toBe('light');
+    expect(reading('reduce', 0).ground).toBe('dark');
+  });
+
+  it('CONTROL: with motion on, the same classes DO animate — the flash each ground uses, and the shake', () => {
+    // battle.css: `arena-flash` / `arena-shake`; atmosphere.css: `arena-flash-light` on the light ground.
+    for (const motion of ['full', 'system']) {
+      expect(reading(motion, 0).flash).toBe('arena-flash');
+      expect(reading(motion, 1).flash).toBe('arena-flash-light');
+      expect(reading(motion, 0).shake).toBe('arena-shake');
+    }
   });
 });
 

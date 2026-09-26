@@ -220,9 +220,10 @@ async function phaseA() {
   }
 
   const paint = await paintPass(win, scenarios);
+  const strike = await strikePass(win);
   win.destroy();
   const fade = await fadePass();
-  return { groups: out, paint, fade };
+  return { groups: out, paint, fade, strike };
 }
 
 /**
@@ -253,6 +254,26 @@ async function paintPass(win, scenarios) {
     }
   }
   return reports;
+}
+
+/**
+ * THE STRIKE PASS (G65, PLAN.md #1.6) — the struck figure's and the shaken stat box's computed
+ * `animation-name` under each PLAYER motion setting, on a dark floor and on floor 2's light
+ * ground, with the OS left at normal motion (this window's default). Read in real Chromium,
+ * because the defect was a cascade-order one that no DOM without layout can see.
+ */
+async function strikePass(win) {
+  const readings = [];
+  for (const motion of ['reduce', 'full', 'system']) {
+    for (const place of [0, 1]) {
+      readings.push(
+        await win.webContents.executeJavaScript(
+          `window.__voidLayoutProbe.strikeMotion(${JSON.stringify({ motion, place })})`,
+        ),
+      );
+    }
+  }
+  return readings;
 }
 
 /**
@@ -449,6 +470,7 @@ app.whenReady().then(async () => {
       phaseA: a.groups,
       paint: a.paint,
       fade: a.fade,
+      strike: a.strike,
       minWindow: phaseB(),
       phaseC: await phaseC(),
     };
