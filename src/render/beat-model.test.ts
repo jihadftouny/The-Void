@@ -3,10 +3,10 @@
 // engine event. Every expected value is derived by hand (dice chosen by hand, templates read
 // from `format.ts`, schedule arithmetic done here), never read off the module under test.
 //
-// ⚠ ORDER-AGNOSTIC (Appendix A.1). As of 2026-09-12 the engine emits the enemy's turn before the
-// player's in a Fight/Cast round; that is its CURRENT behaviour, not the design, which (§14.8,
-// confirmed by the author) has you strike first, with speed from initiative and Dexterity —
-// an engine change tracked as FINDINGS G62. NOTHING HERE ASSERTS WHICH SIDE GOES FIRST. The
+// ⚠ ORDER-AGNOSTIC (Appendix A.1). Since PLAN.md #1.6 (G62) the engine's round has you strike
+// first, then the enemy, with speed from the §16.1 tempo gauge and Dexterity —
+// no initiative roll. The beat model itself never depended on that. NOTHING HERE ASSERTS WHICH SIDE GOES
+// FIRST beyond reading it off the engine. The
 // engine round below takes its order from the events the engine emitted; the guard block feeds
 // a round in EACH order, and with any number of actions per side, and asserts each replays
 // faithfully — when the engine changes, this file stays green, and if the beat model ever
@@ -270,11 +270,11 @@ describe('either round order replays faithfully (A.1)', () => {
   });
 
   // ---------------------------------------------------------------------------------------
-  // ⭐ ANY NUMBER OF ACTIONS PER SIDE. The author's answer on round order (2026-09-12): "you
-  // strike first, but it really depends on initiative like DnD, and the Dexterity stat" — which
-  // is GAME-DESIGN §16.1's tempo gauge: a full gauge is an EXTRA ACTION, an empty one a LOST
-  // TURN. Neither is built. When it is, a round can carry two actions from one side and none
-  // from the other, in either order, so the replay must hold no count per side at all.
+  // ⭐ ANY NUMBER OF ACTIONS PER SIDE. The author's answer on round order (2026-09-12) — you
+  // strike first, with Dexterity deciding speed — is GAME-DESIGN §16.1's tempo gauge: a full
+  // gauge is an EXTRA ACTION, an empty one a LOST TURN. Both are built (PLAN.md #1.6), so a
+  // round can carry two actions from one side and none from the other, in either order, and
+  // the replay must hold no count per side at all.
   // ---------------------------------------------------------------------------------------
 
   const secondPlayerStrike: GameEvent = { ...attack, subject: 'player', outcome: 'hit', damage: 5 };

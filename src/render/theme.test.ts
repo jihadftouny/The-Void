@@ -689,6 +689,10 @@ async function classesTheFrameCarries(animate: boolean): Promise<Carried> {
       enemy: { before: resourceBarModel('HP', 20, 30, 'foe'), after: resourceBarModel('HP', 11, 30, 'foe') },
       charges: { before: resourceBarModel('Charges', 3, 5, 'accent'), after: resourceBarModel('Charges', 3, 5, 'accent') },
     },
+    tempo: {
+      player: { before: tempoGauge(-0.4), after: tempoGauge(-0.4) },
+      enemy: { before: tempoGauge(0.6), after: tempoGauge(0.6) },
+    },
   };
   const els = arenaEls(arena, vitals);
   expect(els, 'the frame the builders made is missing an element the sequencer needs').not.toBeNull();

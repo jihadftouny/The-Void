@@ -119,8 +119,9 @@ describe('the player’s stat box (AC-12): fighting numbers only', () => {
     expect(view.charges).toMatchObject({ label: 'Charges', value: 3, max: p.maxSkillCharges, tone: 'accent' });
     expect(view.resource).toEqual({ kind: 'momentum', value: 2 });
     expect(view.chips.map((c) => c.name)).toEqual(['Poison']);
-    // No XP, no Act, no karma, no tempo — by the view's own keys, not by a search for words.
-    expect(Object.keys(view).sort()).toEqual(['charges', 'chips', 'classLine', 'hp', 'name', 'resource']);
+    // No XP, no Act, no karma — by the view's own keys, not by a search for words. The tempo
+    // gauge IS a fighting number (§16.1: "tempo is tactical"), shown since PLAN.md #1.6.
+    expect(Object.keys(view).sort()).toEqual(['charges', 'chips', 'classLine', 'hp', 'name', 'resource', 'tempo']);
   });
 
   it('a class that banks no resource shows none', () => {
@@ -135,11 +136,37 @@ describe('the player’s stat box (AC-12): fighting numbers only', () => {
   });
 });
 
-describe('the reserved tempo slot (AC-25; GAME-DESIGN §16.1)', () => {
-  it('is absent from both views today — there is no engine field, so nothing renders', () => {
+describe('the tempo gauge on both combatants (AC-19; GAME-DESIGN §16.1)', () => {
+  it('every battle view carries one, reading 0.0 before the gauges ever move', () => {
     const s = inBattle(createBattle(hero(), foe(), 2));
-    expect('tempo' in stageView(s)!).toBe(false);
-    expect('tempo' in vitalsView(s)!).toBe(false);
+    expect(stageView(s)!.tempo).toEqual(tempoGauge(0));
+    expect(vitalsView(s)!.tempo).toEqual(tempoGauge(0));
+  });
+
+  it('reads the ENGINE’s tenths, divided by ten at the edge: player −3 → −0.3, enemy 2 → +0.2', () => {
+    const b = createBattle(hero(), foe(), 2);
+    const s = inBattle({ ...b, tempo: { player: -3, enemy: 2 } });
+    expect(stageView(s)!.tempo).toEqual(tempoGauge(0.2));
+    expect(vitalsView(s)!.tempo).toEqual(tempoGauge(-0.3));
+    expect(stageView(s)!.tempo).toMatchObject({ text: '+0.2', quick: 0.2, slow: 0 });
+    expect(vitalsView(s)!.tempo).toMatchObject({ text: '−0.3', quick: 0, slow: 0.3 });
+  });
+
+  it('outside a battle the stat box shows no gauge (it has nothing to measure)', () => {
+    const s = inBattle(createBattle(hero(), foe(), 2));
+    expect(vitalsView({ ...s, phase: { kind: 'main-menu' } })!.tempo).toBeUndefined();
+  });
+
+  it('the round plan carries each gauge before and after the step', () => {
+    const b = createBattle(hero(), foe(), 2);
+    const before = inBattle({ ...b, tempo: { player: 3, enemy: 0 } });
+    const after = inBattle({ ...b, tempo: { player: 6, enemy: -2 } });
+    const plan = roundPlan(before, after, [{ kind: 'tempo-changed', subject: 'player', tenths: 6 }, { kind: 'fled' }])!;
+    expect(plan.tempo.player).toEqual({ before: tempoGauge(0.3), after: tempoGauge(0.6) });
+    expect(plan.tempo.enemy).toEqual({ before: tempoGauge(0), after: tempoGauge(-0.2) });
+    // A step that ended the fight keeps the before-value: the engine has no gauge to show.
+    const ended = roundPlan(before, { ...before, phase: { kind: 'main-menu' } }, [{ kind: 'fled' }])!;
+    expect(ended.tempo.player.after).toEqual(tempoGauge(0.3));
   });
 
   it('is a TWO-SIDED gauge: it fills toward the extra action and empties toward the lost turn', () => {

@@ -471,8 +471,9 @@ function buildHub(mode: 'menu' | 'confirm-abandon'): void {
  * renderer's own pieces importable — so the only fixture here is the STATE. The HUD column is
  * left empty: the stage hides it, and phase C measures the real one.
  *
- * The tempo scenario sets the reserved `tempo` on the views by hand — the one test-only value
- * in the frame, because no engine field exists yet (#1.6 adds it).
+ * Every battle view carries the engine's tempo gauge (#1.6) — 0.0 at a battle's start. The
+ * `battle-tempo` scenario overrides it by hand to the near-threshold look (+0.8 / −0.3), the one
+ * test-only value in the frame: the widest the gauge's text and cells ever get.
  */
 function mountBattle(scene: BattleScene): void {
   const { state } = scene;

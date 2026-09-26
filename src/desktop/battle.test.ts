@@ -12,6 +12,7 @@
 //
 // ⚠ ORDER-AGNOSTIC (Appendix A.1): the sequencer is played a round in each order, and each is
 // checked against expectations derived from THAT order. Nothing asserts which side acts first.
+// (PLAN.md #1.6 made the engine's order "you, then it"; the sequencer never assumed either.)
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -26,7 +27,12 @@ import {
   type ArenaEls,
   type PlayDeps,
 } from './battle.ts';
-import { tempoGauge, type BattleMenuRow, type RoundPlan, type StageView, type VitalsView } from './battle-model.ts';
+import { roundPlan, tempoGauge, type BattleMenuRow, type RoundPlan, type StageView, type VitalsView } from './battle-model.ts';
+import { createBattle, resolveRound, type BattleState } from '../game/battle.ts';
+import { createPlayer } from '../game/player.ts';
+import { createKarma } from '../game/karma.ts';
+import type { GameState } from '../game/game.ts';
+import type { Enemy } from '../game/enemy.ts';
 import { barUpdateAt, beatSchedule, groupBeats } from '../render/beat-model.ts';
 import { resourceBarModel, conditionChips } from '../render/component-model.ts';
 import type { AudioHookName, AudioSink } from '../render/audio-hooks.ts';
@@ -103,6 +109,10 @@ function plan(events: GameEvent[], lead = 0): RoundPlan {
       player: { before: resourceBarModel('HP', 12, 15, 'hp'), after: resourceBarModel('HP', 8, 15, 'hp') },
       enemy: { before: resourceBarModel('HP', 20, 30, 'foe'), after: resourceBarModel('HP', 16, 30, 'foe') },
       charges: { before: resourceBarModel('Charges', 3, 5, 'accent'), after: resourceBarModel('Charges', 3, 5, 'accent') },
+    },
+    tempo: {
+      player: { before: tempoGauge(0), after: tempoGauge(0) },
+      enemy: { before: tempoGauge(0), after: tempoGauge(0) },
     },
   });
 }
@@ -210,18 +220,30 @@ describe('the stat box (AC-12) and the reserved tempo row (AC-25)', () => {
     expect(box.querySelector('.vitals-resource')).toBeNull();
   });
 
-  it('NO tempo element exists while there is no tempo — no gauge, no "0.0", no label', () => {
+  it('a view WITHOUT a tempo builds no gauge — no "0.0", no label (every battle view has one now)', () => {
     const { arena, vitals: box } = mountFrame();
     expect(document.querySelectorAll('.tempo-row')).toHaveLength(0);
     expect(`${arena.textContent}${box.textContent}`).not.toMatch(/tempo|0\.0/i);
   });
 
-  it('with a tempo (a test-only fixture — no engine field exists) a gauge row renders on each side', () => {
+  it('with a tempo a gauge row renders on each side, named for its side', () => {
     const { arena, vitals: box } = mountFrame(stage({ tempo: tempoGauge(0.8) }), vitals({ tempo: tempoGauge(-0.3) }));
     expect(arena.querySelectorAll('.tempo-row')).toHaveLength(1);
     expect(box.querySelectorAll('.tempo-row')).toHaveLength(1);
     expect(arena.querySelector('.tempo-row .tempo-text')!.textContent).toBe('+0.8');
     expect(box.querySelector('.tempo-row')!.getAttribute('aria-label')).toBe('Tempo −0.3');
+    expect(arena.querySelector('.tempo-row')!.getAttribute('data-tempo')).toBe('enemy');
+    expect(box.querySelector('.tempo-row')!.getAttribute('data-tempo')).toBe('player');
+  });
+
+  it('AC-19: −0.3 on the player lights 3 of the slow half’s 10 cells and none of the quick half', () => {
+    // TEMPO_CELLS = 10, so round(0.3 × 10) = 3 cells, from the engine's −3 tenths.
+    const { vitals: box } = mountFrame(stage(), vitals({ tempo: tempoGauge(-3 / 10) }));
+    const row = box.querySelector<HTMLElement>('.tempo-row')!;
+    expect(row.querySelector('.tempo-text')!.textContent).toBe('−0.3');
+    expect(row.querySelectorAll('.tempo-slow .tempo-cell.is-filled')).toHaveLength(3);
+    expect(row.querySelectorAll('.tempo-quick .tempo-cell.is-filled')).toHaveLength(0);
+    expect(box.querySelectorAll('.tempo-row')).toHaveLength(1);
   });
 
   it('the gauge is two-sided: it fills from the centre toward the extra action or the lost turn', () => {
@@ -310,7 +332,7 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
     return { frames, writes, audio, result, earlyResolve, classesSeen, plan: p, els };
   }
 
-  it('enemy first (what the engine emits as of 2026-09-12): lines in order, each bar written once, at its beat', async () => {
+  it('enemy first (the engine’s order before PLAN.md #1.6): lines in order, each bar written once, at its beat', async () => {
     const r = await walk([enemyStrike, playerStrike], true);
     // Hand-derived from format.ts and this order.
     expect(r.frames.map((f) => f.ticker)).toEqual(['The enemy strikes — hit for 3 damage.', 'You strike — hit for 4 damage.']);
@@ -328,7 +350,7 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
     expect(r.earlyResolve).toBe(false);
   });
 
-  it('player first (the design’s order, §14.8 / FINDINGS G62): the same round replays just as faithfully', async () => {
+  it('player first (the engine’s order since #1.6, §14.8): the same round replays just as faithfully', async () => {
     const r = await walk([playerStrike, enemyStrike], true);
     expect(r.frames.map((f) => f.ticker)).toEqual(['You strike — hit for 4 damage.', 'The enemy strikes — hit for 3 damage.']);
     // Mirror image: now the ENEMY's bar is written first and the player's second.
@@ -431,6 +453,10 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
         enemy: { before: resourceBarModel('HP', 20, 30, 'foe'), after: resourceBarModel('HP', 20, 30, 'foe') },
         charges: { before: resourceBarModel('Charges', 3, 5, 'accent'), after: resourceBarModel('Charges', 2, 5, 'accent') },
       },
+      tempo: {
+        player: { before: tempoGauge(0), after: tempoGauge(0) },
+        enemy: { before: tempoGauge(0), after: tempoGauge(0) },
+      },
     });
     const audio = recorder();
     const running = playRound(p, els, deps(true, audio));
@@ -449,6 +475,121 @@ describe('playRound replays a round beat by beat (AC-21)', () => {
     expect(audio.calls.map((c) => c.name)).toEqual(['tick']);
     await vi.runAllTimersAsync();
     await running;
+  });
+});
+
+describe('G63-2 (AC-20): the bars move at the blow that moved them — a REAL engine step', () => {
+  // One real `resolveRound`, dice by hand (face f of n sides is (f - 0.5) / n):
+  //   the player (Enforcer, STR 14: +2, proficiency +2) — d20 face 15 -> 19 >= AC 10, a hit;
+  //     1d6 face 4 -> the enemy 30 - 4 = 26.
+  //   the enemy (DEX 18 at gauge 8, shipped rate +3: 8 + 3 = 11 -> an EXTRA action, gauge 1):
+  //     each action d20 face 15 + STR mod 1 = 16 >= the player's AC -> a hit, skill-pick 0.5 ->
+  //     Pyro Ball, 2 damage. The player 20 -> 18 -> 16.
+  const face = (f: number, sides: number): number => (f - 0.5) / sides;
+  function realStep(): { plan: RoundPlan; before: GameState } {
+    const player = { ...createPlayer({ name: 'Probe', classId: 'Enforcer', stats: { STR: 14, DEX: 10, CON: 12, INT: 10, WIS: 10, CHA: 10 } }), hp: 20, maxHp: 20 };
+    const stats = { STR: 13, DEX: 18, CON: 13, INT: 13, WIS: 13, CHA: 13 };
+    const enemy: Enemy = {
+      name: 'Beast', type: 'Beast', fullName: 'Feral Rat', stats,
+      mods: { STR: 1, DEX: 4, CON: 1, INT: 1, WIS: 1, CHA: 1 },
+      hp: 30, maxHp: 30, xp: 2, armorClass: 10, skillCharges: 10, maxSkillCharges: 10,
+      hitDie: { quantity: 1, sides: 8 }, resistances: [0, 0, 0, 0, 0, 0, 0], skillPool: ['pyroBall'],
+      activeConditions: [], familyId: 'Beast', karmaWeighted: false,
+    };
+    const battle: BattleState = { ...createBattle(player, enemy, 1), tempo: { player: 0, enemy: 8 } };
+    const wrap = (b: BattleState): GameState => ({
+      version: 9, rngState: 1, player: b.player, act: 1, place: 0, karma: createKarma(),
+      phase: { kind: 'battle', battle: b, started: true, final: false },
+    });
+    const draws = [face(15, 20), face(4, 6), face(15, 20), 0.5, face(15, 20), 0.5];
+    let i = 0;
+    const r = resolveRound(battle, 'fight', () => {
+      if (i >= draws.length) throw new Error('over-drawn');
+      return draws[i++]!;
+    });
+    const before = wrap(battle);
+    return { plan: roundPlan(before, wrap(r.state), r.events)!, before };
+  }
+
+  it('the enemy bar moves at the player’s blow; the player’s bar at EACH enemy blow, to each engine value', async () => {
+    const { plan: p, before } = realStep();
+    const { els } = mountFrame(
+      { ...stage(), hp: resourceBarModel('HP', 30, 30, 'foe'), tempo: tempoGauge(0.8) },
+      { ...vitals(), hp: resourceBarModel('HP', 20, 20, 'hp'), tempo: tempoGauge(0) },
+    );
+    expect(before.phase.kind).toBe('battle');
+    const running = playRound(p, els, deps(true));
+    const frames: { ticker: string; player: string; enemy: string; enemyTempo: string }[] = [];
+    await flush();
+    for (let b = 0; b < p.beats.length; b += 1) {
+      frames.push({
+        ticker: els.ticker.textContent ?? '',
+        player: barText(els.bars.player),
+        enemy: barText(els.bars.enemy),
+        enemyTempo: els.tempo.enemy!.querySelector('.tempo-text')!.textContent ?? '',
+      });
+      if (b < p.beats.length - 1) {
+        await vi.advanceTimersByTimeAsync(p.schedule.at[b + 1]! - p.schedule.at[b]!);
+        await flush();
+      }
+    }
+    await vi.runAllTimersAsync();
+    await running;
+    // Beats, from format.ts: the player's blow, the enemy's first blow, the extra-action line,
+    // the enemy's second blow.
+    expect(frames.map((f) => f.ticker)).toEqual([
+      'You strike — hit for 4 damage.',
+      'The enemy strikes — hit for 2 damage.',
+      'The enemy moves again.',
+      'The enemy strikes — hit for 2 damage.',
+    ]);
+    expect(frames.map((f) => f.enemy)).toEqual(['26/30', '26/30', '26/30', '26/30']);
+    expect(frames.map((f) => f.player)).toEqual(['20/20', '18/20', '18/20', '16/20']);
+    // The enemy's gauge move (8 -> 11 -> spent -> 1, i.e. +0.1) rides the beat closed before it.
+    expect(frames[0]!.enemyTempo).toBe('+0.1');
+    // ...and every bar and gauge ends on the engine's after-values.
+    expect(barText(els.bars.player)).toBe('16/20');
+    expect(els.tempo.enemy!.querySelector('.tempo-text')!.textContent).toBe('+0.1');
+    expect(els.tempo.player!.querySelector('.tempo-text')!.textContent).toBe('0.0');
+  });
+
+  it('with one blow per side, each bar is still written exactly once, at that blow', async () => {
+    const r = await (async () => {
+      const { els } = mountFrame();
+      const writes = { player: 0, enemy: 0 };
+      for (const key of ['player', 'enemy'] as const) {
+        new MutationObserver((records) => {
+          for (const rec of records) writes[key] += [...rec.addedNodes].filter((n) => (n as Element).classList?.contains('void-bar')).length;
+        }).observe(els.bars[key], { childList: true });
+      }
+      const withValues: GameEvent[] = [
+        playerStrike,
+        { kind: 'hp-changed', subject: 'enemy', hp: 16, maxHp: 30 },
+        enemyStrike,
+        { kind: 'hp-changed', subject: 'player', hp: 8, maxHp: 15 },
+      ];
+      const running = playRound(plan(withValues), els, deps(true));
+      await vi.runAllTimersAsync();
+      await running;
+      await flush();
+      return writes;
+    })();
+    expect(r).toEqual({ player: 1, enemy: 1 });
+  });
+
+  it('a tempo row is rewritten at the beat carrying its tempo-changed, and ends on the after-value', async () => {
+    const { els } = mountFrame(stage({ tempo: tempoGauge(0) }), vitals({ tempo: tempoGauge(0.2) }));
+    const events: GameEvent[] = [{ kind: 'tempo-changed', subject: 'player', tenths: 5 }, playerStrike, enemyStrike];
+    const base = plan(events);
+    const p: RoundPlan = { ...base, tempo: { ...base.tempo, player: { before: tempoGauge(0.2), after: tempoGauge(0.5) } } };
+    const running = playRound(p, els, deps(true));
+    await flush();
+    // Beat 0 is the player's blow, which the value before it attached to: already +0.5.
+    expect(els.tempo.player!.querySelector('.tempo-text')!.textContent).toBe('+0.5');
+    expect(els.tempo.player!.querySelectorAll('.tempo-quick .tempo-cell.is-filled')).toHaveLength(5);
+    await vi.runAllTimersAsync();
+    await running;
+    expect(els.tempo.player!.getAttribute('aria-label')).toBe('Tempo +0.5');
   });
 });
 
