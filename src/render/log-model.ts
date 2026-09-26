@@ -21,8 +21,11 @@
 import type { GameEvent, GameEventKind } from '../game/gameEvent.ts';
 import { formatEvent, formatRollDetail } from './format.ts';
 
-/** Where a beat is reported: the mechanical log, or the Void's narration pane. */
-export type LogRoute = 'log' | 'pane';
+/**
+ * Where a beat is reported: the mechanical log, the Void's narration pane, or `hud` — shown by
+ * the frame's bars and gauges, never as a line (PLAN.md #1.6: `hp-changed`, `tempo-changed`).
+ */
+export type LogRoute = 'log' | 'pane' | 'hud';
 
 /** One line of the combat log. */
 export interface LogLine {
@@ -95,6 +98,14 @@ export const LOG_ROUTING: Record<GameEventKind, LogRoute> = {
   'floor-drain': 'log',
   'illusion-struck': 'log',
   'illusion-dispelled': 'log',
+  // PLAN.md #1.6 — the tempo gauge's two moments are logged (a lost turn and an extra action
+  // are mechanical facts the player must be able to read back); a failed escape is logged
+  // above. The gauge's VALUE and a combatant's HP after a blow are `hud`: the frame draws them,
+  // and a line per blow saying "You stand at 12/20" would drown the log it sits in.
+  'tempo-extra-action': 'log',
+  'tempo-lost-turn': 'log',
+  'tempo-changed': 'hud',
+  'hp-changed': 'hud',
   // A victory drop OR a chest item the full pack could not take. Pane, not log: the chest path
   // happens outside any fight, and the victory line already reports what WAS taken.
   'loot-left-behind': 'pane',

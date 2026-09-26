@@ -34,10 +34,15 @@ import { hookForEvent, type AudioHookName } from './audio-hooks.ts';
  *    skill an enemy used before the attack that carried it, a condition taking hold).
  *  - `pane`   — the narration owns it and the arena never shows it. Exactly the kinds the
  *    combat log routes to the pane (`LOG_ROUTING`), which `beat-model.test.ts` cross-checks.
+ *  - `bar`    — moves a bar or the tempo gauge and shows nothing (PLAN.md #1.6: `hp-changed`,
+ *    `tempo-changed`). It is not a beat and joins no beat's `events`; its VALUE attaches to the
+ *    beat that caused it (`Beat.barValues` / `Beat.tempoValues`), so the sequencer writes the
+ *    bar at the blow that moved it (G63-2). Exactly the kinds the log routes to `hud`, which
+ *    `beat-model.test.ts` cross-checks the same way.
  *
  * EXHAUSTIVE: a new event kind fails the build here until someone decides which it is.
  */
-export type BeatRole = 'anchor' | 'attach' | 'pane';
+export type BeatRole = 'anchor' | 'attach' | 'pane' | 'bar';
 
 export const BEAT_ROLE: Readonly<Record<GameEventKind, BeatRole>> = {
   // ---- anchors: each one is a beat ----
@@ -67,6 +72,11 @@ export const BEAT_ROLE: Readonly<Record<GameEventKind, BeatRole>> = {
   'cast-unavailable': 'anchor',
   'spare-unavailable': 'anchor',
   'consumable-unavailable': 'anchor',
+  'tempo-extra-action': 'anchor',
+  'tempo-lost-turn': 'anchor',
+  // ---- values the frame draws, attached to the beat that caused them ----
+  'hp-changed': 'bar',
+  'tempo-changed': 'bar',
   // ---- attached to the next anchor ----
   'enemy-skill-used': 'attach',
   advantage: 'attach',
@@ -136,6 +146,29 @@ export interface Beat {
   float: BeatFloat | null;
   /** Whose side took the blow, for the flash (enemy) or the shake (player). */
   struck: CombatSubject | null;
+  /**
+   * PLAN.md #1.6 / G63-2: the HP a bar should show AT this beat, from the engine's own
+   * `hp-changed` events (the last one wins when a beat carries two). Absent when the beat moved
+   * no HP. Never computed here — copied off the event.
+   */
+  barValues?: Partial<Record<BarKey, number>>;
+  /** The tempo gauge (integer tenths) AT this beat, from `tempo-changed`. Absent when unmoved. */
+  tempoValues?: Partial<Record<CombatSubject, number>>;
+}
+
+/** The values `bar` events carry, gathered for one beat. */
+interface BeatValues {
+  barValues?: Partial<Record<BarKey, number>>;
+  tempoValues?: Partial<Record<CombatSubject, number>>;
+}
+
+/** Record one `bar` event's value onto a beat's values. */
+function addValue(into: BeatValues, event: GameEvent): void {
+  if (event.kind === 'hp-changed') {
+    into.barValues = { ...into.barValues, [event.subject]: event.hp };
+  } else if (event.kind === 'tempo-changed') {
+    into.tempoValues = { ...into.tempoValues, [event.subject]: event.tenths };
+  }
 }
 
 /** The other side of a combatant. */
@@ -163,7 +196,6 @@ export function touchesOf(event: GameEvent): BarKey[] {
       return [event.subject];
     case 'lifesteal':
     case 'self-sacrifice':
-    case 'escape-failed':
     case 'revive':
     case 'shield-gained':
     case 'shield-absorbed':
@@ -203,7 +235,6 @@ function struckBy(event: GameEvent): CombatSubject | null {
     case 'condition-damage':
       return event.subject;
     case 'boss-minion-damage':
-    case 'escape-failed':
       return 'player';
     default:
       return null;
@@ -253,8 +284,6 @@ export function floatFor(event: GameEvent): BeatFloat | null {
       return amountFloat('player', event.amount, '+', 'heal');
     case 'boss-minion-damage':
       return amountFloat('player', event.amount, '−', 'harm');
-    case 'escape-failed':
-      return amountFloat('player', event.damage, '−', 'harm');
     case 'revive':
       return { side: 'player', text: 'REVIVED', tone: 'heal' };
     default:
@@ -263,11 +292,12 @@ export function floatFor(event: GameEvent): BeatFloat | null {
 }
 
 /** Assemble one beat from the events it carries. */
-function beatOf(index: number, events: readonly GameEvent[], anchor: GameEvent | null): Beat {
+function beatOf(index: number, events: readonly GameEvent[], anchor: GameEvent | null, values: BeatValues): Beat {
   const lead = anchor ?? (events[events.length - 1] as GameEvent);
   const touches = new Set<BarKey>();
   for (const event of events) for (const key of touchesOf(event)) touches.add(key);
   return {
+    ...values,
     index,
     events,
     anchor,
@@ -282,25 +312,44 @@ function beatOf(index: number, events: readonly GameEvent[], anchor: GameEvent |
 /**
  * Group a step's events into beats — PURE, and NEVER REORDERING.
  *
- * Walk the events in order: `pane` kinds are skipped (the narration owns them); `attach` kinds
- * gather into the pending beat; an `anchor` closes the pending beat with itself as its anchor.
- * Anything still gathering at the end becomes a final beat with no anchor, whose line is its
- * last event's. The concatenated `events` of the beats is exactly the input with the pane
- * kinds removed, in the same order — the property the test pins.
+ * Walk the events in order: `pane` kinds are skipped (the narration owns them); `bar` kinds
+ * join no beat — their value is recorded on the beat that caused them (see `BeatRole`);
+ * `attach` kinds gather into the pending beat; an `anchor` closes the pending beat with itself
+ * as its anchor. Anything still gathering at the end becomes a final beat with no anchor, whose
+ * line is its last event's. The concatenated `events` of the beats is exactly the input with
+ * the pane and bar kinds removed, in the same order — the property the test pins.
  */
 export function groupBeats(events: readonly GameEvent[]): Beat[] {
   const beats: Beat[] = [];
   let pending: GameEvent[] = [];
+  let pendingValues: BeatValues = {};
   for (const event of events) {
     const role = BEAT_ROLE[event.kind];
     if (role === 'pane') continue;
+    if (role === 'bar') {
+      // The value belongs to the beat that CAUSED it: the one just closed when nothing is
+      // gathering (a blow is an anchor, and its `hp-changed` follows it), else the one that is
+      // gathering. A value before any beat at all waits for the first one.
+      const last = beats[beats.length - 1];
+      if (pending.length === 0 && last !== undefined) {
+        const values: BeatValues = {};
+        if (last.barValues) values.barValues = last.barValues;
+        if (last.tempoValues) values.tempoValues = last.tempoValues;
+        addValue(values, event);
+        beats[beats.length - 1] = { ...last, ...values };
+      } else {
+        addValue(pendingValues, event);
+      }
+      continue;
+    }
     pending.push(event);
     if (role === 'anchor') {
-      beats.push(beatOf(beats.length, pending, event));
+      beats.push(beatOf(beats.length, pending, event, pendingValues));
       pending = [];
+      pendingValues = {};
     }
   }
-  if (pending.length > 0) beats.push(beatOf(beats.length, pending, null));
+  if (pending.length > 0) beats.push(beatOf(beats.length, pending, null, pendingValues));
   return beats;
 }
 

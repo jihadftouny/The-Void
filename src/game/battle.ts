@@ -1025,7 +1025,7 @@ function enemyCounterAttack(state: BattleState, rng: Rng): RoundResult {
   // `escape-failed` reports the HP the player ACTUALLY lost, so it reconciles with the
   // `shield-absorbed` / first-hit-reduction entries beside it. Identical to the rolled damage
   // for a player with no such gear (off-equivalence).
-  events.push({ kind: 'escape-failed', damage: taken.applied });
+  events.push({ kind: 'escape-failed' });
   const next = withFlags(state, taken.player, taken.enemy, taken.firstHitDone, taken.reviveUsed);
   if (taken.died) {
     events.push({ kind: 'defeat' });

@@ -35,6 +35,16 @@ export function hpText(hp: number, maxHp: number): string {
   return `${hp}/${maxHp}`;
 }
 
+/**
+ * An engine tempo in integer TENTHS as signed one-decimal text: 4 → `+0.4`, −3 → `−0.3`, 0 →
+ * `0.0`. The same shape the stage's gauge prints (`tempoGauge`), with the typographic minus.
+ * Formats; computes no rule.
+ */
+function tenthsText(tenths: number): string {
+  const magnitude = (Math.abs(tenths) / 10).toFixed(1);
+  return tenths > 0 ? `+${magnitude}` : tenths < 0 ? `−${magnitude}` : '0.0';
+}
+
 /** The player-facing label for a combat subject. */
 function sideName(subject: CombatSubject): string {
   return subject === 'player' ? 'You' : 'The enemy';
@@ -157,7 +167,8 @@ export function formatEvent(e: GameEvent): string {
       // G72: WORLD.md §6 — the Void is a condition, not a place. Worded as narrate.ts's fact.
       return `You break away into the dark.`;
     case 'escape-failed':
-      return `Your escape fails — you take ${e.damage} damage.`;
+      // PLAN.md #1.6: a failed escape costs the turn; the enemy's own attack line follows.
+      return `Your escape fails.`;
     case 'escape-impossible':
       return `There is no escape from this one.`;
     case 'spared':
@@ -204,6 +215,22 @@ export function formatEvent(e: GameEvent): string {
       return `You see through the illusion — Wisdom ${e.total} vs ${e.dc}. It was never there.`;
     case 'loot-left-behind':
       return `Your pack is full — you leave ${e.name} behind.`;
+    // --- PLAN.md #1.6 sequential rounds + the §16.1 tempo gauge ---
+    // `tempo-changed` and `hp-changed` are HUD values (`LOG_ROUTING` 'hud'): the frame's gauge
+    // and bars show them and they never become log lines. They still format, so the table is
+    // total and a developer surface that prints an event reads sensibly.
+    case 'tempo-changed':
+      return e.subject === 'player'
+        ? `Your tempo is ${tenthsText(e.tenths)}.`
+        : `The enemy's tempo is ${tenthsText(e.tenths)}.`;
+    case 'tempo-extra-action':
+      return e.subject === 'player' ? `You have a moment more — act again.` : `The enemy moves again.`;
+    case 'tempo-lost-turn':
+      return e.subject === 'player' ? `You are too slow to act this round.` : `The enemy is too slow to act.`;
+    case 'hp-changed':
+      return e.subject === 'player'
+        ? `You stand at ${hpText(e.hp, e.maxHp)}.`
+        : `The enemy stands at ${hpText(e.hp, e.maxHp)}.`;
 
     // --- narrative events ---
     case 'title':

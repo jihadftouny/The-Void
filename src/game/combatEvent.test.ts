@@ -40,7 +40,7 @@ describe('CombatEvent JSON round-trip', () => {
     { kind: 'condition-applied', subject: 'player', conditionType: 'freeze' },
     { kind: 'condition-expired', subject: 'player', conditionType: 'bleed' },
     { kind: 'fled' },
-    { kind: 'escape-failed', damage: 2 },
+    { kind: 'escape-failed' },
     { kind: 'escape-impossible' },
     { kind: 'victory', xpGained: 3, loot: [] },
     { kind: 'defeat' },

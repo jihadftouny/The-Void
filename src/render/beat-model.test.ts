@@ -80,7 +80,9 @@ function engineRound(): CombatEvent[] {
 }
 
 const EVERY: readonly GameEvent[] = Object.values(ONE_OF_EVERY_EVENT);
-const nonPane = (events: readonly GameEvent[]): GameEvent[] => events.filter((e) => BEAT_ROLE[e.kind] !== 'pane');
+/** The events a beat carries: everything but the narration's (`pane`) and the frame's values (`bar`). */
+const nonPane = (events: readonly GameEvent[]): GameEvent[] =>
+  events.filter((e) => BEAT_ROLE[e.kind] !== 'pane' && BEAT_ROLE[e.kind] !== 'bar');
 
 // =========================================================================================
 
@@ -96,6 +98,18 @@ describe('the role table', () => {
     for (const kind of Object.keys(LOG_ROUTING) as GameEventKind[]) {
       expect(BEAT_ROLE[kind] === 'pane', kind).toBe(LOG_ROUTING[kind] === 'pane');
     }
+  });
+
+  it('a kind moves a bar EXACTLY when the combat log routes it to the HUD (PLAN.md #1.6)', () => {
+    // The sibling of the pane cross-check: a value the frame draws is neither a log line nor a
+    // beat, in both tables — and there are exactly the two the plan names.
+    for (const kind of Object.keys(LOG_ROUTING) as GameEventKind[]) {
+      expect(BEAT_ROLE[kind] === 'bar', kind).toBe(LOG_ROUTING[kind] === 'hud');
+    }
+    const bars = (Object.keys(BEAT_ROLE) as GameEventKind[]).filter((k) => BEAT_ROLE[k] === 'bar').sort();
+    expect(bars).toEqual(['hp-changed', 'tempo-changed']);
+    expect(BEAT_ROLE['tempo-extra-action']).toBe('anchor');
+    expect(BEAT_ROLE['tempo-lost-turn']).toBe('anchor');
   });
 
   it('the plan’s anchors and attachments, by hand', () => {
@@ -131,6 +145,30 @@ describe('groupBeats never reorders anything', () => {
     expect(beats[1]!.anchor).toBeNull();
     // format.ts: `${conditionName} takes hold of ${side.toLowerCase()}.` — Burn's display name.
     expect(beats[1]!.line).toBe('Burn takes hold of the enemy.');
+  });
+
+  it('a bar value rides the beat that CAUSED it — never a beat of its own (PLAN.md #1.6)', () => {
+    const hit = { ...ONE_OF_EVERY_EVENT.attack, subject: 'player' as const, outcome: 'hit' as const, damage: 3 };
+    const back = { ...ONE_OF_EVERY_EVENT.attack, subject: 'enemy' as const, outcome: 'hit' as const, damage: 2 };
+    const adv: GameEvent = { kind: 'advantage', subject: 'enemy' };
+    const beats = groupBeats([
+      { kind: 'tempo-changed', subject: 'player', tenths: 4 }, // before any beat → the first beat
+      hit,
+      { kind: 'hp-changed', subject: 'enemy', hp: 7, maxHp: 10 }, // after a closed beat → that beat
+      adv,
+      { kind: 'hp-changed', subject: 'player', hp: 9, maxHp: 12 }, // while `adv` gathers → its beat
+      back,
+      { kind: 'hp-changed', subject: 'player', hp: 8, maxHp: 12 }, // the same beat's later value wins
+    ]);
+    expect(beats).toHaveLength(2);
+    expect(beats[0]!.events).toEqual([hit]);
+    expect(beats[0]!.barValues).toEqual({ enemy: 7 });
+    expect(beats[0]!.tempoValues).toEqual({ player: 4 });
+    expect(beats[1]!.events).toEqual([adv, back]);
+    expect(beats[1]!.barValues).toEqual({ player: 8 });
+    expect(beats[1]!.tempoValues).toBeUndefined();
+    // A beat that moved nothing carries no values at all.
+    expect(groupBeats([hit])[0]!.barValues).toBeUndefined();
   });
 
   it('a step with nothing for the arena has no beats', () => {
@@ -291,7 +329,8 @@ describe('floats and touches, by hand', () => {
     expect(floatFor({ kind: 'condition-heal', subject: 'player', conditionType: 'regeneration', amount: 2 })).toEqual({ side: 'player', text: '+2', tone: 'heal' });
     expect(floatFor({ kind: 'lifesteal', amount: 3 })).toEqual({ side: 'player', text: '+3', tone: 'heal' });
     expect(floatFor({ kind: 'boss-minion-damage', amount: 4 })).toEqual({ side: 'player', text: '−4', tone: 'harm' });
-    expect(floatFor({ kind: 'escape-failed', damage: 5 })).toEqual({ side: 'player', text: '−5', tone: 'harm' });
+    // PLAN.md #1.6: a failed escape carries no damage — the enemy's own attack floats it.
+    expect(floatFor({ kind: 'escape-failed' })).toBeNull();
     expect(floatFor({ kind: 'revive', healedTo: 7 })).toEqual({ side: 'player', text: 'REVIVED', tone: 'heal' });
     const cast = ONE_OF_EVERY_EVENT['skill-cast'];
     expect(floatFor({ ...cast, damage: 10 })).toEqual({ side: 'enemy', text: '−10', tone: 'harm' });
@@ -314,16 +353,13 @@ describe('floats and touches, by hand', () => {
     expect(beat!.line).toBe('You strike — hit for 0 damage.');
     expect(beat!.hook).toBe('hit');
     expect(beat!.touches, 'the bar is still written — with the engine’s unchanged value').toEqual(['enemy']);
-    // One rule for every number the stage floats: a zero is never shown. (A failed escape a
-    // shield absorbed entirely reports the 0 HP actually lost — the same "−0".)
-    expect(floatFor({ kind: 'escape-failed', damage: 0 })).toBeNull();
+    // One rule for every number the stage floats: a zero is never shown.
     expect(floatFor({ kind: 'condition-damage', subject: 'enemy', conditionType: 'burn', amount: 0 })).toBeNull();
     expect(floatFor({ kind: 'condition-heal', subject: 'player', conditionType: 'regeneration', amount: 0 })).toBeNull();
     expect(floatFor({ kind: 'lifesteal', amount: 0 })).toBeNull();
     expect(floatFor({ kind: 'boss-minion-damage', amount: 0 })).toBeNull();
     // ...and the smallest real number still floats, so the rule is "zero", not "small".
     expect(floatFor({ ...attack, subject: 'player', outcome: 'hit', damage: 1 })).toEqual({ side: 'enemy', text: '−1', tone: 'harm' });
-    expect(floatFor({ kind: 'escape-failed', damage: 1 })).toEqual({ side: 'player', text: '−1', tone: 'harm' });
   });
 
   it('touches only the bars an event can move', () => {

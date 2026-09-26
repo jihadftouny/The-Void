@@ -221,7 +221,8 @@ describe('resolveRound Run', () => {
     const r = resolveRound(state, 'run', scriptedRng([0.9, face(15, 20), 0.5]));
     expect(r.status).toBe('ongoing');
     expect(r.state.player.hp).toBe(18); // 20 - 2
-    expect(r.events).toContainEqual({ kind: 'escape-failed', damage: 2 });
+    // PLAN.md #1.6: `escape-failed` carries no damage; the HP above is the proof of the blow.
+    expect(r.events).toContainEqual({ kind: 'escape-failed' });
   });
 
   it('in the final act (canFlee false): escape impossible, no damage, ongoing', () => {
@@ -846,8 +847,8 @@ describe('G24 — the failed-escape counter-attack runs every defensive guard', 
     expect(r.state.player.hp).toBe(20); // pre-fix: 18, the shield was not consulted at all
     expect(r.state.player.shield).toBe(18); // 20 - 2 absorbed
     expect(r.events).toContainEqual({ kind: 'shield-absorbed', amount: 2 });
-    // `escape-failed` reports the HP actually lost, so it reconciles with the absorb beside it.
-    expect(r.events).toContainEqual({ kind: 'escape-failed', damage: 0 });
+    // PLAN.md #1.6: `escape-failed` carries no damage; the absorb above is the whole account.
+    expect(r.events).toContainEqual({ kind: 'escape-failed' });
   });
 
   it('the once-per-battle revive intercepts a lethal counter-attack', () => {

@@ -898,7 +898,7 @@ describe('no measurement is interpolated into a message', () => {
 describe('the player-facing projectors are byte-identical, and carry no telemetry', () => {
   const EVENTS: readonly GameEvent[] = [
     { kind: 'encounter-start', enemyName: 'Rust Chorister' },
-    { kind: 'escape-failed', damage: 4 },
+    { kind: 'escape-failed' },
     { kind: 'victory', xpGained: 5, loot: [] },
     { kind: 'defeat' },
   ];
@@ -906,11 +906,11 @@ describe('the player-facing projectors are byte-identical, and carry no telemetr
   it('logLines renders exactly the sentences format.ts specifies', () => {
     // Hand-derived, per `format.ts`:
     //   `encounter-start` is routed to the PANE (log-model.ts LOG_ROUTING) -> no line.
-    //   `escape-failed`   -> `Your escape fails — you take ${damage} damage.`
+    //   `escape-failed`   -> `Your escape fails.` (PLAN.md #1.6: it carries no damage now)
     //   `victory`         -> `Victory! +${xp} XP${rest}.${loot}` with no rest and no loot.
     //   `defeat`          -> `You have fallen.`
     expect(logLines(EVENTS)).toEqual([
-      { text: 'Your escape fails — you take 4 damage.' },
+      { text: 'Your escape fails.' },
       { text: 'Victory! +5 XP.' },
       { text: 'You have fallen.' },
     ]);
@@ -921,7 +921,7 @@ describe('the player-facing projectors are byte-identical, and carry no telemetr
     expect(prompt).not.toBeNull();
     expect(prompt!.facts).toEqual([
       'A Rust Chorister emerges to bar your way.',
-      'Your escape fails; you take 4 harm.',
+      'Your escape fails.',
       'The enemy falls. You are still standing.',
       'Your strength gives out.',
     ]);

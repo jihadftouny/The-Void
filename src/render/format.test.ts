@@ -39,6 +39,20 @@ describe('formatEvent — anchored player-facing strings', () => {
     expect(formatEvent({ kind: 'fled' })).toBe('You break away into the dark.');
   });
 
+  // PLAN.md #1.6 (AC-25): the strings are the plan's D6 table, copied from the plan by hand.
+  it('the tempo gauge, the per-blow HP and the failed escape read as the plan wrote them', () => {
+    expect(formatEvent({ kind: 'tempo-extra-action', subject: 'player' })).toBe('You have a moment more — act again.');
+    expect(formatEvent({ kind: 'tempo-extra-action', subject: 'enemy' })).toBe('The enemy moves again.');
+    expect(formatEvent({ kind: 'tempo-lost-turn', subject: 'player' })).toBe('You are too slow to act this round.');
+    expect(formatEvent({ kind: 'tempo-lost-turn', subject: 'enemy' })).toBe('The enemy is too slow to act.');
+    expect(formatEvent({ kind: 'escape-failed' })).toBe('Your escape fails.');
+    expect(formatEvent({ kind: 'tempo-changed', subject: 'player', tenths: 4 })).toBe('Your tempo is +0.4.');
+    expect(formatEvent({ kind: 'tempo-changed', subject: 'enemy', tenths: -3 })).toBe("The enemy's tempo is −0.3.");
+    expect(formatEvent({ kind: 'tempo-changed', subject: 'player', tenths: 0 })).toBe('Your tempo is 0.0.');
+    expect(formatEvent({ kind: 'hp-changed', subject: 'player', hp: 12, maxHp: 20 })).toBe('You stand at 12/20.');
+    expect(formatEvent({ kind: 'hp-changed', subject: 'enemy', hp: 5, maxHp: 10 })).toBe('The enemy stands at 5/10.');
+  });
+
   it('a max-HP self-sacrifice is worded as narrate.ts words it; the fuel line is unchanged (G72)', () => {
     expect(formatEvent({ kind: 'self-sacrifice', amount: 3, ofMaxHp: true })).toBe(
       'You spend 3 of your own lifeblood, and it does not come back.',
@@ -148,7 +162,7 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   lifesteal: { kind: 'lifesteal', amount: 5 },
   detonate: { kind: 'detonate', consumed: 2, bonusDamage: 6 },
   fled: { kind: 'fled' },
-  'escape-failed': { kind: 'escape-failed', damage: 4 },
+  'escape-failed': { kind: 'escape-failed' },
   'escape-impossible': { kind: 'escape-impossible' },
   spared: { kind: 'spared', enemyName: 'Grief' },
   'spare-unavailable': { kind: 'spare-unavailable' },
@@ -169,6 +183,11 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'illusion-struck': { kind: 'illusion-struck' },
   'illusion-dispelled': { kind: 'illusion-dispelled', natural: 11, modifier: 3, total: 14, dc: 13 },
   'loot-left-behind': { kind: 'loot-left-behind', name: 'Legendary mainHand', rarity: 'Legendary' },
+  // PLAN.md #1.6 (combat)
+  'tempo-changed': { kind: 'tempo-changed', subject: 'enemy', tenths: -3 },
+  'tempo-extra-action': { kind: 'tempo-extra-action', subject: 'enemy' },
+  'tempo-lost-turn': { kind: 'tempo-lost-turn', subject: 'player' },
+  'hp-changed': { kind: 'hp-changed', subject: 'enemy', hp: 5, maxHp: 10 },
   // ---- narrative (26) ----
   title: { kind: 'title' },
   intro: { kind: 'intro', header: 'H', lines: ['a', 'b'] },
@@ -214,7 +233,9 @@ describe('formatEvent — totality over every event kind', () => {
     // PLAN.md #2 added 4 combat and 4 narrative kinds.
     // ...and removed the four rest-decision kinds (rest-lore, rest-full, rest-declined, no-rests).
     // ...and the three potion kinds (§22.6).
-    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 26 + 4 - 4);
+    // PLAN.md #1.6 added 4 combat kinds (tempo-changed, tempo-extra-action, tempo-lost-turn,
+    // hp-changed).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4);
     for (const kind of ALL_KINDS) expect(SAMPLES[kind].kind).toBe(kind);
   });
 

@@ -172,7 +172,9 @@ export function describeEvent(e: GameEvent): string {
     case 'fled':
       return `You break away into the dark.`;
     case 'escape-failed':
-      return `Your escape fails; you take ${e.damage} harm.`;
+      // PLAN.md #1.6: the escape carries no damage now — the enemy's own `attack` fact that
+      // follows it says what the blow cost.
+      return `Your escape fails.`;
     case 'escape-impossible':
       return `There is no escape here.`;
     case 'victory':
@@ -304,6 +306,13 @@ export function describeEvent(e: GameEvent): string {
       return `It was never there.`;
     case 'loot-left-behind':
       return `You cannot carry ${e.name}; you leave it.`;
+    // PLAN.md #1.6 — the §16.1 tempo gauge's two MOMENTS. Words, never the gauge's number.
+    case 'tempo-extra-action':
+      return e.subject === 'player' ? `You move again before it can answer.` : `The enemy moves again.`;
+    case 'tempo-lost-turn':
+      return e.subject === 'player'
+        ? `You are too slow; the moment passes.`
+        : `The enemy is too slow; the moment passes.`;
     case 'rest-found':
       // The scene itself (the place, the character's condition, the tone) is the scene block
       // `buildNarrationPrompt` appends for this step; this fact line only anchors it.
@@ -363,6 +372,13 @@ export function describeEvent(e: GameEvent): string {
     // A numeric gauge the HUD owns. VOID_PERSONA forbids the narrator naming numbers or
     // mechanics, and a momentum/corruption counter is nothing but both.
     case 'resource-changed':
+      return '';
+
+    // PLAN.md #1.6 — the same reason, twice: the tempo gauge's value and a combatant's HP after
+    // a blow are numbers the HUD draws. The blow itself (`attack`, `condition-damage`) is the
+    // fact; the running total is not a moment.
+    case 'tempo-changed':
+    case 'hp-changed':
       return '';
 
     // Carries only internal enum ids (`trigger`, `action`) — printing them IS the C9
