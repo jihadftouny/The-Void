@@ -56,16 +56,19 @@ function run(rate: number, rounds: number): { gauge: number[]; extra: number[]; 
 }
 
 describe('the constants are §16.1’s numbers, in tenths', () => {
-  it('±1.0 threshold, ±0.3 Quick/Slow, a ±0.7 cap', () => {
+  it('±1.0 threshold, ±0.3 Quick/Slow — and the author’s ±0.3 cap (2026-09-26, second round)', () => {
     expect(TEMPO_THRESHOLD_TENTHS).toBe(10);
     expect(TEMPO_QUICK_TENTHS).toBe(3);
     expect(TEMPO_SLOW_TENTHS).toBe(-3);
-    expect(TEMPO_RATE_CAP_TENTHS).toBe(7);
+    expect(TEMPO_RATE_CAP_TENTHS).toBe(3);
   });
 });
 
-describe('tempoRate — §16.1’s table, row by row', () => {
-  const CAP = TEMPO_RATE_CAP_TENTHS;
+// §16.1's table is the UNCAPPED rate — the formula itself — so its rows are read with the cap
+// lifted (`Infinity`, the measurement seam). What the shipped ±0.3 cap does to them is its own
+// block below.
+describe('tempoRate — §16.1’s table, row by row (the formula, uncapped)', () => {
+  const CAP = Infinity;
   it('DEX 10 → 0; DEX 12 → +0.1; DEX 18 → +0.4; DEX 6 → −0.2', () => {
     expect(tempoRate(fighter(10), CAP)).toBe(0); // floor(0/2) = 0
     expect(tempoRate(fighter(12), CAP)).toBe(1); // floor(2/2) = 1
@@ -86,18 +89,18 @@ describe('tempoRate — §16.1’s table, row by row', () => {
     expect(tempoRate(fighter(14, ['quick', 'slow']), CAP)).toBe(2); // 2 + 3 − 3
   });
 
-  it('a family speed adds on top of Dexterity, then the cap applies to the SUM', () => {
+  it('a family speed adds on top of Dexterity, then a cap applies to the SUM', () => {
     expect(tempoRate(fighter(14), CAP, 2)).toBe(4); // 2 + 2
     expect(tempoRate(fighter(14), CAP, -2)).toBe(0); // 2 − 2
-    expect(tempoRate(fighter(18, ['quick']), CAP, 2)).toBe(7); // 4 + 3 + 2 = 9 → capped at 7
-    expect(tempoRate(fighter(6, ['slow']), CAP, -2)).toBe(-7); // −2 − 3 − 2 = −7 (exactly the cap)
-    expect(tempoRate(fighter(4, ['slow']), CAP, -2)).toBe(-7); // −3 − 3 − 2 = −8 → −7
+    // With a cap of 7 (the build's first value) — the clamp acts on the sum, not on a part:
+    expect(tempoRate(fighter(18, ['quick']), 7, 2)).toBe(7); // 4 + 3 + 2 = 9 → 7
+    expect(tempoRate(fighter(6, ['slow']), 7, -2)).toBe(-7); // −2 − 3 − 2 = −7 (exactly the cap)
+    expect(tempoRate(fighter(4, ['slow']), 7, -2)).toBe(-7); // −3 − 3 − 2 = −8 → −7
   });
 
-  it('the cap bites inflated stats; Infinity lifts it (the measurement seam)', () => {
-    expect(tempoRate(fighter(40), CAP)).toBe(7); // mod 15 → capped
-    expect(tempoRate(fighter(40), Infinity)).toBe(15);
-    expect(tempoRate(fighter(1), CAP)).toBe(-5); // floor(−9/2) = −5: under the cap, untouched
+  it('Infinity is the formula itself (the measurement seam)', () => {
+    expect(tempoRate(fighter(40), CAP)).toBe(15); // floor(30/2)
+    expect(tempoRate(fighter(1), CAP)).toBe(-5); // floor(−9/2)
   });
 
   it('reads gear through baseStatMod (a stored-stat + equipment mod)', () => {
@@ -106,6 +109,36 @@ describe('tempoRate — §16.1’s table, row by row', () => {
     const ringed = { ...p, inventory: inventoryWithGear({ ring: 'hollow-ring' }) };
     expect(baseStatMod(ringed, 'CON')).toBe(2);
     expect(baseStatMod(p, 'CON')).toBe(1);
+  });
+});
+
+describe('the SHIPPED ±0.3 cap — what it does to §16.1’s rows, the player’s included', () => {
+  const CAP = TEMPO_RATE_CAP_TENTHS;
+  it('clips every fast row to +0.3: DEX 16, DEX 18 and 18 + Quick all fill alike', () => {
+    // The cap is symmetric and applies to the player too. §16.1: DEX 18 → +0.4, 18 + Quick →
+    // +0.7; shipped, both read +0.3 — the same as DEX 16 (floor(6/2) = 3).
+    expect(tempoRate(fighter(16), CAP)).toBe(3);
+    expect(tempoRate(fighter(18), CAP)).toBe(3);
+    expect(tempoRate(fighter(18, ['quick']), CAP)).toBe(3);
+    expect(tempoRate(fighter(14), CAP)).toBe(2); // under the cap: untouched
+    expect(tempoRate(fighter(10, ['quick']), CAP)).toBe(3); // Quick alone is exactly the cap
+  });
+
+  it('leaves the slow rows alone down to −0.3, and clips below it', () => {
+    expect(tempoRate(fighter(6), CAP)).toBe(-2); // §16.1 DEX 6 → −0.2, untouched
+    expect(tempoRate(fighter(10, ['slow']), CAP)).toBe(-3); // §16.1 10 + Slow → −0.3, exactly
+    expect(tempoRate(fighter(6, ['slow']), CAP)).toBe(-3); // −2 − 3 = −5 → −3
+  });
+
+  it('bites the inflated enemy stats hardest: DEX 40 (+1.5) fills at +0.3', () => {
+    expect(tempoRate(fighter(40), CAP)).toBe(3);
+    expect(tempoRate(fighter(18), CAP, 2)).toBe(3); // a quick family on a fast enemy: 4 + 2 → 3
+  });
+
+  it('a DEX-18 player, shipped: 3, 6, 9, 12→2, 5, 8, 11→1, 4, 7, 10→0 — extras on 4, 7, 10', () => {
+    const r = run(tempoRate(fighter(18), CAP), 10);
+    expect(r.gauge).toEqual([3, 6, 9, 2, 5, 8, 1, 4, 7, 0]);
+    expect(r.extra).toEqual([4, 7, 10]);
   });
 });
 
@@ -181,10 +214,11 @@ describe('advanceTempo — the two recorded choices', () => {
     expect(advanceTempo(0, -25, true)).toEqual({ tenths: -15, actions: 0, crossed: 'lost' });
   });
 
-  it('the cap on round 1: DEX 40 capped (+7) crosses on round 2; uncapped (+15) on round 1', () => {
-    const capped = run(tempoRate(fighter(40), TEMPO_RATE_CAP_TENTHS), 2);
-    expect(capped.gauge).toEqual([7, 4]);
-    expect(capped.extra).toEqual([2]);
+  it('the cap: DEX 40 shipped (+3) first crosses on round 4; uncapped (+15) on round 1', () => {
+    // 3, 6, 9, 12 → extra → 2.
+    const capped = run(tempoRate(fighter(40), TEMPO_RATE_CAP_TENTHS), 4);
+    expect(capped.gauge).toEqual([3, 6, 9, 2]);
+    expect(capped.extra).toEqual([4]);
     const literal = run(tempoRate(fighter(40), Infinity), 1);
     expect(literal.extra).toEqual([1]);
     expect(literal.gauge).toEqual([5]);

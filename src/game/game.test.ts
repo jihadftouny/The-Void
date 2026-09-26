@@ -1058,7 +1058,7 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
 
 describe('AC-15 (PLAN.md #1.6) — a boss gets exactly one post-round per COMPLETED round', () => {
   // The Kingpin with a crew of 2 announces `boss-minion-damage` once per round it runs. The
-  // player (DEX 18, rate +4) opens at gauge 6: 6 + 4 = 10 crosses, so the first Fight PAUSES the
+  // player (DEX 18, shipped rate +3 under the ±0.3 cap) opens at gauge 7: 7 + 3 = 10 crosses, so the first Fight PAUSES the
   // round for the extra action (`roundComplete: false`) — and the crew must NOT strike. The
   // second Fight completes the round, and the crew strikes exactly once.
   it('the paused step fires nothing; the completing step fires it once; boss.round counts rounds', () => {
@@ -1067,7 +1067,7 @@ describe('AC-15 (PLAN.md #1.6) — a boss gets exactly one post-round per COMPLE
     if (built.state.phase.kind !== 'battle') throw new Error('not a battle');
     const start: GameState = {
       ...built.state,
-      phase: { ...built.state.phase, battle: { ...built.state.phase.battle, tempo: { player: 6, enemy: 0 } } },
+      phase: { ...built.state.phase, battle: { ...built.state.phase.battle, tempo: { player: 7, enemy: 0 } } },
     };
     const first = step(start, { kind: 'battle-action', action: 'fight' });
     expect(first.events).toContainEqual({ kind: 'tempo-extra-action', subject: 'player' });

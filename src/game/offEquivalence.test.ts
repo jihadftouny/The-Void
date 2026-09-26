@@ -325,6 +325,33 @@
 //     | — the 2,500-run baseline moved 0.411 -> 0.306, in the predicted direction, and act-1
 //     | death share 0.389 -> 0.332 (deaths moved LATER, as intended).
 // ---------------------------------------------------------------------------------------------
+// PLAN.md #1.6 `round-order` RULE LEDGER — ONE re-baseline for the whole unit (G62).
+//
+//   RULE CHANGED                                                   DIRECTION ON THESE RUNS
+//   the round is sequential: the player's tick + action first       PLAYER STRONGER (kills land
+//   (a killing blow ends the round before the enemy answers)        before the answer)
+//   Run and Item are turns (tick first; the enemy answers them)     player weaker at low HP
+//   the §16.1 tempo gauge, both sides, capped at the author's ±0.3  enemy stronger from floor 2
+//   (+ each enemy family's data speed)                              (DEX >= 16 -> +0.3 a round)
+//
+//  PREDICTION (written BEFORE the six runs below were re-measured): EVERY row moves and none is
+//  byte-identical — the player's d20 is now the round's FIRST draw, so the draw stream diverges
+//  in the first round of every run, and no run here ends before its first round. Direction on
+//  the 500-run guard: the build had already measured it while choosing the cap (the author's
+//  second-round ruling quotes it), so it is not a prediction but a known number: 0.282 at
+//  seeds 1..100 x 5, act-1 death share 0.357; on the report's 2,500 runs, 29.8% against the
+//  committed 30.6% before this unit. The six rows are a fingerprint, not a sample: no direction
+//  is claimed for them beyond "all move".
+//  OBSERVED: FIVE rows moved and ONE did not — the prediction was WRONG for Hollow seed 3,
+//  and the reason is worth keeping. That run's one fight is eight rounds in which the player
+//  never drew: two Siphon casts (no draw), then six rounds held by a condition (no draw). The
+//  only draws were the enemy's, in their old order, and the enemy's gauge (+0.1 a round) never
+//  reached +1.0 — so the stream is byte-identical, rngState 1951871910 unchanged. The other
+//  five moved: Enforcer 1 still dies to The Counselor on floor 4 (level 15 -> 11, 368 -> 257
+//  steps); Enforcer 2 went damnation -> a floor-2 death; Enforcer 3 went a floor-1 death ->
+//  damnation; Hollow 1 died on floor 3 -> floor 4; Hollow 2 died on floor 4 -> floor 1 (to the
+//  Kingpin). Wins 1/6 -> 1/6, avg level 61/6 -> 58/6, floors cleared 12/6 -> 11/6.
+// ---------------------------------------------------------------------------------------------
 //
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
 // (outcome, act, level, floors, step count, cause), the FINAL RNG ACCUMULATOR of a full run
@@ -404,12 +431,13 @@ function lockedReport(r: AggregateReport): unknown {
 // early. NO row is byte-identical this time, and that absence is itself consistent with the
 // prediction: unlike #0a's steps 5 and 8, there is no run here short enough to end before its
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
+// PLAN.md #1.6: five rows moved; Hollow seed 3 held byte-for-byte (see the ledger above).
 const GOLDEN_RUNS: readonly (LockedRecord & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 15, floorsCleared: 3, steps: 368, cause: 'The Counselor', rngState: 3654640621 },
-  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 25, floorsCleared: 4, steps: 459, cause: 'unmade the Hollow (damnation)', rngState: 3857371310 },
-  { seed: 3, classId: 'Enforcer', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 3, floorsCleared: 0, steps: 52, cause: 'Reinforced Electro-Core Drone', rngState: 2504613783 },
-  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 3, finalAct: 3, finalLevel: 6, floorsCleared: 2, steps: 195, cause: 'Warped Smouldering Cinder', rngState: 3083415351 },
-  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 325, cause: 'Whispering Refrain', rngState: 2974016355 },
+  { seed: 1, classId: 'Enforcer', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 11, floorsCleared: 3, steps: 257, cause: 'The Counselor', rngState: 661226165 },
+  { seed: 2, classId: 'Enforcer', outcome: 'death', diedAtAct: 2, finalAct: 2, finalLevel: 3, floorsCleared: 1, steps: 81, cause: 'Elder Beholder', rngState: 3689191325 },
+  { seed: 3, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 27, floorsCleared: 4, steps: 478, cause: 'unmade the Hollow (damnation)', rngState: 1378817228 },
+  { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 12, floorsCleared: 3, steps: 337, cause: 'The Knight', rngState: 2454910478 },
+  { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 4, floorsCleared: 0, steps: 82, cause: 'Undercity Kingpin', rngState: 1353672236 },
   { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 16, cause: 'Intoxicated Punk', rngState: 1951871910 },
 ];
 
@@ -441,21 +469,21 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
       damnation: 1,
       deaths: 5,
       winRate: 1 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 15+25+3+6+11+1 = 61, floors
-      // 3+4+0+2+3+0 = 12. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 61 / 6,
-      avgFloorsCleared: 12 / 6,
-      deathByAct: { 1: 2, 2: 0, 3: 1, 4: 2, 5: 0 },
+      // Summed from the GOLDEN_RUNS rows above: levels 11+3+27+12+4+1 = 58, floors
+      // 3+1+4+3+0+0 = 11. Written as the fraction so the two stay visibly tied together.
+      avgLevel: 58 / 6,
+      avgFloorsCleared: 11 / 6,
+      deathByAct: { 1: 2, 2: 1, 3: 0, 4: 2, 5: 0 },
       perClass: {
         Enforcer: {
           runs: 3, wins: 1, grace: 0, damnation: 1, deaths: 2,
-          winRate: 1 / 3, avgLevel: 43 / 3, avgFloorsCleared: 7 / 3,
-          deathByAct: { 1: 1, 2: 0, 3: 0, 4: 1, 5: 0 },
+          winRate: 1 / 3, avgLevel: 41 / 3, avgFloorsCleared: 8 / 3,
+          deathByAct: { 1: 0, 2: 1, 3: 0, 4: 1, 5: 0 },
         },
         Hollow: {
           runs: 3, wins: 0, grace: 0, damnation: 0, deaths: 3,
-          winRate: 0 / 3, avgLevel: 18 / 3, avgFloorsCleared: 5 / 3,
-          deathByAct: { 1: 1, 2: 0, 3: 1, 4: 1, 5: 0 },
+          winRate: 0 / 3, avgLevel: 17 / 3, avgFloorsCleared: 3 / 3,
+          deathByAct: { 1: 2, 2: 0, 3: 0, 4: 1, 5: 0 },
         },
       },
     });

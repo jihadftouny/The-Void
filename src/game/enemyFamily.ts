@@ -57,12 +57,12 @@ export interface FamilyTheme {
   statBias?: Partial<Stats>;
   /**
    * PLAN.md #1.6 (author, 2026-09-26): the family's own SPEED on the §16.1 tempo gauge, in
-   * integer TENTHS per round, added to the Dexterity-driven rate before the ±0.7 cap
+   * integer TENTHS per round, added to the Dexterity-driven rate before the ±0.3 cap
    * (`tempo.ts`). Scale: +2 quick · +1 brisk · 0 ordinary · −1 deliberate · −2 slow — so +2
    * alone is "an extra action every five rounds" in §16.1's terms. Absent ⇒ 0.
    *
-   * ⚠ PROPOSED VALUES, NOT DESIGN. Every one of the 24 was proposed by the `round-order` build
-   * from the family's description and kit and awaits the author's confirmation (FINDINGS.md).
+   * The 24 values were proposed by the `round-order` build from each family's description and
+   * kit, and ACCEPTED by the author as shipped values (2026-09-26). Still data: tune them here.
    */
   speedTenths?: number;
   /** Prose note on the deferred/provisional real behavior (M10 floor hooks). */

@@ -1130,7 +1130,10 @@ describe('BattleState JSON round-trip', () => {
 // PLAN.md #1.6 — THE SEQUENTIAL ROUND AND THE §16.1 TEMPO GAUGE (AC-3 .. AC-15)
 //
 // Every expected number below is derived by hand in its comment: the gauge from §16.1's table
-// (rate = DEX mod, ±3 for Quick/Slow, capped at ±7; +10 → an extra action, −10 → a lost turn),
+// (rate = DEX mod, ±3 for Quick/Slow, plus an enemy family's speed, capped at the author's ±3;
+// +10 → an extra action, −10 → a lost turn). §16.1's own rows (DEX 18 → +0.4, 18 + Quick →
+// +0.7) exceed the shipped cap, so they are played with it LIFTED (`SPEC`, the measurement
+// seam) to prove the round machinery follows the formula; the shipped clip is its own case.
 // the dice from the scripted faces. `FUMBLE` (a natural 1) is used wherever a test is about
 // the gauge and not the blow: a fumble draws only its d20 and deals nothing, on either side.
 // =============================================================================================
@@ -1139,6 +1142,8 @@ describe('BattleState JSON round-trip', () => {
 const FUMBLE = face(1, 20);
 /** An rng that fumbles forever — for multi-round gauge tests whose draws are not the point. */
 const alwaysFumble: Rng = () => FUMBLE;
+/** §16.1's formula with the shipped cap lifted — the measurement seam, never set by the game. */
+const SPEC: RoundRules = { ...DEFAULT_ROUND_RULES, tempoRateCapTenths: Infinity };
 
 /** The player fixture with its DEX set (its AC follows DEX; irrelevant where both sides fumble). */
 function playerWithDex(dex: number, overrides: Partial<Player> = {}): Player {
@@ -1260,10 +1265,18 @@ describe('AC-7 — DEX 10 on both sides: the gauge never moves and says nothing'
   });
 });
 
-describe('AC-8 — DEX 18: "an extra action every ~2.5 rounds"', () => {
+describe('AC-8 — DEX 18: "an extra action every ~2.5 rounds" (§16.1, the formula)', () => {
+  it('SHIPPED, the ±0.3 cap clips it: 3, 6, 9, 2, 5, 8, 1, 4, 7, 0 — extras on rounds 4, 7, 10', () => {
+    // The author's cap is symmetric: a DEX-18 player's +0.4 is played as +0.3.
+    // 3, 6, 9, 12 -> 2, 5, 8, 11 -> 1, 4, 7, 10 -> 0.
+    const log = playRounds(createBattle(playerWithDex(18, { hp: 20 }), makeEnemy({ hp: 30 }), 1), 10, alwaysFumble);
+    expect(log.map((r) => r.player)).toEqual([3, 6, 9, 2, 5, 8, 1, 4, 7, 0]);
+    expect(roundsWhere(log, (r) => r.extra)).toEqual([4, 7, 10]);
+  });
+
   it('gauge 4, 8, 2, 6, 0, 4, 8, 2, 6, 0 — extra actions on rounds 3, 5, 8, 10', () => {
     // Rate +4: 4, 8, 12 -> extra -> 2, 6, 10 -> extra -> 0, 4, 8, 12 -> 2, 6, 10 -> 0.
-    const log = playRounds(createBattle(playerWithDex(18, { hp: 20 }), makeEnemy({ hp: 30 }), 1), 10, alwaysFumble);
+    const log = playRounds(createBattle(playerWithDex(18, { hp: 20 }), makeEnemy({ hp: 30 }), 1), 10, alwaysFumble, SPEC);
     expect(log.map((r) => r.player)).toEqual([4, 8, 2, 6, 0, 4, 8, 2, 6, 0]);
     expect(roundsWhere(log, (r) => r.extra)).toEqual([3, 5, 8, 10]);
     // Each extra round took TWO steps (the pause, then the second input) and two player blows.
@@ -1297,13 +1310,19 @@ describe('AC-10 — Quick and Slow are the ±0.3, to the digit', () => {
     player: { ...b.player, activeConditions: [makeCondition(type)] },
   });
 
-  it('DEX 18 + Quick (re-applied each round): rate +7 — extras on 2, 3, 5, 6, 8, 9, 10', () => {
+  it('DEX 18 + Quick (re-applied each round), §16.1 formula: rate +7 — extras on 2, 3, 5, 6, 8, 9, 10', () => {
     // 4 + 3 = 7 (the augment's own +2 DEX is NOT counted twice). 7, 14->4, 11->1, 8, 15->5,
     // 12->2, 9, 16->6, 13->3, 10->0. (The plan's AC-10 listed 2,3,5,6,8,9; round 10 lands on
     // +1.0 exactly and crosses too — seventy tenths are seven crossings.)
-    const log = playRounds(createBattle(playerWithDex(18, { hp: 20 }), makeEnemy({ hp: 30 }), 1), 10, alwaysFumble, DEFAULT_ROUND_RULES, keep('quick'));
+    const log = playRounds(createBattle(playerWithDex(18, { hp: 20 }), makeEnemy({ hp: 30 }), 1), 10, alwaysFumble, SPEC, keep('quick'));
     expect(log.map((r) => r.player)).toEqual([7, 4, 1, 8, 5, 2, 9, 6, 3, 0]);
     expect(roundsWhere(log, (r) => r.extra)).toEqual([2, 3, 5, 6, 8, 9, 10]);
+  });
+
+  it('SHIPPED, the same Quick DEX-18 player is clipped to +3: no faster than without Quick', () => {
+    const quick = playRounds(createBattle(playerWithDex(18, { hp: 20 }), makeEnemy({ hp: 30 }), 1), 10, alwaysFumble, DEFAULT_ROUND_RULES, keep('quick'));
+    expect(quick.map((r) => r.player)).toEqual([3, 6, 9, 2, 5, 8, 1, 4, 7, 0]);
+    expect(roundsWhere(quick, (r) => r.extra)).toEqual([4, 7, 10]);
   });
 
   it('DEX 10 + Slow: rate -3 — turns lost on rounds 4, 7, 10', () => {
@@ -1315,7 +1334,7 @@ describe('AC-10 — Quick and Slow are the ±0.3, to the digit', () => {
 });
 
 describe('AC-11 — the extra action is a second INPUT', () => {
-  // DEX 18 at gauge 6: 6 + 4 = 10 -> the extra action this round. Regeneration (past onset,
+  // DEX 18 (shipped rate +3) at gauge 7: 7 + 3 = 10 -> the extra action this round. Regeneration (past onset,
   // one turn left) marks the player's tick: it heals +1 on the FIRST step and must not tick again.
   function crossing(): BattleState {
     const base = createBattle(
@@ -1323,7 +1342,7 @@ describe('AC-11 — the extra action is a second INPUT', () => {
       makeEnemy({ hp: 30 }),
       1,
     );
-    return { ...base, tempo: { player: 6, enemy: 0 } };
+    return { ...base, tempo: { player: 7, enemy: 0 } };
   }
 
   it('the first step resolves one action and PAUSES: extra action announced, the enemy has not acted', () => {
@@ -1333,7 +1352,7 @@ describe('AC-11 — the extra action is a second INPUT', () => {
     expect(r.resolved).toBe(true);
     expect(r.roundComplete).toBe(false);
     expect(r.state.extraAction).toBe(true);
-    // 6 + 4 = 10 -> the threshold spent -> 0. Both gauges at 0, so the battle carries no `tempo`.
+    // 7 + 3 = 10 -> the threshold spent -> 0. Both gauges at 0, so the battle carries no `tempo`.
     expect(r.events).toContainEqual({ kind: 'tempo-changed', subject: 'player', tenths: 0 });
     expect(r.state.tempo).toBeUndefined();
     expect(r.events.at(-1)).toEqual({ kind: 'tempo-extra-action', subject: 'player' });
@@ -1384,7 +1403,7 @@ describe('AC-11 — the extra action is a second INPUT', () => {
       makeEnemy({ hp: 30 }),
       1,
     );
-    const paused = resolveRound({ ...base, tempo: { player: 6, enemy: 0 } }, 'fight', scriptedRng([face(15, 20), face(15, 20), face(4, 6)])).state;
+    const paused = resolveRound({ ...base, tempo: { player: 7, enemy: 0 } }, 'fight', scriptedRng([face(15, 20), face(15, 20), face(4, 6)])).state;
     expect(paused.extraActionAdvDis).toBe(-1);
     const r = resolveRound(paused, 'fight', scriptedRng([face(15, 20), face(3, 20), FUMBLE]));
     const second = playerAttacks(r)[0] as Extract<CombatEvent, { kind: 'attack' }>;
@@ -1400,11 +1419,13 @@ describe('AC-12 — the enemy\'s extra action is two actions in one step', () =>
     // Every enemy action: face 15 + 1 = 16 >= 12 -> hit, skill-pick 0.5 -> Pyro Ball 2 (the
     // enemy holds 10 charges, so it can always pay). Player 20 -> 18 -> 16 -> 14 -> 12.
     // The enemy carries regeneration (fresh) so its TICK is visible: exactly one heal a round.
+    // Played at §16.1's formula (`SPEC`); under the shipped ±0.3 cap the same enemy first
+    // doubles on round 4 (AC-13's shipped case pins that).
     let battle = createBattle(playerWithDex(10, { hp: 20 }), enemyWithDex(18, { hp: 30, skillCharges: 10, maxSkillCharges: 10 }), 1);
-    const r1 = resolveRound(battle, 'fight', scriptedRng([FUMBLE, face(15, 20), 0.5]));
-    const r2 = resolveRound((battle = r1.state), 'fight', scriptedRng([FUMBLE, face(15, 20), 0.5]));
+    const r1 = resolveRound(battle, 'fight', scriptedRng([FUMBLE, face(15, 20), 0.5]), SPEC);
+    const r2 = resolveRound((battle = r1.state), 'fight', scriptedRng([FUMBLE, face(15, 20), 0.5]), SPEC);
     battle = { ...r2.state, enemy: { ...r2.state.enemy, activeConditions: [makeCondition('regeneration')] } };
-    const r3 = resolveRound(battle, 'fight', scriptedRng([FUMBLE, face(15, 20), 0.5, face(15, 20), 0.5]));
+    const r3 = resolveRound(battle, 'fight', scriptedRng([FUMBLE, face(15, 20), 0.5, face(15, 20), 0.5]), SPEC);
     expect(enemyAttacks(r1)).toHaveLength(1);
     expect(enemyAttacks(r2)).toHaveLength(1);
     expect(enemyAttacks(r3)).toHaveLength(2);
@@ -1421,13 +1442,13 @@ describe('AC-12 — the enemy\'s extra action is two actions in one step', () =>
 });
 
 describe('AC-13 — the rate cap, and the two measurement switches', () => {
-  // DEX 40 -> mod floor(30/2) = 15. Capped at 7: 7, 14 -> extra on round 2 (not 1).
+  // DEX 40 -> mod floor(30/2) = 15. Capped at the author's 3: 3, 6, 9, 12 -> extra on round 4.
   const fresh = () => createBattle(playerWithDex(10, { hp: 20 }), enemyWithDex(40, { hp: 30 }), 1);
 
-  it('under the shipped cap the first enemy extra action is on round 2', () => {
-    const log = playRounds(fresh(), 2, alwaysFumble);
-    expect(log.map((r) => r.enemy)).toEqual([7, 4]);
-    expect(roundsWhere(log, (r) => r.enemyExtra)).toEqual([2]);
+  it('under the shipped cap the first enemy extra action is on round 4', () => {
+    const log = playRounds(fresh(), 4, alwaysFumble);
+    expect(log.map((r) => r.enemy)).toEqual([3, 6, 9, 2]);
+    expect(roundsWhere(log, (r) => r.enemyExtra)).toEqual([4]);
   });
 
   it('with the cap lifted (§16.1 literal) it is on round 1', () => {
@@ -1460,27 +1481,31 @@ describe('the enemy family\'s data-driven speed (author, 2026-09-26)', () => {
   });
 
   it('the family speed adds to Dexterity BEFORE the cap', () => {
-    // DEX 18 (+4) + Mutant Stray (+2) = 6: 6, 12 -> extra on round 2 -> 2.
-    const log = playRounds(createBattle(playerWithDex(10, { hp: 20 }), enemyWithDex(18, { hp: 30, familyId: 'mutantStrays' }), 1), 2, alwaysFumble);
+    // §16.1 formula (cap lifted): DEX 18 (+4) + Mutant Stray (+2) = 6: 6, 12 -> extra -> 2.
+    const log = playRounds(createBattle(playerWithDex(10, { hp: 20 }), enemyWithDex(18, { hp: 30, familyId: 'mutantStrays' }), 1), 2, alwaysFumble, SPEC);
     expect(log.map((r) => r.enemy)).toEqual([6, 2]);
-    // DEX 22 (+6) + 2 = 8 -> capped at 7.
-    const capped = playRounds(createBattle(playerWithDex(10, { hp: 20 }), enemyWithDex(22, { hp: 30, familyId: 'mutantStrays' }), 1), 1, alwaysFumble);
-    expect(capped[0]!.enemy).toBe(7);
+    // Shipped: DEX 12 (+1) + 2 = 3, exactly the cap; DEX 14 (+2) + 2 = 4 -> capped at 3.
+    const at = (dex: number) => playRounds(createBattle(playerWithDex(10, { hp: 20 }), enemyWithDex(dex, { hp: 30, familyId: 'mutantStrays' }), 1), 1, alwaysFumble)[0]!.enemy;
+    expect(at(12)).toBe(3);
+    expect(at(14)).toBe(3);
+    // ...and a slow family pulls a fast enemy back under it: DEX 14 (+2) + Cyber-Enforcer (-2) = 0.
+    const slowFast = playRounds(createBattle(playerWithDex(10, { hp: 20 }), enemyWithDex(14, { hp: 30, familyId: 'cyberEnforcers' }), 1), 1, alwaysFumble);
+    expect(slowFast[0]!.enemy).toBe(0);
   });
 });
 
 describe('AC-14 — a controlled combatant spends no threshold', () => {
   it('a stunned DEX-18 player drifts past +1.0 without acting, then takes the extra action when free', () => {
-    // Gauge 8, stunned (onset): 8 + 4 = 12, no crossing, `player-unable-to-act`.
+    // Gauge 8, stunned (onset): 8 + 3 (DEX 18's +4, shipped cap 3) = 11, no crossing.
     const base = createBattle(playerWithDex(18, { hp: 20, activeConditions: [makeCondition('stun')] }), makeEnemy({ hp: 30 }), 1);
     const held = resolveRound({ ...base, tempo: { player: 8, enemy: 0 } }, 'fight', scriptedRng([FUMBLE]));
-    expect(held.state.tempo?.player).toBe(12);
+    expect(held.state.tempo?.player).toBe(11);
     expect(kinds(held)).not.toContain('tempo-extra-action');
     expect(held.events).toContainEqual({ kind: 'player-unable-to-act', conditionType: 'stun' });
-    // Freed (the stun cleared by hand): 12 + 4 = 16 -> extra -> 6.
+    // Freed (the stun cleared by hand): 11 + 3 = 14 -> extra -> 4.
     const free = { ...held.state, player: { ...held.state.player, activeConditions: [] } };
     const r = resolveRound(free, 'fight', scriptedRng([FUMBLE]));
     expect(r.state.extraAction).toBe(true);
-    expect(r.state.tempo?.player).toBe(6);
+    expect(r.state.tempo?.player).toBe(4);
   });
 });
