@@ -34,7 +34,7 @@ When you run units in parallel, also assign each worktree its **own dependencies
 ## 3. Pipeline per unit
 Units run concurrently; stages within a unit are strictly sequential. Launch each stage with the Agent tool (`subagent_type` as named below), always passing in the prompt: the unit's TASK, `WORKTREE=<absolute worktree path>`, `MAIN=<absolute main checkout path>`.
 
-1. **plan-agent** — wait for its result. If it returns open questions, put those only the user can settle to the user (AskUserQuestion), then append the answers to `WORKTREE/.agentic/plan.md`.
+1. **plan-agent** — wait for its result. If it returns open questions, put those only the user can settle to the user (AskUserQuestion), then append the answers to `WORKTREE/.agentic/plan.md`. **Ask each decision whole, once:** before sending, check every option for the follow-up its answer would force (does it apply to both sides? to the player too? does it persist?) and include that in the same round. The same applies to any question raised mid-build (a tripped gate): price its knock-ons before asking. If an answer the user gives opens a new question anyway, ask it immediately — before the build acts on the answer, never after. *(Added 2026-09-26 after `round-order` asked the tempo cap and its player-side effect in two separate rounds, costing a rebuild cycle.)*
 2. **build-agent** — note its agent ID for fix rounds.
 3. **test-agent** — parse the first line of its result: `VERDICT: PASS` or `VERDICT: FAIL`.
 4. **Fix loop** on FAIL: continue the SAME build agent via SendMessage (load through ToolSearch if deferred) with the failure details, then re-run test-agent. Maximum 2 fix rounds.
