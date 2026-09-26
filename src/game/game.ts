@@ -194,8 +194,8 @@ export type GameInput =
 export interface StepOptions {
   illusionDc?: number;
   /**
-   * PLAN.md #1.6 — the same seam, for the §16.1 tempo gauge (Open Question 1): the |rate| cap in
-   * tenths (`Infinity` = §16.1's literal rate), whether the ENEMY's gauge moves at all, and
+   * PLAN.md #1.6 — the same seam, for the §16.1 tempo gauge (Open Question 1): the ENEMY's |rate|
+   * cap in tenths (the player's is never capped — G78; `Infinity` = §16.1's literal rate), whether the ENEMY's gauge moves at all, and
    * whether an enemy family's data-driven speed counts. The shipped renderer passes none of them
    * (a source scan in `src/desktop` holds that).
    */
