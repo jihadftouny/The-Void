@@ -343,6 +343,8 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 >
 **It still fits. But the margin is now thin enough that one unit going badly would consume it**, where before it would not have. Two things make that real rather than theoretical: this session has already seen two agent stalls and one pipeline escape, and #11 is the least-understood unit in the plan — nobody has yet built a boss that selects its own actions.
 
+> **✅ ESTIMATED 2026-09-26 — the round-order and tempo-gauge unit is ~30 h** (plan: ~29 h, range 26–34, plus ~1–2 h for the author's per-family enemy speeds). Author rulings the same day: enemy speed = the Dexterity-driven gauge **plus** a per-family speed from data, capped; an extra action is a **freely chosen** second move; the gauge **resets every fight**. **Remaining is now ~93–103 h** — tempo (~30), #11 (~35–45), block 4 (16), block 5 (12) — against ~112 h of capacity (26 Sep → 31 Dec at 8 h/week). **Slack is ~9–19 h.** Read that with the caveat above: agent hours are not the author's hours.
+
 > **✅ DECIDED 2026-09-26 — full boss agents.** The author chose the full #11 (bosses that pick their own moves, remember your run, and can be talked to, plus the floor-4 executioner) over the cheaper talk field. The fallback below stays recorded, but it is no longer the plan — only an overrun would bring it back, and only by the author's hand.
 
 ### What gives first if it runs over
