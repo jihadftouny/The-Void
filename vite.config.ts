@@ -3,7 +3,14 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   base: './',
-  server: { port: 5173, strictPort: true },
+  server: {
+    port: 5173,
+    strictPort: true,
+    // FINDINGS.md G74: Vite watches the whole repo, and pipeline worktrees live inside it, so
+    // an agent editing `worktrees/<slug>/desktop.html` full-reloaded the author's running game
+    // mid-play (seen 2026-09-26). `logs/` holds the narration corpus the running game writes.
+    watch: { ignored: ['**/worktrees/**', '**/logs/**'] },
+  },
   build: {
     target: 'es2022',
     sourcemap: true,
