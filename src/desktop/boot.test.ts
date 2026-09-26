@@ -413,6 +413,11 @@ describe('a real round plays on the stage while the Void speaks (PLAN.md #6)', (
     expect(played.ms, 'the round did not take its scheduled time').toBeGreaterThanOrEqual(scheduledMs(beats.length) - 5);
     expect(played.ms).toBeLessThan(3000);
     expect(played.motion).toBe('full');
+    // PLAN.md #1.6: the actions each side took, counted here from the step's own attacks (a
+    // Fight step's only actions) — the renderer's count must agree.
+    const attacks = (side: string) => expected.events.filter((e) => e.kind === 'attack' && e.subject === side).length;
+    expect((played as unknown as { actions: unknown }).actions).toEqual({ player: attacks('player'), enemy: attacks('enemy') });
+    expect(attacks('player'), 'the fixture fight has no player blow — the count proves nothing').toBeGreaterThan(0);
     // Every hook, in beat order — logged by the boundary sink as it is sent.
     const expectedHooks = beats.map((b) => b.hook).filter((h): h is NonNullable<typeof h> => h !== null);
     expect(played.hooks).toEqual(expectedHooks);

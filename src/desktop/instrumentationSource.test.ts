@@ -368,6 +368,41 @@ describe('dispatch() times the step and the whole turn', () => {
 // principle was written after. The line lives in `replayRound`, which `dispatch` calls.
 // =========================================================================================
 
+describe('PLAN.md #1.6 — the tempo gauge and the round’s actions are logged at the boundary (AC-29)', () => {
+  it('the step detail carries both gauges as NUMBERS and the extra-action pause as a boolean', () => {
+    const detail = logCalls(SOURCE).find((c) => c.includes("'step detail'"));
+    expect(detail, 'the step detail line is gone').toBeDefined();
+    expect(detail).toMatch(/tempo:\s*\{\s*player:[^}]*battle\.tempo\?\.player\s*\?\?\s*0/);
+    expect(detail).toMatch(/enemy:[^}]*battle\.tempo\?\.enemy\s*\?\?\s*0/);
+    expect(detail).toMatch(/extraAction:\s*state\.phase\.kind\s*===\s*'battle'\s*&&\s*state\.phase\.battle\.extraAction\s*===\s*true/);
+  });
+
+  it('a crossed threshold has its own info line, with subject, kind and the gauge after it', () => {
+    const turn = bodyOf('async function dispatch(');
+    const line = logCalls(turn).find((c) => c.includes("'tempo threshold'"));
+    expect(line, 'no tempo threshold line in dispatch').toBeDefined();
+    expect(line).toMatch(/^log\.info\s*\(\s*'battle'\s*,\s*'tempo threshold'/);
+    for (const key of ['subject:', 'kind:', 'tenthsAfter:']) expect(line, key).toContain(key);
+    // It fires for both threshold events and nothing else.
+    expect(turn).toMatch(/e\.kind !== 'tempo-extra-action' && e\.kind !== 'tempo-lost-turn'/);
+    // ...and it reads the state AFTER the step (it comes after the step, not before it).
+    expect(turn.search(/'tempo threshold'/)).toBeGreaterThan(turn.search(/=\s*step\s*\(\s*state\s*,/));
+  });
+
+  it('the round line counts each side’s actions; the beat line carries the values it wrote', () => {
+    const body = bodyOf('async function replayRound(');
+    const played = logCalls(body).find((c) => c.includes("'round played'"));
+    expect(played).toMatch(/actions:\s*actionsBySide\s*\(/);
+    const beat = logCalls(body).find((c) => c.includes("'beat'"));
+    expect(beat).toMatch(/barValues:\s*beat\.barValues/);
+    expect(beat).toMatch(/tempoValues:\s*beat\.tempoValues/);
+    const counter = bodyOf('function actionsBySide(');
+    for (const kind of ['attack', 'skill-cast', 'consumable-used', 'fled', 'escape-failed']) {
+      expect(counter, `${kind} is not counted as an action`).toContain(`'${kind}'`);
+    }
+  });
+});
+
 describe('the round replay is timed, escalates when slow, and fails loudly', () => {
   const body = bodyOf('async function replayRound(');
 
