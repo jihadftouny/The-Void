@@ -8,22 +8,25 @@
 //    d20 + damage, flee roll, victory loot) threads the injected `Rng` in a
 //    documented order, so a round is exactly reproducible and testable.
 //  - Serializable plain-data state: BattleState is flat plain data (player, enemy,
-//    act, canFlee) that round-trips through JSON.
+//    act, canFlee, and the two optional tempo fields) that round-trips through JSON.
 //
 // Ported from `GameLogic.battle`. The M7 encounter controller loops resolveRound;
 // M8 sets `act`/`canFlee` and reads the victory/defeat events. Recorded DEVIATIONS:
 //  - Flee uses the LITERAL Java formula `rng()*10 + 1 <= 3.5` (~25% escape), though
 //    the Java comment and this task say "~35%". [NEEDS-HUMAN: 25% vs 35%?] The test
 //    straddles 3.5 so it is independent of the exact constant.
-//  - A failed/blocked flee does NOT tick the fleeing character's conditions (Java
-//    does); run consumes only the flee roll + the enemy counter-attack draws.
+//  - PLAN.md #1.6 (G62): THE ROUND IS SEQUENTIAL — you act, then it acts (§14.8, §22.30), with
+//    the §16.1 tempo gauge (`tempo.ts`) granting an extra action or costing a turn. Run and Item
+//    are ordinary turns now: the player's conditions tick first (as the Java did for a flee),
+//    and the enemy's turn follows a failed escape or a used item. The old "counter-attack" path
+//    is gone; its guards (G24) ride along because the enemy's turn uses the one damage path.
 
 import { type Player } from './player.ts';
 import { damageEnemy, type Enemy } from './enemy.ts';
 import { getFamily } from './enemyFamily.ts';
 import { rollDie, type Rng } from './rng.ts';
-import { type CombatEvent, type DamageSource, withDamageSource } from './combatEvent.ts';
-import { hasControlCondition, tickConditions, type ConditionType } from './condition.ts';
+import { type CombatEvent, type CombatSubject, type DamageSource, withDamageSource } from './combatEvent.ts';
+import { tickConditions, type ConditionType } from './condition.ts';
 import { combineAdvDis, resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
 import { resolveSkill, type SkillDef, type SkillId } from './skill.ts';
 import { castSkill, clampMomentum, grantMomentum, usesMomentum } from './classKit.ts';
@@ -37,6 +40,7 @@ import { computeEquipModifiers, effectiveChargeCost, type EquipModifiers } from 
 import { fireFloorTriggers, fireTrigger, reviveActionFor } from './relicEffects.ts';
 import { applyConsumable, type ConsumableSource } from './consumable.ts';
 import { ILLUSION_DC, type FloorId } from './floors.ts';
+import { TEMPO_RATE_CAP_TENTHS, advanceTempo, tempoRate, type TempoStep } from './tempo.ts';
 
 /** The full, serializable state of a battle in progress. */
 export interface BattleState {
@@ -76,6 +80,26 @@ export interface BattleState {
    * per-round computation instead of the write-only latch it used to be.
    */
   playerAdvantage?: -1 | 0 | 1;
+  /**
+   * PLAN.md #1.6, OPTIONAL: the §16.1 tempo gauges, in integer TENTHS (+4 = +0.4; see
+   * `tempo.ts` for why tenths). Battle-scoped by construction — it lives on the battle, so it
+   * resets every fight (author, 2026-09-26) and cannot leak to the hub. ABSENT ⇒ both 0, and it
+   * is written only while either gauge is non-zero, so a battle whose gauges never move (every
+   * DEX-10 fight) keeps its pre-#1.6 JSON shape and a pre-unit save decodes unchanged.
+   */
+  tempo?: { player: number; enemy: number };
+  /**
+   * PLAN.md #1.6, OPTIONAL: the player's gauge crossed +1.0 and the round is PAUSED after their
+   * first action, waiting for the second (a freely chosen battle action — author, 2026-09-26).
+   * The enemy has not acted yet. Present only while paused.
+   */
+  extraAction?: true;
+  /**
+   * The paused round's own advantage/disadvantage (the standing modifier combined with the
+   * player's tick — e.g. a fracture's −1), so the SECOND action rolls exactly as the first did.
+   * Present only while paused, and only when non-zero.
+   */
+  extraActionAdvDis?: -1 | 1;
 }
 
 /**
@@ -103,10 +127,25 @@ export interface RoundRules {
   healPct: number;
   /** The Difficulty Class of the passive Wisdom roll against an illusion (`floors.ts`). */
   illusionDc: number;
+  /**
+   * PLAN.md #1.6: the |rate| clamp of the tempo gauge, in tenths. Shipped:
+   * `TEMPO_RATE_CAP_TENTHS`. MEASUREMENT ONLY may pass `Infinity` (§16.1's literal rate).
+   */
+  tempoRateCapTenths: number;
+  /** Whether the ENEMY's gauge moves at all. Shipped: true. MEASUREMENT ONLY. */
+  enemyTempo: boolean;
+  /** Whether an enemy family's data-driven speed is added to its rate. Shipped: true. MEASUREMENT ONLY. */
+  familySpeed: boolean;
 }
 
-/** No floor mechanic: full heals, the shipped illusion DC. */
-export const DEFAULT_ROUND_RULES: RoundRules = { healPct: 100, illusionDc: ILLUSION_DC };
+/** No floor mechanic: full heals, the shipped illusion DC, the shipped tempo gauge. */
+export const DEFAULT_ROUND_RULES: RoundRules = {
+  healPct: 100,
+  illusionDc: ILLUSION_DC,
+  tempoRateCapTenths: TEMPO_RATE_CAP_TENTHS,
+  enemyTempo: true,
+  familySpeed: true,
+};
 
 /**
  * The state of the battle after a round resolves. `dispelled` (PLAN.md #2): the passive Wisdom
@@ -138,6 +177,14 @@ export interface RoundResult {
    * IS resolved — the item was spent and the turn with it (G39).
    */
   resolved: boolean;
+  /**
+   * PLAN.md #1.6: did a whole ROUND complete — both sides' turns (or the fight ended)? False for
+   * every rejection AND for the extra-action pause (the player has acted once and the round
+   * waits for their second input; the enemy has not acted). `game.ts` layers the boss's
+   * once-per-round mechanic only on a completed round, so a doubled round fires it once.
+   * Required, like `resolved`, so no return site can omit it.
+   */
+  roundComplete: boolean;
 }
 
 /**
@@ -405,16 +452,30 @@ export function rollFlee(rng: Rng): boolean {
 }
 
 /**
- * Resolve one battle round for the chosen action — PURE. Returns a new BattleState,
- * the ordered events, and a terminal status. The input `state` is never mutated.
+ * Resolve one battle step for the chosen action — PURE. Returns a new BattleState, the ordered
+ * events, a terminal status, and whether a ROUND completed. The input `state` is never mutated.
  *
- * Round draw order (documented for the exact-list test) for Fight/Cast, via the shared
- * `resolvePlayerTurn`: enemy-condition-tick draws (NONE when the enemy is conditionless)
- * -> enemy to-hit d20 (1 draw, or 2 at adv/dis; M4) -> enemy skill-pick draw (ONLY on a
- * hit/crit with charges) -> player-condition-tick draws -> player d20 + damage draws
- * (Fight) or no draw (Cast) -> on victory: the loot roll. (PLAN.md #2 deleted the victory's
- * extra-rest draw with the banked rest counter, so every draw after a victory moved up by one — a
- * deliberate, ledgered re-baseline in `offEquivalence.test.ts`.)
+ * PLAN.md #1.6 / GAME-DESIGN §14.8, §16.1, §22.30 — THE ROUND IS SEQUENTIAL. You act, then it
+ * acts: the player's turn resolves fully (condition tick, tempo gauge, action, damage applied)
+ * and only then the enemy's. A killing blow ends the round before the enemy can strike back; an
+ * enemy blow that kills the player ends it there too.
+ *
+ * Dispatch:
+ *  1. REJECTIONS first, unchanged (G36): Run where `canFlee` is false (`escape-impossible`), an
+ *     uncastable skill (`cast-unavailable`), an empty backpack slot (`consumable-unavailable`),
+ *     a non-⚖ Spare (`spare-unavailable`). State unchanged, one event, NO draw, no gauge
+ *     movement, `resolved: false`, `roundComplete: false`. A rejected press during the
+ *     extra-action pause leaves the pause (`extraAction`) set.
+ *  2. SPARE: the fight ends as `spared` (no draw).
+ *  3. Everything else is a TURN (`playRound`): Fight, Cast, Run and Item alike cost the player's
+ *     action and are answered by the enemy's turn. Run's failed escape is no longer a special
+ *     counter-attack; it is simply the enemy's ordinary turn.
+ *
+ * DRAW ORDER (documented for the exact-list tests):
+ *   [illusion d20 — illusory enemy only] → player condition-tick draws → the player action's
+ *   draws (Fight: d20 ×1–2 + damage die(s); Run: the flee draw; Cast/Item: none) → enemy
+ *   condition-tick draws → per enemy action: d20 ×1–2, then the skill-pick (only on a hit with
+ *   an affordable skill) → on victory: the loot roll. The tempo gauge draws NOTHING.
  */
 export function resolveRound(
   state: BattleState,
@@ -423,20 +484,41 @@ export function resolveRound(
   rules: RoundRules = DEFAULT_ROUND_RULES,
 ): RoundResult {
   if (typeof action === 'object') {
-    if (action.kind === 'cast') return resolveCast(state, action.skillId, rng, rules);
-    return resolveUseConsumable(state, action.source, rng, rules);
+    if (action.kind === 'cast') {
+      // M9: the player's OWN skill def (base merged with any owned upgrade). G33: the shared
+      // discount helper is the one place the effective charge cost is decided.
+      const skill = resolveSkill(state.player, action.skillId);
+      const effectiveCost = effectiveChargeCost(state.player.inventory, skill?.chargeCost ?? 0);
+      if (!skill || !state.player.skillPool.includes(action.skillId) || state.player.skillCharges < effectiveCost) {
+        return rejected(state, { kind: 'cast-unavailable' });
+      }
+      return playRound(state, { kind: 'cast', skill }, rng, rules);
+    }
+    // An item is available iff its backpack slot holds a usable def — a property of the pack
+    // alone, so it is decided here, before the tick, with no side effect (`applyConsumable` is
+    // pure; its result is discarded and the item is applied for real at the action).
+    const probe = applyConsumable(state.player, state.enemy, action.source, { healPct: rules.healPct });
+    if (!probe.consumed) return rejected(state, { kind: 'consumable-unavailable' });
+    return playRound(state, { kind: 'item', source: action.source }, rng, rules);
   }
   switch (action) {
     case 'fight':
-      return resolvePlayerTurn(state, { kind: 'fight' }, rng, rules);
+      return playRound(state, { kind: 'fight' }, rng, rules);
     case 'run':
-      return resolveRun(state, rng);
+      // G36: a REJECTED press. Nothing was resolved — no dice, no tick, no state change.
+      if (!state.canFlee) return rejected(state, { kind: 'escape-impossible' });
+      return playRound(state, { kind: 'run' }, rng, rules);
     case 'spare':
       return resolveSpare(state);
     /* istanbul ignore next */
     default:
-      return { state, events: [], status: 'ongoing', resolved: false };
+      return { state, events: [], status: 'ongoing', resolved: false, roundComplete: false };
   }
+}
+
+/** A no-op rejection: the input state, its one event, nothing resolved (G36). */
+function rejected(state: BattleState, event: CombatEvent): RoundResult {
+  return { state, events: [event], status: 'ongoing', resolved: false, roundComplete: false };
 }
 
 /**
@@ -457,237 +539,336 @@ export function spareAvailable(battle: BattleState): boolean {
  */
 function resolveSpare(state: BattleState): RoundResult {
   if (!state.enemy.karmaWeighted) {
-    return { state, events: [{ kind: 'spare-unavailable' }], status: 'ongoing', resolved: false };
+    return rejected(state, { kind: 'spare-unavailable' });
   }
   return {
     state,
     events: [{ kind: 'spared', enemyName: state.enemy.fullName }],
     status: 'spared',
     resolved: true,
+    roundComplete: true,
   };
 }
 
-/** What the player does on their step of a symmetric round: attack, or cast a skill. */
-type PlayerTurnAction = { kind: 'fight' } | { kind: 'cast'; skill: SkillDef };
+/** What the player does with an action: attack, cast, try to run, or use an item. */
+type PlayerAction =
+  | { kind: 'fight' }
+  | { kind: 'cast'; skill: SkillDef }
+  | { kind: 'run' }
+  | { kind: 'item'; source: ConsumableSource };
 
 /**
- * The shared symmetric round for Fight and Cast — PURE. Draw order (steps 0-6):
- *  0. PLAN.md #2, floor 2 — ONLY against an `illusory` enemy: ONE d20 draw, the passive Wisdom
- *     roll `d20 + effective WIS mod` (Lucid / Clouded shift it through `effectiveMods`) against
- *     `rules.illusionDc`. At or above the DC the illusion is seen through: `illusion-dispelled`
- *     (carrying the roll), status `dispelled`, and NOTHING else happens this round — no
- *     further draw, no attack either way. Below it, the round runs as below, except that no
- *     damage reaches the enemy (`damageEnemy`) and the enemy's attack is real. A real enemy
- *     takes NO draw here, so every non-illusory round keeps its exact pre-#2 draw order.
- *  1. Tick ENEMY conditions (player-inflicted DoT/control finally tick). Apply the hp
- *     delta; if the enemy dies to its own DoT before acting, it is still a victory.
- *     Zero rng draws when the enemy is conditionless, so a conditionless round's draws
- *     are exactly the pre-M2 order.
- *  2. Enemy attacks unless a control condition (freeze/etc.) skipped it. It rolls a to-hit
- *     d20 (M4) vs the player's AC — on a miss it deals 0 and draws no skill-pick.
- *  3. Tick the PLAYER's conditions.
- *  4. Player acts unless skipped: Fight rolls d20 + damage; Cast spends a charge and
- *     applies the skill's condition to the enemy (no rng draw). A control-skipped player
- *     never reaches the cast branch, so casting under control spends NO charge.
- *  5. Apply the exchanged damage (clamp hp at 0).
- *  6. Resolve player-died / player-won / ongoing.
+ * The live, MUTABLE working copy of one round — local to a single `resolveRound` call and never
+ * stored (the state that leaves is rebuilt as plain data by `settle`). Exported as a TYPE only so
+ * `resolveEnemyTurn`'s signature can name it.
  */
-function resolvePlayerTurn(
-  state: BattleState,
-  action: PlayerTurnAction,
-  rng: Rng,
-  rules: RoundRules,
-): RoundResult {
-  const events: CombatEvent[] = [];
-  let player: Player = state.player;
-  let enemy: Enemy = state.enemy;
+export interface RoundContext {
+  player: Player;
+  enemy: Enemy;
+  /** The live event list; everything appends here, in order. */
+  events: CombatEvent[];
+  /** The player's aggregated equip modifiers, read once per step. */
+  mods: EquipModifiers;
+  firstHitDone: boolean;
+  reviveUsed: boolean;
+  /** Both gauges, in tenths. */
+  tempo: { player: number; enemy: number };
+  /** The HP each side last showed in an `hp-changed` (or held at the start of the step). */
+  shownHp: { player: number; enemy: number };
+}
 
-  // 0. PLAN.md #2: the passive Wisdom roll against an illusion (see the doc comment above).
-  if (enemy.illusory) {
-    const natural = rollDie(rng, 20);
-    const modifier = effectiveMods(player).WIS;
-    const total = natural + modifier;
-    if (total >= rules.illusionDc) {
-      return {
-        state,
-        events: [{ kind: 'illusion-dispelled', natural, modifier, total, dc: rules.illusionDc }],
-        status: 'dispelled',
-        resolved: true,
+/** How a turn ended: the fight goes on, or one side is down. */
+type TurnOutcome = 'ongoing' | 'enemy-died' | 'player-died';
+
+/**
+ * Emit `hp-changed` for a side whose HP moved since it was last shown — the engine's per-blow
+ * truth the stage writes its bars with (G63-2). `maxHp` is the STORED max, which is what the
+ * stage's bars are drawn against.
+ */
+function syncHp(ctx: RoundContext, side: CombatSubject): void {
+  const who = side === 'player' ? ctx.player : ctx.enemy;
+  if (who.hp === ctx.shownHp[side]) return;
+  ctx.shownHp[side] = who.hp;
+  ctx.events.push({ kind: 'hp-changed', subject: side, hp: who.hp, maxHp: who.maxHp });
+}
+
+/** Move one side's gauge, emitting `tempo-changed` iff the value moved. */
+function moveGauge(ctx: RoundContext, side: CombatSubject, rate: number, canAct: boolean): TempoStep {
+  const moved = advanceTempo(ctx.tempo[side], rate, canAct);
+  if (moved.tenths !== ctx.tempo[side]) {
+    ctx.tempo[side] = moved.tenths;
+    ctx.events.push({ kind: 'tempo-changed', subject: side, tenths: moved.tenths });
+  }
+  if (moved.crossed === 'lost') ctx.events.push({ kind: 'tempo-lost-turn', subject: side });
+  return moved;
+}
+
+/**
+ * Run the once-per-battle revive gate on a player at 0 HP from something other than an attack
+ * (a DoT tick, a self-sacrifice, an item) — the same guarded path, with 0 further damage (G24).
+ * Returns true when the player is down for good.
+ */
+function playerDownAfterGate(ctx: RoundContext): boolean {
+  if (ctx.player.hp > 0) return false;
+  const gated = applyDamageToPlayer(ctx.player, ctx.enemy, 0, {
+    mods: ctx.mods,
+    firstHitDone: ctx.firstHitDone,
+    reviveUsed: ctx.reviveUsed,
+    events: ctx.events,
+  });
+  ctx.player = gated.player;
+  ctx.enemy = gated.enemy;
+  ctx.reviveUsed = gated.reviveUsed;
+  syncHp(ctx, 'player');
+  return gated.died;
+}
+
+/**
+ * The next BattleState from the working copy: the flags (only when true), the gauges (only
+ * when either is non-zero, so a round that moved nothing leaves the JSON shape unchanged), and
+ * the extra-action pause (only while paused).
+ */
+function settle(state: BattleState, ctx: RoundContext, paused: { advDis: -1 | 0 | 1 } | null): BattleState {
+  const { tempo: _tempo, extraAction: _extra, extraActionAdvDis: _adv, ...rest } = state;
+  const next = withFlags(rest, ctx.player, ctx.enemy, ctx.firstHitDone, ctx.reviveUsed);
+  if (ctx.tempo.player !== 0 || ctx.tempo.enemy !== 0) next.tempo = { ...ctx.tempo };
+  if (paused) {
+    next.extraAction = true;
+    if (paused.advDis !== 0) next.extraActionAdvDis = paused.advDis;
+  }
+  return next;
+}
+
+/** A finished step: the settled state, the events, a status, and a completed round. */
+function done(state: BattleState, ctx: RoundContext, status: RoundStatus): RoundResult {
+  return { state: settle(state, ctx, null), events: ctx.events, status, resolved: true, roundComplete: true };
+}
+
+/** The player went down: `defeat`, and the round is over. */
+function defeat(state: BattleState, ctx: RoundContext): RoundResult {
+  ctx.events.push({ kind: 'defeat' });
+  return done(state, ctx, 'player-died');
+}
+
+/** The enemy went down: the `onKill` triggers, then the victory block (the loot roll). */
+function victory(state: BattleState, ctx: RoundContext, rng: Rng): RoundResult {
+  return killAndVictory(settle(state, ctx, null), ctx.player, { ...ctx.enemy, hp: Math.max(ctx.enemy.hp, 0) }, ctx.events, rng);
+}
+
+/**
+ * One round (or the second half of a paused one) — PURE. See `resolveRound` for the draw order.
+ *
+ * A NEW round (`state.extraAction` absent):
+ *  0. Floor 2, ONLY against an `illusory` enemy: the passive Wisdom roll, one d20 +
+ *     `effectiveMods(player).WIS` vs `rules.illusionDc`. At or above it the fight simply ends
+ *     (`illusion-dispelled`, status `dispelled`) and nothing else happens; below it, nothing is
+ *     said (naming the illusion early would give it away) and the round runs.
+ *  1. PLAYER TICK — the player's conditions (DoT, heal, skip, fracture's −1). A healing tick is
+ *     capped at effective max HP (G22a). A lethal tick passes the revive gate; if it holds, the
+ *     round is a `defeat` and the enemy never acts. Empty Vessel restores its charge.
+ *  2. PLAYER GAUGE — `tempoRate` → `advanceTempo`. A control condition (`player-unable-to-act`)
+ *     or a crossed −1.0 (`tempo-lost-turn`) means no action; a crossed +1.0 means two.
+ *  3. PLAYER ACTION — `playerAction`. The enemy down → victory; the player down → defeat;
+ *     a successful escape → fled. All END the round there.
+ *  3b. A crossed +1.0 with the fight still on: `tempo-extra-action`, and the round PAUSES for a
+ *     second, freely chosen input — status `ongoing`, `resolved: true`, `roundComplete: false`,
+ *     `state.extraAction: true`. The enemy has not acted.
+ * The SECOND action of a paused round (`state.extraAction` set):
+ *  3'. PLAYER ACTION exactly as step 3 — no tick, no gauge, no illusion roll — at the round's
+ *     own advantage (`extraActionAdvDis`), and the pause clears.
+ * Then, if the fight is still on:
+ *  4. THE ENEMY'S TURN — `resolveEnemyTurn`.
+ *  5. `ongoing`, `roundComplete: true`.
+ */
+function playRound(state: BattleState, action: PlayerAction, rng: Rng, rules: RoundRules): RoundResult {
+  const second = state.extraAction === true;
+  const ctx: RoundContext = {
+    player: state.player,
+    enemy: state.enemy,
+    events: [],
+    mods: computeEquipModifiers(state.player.inventory),
+    firstHitDone: state.firstEnemyHitDone ?? false,
+    reviveUsed: state.reviveUsed ?? false,
+    tempo: { player: state.tempo?.player ?? 0, enemy: state.tempo?.enemy ?? 0 },
+    shownHp: { player: state.player.hp, enemy: state.enemy.hp },
+  };
+
+  let actions: 0 | 1 | 2 = 1;
+  let advDis: -1 | 0 | 1;
+  if (!second) {
+    // 0. The passive Wisdom roll against an illusion.
+    if (ctx.enemy.illusory) {
+      const natural = rollDie(rng, 20);
+      const modifier = effectiveMods(ctx.player).WIS;
+      const total = natural + modifier;
+      if (total >= rules.illusionDc) {
+        return {
+          state,
+          events: [{ kind: 'illusion-dispelled', natural, modifier, total, dc: rules.illusionDc }],
+          status: 'dispelled',
+          resolved: true,
+          roundComplete: true,
+        };
+      }
+    }
+
+    // 1. The player's tick. G12: the condition's adv/dis is NOT written onto the player; it is
+    //    combined, for this round only, with the battle's standing modifier.
+    const ptc = tickConditions(ctx.player, ctx.enemy, rng);
+    const ticked: Player = { ...ctx.player, activeConditions: ptc.conditions };
+    const rawHp = ctx.player.hp + ptc.hpDelta;
+    ctx.player = { ...ticked, hp: ptc.hpDelta > 0 ? Math.min(rawHp, effectiveMaxHp(ticked)) : Math.max(rawHp, 0) };
+    ctx.events.push(...ptc.events);
+    syncHp(ctx, 'player');
+    if (playerDownAfterGate(ctx)) return defeat(state, ctx);
+    advDis = combineAdvDis(state.playerAdvantage ?? 0, ptc.advDisOverride);
+    // Empty Vessel: restore charge(s) at the player's turn (capped at max). No-op at 0.
+    if (ctx.mods.chargePerTurn > 0) {
+      ctx.player = {
+        ...ctx.player,
+        skillCharges: Math.min(ctx.player.skillCharges + ctx.mods.chargePerTurn, ctx.player.maxSkillCharges),
       };
     }
-    // A FAILED roll emits nothing: saying so would name the illusion before it is seen through.
+
+    // 2. The player's gauge. A controlled player's gauge drifts but spends nothing (tempo.ts).
+    const moved = moveGauge(ctx, 'player', tempoRate(ctx.player, rules.tempoRateCapTenths), !ptc.skipTurn);
+    actions = moved.actions;
+    if (ptc.skipTurn) {
+      ctx.events.push({ kind: 'player-unable-to-act', conditionType: skipCause(ptc.events) });
+    }
+  } else {
+    advDis = state.extraActionAdvDis ?? 0;
   }
 
-  // M6: read the player's aggregated equip modifiers ONCE. Every field below is
-  // identity-valued (0 / false / mult 1 / null / []) for effect-free gear, so all the M6
-  // branches are no-ops for a normal run (off-equivalence). RNG-FREE — no draw is added.
-  const mods = computeEquipModifiers(player.inventory);
-  let firstHitDone = state.firstEnemyHitDone ?? false;
-  let reviveUsed = state.reviveUsed ?? false;
-
-  // 1. Tick the enemy's conditions. Grave of Embers / Ashen Crown double the enemy's
-  //    negative DoT (dotTickMult) — identity 1 for a normal run.
-  const etc = tickConditions(enemy, player, rng);
-  const enemyTickDelta = etc.hpDelta < 0 ? etc.hpDelta * mods.dotTickMult : etc.hpDelta;
-  // G22(a), enemy half: a HEALING tick (regeneration) is capped at the enemy's effective max
-  // HP. The player side had the same hole and the same one-line fix; closing only one would
-  // leave the mirror bug live. Negative deltas are untouched (the 0 floor is applied below /
-  // at step 5), and the cap is read from the POST-tick conditions so an augment that expired
-  // this very tick no longer inflates it.
-  const tickedEnemy: Enemy = { ...enemy, activeConditions: etc.conditions };
-  const rawEnemyHp = enemy.hp + enemyTickDelta;
-  enemy = {
-    ...tickedEnemy,
-    // PLAN.md #2: an illusion LOSES nothing to a damage-over-time tick either (the tick's own
-    // `condition-damage` line still reads as damage — the fracture is what the player sees),
-    // or a bleed cast on it would kill it and pay out XP and loot for a thing that is not there.
-    hp:
-      enemyTickDelta > 0
-        ? Math.min(rawEnemyHp, effectiveMaxHp(tickedEnemy))
-        : enemy.illusory
-          ? enemy.hp
-          : rawEnemyHp,
-  };
-  events.push(...etc.events);
-  const skipEnemyAttack = etc.skipTurn;
-  if (enemy.hp <= 0) {
-    return killAndVictory(state, player, { ...enemy, hp: 0 }, events, rng);
+  // 3. The player's action (the first of two, the only one, or the paused round's second).
+  if (actions >= 1) {
+    const outcome = playerAction(ctx, action, advDis, rng, rules, state.canFlee);
+    if (outcome === 'fled') return done(state, ctx, 'fled');
+    if (outcome === 'player-died') return defeat(state, ctx);
+    if (outcome === 'enemy-died') return victory(state, ctx, rng);
+    // 3b. The extra action: the round pauses for the player's second input.
+    if (actions === 2 && !second) {
+      ctx.events.push({ kind: 'tempo-extra-action', subject: 'player' });
+      return {
+        state: settle(state, ctx, { advDis }),
+        events: ctx.events,
+        status: 'ongoing',
+        resolved: true,
+        roundComplete: false,
+      };
+    }
   }
 
-  // 2. Enemy attacks unless skipped. M4: it now rolls to hit vs the player's real AC
-  //    (from armor/shield/augments) at the adv/dis the player's class imposes (a Scavver
-  //    forces disadvantage). Both are computed from the CURRENT player (before its own
-  //    condition tick in step 3). On a miss enemyDamage stays 0, so the momentum hook
-  //    below sees no taken damage.
-  let enemyDamage = 0;
-  /** Where the enemy's attack event landed, so step 5 can fold a reduction into it. */
-  let enemyAttackIndex: number | undefined;
-  if (!skipEnemyAttack) {
-    const defenderAc = playerArmorClass(player);
-    // G30: the enemy's roll now combines the adv/dis its TARGET imposes (Scavver evasion)
-    // with the override its OWN condition tick just produced. Step 3 always read
-    // `advDisOverride` for the player and step 2 never read it for the enemy, so the enemy
-    // half of `fracture` — inflicted by `heavyStrike`, the Enforcer's core skill — had no
-    // consumer at all: a fractured enemy and a clean one rolled byte-identically. The
-    // existing `disadvantage {subject:'enemy'}` event now fires for it, so the log shows it
-    // too, with NO new event kind.
-    const enemyAdvDis = combineAdvDis(enemyAdvDisVs(player), etc.advDisOverride);
-    const ea = resolveEnemyAttack(enemy, player, defenderAc, enemyAdvDis, rng);
-    enemy = ea.enemy;
-    player = ea.target;
-    enemyDamage = ea.damage;
-    events.push(...ea.events);
-    // `resolveEnemyAttack` always pushes its `attack` event LAST, so after this spread the
-    // attack sits at the end of `events`. Asserted by a test in combat.test.ts. The index is
-    // captured here and used at step 5, where the shared damage helper folds any first-hit
-    // reduction back into it.
-    enemyAttackIndex = events.length - 1;
+  // 4. The enemy's turn.
+  const enemyOutcome = resolveEnemyTurn(ctx, rng, rules);
+  if (enemyOutcome === 'player-died') return defeat(state, ctx);
+  if (enemyOutcome === 'enemy-died') return victory(state, ctx, rng);
+  return done(state, ctx, 'ongoing');
+}
+
+/**
+ * ONE player action, applied to the working copy — Fight, Cast, Run or Item. Returns how it
+ * left the fight. PURE apart from appending to `ctx` (a local working copy).
+ *
+ * Fight/Cast: the blow (or cast), the post-hoc passives folded back into the event that
+ * reported the damage (Adrenal Shunt, Void Pact — M-UI2), an illusion voiding it (floor 2), the
+ * damage applied, the Enforcer's momentum for dealing it, then the `onHit`/`onCrit`/`onCast`
+ * relic triggers. Run: one flee draw. Item: the consumable, with its own flee and revive rules.
+ */
+function playerAction(
+  ctx: RoundContext,
+  action: PlayerAction,
+  advDis: -1 | 0 | 1,
+  rng: Rng,
+  rules: RoundRules,
+  canFlee: boolean,
+): TurnOutcome | 'fled' {
+  if (action.kind === 'run') {
+    if (rollFlee(rng)) {
+      ctx.events.push({ kind: 'fled' });
+      return 'fled';
+    }
+    // The escape costs the turn; the enemy's ordinary turn follows and reports its own blow.
+    ctx.events.push({ kind: 'escape-failed' });
+    return 'ongoing';
   }
 
-  // 3. Tick the player's conditions (damage/heal/skip/fracture), then apply hp delta.
-  const ptc = tickConditions(player, enemy, rng);
-  // G22(a): a HEALING tick (regeneration, Penitent consecrate) is capped at the player's
-  // effective max HP. Before this, `hp + ptc.hpDelta` was written raw, so a regeneration tick
-  // could leave `hp > maxHp` — reproduced in the register. Same shape as the enemy clamp in
-  // step 1; the cap reads the POST-tick conditions.
-  const tickedPlayer: Player = { ...player, activeConditions: ptc.conditions };
-  const rawPlayerHp = player.hp + ptc.hpDelta;
-  player = {
-    ...tickedPlayer,
-    hp: ptc.hpDelta > 0 ? Math.min(rawPlayerHp, effectiveMaxHp(tickedPlayer)) : rawPlayerHp,
-  };
-  // G12: the condition's adv/dis is NO LONGER written onto the player. That write was the
-  // whole defect — it fired only when non-zero, so nothing ever restored it to 0, and
-  // `game.ts` persisted it to the hub player. It is now combined per-round, below, with the
-  // battle's own standing modifier and thrown away at the end of the round.
-  events.push(...ptc.events);
-  // The player's advantage for THIS round: the battle's standing modifier (an encounter's
-  // ambush, a boss's adaptation) combined with whatever this tick's conditions imposed.
-  // Advantage and disadvantage cancel — see `combineAdvDis`.
-  const playerAdvDis = combineAdvDis(state.playerAdvantage ?? 0, ptc.advDisOverride);
-
-  // Empty Vessel: restore charge(s) at the player's turn (capped at max). No-op at 0.
-  if (mods.chargePerTurn > 0) {
-    player = {
-      ...player,
-      skillCharges: Math.min(player.skillCharges + mods.chargePerTurn, player.maxSkillCharges),
-    };
+  if (action.kind === 'item') {
+    // PLAN.md #2: a healing consumable is dampened on floor 3 (`healPct` reaches `healSelf`).
+    const res = applyConsumable(ctx.player, ctx.enemy, action.source, { healPct: rules.healPct });
+    ctx.player = res.player;
+    ctx.enemy = res.enemy;
+    ctx.events.push(...res.events);
+    // PLAN.md #2: a thrown item passed through an illusion — say so, as a blow does.
+    if (res.voided) ctx.events.push({ kind: 'illusion-struck' });
+    syncHp(ctx, 'player');
+    syncHp(ctx, 'enemy');
+    if (res.fled) {
+      // G39: the item is spent and the turn with it, but a battle that forbids fleeing (every
+      // boss, the final act) keeps you: `escape-impossible`, and the enemy's turn follows.
+      if (canFlee) return 'fled';
+      ctx.events.push({ kind: 'escape-impossible' });
+    }
+    // G24's fourth site: the once-per-battle revive gate, for a self-lethal item.
+    if (playerDownAfterGate(ctx)) return 'player-died';
+    return ctx.enemy.hp <= 0 ? 'enemy-died' : 'ongoing';
   }
 
-  // 4. Player acts unless a condition made it skip.
-  let playerDamage = 0;
+  let damage = 0;
   let didHit = false;
   let didCrit = false;
   let didCast = false;
-  // Where the player's damaging event landed in `events`, so step 4b's post-hoc modifiers
-  // can be folded back into it. -1 when the player dealt no damaging action this round.
-  let playerDamageEventIndex = -1;
-  if (ptc.skipTurn) {
-    events.push({ kind: 'player-unable-to-act', conditionType: skipCause(ptc.events) });
-  } else if (action.kind === 'fight') {
-    // M5: resolve the weapon from the paperdoll mainHand (empty -> UNARMED so an unarmed
-    // player never throws) and the flat equip-damage bonus, both injected into combat.ts.
-    // Both are off-equivalent for legacy gear (real weapon, 0 bonus), so the draw order and
-    // damage are unchanged for a normal run.
-    const weapon = weaponForSlot(player.inventory) ?? UNARMED;
-    // M9: the player's wired damage perks (sharpEdge) ride the SAME flat-damage seam as the
-    // equip bonus. Off-equivalent (0) for a player with no such perk. M-UI2 passes the two
-    // SEPARATELY (they used to be summed here) purely so the emitted breakdown can name
-    // gear and perks apart; they are added at the same point, so the total is unchanged.
+  // Where the damaging event landed, so the post-hoc passives can be folded back into it.
+  let reportIndex = -1;
+  if (action.kind === 'fight') {
+    // M5: the weapon from the paperdoll mainHand (empty → UNARMED). M9: wired damage perks ride
+    // the flat-damage seam, passed SEPARATELY so the breakdown can name gear and perks apart.
+    const weapon = weaponForSlot(ctx.player.inventory) ?? UNARMED;
     const pa = resolvePlayerAttack(
-      player,
-      enemy,
+      ctx.player,
+      ctx.enemy,
       weapon,
-      mods.flatDamage,
+      ctx.mods.flatDamage,
       rng,
-      perkModifiers(player.perks).flatDamage,
-      // G12: the round's adv/dis is INJECTED, mirroring how the enemy's is already computed
-      // here and injected. `Attacker.advantageDisadvantage` survives as the standing default
-      // for callers that pass nothing, so no save field is removed and no test call site
-      // changes shape.
-      playerAdvDis,
+      perkModifiers(ctx.player.perks).flatDamage,
+      // G12: the round's adv/dis is INJECTED.
+      advDis,
     );
-    playerDamage = pa.damage;
+    damage = pa.damage;
     didHit = pa.outcome === 'hit' || pa.outcome === 'crit';
     didCrit = pa.outcome === 'crit';
-    events.push(...pa.events);
-    // `resolvePlayerAttack` pushes its `attack` event last.
-    playerDamageEventIndex = events.length - 1;
+    ctx.events.push(...pa.events);
+    reportIndex = ctx.events.length - 1; // `resolvePlayerAttack` pushes its `attack` last.
   } else {
-    // Cast: spend one charge and resolve the skill through `castSkill` — the base
-    // useSkill damage/condition PLUS the class signature twist, all deterministic (NO rng
-    // draw, so the documented draw order is unchanged). Forward the twist events; the base
-    // `enemy-skill-used` event is dropped in favor of the player-facing `skill-cast`.
-    // PLAN.md #2: the floor's heal percentage reaches `selfHeal` and `lifestealFraction`.
-    const cast = castSkill(player, enemy, action.skill, {
+    // Cast: spend the charge and resolve the skill through `castSkill` — the base damage /
+    // condition PLUS the class twist, all deterministic (NO draw). The base `enemy-skill-used`
+    // event is dropped in favour of the player-facing `skill-cast`. PLAN.md #2: the floor's
+    // heal percentage reaches `selfHeal` and `lifestealFraction`.
+    const cast = castSkill(ctx.player, ctx.enemy, action.skill, {
       healPct: rules.healPct,
-      ...(enemy.illusory ? { illusoryTarget: true } : {}),
+      ...(ctx.enemy.illusory ? { illusoryTarget: true } : {}),
     });
-    player = cast.caster;
-    enemy = cast.target;
-    playerDamage = cast.damage;
+    ctx.player = cast.caster;
+    ctx.enemy = cast.target;
+    damage = cast.damage;
     didCast = true;
-    // Overclock Chip / Hollow Heart: refund the charge-cost discount castSkill just spent
-    // (capped so the effective spend never goes below 0, and never above max).
-    if (mods.chargeDiscount > 0) {
-      const refund = Math.min(mods.chargeDiscount, action.skill.chargeCost);
-      player = {
-        ...player,
-        skillCharges: Math.min(player.skillCharges + refund, player.maxSkillCharges),
+    // Overclock Chip / Hollow Heart: refund the charge-cost discount castSkill just spent.
+    if (ctx.mods.chargeDiscount > 0) {
+      const refund = Math.min(ctx.mods.chargeDiscount, action.skill.chargeCost);
+      ctx.player = {
+        ...ctx.player,
+        skillCharges: Math.min(ctx.player.skillCharges + refund, ctx.player.maxSkillCharges),
       };
     }
-    // The cast's damage rides the event as a single 'skill' term (the skill resolver owns
-    // how it was computed). A pure-condition cast deals 0 and carries no terms — which
-    // still satisfies "the terms sum to the damage".
-    events.push({
+    ctx.events.push({
       kind: 'skill-cast',
       subject: 'player',
       skillId: action.skill.id,
       name: action.skill.name,
-      damage: playerDamage,
-      damageSources: playerDamage !== 0 ? [{ kind: 'skill', amount: playerDamage }] : [],
+      damage,
+      damageSources: damage !== 0 ? [{ kind: 'skill', amount: damage }] : [],
     });
-    playerDamageEventIndex = events.length - 1;
+    reportIndex = ctx.events.length - 1;
     for (const e of cast.events) {
       if (
         e.kind === 'condition-applied' ||
@@ -696,118 +877,134 @@ function resolvePlayerTurn(
         e.kind === 'lifesteal' ||
         e.kind === 'detonate'
       ) {
-        events.push(e);
+        ctx.events.push(e);
       }
     }
   }
 
-  // 4b. Player-damage passive modifiers (RNG-free). Adrenal Shunt adds a flat bonus below
-  //     the HP threshold; Void Pact multiplies the total. Both no-op for a normal run.
-  //
-  //     Each one is ALSO folded back into the event that already reported the damage. Before
-  //     M-UI2 they were applied only to the local `playerDamage`, so the emitted event kept
-  //     announcing the pre-modifier number while the enemy lost the post-modifier one.
-  if (playerDamage > 0) {
-    if (
-      mods.lowHpDamageBonus &&
-      player.hp < (mods.lowHpDamageBonus.thresholdPct / 100) * effectiveMaxHp(player)
-    ) {
-      playerDamage += mods.lowHpDamageBonus.amount;
-      foldDamageSource(events, playerDamageEventIndex, {
-        kind: 'low-hp-bonus',
-        amount: mods.lowHpDamageBonus.amount,
-      });
+  // Post-hoc passives (RNG-free), each FOLDED BACK into the event that reported the damage so
+  // the log never announces a number the enemy did not lose (M-UI2).
+  if (damage > 0) {
+    const low = ctx.mods.lowHpDamageBonus;
+    if (low && ctx.player.hp < (low.thresholdPct / 100) * effectiveMaxHp(ctx.player)) {
+      damage += low.amount;
+      foldDamageSource(ctx.events, reportIndex, { kind: 'low-hp-bonus', amount: low.amount });
     }
-    if (mods.damageDealtMult > 0) {
-      const before = playerDamage;
-      playerDamage = Math.floor(before * (1 + mods.damageDealtMult / 100));
-      // Record the DELTA the multiplier actually produced (after flooring), not the
-      // percentage — the terms have to sum to the damage, and a percentage does not.
-      const delta = playerDamage - before;
-      if (delta !== 0) {
-        foldDamageSource(events, playerDamageEventIndex, { kind: 'damage-mult', amount: delta });
-      }
+    if (ctx.mods.damageDealtMult > 0) {
+      const before = damage;
+      damage = Math.floor(before * (1 + ctx.mods.damageDealtMult / 100));
+      const delta = damage - before;
+      if (delta !== 0) foldDamageSource(ctx.events, reportIndex, { kind: 'damage-mult', amount: delta });
     }
   }
 
-  // 4c. PLAN.md #2: the blow passes through an illusion. The event that reported it keeps its
-  //     rolled damage (its terms still sum to it; folding an "illusion" term into the dice
-  //     detail would NAME the illusion in the log before it is seen through), and
-  //     `illusion-struck` is placed right after it to say nothing was there. `playerDamage` is
-  //     then 0, so step 5 lands nothing and the momentum hook below banks nothing for it.
-  if (enemy.illusory && playerDamage > 0) {
-    events.splice(playerDamageEventIndex + 1, 0, { kind: 'illusion-struck' });
-    playerDamage = 0;
+  // PLAN.md #2: the blow passes through an illusion. The reporting event keeps its rolled
+  // damage (folding an "illusion" term in would name it early); `illusion-struck` follows it.
+  if (ctx.enemy.illusory && damage > 0) {
+    ctx.events.splice(reportIndex + 1, 0, { kind: 'illusion-struck' });
+    damage = 0;
   }
 
-  // 5. Apply the exchanged damage. The player's blow lands first (nothing between reads
-  //    either hp, and this keeps the enemy's HP settled before any onTakeDamage reflect),
-  //    then the enemy's damage goes through the ONE guarded path (G24/G29): first-hit
-  //    reduction -> shield -> hp -> onTakeDamage -> revive gate.
-  enemy = damageEnemy(enemy, playerDamage);
-  const taken = applyDamageToPlayer(player, enemy, enemyDamage, {
-    mods,
-    firstHitDone,
-    reviveUsed,
-    events,
-    ...(enemyAttackIndex !== undefined ? { attackEventIndex: enemyAttackIndex } : {}),
-  });
-  player = taken.player;
-  enemy = taken.enemy;
-  firstHitDone = taken.firstHitDone;
-  reviveUsed = taken.reviveUsed;
-  // The HP the player ACTUALLY lost (post-reduction, post-shield) — what the momentum hook
-  // has always read, and what the death check below tests.
-  enemyDamage = taken.applied;
+  ctx.enemy = damageEnemy(ctx.enemy, damage);
+  syncHp(ctx, 'enemy');
+  syncHp(ctx, 'player'); // a cast's self-sacrifice or lifesteal
 
-  // Momentum-on-damage hooks (Enforcer only): dealing damage grants +1 and taking enemy
-  // damage grants +1, capped. SILENT (no event) and pure arithmetic (no rng draw), so a
-  // conditionless round stays byte-identical for non-momentum classes and adds no draw.
-  if (usesMomentum(player)) {
-    let gain = 0;
-    if (playerDamage > 0) gain += 1;
-    if (enemyDamage > 0) gain += 1;
-    if (gain > 0) player = grantMomentum(player, gain);
-  }
+  // Momentum (Enforcer only): +1 for DEALING damage. The +1 for TAKING it is granted in the
+  // enemy's turn, where the damage lands. Silent, no draw.
+  if (usesMomentum(ctx.player) && damage > 0) ctx.player = grantMomentum(ctx.player, 1);
 
-  // 5b. Fire the player's ACTION triggers (RNG-free). `onTakeDamage` already fired inside the
-  //     damage helper above, alongside the shield and the revive gate it belongs with.
-  //     PLAN.md #2: a relic's `healSelf` (Penitent's Rosary, Stitched Heart) is dampened on
-  //     floor 3 like every other heal — `healPct` rides the trigger context.
+  // The player's ACTION triggers (RNG-free). PLAN.md #2: a relic's `healSelf` is dampened on
+  // floor 3 like every other heal — `healPct` rides the trigger context.
   const triggerCtx = { healPct: rules.healPct };
-  if (didHit) {
-    const t = fireTrigger('onHit', player, enemy, triggerCtx);
-    player = t.player; enemy = t.enemy; events.push(...t.events);
-  }
-  if (didCrit) {
-    const t = fireTrigger('onCrit', player, enemy, triggerCtx);
-    player = t.player; enemy = t.enemy; events.push(...t.events);
-  }
-  if (didCast) {
-    const t = fireTrigger('onCast', player, enemy, triggerCtx);
-    player = t.player; enemy = t.enemy; events.push(...t.events);
-  }
-
-  // 6. Resolve the outcome (player death checked first, faithful to pre-M2). The revive gate
-  //    already ran inside the damage helper, so reaching 0 HP here is final.
-  if (player.hp <= 0) {
-    events.push({ kind: 'defeat' });
-    return {
-      state: withFlags(state, player, enemy, firstHitDone, reviveUsed),
-      events,
-      status: 'player-died',
-      resolved: true,
-    };
-  }
-  if (enemy.hp <= 0) {
-    return killAndVictory(state, player, enemy, events, rng);
-  }
-  return {
-    state: withFlags(state, player, enemy, firstHitDone, reviveUsed),
-    events,
-    status: 'ongoing',
-    resolved: true,
+  const fire = (trigger: 'onHit' | 'onCrit' | 'onCast'): void => {
+    const t = fireTrigger(trigger, ctx.player, ctx.enemy, triggerCtx);
+    ctx.player = t.player;
+    ctx.enemy = t.enemy;
+    ctx.events.push(...t.events);
   };
+  if (didHit) fire('onHit');
+  if (didCrit) fire('onCrit');
+  if (didCast) fire('onCast');
+  syncHp(ctx, 'enemy');
+  syncHp(ctx, 'player');
+
+  // The player is checked first (a self-sacrifice that killed you), faithful to pre-M2.
+  if (playerDownAfterGate(ctx)) return 'player-died';
+  return ctx.enemy.hp <= 0 ? 'enemy-died' : 'ongoing';
+}
+
+/**
+ * THE ENEMY'S TURN — its condition tick, its tempo gauge, then N actions — PURE apart from
+ * appending to `ctx` (a local working copy). Returns how it left the fight.
+ *
+ *  a. TICK. The enemy's conditions (the player's DoT and control finally bite). Grave of Embers
+ *     / Ashen Crown double a negative DoT (`dotTickMult`); a healing tick is capped at effective
+ *     max HP (G22a); an illusion loses nothing to a DoT (PLAN.md #2). Dead to its own tick ⇒
+ *     `enemy-died` before it acts.
+ *  b. GAUGE. `tempoRate` of its Dexterity plus its FAMILY'S SPEED (data, `enemyFamilies.json`),
+ *     capped; `rules.enemyTempo` false (measurement only) holds it still. A control condition
+ *     means no action (the gauge drifts, spends nothing); a crossed −1.0 is `tempo-lost-turn`.
+ *  c. ACTIONS, one or two. Before the second: `tempo-extra-action`. EACH action is ONE call to
+ *     `resolveEnemyAttack` (to-hit, then a random affordable skill) and ONE pass through the
+ *     guarded damage path (first-hit reduction → shield → HP → `onTakeDamage` → revive). The
+ *     player down ⇒ `player-died` and no further action; the enemy down to a reflect ⇒
+ *     `enemy-died`.
+ *
+ * ⚑ THE SEAM FOR #11 (boss agents choose their own actions). A boss agent's choice replaces
+ * the `randInt` skill pick inside `resolveEnemyAttack` with a chosen `SkillId` (or a plain
+ * strike), rolling to-hit first as now; the choice enters `step` as an input alongside the
+ * player's (GAME-DESIGN.md §17.3 point 2) and this function receives one choice per action its
+ * gauge granted — `actions` is already computed here. Nothing else in the loop moves.
+ */
+export function resolveEnemyTurn(ctx: RoundContext, rng: Rng, rules: RoundRules): TurnOutcome {
+  // a. The tick.
+  const etc = tickConditions(ctx.enemy, ctx.player, rng);
+  const delta = etc.hpDelta < 0 ? etc.hpDelta * ctx.mods.dotTickMult : etc.hpDelta;
+  const ticked: Enemy = { ...ctx.enemy, activeConditions: etc.conditions };
+  const rawHp = ctx.enemy.hp + delta;
+  ctx.enemy = {
+    ...ticked,
+    hp: delta > 0 ? Math.min(rawHp, effectiveMaxHp(ticked)) : ctx.enemy.illusory ? ctx.enemy.hp : Math.max(rawHp, 0),
+  };
+  ctx.events.push(...etc.events);
+  syncHp(ctx, 'enemy');
+  if (ctx.enemy.hp <= 0) return 'enemy-died';
+
+  // b. The gauge.
+  const family = rules.familySpeed ? (getFamily(ctx.enemy.familyId)?.theme.speedTenths ?? 0) : 0;
+  const rate = rules.enemyTempo ? tempoRate(ctx.enemy, rules.tempoRateCapTenths, family) : 0;
+  const { actions } = moveGauge(ctx, 'enemy', rate, !etc.skipTurn);
+
+  // c. The actions.
+  for (let i = 0; i < actions; i += 1) {
+    if (i === 1) ctx.events.push({ kind: 'tempo-extra-action', subject: 'enemy' });
+    // M4: to-hit vs the player's real AC. G30: the adv/dis its TARGET imposes (Scavver evasion)
+    // combined with the override its OWN tick produced (fracture).
+    const enemyAdvDis = combineAdvDis(enemyAdvDisVs(ctx.player), etc.advDisOverride);
+    const ea = resolveEnemyAttack(ctx.enemy, ctx.player, playerArmorClass(ctx.player), enemyAdvDis, rng);
+    ctx.enemy = ea.enemy;
+    ctx.player = ea.target;
+    ctx.events.push(...ea.events);
+    // `resolveEnemyAttack` always pushes its `attack` event LAST (asserted in combat.test.ts).
+    const taken = applyDamageToPlayer(ctx.player, ctx.enemy, ea.damage, {
+      mods: ctx.mods,
+      firstHitDone: ctx.firstHitDone,
+      reviveUsed: ctx.reviveUsed,
+      events: ctx.events,
+      attackEventIndex: ctx.events.length - 1,
+    });
+    ctx.player = taken.player;
+    ctx.enemy = taken.enemy;
+    ctx.firstHitDone = taken.firstHitDone;
+    ctx.reviveUsed = taken.reviveUsed;
+    syncHp(ctx, 'player');
+    syncHp(ctx, 'enemy'); // an `onTakeDamage` reflect
+    // Momentum (Enforcer only): +1 for TAKING damage (post-reduction, post-shield).
+    if (usesMomentum(ctx.player) && taken.applied > 0) ctx.player = grantMomentum(ctx.player, 1);
+    if (taken.died) return 'player-died';
+    if (ctx.enemy.hp <= 0) return 'enemy-died';
+  }
+  return 'ongoing';
 }
 
 /**
@@ -844,31 +1041,6 @@ function killAndVictory(
   const k = fireTrigger('onKill', player, enemy, {});
   events.push(...k.events);
   return applyVictory(state, k.player, k.enemy, events, rng);
-}
-
-/**
- * The player casts a skill from their pool — pre-guard then the shared round. If the
- * skill is unknown, not in `player.skillPool`, or the player lacks the charge, this is a
- * no-op: state unchanged, a single `cast-unavailable` event, `ongoing`, and NO rng draw
- * (mirrors an unavailable consumable). Otherwise it runs `resolvePlayerTurn` as a cast.
- */
-function resolveCast(state: BattleState, skillId: SkillId, rng: Rng, rules: RoundRules): RoundResult {
-  const player = state.player;
-  // M9: resolve the player's OWN skill def (base merged with any owned upgrade). No upgrade
-  // ⇒ the base SKILLS def is returned unchanged (off-equivalence); the enemy path still reads
-  // SKILLS directly (upgrades are player-only).
-  const skill = resolveSkill(player, skillId);
-  // Overclock Chip / Hollow Heart cut the effective charge cost (never below 0). 0 for a
-  // normal run, so availability is unchanged (off-equivalence).
-  //
-  // G33: this used to inline the arithmetic, which made it the ONLY place the rule lived —
-  // so the Cast picker and the character sheet showed the undiscounted cost and the relic
-  // did nothing through the real UI. The shared helper is byte-equivalent to what was here.
-  const effectiveCost = effectiveChargeCost(player.inventory, skill?.chargeCost ?? 0);
-  if (!skill || !player.skillPool.includes(skillId) || player.skillCharges < effectiveCost) {
-    return { state, events: [{ kind: 'cast-unavailable' }], status: 'ongoing', resolved: false };
-  }
-  return resolvePlayerTurn(state, { kind: 'cast', skill }, rng, rules);
 }
 
 /**
@@ -909,129 +1081,13 @@ function applyVictory(
     const left = summarizeLoot(drop);
     events.push({ kind: 'loot-left-behind', name: left.name, rarity: left.rarity });
   }
-  return { state: { ...state, player: newPlayer, enemy }, events, status: 'player-won', resolved: true };
-}
-
-/**
- * Use a backpack consumable as the player's action — PURE. Delegates the RNG-free effect
- * application to `consumable.applyConsumable`, then resolves the round: an unavailable item is
- * a no-op (state unchanged, `consumable-unavailable`); a `flee` consumable ends the round as
- * `fled`; a throwable that drops the enemy to 0 is a victory (rewards rolled via
- * `killAndVictory`); a self-lethal outcome (none ship today) is a defeat; otherwise `ongoing`.
- * NO enemy counter-attack — using an item costs the turn and grants the enemy nothing.
- */
-function resolveUseConsumable(
-  state: BattleState,
-  source: ConsumableSource,
-  rng: Rng,
-  rules: RoundRules,
-): RoundResult {
-  // PLAN.md #2: a healing consumable is dampened on floor 3 (`healPct` reaches `healSelf`).
-  const res = applyConsumable(state.player, state.enemy, source, { healPct: rules.healPct });
-  if (!res.consumed) {
-    return { state, events: res.events, status: 'ongoing', resolved: false };
-  }
-  let player = res.player;
-  const enemy = res.enemy;
-  const events = res.events;
-  // PLAN.md #2: a thrown item passed through an illusion — say so, as a blow does.
-  if (res.voided) events.push({ kind: 'illusion-struck' });
-  if (res.fled) {
-    // G39: a flee consumable used to return `fled` WITHOUT consulting `canFlee`, which every
-    // boss battle sets to false. Measured: a Smoke Vial in the act-5 Hollow fight returned
-    // `status: 'fled'` and dropped the player back at the act-5 hub — where the Hollow was
-    // constructed only at floor entry, so the run had NO path to any ending at all: death or
-    // Quit only. The item is still CONSUMED and the turn still spent (it was used; that is
-    // `resolved: true`), but the escape simply fails.
-    if (state.canFlee) {
-      return { state: { ...state, player, enemy }, events, status: 'fled', resolved: true };
-    }
-    events.push({ kind: 'escape-impossible' });
-  }
-  // G24's fourth site: run the once-per-battle revive gate here too. It is the one guard of
-  // the shared path that a consumable outcome can reach — shield/first-hit/onTakeDamage all
-  // key off damage taken from an ATTACK, and no self-damaging consumable ships today, so
-  // this branch is guarded by construction rather than reachable in play.
-  let reviveUsed = state.reviveUsed ?? false;
-  if (player.hp <= 0) {
-    const gated = applyDamageToPlayer(player, enemy, 0, {
-      mods: computeEquipModifiers(player.inventory),
-      firstHitDone: state.firstEnemyHitDone ?? false,
-      reviveUsed,
-      events,
-    });
-    player = gated.player;
-    reviveUsed = gated.reviveUsed;
-    if (gated.died) {
-      events.push({ kind: 'defeat' });
-      return {
-        state: withFlags(state, player, enemy, state.firstEnemyHitDone ?? false, reviveUsed),
-        events,
-        status: 'player-died',
-        resolved: true,
-      };
-    }
-  }
-  if (enemy.hp <= 0) {
-    return killAndVictory(state, player, enemy, events, rng);
-  }
   return {
-    state: withFlags(state, player, enemy, state.firstEnemyHitDone ?? false, reviveUsed),
+    state: { ...state, player: newPlayer, enemy },
     events,
-    status: 'ongoing',
+    status: 'player-won',
     resolved: true,
+    roundComplete: true,
   };
-}
-
-function resolveRun(state: BattleState, rng: Rng): RoundResult {
-  if (!state.canFlee) {
-    // G36: a REJECTED press. Nothing was resolved — no dice, no tick, no state change — so
-    // `game.ts` must not layer the boss's per-round mechanic on top of it.
-    return { state, events: [{ kind: 'escape-impossible' }], status: 'ongoing', resolved: false };
-  }
-  // A controlled (stunned/etc.) player cannot even attempt to flee: forced counter.
-  if (hasControlCondition(state.player)) {
-    return enemyCounterAttack(state, rng);
-  }
-  if (rollFlee(rng)) {
-    return { state: { ...state }, events: [{ kind: 'fled' }], status: 'fled', resolved: true };
-  }
-  return enemyCounterAttack(state, rng);
-}
-
-/**
- * Shared "your escape failed, take a counter-attack" path (also the controlled case).
- *
- * G24: this used to subtract HP raw and check death raw, skipping every guard
- * `resolvePlayerTurn` applies. It now goes through the SAME `applyDamageToPlayer` helper, so
- * a shield absorbs here, Scrap Plating's free hit applies here, `onTakeDamage` relics fire
- * here, and — the one that matters most — the Halo Fragment revives you here. The register
- * measured all four failing at exactly the death players most often walk into.
- */
-function enemyCounterAttack(state: BattleState, rng: Rng): RoundResult {
-  const defenderAc = playerArmorClass(state.player);
-  const enemyAdvDis = enemyAdvDisVs(state.player);
-  const ea = resolveEnemyAttack(state.enemy, state.player, defenderAc, enemyAdvDis, rng);
-  const events: CombatEvent[] = [...ea.events];
-  // `resolveEnemyAttack` always pushes its `attack` event last.
-  const attackEventIndex = events.length - 1;
-  const taken = applyDamageToPlayer(ea.target, ea.enemy, ea.damage, {
-    mods: computeEquipModifiers(ea.target.inventory),
-    firstHitDone: state.firstEnemyHitDone ?? false,
-    reviveUsed: state.reviveUsed ?? false,
-    events,
-    attackEventIndex,
-  });
-  // `escape-failed` reports the HP the player ACTUALLY lost, so it reconciles with the
-  // `shield-absorbed` / first-hit-reduction entries beside it. Identical to the rolled damage
-  // for a player with no such gear (off-equivalence).
-  events.push({ kind: 'escape-failed' });
-  const next = withFlags(state, taken.player, taken.enemy, taken.firstHitDone, taken.reviveUsed);
-  if (taken.died) {
-    events.push({ kind: 'defeat' });
-    return { state: next, events, status: 'player-died', resolved: true };
-  }
-  return { state: next, events, status: 'ongoing', resolved: true };
 }
 
 /**

@@ -115,7 +115,11 @@ export interface FloorCounters {
   steps: number;
   /** Encounters met: battles, chests, found rests, bargains, and the floor's boss. */
   encounters: number;
-  /** Battle rounds fought (every `battle-action` the run answered). */
+  /**
+   * Battle rounds fought: every `battle-action` the run answered that STARTED a round. PLAN.md
+   * #1.6: the second input of a round the player's extra action paused is the same round, so it
+   * is not counted again.
+   */
   rounds: number;
   /** Rest spots found (`rest-found`). */
   rests: number;
@@ -137,6 +141,11 @@ export interface FloorCounters {
   healsUsed: number;
   /** Items a full pack left behind (`loot-left-behind`). */
   lootLeftBehind: number;
+  /**
+   * PLAN.md #1.6: enemy turns that were DOUBLE actions — a `tempo-extra-action` with
+   * `subject: 'enemy'`. Against `rounds`, the share of enemy turns the gauge doubled.
+   */
+  enemyExtraActions: number;
 }
 
 /** A fresh counter set, every field zero. */
@@ -158,6 +167,7 @@ export function emptyFloorCounters(): FloorCounters {
     diedInIllusion: 0,
     healsUsed: 0,
     lootLeftBehind: 0,
+    enemyExtraActions: 0,
   };
 }
 
@@ -237,11 +247,16 @@ export function tallyStep(
   // A battle OPENED this step against an illusion (the roll happens as the encounter is built).
   if (count('encounter-start') > 0 && inIllusoryBattle(post)) c.illusionsMet += 1;
 
+  c.enemyExtraActions += events.filter((e) => e.kind === 'tempo-extra-action' && e.subject === 'enemy').length;
+
   const fighting = pre.awaiting === 'battle-action';
-  if (fighting) c.rounds += 1;
+  // PLAN.md #1.6: a step answering the extra-action pause continues a round; it starts none.
+  const startsRound =
+    fighting && !(pre.state.phase.kind === 'battle' && pre.state.phase.battle.extraAction === true);
+  if (startsRound) c.rounds += 1;
   const illusory = fighting && inIllusoryBattle(pre);
   if (illusory) {
-    c.illusionRounds += 1;
+    if (startsRound) c.illusionRounds += 1;
     const before = pre.state.phase.kind === 'battle' ? pre.state.phase.battle.player.hp : 0;
     c.illusionHpLost += Math.max(0, before - hpAfter(post));
   }

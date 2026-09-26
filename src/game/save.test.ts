@@ -229,6 +229,46 @@ describe('round-trip', () => {
   });
 });
 
+describe('PLAN.md #1.6 — the tempo gauge and the extra-action pause survive a save (AC-16)', () => {
+  /** A mid-battle game state carrying both new optional battle fields. */
+  function pausedMidRound(): GameState {
+    const player = { ...createPlayer({ name: 'Ari', classId: 'Enforcer', stats: { STR: 14, DEX: 18, CON: 12, INT: 10, WIS: 10, CHA: 10 } }), hp: 30, maxHp: 30 };
+    const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(9));
+    const battle = { ...createBattle(player, enemy, 1), tempo: { player: 3, enemy: -4 }, extraAction: true as const };
+    return {
+      version: SAVE_VERSION,
+      rngState: 4242,
+      player,
+      act: 1,
+      place: 0,
+      karma: midRunState(SEED).karma,
+      phase: { kind: 'battle', battle, started: true, final: false },
+    };
+  }
+
+  it('a paused round with non-zero gauges round-trips deep-equal, and plays on identically', () => {
+    const live = pausedMidRound();
+    const decoded = decodeSave(encodeSave(live));
+    expect(decoded).toEqual(live);
+    const fight: GameInput = { kind: 'battle-action', action: 'fight' };
+    const fromLive = step(live, fight);
+    const fromSave = step(decoded!, fight);
+    expect(fromSave).toEqual(fromLive);
+    // Non-vacuity: that step really was the paused round's SECOND action — it cleared the pause.
+    if (fromLive.state.phase.kind === 'battle') expect(fromLive.state.phase.battle.extraAction).toBeUndefined();
+  });
+
+  it('a PRE-UNIT mid-battle save (no tempo, no pause) still decodes and plays — no version bump', () => {
+    const live = pausedMidRound();
+    if (live.phase.kind !== 'battle') throw new Error('not a battle');
+    const { tempo: _t, extraAction: _x, ...legacyBattle } = live.phase.battle;
+    const legacy: GameState = { ...live, phase: { ...live.phase, battle: legacyBattle } };
+    const decoded = decodeSave(encodeSave(legacy));
+    expect(decoded).toEqual(legacy);
+    expect(() => step(decoded!, { kind: 'battle-action', action: 'fight' })).not.toThrow();
+  });
+});
+
 describe('decodeSave rejection (returns null, never throws)', () => {
   const cases: Array<[string, string]> = [
     ['malformed JSON', '{'],

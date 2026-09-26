@@ -310,9 +310,11 @@ export function describeEvent(e: GameEvent): string {
     case 'tempo-extra-action':
       return e.subject === 'player' ? `You move again before it can answer.` : `The enemy moves again.`;
     case 'tempo-lost-turn':
+      // Not "too slow" (the plan's wording): `slow` is a condition id, and a lost turn is the
+      // gauge, not the Slow condition — the text-hygiene rules would rightly flag it.
       return e.subject === 'player'
-        ? `You are too slow; the moment passes.`
-        : `The enemy is too slow; the moment passes.`;
+        ? `You fall behind; the moment passes.`
+        : `The enemy falls behind; the moment passes.`;
     case 'rest-found':
       // The scene itself (the place, the character's condition, the tone) is the scene block
       // `buildNarrationPrompt` appends for this step; this fact line only anchors it.

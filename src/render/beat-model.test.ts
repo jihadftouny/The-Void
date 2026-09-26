@@ -66,16 +66,18 @@ function foe(): Enemy {
 }
 
 /**
- * One real Fight round, dice by hand (the derivation `illusion.test.ts` records):
- *   [enemy to-hit d20 = 18 → a hit; no skills → the plain strike for 1]
+ * One real Fight round, dice by hand (the derivation `illusion.test.ts` records), in the
+ * engine's order since PLAN.md #1.6 — you act, then it acts:
  *   [player to-hit d20 = 15: 15 + 0 (STR 10) + 2 (proficiency) = 17 ≥ AC 10 → a hit]
- *   [1d6 sword = 4]
- * An Enforcer's momentum gain is SILENT and the hero carries no relic, so those two strikes
- * are the whole event list. WHICH COMES FIRST is the engine's business and is read off it.
+ *   [1d6 sword = 4 → the foe 10 − 4 = 6]
+ *   [enemy to-hit d20 = 18 → a hit; no skills → the plain strike for 1 → the hero 12 − 1 = 11]
+ * Both sides have DEX 10 (no gauge event); an Enforcer's momentum gain is SILENT and the hero
+ * carries no relic, so the two strikes and the engine's two `hp-changed` values are the whole
+ * event list. The order is read off the engine, never assumed by the beat model.
  */
 function engineRound(): CombatEvent[] {
   const hero = { ...createPlayer({ name: 'Hero', classId: 'Enforcer', stats: { STR: 10, DEX: 10, CON: 12, INT: 10, WIS: 10, CHA: 10 } }), hp: 12, maxHp: 12 };
-  const r = resolveRound(createBattle(hero, foe(), 2), 'fight', scripted([face(18, 20), face(15, 20), face(4, 6)]));
+  const r = resolveRound(createBattle(hero, foe(), 2), 'fight', scripted([face(15, 20), face(4, 6), face(18, 20)]));
   return r.events;
 }
 
@@ -182,8 +184,12 @@ describe('a real engine round, dice by hand (AC-20)', () => {
   const beats = groupBeats(events);
 
   it('is two strikes, and they are the beats — the ENGINE’S events, in the ENGINE’S order', () => {
-    expect(events.map((e) => e.kind)).toEqual(['attack', 'attack']);
-    expect(beats.map((b) => b.anchor)).toEqual(events); // identity and order, from the engine
+    expect(events.map((e) => e.kind)).toEqual(['attack', 'hp-changed', 'attack', 'hp-changed']);
+    // The beats are the two strikes, in the engine's order; the `hp-changed` values ride them.
+    expect(beats.map((b) => b.anchor)).toEqual(events.filter((e) => e.kind === 'attack'));
+    expect(beats.map((b) => b.anchor?.kind === 'attack' && b.anchor.subject)).toEqual(['player', 'enemy']);
+    expect(beats[0]!.barValues).toEqual({ enemy: 6 });
+    expect(beats[1]!.barValues).toEqual({ player: 11 });
   });
 
   it('the ticker lines are format.ts’s templates on the hand-rolled numbers', () => {

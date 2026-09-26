@@ -43,8 +43,10 @@ describe('formatEvent — anchored player-facing strings', () => {
   it('the tempo gauge, the per-blow HP and the failed escape read as the plan wrote them', () => {
     expect(formatEvent({ kind: 'tempo-extra-action', subject: 'player' })).toBe('You have a moment more — act again.');
     expect(formatEvent({ kind: 'tempo-extra-action', subject: 'enemy' })).toBe('The enemy moves again.');
-    expect(formatEvent({ kind: 'tempo-lost-turn', subject: 'player' })).toBe('You are too slow to act this round.');
-    expect(formatEvent({ kind: 'tempo-lost-turn', subject: 'enemy' })).toBe('The enemy is too slow to act.');
+    // The plan's "too slow" lines were reworded: `slow` is a condition id and ENGINE_TEXT_RULES
+    // forbid one loose in prose (AC-25's own requirement wins over its example strings).
+    expect(formatEvent({ kind: 'tempo-lost-turn', subject: 'player' })).toBe('You fall behind — you lose the turn.');
+    expect(formatEvent({ kind: 'tempo-lost-turn', subject: 'enemy' })).toBe('The enemy falls behind and loses the turn.');
     expect(formatEvent({ kind: 'escape-failed' })).toBe('Your escape fails.');
     expect(formatEvent({ kind: 'tempo-changed', subject: 'player', tenths: 4 })).toBe('Your tempo is +0.4.');
     expect(formatEvent({ kind: 'tempo-changed', subject: 'enemy', tenths: -3 })).toBe("The enemy's tempo is −0.3.");

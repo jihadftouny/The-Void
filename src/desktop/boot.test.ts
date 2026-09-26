@@ -391,8 +391,14 @@ describe('a real round plays on the stage while the Void speaks (PLAN.md #6)', (
     const expected = step(fight, { kind: 'battle-action', action: 'fight' });
     const beats = groupBeats(expected.events);
     const { entries } = await resume(fight);
-    // Every value the enemy's bar shows, from the moment the replay mounts its frame to the end.
+    // Every value the enemy's bar shows: the fight screen's frame as the player presses Fight,
+    // then every value the replay writes. PLAN.md #1.6: the player now strikes FIRST, so the
+    // enemy's bar moves at beat 0 — written in the same task that mounts the replay's frame, so
+    // a MutationObserver alone never sees that frame's opening value. What the player SAW before
+    // it is the frame already on screen, which is read here directly.
     const enemyBarTexts: string[] = [];
+    const onScreen = document.querySelector('#arena .frame-bar[data-bar="enemy"] .void-bar-text')?.textContent;
+    if (onScreen) enemyBarTexts.push(onScreen);
     new MutationObserver(() => {
       const text = document.querySelector('#arena .frame-bar[data-bar="enemy"] .void-bar-text')?.textContent;
       if (text && text !== enemyBarTexts.at(-1)) enemyBarTexts.push(text);

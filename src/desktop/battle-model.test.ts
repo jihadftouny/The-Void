@@ -260,11 +260,12 @@ describe('illusions are not revealed by the UI (AC-26, pure half)', () => {
   });
 
   it('a failed Wisdom roll: the only tell is the engine’s own line, and the bar does not move', () => {
-    // Draws, per illusion.test.ts: [Wisdom d20 = 5 → 5 + 0 < 13, fails] [enemy to-hit 18 → a
-    // hit for 1] [player to-hit 15 → 17 ≥ 10, a hit] [1d6 = 4 — which passes through].
+    // Draws, per illusion.test.ts, in the PLAN.md #1.6 order: [Wisdom d20 = 5 → 5 + 0 < 13,
+    // fails] [player to-hit 15 → 17 ≥ 10, a hit] [1d6 = 4 — which passes through] [enemy to-hit
+    // 18 → a hit for 1].
     const b = createBattle(hero(), foe({ illusory: true }), 2);
     const before = inBattle(b);
-    const r = resolveRound(b, 'fight', scripted([face(5, 20), face(18, 20), face(15, 20), face(4, 6)]));
+    const r = resolveRound(b, 'fight', scripted([face(5, 20), face(15, 20), face(4, 6), face(18, 20)]));
     const after = inBattle(r.state);
     const plan = roundPlan(before, after, r.events)!;
     const illusionLines = plan.beats.map((beat) => beat.line).filter((l) => /illusion|passes through|nothing is there/i.test(l));
@@ -290,8 +291,9 @@ describe('illusions are not revealed by the UI (AC-26, pure half)', () => {
 
 describe('the round plan: the bars are only ever engine values', () => {
   it('an ongoing round: before and after are the two states’ numbers (10 − 4, 12 − 1)', () => {
+    // PLAN.md #1.6: the player's d20 (15 → hit) and 1d6 (4) first, then the enemy's d20 (18 → hit, 1).
     const b = createBattle(hero(), foe(), 2);
-    const r = resolveRound(b, 'fight', scripted([face(18, 20), face(15, 20), face(4, 6)]));
+    const r = resolveRound(b, 'fight', scripted([face(15, 20), face(4, 6), face(18, 20)]));
     const plan = roundPlan(inBattle(b), inBattle(r.state), r.events)!;
     expect(plan.bars.enemy.before.value).toBe(10);
     expect(plan.bars.enemy.after.value).toBe(6);

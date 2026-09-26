@@ -454,6 +454,21 @@ describe('tallyStep — one step folded into the counters (expected counts read 
     expect(tallyStep(emptyPerFloor(), pre, post)[2]).toMatchObject({ rounds: 1, illusionRounds: 1, illusionHpLost: 6 });
   });
 
+  it('PLAN.md #1.6: the second input of a paused round is the same round; enemy double actions count', () => {
+    // A paused round (the player's extra action pending) answered: a step, but NOT a new round.
+    const paused = fightOn(0, 20, false);
+    if (paused.phase.kind !== 'battle') throw new Error('not a battle');
+    const pre = sr({ ...paused, phase: { ...paused.phase, battle: { ...paused.phase.battle, extraAction: true } } });
+    const post = sr(fightOn(0, 18, false), [
+      { kind: 'tempo-extra-action', subject: 'enemy' },
+      { kind: 'tempo-extra-action', subject: 'player' }, // the player's does not count here
+    ]);
+    const after = tallyStep(emptyPerFloor(), pre, post);
+    expect(after[1]).toMatchObject({ steps: 1, rounds: 0, enemyExtraActions: 1 });
+    // ...while an ordinary battle step starts one.
+    expect(tallyStep(emptyPerFloor(), sr(fightOn(0, 20, false)), sr(fightOn(0, 18, false)))[1]).toMatchObject({ rounds: 1, enemyExtraActions: 0 });
+  });
+
   it('HP lost is NET per round: a round that healed costs 0, and a real fight costs nothing', () => {
     const healed = tallyStep(emptyPerFloor(), sr(fightOn(1, 5, true)), sr(fightOn(1, 9, true)));
     expect(healed[2]).toMatchObject({ rounds: 1, illusionRounds: 1, illusionHpLost: 0 });

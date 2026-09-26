@@ -226,7 +226,9 @@ export function formatEvent(e: GameEvent): string {
     case 'tempo-extra-action':
       return e.subject === 'player' ? `You have a moment more — act again.` : `The enemy moves again.`;
     case 'tempo-lost-turn':
-      return e.subject === 'player' ? `You are too slow to act this round.` : `The enemy is too slow to act.`;
+      // Not "too slow" (the plan's wording): `slow` is a condition id, and the text-hygiene rules
+      // forbid a condition id loose in prose — the lost turn is the GAUGE, not the Slow condition.
+      return e.subject === 'player' ? `You fall behind — you lose the turn.` : `The enemy falls behind and loses the turn.`;
     case 'hp-changed':
       return e.subject === 'player'
         ? `You stand at ${hpText(e.hp, e.maxHp)}.`

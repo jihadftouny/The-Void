@@ -237,8 +237,9 @@ describe('the tempo gauge and the failed escape, as the narrator hears them (PLA
     const facts: [GameEvent, string][] = [
       [{ kind: 'tempo-extra-action', subject: 'player' }, 'You move again before it can answer.'],
       [{ kind: 'tempo-extra-action', subject: 'enemy' }, 'The enemy moves again.'],
-      [{ kind: 'tempo-lost-turn', subject: 'player' }, 'You are too slow; the moment passes.'],
-      [{ kind: 'tempo-lost-turn', subject: 'enemy' }, 'The enemy is too slow; the moment passes.'],
+      // Reworded from the plan's "too slow": `slow` is a condition id (ENGINE_TEXT_RULES).
+      [{ kind: 'tempo-lost-turn', subject: 'player' }, 'You fall behind; the moment passes.'],
+      [{ kind: 'tempo-lost-turn', subject: 'enemy' }, 'The enemy falls behind; the moment passes.'],
       [{ kind: 'escape-failed' }, 'Your escape fails.'],
     ];
     for (const [event, fact] of facts) {
