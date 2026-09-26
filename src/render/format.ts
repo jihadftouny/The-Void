@@ -144,7 +144,7 @@ export function formatEvent(e: GameEvent): string {
       return `Your ${e.resource} is now ${e.value}.`;
     case 'self-sacrifice':
       return e.ofMaxHp
-        ? `You sacrifice ${e.amount} of your max HP to the Void.`
+        ? `You spend ${e.amount} of your own lifeblood, and it does not come back.`
         : `You spend ${e.amount} HP as fuel.`;
     case 'lifesteal':
       return `You drain ${e.amount} HP.`;
@@ -154,7 +154,8 @@ export function formatEvent(e: GameEvent): string {
       // for subjects a few cases up; this is the noun half.)
       return `You detonate ${e.consumed} affliction${e.consumed === 1 ? '' : 's'} for ${e.bonusDamage} damage.`;
     case 'fled':
-      return `You escape into the Void.`;
+      // G72: WORLD.md §6 — the Void is a condition, not a place. Worded as narrate.ts's fact.
+      return `You break away into the dark.`;
     case 'escape-failed':
       return `Your escape fails — you take ${e.damage} damage.`;
     case 'escape-impossible':

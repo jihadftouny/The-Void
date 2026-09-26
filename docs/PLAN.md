@@ -416,7 +416,7 @@ printing raw enum identifiers (`On onHit: dealDamage`) on 41% of all loot (C9)~~
 1 bleed damage."` and buffs described as afflictions in the LIVE narration facts (C10)~~ ·
 ~~neither player-facing projector having a single test (C11)~~. **These are ENGINE text, not
 authored prose, which is why they left #13 ahead of the author's block.** What remains here is the
-author's: the two reserved words used casually in shipped strings (**C1**, and now **G72** — the combat log's *“escape into the Void”* / *“sacrifice … to the Void”*, found by `text-hygiene`) · the class picker giving away the
+author's: the two reserved words used casually in shipped strings (**C1**; ~~**G72** — the combat log's *“escape into the Void”* / *“sacrifice … to the Void”*, found by `text-hygiene`~~ — FIXED 2026-09-26 by `round-order`, reworded to `narrate.ts`'s lines) · the class picker giving away the
 concealed fact · the intro sending you to the wrong place · **the line that makes the floor-4 angels
 a hallucination** · two different items both named "Clarity Draught" · and four smaller text defects
 (a typo, one string filling 43% of the insanity table, and "The Husk Husk" as a reachable generated
@@ -436,7 +436,7 @@ icon obligation is gone, so item count is no longer an art-budget question; exac
 > renderer at run time: raw condition ids, condition labels loose in prose, effect ids, catalog ids,
 > camelCase/snake_case tokens, `“(s)”`, **a floor named by its ordinal**, **the Void treated as a
 > place** (`WORLD.md` §6) and **a reserved word used casually** (§0). Two of #13's own defects
-> (**G71a**, **G71b**) are closed by it; **G72** is newly visible because of it; and **C1** is now
+> (**G71a**, **G71b**) are closed by it; ~~**G72**~~ was made visible by it (and is now fixed — `round-order`, 2026-09-26); and **C1** is now
 > half-detectable (see its row — the unreachable empty-chest line needs a static prose scan, which
 > is one call to the same detector over `jsonLeaves` and the shipping literals).
 > **It also records what the model says.** Every narrated beat is appended to a capped, gitignored

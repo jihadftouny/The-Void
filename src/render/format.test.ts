@@ -33,6 +33,19 @@ describe('hpText', () => {
 });
 
 describe('formatEvent — anchored player-facing strings', () => {
+  // G72 (WORLD.md §6): the Void is a condition, never a place. The expected strings are the
+  // ones src/llm/narrate.ts already carries for the same two events — an independent file.
+  it('fled is worded as narrate.ts words it (G72)', () => {
+    expect(formatEvent({ kind: 'fled' })).toBe('You break away into the dark.');
+  });
+
+  it('a max-HP self-sacrifice is worded as narrate.ts words it; the fuel line is unchanged (G72)', () => {
+    expect(formatEvent({ kind: 'self-sacrifice', amount: 3, ofMaxHp: true })).toBe(
+      'You spend 3 of your own lifeblood, and it does not come back.',
+    );
+    expect(formatEvent({ kind: 'self-sacrifice', amount: 3, ofMaxHp: false })).toBe('You spend 3 HP as fuel.');
+  });
+
   it('victory carries the XP number (M7: no gold)', () => {
     const s = formatEvent({ kind: 'victory', xpGained: 12, loot: [] });
     expect(s).toContain('12');
