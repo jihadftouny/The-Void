@@ -63,9 +63,10 @@ whole point of putting a creature on screen.
 measurements, floors and exceptions are in §17 ("The third mode"). Three differences from the frame
 above, each deliberate: the prose stays on screen beneath the arena (§2 — the Void speaks while the
 round plays); the enemy shows its name, HP and conditions but **no family caption** (the family names
-are #13's to write, and an unreviewed name on the stage is the naming defect again); and the tempo row
-and **Talk** are reserved seams that render nothing until the engine has a tempo (#1.6) and bosses can
-talk (#11).
+are #13's to write, and an unreviewed name on the stage is the naming defect again); and **Talk** is a
+reserved seam that renders nothing until bosses can talk (#11). **The tempo row is LIVE since
+2026-09-26 (`round-order`, #1.6)** on both combatants in every battle, and its bars and gauge move at
+the beat that moved them (G63-2).
 
 ## 2. Narration placement and cadence **[DECIDED]**
 
@@ -724,10 +725,12 @@ the prose** there: the bottom row is `fit-content(40vh)`, so a long menu scrolls
 the prose. (It first shipped content-sized, and an open Cast list at 800x600 squeezed the prose
 column to its padding — 4 px of prose visible — while the narration's own box still measured its
 floor, because the floor is a min-height. The probe now measures the prose the player can SEE: the
-narration's box clipped by the column's.) **One measured limit** there: the reserved tempo gauge
-adds a row to the arena and to the stat box, which does not scroll, and at 800x600 with large text
-that leaves three lines of prose (~98 px), not four. Nothing renders the gauge today; the unit that
-turns it on (#1.6) decides its stacked form. The probe holds it at three.
+narration's box clipped by the column's.) **One measured limit** there: the tempo gauge adds a row
+to the arena and to the stat box, which does not scroll, and at 800x600 with large text that leaves
+three lines of prose (~98 px), not four. **Decided by #1.6 (`round-order`, 2026-09-26): the gauge
+stays in the stacked form** — it is a fighting number read every round — and the stacked fallback
+(unreachable in the shipped build, whose minimum is 960 wide) holds **three** prose lines at large
+text in every stage scenario. The probe holds it there.
 
 **Reversals — one thing to move, and its twin in the probe.**
 

@@ -345,6 +345,8 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 
 > **✅ ESTIMATED 2026-09-26 — the round-order and tempo-gauge unit is ~30 h** (plan: ~29 h, range 26–34, plus ~1–2 h for the author's per-family enemy speeds). Author rulings the same day: enemy speed = the Dexterity-driven gauge **plus** a per-family speed from data, capped; an extra action is a **freely chosen** second move; the gauge **resets every fight**. **Remaining is now ~93–103 h** — tempo (~30), #11 (~35–45), block 4 (16), block 5 (12) — against ~112 h of capacity (26 Sep → 31 Dec at 8 h/week). **Slack is ~9–19 h.** Read that with the caveat above: agent hours are not the author's hours.
 
+> **✅ BUILT 2026-09-26 — the round-order and tempo-gauge unit (`round-order`, #1.6), awaiting review and merge.** By the build's own reckoning about **31 h** of agent time against the ~30 h estimate (the stop at the winnability gate and the second-round cap ruling added ~1 h; not a measured figure). The cap is the author's ±0.3; the measured overall win rate is 29.8% (was 30.6%). One new author question, **G78** — the cap also clips a fast player's speed — does not block the merge.
+
 > **✅ DECIDED 2026-09-26 — full boss agents.** The author chose the full #11 (bosses that pick their own moves, remember your run, and can be talked to, plus the floor-4 executioner) over the cheaper talk field. The fallback below stays recorded, but it is no longer the plan — only an overrun would bring it back, and only by the author's hand.
 
 ### What gives first if it runs over

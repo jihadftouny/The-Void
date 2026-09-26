@@ -254,7 +254,9 @@ reads said "twenty-four … G11–G34" while the cells held 31 distinct ids. Fou
    (`healthy/sick` → `Hardy/Frail` etc.), **and §22.3 separately renames `insanity`** so the
    psychosis theme stays unpointable. **A builder doing only §14.4 leaves `insanity` shipping.**
    The skill **"Maddening Gaze"** and the **"Clarity Draught"** follow the same ruling (→ #13).
-6. **Redefine Quick/Slow** as the **tempo gauge** (§16.1) — `initiativeOrderTwist` is a dead no-op.
+6. ~~**Redefine Quick/Slow** as the **tempo gauge** (§16.1) — `initiativeOrderTwist` is a dead no-op.~~
+   **✅ BUILT 2026-09-26 by `round-order` (#1.6, G62)** — Quick/Slow are the ±0.3 of the tempo rate,
+   and the dead no-op is deleted. See the #1.6 row under "Newer work items".
 7. **Rework the level-up draft** (§19.5) — remove `stat` from `draft.ts` `CATEGORY_WEIGHTS`, add the
    **per-level stat allowance**, and add a **level cap of 20** (none exists in `src/` today).
 8. ~~Decide~~ **✅ DECIDED (§22.18): `node` default, per-file `jsdom` opt-in.** The suite stays in
@@ -386,6 +388,11 @@ The other three can be wired independently.
 exist), and **no boss is an agent**, which was M12's entire premise. **Also #11's (moved from #6 on
 2026-09-12, FINDINGS B18):** the **free-text input for talking to bosses** (§20) — the battle menu
 already reserves the room for a Talk row and its input (`UI-DESIGN.md` §17, "The third mode").
+**✅ Confirmed 2026-09-26 — #11 builds on the FINAL round rules** (`round-order`, #1.6): the enemy's turn
+is one exported function, `resolveEnemyTurn` in `battle.ts`, which runs the tick, the gauge and then
+one call per granted action; a boss agent's choice replaces the random skill pick inside
+`resolveEnemyAttack`, and a boss with an extra action is asked twice. Do not run #11 in parallel with
+any unit touching `battle.ts`, `game.ts`, `boss.ts` or the event tables.
 
 **#12 narrator to spec (reduced M11)** — grammar-constrained choices, the tool registry and
 free-text mapping are **dropped**. What remains: the persona rewrite (the narrator *is* the
@@ -544,6 +551,7 @@ banner.)*
 
 | # | Item |
 |---|---|
+| **#1.6** | **Sequential rounds + the §16.1 tempo gauge** (`round-order`, built 2026-09-26, awaiting merge). Covers **G62 G63(1–3) G65 G72**, and raised **G78** (the ±0.3 cap clips the player's fast rates — an author question, not blocking). You act, then it acts; a killing blow ends the round; the gauge grants a freely chosen extra action or costs a turn, capped at ±0.3 (author), with each enemy family's data speed on top; resets every fight. `resolveEnemyTurn` is #11's seam. Balance re-measured, nothing retuned: 30.6% → 29.8% |
 | **#15** | The audio layer — effects, ambient beds, and the thinning score (Lyria is on the same key) |
 | **#16** | Bundle **JetBrains Mono**, re-check the type scale against a real face |
 | **#17** | Ship assets — app icon, title art, store art, cursors |
