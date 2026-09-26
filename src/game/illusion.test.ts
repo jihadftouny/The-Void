@@ -227,6 +227,26 @@ describe('AC-11 — against an illusion, nothing the player does lands, and its 
     );
   });
 
+  it('PLAN.md #1.6: the extra action does NOT re-roll the Wisdom check — one roll per ROUND', () => {
+    // A DEX-18 hero (rate +4, the player's is uncapped) at gauge 6: 6 + 4 = 10 -> the round
+    // pauses for a second action. First step, draws in order: [Wisdom d20 = 5 -> 5 + 0 < 13,
+    // fails] [to-hit 15 -> 17 >= 10, a hit] [1d6 = 4, passing through]. No enemy draw: paused.
+    const h = { ...hero(10, { hp: 12, maxHp: 12 }), stats: { ...stats(10), DEX: 18 } };
+    const b: BattleState = { ...fight(h, foe({ illusory: true })), tempo: { player: 6, enemy: 0 } };
+    const first = resolveRound(b, 'fight', scripted([face(5, 20), face(15, 20), face(4, 6)]));
+    expect(first.state.extraAction).toBe(true);
+    // Second step. Were the Wisdom check rolled again, the FIRST draw (15) would be it — 15 >= 13
+    // would dispel the illusion. Instead it is the to-hit: [15 -> hit] [1d6 = 4] then the enemy's
+    // turn [d20 = 18 -> a hit for 1]. Exactly three draws, and the fight goes on.
+    const rng = scripted([face(15, 20), face(4, 6), face(18, 20)]);
+    const second = resolveRound(first.state, 'fight', rng);
+    expect(rng.used()).toBe(3);
+    expect(second.status).toBe('ongoing');
+    expect(second.events.some((e) => e.kind === 'illusion-dispelled')).toBe(false);
+    expect(second.events.map((e) => e.kind)).toContain('illusion-struck');
+    expect(second.state.enemy.hp).toBe(10);
+  });
+
   it('the Hollow’s lifesteal draws nothing from a wound that is not there', () => {
     // Siphon would heal floor(3 * 0.5) = 1 against a real target (floors.test.ts); here, 0.
     const p = { ...createPlayer({ name: 'H', classId: 'Hollow', stats: stats(10) }), hp: 5, maxHp: 12, skillCharges: 5, skillPool: ['siphon'] };
