@@ -60,12 +60,24 @@ per-class refinement also remains (Scavver strong / ranged classes weak — play
 **The karma pillar has its first real EFFECT** — the floor-4 gate routes grace (ascension, ends at
 act 4) vs cast-down (→ Hollow-Self → damnation) by your hidden Nature.
 
-**Next up: `#0 critical-engine-bugs`** (`PLAN.md` #0) — **not** the engine foundations. #0 now
+> **▶ WHERE THINGS STAND — 2026-09-26.** *(This block replaces the stale "Next up: #0" paragraph
+> below, which described 2026-08-28 and was never updated as the work moved on. The dated Session
+> log is the accurate history.)* Everything built so far is merged to `main` and pushed. **Done
+> since #0:** items reachable and both endings earned (#9, #10a), the look and typeface (#8, #16),
+> floor mechanics, bargains and rest spots (#2), the battle screen (#6), four floor-look repairs,
+> the art tool (#3, spends nothing yet), and two text clean-ups (`machine-text`, `text-hygiene`).
+> **Next, in order:** (1) the round-order and tempo-gauge unit (`FINDINGS.md` G62) — not yet
+> estimated, and #11 waits on it; (2) **#11 full boss agents** (the author chose the full version
+> 2026-09-26, not the cheaper talk field); (3) block 4, the author's own prose, in parallel;
+> (4) art: style probes, then a transparency method (G73) and the image shapes (G70), then the
+> batch — **the spend was approved 2026-09-26** (`SHIP-SCOPE.md` §5.2).
+
+~~**Next up: `#0 critical-engine-bugs`** (`PLAN.md` #0) — **not** the engine foundations. #0 now
 precedes #1, because #1's equip-as-input and slot-migration changes both build on the equip
 resolution path that G11 shows is broken. Then everything else. Two full project audits
 (`docs/SCOPE-AUDIT.md`, `docs/SCOPE-AUDIT-2.md`) and **22** scope-interview rounds have since
 reshaped the plan. **The live list of what is open is `docs/FINDINGS.md`; the live work plan is
-`docs/PLAN.md`.**
+`docs/PLAN.md`.**~~
 
 **Now decided and written down** (31 items + the **twelve 2026-08-31 validation decisions**,
 `GAME-DESIGN.md` §22 — endings second-person, `insanity` renamed, no cross-run narration, karma
@@ -117,7 +129,7 @@ no warning. **G1's fix landed with G19 and G3's is decided — only G2 still nee
 | M8 — Enemies: families, affixes, karma-weighting | 🔶 **merged, but fails its own "done when"** (691 tests). Shipped: 24 families + 5 affixes + spare action + family-themed kits. **But `ROADMAP.md` requires karma-weighted families to "shift Nature *axes*" — all nine ⚖ families declare the same pair and only `mercyCruelty` ever moves.** `enemyFamily.ts:17` says so itself: *"uniformly set to the mercy↔cruelty pair now. M10 differentiates the axes."* One axis, not axes (`FINDINGS.md` G15) |
 | M9 — In-run progression (frequent level-up picks) | 🔶 **merged, then partly reversed by design** (726 tests). Shipped: XP-frequent leveling + draft-1-of-3 + lean start + auto-HP. **But §19.5 removed `stat` from the draft** (per-level allowance instead) **and set a level cap of 20** — neither is in `src/` yet |
 | M-UI — Functional UI (surfaces the whole engine, hand-testable) | ✅ **merged to `main`** (753 tests); plain/utilitarian — the turn-based battle screen is the NEXT unit |
-| M-UI2 — Visual restyle (5 units) | 🔶 **units 1 and 2 of 5 merged to `main`; #6 BUILT 2026-09-12 on `agentic/battle-screen`, awaiting verification and merge** (2688 tests, after fix round 1): the fight as a framed stage, the round replayed beat by beat, a sound hook per beat, `game.ts` behind `boot()` (G51), the Cast list fitting the minimum window. **Unit 2 = `visual-identity` (#8 + #16), merged 2026-09-08** (2149 tests): JetBrains Mono bundled with its OFL text, five per-floor palettes with textures and machine-gated contrast, settings screen, content warning, always-on floor tag, and three reserved-but-empty art regions. **Remaining: #6 battle screen (built, unmerged) and #7 canvas (out of v1).** Unit 1 (`ui-foundation`) merged earlier (1026 tests): design tokens, shared components, second front-end retired, combat events widened. **Units 2–5 are `PLAN.md` #6–#8.** *(Added 2026-08-28 — this had no tracker row at all despite being merged, so a five-unit restyle with 273 tests behind it was invisible to the milestone table.)* |
+| M-UI2 — Visual restyle (5 units) | 🔶 **units 1, 2 and #6 merged to `main`** — **#6 MERGED 2026-09-12** (2688 tests, after fix round 1): the fight as a framed stage, the round replayed beat by beat, a sound hook per beat, `game.ts` behind `boot()` (G51), the Cast list fitting the minimum window. **Unit 2 = `visual-identity` (#8 + #16), merged 2026-09-08** (2149 tests): JetBrains Mono bundled with its OFL text, five per-floor palettes with textures and machine-gated contrast, settings screen, content warning, always-on floor tag, and three reserved-but-empty art regions. **Remaining: #7 canvas only (out of v1).** ~~#6 battle screen (built, unmerged)~~ — merged 2026-09-12. Unit 1 (`ui-foundation`) merged earlier (1026 tests): design tokens, shared components, second front-end retired, combat events widened. **Units 2–5 are `PLAN.md` #6–#8.** *(Added 2026-08-28 — this had no tracker row at all despite being merged, so a five-unit restyle with 273 tests behind it was invisible to the milestone table.)* |
 | M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ needs your PROSE |
 | M11 — LLM layer to spec (**narrate ONLY** — floor voices, beat significance, karma-in-prompt, boss agents, boss talk) | ⬜ **shrank 2026-08-25** — grammar-constrained choices + the tool registry are DROPPED; the engine writes the choices |
 | M12 — Bosses: five unique encounters as agents | 🔶 **4 of 5** merged (894 tests) — `boss.ts` has **four** combat bosses; the **floor-4 executioner fight does not exist** (`PLAN.md` #11). Karma verdict gate + two endings done. **No boss is an agent yet.** Boss prose still yours |

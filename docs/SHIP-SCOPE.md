@@ -103,7 +103,7 @@ Each of these stays fully specified in `ROADMAP.md`/`PLAN.md`. Cut means *not in
 | Cut | `PLAN.md` | Back in | Why it can wait |
 |---|---|---|---|
 | **Floor-specific mechanics + balance re-run** | #2 | **v1.2** | Ships with a **sanity check**, not a simulated re-tune. `BALANCE-REPORT.md` stays invalidated and says so |
-| **All generated art** | ~~#3~~ #4 #5 | **v2.0** | **Forbidden by plan rule 2 until ~Apr 2028** — see §5.2. Not an effort question; a money one |
+| ~~**All generated art**~~ **→ IN v1 (2026-09-26, §5.2)** | ~~#3~~ #4 #5 | ~~**v2.0**~~ **v1** | ~~Forbidden by plan rule 2 until ~Apr 2028~~ — the author overruled rule 2 for the art on 2026-09-26; it waits on style probes and a transparency method, not on money |
 | **Battle-screen redesign** | #6 | **v1.3** | The current screen is functional. A restyle is not a shipping blocker |
 | **The Kaplay canvas/atmosphere layer** | #7 | **v2.0** | Kaplay is a dependency nothing imports; it stays that way. Wants the art to sit on top of |
 | **Screens restyle** | #8 | **v1.3** | Typography and CSS only, so it is affordable — just not essential |
@@ -135,7 +135,14 @@ Plan v3 rule 2 says *"web/itch distribution"*, and `b1` asks devlog #1 to explai
 
 > **⚠ REOPENED 2026-09-21 — the author has chosen a no-placeholder first playable, and asked for the images to be sequenced in.** The costing was redone from the bible's own locked figures: **~$13.67 one-off** — $10.05 for the 50-asset batch (150 images at $0.067 batched), $1.21 for a 9-image style probe, ~$0.40 of technical re-runs against a 1-in-3 white-background fault, and ~$2.01 allowed for rejecting and re-rolling a fifth of the assets. **Everything else remains $0**: the model is Apache-2.0 and player-downloaded, the typeface is bundled under its open licence, itch is free, audio is CC0-only and cut, item icons are cancelled, and the interface is typographic by design. *(Unbudgeted and optional: a Windows code-signing certificate, a few hundred dollars a year, without which the installer shows a SmartScreen warning. The plan ships unsigned.)*
 >
-> **This still contradicts Plan v3 rule 2 ($0 game spending until ~Apr 2028), and the rule is the author's to overrule — not mine.** The $0 alternative, which also satisfies *“no placeholders”*, is to **delete the three reserved art regions for v1** and ship text-only. **Undecided as of 2026-09-21.**
+> **This still contradicts Plan v3 rule 2 ($0 game spending until ~Apr 2028), and the rule is the author's to overrule — not mine.** The $0 alternative, which also satisfies *“no placeholders”*, is to **delete the three reserved art regions for v1** and ship text-only. ~~**Undecided as of 2026-09-21.**~~
+>
+> **✅ DECIDED 2026-09-26 — the author overrules rule 2 for the art: v1 ships WITH generated art. Text-only is rejected.** Two conditions come first, in this order, and no batch runs before both are met:
+>
+> 1. **A few style probes, until the style is well defined** — not the single $1.21 probe this section budgeted. The probe count is the author's call as they go; each probe is ~$1.21, so the ~$13.67 total grows by roughly that much per extra probe.
+> 2. **A proper background-transparency method.** The chosen image model cannot output transparency, and the keying the tool ships today (`ART-BIBLE.md` §1c, alpha from `max(r,g,b)` over a black background) also thins every dark pixel *inside* a figure — in a game this dark, that is most of them. **Open for design — `FINDINGS.md` G73.**
+>
+> **Still open, to be discussed with the author: the image shapes (`FINDINGS.md` G70).** It must be settled before the first batch, since it decides 43 of the 50 assets. **The Plan v3 board carries the rule-2 exception.**
 >
 > **What has already landed at $0:** `PLAN.md` **#3, the tooling**, merged 2026-09-21 — it generates nothing, spends nothing, and ships all 52 prompts empty. **The batches (#4, #5) remain out of v1** until the author rules on the spend. The sequence, if they do: pipeline (done, $0) → **probe 04, $1.21, the real decision point** → the authored pass in parallel → four gated batches, $10.05 → a wiring unit that hides any region whose image is missing, so late art can never block the date.
 
@@ -223,7 +230,7 @@ The ordering principle is not "what would be nicest next". It is: **what raises 
 
 **The first release that is allowed to cost anything.** Milestone `f5` (on the Plan v3 board) is what unlocks it, per plan rule 2 — so this release cannot be pulled forward by working harder.
 
-- **#3 #4 #5** — the art pipeline and the four generation batches (~$10.05, the first spendable moment in the whole plan).
+- ~~**#3 #4 #5** — the art pipeline and the four generation batches~~ **moved into v1 on 2026-09-26 (§5.2).**
 - **#7** — the Kaplay canvas atmosphere layer. Kaplay finally gets imported, four years after being added as a dependency.
 - **#17** — title, store and cursor art (the icon already shipped in v1).
 - **#11** — the floor-4 executioner and the boss agents that were M12's original premise.
@@ -335,6 +342,8 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 > **✅ #6 MERGED 2026-09-12** (~12 h, one fix round). **Done: ~98 h. Remaining: ~63–73 h** — #11 (~35–45 h), block 4 (16 h), block 5 (12 h) — **plus the round-order and tempo-gauge unit, still unestimated.** Against ~126 h of capacity that is roughly 55–60 h of slack before that unit.
 >
 **It still fits. But the margin is now thin enough that one unit going badly would consume it**, where before it would not have. Two things make that real rather than theoretical: this session has already seen two agent stalls and one pipeline escape, and #11 is the least-understood unit in the plan — nobody has yet built a boss that selects its own actions.
+
+> **✅ DECIDED 2026-09-26 — full boss agents.** The author chose the full #11 (bosses that pick their own moves, remember your run, and can be talked to, plus the floor-4 executioner) over the cheaper talk field. The fallback below stays recorded, but it is no longer the plan — only an overrun would bring it back, and only by the author's hand.
 
 ### What gives first if it runs over
 
