@@ -20,14 +20,14 @@ Format per entry:
 ---
 
 ## 2026-09-26 — round-order (sequential rounds + the tempo gauge; G62, G72, G78) [branch `agentic/round-order`, **unmerged**]
-- Verdict: **PASS, PASS** (initial + after fix round 1). 3362 → **3431 tests** (4 skipped). 15 commits; one deliberately red (`9f068fc`, at the winnability gate), every other green. Merge dry-run against `main` 57a60bf: clean.
-- Fix rounds: **1** — not a test FAIL: the author's G78 ruling (cap enemies only) plus tester notes N1–N5, carried in one round.
+- Verdict: **PASS, PASS, PASS** (initial, after fix round 1, after fix round 2). 3362 → **3432 tests** (4 skipped). 17 commits; one deliberately red (`9f068fc`, at the winnability gate), every other green. Merge dry-run against `main` 57a60bf: clean.
+- Fix rounds: **2**, neither from a test FAIL: (1) the author's G78 ruling (cap enemies only) plus tester notes N1–N5; (2) at the author's request before merge, tester notes N8–N10 (a behaviour test pinning the player's slow side uncapped, broken deliberately to prove it; two comment corrections).
 - Plan open-questions: 3 (enemy tempo rate, what an extra action is, gauge carry-over) → author: DEX gauge **plus** per-family speed; a freely chosen second move; reset each fight. **Then two more rounds mid-build**: the winnability gate tripped at 0.182 under the ±0.7 cap → author chose ±0.3; then the cap turned out to clip the PLAYER too (G78) → author chose enemies-only. Final: 29.5% overall (was 30.6%), class spread 39.6 → 31.8 points.
 - Build-agent deviations: all disclosed and reasoned — lost-turn wording avoids `slow` (a condition id; the text rules reject it); the plan's DEX18+Quick list was one round short; new `extraActionAdvDis` field; test-only knobs `familySpeed`/`enemyTempo`/`tempoRateCapTenths` (tester proved unreachable from the renderer); `scripts/layout-probe.mjs` gained a strike pass; step 8 folded into the cap commit to keep every commit green.
 - Test failures before fixes: none (both verdicts PASS). Tester's 34 + 11 deliberate breaks; 120 real games, 46,266 save/load round-trips (586 mid-extra-action), 9,674 fight openings, zero rule violations.
 - Stopped correctly at a pre-armed gate: the build refused to retune classes when `balance.test.ts` went red and returned measured options instead — the plan's gate did exactly its job.
 - **Orchestrator error, recorded:** the player-side effect of the cap (G78) was foreseeable when the cap was offered and was asked in a second round, costing one rebuild/re-measure cycle (~20 min). **Doctrine changed the same day** (`57a60bf`): plan-agent must measure balance-guarded numbers before building and fold each answer's follow-ups into the same question; SKILL.md §3.1 requires the orchestrator to do the same.
-- Open, non-blocking: tester N8 (no behaviour test pins the player's slow side uncapped — only snapshots catch it), N9/N10 (two comments slightly wrong). Pre-existing, out of scope: a Smoke Vial ends a fight with no `fled` event.
+- Open, non-blocking: tester **N11** — `src/game/tempo.ts:41-42` says a rate of 10+ could act three times a round; it takes 11+ (DEX 32+). Comment only, predates round 2; left because the unit is at its 2-fix-round cap. Pre-existing, out of scope: a Smoke Vial ends a fight with no `fled` event.
 - Manual engineer fixes: none yet.
 
 ## 2026-09-21 — text-hygiene (G71 closed, G72 opened, C1 widened) [branch `agentic/text-hygiene`, **merged to `main` 2026-09-21**]
