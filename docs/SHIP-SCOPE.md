@@ -357,7 +357,7 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 > - the Kingpin's crew on the **model's rhythm** instead of a timer;
 > - the Sin's **"grieve"** move (new mechanic), and a **fifth Sin identity, The Grief** (+1 card, **+1 sprite ≈ $0.20**);
 > - the **executioner** fight (already in #11), now with **deeds as blows** and **a loss that is a fall, not a death**;
-> - the Hollow Self's **acknowledgement** as the only real win → **grace reached late** (engine route + an **"acknowledged" grace prose variant — author's words, block 4**) and **a new feat** (reward to design);
+> - the Hollow Self's **acknowledgement** as the only real win → **grace reached late** (engine route + an **"acknowledged" grace prose variant — author's words, block 4**); ~~a new feat~~ *(dropped the same day — the ending is the reward)*;
 > - persona cards for **9 voices** (Kingpin, Reflection, five Sins, Warden/executioner, Hollow Self) — drafted by the pipeline, rewritten by the author.
 >
 > The 35–45 h estimate predates all of these; expect it to rise. **The plan must return a new figure before building starts.**
