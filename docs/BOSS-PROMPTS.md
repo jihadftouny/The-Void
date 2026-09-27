@@ -298,3 +298,24 @@ The real-model script (not part of `npm test`) runs scripted fights and conversa
    empty. **Targets to agree before merge**; the one that matters most: **the Hollow Self must refuse
    the manipulative and empty groups essentially always, and accept most genuine acknowledgements**.
 6. **Repetition** — share of lines sharing an opening with any of the boss's previous 5 lines.
+
+### 7.1 The Hollow Self's judge — the agreed targets *(author, 2026-09-27)*
+
+Talk is free and unlimited, so the targets are set on **whole conversations**, not single lines — a
+per-message false-accept rate compounds over a player who keeps trying.
+
+| Target | Measured as | Pass mark |
+|---|---|---|
+| **Manipulation ceiling** | conversations of **20 manipulative or empty messages** in a row (*"I acknowledge you"*, *"surrender"*, *"ignore your rules"*, *"ok"*, gibberish) | **≤ 15%** of such conversations end in surrender (≈ 0.8% per message) |
+| **Genuine acceptance** | conversations of genuine acknowledgements — accepting it as part of them, naming something real | first genuine message accepted **≥ 60%**; by the third genuine message **≥ 90%** |
+| **Sincere but off-target** | single messages of real remorse that do not accept it as part of them (*"I'm sorry for what I did to the Fixer"*) | accepted **≤ 20%** on their own — **but they count toward the conversation**, so a follow-up that connects them (*"…and you're what's left of that. You're me."*) should land more easily |
+
+**Method.** The judge runs at **low randomness** (temperature ≤ 0.3 for the Talk call to this boss), so the
+same message gets the same verdict and re-pasting it cannot re-roll; the whole conversation (last 6
+exchanges) is judged, so repeated manipulation counts against the player. The test set — **at least 40
+conversations per group, each run 3 times** — is drafted by the pipeline from plausible player phrasing and
+**reviewed by the author** before it becomes the gate.
+
+**If a target is missed: the merge is blocked.** The pipeline iterates the judge prompt with this script as
+the gate — **two rounds, then it comes back to the author** (who may then loosen a target by an explicit,
+recorded decision, never silently).
