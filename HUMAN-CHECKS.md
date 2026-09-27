@@ -27,9 +27,22 @@
 >       From floor 2 down,
 >       some enemy turns are two blows (*“The enemy moves again.”* between them) and your HP bar
 >       drops twice. *Fail if* it reads as the same hit logged twice.
-> - [ ] **5. Does a FAST character feel fast?** *(Amended 2026-09-27: your gauge is now capped at ±0.4 — you ruled — so DEX 18 + Quick fills +0.4 a round, the same as plain DEX 18. The text below describes the uncapped version.)* Your gauge was never capped (G78): a
->       DEX-18 character under Quick fills +0.7 a round and acts twice almost every other round.
->       *Fail if* that feels like a different, easier game rather than a reward for Dexterity.
+> - [ ] **5. Does a FAST character feel rewarded, not overpowered?** Your gauge is capped at
+>       **±0.4** (you ruled, 2026-09-27): a DEX-18 character fills +0.4 a round and gets an extra
+>       action on rounds 3, 5, 8, 10 — roughly every other-and-a-half round. Quick no longer stacks
+>       past DEX 16. Play a Scavver (the Dexterity class) for a few fights.
+>       *Fail if* it feels like a different, easier game rather than a reward for Dexterity — or,
+>       the other way, if Dexterity above 16 feels like it does nothing.
+> - [ ] **6. Is it confusing that the ENEMY's gauge moves when YOUR blow lands?** (Tester note
+>       N6, 2026-09-26.) In any floor-1 fight, watch the enemy's tempo row under its HP bar during
+>       a round where you strike: it can tick at the moment your blow lands, before the enemy
+>       acts. *Fail if* that reads as a bug or makes the gauge harder to follow.
+> - [ ] **7. Approve the lost-turn wording** — your words to change. The plan's *"too slow"* was
+>       replaced because `slow` is a condition name and the text rules forbid it in prose (G62).
+>       Combat log: *"You fall behind — you lose the turn."* / *"The enemy falls behind and loses
+>       the turn."* Narrator facts: *"You fall behind; the moment passes."* / *"The enemy falls
+>       behind; the moment passes."* *Fail if* you want different words (they live in
+>       `src/render/format.ts` and `src/llm/narrate.ts`).
 
 > ## 📓 From `text-hygiene` (2026-09-21) — the game now keeps a record of what the model says
 >
