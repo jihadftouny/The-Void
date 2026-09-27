@@ -25,6 +25,7 @@ disagree. Keep this index current: a document not listed here will be missed by 
 | 14 | **[SHIPPING.md](SHIPPING.md)** | *How it ships.* Licence and third-party notices, free-on-itch release, no telemetry, the store page, first-run flow, and the playtest brief | packaging, release, or writing anything public-facing |
 | 15 | **[CONTENT-WARNING.md](CONTENT-WARNING.md)** | *The warning, and where it appears.* Shown at the start of **every** fresh run, plus the store page and README. **The words are the author's to write** | building the first-run flow or the store page |
 | 16 | **[N1-SPIKE.md](N1-SPIKE.md)** | *Local-LLM viability.* Measured numbers from the 2026-08-02 hardware spike | packaging or model-tier work |
+| 17 | **[BOSS-PROMPTS.md](BOSS-PROMPTS.md)** | *What each boss is told, and what it may answer.* The persona cards, shared rules, call shapes and fallbacks for the boss agents (#11). **Wording is a draft for the author**; `WORLD.md` wins on fiction, `GAME-DESIGN.md` §22.31 on what a boss can do | writing or changing any boss prompt, persona or Talk rule |
 
 **Stale, kept for history — do NOT build from these:**
 
