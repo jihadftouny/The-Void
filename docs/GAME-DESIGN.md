@@ -996,6 +996,23 @@ rate per round = DEXmod × 0.1     (+0.3 while Quick,  −0.3 while Slow)
 The 0.1-per-DEX-modifier rate is a **starting proposal, not a tuned number** — it must be measured in
 the balance pass, and the base is deliberately zero so an average character sees no change at all.
 
+**As tuned and shipped — the author's rulings, 2026-09-26 → 27** (`round-order`, `player-tempo-cap`;
+`FINDINGS.md` G62, G77, G78). The table above is the **formula**; these are the **limits** on it:
+
+- **Rates are capped.** The **player's** rate never exceeds **±0.4**; an **enemy's** never exceeds
+  **±0.3**. So DEX 18 plays its full +0.4, but **18 + Quick plays +0.4, not +0.7**, and DEX 6 + Slow
+  plays −0.4, not −0.5 — Quick and Slow matter most below DEX 16 and above DEX 8.
+  *Why the enemy cap:* enemy stats inflate with the player's XP (an inherited formula, G77), so from
+  floor 3 on the literal rate gave enemies an extra action nearly every round and the winnability
+  anchor failed (0.182 against a 0.20 floor at ±0.7). *Why the player cap:* the author's call on
+  2026-09-27, after the enemy-only ruling had left the player uncapped.
+- **An enemy's rate is its DEX rate plus its family's speed** (`speedTenths` in
+  `src/data/enemyFamilies.json`, from +2 quick to −2 slow), before the cap. Below floor 2 the
+  inflated DEX usually saturates the cap, so family speed shows mostly on floors 1–2 until G77 is fixed.
+- **An extra action is a second move you choose** — the round pauses for it; an enemy's is two attacks.
+- **The gauge resets to zero at the start of every fight.**
+- Measured (2,500 runs): overall win rate 30.6% before the gauge → **29.4%** with both caps.
+
 ### 16.2 Equipping is hub-only **[DECIDED 2026-08-26]**
 
 Equip and unequip are legal **only in the hub**, between encounters — never mid-battle.

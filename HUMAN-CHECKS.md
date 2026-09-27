@@ -27,7 +27,7 @@
 >       From floor 2 down,
 >       some enemy turns are two blows (*“The enemy moves again.”* between them) and your HP bar
 >       drops twice. *Fail if* it reads as the same hit logged twice.
-> - [ ] **5. Does a FAST character feel fast?** Your gauge is never capped (you ruled, G78): a
+> - [ ] **5. Does a FAST character feel fast?** *(Amended 2026-09-27: your gauge is now capped at ±0.4 — you ruled — so DEX 18 + Quick fills +0.4 a round, the same as plain DEX 18. The text below describes the uncapped version.)* Your gauge was never capped (G78): a
 >       DEX-18 character under Quick fills +0.7 a round and acts twice almost every other round.
 >       *Fail if* that feels like a different, easier game rather than a reward for Dexterity.
 
