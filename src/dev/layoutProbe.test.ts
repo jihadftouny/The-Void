@@ -372,6 +372,8 @@ interface ProbeResult {
   paint: (Report & { paint: Paint })[];
   /** `floor-looks`: the timed floor-1 -> floor-2 re-theme, three ways. */
   fade: FadeRun[];
+  /** G65: the strike classes' computed animation, per player motion setting and ground. */
+  strike: { motion: string; place: number; ground: string; flash: string; shake: string }[];
   phaseC: { steps: WalkStep[]; fontLoaded: boolean; fontCount: number; logs: LogEntry[] };
   minWindow: {
     options: Record<string, unknown>;
@@ -1646,12 +1648,15 @@ describe('the battle is a framed stage', () => {
     }
   });
 
-  it("the reserved tempo row fits the frame, and nothing renders it while there is no tempo (#1.6)", () => {
+  it('the tempo gauge renders on both combatants in EVERY battle state, and fits the frame (#1.6, AC-24)', () => {
+    let measured = 0;
     for (const r of everyReport()) {
       if (EXPECTED[r.scenario]!.mode !== 'stage') continue;
       const where = `${r.viewport.width}x${r.viewport.height} ${r.scenario}/${r.scale}`;
-      expect(r.tempoRows, `${where}: the tempo rows rendered`).toBe(r.scenario === 'battle-tempo' ? 2 : 0);
+      expect(r.tempoRows, `${where}: the tempo rows rendered`).toBe(2);
+      measured += 1;
     }
+    expect(measured, 'no stage scenario was measured').toBeGreaterThan(0);
     // The fit itself is the strict standard: `battle-tempo` is in ALL_VISIBLE, and the prose
     // floor above runs over every stage scenario including it.
   });
@@ -1699,14 +1704,15 @@ describe('the battle is a framed stage', () => {
   }
 
   /**
-   * ONE MEASURED LIMIT, recorded rather than smoothed over (UI-DESIGN §17). The reserved tempo
-   * gauge (#1.6) adds a row to the arena AND to the stat box, and the stat box does not scroll;
-   * at 800x600 with LARGE text the fixed parts then leave ~98px — three lines, not four. The
-   * state is not rendered by anything today (no engine tempo yet) and the fallback is
-   * unreachable in the shipped build; the unit that turns the gauge on decides its stacked
-   * form. Held to three lines so it cannot quietly get worse.
+   * ONE MEASURED LIMIT, recorded rather than smoothed over (UI-DESIGN §17). The tempo gauge adds
+   * a row to the arena AND to the stat box, and the stat box does not scroll; at 800x600 with
+   * LARGE text the fixed parts then leave ~98px — three lines, not four. PLAN.md #1.6 turned the
+   * gauge on in every battle, and DECIDED the stacked form: the gauge stays (it is a fighting
+   * number the player reads every round), and the stacked fallback — unreachable in the shipped
+   * build, whose window minimum is 960 wide — holds THREE prose lines at large text in every
+   * stage scenario. Held there so it cannot quietly get worse.
    */
-  const STACKED_THREE_LINES: ReadonlySet<string> = new Set(['battle-tempo/large']);
+  const STACKED_THREE_LINES: ReadonlySet<string> = new Set(STAGE_SCENARIOS.map((s) => `${s}/large`));
 
   it('below the breakpoint NO battle state hides the prose: the floor is visible, not merely laid out', () => {
     const hidden: string[] = [];
@@ -1731,6 +1737,38 @@ describe('the battle is a framed stage', () => {
     // Non-vacuity: every battle state was measured, and the helper measures a real overlap.
     expect(STAGE_SCENARIOS.length).toBeGreaterThanOrEqual(7);
     expect(visibleProse(report(960, 640, 'battle', 'normal'))).toBeGreaterThanOrEqual(proseFloorPx('stage', 'normal') - SLACK);
+  });
+});
+
+// =========================================================================================
+// G65 (PLAN.md #1.6) — the reduced-motion backstop holds for the PLAYER's own setting.
+// =========================================================================================
+
+describe('G65 — under the player’s reduced motion a strike never animates, on any ground', () => {
+  const reading = (motion: string, place: number) => {
+    const found = RESULT.strike.find((r) => r.motion === motion && r.place === place);
+    if (!found) throw new Error(`no strike reading for ${motion} on place ${place}`);
+    return found;
+  };
+
+  it('the player’s "reduce" with the OS at normal motion: no flash, no shake — dark and light ground', () => {
+    for (const place of [0, 1]) {
+      const r = reading('reduce', place);
+      expect(r.flash, `floor ${place + 1}: the struck enemy still flashes`).toBe('none');
+      expect(r.shake, `floor ${place + 1}: the struck stat box still shakes`).toBe('none');
+    }
+    // Non-vacuity: floor 2 really is the light ground whose own flash rule was the second hole.
+    expect(reading('reduce', 1).ground).toBe('light');
+    expect(reading('reduce', 0).ground).toBe('dark');
+  });
+
+  it('CONTROL: with motion on, the same classes DO animate — the flash each ground uses, and the shake', () => {
+    // battle.css: `arena-flash` / `arena-shake`; atmosphere.css: `arena-flash-light` on the light ground.
+    for (const motion of ['full', 'system']) {
+      expect(reading(motion, 0).flash).toBe('arena-flash');
+      expect(reading(motion, 1).flash).toBe('arena-flash-light');
+      expect(reading(motion, 0).shake).toBe('arena-shake');
+    }
   });
 });
 

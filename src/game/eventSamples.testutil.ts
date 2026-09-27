@@ -75,7 +75,7 @@ export const ONE_OF_EVERY_EVENT: { [K in GameEventKind]: Extract<GameEvent, { ki
   lifesteal: { kind: 'lifesteal', amount: 5 },
   detonate: { kind: 'detonate', consumed: 2, bonusDamage: 6 },
   fled: { kind: 'fled' },
-  'escape-failed': { kind: 'escape-failed', damage: 4 },
+  'escape-failed': { kind: 'escape-failed' },
   'escape-impossible': { kind: 'escape-impossible' },
   spared: { kind: 'spared', enemyName: 'Scrap Warden' },
   'spare-unavailable': { kind: 'spare-unavailable' },
@@ -96,6 +96,11 @@ export const ONE_OF_EVERY_EVENT: { [K in GameEventKind]: Extract<GameEvent, { ki
   'illusion-struck': { kind: 'illusion-struck' },
   'illusion-dispelled': { kind: 'illusion-dispelled', natural: 13, modifier: 1, total: 14, dc: 13 },
   'loot-left-behind': { kind: 'loot-left-behind', name: 'Rare ring', rarity: 'Rare' },
+  // PLAN.md #1.6 (combat)
+  'tempo-changed': { kind: 'tempo-changed', subject: 'player', tenths: 4 },
+  'tempo-extra-action': { kind: 'tempo-extra-action', subject: 'player' },
+  'tempo-lost-turn': { kind: 'tempo-lost-turn', subject: 'enemy' },
+  'hp-changed': { kind: 'hp-changed', subject: 'player', hp: 12, maxHp: 20 },
   // ---- narrative (26) ----
   title: { kind: 'title' },
   intro: { kind: 'intro', header: 'STORY', lines: ['The capital of Absolution, 2100 . . .'] },

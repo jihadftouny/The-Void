@@ -132,6 +132,16 @@ export function statModDelta(char: Conditioned, stat: StatKey): number {
 }
 
 /**
+ * The mod of one stat from the STORED stat plus EQUIPPED gear only — the augment/deprivation
+ * conditions deliberately NOT layered in. PLAN.md #1.6: the §16.1 tempo rate reads Dexterity
+ * this way so the Quick/Slow augment counts once, as its flat ±0.3, and not a second time
+ * through its own ±2 DEX (`tempo.ts`, deviation 2). Everything else keeps `effectiveMods`.
+ */
+export function baseStatMod(char: Conditioned, stat: StatKey): number {
+  return computeStatMod(char.stats[stat] + equipStatDelta(char, stat));
+}
+
+/**
  * Effective armor class: stored AC + the CON-mod delta (Hardy/Frail) + the DEX-mod
  * delta (Quick/Slow evasion). Off-equivalent (returns stored AC) when no augment is
  * active. Used NOW as the enemy AC a player attack tests against; the player-side use
@@ -165,21 +175,13 @@ export function effectiveResistances(
   return char.resistances.map((r, i) => r + shift + (equip ? equip[i] ?? 0 : 0));
 }
 
-// ------- Deferred-twist no-op hooks -------------------------------------------
-// Each augment/deprivation has, beyond its ± stat portion (implemented above), a
-// gameplay "twist" that belongs to a LATER milestone. These seams are wired now as
-// explicit NO-OPS (they return neutral values regardless of conditions) so the later
-// milestone has a single, obvious site to fill in — never a silently-missing feature.
-// Do NOT invent those systems here.
-
-/**
- * Quick/Slow TRUE-INITIATIVE reorder (M4 [OPEN] model). Quick should let the player act
- * before the enemy, Slow after. Until the round grows a real initiative step this is a
- * no-op: the ± DEX portion (to-hit / AC) is already live via the accessors above.
- */
-export function initiativeOrderTwist(_char: Conditioned): 0 {
-  return 0; // no-op until M4
-}
+// ------- Deferred-twist hooks — ALL THREE ARE NOW GONE ----------------------------------
+// Each augment/deprivation once had, beyond its ± stat portion (implemented above), a no-op
+// "twist" seam waiting for a later milestone. PLAN.md #1.6 filled the last one: Quick and Slow
+// are the ±0.3 modifiers of the §16.1 tempo rate (`tempo.ts`), read there directly from the
+// conditions, and there is no initiative ROLL to reorder (declined twice — §22.30). The no-op
+// hook is DELETED for G16's reason below; its old name is kept out of this comment so
+// `statEffects.test.ts`'s source scan can hold the deletion.
 
 // PLAN.md #2: the Lucid/Clouded ILLUSION-SIGHT stub that used to sit here is DELETED — floor 2
 // now exists, and Lucid/Clouded reach it with no special case: the passive Wisdom roll against an
@@ -193,7 +195,7 @@ export function initiativeOrderTwist(_char: Conditioned): 0 {
 // a milestone that has already landed is worse than an absence, because it reads as scheduled
 // work. Nothing depended on it (its only references were its own two test lines), so deletion
 // is the honest option; the ±CHA portion of Emboldened/Cowed is already live through
-// `effectiveMods`. Its sibling above STAYS — it has a named future owner (`PLAN.md` #1.6 for the
-// initiative reorder), which is exactly what this one lacked.
+// `effectiveMods`. (Its Quick/Slow sibling stayed while it had a named owner — `PLAN.md` #1.6 —
+// and went when that owner built the real thing.)
 // Its old name is deliberately NOT written here: a source scan in `statEffects.test.ts` asserts
 // the identifier appears in no shipping file, and a tombstone would defeat it.

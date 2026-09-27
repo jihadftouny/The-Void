@@ -12,7 +12,7 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3362 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3433 tests** `[####----------------]`
 
 *Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
 ⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
@@ -148,6 +148,30 @@ port (M1–M10) and v2 LLM work (N1–N3) are subsumed here as the base and as M
 Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new system · ★★ mechanics-first game realized
 
 ## Session log
+
+### 2026-09-26 — you strike first, and speed is a gauge (`round-order`, #1.6) — built, awaiting merge
+
+**3362 → 3433 tests (4 skipped).** Plan → build (stopped once at the winnability gate) → the
+author's ruling → build finished. Not merged.
+
+- **A round is you, then it** (G62, §14.8/§22.30). Your whole turn — conditions, gauge, action,
+  damage — resolves before the enemy's starts, so **a killing blow ends the round with no hit
+  back**. Running and using an item are turns too; the old "counter-attack" path is gone and its
+  guards ride the enemy's ordinary turn.
+- **The §16.1 tempo gauge is real.** One number per side, in integer tenths, filled by Dexterity,
+  ±0.3 for Quick/Slow, plus each enemy family's speed from `enemyFamilies.json` (24 values the
+  build proposed and the author accepted). Full: a **second move of your choice** (the round
+  pauses for it). Empty: a lost turn. Reset every fight. The ENEMY's rate is capped at **±0.3 —
+  the author's ruling** after the first cap (±0.7) held the winnability anchor at 0.182 against its
+  0.20 floor; the player's rate is never capped (the author's third ruling, G78).
+- **It is on screen** on both combatants, and the bars now move **at each blow** (a doubled enemy
+  drops your bar twice, to the engine's numbers) — G63's three live items closed; the
+  reduced-motion flash hole G65 closed and proved in real Chromium.
+- **Balance, re-measured, nothing retuned:** 30.6% → **29.5%**; Scavver 57.4 → 48.4, Enforcer
+  32.0 → 37.8, Hollow 27.8 → 26.6, Neuromancer 17.8 → 18.0, Penitent 18.2 → 16.6 — the class
+  spread narrows from 39.6 to 31.8 points (G59's input). Variants in FINDINGS G62.
+- **Also:** the combat log no longer calls the Void a place (G72); every step's gauges, a crossed
+  threshold and each side's action count are logged at the boundary (principle 7).
 
 ### 2026-09-21 — the game starts keeping a record of what the narrator says ✅
 

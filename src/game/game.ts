@@ -28,6 +28,7 @@ import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
 import {
   applyDamageToBattlePlayer,
+  DEFAULT_ROUND_RULES,
   resolveRound,
   openBattle,
   type BattleState,
@@ -192,6 +193,15 @@ export type GameInput =
  */
 export interface StepOptions {
   illusionDc?: number;
+  /**
+   * PLAN.md #1.6 — the same seam, for the §16.1 tempo gauge (Open Question 1): the ENEMY's |rate|
+   * cap in tenths (the player's is never capped — G78; `Infinity` = §16.1's literal rate), whether the ENEMY's gauge moves at all, and
+   * whether an enemy family's data-driven speed counts. The shipped renderer passes none of them
+   * (a source scan in `src/desktop` holds that).
+   */
+  tempoRateCapTenths?: number;
+  enemyTempo?: boolean;
+  familySpeed?: boolean;
 }
 
 /** What `step` returns: the next state, the ordered events, and the next Awaiting. */
@@ -548,6 +558,9 @@ function roundRules(state: GameState, options: StepOptions): RoundRules {
   return {
     healPct: floorModifiers(floorOf(state)).healPct,
     illusionDc: options.illusionDc ?? ILLUSION_DC,
+    tempoRateCapTenths: options.tempoRateCapTenths ?? DEFAULT_ROUND_RULES.tempoRateCapTenths,
+    enemyTempo: options.enemyTempo ?? DEFAULT_ROUND_RULES.enemyTempo,
+    familySpeed: options.familySpeed ?? DEFAULT_ROUND_RULES.familySpeed,
   };
 }
 
@@ -753,10 +766,14 @@ function resolveBattleRound(
   // presses against the act-1 Kingpin cost 11 HP to summoned minions, and three rejected casts
   // burned the Reflection's once-per-battle adaptation.
   //
+  // PLAN.md #1.6: and `round.roundComplete` — the boss mechanic is once per ROUND, and a round
+  // the player's extra action paused has not completed (the enemy has not acted). The step that
+  // completes it fires the mechanic, once; `boss.round` therefore counts completed rounds.
+  //
   // G29: the Kingpin's minion damage comes back as a NUMBER and is applied here, through the
   // one guarded damage path in `battle.ts` (shield -> onTakeDamage relics -> revive gate), so
   // the most common death in the game finally consults the defenses the player paid for.
-  if (status === 'ongoing' && battle.boss && round.resolved) {
+  if (status === 'ongoing' && battle.boss && round.resolved && round.roundComplete) {
     const post = bossPostRound(battle, action);
     battle = post.battle;
     events.push(...post.events);

@@ -3,10 +3,10 @@
 // engine event. Every expected value is derived by hand (dice chosen by hand, templates read
 // from `format.ts`, schedule arithmetic done here), never read off the module under test.
 //
-// ⚠ ORDER-AGNOSTIC (Appendix A.1). As of 2026-09-12 the engine emits the enemy's turn before the
-// player's in a Fight/Cast round; that is its CURRENT behaviour, not the design, which (§14.8,
-// confirmed by the author) has you strike first, with speed from initiative and Dexterity —
-// an engine change tracked as FINDINGS G62. NOTHING HERE ASSERTS WHICH SIDE GOES FIRST. The
+// ⚠ ORDER-AGNOSTIC (Appendix A.1). Since PLAN.md #1.6 (G62) the engine's round has you strike
+// first, then the enemy, with speed from the §16.1 tempo gauge and Dexterity —
+// no initiative roll. The beat model itself never depended on that. NOTHING HERE ASSERTS WHICH SIDE GOES
+// FIRST beyond reading it off the engine. The
 // engine round below takes its order from the events the engine emitted; the guard block feeds
 // a round in EACH order, and with any number of actions per side, and asserts each replays
 // faithfully — when the engine changes, this file stays green, and if the beat model ever
@@ -66,21 +66,25 @@ function foe(): Enemy {
 }
 
 /**
- * One real Fight round, dice by hand (the derivation `illusion.test.ts` records):
- *   [enemy to-hit d20 = 18 → a hit; no skills → the plain strike for 1]
+ * One real Fight round, dice by hand (the derivation `illusion.test.ts` records), in the
+ * engine's order since PLAN.md #1.6 — you act, then it acts:
  *   [player to-hit d20 = 15: 15 + 0 (STR 10) + 2 (proficiency) = 17 ≥ AC 10 → a hit]
- *   [1d6 sword = 4]
- * An Enforcer's momentum gain is SILENT and the hero carries no relic, so those two strikes
- * are the whole event list. WHICH COMES FIRST is the engine's business and is read off it.
+ *   [1d6 sword = 4 → the foe 10 − 4 = 6]
+ *   [enemy to-hit d20 = 18 → a hit; no skills → the plain strike for 1 → the hero 12 − 1 = 11]
+ * Both sides have DEX 10 (no gauge event); an Enforcer's momentum gain is SILENT and the hero
+ * carries no relic, so the two strikes and the engine's two `hp-changed` values are the whole
+ * event list. The order is read off the engine, never assumed by the beat model.
  */
 function engineRound(): CombatEvent[] {
   const hero = { ...createPlayer({ name: 'Hero', classId: 'Enforcer', stats: { STR: 10, DEX: 10, CON: 12, INT: 10, WIS: 10, CHA: 10 } }), hp: 12, maxHp: 12 };
-  const r = resolveRound(createBattle(hero, foe(), 2), 'fight', scripted([face(18, 20), face(15, 20), face(4, 6)]));
+  const r = resolveRound(createBattle(hero, foe(), 2), 'fight', scripted([face(15, 20), face(4, 6), face(18, 20)]));
   return r.events;
 }
 
 const EVERY: readonly GameEvent[] = Object.values(ONE_OF_EVERY_EVENT);
-const nonPane = (events: readonly GameEvent[]): GameEvent[] => events.filter((e) => BEAT_ROLE[e.kind] !== 'pane');
+/** The events a beat carries: everything but the narration's (`pane`) and the frame's values (`bar`). */
+const nonPane = (events: readonly GameEvent[]): GameEvent[] =>
+  events.filter((e) => BEAT_ROLE[e.kind] !== 'pane' && BEAT_ROLE[e.kind] !== 'bar');
 
 // =========================================================================================
 
@@ -96,6 +100,18 @@ describe('the role table', () => {
     for (const kind of Object.keys(LOG_ROUTING) as GameEventKind[]) {
       expect(BEAT_ROLE[kind] === 'pane', kind).toBe(LOG_ROUTING[kind] === 'pane');
     }
+  });
+
+  it('a kind moves a bar EXACTLY when the combat log routes it to the HUD (PLAN.md #1.6)', () => {
+    // The sibling of the pane cross-check: a value the frame draws is neither a log line nor a
+    // beat, in both tables — and there are exactly the two the plan names.
+    for (const kind of Object.keys(LOG_ROUTING) as GameEventKind[]) {
+      expect(BEAT_ROLE[kind] === 'bar', kind).toBe(LOG_ROUTING[kind] === 'hud');
+    }
+    const bars = (Object.keys(BEAT_ROLE) as GameEventKind[]).filter((k) => BEAT_ROLE[k] === 'bar').sort();
+    expect(bars).toEqual(['hp-changed', 'tempo-changed']);
+    expect(BEAT_ROLE['tempo-extra-action']).toBe('anchor');
+    expect(BEAT_ROLE['tempo-lost-turn']).toBe('anchor');
   });
 
   it('the plan’s anchors and attachments, by hand', () => {
@@ -133,6 +149,30 @@ describe('groupBeats never reorders anything', () => {
     expect(beats[1]!.line).toBe('Burn takes hold of the enemy.');
   });
 
+  it('a bar value rides the beat that CAUSED it — never a beat of its own (PLAN.md #1.6)', () => {
+    const hit = { ...ONE_OF_EVERY_EVENT.attack, subject: 'player' as const, outcome: 'hit' as const, damage: 3 };
+    const back = { ...ONE_OF_EVERY_EVENT.attack, subject: 'enemy' as const, outcome: 'hit' as const, damage: 2 };
+    const adv: GameEvent = { kind: 'advantage', subject: 'enemy' };
+    const beats = groupBeats([
+      { kind: 'tempo-changed', subject: 'player', tenths: 4 }, // before any beat → the first beat
+      hit,
+      { kind: 'hp-changed', subject: 'enemy', hp: 7, maxHp: 10 }, // after a closed beat → that beat
+      adv,
+      { kind: 'hp-changed', subject: 'player', hp: 9, maxHp: 12 }, // while `adv` gathers → its beat
+      back,
+      { kind: 'hp-changed', subject: 'player', hp: 8, maxHp: 12 }, // the same beat's later value wins
+    ]);
+    expect(beats).toHaveLength(2);
+    expect(beats[0]!.events).toEqual([hit]);
+    expect(beats[0]!.barValues).toEqual({ enemy: 7 });
+    expect(beats[0]!.tempoValues).toEqual({ player: 4 });
+    expect(beats[1]!.events).toEqual([adv, back]);
+    expect(beats[1]!.barValues).toEqual({ player: 8 });
+    expect(beats[1]!.tempoValues).toBeUndefined();
+    // A beat that moved nothing carries no values at all.
+    expect(groupBeats([hit])[0]!.barValues).toBeUndefined();
+  });
+
   it('a step with nothing for the arena has no beats', () => {
     expect(groupBeats([])).toEqual([]);
     expect(groupBeats([ONE_OF_EVERY_EVENT['encounter-start'], ONE_OF_EVERY_EVENT['level-up']])).toEqual([]);
@@ -144,8 +184,12 @@ describe('a real engine round, dice by hand (AC-20)', () => {
   const beats = groupBeats(events);
 
   it('is two strikes, and they are the beats — the ENGINE’S events, in the ENGINE’S order', () => {
-    expect(events.map((e) => e.kind)).toEqual(['attack', 'attack']);
-    expect(beats.map((b) => b.anchor)).toEqual(events); // identity and order, from the engine
+    expect(events.map((e) => e.kind)).toEqual(['attack', 'hp-changed', 'attack', 'hp-changed']);
+    // The beats are the two strikes, in the engine's order; the `hp-changed` values ride them.
+    expect(beats.map((b) => b.anchor)).toEqual(events.filter((e) => e.kind === 'attack'));
+    expect(beats.map((b) => b.anchor?.kind === 'attack' && b.anchor.subject)).toEqual(['player', 'enemy']);
+    expect(beats[0]!.barValues).toEqual({ enemy: 6 });
+    expect(beats[1]!.barValues).toEqual({ player: 11 });
   });
 
   it('the ticker lines are format.ts’s templates on the hand-rolled numbers', () => {
@@ -226,11 +270,11 @@ describe('either round order replays faithfully (A.1)', () => {
   });
 
   // ---------------------------------------------------------------------------------------
-  // ⭐ ANY NUMBER OF ACTIONS PER SIDE. The author's answer on round order (2026-09-12): "you
-  // strike first, but it really depends on initiative like DnD, and the Dexterity stat" — which
-  // is GAME-DESIGN §16.1's tempo gauge: a full gauge is an EXTRA ACTION, an empty one a LOST
-  // TURN. Neither is built. When it is, a round can carry two actions from one side and none
-  // from the other, in either order, so the replay must hold no count per side at all.
+  // ⭐ ANY NUMBER OF ACTIONS PER SIDE. The author's answer on round order (2026-09-12) — you
+  // strike first, with Dexterity deciding speed — is GAME-DESIGN §16.1's tempo gauge: a full
+  // gauge is an EXTRA ACTION, an empty one a LOST TURN. Both are built (PLAN.md #1.6), so a
+  // round can carry two actions from one side and none from the other, in either order, and
+  // the replay must hold no count per side at all.
   // ---------------------------------------------------------------------------------------
 
   const secondPlayerStrike: GameEvent = { ...attack, subject: 'player', outcome: 'hit', damage: 5 };
@@ -291,7 +335,8 @@ describe('floats and touches, by hand', () => {
     expect(floatFor({ kind: 'condition-heal', subject: 'player', conditionType: 'regeneration', amount: 2 })).toEqual({ side: 'player', text: '+2', tone: 'heal' });
     expect(floatFor({ kind: 'lifesteal', amount: 3 })).toEqual({ side: 'player', text: '+3', tone: 'heal' });
     expect(floatFor({ kind: 'boss-minion-damage', amount: 4 })).toEqual({ side: 'player', text: '−4', tone: 'harm' });
-    expect(floatFor({ kind: 'escape-failed', damage: 5 })).toEqual({ side: 'player', text: '−5', tone: 'harm' });
+    // PLAN.md #1.6: a failed escape carries no damage — the enemy's own attack floats it.
+    expect(floatFor({ kind: 'escape-failed' })).toBeNull();
     expect(floatFor({ kind: 'revive', healedTo: 7 })).toEqual({ side: 'player', text: 'REVIVED', tone: 'heal' });
     const cast = ONE_OF_EVERY_EVENT['skill-cast'];
     expect(floatFor({ ...cast, damage: 10 })).toEqual({ side: 'enemy', text: '−10', tone: 'harm' });
@@ -314,16 +359,13 @@ describe('floats and touches, by hand', () => {
     expect(beat!.line).toBe('You strike — hit for 0 damage.');
     expect(beat!.hook).toBe('hit');
     expect(beat!.touches, 'the bar is still written — with the engine’s unchanged value').toEqual(['enemy']);
-    // One rule for every number the stage floats: a zero is never shown. (A failed escape a
-    // shield absorbed entirely reports the 0 HP actually lost — the same "−0".)
-    expect(floatFor({ kind: 'escape-failed', damage: 0 })).toBeNull();
+    // One rule for every number the stage floats: a zero is never shown.
     expect(floatFor({ kind: 'condition-damage', subject: 'enemy', conditionType: 'burn', amount: 0 })).toBeNull();
     expect(floatFor({ kind: 'condition-heal', subject: 'player', conditionType: 'regeneration', amount: 0 })).toBeNull();
     expect(floatFor({ kind: 'lifesteal', amount: 0 })).toBeNull();
     expect(floatFor({ kind: 'boss-minion-damage', amount: 0 })).toBeNull();
     // ...and the smallest real number still floats, so the rule is "zero", not "small".
     expect(floatFor({ ...attack, subject: 'player', outcome: 'hit', damage: 1 })).toEqual({ side: 'enemy', text: '−1', tone: 'harm' });
-    expect(floatFor({ kind: 'escape-failed', damage: 1 })).toEqual({ side: 'player', text: '−1', tone: 'harm' });
   });
 
   it('touches only the bars an event can move', () => {

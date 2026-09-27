@@ -119,6 +119,9 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   'skills-warped': 'fact',
   'deal-needs-room': 'fact',
   'item-discarded': 'fact',
+  // --- the 2 facts PLAN.md #1.6 adds (the tempo gauge's two moments) ---
+  'tempo-extra-action': 'fact',
+  'tempo-lost-turn': 'fact',
   // --- the 17 deliberate silences ---
   'cast-unavailable': 'silent',
   'spare-unavailable': 'silent',
@@ -135,6 +138,9 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   'stat-stolen': 'silent',
   title: 'silent',
   'stats-rolled': 'silent',
+  // PLAN.md #1.6 — HUD values, silent for `resource-changed`'s reason (a number the HUD owns).
+  'tempo-changed': 'silent',
+  'hp-changed': 'silent',
 };
 
 const ALL_KINDS = Object.keys(SAMPLE) as GameEventKind[];
@@ -181,17 +187,21 @@ describe('describeEvent covers every event kind (G13)', () => {
     // no-rests) with the decision itself (§22.26).
     // ...and the three potion kinds (potion-drunk, potion-unavailable, potion-blocked) with the
     // potion itself (§22.6).
-    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 26 + 4 - 4);
+    // PLAN.md #1.6 added 4 combat kinds (tempo-changed, tempo-extra-action, tempo-lost-turn,
+    // hp-changed).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4);
   });
 
-  it('the classification is 49 facts and 15 deliberate silences', () => {
+  it('the classification is 51 facts and 17 deliberate silences', () => {
     // From the plan: 29 kinds already had a fact, G13 adds 17 more, and the other 17 are
     // silenced on purpose. 29 + 17 + 17 = 63. PLAN.md #2 removed two of the 29 (rest-lore,
     // rest-full) and two of G13's 17 (rest-declined, no-rests), and added 8 of its own.
     const facts = ALL_KINDS.filter((k) => EXPECTED[k] === 'fact');
     // ...and PLAN.md #2's potion removal took one pre-G13 fact (potion-drunk) and two silences.
-    expect(facts).toHaveLength(26 + 15 + 8);
-    expect(DELIBERATELY_SILENT.size).toBe(15);
+    // PLAN.md #1.6: +2 facts (tempo-extra-action, tempo-lost-turn), +2 silences
+    // (tempo-changed, hp-changed).
+    expect(facts).toHaveLength(26 + 15 + 8 + 2);
+    expect(DELIBERATELY_SILENT.size).toBe(15 + 2);
     expect(NEW_FACT_KINDS).toHaveLength(15);
     for (const k of NEW_FACT_KINDS) expect(EXPECTED[k]).toBe('fact');
   });
@@ -220,6 +230,26 @@ describe('describeEvent covers every event kind (G13)', () => {
 // ---------------------------------------------------------------------------------------
 // U3-U6 — what the new fact lines must say
 // ---------------------------------------------------------------------------------------
+
+describe('the tempo gauge and the failed escape, as the narrator hears them (PLAN.md #1.6)', () => {
+  it('reads the plan’s exact facts, with no number in any of them', () => {
+    // AC-25: strings copied from the plan's D6 table, not from narrate.ts.
+    const facts: [GameEvent, string][] = [
+      [{ kind: 'tempo-extra-action', subject: 'player' }, 'You move again before it can answer.'],
+      [{ kind: 'tempo-extra-action', subject: 'enemy' }, 'The enemy moves again.'],
+      // Reworded from the plan's "too slow": `slow` is a condition id (ENGINE_TEXT_RULES).
+      [{ kind: 'tempo-lost-turn', subject: 'player' }, 'You fall behind; the moment passes.'],
+      [{ kind: 'tempo-lost-turn', subject: 'enemy' }, 'The enemy falls behind; the moment passes.'],
+      [{ kind: 'escape-failed' }, 'Your escape fails.'],
+    ];
+    for (const [event, fact] of facts) {
+      expect(describeEvent(event)).toBe(fact);
+      expect(describeEvent(event), 'the narrator never hears a number').not.toMatch(/\d/);
+    }
+    expect(describeEvent({ kind: 'tempo-changed', subject: 'player', tenths: 4 })).toBe('');
+    expect(describeEvent({ kind: 'hp-changed', subject: 'enemy', hp: 5, maxHp: 10 })).toBe('');
+  });
+});
 
 describe('attribution: the player and the enemy are never confused (G13)', () => {
   // The register's own case: Enforcer, seed 1, step 139 — the player casts Heavy Strike for

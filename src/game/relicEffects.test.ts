@@ -5,6 +5,13 @@
 // Dice control: a fixed-sequence rng returns exactly the draws a round consumes (and throws
 // if the code draws more than expected — a guard against silent extra draws). d20(n) is the
 // rng float that makes rollDie(rng,20) land on natural n; dmg6(4) lands 1d6 on 4.
+//
+// PLAN.md #1.6 — THE ROUND IS SEQUENTIAL: the player's draws (d20, then the damage die on a hit)
+// come FIRST, then the enemy's tick and its to-hit d20 (and its skill-pick on a hit with a
+// charge). Every script below is in that order. Both fixtures have DEX 10, so neither tempo
+// gauge moves. A skill that applies stun or fracture to the enemy now bites the SAME round
+// (the enemy ticks after the cast): stun skips its turn (no draw), fracture disadvantages it
+// (two d20s).
 
 import { describe, expect, it } from 'vitest';
 import { resolveRound, openBattle, createBattle, type BattleState } from './battle.ts';
@@ -82,12 +89,12 @@ function makeEnemy(over: Partial<Enemy> = {}): Enemy {
 describe('trigger: onTakeDamage — Mirror Shard reflects 25% of damage taken', () => {
   // Enemy crits with pyroBall (base 2, crit doubles -> 4 to the player). Reflect = floor(4*0.25)
   // = 1. Player fumbles (0 damage), so the enemy's ONLY hp loss is the reflected 1.
-  // Draws: enemy d20 nat20, enemy skill-pick, player d20 nat1(fumble).
+  // Draws: player d20 nat1 (fumble), enemy d20 nat20, enemy skill-pick.
   const enemy = makeEnemy({ hp: 30, skillCharges: 1, skillPool: ['pyroBall'] });
 
   it('with Mirror Shard the enemy loses exactly 1 hp (the reflect); the player takes 4', () => {
     const battle = createBattle(makePlayer({ ring: { defId: 'mirror-shard' } }), enemy, 1);
-    const r = resolveRound(battle, 'fight', seqRng([d20(20), 0.5, d20(1)]));
+    const r = resolveRound(battle, 'fight', seqRng([d20(1), d20(20), 0.5]));
     expect(r.state.player.hp).toBe(6); // 10 - 4
     expect(r.state.enemy.hp).toBe(29); // 30 - 0(player fumble) - 1(reflect)
     expect(r.events.some((e) => e.kind === 'relic-triggered' && e.trigger === 'onTakeDamage')).toBe(true);
@@ -95,7 +102,7 @@ describe('trigger: onTakeDamage — Mirror Shard reflects 25% of damage taken', 
 
   it('WITHOUT Mirror Shard the enemy loses 0 hp (no reflect)', () => {
     const battle = createBattle(makePlayer(), enemy, 1);
-    const r = resolveRound(battle, 'fight', seqRng([d20(20), 0.5, d20(1)]));
+    const r = resolveRound(battle, 'fight', seqRng([d20(1), d20(20), 0.5]));
     expect(r.state.enemy.hp).toBe(30);
     expect(r.events.some((e) => e.kind === 'relic-triggered')).toBe(false);
   });
@@ -105,7 +112,7 @@ describe('trigger: onHit — Ash Censer applies burn to the enemy on a weapon hi
   // Enemy fumbles; player hits with Jaaj Sword (1d6 -> 4). onHit applies burn (no damage).
   it('the enemy gains burn after a player hit', () => {
     const battle = createBattle(makePlayer({ ring: { defId: 'ash-censer' } }), makeEnemy(), 1);
-    const r = resolveRound(battle, 'fight', seqRng([d20(1), d20(10), d6(4)]));
+    const r = resolveRound(battle, 'fight', seqRng([d20(10), d6(4), d20(1)]));
     expect(r.state.enemy.hp).toBe(26); // 30 - 4 weapon
     expect(r.state.enemy.activeConditions.some((c) => c.type === 'burn')).toBe(true);
     expect(r.events.some((e) => e.kind === 'relic-triggered' && e.trigger === 'onHit')).toBe(true);
@@ -127,14 +134,14 @@ describe('trigger: onCrit — a triggered onCrit effect fires only on a crit', (
   it('fires on a crit (weapon crit 1d6+1d6 = 8, + 3 onCrit)', () => {
     // Player crits: two 1d6 damage rolls (4 + 4 = 8), then onCrit adds 3.
     const battle = createBattle(makePlayer({ ring: critRelic }), makeEnemy(), 1);
-    const r = resolveRound(battle, 'fight', seqRng([d20(1), d20(20), d6(4), d6(4)]));
+    const r = resolveRound(battle, 'fight', seqRng([d20(20), d6(4), d6(4), d20(1)]));
     expect(r.state.enemy.hp).toBe(19); // 30 - 8 - 3
     expect(r.events.some((e) => e.kind === 'relic-triggered' && e.trigger === 'onCrit')).toBe(true);
   });
 
   it('does NOT fire on an ordinary hit', () => {
     const battle = createBattle(makePlayer({ ring: critRelic }), makeEnemy(), 1);
-    const r = resolveRound(battle, 'fight', seqRng([d20(1), d20(10), d6(4)]));
+    const r = resolveRound(battle, 'fight', seqRng([d20(10), d6(4), d20(1)]));
     expect(r.state.enemy.hp).toBe(26); // 30 - 4, no onCrit bonus
     expect(r.events.some((e) => e.kind === 'relic-triggered')).toBe(false);
   });
@@ -143,7 +150,8 @@ describe('trigger: onCrit — a triggered onCrit effect fires only on a crit', (
 describe('trigger: onCast — Doubling Glass adds flat damage on a cast', () => {
   it('casting Intimidate deals its 1 + 2 from Doubling Glass', () => {
     const battle = createBattle(makePlayer({ ring: { defId: 'doubling-glass' } }), makeEnemy(), 1);
-    const r = resolveRound(battle, { kind: 'cast', skillId: 'intimidate' }, seqRng([d20(1)]));
+    const r = resolveRound(battle, { kind: 'cast', skillId: 'intimidate' }, seqRng([]));
+    // Intimidate's stun has its onset on the enemy's tick this round: it skips, no draw at all.
     expect(r.state.enemy.hp).toBe(27); // 30 - (1 skill + 2 onCast)
     expect(r.events.some((e) => e.kind === 'relic-triggered' && e.trigger === 'onCast')).toBe(true);
   });
@@ -151,9 +159,10 @@ describe('trigger: onCast — Doubling Glass adds flat damage on a cast', () => 
 
 describe('trigger: onKill — Devourer\'s Maw steals STR permanently (anchor)', () => {
   it('STR 14 -> 15 on the first kill, -> 16 (mod +3) on the second', () => {
-    // Kill an enemy at 1 hp with a Jaaj Sword hit (1d6 -> 4). Victory draws: extra-rest (0.99 ->
-    // none) then the loot gate (0.5 >= act-1 dropChance 0.5 -> no drop). M7: gold -> loot roll.
-    const seq = () => seqRng([d20(1), d20(10), d6(4), 0.99, 0.5]);
+    // Kill an enemy at 1 hp with a Jaaj Sword hit (d20 10 + 4 = 14 >= AC 10; 1d6 -> 4) on the
+    // player's turn — the enemy never answers. Victory draws the loot gate (0.99 >= act-1
+    // dropChance 0.5 -> no drop); PLAN.md #2 removed the extra-rest draw before it.
+    const seq = () => seqRng([d20(10), d6(4), 0.99]);
     const battle1 = createBattle(makePlayer({ amulet: { defId: 'devourers-maw' } }), makeEnemy({ hp: 1 }), 1);
     const r1 = resolveRound(battle1, 'fight', seq());
     expect(r1.status).toBe('player-won');
@@ -205,7 +214,8 @@ describe('Overclock Chip — cuts a skill\'s effective charge cost by 1', () => 
   it('a cost-2 skill casts on 1 charge WITH the chip (and ends at 0 charges)', () => {
     const player = makePlayer({ ring: { defId: 'overclock-chip' } }, { skillCharges: 1 });
     const battle = createBattle(player, makeEnemy(), 1);
-    const r = resolveRound(battle, { kind: 'cast', skillId: 'heavyStrike' }, seqRng([d20(1)]));
+    const r = resolveRound(battle, { kind: 'cast', skillId: 'heavyStrike' }, seqRng([d20(1), d20(1)]));
+    // Heavy Strike's fracture bites the enemy's roll this round: two d20s (both fumbles).
     expect(r.events.some((e) => e.kind === 'cast-unavailable')).toBe(false);
     expect(r.state.player.skillCharges).toBe(0); // 1 - 2 + refund(1)
     expect(r.state.enemy.hp).toBe(27); // 30 - 3 (heavyStrike base, 0 momentum)
@@ -224,10 +234,10 @@ describe('Scrap Plating — the first enemy hit each battle deals 0', () => {
     // Enemy crits (plain 1*2 = 2) each round. Player fumbles. First hit -> 0, second -> 2.
     const player = makePlayer({ ring: { defId: 'scrap-plating' } });
     const battle = createBattle(player, makeEnemy(), 1);
-    const r1 = resolveRound(battle, 'fight', seqRng([d20(20), d20(1)]));
+    const r1 = resolveRound(battle, 'fight', seqRng([d20(1), d20(20)]));
     expect(r1.state.player.hp).toBe(10); // first hit reduced to 0
     expect(r1.state.firstEnemyHitDone).toBe(true);
-    const r2 = resolveRound(r1.state, 'fight', seqRng([d20(20), d20(1)]));
+    const r2 = resolveRound(r1.state, 'fight', seqRng([d20(1), d20(20)]));
     expect(r2.state.player.hp).toBe(8); // 10 - 2 (second hit lands)
   });
 });
@@ -236,7 +246,7 @@ describe('Adrenal Shunt — +2 damage below half HP', () => {
   it('a hit below 1/2 max HP deals 2 more than without the relic', () => {
     const withRelic = makePlayer({ ring: { defId: 'adrenal-shunt' } }, { hp: 4 }); // 4 < 5 = half of 10
     const without = makePlayer({}, { hp: 4 });
-    const seq = () => seqRng([d20(1), d20(10), d6(4)]);
+    const seq = () => seqRng([d20(10), d6(4), d20(1)]);
     const a = resolveRound(createBattle(withRelic, makeEnemy(), 1), 'fight', seq());
     const b = resolveRound(createBattle(without, makeEnemy(), 1), 'fight', seq());
     expect(b.state.enemy.hp).toBe(26); // 30 - 4
@@ -248,7 +258,7 @@ describe('Grave of Embers — the enemy\'s DoT ticks for double', () => {
   it('an enemy burn deals 2 instead of 1', () => {
     // Enemy carries an ACTIVE burn (remaining 1 of 2): base tick -1, doubled to -2.
     const burn = { type: 'burn' as const, remainingTurns: 1, maxTurns: 2 };
-    const seq = () => seqRng([0.5, d20(1), d20(1)]); // burn save, enemy fumble, player fumble
+    const seq = () => seqRng([d20(1), 0.5, d20(1)]); // player fumble, burn save, enemy fumble
     const withRelic = resolveRound(
       createBattle(makePlayer({ ring: { defId: 'grave-of-embers' } }), makeEnemy({ activeConditions: [burn] }), 1),
       'fight',
@@ -274,7 +284,7 @@ describe('Empty Vessel — +1 skill charge on the player\'s turn', () => {
 
 describe('Void Pact — +50% damage and cannot heal', () => {
   it('a hit deals floor(damage * 1.5)', () => {
-    const seq = () => seqRng([d20(1), d20(10), d6(4)]);
+    const seq = () => seqRng([d20(10), d6(4), d20(1)]);
     const a = resolveRound(createBattle(makePlayer({ amulet: { defId: 'void-pact' } }), makeEnemy(), 1), 'fight', seq());
     const b = resolveRound(createBattle(makePlayer(), makeEnemy(), 1), 'fight', seq());
     expect(b.state.enemy.hp).toBe(26); // 30 - 4
@@ -284,8 +294,10 @@ describe('Void Pact — +50% damage and cannot heal', () => {
   it('blocks a consumable heal site (the Void Draught that replaced the potion, §22.6)', () => {
     const base = makePlayer({ amulet: { defId: 'void-pact' } }, { hp: 3 });
     const player = { ...base, inventory: { ...base.inventory, backpack: [{ defId: 'void-draught' }] } };
-    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
-    expect(r.events).toEqual([{ kind: 'consumable-used', itemId: 'void-draught' }]);
+    // An item is a turn: the enemy answers (a fumble, one draw).
+    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'useConsumable', source: { index: 0 } }, seqRng([d20(1)]));
+    expect(r.events).toContainEqual({ kind: 'consumable-used', itemId: 'void-draught' });
+    expect(r.events.some((e) => e.kind === 'hp-changed' && e.subject === 'player')).toBe(false);
     expect(r.state.player.hp).toBe(3); // no heal — the draught is spent for nothing
   });
 });
@@ -293,15 +305,16 @@ describe('Void Pact — +50% damage and cannot heal', () => {
 describe('Reliquary — casting heals the caster (onCast)', () => {
   it('a cast heals 3', () => {
     const player = makePlayer({ amulet: { defId: 'reliquary' } }, { hp: 4 });
-    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'cast', skillId: 'intimidate' }, seqRng([d20(1)]));
-    expect(r.state.player.hp).toBe(7); // 4 + 3
+    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'cast', skillId: 'intimidate' }, seqRng([]));
+    expect(r.state.player.hp).toBe(7); // 4 + 3 (the stunned enemy never answers)
   });
 });
 
 describe('Hollow Heart — charge discount + onCast lifesteal heal', () => {
   it('a cost-2 skill casts on 1 charge and heals 2', () => {
     const player = makePlayer({ amulet: { defId: 'hollow-heart' } }, { hp: 4, skillCharges: 1 });
-    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'cast', skillId: 'heavyStrike' }, seqRng([d20(1)]));
+    // Heavy Strike's fracture disadvantages the enemy this round: two d20s, both fumbles.
+    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'cast', skillId: 'heavyStrike' }, seqRng([d20(1), d20(1)]));
     expect(r.state.player.skillCharges).toBe(0);
     expect(r.state.player.hp).toBe(6); // 4 + 2
     expect(r.state.enemy.hp).toBe(27); // 30 - 3
@@ -311,14 +324,16 @@ describe('Hollow Heart — charge discount + onCast lifesteal heal', () => {
 describe('unique: Reflection\'s Edge — bonus damage = enemy condition count (onHit)', () => {
   it('hits for the weapon 1 (UNARMED) + 2 (two enemy conditions)', () => {
     // Enemy carries burn + poison at ONSET (no tick damage/draw this round). Reflection's Edge
-    // sits in mainHand: it has no legacy dice, so the player swings UNARMED (1d1 = 1).
+    // sits in mainHand: it has no legacy dice, so the player swings UNARMED (1d1 = 1). The
+    // player strikes first — the two conditions are already on the enemy, so the count is 2 —
+    // then the enemy's tick (both onsets, no draw) and its fumble.
     const conds = [
       { type: 'burn' as const, remainingTurns: 2, maxTurns: 2 },
       { type: 'poison' as const, remainingTurns: 2, maxTurns: 2 },
     ];
     const player = makePlayer({ mainHand: { defId: 'reflections-edge' } });
     const battle = createBattle(player, makeEnemy({ activeConditions: conds }), 1);
-    const r = resolveRound(battle, 'fight', seqRng([d20(1), d20(10), 0.5]));
+    const r = resolveRound(battle, 'fight', seqRng([d20(10), 0.5, d20(1)]));
     expect(r.state.enemy.hp).toBe(27); // 30 - 1 (UNARMED) - 2 (onHit, 2 conditions)
     expect(r.events.some((e) => e.kind === 'relic-triggered' && e.trigger === 'onHit')).toBe(true);
   });
@@ -326,7 +341,7 @@ describe('unique: Reflection\'s Edge — bonus damage = enemy condition count (o
 
 describe('unique: Ashen Crown — +2 INT boosts skill damage', () => {
   it('Intimidate deals 2 with the crown, 1 without', () => {
-    const seq = () => seqRng([d20(1)]);
+    const seq = () => seqRng([]); // the stun lands first: the enemy skips, no draw
     const a = resolveRound(createBattle(makePlayer({ helmet: { defId: 'ashen-crown' } }), makeEnemy(), 1), { kind: 'cast', skillId: 'intimidate' }, seq());
     const b = resolveRound(createBattle(makePlayer(), makeEnemy(), 1), { kind: 'cast', skillId: 'intimidate' }, seq());
     expect(b.state.enemy.hp).toBe(29); // 30 - 1
@@ -385,11 +400,11 @@ describe('off-equivalence lockstep — the trigger seam is inert when nothing fi
     function run(withRelic: boolean) {
       const player = withRelic ? makePlayer({ amulet: { defId: 'devourers-maw' } }) : makePlayer();
       // A deterministic hand-authored sequence for three fight rounds (enemy hp 100 survives).
-      // Each round: enemy d20 (miss/fumble), player d20 (hit), player 1d6.
+      // Each round: player d20 (hit), player 1d6, then the enemy's d20 (a fumble).
       const draws = [
-        d20(1), d20(10), d6(2),
-        d20(1), d20(10), d6(2),
-        d20(1), d20(10), d6(2),
+        d20(10), d6(2), d20(1),
+        d20(10), d6(2), d20(1),
+        d20(10), d6(2), d20(1),
       ];
       const rng = seqRng(draws);
       let state: BattleState = createBattle(player, makeEnemy({ hp: 100 }), 1);
@@ -421,7 +436,7 @@ describe('Halo Fragment revive (anchor) — once per battle', () => {
     const player = makePlayer({ amulet: { defId: 'halo-fragment' } }, { hp: 3, maxHp: 40 });
     // Two charges so BOTH rounds land a pyroBall crit (4 damage); round 1 spends one, round 2 the other.
     const enemy = makeEnemy({ hp: 30, skillCharges: 2, maxSkillCharges: 2, skillPool: ['pyroBall'] });
-    const r1 = resolveRound(createBattle(player, enemy, 1), 'fight', seqRng([d20(20), 0.5, d20(1)]));
+    const r1 = resolveRound(createBattle(player, enemy, 1), 'fight', seqRng([d20(1), d20(20), 0.5]));
     expect(r1.status).toBe('ongoing');
     expect(r1.state.player.hp).toBe(10); // revived
     expect(r1.state.reviveUsed).toBe(true);
@@ -429,7 +444,7 @@ describe('Halo Fragment revive (anchor) — once per battle', () => {
 
     // Drop the player low again; the revive is spent, so the next lethal hit is fatal.
     const wounded: BattleState = { ...r1.state, player: { ...r1.state.player, hp: 3 } };
-    const r2 = resolveRound(wounded, 'fight', seqRng([d20(20), 0.5, d20(1)]));
+    const r2 = resolveRound(wounded, 'fight', seqRng([d20(1), d20(20), 0.5]));
     expect(r2.status).toBe('player-died');
   });
 });
@@ -453,11 +468,11 @@ function sumTerms(e: { damageSources: readonly { amount: number }[] }): number {
 
 describe('post-hoc damage modifiers are folded back into the event', () => {
   it('Void Pact: a 6-damage hit reports 9, with the +50% recorded as a +3 term', () => {
-    // Enemy fumbles (nat 1). Player nat 10 + 2 = 12 >= AC 10 -> hit; 1d6 lands on 6.
+    // Player nat 10 + 2 = 12 >= AC 10 -> hit; 1d6 lands on 6. Then the enemy fumbles (nat 1).
     // Void Pact multiplies by 1.5: floor(6 * 1.5) = 9, i.e. 3 more than was rolled.
     const player = makePlayer({ amulet: { defId: 'void-pact' } });
     const r = resolveRound(
-      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(1), d20(10), d6(6)]),
+      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(10), d6(6), d20(1)]),
     );
     const attack = r.events.find((e) => e.kind === 'attack' && e.subject === 'player');
     expect(attack).toBeDefined();
@@ -476,7 +491,7 @@ describe('post-hoc damage modifiers are folded back into the event', () => {
 
   it('WITHOUT Void Pact the same round reports and deals the rolled 6', () => {
     const r = resolveRound(
-      createBattle(makePlayer(), makeEnemy(), 1), 'fight', seqRng([d20(1), d20(10), d6(6)]),
+      createBattle(makePlayer(), makeEnemy(), 1), 'fight', seqRng([d20(10), d6(6), d20(1)]),
     );
     const attack = r.events.find((e) => e.kind === 'attack' && e.subject === 'player');
     if (attack?.kind !== 'attack') throw new Error('no player attack event');
@@ -489,7 +504,7 @@ describe('post-hoc damage modifiers are folded back into the event', () => {
     // hp 4 < 5 (half of maxHp 10) so the relic fires. 1d6 lands on 4, +2 = 6.
     const player = makePlayer({ ring: { defId: 'adrenal-shunt' } }, { hp: 4 });
     const r = resolveRound(
-      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(1), d20(10), d6(4)]),
+      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(10), d6(4), d20(1)]),
     );
     const attack = r.events.find((e) => e.kind === 'attack' && e.subject === 'player');
     if (attack?.kind !== 'attack') throw new Error('no player attack event');
@@ -507,7 +522,7 @@ describe('post-hoc damage modifiers are folded back into the event', () => {
     // first hit of the battle, so the player loses NOTHING — and the event must say so.
     const player = makePlayer({ ring: { defId: 'scrap-plating' } });
     const r1 = resolveRound(
-      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(20), d20(1)]),
+      createBattle(player, makeEnemy(), 1), 'fight', seqRng([d20(1), d20(20)]),
     );
     const first = r1.events.find((e) => e.kind === 'attack' && e.subject === 'enemy');
     if (first?.kind !== 'attack') throw new Error('no enemy attack event');
@@ -521,7 +536,7 @@ describe('post-hoc damage modifiers are folded back into the event', () => {
     expect(r1.state.player.hp).toBe(10); // untouched, exactly as the event reports
 
     // Round two: the relic is spent, so the identical roll now reports AND deals 2.
-    const r2 = resolveRound(r1.state, 'fight', seqRng([d20(20), d20(1)]));
+    const r2 = resolveRound(r1.state, 'fight', seqRng([d20(1), d20(20)]));
     const second = r2.events.find((e) => e.kind === 'attack' && e.subject === 'enemy');
     if (second?.kind !== 'attack') throw new Error('no enemy attack event');
     expect(second.damage).toBe(2);
@@ -544,7 +559,7 @@ describe('post-hoc damage modifiers are folded back into the event', () => {
     const player = makePlayer({}, {});
     const opened = createBattle(player, makeEnemy(), 1);
     const battle = { ...opened, player: { ...opened.player, shield: 1 } };
-    const r = resolveRound(battle, 'fight', seqRng([d20(20), d20(1)]));
+    const r = resolveRound(battle, 'fight', seqRng([d20(1), d20(20)]));
     const attack = r.events.find((e) => e.kind === 'attack' && e.subject === 'enemy');
     const absorbed = r.events.find((e) => e.kind === 'shield-absorbed');
     if (attack?.kind !== 'attack') throw new Error('no enemy attack event');
@@ -660,14 +675,15 @@ describe('G17 — a thrown elemental consumable is mitigated by the target resis
 
   it('END TO END — throwing a Firebomb from the backpack at a Blessed enemy deals 4', () => {
     // The player-observable claim, through the real battle action rather than the helper.
-    // Using a consumable draws NOTHING, so the empty rng proves it (it throws if drawn).
+    // Using a consumable draws NOTHING itself; PLAN.md #1.6 makes it a turn, so the enemy's
+    // answer is its ONE draw — a fumble — and the script throws on anything more.
     const base = makePlayer();
     const carrying: Player = {
       ...base,
       inventory: { ...base.inventory, backpack: [{ defId: 'firebomb' }] },
     };
     const battle = createBattle(carrying, blessed({ hp: 30 }), 1);
-    const r = resolveRound(battle, { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
+    const r = resolveRound(battle, { kind: 'useConsumable', source: { index: 0 } }, seqRng([d20(1)]));
     expect(r.status).toBe('ongoing');
     expect(r.state.enemy.hp).toBe(26); // 30 - mitigate(6, 25) = 30 - 4
     expect(r.state.player.inventory.backpack).toEqual([]); // consumed

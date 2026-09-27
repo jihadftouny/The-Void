@@ -391,8 +391,14 @@ describe('a real round plays on the stage while the Void speaks (PLAN.md #6)', (
     const expected = step(fight, { kind: 'battle-action', action: 'fight' });
     const beats = groupBeats(expected.events);
     const { entries } = await resume(fight);
-    // Every value the enemy's bar shows, from the moment the replay mounts its frame to the end.
+    // Every value the enemy's bar shows: the fight screen's frame as the player presses Fight,
+    // then every value the replay writes. PLAN.md #1.6: the player now strikes FIRST, so the
+    // enemy's bar moves at beat 0 — written in the same task that mounts the replay's frame, so
+    // a MutationObserver alone never sees that frame's opening value. What the player SAW before
+    // it is the frame already on screen, which is read here directly.
     const enemyBarTexts: string[] = [];
+    const onScreen = document.querySelector('#arena .frame-bar[data-bar="enemy"] .void-bar-text')?.textContent;
+    if (onScreen) enemyBarTexts.push(onScreen);
     new MutationObserver(() => {
       const text = document.querySelector('#arena .frame-bar[data-bar="enemy"] .void-bar-text')?.textContent;
       if (text && text !== enemyBarTexts.at(-1)) enemyBarTexts.push(text);
@@ -407,6 +413,11 @@ describe('a real round plays on the stage while the Void speaks (PLAN.md #6)', (
     expect(played.ms, 'the round did not take its scheduled time').toBeGreaterThanOrEqual(scheduledMs(beats.length) - 5);
     expect(played.ms).toBeLessThan(3000);
     expect(played.motion).toBe('full');
+    // PLAN.md #1.6: the actions each side took, counted here from the step's own attacks (a
+    // Fight step's only actions) — the renderer's count must agree.
+    const attacks = (side: string) => expected.events.filter((e) => e.kind === 'attack' && e.subject === side).length;
+    expect((played as unknown as { actions: unknown }).actions).toEqual({ player: attacks('player'), enemy: attacks('enemy') });
+    expect(attacks('player'), 'the fixture fight has no player blow — the count proves nothing').toBeGreaterThan(0);
     // Every hook, in beat order — logged by the boundary sink as it is sent.
     const expectedHooks = beats.map((b) => b.hook).filter((h): h is NonNullable<typeof h> => h !== null);
     expect(played.hooks).toEqual(expectedHooks);

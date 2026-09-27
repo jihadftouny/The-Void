@@ -368,6 +368,41 @@ describe('dispatch() times the step and the whole turn', () => {
 // principle was written after. The line lives in `replayRound`, which `dispatch` calls.
 // =========================================================================================
 
+describe('PLAN.md #1.6 — the tempo gauge and the round’s actions are logged at the boundary (AC-29)', () => {
+  it('the step detail carries both gauges as NUMBERS and the extra-action pause as a boolean', () => {
+    const detail = logCalls(SOURCE).find((c) => c.includes("'step detail'"));
+    expect(detail, 'the step detail line is gone').toBeDefined();
+    expect(detail).toMatch(/tempo:\s*\{\s*player:[^}]*battle\.tempo\?\.player\s*\?\?\s*0/);
+    expect(detail).toMatch(/enemy:[^}]*battle\.tempo\?\.enemy\s*\?\?\s*0/);
+    expect(detail).toMatch(/extraAction:\s*state\.phase\.kind\s*===\s*'battle'\s*&&\s*state\.phase\.battle\.extraAction\s*===\s*true/);
+  });
+
+  it('a crossed threshold has its own info line, with subject, kind and the gauge after it', () => {
+    const turn = bodyOf('async function dispatch(');
+    const line = logCalls(turn).find((c) => c.includes("'tempo threshold'"));
+    expect(line, 'no tempo threshold line in dispatch').toBeDefined();
+    expect(line).toMatch(/^log\.info\s*\(\s*'battle'\s*,\s*'tempo threshold'/);
+    for (const key of ['subject:', 'kind:', 'tenthsAfter:']) expect(line, key).toContain(key);
+    // It fires for both threshold events and nothing else.
+    expect(turn).toMatch(/e\.kind !== 'tempo-extra-action' && e\.kind !== 'tempo-lost-turn'/);
+    // ...and it reads the state AFTER the step (it comes after the step, not before it).
+    expect(turn.search(/'tempo threshold'/)).toBeGreaterThan(turn.search(/=\s*step\s*\(\s*state\s*,/));
+  });
+
+  it('the round line counts each side’s actions; the beat line carries the values it wrote', () => {
+    const body = bodyOf('async function replayRound(');
+    const played = logCalls(body).find((c) => c.includes("'round played'"));
+    expect(played).toMatch(/actions:\s*actionsBySide\s*\(/);
+    const beat = logCalls(body).find((c) => c.includes("'beat'"));
+    expect(beat).toMatch(/barValues:\s*beat\.barValues/);
+    expect(beat).toMatch(/tempoValues:\s*beat\.tempoValues/);
+    const counter = bodyOf('function actionsBySide(');
+    for (const kind of ['attack', 'skill-cast', 'consumable-used', 'fled', 'escape-failed']) {
+      expect(counter, `${kind} is not counted as an action`).toContain(`'${kind}'`);
+    }
+  });
+});
+
 describe('the round replay is timed, escalates when slow, and fails loudly', () => {
   const body = bodyOf('async function replayRound(');
 
@@ -898,7 +933,7 @@ describe('no measurement is interpolated into a message', () => {
 describe('the player-facing projectors are byte-identical, and carry no telemetry', () => {
   const EVENTS: readonly GameEvent[] = [
     { kind: 'encounter-start', enemyName: 'Rust Chorister' },
-    { kind: 'escape-failed', damage: 4 },
+    { kind: 'escape-failed' },
     { kind: 'victory', xpGained: 5, loot: [] },
     { kind: 'defeat' },
   ];
@@ -906,11 +941,11 @@ describe('the player-facing projectors are byte-identical, and carry no telemetr
   it('logLines renders exactly the sentences format.ts specifies', () => {
     // Hand-derived, per `format.ts`:
     //   `encounter-start` is routed to the PANE (log-model.ts LOG_ROUTING) -> no line.
-    //   `escape-failed`   -> `Your escape fails — you take ${damage} damage.`
+    //   `escape-failed`   -> `Your escape fails.` (PLAN.md #1.6: it carries no damage now)
     //   `victory`         -> `Victory! +${xp} XP${rest}.${loot}` with no rest and no loot.
     //   `defeat`          -> `You have fallen.`
     expect(logLines(EVENTS)).toEqual([
-      { text: 'Your escape fails — you take 4 damage.' },
+      { text: 'Your escape fails.' },
       { text: 'Victory! +5 XP.' },
       { text: 'You have fallen.' },
     ]);
@@ -921,7 +956,7 @@ describe('the player-facing projectors are byte-identical, and carry no telemetr
     expect(prompt).not.toBeNull();
     expect(prompt!.facts).toEqual([
       'A Rust Chorister emerges to bar your way.',
-      'Your escape fails; you take 4 harm.',
+      'Your escape fails.',
       'The enemy falls. You are still standing.',
       'Your strength gives out.',
     ]);

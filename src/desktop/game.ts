@@ -703,6 +703,9 @@ async function replayRound(plan: RoundPlan, before: GameState, tickerBefore: str
           hook: beat.hook,
           struck: beat.struck,
           touches: beat.touches,
+          // PLAN.md #1.6 (G63-2): the engine values this beat wrote to a bar or a gauge.
+          ...(beat.barValues ? { barValues: beat.barValues } : {}),
+          ...(beat.tempoValues ? { tempoValues: beat.tempoValues } : {}),
         }),
     });
     hooks.push(...played.hooks);
@@ -717,7 +720,23 @@ async function replayRound(plan: RoundPlan, before: GameState, tickerBefore: str
     ms: roundMs,
     motion: motionAnimate ? 'full' : 'reduced',
     hooks,
+    // PLAN.md #1.6: how many ACTIONS each side took this step — the §16.1 gauge can make it 0 or
+    // 2 — so a report of "it hit me twice" can be checked against the log.
+    actions: actionsBySide(plan.beats.flatMap((beat) => beat.events)),
   });
+}
+
+/**
+ * The actions each side took in a step's events (PLAN.md #1.6 logging) — an `attack` by its
+ * subject, and the player's other actions: a cast, an item, an escape made or failed.
+ */
+function actionsBySide(events: readonly GameEvent[]): { player: number; enemy: number } {
+  const out = { player: 0, enemy: 0 };
+  for (const e of events) {
+    if (e.kind === 'attack') out[e.subject] += 1;
+    else if (e.kind === 'skill-cast' || e.kind === 'consumable-used' || e.kind === 'fled' || e.kind === 'escape-failed') out.player += 1;
+  }
+  return out;
 }
 
 /**
@@ -1233,12 +1252,29 @@ async function dispatch(input: GameInput): Promise<void> {
       // the player is deliberately not shown. Developer surface only (principle 7).
       floor: floorOf(state),
       illusory: state.phase.kind === 'battle' && state.phase.battle.enemy.illusory === true,
+      // PLAN.md #1.6: both §16.1 gauges in the engine's TENTHS (numbers), and whether the round
+      // is paused for the player's extra action.
+      tempo: {
+        player: state.phase.kind === 'battle' ? (state.phase.battle.tempo?.player ?? 0) : 0,
+        enemy: state.phase.kind === 'battle' ? (state.phase.battle.tempo?.enemy ?? 0) : 0,
+      },
+      extraAction: state.phase.kind === 'battle' && state.phase.battle.extraAction === true,
       summary: {
         maxAct: runSummary.maxAct,
         bossKills: runSummary.bossKills.length,
         spares: runSummary.spareCount,
       },
     });
+    // PLAN.md #1.6: a §16.1 threshold crossed — an extra action or a lost turn — at `info`, so a
+    // shipped log shows WHY a round had two blows from one side or none (principle 7).
+    for (const e of r.events) {
+      if (e.kind !== 'tempo-extra-action' && e.kind !== 'tempo-lost-turn') continue;
+      log.info('battle', 'tempo threshold', {
+        subject: e.subject,
+        kind: e.kind,
+        tenthsAfter: state.phase.kind === 'battle' ? (state.phase.battle.tempo?.[e.subject] ?? 0) : null,
+      });
+    }
     renderSheet();
     renderLog(r.events); // G18: the dice and the damage, before the prose that cannot say them
     showThinking();

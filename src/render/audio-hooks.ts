@@ -95,6 +95,12 @@ export const HOOK_BY_KIND: Readonly<Record<GameEventKind, AudioHookName | null>>
   'boss-minion-damage': 'boss',
   'boss-adapt': 'boss',
   'floor-drain': 'tick',
+  // PLAN.md #1.6 — a tempo threshold is a tick of the clock; the gauge's value and the per-blow
+  // HP are HUD writes riding a beat that already has its sound.
+  'tempo-extra-action': 'tick',
+  'tempo-lost-turn': 'tick',
+  'tempo-changed': null,
+  'hp-changed': null,
   'loot-left-behind': null,
   // ---- the narrative stream: only the openings of a fight make a sound here ----
   'encounter-start': 'open',

@@ -651,9 +651,9 @@ export function tickConditions(
       case 'repulsive': {
         // Augment / deprivation — a pure per-turn COUNTDOWN. Their gameplay teeth are
         // the ± stat cascade read via `statEffects.ts` accessors during combat (to-hit,
-        // damage, AC, max-HP, skill power); they inflict no per-turn hp/skip here. The
-        // deferred twists (Quick/Slow initiative reorder, Lucid/Clouded illusion-sight,
-        // Emboldened/Cowed deal-quality) are commented no-op hooks in statEffects.ts.
+        // damage, AC, max-HP, skill power); they inflict no per-turn hp/skip here. Quick/Slow
+        // also move the §16.1 tempo rate by ±0.3 (`tempo.ts`, PLAN.md #1.6), read from their
+        // presence; the other deferred twist hooks are gone (see statEffects.ts).
         if (isOnset) {
           events.push({ kind: 'condition-onset', subject, conditionType: type });
           cond.remainingTurns--;

@@ -162,12 +162,13 @@ describe('AC-10 — the illusion rate is the author’s "about one fight in thre
 
 describe('AC-11 — against an illusion, nothing the player does lands, and its attacks are real', () => {
   it('a fight that HITS deals 0 and says so; the enemy’s hit is real', () => {
-    // Draws, in order: [Wisdom d20 = 5 -> 5 + 0 < 13, fails] [enemy tick: no conditions, 0]
-    // [enemy to-hit d20 = 18 -> 18 + 0 vs the player's AC: a hit; no skills -> the plain 1]
-    // [player tick: 0] [player to-hit d20 = 15: 15 + 0 (STR 10) + 2 (proficiency) = 17 >= 10,
-    // a hit] [1d6 sword = 4]. The attack REPORTS 4; the enemy loses 0; the player loses 1.
+    // Draws, in order (PLAN.md #1.6 — you act, then it acts): [Wisdom d20 = 5 -> 5 + 0 < 13,
+    // fails] [player tick: 0] [player to-hit d20 = 15: 15 + 0 (STR 10) + 2 (proficiency) = 17
+    // >= 10, a hit] [1d6 sword = 4] [enemy tick: no conditions, 0] [enemy to-hit d20 = 18 ->
+    // 18 + 0 vs the player's AC: a hit; no skills -> the plain 1]. The attack REPORTS 4; the
+    // enemy loses 0; the player loses 1.
     const b = fight(hero(10, { hp: 12, maxHp: 12 }), foe({ illusory: true }));
-    const rng = scripted([face(5, 20), face(18, 20), face(15, 20), face(4, 6)]);
+    const rng = scripted([face(5, 20), face(15, 20), face(4, 6), face(18, 20)]);
     const r = resolveRound(b, 'fight', rng);
     expect(rng.used()).toBe(4);
     expect(r.status).toBe('ongoing');
@@ -181,7 +182,7 @@ describe('AC-11 — against an illusion, nothing the player does lands, and its 
 
   it('CONTROL: the same draws against a REAL enemy (no Wisdom draw) take 4 HP off it', () => {
     const b = fight(hero(10, { hp: 12, maxHp: 12 }), foe());
-    const rng = scripted([face(18, 20), face(15, 20), face(4, 6)]);
+    const rng = scripted([face(15, 20), face(4, 6), face(18, 20)]);
     const r = resolveRound(b, 'fight', rng);
     expect(r.state.enemy.hp).toBe(6);
     expect(r.events.some((e) => e.kind === 'illusion-struck')).toBe(false);
@@ -209,16 +210,41 @@ describe('AC-11 — against an illusion, nothing the player does lands, and its 
     expect(r.events.some((e) => e.kind === 'illusion-struck')).toBe(false);
   });
 
-  it('a Firebomb (6 fire) deals 0 to an illusion and reports it; no draw is taken', () => {
+  it('a Firebomb (6 fire) deals 0 to an illusion and reports it; the item takes no draw', () => {
     const base = hero();
     const p: Player = { ...base, inventory: { ...base.inventory, backpack: [{ defId: 'firebomb' }] } };
     const b = fight(p, foe({ illusory: true }));
-    const r = resolveRound(b, { kind: 'useConsumable', source: { index: 0 } }, scripted([]));
+    // Draws: the Wisdom d20 (5, fails); the item none; then the enemy's turn (PLAN.md #1.6 — an
+    // item is a turn): its to-hit d20, a natural 1 (fumble, nothing more). Exactly TWO draws,
+    // and the script throws on a third.
+    const rng = scripted([face(5, 20), face(1, 20)]);
+    const r = resolveRound(b, { kind: 'useConsumable', source: { index: 0 } }, rng);
+    expect(rng.used()).toBe(2);
     expect(r.state.enemy.hp).toBe(10);
     expect(r.state.player.inventory.backpack).toEqual([]); // the item is spent
     expect(r.events.map((e) => e.kind)).toEqual(
       expect.arrayContaining(['consumable-used', 'illusion-struck']),
     );
+  });
+
+  it('PLAN.md #1.6: the extra action does NOT re-roll the Wisdom check — one roll per ROUND', () => {
+    // A DEX-18 hero (rate +4, the player's is uncapped) at gauge 6: 6 + 4 = 10 -> the round
+    // pauses for a second action. First step, draws in order: [Wisdom d20 = 5 -> 5 + 0 < 13,
+    // fails] [to-hit 15 -> 17 >= 10, a hit] [1d6 = 4, passing through]. No enemy draw: paused.
+    const h = { ...hero(10, { hp: 12, maxHp: 12 }), stats: { ...stats(10), DEX: 18 } };
+    const b: BattleState = { ...fight(h, foe({ illusory: true })), tempo: { player: 6, enemy: 0 } };
+    const first = resolveRound(b, 'fight', scripted([face(5, 20), face(15, 20), face(4, 6)]));
+    expect(first.state.extraAction).toBe(true);
+    // Second step. Were the Wisdom check rolled again, the FIRST draw (15) would be it — 15 >= 13
+    // would dispel the illusion. Instead it is the to-hit: [15 -> hit] [1d6 = 4] then the enemy's
+    // turn [d20 = 18 -> a hit for 1]. Exactly three draws, and the fight goes on.
+    const rng = scripted([face(15, 20), face(4, 6), face(18, 20)]);
+    const second = resolveRound(first.state, 'fight', rng);
+    expect(rng.used()).toBe(3);
+    expect(second.status).toBe('ongoing');
+    expect(second.events.some((e) => e.kind === 'illusion-dispelled')).toBe(false);
+    expect(second.events.map((e) => e.kind)).toContain('illusion-struck');
+    expect(second.state.enemy.hp).toBe(10);
   });
 
   it('the Hollow’s lifesteal draws nothing from a wound that is not there', () => {
@@ -309,9 +335,9 @@ describe('AC-12 — the passive Wisdom roll, d20 + effective WIS mod >= 13', () 
 
   it('the injected DC is honoured (the balance report’s sensitivity seam)', () => {
     const b = fight(hero(10, { skillCharges: 5, skillPool: ['brace'] }), foe({ illusory: true, activeConditions: [makeCondition('freeze')] }));
-    const at11 = resolveRound(b, { kind: 'cast', skillId: 'brace' }, scripted([face(11, 20)]), { healPct: 100, illusionDc: 11 });
+    const at11 = resolveRound(b, { kind: 'cast', skillId: 'brace' }, scripted([face(11, 20)]), { ...DEFAULT_ROUND_RULES, illusionDc: 11 });
     expect(at11.status).toBe('dispelled');
-    const at15 = resolveRound(b, { kind: 'cast', skillId: 'brace' }, scripted([face(14, 20)]), { healPct: 100, illusionDc: 15 });
+    const at15 = resolveRound(b, { kind: 'cast', skillId: 'brace' }, scripted([face(14, 20)]), { ...DEFAULT_ROUND_RULES, illusionDc: 15 });
     expect(at15.status).toBe('ongoing');
   });
 
@@ -360,7 +386,7 @@ describe('AC-13 — a non-illusory round takes the same draws and emits the same
         const a = counting(seed);
         const c = counting(seed);
         const ra = resolveRound(b, action, a);
-        const rc = resolveRound(b, action, c, { healPct: 100, illusionDc: 13 });
+        const rc = resolveRound(b, action, c, { ...DEFAULT_ROUND_RULES, illusionDc: 13 });
         expect(rc).toEqual(ra);
         expect(c.count()).toBe(a.count());
       }

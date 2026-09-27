@@ -17,13 +17,14 @@
 // them; which side acts first is the engine's business (Appendix A.1).
 
 import { appendButton, bar, chip } from '../render/components.ts';
-import { barCells, type ConditionChipModel, type ResourceBarModel } from '../render/component-model.ts';
+import { barCells, resourceBarModel, type ConditionChipModel, type ResourceBarModel } from '../render/component-model.ts';
 import type { BarKey, Beat, BeatFloat } from '../render/beat-model.ts';
 import type { AudioHookName, AudioSink } from '../render/audio-hooks.ts';
 import { buildArtSlotById } from './screens.ts';
 import {
   BATTLE_LABELS,
   battleRowButton,
+  tempoGaugeOfTenths,
   type BattleMenuRow,
   type RoundPlan,
   type StageView,
@@ -74,25 +75,34 @@ function tempoHalf(side: 'slow' | 'quick', fraction: number): HTMLElement {
   return half;
 }
 
-/**
- * The reserved tempo gauge (#1.6, GAME-DESIGN §16.1): two halves meeting at a centre line —
- * filling rightward toward the extra action, leftward toward the lost turn — and the engine's
- * number. Built ONLY when a view carries a tempo, which none does until the engine has the
- * field, so today the frame renders no gauge, no "0.0" and no label. Counted with the shared
- * `barCells` rule: only a true zero reads empty, only a true full reads full.
- */
-function tempoRow(gauge: TempoGaugeModel): HTMLElement {
-  const row = element('div', 'tempo-row');
-  row.setAttribute('role', 'img');
-  row.setAttribute('aria-label', `${gauge.label} ${gauge.text}`);
-  row.appendChild(element('span', 'tempo-label', gauge.label));
+/** The children of a tempo row: label, the two-sided track, and the engine's number. */
+function tempoParts(gauge: TempoGaugeModel): HTMLElement[] {
   const track = element('span', 'tempo-gauge');
   track.appendChild(tempoHalf('slow', gauge.slow));
   track.appendChild(element('span', 'tempo-centre'));
   track.appendChild(tempoHalf('quick', gauge.quick));
-  row.appendChild(track);
-  row.appendChild(element('span', 'tempo-text', gauge.text));
+  return [element('span', 'tempo-label', gauge.label), track, element('span', 'tempo-text', gauge.text)];
+}
+
+/**
+ * The tempo gauge (#1.6, GAME-DESIGN §16.1): two halves meeting at a centre line — filling
+ * rightward toward the extra action, leftward toward the lost turn — and the engine's number.
+ * Built when a view carries a tempo, which every battle view does. `data-tempo` names its side,
+ * so the sequencer can find it. Counted with the shared `barCells` rule: only a true zero reads
+ * empty, only a true full reads full.
+ */
+function tempoRow(gauge: TempoGaugeModel, side: 'player' | 'enemy'): HTMLElement {
+  const row = element('div', 'tempo-row');
+  row.dataset['tempo'] = side;
+  row.setAttribute('role', 'img');
+  setTempo(row, gauge);
   return row;
+}
+
+/** Rewrite a tempo row with a freshly built gauge. Its parts are never mutated in place. */
+export function setTempo(row: HTMLElement, gauge: TempoGaugeModel): void {
+  row.setAttribute('aria-label', `${gauge.label} ${gauge.text}`);
+  row.replaceChildren(...tempoParts(gauge));
 }
 
 /** Replace the bar in a host with a freshly built one. A bar is never mutated in place. */
@@ -126,7 +136,7 @@ export function buildArena(view: StageView, ticker: TickerState): HTMLElement {
   inner.appendChild(element('p', 'arena-name', view.name));
   inner.appendChild(barHost('enemy', view.hp));
   inner.appendChild(chipsRow(view.chips));
-  if (view.tempo !== undefined) inner.appendChild(tempoRow(view.tempo));
+  if (view.tempo !== undefined) inner.appendChild(tempoRow(view.tempo, 'enemy'));
 
   const band = element('div', 'ticker');
   const line = element('p', 'ticker-line', ticker.line);
@@ -171,7 +181,7 @@ export function buildVitals(view: VitalsView): HTMLElement {
     inner.appendChild(element('p', 'vitals-resource', `${word} ${view.resource.value}`));
   }
   inner.appendChild(chipsRow(view.chips));
-  if (view.tempo !== undefined) inner.appendChild(tempoRow(view.tempo));
+  if (view.tempo !== undefined) inner.appendChild(tempoRow(view.tempo, 'player'));
   return inner;
 }
 
@@ -199,6 +209,8 @@ export interface ArenaEls {
   player: HTMLElement;
   /** The host of each bar, as `barHost` built them. */
   bars: Record<BarKey, HTMLElement>;
+  /** Each side's tempo row, as `tempoRow` built it (absent from a frame built without one). */
+  tempo: Partial<Record<'player' | 'enemy', HTMLElement>>;
 }
 
 /** What the sequencer needs from outside: a way to wait, a place to send sounds, and motion. */
@@ -223,6 +235,7 @@ export interface PlayResult {
 }
 
 const BAR_KEYS: readonly BarKey[] = ['player', 'enemy', 'charges'];
+const TEMPO_SIDES = ['player', 'enemy'] as const;
 
 /** The classes a strike adds, by motion: a flash and a shake, or a tint and no movement. */
 function strikeClass(side: 'player' | 'enemy', animate: boolean): string {
@@ -250,12 +263,18 @@ function showFloat(els: ArenaEls, float: BeatFloat): void {
  * Replay one step's beats on the frame, in order, on the plan's schedule.
  *
  * First it waits the plan's `lead` (non-zero only for the opening, whose frame was not on
- * screen before — `openingLead`). Per beat: the ticker takes its line; every bar whose update
- * beat this is is written with the engine's AFTER value (so each bar is written exactly once
- * per round, at the last beat that could have moved it — never before); the struck side
- * flashes or shakes (or is tinted, under reduced motion); the float appears; the hook is sent.
- * Between beats it waits the spacing; after the last it holds, then clears its effects and
- * resolves.
+ * screen before — `openingLead`). Per beat: the ticker takes its line; the bars are written
+ * (below); the struck side flashes or shakes (or is tinted, under reduced motion); the float
+ * appears; the hook is sent. Between beats it waits the spacing; after the last it holds, then
+ * clears its effects and resolves.
+ *
+ * THE BARS MOVE AT THE BLOW THAT MOVED THEM (G63-2, PLAN.md #1.6). A bar is written at the
+ * beat named for its FINAL value (`updateAt`, the last beat that touched it) with the engine's
+ * AFTER value — and, before that, at any beat carrying an engine `hp-changed` for it
+ * (`Beat.barValues`) with THAT value. An enemy that strikes twice moves the player's bar twice,
+ * each time to a number the engine wrote; one blow per side writes each bar exactly once. A
+ * tempo gauge is written at the beat carrying its `tempo-changed` (`Beat.tempoValues`), and
+ * after the last beat it is set to the plan's after-value if it is not already showing it.
  *
  * It never receives `GameState`, and it writes nothing but these elements.
  */
@@ -268,7 +287,15 @@ export async function playRound(plan: RoundPlan, els: ArenaEls, deps: PlayDeps):
     clearEffects(els);
     els.ticker.textContent = beat.line;
     for (const key of BAR_KEYS) {
-      if (plan.updateAt[key] === beat.index) setBar(els.bars[key], plan.bars[key].after);
+      const after = plan.bars[key].after;
+      const mid = beat.barValues?.[key];
+      if (plan.updateAt[key] === beat.index) setBar(els.bars[key], after);
+      else if (mid !== undefined) setBar(els.bars[key], resourceBarModel(after.label, mid, after.max, after.tone));
+    }
+    for (const side of TEMPO_SIDES) {
+      const tenths = beat.tempoValues?.[side];
+      const row = els.tempo[side];
+      if (tenths !== undefined && row) setTempo(row, tempoGaugeOfTenths(tenths));
     }
     if (beat.struck) (beat.struck === 'enemy' ? els.enemy : els.player).classList.add(strikeClass(beat.struck, deps.animate));
     if (beat.float) showFloat(els, beat.float);
@@ -281,6 +308,19 @@ export async function playRound(plan: RoundPlan, els: ArenaEls, deps: PlayDeps):
   }
   if (plan.beats.length > 0) await deps.wait(done - (at[plan.beats.length - 1] as number));
   clearEffects(els);
+  // Every bar and gauge ends on the engine's after-value, whatever the beats carried (a value
+  // riding a late attached beat — a reflect after the last blow — cannot leave a stale number).
+  for (const key of BAR_KEYS) {
+    const after = plan.bars[key].after;
+    if (els.bars[key].querySelector('.void-bar-text')?.textContent !== bar(after).querySelector('.void-bar-text')?.textContent) {
+      setBar(els.bars[key], after);
+    }
+  }
+  for (const side of TEMPO_SIDES) {
+    const row = els.tempo[side];
+    const after = plan.tempo[side].after;
+    if (row && row.querySelector('.tempo-text')?.textContent !== after.text) setTempo(row, after);
+  }
   return { beats: plan.beats.length, hooks };
 }
 
@@ -293,5 +333,10 @@ export function arenaEls(arena: HTMLElement, vitals: HTMLElement): ArenaEls | nu
   const playerBar = vitals.querySelector<HTMLElement>('.frame-bar[data-bar="player"]');
   const chargesBar = vitals.querySelector<HTMLElement>('.frame-bar[data-bar="charges"]');
   if (!ticker || !enemy || !player || !enemyBar || !playerBar || !chargesBar) return null;
-  return { ticker, enemy, player, bars: { enemy: enemyBar, player: playerBar, charges: chargesBar } };
+  const tempo: ArenaEls['tempo'] = {};
+  const enemyTempo = arena.querySelector<HTMLElement>('.tempo-row[data-tempo="enemy"]');
+  const playerTempo = vitals.querySelector<HTMLElement>('.tempo-row[data-tempo="player"]');
+  if (enemyTempo) tempo.enemy = enemyTempo;
+  if (playerTempo) tempo.player = playerTempo;
+  return { ticker, enemy, player, bars: { enemy: enemyBar, player: playerBar, charges: chargesBar }, tempo };
 }

@@ -145,7 +145,12 @@ export type CombatEvent =
   | { kind: 'lifesteal'; amount: number; text?: string }
   | { kind: 'detonate'; consumed: number; bonusDamage: number; text?: string }
   | { kind: 'fled'; text?: string }
-  | { kind: 'escape-failed'; damage: number; text?: string }
+  /**
+   * A Run was attempted and the flee roll failed. Carries NO damage (PLAN.md #1.6 / G62): a
+   * failed escape costs the turn, and the enemy's ordinary turn follows — its own `attack`
+   * event reports whatever it deals, through the one guarded damage path.
+   */
+  | { kind: 'escape-failed'; text?: string }
   | { kind: 'escape-impossible'; text?: string }
   // ---- M8 spare / release (karma-weighted enemies only) ----
   | { kind: 'spared'; enemyName: string; text?: string }
@@ -198,7 +203,24 @@ export type CombatEvent =
    * stays where it fell. A combat event because the victory block emits it; the chest path
    * emits it from `game.ts` too.
    */
-  | { kind: 'loot-left-behind'; name: string; rarity: Rarity; text?: string };
+  | { kind: 'loot-left-behind'; name: string; rarity: Rarity; text?: string }
+  // ---- PLAN.md #1.6 sequential rounds + the §16.1 tempo gauge ----
+  /**
+   * A combatant's tempo gauge moved this round. `tenths` is the gauge AFTER the move, in
+   * integer tenths (+4 = +0.4) — see `tempo.ts` for why tenths. Emitted only when it changed.
+   * A HUD value: the frame's gauge shows it; it is never a log line or a narrator fact.
+   */
+  | { kind: 'tempo-changed'; subject: CombatSubject; tenths: number; text?: string }
+  /** The gauge reached +1.0: the combatant takes an EXTRA ACTION this round (threshold spent). */
+  | { kind: 'tempo-extra-action'; subject: CombatSubject; text?: string }
+  /** The gauge reached −1.0: the combatant LOSES its turn this round (threshold spent). */
+  | { kind: 'tempo-lost-turn'; subject: CombatSubject; text?: string }
+  /**
+   * A combatant's HP after one blow / tick landed — the engine's per-blow truth, so the bars
+   * move at the blow that moved them (G63-2) with a value the engine wrote. Emitted only when
+   * HP actually moved. A HUD value, never a log line or a narrator fact.
+   */
+  | { kind: 'hp-changed'; subject: CombatSubject; hp: number; maxHp: number; text?: string };
 
 /** Every event `kind` string (handy for exhaustiveness / test assertions). */
 export type CombatEventKind = CombatEvent['kind'];

@@ -1,5 +1,32 @@
 # Human Checks — The Void
 
+> ## ▶️ From `round-order` (`PLAN.md` #1.6, 2026-09-26) — you strike first now, and speed is a gauge
+>
+> **What changed in the game:** a round is YOU, then IT. Your blow lands before the enemy answers,
+> so a killing blow ends the fight without a hit back. Running and using an item cost your turn
+> too — the enemy answers them. Each side now has a **tempo gauge** beside its HP (the two-sided row
+> of cells): it fills each round by your Dexterity (and Quick/Slow, and for an enemy its family's
+> speed); full, you get a **second move of your choice** that round; empty, you **lose the turn**.
+> It resets every fight. The rules, the numbers and the order are machine-checked; these are the
+> feel checks only a person can do. Play from **F3** (`npm run desktop`): `act1-hub` → Continue, a
+> few fights on floor 1 and one deeper (`act5-warped`). **Do NOT run this from the worktree while a
+> real-model play-through is using ports 5188/9333.**
+>
+> - [ ] **1. Does a round read as YOU, then IT?** Your line and your blow's flash come first, then
+>       the enemy's. *Fail if* the order ever reads backwards, or a killed enemy still hits you.
+> - [ ] **2. Is a LOST TURN legible?** A slow character (or one under Slow) will sometimes see
+>       *“You fall behind — you lose the turn.”* on the ticker while the gauge empties leftward.
+>       *Fail if* you cannot tell why you did nothing that round.
+> - [ ] **3. Is YOUR extra action legible?** When your gauge fills, the ticker says *“You have a
+>       moment more — act again.”* and the menu comes back **before the enemy moves**. *Fail if* the
+>       second prompt reads as a glitch or a double-click, or you cannot tell the round is paused.
+> - [ ] **4. Does the ENEMY's double action read as intended, not as a glitch?** From floor 2 down,
+>       some enemy turns are two blows (*“The enemy moves again.”* between them) and your HP bar
+>       drops twice. *Fail if* it reads as the same hit logged twice.
+> - [ ] **5. Does a FAST character feel fast?** Your gauge is never capped (you ruled, G78): a
+>       DEX-18 character under Quick fills +0.7 a round and acts twice almost every other round.
+>       *Fail if* that feels like a different, easier game rather than a reward for Dexterity.
+
 > ## 📓 From `text-hygiene` (2026-09-21) — the game now keeps a record of what the model says
 >
 > **Two things you were being shown that nobody wrote are fixed and machine-proven:** the altar now
@@ -118,13 +145,9 @@
 >       *Failure:* it reads as a spreadsheet recalculating (too fast) or a slideshow (too slow). **The
 >       knob:** `BEAT_MS`, `BEAT_HOLD_MS` and `MAX_ROUND_MS` in `src/render/beat-model.ts` — one edit
 >       each; the tests pin the arithmetic, not the values' feel.
-> - [ ] **2. In this build the enemy's blow plays first, then yours — the ENGINE's current order,
->       not the design.** The screen plays the round in whatever order the engine emits it. The
->       design is that YOU strike first, with speed from the tempo gauge that Dexterity fills — no initiative roll (§14.8, and the
->       tempo gauge of §16.1); the engine does not do that yet (`FINDINGS.md` G62). Nothing on the
->       screen assumes an order, so when the engine changes the screen follows with no change of
->       its own. For this build, just confirm a round's lines come in the order the combat log
->       gives them — the enemy's blow, then yours.
+> - [x] ~~**2. In this build the enemy's blow plays first, then yours.**~~ **Superseded 2026-09-26
+>       by `round-order` (G62):** you strike first now — see that block's checks 1–4 at the top of
+>       this file, which replace this one.
 > - [ ] **3. The flash, the shake — and the reduced-motion tint.** Is the enemy's flash and your stat
 >       box's shake comfortable over a long fight? Then **Settings → Motion → Reduced**: the timing
 >       is the same, nothing moves, and a struck side gets a soft outline instead. *Failure:* the

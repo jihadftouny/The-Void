@@ -49,7 +49,7 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   lifesteal: { kind: 'lifesteal', amount: 3 },
   detonate: { kind: 'detonate', consumed: 1, bonusDamage: 4 },
   fled: { kind: 'fled' },
-  'escape-failed': { kind: 'escape-failed', damage: 2 },
+  'escape-failed': { kind: 'escape-failed' },
   'escape-impossible': { kind: 'escape-impossible' },
   spared: { kind: 'spared', enemyName: 'The Grieving' },
   'spare-unavailable': { kind: 'spare-unavailable' },
@@ -70,6 +70,11 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'illusion-struck': { kind: 'illusion-struck' },
   'illusion-dispelled': { kind: 'illusion-dispelled', natural: 12, modifier: 1, total: 13, dc: 13 },
   'loot-left-behind': { kind: 'loot-left-behind', name: 'Common helmet', rarity: 'Common' },
+  // PLAN.md #1.6 (combat)
+  'tempo-changed': { kind: 'tempo-changed', subject: 'player', tenths: 7 },
+  'tempo-extra-action': { kind: 'tempo-extra-action', subject: 'enemy' },
+  'tempo-lost-turn': { kind: 'tempo-lost-turn', subject: 'player' },
+  'hp-changed': { kind: 'hp-changed', subject: 'player', hp: 3, maxHp: 9 },
   // ---- narrative (26) ----
   title: { kind: 'title' },
   intro: { kind: 'intro', header: 'HEAD', lines: ['one', 'two'] },
@@ -115,14 +120,32 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
     // PLAN.md #2: +4 combat, +4 narrative.
     // ...and -4 narrative: the rest-decision kinds left with the decision (PLAN.md #2).
     // ...and -3 combat: the potion kinds left with the potion (§22.6).
-    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 - 3 + 26 + 4 - 4);
+    // ...and +4 combat: PLAN.md #1.6's tempo-changed, tempo-extra-action, tempo-lost-turn,
+    // hp-changed.
+    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4);
     expect(new Set(Object.keys(LOG_ROUTING))).toEqual(new Set(ALL_KINDS));
   });
 
-  it('routes every value to one of the two destinations', () => {
+  it('routes every value to one of the three destinations', () => {
     for (const kind of ALL_KINDS) {
-      expect(['log', 'pane'], `${kind}`).toContain(LOG_ROUTING[kind]);
+      expect(['log', 'pane', 'hud'], `${kind}`).toContain(LOG_ROUTING[kind]);
     }
+  });
+
+  it('exactly the two HUD values are routed to the HUD, and yield NO line (PLAN.md #1.6)', () => {
+    // Decided in the plan's D6 table, written out here independently of the map.
+    const hud = ALL_KINDS.filter((k) => LOG_ROUTING[k] === 'hud').sort();
+    expect(hud).toEqual(['hp-changed', 'tempo-changed']);
+    for (const kind of hud) expect(logLines([SAMPLE[kind]]), `${kind} must not reach the log`).toEqual([]);
+    // ...and a real run's per-blow HP and gauge never interleave the log's lines.
+    expect(
+      logLines([
+        { kind: 'tempo-changed', subject: 'player', tenths: 4 },
+        { kind: 'hp-changed', subject: 'player', hp: 12, maxHp: 20 },
+        { kind: 'tempo-extra-action', subject: 'player' },
+        { kind: 'hp-changed', subject: 'enemy', hp: 5, maxHp: 10 },
+      ]).map((l) => l.text),
+    ).toEqual(['You have a moment more — act again.']);
   });
 
   it('every LOG-routed kind yields exactly one NON-EMPTY line', () => {
@@ -136,7 +159,8 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
     }
     // non-vacuity: 37 + PLAN.md #2's three in-fight kinds (floor-drain, illusion-struck,
     // illusion-dispelled). `loot-left-behind` is a combat kind routed to the PANE.
-    expect(logged).toBe(37 + 3 - 3);
+    // PLAN.md #1.6: +2 (tempo-extra-action, tempo-lost-turn); its other two are `hud`.
+    expect(logged).toBe(37 + 3 - 3 + 2);
   });
 
   it('every PANE-routed kind yields NO line at all', () => {

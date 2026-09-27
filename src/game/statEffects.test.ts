@@ -13,7 +13,6 @@ import {
   effectiveArmorClass,
   effectiveMaxHp,
   effectiveResistances,
-  initiativeOrderTwist,
   type Conditioned,
 } from './statEffects.ts';
 import { makeCondition, type ActiveCondition, type ConditionType } from './condition.ts';
@@ -180,17 +179,6 @@ describe('purity', () => {
   });
 });
 
-describe('deferred-twist no-op hooks are wired and currently inert', () => {
-  it('the initiative twist returns 0 even with its augment active', () => {
-    expect(initiativeOrderTwist(withCond('quick'))).toBe(0);
-    expect(initiativeOrderTwist(withCond('slow'))).toBe(0);
-    // PLAN.md #2: the illusion-sight lines are GONE with their stub — floor 2's passive Wisdom
-    // roll reads `effectiveMods` and is tested behaviourally in `illusion.test.ts`.
-    // G16: the two `dealQualityTwist` lines that used to sit here are GONE with the function.
-    // It was a no-op commented "no-op until M7" — and M7 shipped. Its siblings stay because
-    // each has a named future owner; this one only had a stale promise.
-  });
-});
 
 // ------- G16 — the third dead stat twist is DELETED, not re-labelled --------------------------
 
@@ -219,8 +207,25 @@ describe('G16 — dealQualityTwist is gone from the shipping code', () => {
     expect(hits).toEqual([]);
   });
 
-  it('its sibling stays — it has a named future owner, which is what it lacked', () => {
-    expect(typeof statEffects.initiativeOrderTwist).toBe('function'); // PLAN.md #1.6
+  it('its Quick/Slow sibling is gone too — PLAN.md #1.6 built the tempo gauge it waited for (AC-18)', () => {
+    // Quick/Slow are now the ±0.3 of the §16.1 rate (`tempo.ts`); the no-op initiative hook had
+    // nothing left to wait for. The name is assembled so this file's own text is not a hit.
+    const name = ['initiative', 'Order', 'Twist'].join('');
+    expect(name in statEffects).toBe(false);
+    const dir = fileURLToPath(new URL('.', import.meta.url));
+    const roots = [dir, join(dir, '..', 'render'), join(dir, '..', 'llm'), join(dir, '..', 'desktop'), join(dir, '..', 'dev')];
+    const hits: string[] = [];
+    let scanned = 0;
+    for (const root of roots) {
+      if (!existsSync(root)) continue;
+      for (const file of readdirSync(root)) {
+        if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue;
+        scanned += 1;
+        if (readFileSync(join(root, file), 'utf8').includes(name)) hits.push(file);
+      }
+    }
+    expect(hits).toEqual([]);
+    expect(scanned).toBeGreaterThan(60); // non-vacuity: the scan really read the shipping files
   });
 
   it('the illusion-sight stub is gone too — floor 2 replaced it with a real roll (PLAN.md #2)', () => {

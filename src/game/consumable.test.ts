@@ -1,8 +1,10 @@
 // M6 step 5 — the use-consumable battle action across the five §6 categories, through the
 // REAL action ({kind:'useConsumable'}) on resolveRound. Every expected value is hand-derived
 // from the consumable's `use` array in consumables.json and the effect arithmetic — never read
-// back from code. Using a consumable draws NO rng and grants the enemy no turn, so most rounds
-// pass an empty seqRng (which throws if the code draws), proving the no-draw / no-counter rule.
+// back from code. Using a consumable draws NO rng itself. PLAN.md #1.6: it IS a turn, so the
+// enemy answers it — this file's enemy (STR 10, no skills, no charges) takes exactly ONE draw,
+// its to-hit d20, which `FUMBLE` makes a natural 1 (a fumble: no damage, no further draw). So a
+// round here passes `[FUMBLE]`, and the script still throws on any draw beyond it.
 
 import { describe, expect, it } from 'vitest';
 import { resolveRound, createBattle, type BattleAction } from './battle.ts';
@@ -41,8 +43,11 @@ function makeEnemy(over: Partial<Enemy> = {}): Enemy {
 
 const cond = (type: ConditionType): ActiveCondition => ({ type, remainingTurns: 2, maxTurns: 2 });
 
-/** Use the backpack item at index 0. */
-function use0(player: Player, enemy: Enemy, draws: number[] = []) {
+/** The enemy's one to-hit draw, landing on a natural 1: a fumble, so it deals nothing. */
+const FUMBLE = 0.5 / 20;
+
+/** Use the backpack item at index 0. The default draws are the enemy's fumbled answer. */
+function use0(player: Player, enemy: Enemy, draws: number[] = [FUMBLE]) {
   return resolveRound(createBattle(player, enemy, 1), { kind: 'useConsumable', source: { index: 0 } }, seqRng(draws));
 }
 
@@ -103,16 +108,18 @@ describe('throwables category', () => {
   });
 
   it('a throwable that kills the enemy resolves to victory (rewards rolled)', () => {
-    // Enemy at 1 hp; Firebomb (6) kills. killAndVictory draws extra-rest (0.99 -> none) then the
-    // loot gate (0.5 >= act-1 dropChance 0.5 -> no drop). M7: gold draw replaced by loot roll.
-    const r = use0(makePlayer({}, [{ defId: 'firebomb' }]), makeEnemy({ hp: 1, xp: 1 }), [0.99, 0.5]);
+    // Enemy at 1 hp; Firebomb (6) kills — on the PLAYER'S turn, so the enemy never answers.
+    // killAndVictory draws the loot gate (0.99 >= act-1 dropChance 0.5 -> no drop); PLAN.md #2
+    // removed the extra-rest draw that used to precede it.
+    const r = use0(makePlayer({}, [{ defId: 'firebomb' }]), makeEnemy({ hp: 1, xp: 1 }), [0.99]);
     expect(r.status).toBe('player-won');
   });
 });
 
 describe('utility category', () => {
   it('Smoke Vial flees the battle (guaranteed)', () => {
-    const r = use0(makePlayer({}, [{ defId: 'smoke-vial' }]), makeEnemy());
+    // A successful escape ends the round: no enemy answer, so no draw at all.
+    const r = use0(makePlayer({}, [{ defId: 'smoke-vial' }]), makeEnemy(), []);
     expect(r.status).toBe('fled');
   });
 
@@ -127,7 +134,7 @@ describe('utility category', () => {
 describe('unavailable + potion off-equivalence', () => {
   it('an empty backpack index is unavailable (state unchanged, no draw)', () => {
     const player = makePlayer({ hp: 5 }, []);
-    const r = use0(player, makeEnemy());
+    const r = use0(player, makeEnemy(), []); // an empty script: a rejection draws nothing
     expect(r.events).toEqual([{ kind: 'consumable-unavailable' }]);
     expect(r.state.player.hp).toBe(5);
   });
@@ -138,7 +145,7 @@ describe('unavailable + potion off-equivalence', () => {
     expect(noPotion).toBe(true);
     // And the draught heals to cap exactly as the potion did (100% of max HP, capped).
     const player = makePlayer({ hp: 3, maxHp: 10 }, [{ defId: 'void-draught' }]);
-    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
+    const r = resolveRound(createBattle(player, makeEnemy(), 1), { kind: 'useConsumable', source: { index: 0 } }, seqRng([FUMBLE]));
     expect(r.state.player.hp).toBe(10);
     expect(r.state.player.inventory.backpack).toEqual([]);
   });
@@ -154,7 +161,7 @@ describe('G28(d) — the Clarity Draught does what it advertises', () => {
     // `use: [{ healSelf, amount: 8 }]`.
     const player = makePlayer({ hp: 5, maxHp: 30 }, [{ defId: 'clarity-draught' }]);
     const battle = createBattle(player, makeEnemy(), 1);
-    const r = resolveRound(battle, { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
+    const r = resolveRound(battle, { kind: 'useConsumable', source: { index: 0 } }, seqRng([FUMBLE]));
     expect(r.status).toBe('ongoing');
     expect(r.state.player.hp).toBe(13); // 5 + 8, well under the 30 cap
     expect(r.state.player.inventory.backpack).toEqual([]); // consumed
@@ -165,7 +172,7 @@ describe('G28(d) — the Clarity Draught does what it advertises', () => {
   it('its heal is still capped at effective max HP', () => {
     const player = makePlayer({ hp: 9, maxHp: 10 }, [{ defId: 'clarity-draught' }]);
     const battle = createBattle(player, makeEnemy(), 1);
-    const r = resolveRound(battle, { kind: 'useConsumable', source: { index: 0 } }, seqRng([]));
+    const r = resolveRound(battle, { kind: 'useConsumable', source: { index: 0 } }, seqRng([FUMBLE]));
     expect(r.state.player.hp).toBe(10);
   });
 });

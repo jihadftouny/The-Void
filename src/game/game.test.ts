@@ -24,7 +24,7 @@ import { createKarma, type KarmaState } from './karma.ts';
 import { hasControlCondition, makeCondition } from './condition.ts';
 import { resolveSkill, type SkillId } from './skill.ts';
 import { generateDraft } from './draft.ts';
-import { gearUpAtHub } from './sim.ts';
+import { gearUpAtHub, heuristicPolicy } from './sim.ts';
 import { type GameEvent } from './gameEvent.ts';
 
 // ------- Fixtures ------------------------------------------------------------
@@ -761,9 +761,15 @@ function bossVictoryState(
     canFlee: false,
     boss: { bossId, round: 0, ...(bossId === 'kingpin' ? { minions: 0 } : {}) },
   };
+  // PLAN.md #1.6: the player strikes FIRST, so the round's first draw is the player's d20. Against
+  // AC 1 any natural but a 1 (a fumble) hits, and the 1-HP boss falls before it can act. The
+  // state is chosen by computing that first face from the same generator `step` uses — never by
+  // trying outcomes until one passes.
+  let rngState = 7;
+  while (1 + Math.floor(createRng(rngState).rng() * 20) === 1) rngState += 1;
   return {
     version: 9,
-    rngState: 7,
+    rngState,
     player,
     act,
     place: act - 1,
@@ -968,10 +974,11 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
   // replay, and that file is re-baselined by design whenever behaviour moves, so the guard
   // would evaporate at the next re-baseline. These are the positive end-to-end assertions.
   //
-  // Every case uses `potion` as the action, which is the one action that RESOLVES a round
-  // (so the boss mechanic runs) while granting the enemy NO turn — so the player's HP after
-  // the step is the potion heal minus the minion damage and nothing else. It also draws no
-  // rng, and `bossPostRound` is RNG-free, so these are deterministic whatever the seed.
+  // Every case uses the Void Draught as the action, which RESOLVES a round (so the boss
+  // mechanic runs) and draws no rng. PLAN.md #1.6 made an item a TURN — the enemy answers it —
+  // so the boss is FROZEN here (a fresh freeze: its tick is the onset, it skips, no draw). The
+  // player's HP after the step is then the heal minus the minion damage and nothing else, and
+  // `bossPostRound` is RNG-free, so these are deterministic whatever the seed.
   //
   // The Kingpin's cadence summons on round 3, so each fixture starts with `minions: 2`
   // already on the field: round 1 then does `2 x KINGPIN_MINION_DAMAGE` = 2 damage with no
@@ -983,11 +990,19 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
   // character carries one at backpack index 0 (`STARTING_CONSUMABLES`).
   const DRAUGHT = { kind: 'battle-action', action: { kind: 'useConsumable', source: { index: 0 } } } as const;
 
+  /** A boss battle whose boss is frozen this round (skips its turn: no blow, no draw). */
+  const frozenBoss = (built: StepResult): GameState => {
+    const phase = built.state.phase;
+    if (phase.kind !== 'battle') throw new Error('not a battle');
+    const enemy = { ...phase.battle.enemy, activeConditions: [makeCondition('freeze')] };
+    return { ...built.state, phase: { ...phase, battle: { ...phase.battle, enemy } } };
+  };
+
   it('the damage lands on HP: a Void Draught heals 10 -> 20, then the crew takes it to 18', () => {
     expect(KINGPIN_MINION_DAMAGE).toBe(1); // the constant behind the "2", restated
     const player = makePlayer({ hp: 10, maxHp: 20 });
     expect(player.inventory.backpack[0]).toEqual({ defId: 'void-draught' });
-    const r = step(bossBattleState(kingpinWithCrew(), 1, player).state, DRAUGHT);
+    const r = step(frozenBoss(bossBattleState(kingpinWithCrew(), 1, player)), DRAUGHT);
     expect(r.events).toContainEqual({ kind: 'consumable-used', itemId: 'void-draught' });
     expect(r.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 });
     expect(r.state.phase.kind).toBe('battle');
@@ -1002,7 +1017,7 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
     // This is the actual content of G29: `boss.ts` used to write `player.hp` directly, so a
     // 20-point shield absorbed NOTHING at the death `BALANCE-REPORT.md` says happens most.
     const player = makePlayer({ hp: 10, maxHp: 20 });
-    const r = step(bossBattleState(kingpinWithCrew(), 1, player, 3, { shield: 5 }).state, DRAUGHT);
+    const r = step(frozenBoss(bossBattleState(kingpinWithCrew(), 1, player, 3, { shield: 5 })), DRAUGHT);
     expect(r.events).toContainEqual({ kind: 'shield-absorbed', amount: 2 });
     if (r.state.phase.kind === 'battle') {
       expect(r.state.phase.battle.player.hp).toBe(20); // the shield ate all of it
@@ -1021,7 +1036,7 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
         slots: { ...base.inventory.slots, amulet: { defId: 'halo-fragment' } },
       },
     };
-    const r = step(bossBattleState(kingpinWithCrew(), 1, haloed).state, DRAUGHT);
+    const r = step(frozenBoss(bossBattleState(kingpinWithCrew(), 1, haloed)), DRAUGHT);
     expect(r.events).toContainEqual({ kind: 'revive', healedTo: 1 });
     expect(r.state.phase.kind).toBe('battle'); // survived
     if (r.state.phase.kind === 'battle') {
@@ -1033,11 +1048,70 @@ describe('G29 — boss-minion damage reaches the player THROUGH game.ts, guarded
   it('without a revive the same lethal tick ends the run — game.ts owns the death now', () => {
     // `bossPostRound` no longer decides this; it returns a number and `game.ts` resolves it.
     const player = makePlayer({ hp: 1, maxHp: 2 });
-    const r = step(bossBattleState(kingpinWithCrew(), 1, player).state, DRAUGHT);
+    const r = step(frozenBoss(bossBattleState(kingpinWithCrew(), 1, player)), DRAUGHT);
     expect(r.events).toContainEqual({ kind: 'defeat' });
     expect(r.state.phase.kind).toBe('game-over');
     expect(r.awaiting).toBe('game-over');
     expect(r.events.some((e) => e.kind === 'game-over')).toBe(true);
+  });
+});
+
+describe('AC-15 (PLAN.md #1.6) — a boss gets exactly one post-round per COMPLETED round', () => {
+  // The Kingpin with a crew of 2 announces `boss-minion-damage` once per round it runs. The
+  // player (DEX 18, rate +4 — the player's is never capped, G78) opens at gauge 6: 6 + 4 = 10 crosses, so the first Fight PAUSES the
+  // round for the extra action (`roundComplete: false`) — and the crew must NOT strike. The
+  // second Fight completes the round, and the crew strikes exactly once.
+  it('the paused step fires nothing; the completing step fires it once; boss.round counts rounds', () => {
+    const player = { ...makePlayer({ hp: 999, maxHp: 999 }), stats: { ...baseStats(), DEX: 18 } };
+    const built = bossBattleState({ bossId: 'kingpin', round: 0, minions: 2 }, 1, player);
+    if (built.state.phase.kind !== 'battle') throw new Error('not a battle');
+    const start: GameState = {
+      ...built.state,
+      phase: { ...built.state.phase, battle: { ...built.state.phase.battle, tempo: { player: 6, enemy: 0 } } },
+    };
+    const first = step(start, { kind: 'battle-action', action: 'fight' });
+    expect(first.events).toContainEqual({ kind: 'tempo-extra-action', subject: 'player' });
+    expect(first.events.some((e) => e.kind === 'boss-minion-damage')).toBe(false);
+    if (first.state.phase.kind !== 'battle') throw new Error('the fight ended early');
+    expect(first.state.phase.battle.extraAction).toBe(true);
+    expect(first.state.phase.battle.boss?.round).toBe(0);
+    expect(first.awaiting).toBe('battle-action');
+
+    const second = step(first.state, { kind: 'battle-action', action: 'fight' });
+    expect(second.events.filter((e) => e.kind === 'boss-minion-damage')).toEqual([{ kind: 'boss-minion-damage', amount: 2 }]);
+    if (second.state.phase.kind !== 'battle') throw new Error('the fight ended early');
+    expect(second.state.phase.battle.boss?.round).toBe(1);
+    expect(second.state.phase.battle.extraAction).toBeUndefined();
+  });
+});
+
+describe('PLAN.md #1.6 (author, 2026-09-26) — the gauge and a pending extra action reset every fight', () => {
+  it('through step: a fight escaped on its extra action, gauges moved; the next fight opens with neither', () => {
+    // A floor-1 fight whose round is PAUSED for the player's extra action, with both gauges off
+    // zero. The Smoke Vial — a guaranteed escape (consumables.json) — IS that second action, so
+    // it spends the pause: the fight ends with the extra action used and only the gauges still
+    // set on it. (A pending pause cannot outlive a fight: the only way out is an action.)
+    const base = makePlayer({ hp: 20, maxHp: 20 });
+    const player = { ...base, inventory: { ...base.inventory, backpack: [{ defId: 'smoke-vial' }] } };
+    const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(1));
+    const battle: BattleState = { ...createBattle(player, enemy, 1), tempo: { player: 5, enemy: -4 }, extraAction: true };
+    const fighting: GameState = { ...menuState(player, 11), phase: { kind: 'battle', battle, started: true, final: false } };
+    const fled = step(fighting, { kind: 'battle-action', action: { kind: 'useConsumable', source: { index: 0 } } });
+    expect(fled.events).toContainEqual({ kind: 'consumable-used', itemId: 'smoke-vial' });
+    expect(fled.state.phase.kind, 'the escape did not end the fight').toBe('main-menu');
+
+    // Walk on, the way the sim plays, until the NEXT fight is on — and read the battle it opens.
+    const policy = heuristicPolicy('Enforcer');
+    let r: StepResult = fled;
+    for (let i = 0; i < 200 && r.state.phase.kind !== 'battle'; i += 1) {
+      r = step(r.state, policy(r));
+    }
+    expect(r.state.phase.kind, 'no second fight was reached — the check read nothing').toBe('battle');
+    if (r.state.phase.kind !== 'battle') return;
+    expect(r.state.phase.battle.tempo, 'the gauges carried into the next fight').toBeUndefined();
+    expect(r.state.phase.battle.extraAction, 'the pending extra action carried into the next fight').toBeUndefined();
+    // ...and a player at rest has nothing on it either: the gauge lives on the battle, never the player.
+    expect(JSON.stringify(r.state.player)).not.toMatch(/tempo|extraAction/);
   });
 });
 

@@ -418,8 +418,8 @@
  * easing, DARKENS instead. It lives here, with the floor and motion policy for the battle
  * effects, so `battle.css` keeps describing the pieces rather than the floors. `data-ground` is
  * the ground as PAINTED: high contrast writes `dark` on every floor, so it keeps the bright flash.
- * Placed BEFORE the reduced-motion rules below, so the OS block's `animation: none` (same
- * specificity, later) still wins for a strike flagged before the script knew motion was off.
+ * The reduced-motion rules below switch it off for BOTH the OS setting and the player's, by
+ * specificity ((0,4,0) against this rule's (0,3,0)), not merely by coming later (G65).
  * --------------------------------------------------------------------------------------- */
 
 [data-ground='light'] .arena-figure.is-struck {
@@ -454,6 +454,8 @@
    * itself when it knows motion is off; this is the CSS half for a flag set before it knew. */
   :root:not([data-motion='full']) .arena-figure.is-struck,
   :root:not([data-motion='full']) .vitals-inner.is-shaking {
+    /* (0,4,0): beats battle.css's flash and the light-floor flash by specificity (G65). */
+    animation: none;
     outline: var(--void-rule-heavy) solid var(--void-harm);
     outline-offset: var(--void-space-1);
   }
@@ -468,8 +470,15 @@
   animation: none;
   transition: none;
 }
-[data-motion='reduce'] .arena-figure.is-struck,
-[data-motion='reduce'] .vitals-inner.is-shaking {
+/* G65 (PLAN.md #1.6): the strike's own classes need their OWN `animation: none` under the
+ * player's setting. The generic rule above is (0,2,0) and sits BEFORE battle.css, so
+ * `battle.css`'s `.arena-figure.is-struck` (also (0,2,0), later) won and a struck enemy still
+ * flashed; `[data-ground='light'] .arena-figure.is-struck` (0,3,0) won outright. `:root` lifts
+ * these to (0,4,0), which beats both by SPECIFICITY — so no reordering of the stylesheets can
+ * reopen the hole. The layout probe reads the computed `animation-name` in real Chromium. */
+:root[data-motion='reduce'] .arena-figure.is-struck,
+:root[data-motion='reduce'] .vitals-inner.is-shaking {
+  animation: none;
   outline: var(--void-rule-heavy) solid var(--void-harm);
   outline-offset: var(--void-space-1);
 }

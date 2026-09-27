@@ -894,7 +894,13 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
     //    returned karma only), so `spared` was scanned by nothing at all: axis nouns injected
     //    into `formatEvent`'s and `describeEvent`'s `spared` arms left the whole suite green.
     //    Every event of every spare step now goes into the same sweep as the deal events.
+    //    The sweep reads seeds 1..6, then CONTINUES until a Judged spare is among them (a run must
+    //    reach floor 4 for one). PLAN.md #1.6 moved which early seeds get that deep; the property
+    //    swept is unchanged, and the non-vacuity check below still has to find one.
     const spares = [1, 2, 3, 4, 5, 6].flatMap((s) => observeSpares(s, 'Penitent'));
+    for (let s = 7; s <= 60 && !spares.some((o) => o.familyId === 'theJudged'); s += 1) {
+      spares.push(...observeSpares(s, 'Penitent'));
+    }
     expect(spares.some((o) => o.familyId === 'theJudged')).toBe(true);
     for (const o of spares) emitted.push(...o.events);
 

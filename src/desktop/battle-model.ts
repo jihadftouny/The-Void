@@ -47,8 +47,7 @@ import {
 } from './view-model.ts';
 
 /**
- * THE TEMPO GAUGE (GAME-DESIGN.md §16.1), as the stage will draw it — RESERVED for `PLAN.md`
- * #1.6, which builds the engine half.
+ * THE TEMPO GAUGE (GAME-DESIGN.md §16.1), as the stage draws it — LIVE since `PLAN.md` #1.6.
  *
  * §16.1: one number per combatant, drifting each round by a rate set by DEX (and Quick/Slow);
  * at +1.0 the combatant takes an EXTRA ACTION and at −1.0 LOSES its turn, the threshold then
@@ -56,10 +55,8 @@ import {
  * emptying toward the lost turn — not a bar from zero, and it is shown on both combatants
  * beside their HP ("tempo is tactical; karma is thematic": this one is meant to be read).
  *
- * The engine has no tempo field yet (`statEffects` returns 0 for it), so no view carries one
- * and NOTHING RENDERS — no gauge, no "0.0", no label. #1.6 adds the field and one line per
- * view: `view.tempo = tempoGauge(combatant.tempo)`. The frame already has the room (the
- * layout probe's `battle-tempo` measures both gauges in place).
+ * The engine keeps it on the battle in integer TENTHS (`battle.tempo`, absent ⇒ 0); the views
+ * divide by ten here, at the edge (`tempoGaugeOfTenths`), and every battle view carries one.
  */
 export interface TempoGaugeModel {
   /** The engine's tempo, verbatim. */
@@ -71,6 +68,11 @@ export interface TempoGaugeModel {
   /** How far toward −1.0 — the lost turn — as 0..1. */
   slow: number;
   label: string;
+}
+
+/** The gauge for an engine tempo in TENTHS (`battle.tempo`) — the one place the ten is divided. */
+export function tempoGaugeOfTenths(tenths: number): TempoGaugeModel {
+  return tempoGauge(tenths / 10);
 }
 
 /** Model the gauge for an engine tempo — PURE formatting of an engine value; no rule applied. */
@@ -93,7 +95,7 @@ export interface StageView {
   name: string;
   hp: ResourceBarModel;
   chips: ConditionChipModel[];
-  /** RESERVED for #1.6's tempo gauge (see `TempoGaugeModel`). Never set today. */
+  /** The enemy's §16.1 tempo gauge (see `TempoGaugeModel`). Set in every battle view. */
   tempo?: TempoGaugeModel;
   /** A boss rides on the battle. Drives no text; #11's talk seam reads it. */
   isBoss: boolean;
@@ -110,7 +112,7 @@ export interface VitalsView {
   /** The class's build resource — present only for a class that banks one. */
   resource?: { kind: 'momentum' | 'corruption'; value: number };
   chips: ConditionChipModel[];
-  /** RESERVED for #1.6's tempo gauge, as on `StageView`. Never set today. */
+  /** The player's §16.1 tempo gauge, as on `StageView`. Set whenever a battle is on. */
   tempo?: TempoGaugeModel;
 }
 
@@ -155,6 +157,7 @@ export function stageView(state: GameState): StageView | null {
     name: enemy.fullName,
     hp: resourceBarModel('HP', enemy.hp, enemy.maxHp, 'foe'),
     chips: conditionChips(enemy.activeConditions),
+    tempo: tempoGaugeOfTenths(battle.tempo?.enemy ?? 0),
     isBoss: battle.boss !== undefined,
   };
 }
@@ -173,6 +176,8 @@ export function vitalsView(state: GameState): VitalsView | null {
   // The ONE rule for which class banks a resource lives in `characterSheet`; reused, not copied.
   const resource = characterSheet(p).resource;
   if (resource) view.resource = resource;
+  // PLAN.md #1.6: the player's gauge beside their HP, whenever a battle is on.
+  if (state.phase.kind === 'battle') view.tempo = tempoGaugeOfTenths(state.phase.battle.tempo?.player ?? 0);
   return view;
 }
 
@@ -248,12 +253,25 @@ export interface BarPair {
   after: ResourceBarModel;
 }
 
+/** A tempo gauge's engine value before the step and after it. */
+export interface TempoPair {
+  before: TempoGaugeModel;
+  after: TempoGaugeModel;
+}
+
 /** One step's replay: its beats, when each plays, and the bars with when each is written. */
 export interface RoundPlan {
   beats: readonly Beat[];
   schedule: BeatSchedule;
   bars: Record<BarKey, BarPair>;
   updateAt: Record<BarKey, number>;
+  /**
+   * PLAN.md #1.6: each side's tempo gauge before and after the step. The sequencer writes a
+   * gauge at the beat that carries its `tempo-changed` (`Beat.tempoValues`) and always ends on
+   * the after-value. When the step ended the fight, the after-value is the before-value — the
+   * frame is leaving, and no engine value exists to show.
+   */
+  tempo: Record<'player' | 'enemy', TempoPair>;
   /**
    * How long the frame stands, showing the BEFORE values, before the first beat plays.
    * See `openingLead`.
@@ -321,11 +339,18 @@ export function roundPlan(before: GameState, after: GameState, events: readonly 
   if (beats.length === 0) return null;
   const bars = roundBars(before, after, events);
   if (!bars) return null;
+  const tempoOf = (s: GameState, side: 'player' | 'enemy'): TempoGaugeModel | null =>
+    s.phase.kind === 'battle' ? tempoGaugeOfTenths(s.phase.battle.tempo?.[side] ?? 0) : null;
+  const tempoPair = (side: 'player' | 'enemy'): TempoPair => {
+    const was = tempoOf(before, side) as TempoGaugeModel; // `before` is a battle (checked above)
+    return { before: was, after: tempoOf(after, side) ?? was };
+  };
   return {
     beats,
     schedule: beatSchedule(beats.length),
     bars,
     updateAt: barUpdateAt(beats),
+    tempo: { player: tempoPair('player'), enemy: tempoPair('enemy') },
     lead: openingLead(before),
   };
 }

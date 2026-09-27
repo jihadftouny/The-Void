@@ -609,18 +609,6 @@ const ALLOWANCES: readonly Allowance[] = [
       'to contain the condition id `strong`. The precise check that a condition FACT never ' +
       'prints an id lives in src/llm/conditionFacts.test.ts, over all 25 x both subjects.',
   },
-  // ⚠ A LIVE DEFECT, FROZEN RATHER THAN FIXED. It is AUTHORED PROSE, which is PLAN.md #13 /
-  // FINDINGS.md C1's territory and not this unit's — this unit's job was to make it
-  // DETECTABLE, and this row is the proof that it worked: no guard could see these two
-  // sentences before the prose rules existed. DELETE the row when #13 rewrites them.
-  {
-    rule: 'void-as-place',
-    where: /\bYou (escape into|sacrifice \d+ of your max HP to) the Void\b/,
-    reason:
-      'format.ts, the combat log: "You escape into the Void." and "You sacrifice N of your max ' +
-      'HP to the Void." WORLD.md §6 — the Void is not a place you can enter or give things to. ' +
-      'AUTHORED PROSE: PLAN.md #13 / FINDINGS.md C1. Reported in the text-hygiene handoff.',
-  },
   // ⚠ NOT LISTED, AND DELIBERATELY SO: `narrate.ts`'s empty-cache fact, "You pry it open, but
   // it is hollow." — a third reserved-word instance, and the one narrate.ts's own comment
   // already records as C1. A row for it was written and then DELETED, because the exercised
@@ -890,9 +878,11 @@ describe('DYNAMIC — nothing a real run shows the player is an engine id', () =
 
   it('the Void is never a place you enter or leave', () => {
     // WORLD.md §6: "The Void is not a place — it is a condition, and the condition is the
-    // Hollow." The two engine lines that break this are in the ALLOWANCES table above, with
-    // their reason and their routing; anything else fails here.
+    // Hollow." The two combat-log lines that once broke this ("You escape into the Void.",
+    // "You sacrifice N of your max HP to the Void.") were reworded in G72, and their allowance
+    // row is GONE, not merely unused — nothing absolves a sighting any more.
     expect(report(sweep.hits['void-as-place']), `${sweep.hits['void-as-place'].length} sightings`).toBe('');
+    expect(ALLOWANCES.some((a) => a.rule === 'void-as-place')).toBe(false);
   });
 
   it('no reserved word is used casually', () => {
