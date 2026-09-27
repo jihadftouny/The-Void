@@ -1597,6 +1597,8 @@ the name is a *player-facing label* — character sheet, save slots, the interfa
 
 > **For whoever authors text:** if you are writing something the Void says, you may not use the
 > player's name. If you are writing an interface label, you may.
+>
+> **Amended 2026-09-27 (§22.31): a BOSS may speak the player's name.** The narrator still may not.
 
 ### 22.3 `insanity` gets renamed — §13 wins over §21.1 (A9)
 
@@ -1959,3 +1961,23 @@ The **enemy art region moves from the HUD to the centre stage**. Its locked **3:
 **⚠ A consequence to measure before any class is tuned.** The two halves likely pull the class spread (G59) in **opposite** directions: *"you strike first"* helps everyone and fragile classes most, since a killing blow no longer costs a hit — **likely narrowing** the gap. The tempo gauge rewards high Dexterity, and **Scavver — already winning 57% — is the only Dexterity-primary class** (Neuromancer is INT/WIS, Penitent WIS/CHA) — **likely widening** it. *These are predictions from the design, not measurements.* **So G59's remedy should be decided only after the round order and the gauge exist and have been re-measured**, or classes get tuned against a game about to change beneath them.
 
 **Where it lands:** an engine unit of its own — it is `#1.6` territory, and both halves change balance, so it carries a re-run. **It is not in v1 today**, and v1's schedule margin is thin (`SHIP-SCOPE.md` §12). Sequence recommended: **#6 → this unit → decide G59 on the new numbers → #11** — the boss agents act in rounds too, so they should be built on the final round rules. **#6 is being built order-agnostic, and able to replay any number of actions per side per round,** so it needs no rework either way.
+
+### 22.31 Boss agents — the first design round *(2026-09-27, the author's rulings)*
+
+A brainstorm before #11's plan. What was settled:
+
+| # | Question | Ruling |
+|---|---|---|
+| — | May a boss speak the player's name? | **Yes — bosses may.** ⚠ This amends §22.2 **for bosses only**: a boss is a different voice from the narrator (the Kingpin literally holds your file). **The narrator — the Void — still never speaks it.** |
+| — | How deeds are phrased to a boss | **By place name, never by number** — *"You spared the Fixer in the Undercity"*, never *"on floor 1"* (`WORLD.md`: floors are named). |
+| D1 | When the boss chooses | **After your move** — reactive. The model call starts as soon as your half resolves, hidden behind your blow's animation. A telegraphed intent was not taken (new feature; fails the v1 gate). |
+| D2 | How often it speaks | **Every round** — one short line, produced in the same call as its move. During boss fights the boss's voice replaces the narrator's round commentary. |
+| D3 | The deed record | **Adopted:** a capped (~20), saved list of named deeds — ⚖ enemies spared and killed (by name), shrines honoured or desecrated, bargains taken (item names), bosses felled, flights. New run state (save version 9 → 10). |
+| D4 | Can talk earn the **Hollow Self's surrender**? | **Yes.** Its meaning — the "acknowledgement" of `WORLD.md` §7 — and what it does to the ending are designed in the per-boss interview. |
+| D5 | The executioner | **Talk yes, no concession.** A fight you are meant to lose well; win or lose, you fall. |
+| D6 | With the model off | **The Talk row is hidden**; bosses fight on the deterministic fallback and speak a few authored lines. |
+| D7 | Persona cards | **Designed boss by boss, interview style** (next). |
+| D8 | Difficulty of an agent-run boss | **Measure first** — the plan simulates a random picker and a best-move picker to show the range before building. |
+
+**Also found in the same pass (`FINDINGS.md` G79):** §22.29 said the deeds behind your karma are *"already recorded as plain data"*. They are not — only the four karma numbers and a spare **count** are kept. D3 is the fix.
+
