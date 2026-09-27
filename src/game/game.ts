@@ -195,11 +195,12 @@ export interface StepOptions {
   illusionDc?: number;
   /**
    * PLAN.md #1.6 — the same seam, for the §16.1 tempo gauge (Open Question 1): the ENEMY's |rate|
-   * cap in tenths (the player's is never capped — G78; `Infinity` = §16.1's literal rate), whether the ENEMY's gauge moves at all, and
+   * cap in tenths (`Infinity` = §16.1's literal rate), the PLAYER's |rate| cap (author, 2026-09-27: ±0.4), whether the ENEMY's gauge moves at all, and
    * whether an enemy family's data-driven speed counts. The shipped renderer passes none of them
    * (a source scan in `src/desktop` holds that).
    */
   tempoRateCapTenths?: number;
+  playerTempoRateCapTenths?: number;
   enemyTempo?: boolean;
   familySpeed?: boolean;
 }
@@ -559,6 +560,7 @@ function roundRules(state: GameState, options: StepOptions): RoundRules {
     healPct: floorModifiers(floorOf(state)).healPct,
     illusionDc: options.illusionDc ?? ILLUSION_DC,
     tempoRateCapTenths: options.tempoRateCapTenths ?? DEFAULT_ROUND_RULES.tempoRateCapTenths,
+    playerTempoRateCapTenths: options.playerTempoRateCapTenths ?? DEFAULT_ROUND_RULES.playerTempoRateCapTenths,
     enemyTempo: options.enemyTempo ?? DEFAULT_ROUND_RULES.enemyTempo,
     familySpeed: options.familySpeed ?? DEFAULT_ROUND_RULES.familySpeed,
   };

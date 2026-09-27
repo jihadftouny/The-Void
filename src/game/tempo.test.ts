@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   TEMPO_QUICK_TENTHS,
+  PLAYER_TEMPO_RATE_CAP_TENTHS,
   TEMPO_RATE_CAP_TENTHS,
   TEMPO_SLOW_TENTHS,
   TEMPO_THRESHOLD_TENTHS,
@@ -112,8 +113,8 @@ describe('tempoRate — §16.1’s table, row by row (the formula, uncapped)', (
   });
 });
 
-// The shipped cap applies to the ENEMY's rate only (author, G78 — `battle.ts` passes `Infinity`
-// for the player; `battle.test.ts` pins that end to end). These cases are what the cap does to a
+// The shipped ±0.3 cap is the ENEMY's (author, G78); the PLAYER has its own ±0.4 cap since
+// 2026-09-27 (`PLAYER_TEMPO_RATE_CAP_TENTHS`, pinned below and end to end in `battle.test.ts`). The cases just below are what the ENEMY cap does to a
 // rate it IS applied to — an enemy with the same stats as each §16.1 row.
 describe('the SHIPPED ±0.3 enemy cap — what it does to a rate it is applied to', () => {
   const CAP = TEMPO_RATE_CAP_TENTHS;
@@ -225,5 +226,23 @@ describe('advanceTempo — the two recorded choices', () => {
     const literal = run(tempoRate(fighter(40), Infinity), 1);
     expect(literal.extra).toEqual([1]);
     expect(literal.gauge).toEqual([5]);
+  });
+});
+
+describe('the SHIPPED ±0.4 player cap (author, 2026-09-27) — §16.1 rows under it', () => {
+  const PCAP = PLAYER_TEMPO_RATE_CAP_TENTHS;
+  it('is four tenths', () => {
+    expect(PCAP).toBe(4);
+  });
+  it('leaves DEX 16 (+3) and DEX 18 (+4) alone; clips 18 + Quick from +7 to +4', () => {
+    // DEX 16 → floor(6/2) = 3; DEX 18 → floor(8/2) = 4; 18 + Quick → 4 + 3 = 7 → 4.
+    expect(tempoRate(fighter(16), PCAP)).toBe(3);
+    expect(tempoRate(fighter(18), PCAP)).toBe(4);
+    expect(tempoRate(fighter(18, ['quick']), PCAP)).toBe(4);
+  });
+  it('clips the slow side symmetrically: DEX 6 + Slow −5 → −4; DEX 10 + Slow −3 untouched', () => {
+    // DEX 6 → floor(−4/2) = −2, Slow −3 → −5 → −4. DEX 10 → 0, Slow −3 → −3.
+    expect(tempoRate(fighter(6, ['slow']), PCAP)).toBe(-4);
+    expect(tempoRate(fighter(10, ['slow']), PCAP)).toBe(-3);
   });
 });

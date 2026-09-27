@@ -32,6 +32,9 @@
 //     COMBINED enemy rate, family speed included — and then (third round, G78) ruled that it
 //     applies to ENEMIES ONLY: the player gets §16.1's full rate, uncapped (DEX 18 + Quick →
 //     +0.7). `battle.ts` passes the cap for the enemy's rate and `Infinity` for the player's.
+//     AMENDED (author, 2026-09-27): the PLAYER is capped too, at ±0.4 (`PLAYER_TEMPO_RATE_CAP_TENTHS`).
+//     DEX 18 (+0.4) is untouched; DEX 18 + Quick reads +0.4, not +0.7; DEX 6 + Slow reads −0.4,
+//     not −0.5. The enemy's ±0.3 is unchanged.
 //  4. AN ENEMY FAMILY'S OWN SPEED (author, 2026-09-26): an enemy's rate is its DEX-driven rate
 //     exactly like the player's, PLUS its family's `speedTenths` from the data. The player has
 //     no family, so passes 0.
@@ -39,7 +42,7 @@
 // Two smaller choices where §16.1 is silent, recorded rather than asked:
 //  - A CONTROLLED combatant's gauge still drifts, but spends no threshold (`canAct` false).
 //  - At most ONE threshold crossing per round. It bites in two ways. (a) A rate of 10 or more
-//    — the uncapped measurement seam, or a player with DEX 30+ — would otherwise act three times
+//    — the uncapped measurement seam only, now that both sides are capped — would otherwise act three times
 //    a round. (b) A CONTROLLED side's gauge keeps drifting without spending (above), so it can
 //    bank past the threshold at any rate: a DEX-18 player (+4) stunned for four rounds holds
 //    4, 8, 12, 16; freed, it reaches 20, takes ONE extra action, and carries 10 into the next
@@ -58,6 +61,8 @@ export const TEMPO_QUICK_TENTHS = 3;
 export const TEMPO_SLOW_TENTHS = -3;
 /** DEVIATION 3 above (author's rulings): an ENEMY's |rate| never exceeds 0.3 on the shipped path. Measurement may lift it. */
 export const TEMPO_RATE_CAP_TENTHS = 3;
+/** DEVIATION 3, amended (author, 2026-09-27): the PLAYER's |rate| never exceeds 0.4 on the shipped path. Measurement may lift it. */
+export const PLAYER_TEMPO_RATE_CAP_TENTHS = 4;
 
 /**
  * One combatant's rate this round, in tenths — PURE, RNG-FREE.
