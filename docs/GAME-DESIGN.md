@@ -1991,5 +1991,21 @@ A brainstorm before #11's plan. What was settled:
 - **Concessions: all four** (pause · reveal a weakness · drop a mechanic — stops calling the crew · surrender). **A surrender is a full victory**: XP, the floor ends, and it counts for the "beat the Kingpin" unlock. Then he takes you anyway (`WORLD.md` §4 — the victory is real; the reversal belongs to the narration after it).
 - *Illustrative lines (not final):* "Come in, {name}. Mind the water — it's deeper than it looks." · "You let the Fixer walk. That was kind. Kindness travels well, where you're going." · seen through: "…Ah. You were always going to see it. Sit, then — we can stop pretending."
 
+**The Reflection (the Entrance to the Void).** A piece of you — floor 2 is Fracture.
+- **Voice: your words, bent back.** It answers what you type in Talk with your own phrasing, twisted; on a round with no talk it recites your deeds as if they were its own.
+- **It uses your name as ITS OWN** (*"I'm {name}. You're the copy."*) and never calls you by it — the fracture made literal.
+- **Moves:** strike, or any skill from its copy of your kit — the model picks. Its adaptation (disadvantage after you repeat a move 3 times) stays automatic.
+- **What moves it: owning your deeds** — acknowledging one it throws at you, not excusing it. (The first step of an idea that deepens floor by floor: own → mourn → acknowledge.)
+- **Concessions: pause · drop a mechanic** (stops adapting — and **if it already adapted, the disadvantage lifts**).
+
+**Your Sin (the Ash City) — FOUR distinct cards**, one per identity, chosen as today by your most-indulged karma axis. *(Not the Seven Sins: Pride, Envy, Wrath, Sloth, Greed, Gluttony and Lust are the floor's **elite enemies** (§17.2), narrator-voiced, not agents.)* Shared by all of them:
+- **Voice: it mourns.** Grief, not fear (`WORLD.md` §6) — it speaks your deeds on its axis as **losses**, not charges.
+- **Addresses you by your name, gently.**
+- **Moves: its skills + "grieve"** — ⚠ a **NEW mechanic**: a no-damage move in which it mourns and you lose a skill charge. Needs balancing against floor 3's own per-fight charge drain.
+- **What moves it: mourning with it** — naming what you lost, not defending it.
+- **Concessions: pause · reveal a weakness · drop a mechanic** (it sheds the extra HP your indulgence gave it). **No surrender.**
+- **The Desecration** grieves **the sacred you spent** (*"There was a candle there. You put it out to see by."*). **The Cruelty** grieves **the ones you didn't spare**, by name (*"The Fixer had a daughter. I keep her face."*). **The Avarice** grieves **what you traded of yourself** (*"This was your patience. You traded it for a ring."*). **The Delusion** grieves **the real you stopped seeing** — the one boss whose lines may contradict themselves on purpose.
+- **⚠ NEW — a fifth identity, "The Grief"**, for a run that indulged **nothing** (today the code sends The Desecration at base strength, which would grieve desecrations that never happened). A new card, and **a new sprite: +1 asset on the art list (~$0.20 for three takes)** — recorded as a conscious addition under `SHIP-SCOPE.md` §2.2.
+
 **Also found in the same pass (`FINDINGS.md` G79):** §22.29 said the deeds behind your karma are *"already recorded as plain data"*. They are not — only the four karma numbers and a spare **count** are kept. D3 is the fix.
 
