@@ -40,7 +40,7 @@ import { computeEquipModifiers, effectiveChargeCost, type EquipModifiers } from 
 import { fireFloorTriggers, fireTrigger, reviveActionFor } from './relicEffects.ts';
 import { applyConsumable, type ConsumableSource } from './consumable.ts';
 import { ILLUSION_DC, type FloorId } from './floors.ts';
-import { TEMPO_RATE_CAP_TENTHS, advanceTempo, tempoRate, type TempoStep } from './tempo.ts';
+import { PLAYER_TEMPO_RATE_CAP_TENTHS, TEMPO_RATE_CAP_TENTHS, advanceTempo, tempoRate, type TempoStep } from './tempo.ts';
 
 /** The full, serializable state of a battle in progress. */
 export interface BattleState {
@@ -129,10 +129,15 @@ export interface RoundRules {
   illusionDc: number;
   /**
    * PLAN.md #1.6: the |rate| clamp of the ENEMY's tempo gauge, in tenths (the player's rate is
-   * never capped — author, G78). Shipped: `TEMPO_RATE_CAP_TENTHS`. MEASUREMENT ONLY may pass
+   * capped separately — `playerTempoRateCapTenths`). Shipped: `TEMPO_RATE_CAP_TENTHS`. MEASUREMENT ONLY may pass
    * `Infinity` (§16.1's literal rate).
    */
   tempoRateCapTenths: number;
+  /**
+   * The |rate| clamp of the PLAYER's tempo gauge, in tenths (author, 2026-09-27: ±0.4). Shipped:
+   * `PLAYER_TEMPO_RATE_CAP_TENTHS`. MEASUREMENT ONLY may pass `Infinity` (§16.1's literal rate).
+   */
+  playerTempoRateCapTenths: number;
   /** Whether the ENEMY's gauge moves at all. Shipped: true. MEASUREMENT ONLY. */
   enemyTempo: boolean;
   /** Whether an enemy family's data-driven speed is added to its rate. Shipped: true. MEASUREMENT ONLY. */
@@ -144,6 +149,7 @@ export const DEFAULT_ROUND_RULES: RoundRules = {
   healPct: 100,
   illusionDc: ILLUSION_DC,
   tempoRateCapTenths: TEMPO_RATE_CAP_TENTHS,
+  playerTempoRateCapTenths: PLAYER_TEMPO_RATE_CAP_TENTHS,
   enemyTempo: true,
   familySpeed: true,
 };
@@ -732,8 +738,8 @@ function playRound(state: BattleState, action: PlayerAction, rng: Rng, rules: Ro
     }
 
     // 2. The player's gauge. A controlled player's gauge drifts but spends nothing (tempo.ts).
-    // The PLAYER's rate is §16.1's in full — the cap is the enemy's alone (author, G78).
-    const moved = moveGauge(ctx, 'player', tempoRate(ctx.player, Infinity), !ptc.skipTurn);
+    // The PLAYER's rate is capped at ±0.4 (author, 2026-09-27); the enemy's at ±0.3.
+    const moved = moveGauge(ctx, 'player', tempoRate(ctx.player, rules.playerTempoRateCapTenths), !ptc.skipTurn);
     actions = moved.actions;
     if (ptc.skipTurn) {
       ctx.events.push({ kind: 'player-unable-to-act', conditionType: skipCause(ptc.events) });
