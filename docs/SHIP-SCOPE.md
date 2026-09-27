@@ -351,6 +351,17 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 
 > **✅ DECIDED 2026-09-26 — full boss agents.** The author chose the full #11 (bosses that pick their own moves, remember your run, and can be talked to, plus the floor-4 executioner) over the cheaper talk field. The fallback below stays recorded, but it is no longer the plan — only an overrun would bring it back, and only by the author's hand.
 
+> **➕ ADDED to #11 by the boss interview, 2026-09-27 (`GAME-DESIGN.md` §22.31) — to be priced by #11's plan, not absorbed.** Under §2.2 each is a conscious addition by the author:
+> - a **saved deed record** (G79 — it never existed; save version 9 → 10);
+> - **model plumbing**: structured (JSON-constrained) output, a request queue, time limits, and a real-model evaluation script;
+> - the Kingpin's crew on the **model's rhythm** instead of a timer;
+> - the Sin's **"grieve"** move (new mechanic), and a **fifth Sin identity, The Grief** (+1 card, **+1 sprite ≈ $0.20**);
+> - the **executioner** fight (already in #11), now with **deeds as blows** and **a loss that is a fall, not a death**;
+> - the Hollow Self's **acknowledgement** as the only real win → **grace reached late** (engine route + an **"acknowledged" grace prose variant — author's words, block 4**) and **a new feat** (reward to design);
+> - persona cards for **9 voices** (Kingpin, Reflection, five Sins, Warden/executioner, Hollow Self) — drafted by the pipeline, rewritten by the author.
+>
+> The 35–45 h estimate predates all of these; expect it to rise. **The plan must return a new figure before building starts.**
+
 ### What gives first if it runs over
 
 §6's cut ladder is pre-armed for exactly this. **If #11 overruns, the cheapest honest fallback is the narrator-judged talk field** the author was offered and did not choose: the text field ships, the narrator decides whether what you typed earned one of the engine's four outcomes, and run-memory lands later. That keeps "you can talk to the thing wearing your face" in v1 at a fraction of the cost. **It is recorded here so that falling back is a pre-agreed step, not a scramble** — but it is the author's to trigger, not the pipeline's.
