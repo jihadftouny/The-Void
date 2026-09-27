@@ -1086,10 +1086,11 @@ describe('AC-15 (PLAN.md #1.6) — a boss gets exactly one post-round per COMPLE
 });
 
 describe('PLAN.md #1.6 (author, 2026-09-26) — the gauge and a pending extra action reset every fight', () => {
-  it('through step: a fight left mid-pause with both gauges moved; the next fight opens with neither', () => {
+  it('through step: a fight escaped on its extra action, gauges moved; the next fight opens with neither', () => {
     // A floor-1 fight whose round is PAUSED for the player's extra action, with both gauges off
-    // zero. The second action is a Smoke Vial — a guaranteed escape (consumables.json) — so the
-    // fight ends with the pause and the gauges still set on it.
+    // zero. The Smoke Vial — a guaranteed escape (consumables.json) — IS that second action, so
+    // it spends the pause: the fight ends with the extra action used and only the gauges still
+    // set on it. (A pending pause cannot outlive a fight: the only way out is an action.)
     const base = makePlayer({ hp: 20, maxHp: 20 });
     const player = { ...base, inventory: { ...base.inventory, backpack: [{ defId: 'smoke-vial' }] } };
     const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(1));

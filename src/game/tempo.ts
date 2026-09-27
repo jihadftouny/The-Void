@@ -38,10 +38,13 @@
 //
 // Two smaller choices where §16.1 is silent, recorded rather than asked:
 //  - A CONTROLLED combatant's gauge still drifts, but spends no threshold (`canAct` false).
-//  - At most ONE threshold crossing per round. Under the enemy cap (3 < 10), and at any rate a
-//    player reaches without extraordinary gear (§16.1 tops out at +0.7), the remainder can never
-//    reach a threshold by itself, so this matters only for a rate of 10 or more — the uncapped
-//    measurement seam, or a player with DEX 30+ — which would otherwise act three times a round.
+//  - At most ONE threshold crossing per round. It bites in two ways. (a) A rate of 10 or more
+//    — the uncapped measurement seam, or a player with DEX 30+ — would otherwise act three times
+//    a round. (b) A CONTROLLED side's gauge keeps drifting without spending (above), so it can
+//    bank past the threshold at any rate: a DEX-18 player (+4) stunned for four rounds holds
+//    4, 8, 12, 16; freed, it reaches 20, takes ONE extra action, and carries 10 into the next
+//    round — which crosses again (10 + 4 = 14 → 4). The banked surplus is paid out one extra
+//    action per round, never several at once.
 
 import { baseStatMod, type Conditioned } from './statEffects.ts';
 
