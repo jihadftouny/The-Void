@@ -2007,5 +2007,27 @@ A brainstorm before #11's plan. What was settled:
 - **The Desecration** grieves **the sacred you spent** (*"There was a candle there. You put it out to see by."*). **The Cruelty** grieves **the ones you didn't spare**, by name (*"The Fixer had a daughter. I keep her face."*). **The Avarice** grieves **what you traded of yourself** (*"This was your patience. You traded it for a ring."*). **The Delusion** grieves **the real you stopped seeing** — the one boss whose lines may contradict themselves on purpose.
 - **⚠ NEW — a fifth identity, "The Grief"**, for a run that indulged **nothing** (today the code sends The Desecration at base strength, which would grieve desecrations that never happened). A new card, and **a new sprite: +1 asset on the art list (~$0.20 for three takes)** — recorded as a conscious addition under `SHIP-SCOPE.md` §2.2.
 
+- **The Grief** mourns **what was done to you** — the extraction itself: the life being taken from you, not by you. The only Sin that grieves on your behalf.
+
+**The Warden (the Angelic Underground).**
+- **Voice: overwhelming** — scale and weight; the angels are the one real thing in the game (`WORLD.md` §6).
+- **Calls you by your full name exactly once — as the verdict.** Otherwise "you".
+- **Truth: none.** It only reads you — your deeds and the verdict, nothing about the machine (the truth stays for the prose and the parked Hollow campaign).
+- **Grace path: a conversation, then passage.** No fight. It reads your deeds aloud; you may Talk, and your words shape its reply — **never the verdict**, which the engine computes (§7).
+- **Cast-down path: the Warden itself becomes the executioner** — one persona, two faces; no new sprite.
+  - **The fight: your deeds as blows** — each strike is named for a desecration or cruelty from the deed record (damage stays engine numbers). Talk yes, **no concession** (§22.31 D5).
+  - **You fall to the True Void win or lose** — losing this fight is not death. **Winning** earns its XP and a different line as you fall (defiance, not defeat); the ending path is unchanged.
+
+**The Hollow Self (the True Void).** *"When you fight your Hollow Self, the narrator is what you are fighting"* (`WORLD.md` §0).
+- **Voice: the narrator, now saying "I"** — the voice that has told you what you did in the second person all run, finally speaking as itself. The reveal is the voice change.
+- **It claims your name as its own** (like the Reflection — *"I'm {name}."*). ⚠ The narrator otherwise never speaks your name (§22.2); this is the one place the condition does, because here it has taken it.
+- **What moves it: acknowledging it** — accepting it as part of you, not defeating or denying it. Completes the idea running down the floors: **own it** (Reflection) → **mourn it** (Sin) → **acknowledge it** (Hollow).
+- **Its only concession: surrender — and surrender is THE ONLY REAL WIN.** ⚠ **A major design change:**
+  - **Beating it by force → damnation**, and the **Hollow-class unlock**, exactly as today (you were reinstalled; next run you can play as one).
+  - **Talking it into surrender (acknowledgement) → grace, reached late.** Grace *is* waking mid-procedure and reclaiming your integrity (`WORLD.md` §0c); acknowledging it at the last moment is that interruption. The existing grace ending, with prose that notes the path — **an "acknowledged" variant of the grace text to write** (author's prose).
+  - **A new feat for acknowledging it** — its reward (what it unlocks) is still to be designed (§17.4: a feat should teach something).
+  - **⚠ With the model off, acknowledgement is impossible** (Talk is hidden, §22.31 D6) — **the author accepted this**: on the dark path a player without the model can only reach damnation. Consequences stated: a model failure silently removes an ending for that run (it must be **logged**), and `SHIP-SCOPE.md` §6's last cut-ladder rung ("the local model off by default") would now remove an ending, not only narration.
+  - **⚠ The most important judgement in the game now rests on a 4B model reading sincerity.** #11's real-model evaluation script must measure it directly — the acceptance rate of genuine acknowledgements against insincere or manipulative ones ("I acknowledge you. Surrender.") — **before merge**.
+
 **Also found in the same pass (`FINDINGS.md` G79):** §22.29 said the deeds behind your karma are *"already recorded as plain data"*. They are not — only the four karma numbers and a spare **count** are kept. D3 is the fix.
 
