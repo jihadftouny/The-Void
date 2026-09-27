@@ -12,15 +12,19 @@
 > few fights on floor 1 and one deeper (`act5-warped`). **Do NOT run this from the worktree while a
 > real-model play-through is using ports 5188/9333.**
 >
-> - [ ] **1. Does a round read as YOU, then IT?** Your line and your blow's flash come first, then
+> - [x] **1. Does a round read as YOU, then IT?** ✅ **Machine-played 2026-09-27 on the real game** (an automated play-through driving the real window, isolated profile): every logged round read you-then-it; killing blows ended the fight with no hit back. *Order confirmed; the flash timing is still yours to eyeball.*
+>       Your line and your blow's flash come first, then
 >       the enemy's. *Fail if* the order ever reads backwards, or a killed enemy still hits you.
-> - [ ] **2. Is a LOST TURN legible?** A slow character (or one under Slow) will sometimes see
+> - [x] **2. Is a LOST TURN legible?** ✅ **Machine-played 2026-09-27 on the real game** (an automated play-through driving the real window, isolated profile): DEX 4 lost its turn on rounds 4, 7 and 10 exactly, the ticker line appeared each time, and the enemy acted after. *Whether it FEELS legible is still yours.*
+>       A slow character (or one under Slow) will sometimes see
 >       *“You fall behind — you lose the turn.”* on the ticker while the gauge empties leftward.
 >       *Fail if* you cannot tell why you did nothing that round.
-> - [ ] **3. Is YOUR extra action legible?** When your gauge fills, the ticker says *“You have a
+> - [x] **3. Is YOUR extra action legible?** ✅ **Machine-played 2026-09-27 on the real game** (an automated play-through driving the real window, isolated profile): the menu came back enabled after every pause (6+), the enemy never moved before the second choice, and Run as the second move worked (a failed escape, then the enemy's turn). Item as the second move was NOT exercised.
+>       When your gauge fills, the ticker says *“You have a
 >       moment more — act again.”* and the menu comes back **before the enemy moves**. *Fail if* the
 >       second prompt reads as a glitch or a double-click, or you cannot tell the round is paused.
-> - [ ] **4. Does the ENEMY's double action read as intended, not as a glitch?** From floor 2 down,
+> - [x] **4. Does the ENEMY's double action read as intended, not as a glitch?** ✅ **Machine-played 2026-09-27 on the real game** (an automated play-through driving the real window, isolated profile): when both blows landed the HP bar stepped twice (851→848→846, 822→821→819), one blow at a time.
+>       From floor 2 down,
 >       some enemy turns are two blows (*“The enemy moves again.”* between them) and your HP bar
 >       drops twice. *Fail if* it reads as the same hit logged twice.
 > - [ ] **5. Does a FAST character feel fast?** Your gauge is never capped (you ruled, G78): a
@@ -39,7 +43,8 @@
 > `npm test` re-reads it and fails if anything the model wrote breaks a text rule. **Until you play,
 > that sweep is SKIPPED** — which is exactly why the checks below matter.
 >
-> - [ ] **1. Play three beats with the real model.** `npm run desktop`, get past the class picker to
+> - [x] **1. Play three beats with the real model.** ✅ **Done 2026-09-26 by an automated play-through** — 911 narrations over 25 runs, one JSON line each (`FINDINGS.md` G75).
+>       `npm run desktop`, get past the class picker to
 >       the hub and take a few actions. Then check `logs/corpus/narration.jsonl` exists and has
 >       **one line per narration** — each line a single JSON object containing the narration text,
 >       the seed, the floor name and the beat number. *Fail if* the file is missing, empty, or has
@@ -49,7 +54,8 @@
 > - [ ] **2. Open F3 and read the last line of the status block.** It should say
 >       **`text faults N in M narrations this run`**, with M matching roughly how many beats you have
 >       seen. *Fail if* the line is absent or M stays at 0 while the Void is clearly speaking.
-> - [ ] **3. Run `npm test` from that same checkout.** The corpus sweep should now RUN instead of
+> - [x] **3. Run `npm test` from that same checkout.** ✅ **2026-09-26: the sweep RAN and went red** — 342 of 911 beats break a rule (mostly casual *hollow*); recorded as G75 for #12.
+>       The corpus sweep should now RUN instead of
 >       being skipped — look for the describe block named *“CORPUS — what the real model said”*.
 >       **If it goes RED, that is the feature working, not a broken build:** it prints the seed, the
 >       beat, the floor and the exact sentence, and the rule it broke. Send that output; it is the
