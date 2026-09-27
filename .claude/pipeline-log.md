@@ -19,7 +19,7 @@ Format per entry:
 
 ---
 
-## 2026-09-26 — round-order (sequential rounds + the tempo gauge; G62, G72, G78) [branch `agentic/round-order`, **unmerged**]
+## 2026-09-26 — round-order (sequential rounds + the tempo gauge; G62, G72, G78) [branch `agentic/round-order`, **merged to `main` 2026-09-27** (`ea9c5fc`), then machine-played on the real game — every automatable check passed]
 - Verdict: **PASS, PASS, PASS** (initial, after fix round 1, after fix round 2). 3362 → **3432 tests** (4 skipped). 17 commits; one deliberately red (`9f068fc`, at the winnability gate), every other green. Merge dry-run against `main` 57a60bf: clean.
 - Fix rounds: **2**, neither from a test FAIL: (1) the author's G78 ruling (cap enemies only) plus tester notes N1–N5; (2) at the author's request before merge, tester notes N8–N10 (a behaviour test pinning the player's slow side uncapped, broken deliberately to prove it; two comment corrections).
 - Plan open-questions: 3 (enemy tempo rate, what an extra action is, gauge carry-over) → author: DEX gauge **plus** per-family speed; a freely chosen second move; reset each fight. **Then two more rounds mid-build**: the winnability gate tripped at 0.182 under the ±0.7 cap → author chose ±0.3; then the cap turned out to clip the PLAYER too (G78) → author chose enemies-only. Final: 29.5% overall (was 30.6%), class spread 39.6 → 31.8 points.

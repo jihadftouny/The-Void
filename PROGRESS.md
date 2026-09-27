@@ -66,8 +66,7 @@ act 4) vs cast-down (→ Hollow-Self → damnation) by your hidden Nature.
 > since #0:** items reachable and both endings earned (#9, #10a), the look and typeface (#8, #16),
 > floor mechanics, bargains and rest spots (#2), the battle screen (#6), four floor-look repairs,
 > the art tool (#3, spends nothing yet), and two text clean-ups (`machine-text`, `text-hygiene`).
-> **Next, in order:** (1) the round-order and tempo-gauge unit (`FINDINGS.md` G62) — not yet
-> estimated, and #11 waits on it; (2) **#11 full boss agents** (the author chose the full version
+> **Next, in order:** (1) ~~the round-order and tempo-gauge unit~~ **merged 2026-09-27**; (2) **#11 full boss agents** (the author chose the full version
 > 2026-09-26, not the cheaper talk field); (3) block 4, the author's own prose, in parallel;
 > (4) art: style probes, then a transparency method (G73) and the image shapes (G70), then the
 > batch — **the spend was approved 2026-09-26** (`SHIP-SCOPE.md` §5.2).
@@ -149,7 +148,11 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
-### 2026-09-26 — you strike first, and speed is a gauge (`round-order`, #1.6) — built, awaiting merge
+### 2026-09-27 — `round-order` MERGED, and machine-played on the real game ✅
+
+**Merged to `main` (`ea9c5fc`) after three PASS verdicts; typecheck, build and the full suite green on the trunk** (the one red is the narration corpus, by design — G75). Then an automated play-through drove the real game window through every check a machine can see: you act first and killing blows end the round; the extra-action pause returns an enabled menu, and Run works as a second move; DEX 18 fills +0.4 a round while every enemy is held to +0.3; a DEX-4 character loses rounds 4, 7 and 10 exactly; an enemy's double hit steps your HP bar twice. **Left for the author:** whether a fast character feels rewarded rather than overpowered, and the lost-turn wording. Also this session: the dev server no longer reloads a running game when an agent edits a worktree (G74).
+
+### 2026-09-26 — you strike first, and speed is a gauge (`round-order`, #1.6) — built
 
 **3362 → 3433 tests (4 skipped).** Plan → build (stopped once at the winnability gate) → the
 author's ruling → build finished. Not merged.
