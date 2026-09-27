@@ -1334,6 +1334,15 @@ describe('AC-10 — Quick and Slow are the ±0.3, to the digit', () => {
     expect(log.map((r) => r.player)).toEqual([-3, -6, -9, -2, -5, -8, -1, -4, -7, 0]);
     expect(roundsWhere(log, (r) => r.lost)).toEqual([4, 7, 10]);
   });
+
+  it('SHIPPED, the PLAYER’s slow side is uncapped too (G78): DEX 6 + Slow loses every other turn', () => {
+    // The enemy's ±0.3 cap would hold this at −3; the player's rate is §16.1's in full:
+    // DEX 6 → floor(−4/2) = −2, Slow −3 → −5 a round. −5, −10 → lost, spent → 0, −5, 0, …
+    // so the gauge reads −5, 0 alternately and the turn is lost on every even round.
+    const log = playRounds(createBattle(playerWithDex(6, { hp: 20 }), makeEnemy({ hp: 30 }), 1), 10, alwaysFumble, DEFAULT_ROUND_RULES, keep('slow'));
+    expect(log.map((r) => r.player)).toEqual([-5, 0, -5, 0, -5, 0, -5, 0, -5, 0]);
+    expect(roundsWhere(log, (r) => r.lost)).toEqual([2, 4, 6, 8, 10]);
+  });
 });
 
 describe('AC-11 — the extra action is a second INPUT', () => {
