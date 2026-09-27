@@ -148,6 +148,10 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-09-27 — your tempo is capped at ±0.4 ✅
+
+**`player-tempo-cap` merged** (the author's ruling). Dexterity 18 still fills +0.4 a round, but Quick no longer stacks past it (18 + Quick was +0.7, now +0.4), and the slowest characters lose turns slightly less often (DEX 6 + Slow −0.5 → −0.4). Enemies keep their ±0.3. **Win rate 29.5% → 29.4%** — the simulated players rarely went past 0.4, so almost nothing moved. Built directly rather than through the full pipeline, at the author's request (recorded in `.claude/pipeline-log.md`). The design doc's tempo section now records every tuning ruling, which it had missed.
+
 ### 2026-09-27 — `round-order` MERGED, and machine-played on the real game ✅
 
 **Merged to `main` (`ea9c5fc`) after three PASS verdicts; typecheck, build and the full suite green on the trunk** (the one red is the narration corpus, by design — G75). Then an automated play-through drove the real game window through every check a machine can see: you act first and killing blows end the round; the extra-action pause returns an enabled menu, and Run works as a second move; DEX 18 fills +0.4 a round while every enemy is held to +0.3; a DEX-4 character loses rounds 4, 7 and 10 exactly; an enemy's double hit steps your HP bar twice. **Left for the author:** whether a fast character feels rewarded rather than overpowered, and the lost-turn wording. Also this session: the dev server no longer reloads a running game when an agent edits a worktree (G74).

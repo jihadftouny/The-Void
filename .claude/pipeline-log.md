@@ -19,6 +19,13 @@ Format per entry:
 
 ---
 
+## 2026-09-27 — player-tempo-cap (the player's tempo rate capped at ±0.4) [branch `agentic/player-tempo-cap`, **merged to `main` 2026-09-27**]
+- Verdict: **no pipeline verdict — ⚠ DOCTRINE DEVIATION, recorded per `CLAUDE.md`.** The author waived the plan/build/test pipeline for this unit ("i dont think we need the full pipeline for this"); the plan-agent was stopped mid-read. The orchestrator built it directly **in a worktree** (not the main checkout), so isolation held; the independent test-agent did not run.
+- What stood in for the test-agent: full suite green (3436), typecheck + build clean, every expected value derived by hand in the test comments, and a **deliberate break** (player cap lifted to 99 → five tests red, and only those). Balance report regenerated: 29.5% → 29.4% overall.
+- **Orchestrator error, recorded:** undoing the deliberate break with `git checkout -- src/game/tempo.ts` reverted the file to its last COMMIT and discarded the uncommitted edit; it was recovered from a backup taken just before the break. **Lesson: commit (or at least back up) before any break-test, and undo a break by restoring the backup, never by `git checkout`.**
+- Also found: `GAME-DESIGN.md` §16.1 had never recorded any of the tempo tuning rulings (both caps, family speed, the chosen second move, the per-fight reset); it now carries an "as tuned" block.
+- Manual engineer fixes: none yet.
+
 ## 2026-09-26 — round-order (sequential rounds + the tempo gauge; G62, G72, G78) [branch `agentic/round-order`, **merged to `main` 2026-09-27** (`ea9c5fc`), then machine-played on the real game — every automatable check passed]
 - Verdict: **PASS, PASS, PASS** (initial, after fix round 1, after fix round 2). 3362 → **3432 tests** (4 skipped). 17 commits; one deliberately red (`9f068fc`, at the winnability gate), every other green. Merge dry-run against `main` 57a60bf: clean.
 - Fix rounds: **2**, neither from a test FAIL: (1) the author's G78 ruling (cap enemies only) plus tester notes N1–N5; (2) at the author's request before merge, tester notes N8–N10 (a behaviour test pinning the player's slow side uncapped, broken deliberately to prove it; two comment corrections).
