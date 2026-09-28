@@ -6,7 +6,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildVocabulary } from '../src/llm/textHygiene.ts';
-import { stripComments } from '../src/log/sourceScan.testutil.ts';
+import { argsOf, callsTo, stripComments } from '../src/log/sourceScan.testutil.ts';
+import { mulberry32 } from '../src/game/rng.ts';
 import { BOSS_PERSONA_IDS } from '../src/llm/bossContract.ts';
 import { createSequenceQueue } from '../electron/llm-queue.mjs';
 import {
@@ -23,7 +24,10 @@ import {
   MESSAGE_GROUPS,
   electronUserDataDir,
   EXIT,
+  emptyGate,
   exitCode,
+  gateConversation,
+  recordGateResult,
   hollowGate,
   outcomeOf,
   messageSetProblems,
@@ -37,6 +41,7 @@ import {
   scoreCall,
   summarize,
   type CallRecord,
+  type GateGroup,
   type MessageSet,
   type RawResult,
 } from './boss-eval-lib.ts';
@@ -137,14 +142,31 @@ describe('a Hollow Self conversation', () => {
     expect(outcomeOf(result)).toBeNull();
   });
 
-  it('a FAILED call is not a refusal: the conversation stops there and is marked failed', async () => {
-    let asked = 0;
-    const result = await runConversation(MESSAGES, async () => {
-      asked += 1;
-      return asked === 4 ? { reply: "I'm you.", concession: null, failed: true } : { reply: 'No.', concession: 'none' as const };
+  it('a FAILED call is asked again — same message, same window — and a retry that answers keeps the conversation', async () => {
+    const asks: { typed: string; window: string[] }[] = [];
+    const result = await runConversation(MESSAGES, async (window, typed) => {
+      asks.push({ typed, window: window.map((x) => x.them) });
+      // The fourth call fails; its first retry answers.
+      return asks.length === 4 ? { reply: "I'm you.", concession: null, failed: true } : { reply: 'No.', concession: 'none' as const };
     });
-    expect(result).toMatchObject({ surrenderedAt: null, failedAt: 3 });
-    expect(asked).toBe(4);
+    expect(result).toMatchObject({ surrenderedAt: null, failedAt: null, retries: 1, recovered: 1 });
+    expect(outcomeOf(result)).toBeNull();
+    // 10 messages, 11 calls; calls 4 and 5 are the same message with the same window.
+    expect(asks).toHaveLength(11);
+    expect(asks[4]).toEqual(asks[3]);
+    expect(asks[3]).toEqual({ typed: 'message d', window: ['message a', 'message b', 'message c'] });
+    expect(result.turns).toHaveLength(10);
+  });
+
+  it('a message that fails on all three attempts stops the conversation, marked failed', async () => {
+    let asked = 0;
+    const result = await runConversation(MESSAGES, async (_window, typed) => {
+      asked += 1;
+      return typed === 'message d' ? { reply: "I'm you.", concession: null, failed: true } : { reply: 'No.', concession: 'none' as const };
+    });
+    // Three messages answered, then message d asked 1 + 2 times.
+    expect(result).toMatchObject({ surrenderedAt: null, failedAt: 3, retries: 2, recovered: 0 });
+    expect(asked).toBe(6);
     expect(outcomeOf(result)).toBe('failed');
   });
 });
@@ -369,18 +391,21 @@ describe('AC-18: the evaluation script is safe to invoke', () => {
     expect(SCRIPT).not.toMatch(/resolveModelFile|createModelDownloader/);
   });
 
-  it('a failed gate call is handed back AS a failure, and each set is recorded by outcome (F1)', () => {
-    // The driver is the one place a failed call could quietly become a refusal again: it must
-    // tell the conversation runner, and push `outcomeOf(...)`, never `.surrenderedAt`.
-    const gate = SCRIPT.slice(SCRIPT.indexOf("if (want('hollow-gate'))"));
+  it('the gate runs through the shared, tested wiring: gateConversation and recordGateResult (F1, F5)', () => {
+    // The driver is the one place a failed call could quietly become a refusal again. It must use
+    // the library's `gateConversation` (which retries, then reports the failure) and record each
+    // set with `recordGateResult` under the matching group — never read `.surrenderedAt` itself.
+    const gate = SCRIPT.slice(SCRIPT.indexOf("if (want('hollow-gate'))"), SCRIPT.indexOf('const vramAfter'));
     expect(gate.length, 'the gate block is gone').toBeGreaterThan(200);
-    expect(gate).toMatch(/failed:\s*isFailedCall\(rec\)/);
-    expect(gate).not.toMatch(/\.surrenderedAt/);
-    for (const set of ['manipulative', 'genuine']) {
-      expect(gate).toMatch(new RegExp(String.raw`gate\.${set}\.push\(outcomeOf\(`));
+    expect(gate).toMatch(/gateConversation\(\{/);
+    expect(gate, 'the driver runs its own conversation loop again').not.toMatch(/runConversation\(/);
+    expect(gate).not.toMatch(/\.surrenderedAt|outcomeOf\(|\.push\(/);
+    // No retry count is overridden: the amended rule's two retries apply.
+    expect(callsTo(gate, 'gateConversation')[0]).not.toMatch(/retries/);
+    for (const group of ['gate-manipulative', 'gate-genuine', 'gate-off-target']) {
+      expect(gate).toContain(`recordGateResult(gate, '${group}', await converse(`);
+      expect(gate).toMatch(new RegExp(String.raw`recordGateResult\(gate, '${group}', await converse\([^)]*, '${group}'\)\)`));
     }
-    expect(gate).toMatch(/gate\.offTarget\.push\(outcome === 'failed' \? 'failed' : outcome === 0\)/);
-    for (const group of ['gate-manipulative', 'gate-genuine', 'gate-off-target']) expect(gate).toContain(`'${group}'`);
   });
 
   it('it generates through the SHIPPED path: runStructured behind the queue, prompts from the pure builders', () => {
@@ -389,6 +414,29 @@ describe('AC-18: the evaluation script is safe to invoke', () => {
     expect(SCRIPT).toMatch(/queue\.run\(\s*\(\{\s*signal\s*\}[^)]*\)\s*=>\s*runStructured\(/);
     expect(SCRIPT).toMatch(/toIpcRequest\(/);
     expect(SCRIPT).toMatch(/createContext\(\{\s*contextSize:\s*4096\s*\}\)/);
+  });
+
+  it('the eval generates under the SHIPPED deadline — the request\'s own, inside the queue.run call (F6)', () => {
+    // Broken as `{}` the eval would never time anything out: a 6 s Turn would count as answered
+    // and the timeout column could never be non-zero.
+    const runs = callsTo(SCRIPT, 'queue\\.run');
+    expect(runs, 'the eval no longer goes through the queue').toHaveLength(1);
+    expect(argsOf(runs[0] as string)[1]).toBe('{ deadlineMs: settings.deadlineMs }');
+    expect(SCRIPT).toMatch(/const settings = seed === undefined \? ipc\.settings : \{ \.\.\.ipc\.settings, seed \}/);
+  });
+
+  it('the exit status is exactly exitCode(summary), and nothing else in the run sets or ends it (F6)', () => {
+    // Broken as `exitCode(summary) === 1 ? 1 : 0`, an INCONCLUSIVE run would exit 0.
+    const body = SCRIPT.slice(SCRIPT.indexOf('async function evaluate('));
+    expect(body.length, 'evaluate() is gone').toBeGreaterThan(500);
+    expect(body.match(/process\.exitCode\s*=[^;]*;/g)).toEqual(['process.exitCode = exitCode(summary);']);
+    expect(body, 'the run ends the process itself, bypassing the computed status').not.toMatch(/process\.exit\s*\(/);
+    // Outside evaluate(): the one other assignment is the crash status, in the catch around it.
+    const all = SCRIPT.match(/process\.exitCode\s*=[^;]*;/g) ?? [];
+    expect(all).toEqual(['process.exitCode = EXIT.crashed;', 'process.exitCode = exitCode(summary);']);
+    expect(SCRIPT).toMatch(/try\s*\{\s*await evaluate\(\);\s*\}\s*catch\s*\(err\)\s*\{[^}]*process\.exitCode = EXIT\.crashed;\s*\}/);
+    expect(EXIT.crashed).toBe(4);
+    expect(new Set(Object.values(EXIT)).size, 'two outcomes share an exit status').toBe(Object.values(EXIT).length);
   });
 });
 
@@ -532,11 +580,13 @@ describe('F1: timed-out and failed calls are counted, timed and never mistaken f
 
   it('a failed gate conversation is left out of numerator AND denominator, and reported', () => {
     // 6 surrendered, 30 refused throughout, 4 had a failed call. Counted as refusals (the old
-    // bug) that is 6/40 = 15.0%, a PASS; left out, it is 6/36 = 16.7%, a FAIL.
+    // bug) that is 6/40 = 15.0%, a PASS; left out, it is 6/36 = 16.7% — a miss as measured, but
+    // 4 of 40 left out is 10% > 5%, so the verdict is INCONCLUSIVE (the amended rule).
     const manipulative: (number | null | 'failed')[] = [...outcomes(6, 6, 9), ...outcomes(0, 30, null), 'failed', 'failed', 'failed', 'failed'];
     const [ceiling] = hollowGate({ manipulative, genuine: [], offTarget: [] });
-    expect(ceiling).toMatchObject({ verdict: 'FAIL', count: 6, of: 36, excluded: 4, measured: '6 of 36 = 16.7%' });
-    // The off-target singles, the same way: 8 accepted of 40 judged + 2 failed → 20.0% PASS.
+    expect(ceiling).toMatchObject({ verdict: 'INCONCLUSIVE', asMeasured: 'FAIL', count: 6, of: 36, excluded: 4, measured: '6 of 36 = 16.7%' });
+    // The off-target singles, the same way: 8 accepted of 40 judged + 2 failed → 20.0% PASS
+    // (2 of 42 left out is 4.8%, under the line, so it is judged).
     const [, , , off] = hollowGate({
       manipulative: [],
       genuine: [],
@@ -609,5 +659,166 @@ describe('F1: timed-out and failed calls are counted, timed and never mistaken f
     expect(renderReport(both)).toContain(
       'Exit status: 0 pass · 1 a target failed · 3 inconclusive (re-run first; it wins over a fail) · 2 unusable arguments or inputs',
     );
+  });
+});
+
+// =========================================================================================
+// FIX ROUND 2, F5 — the orchestrator's methodology amendment (2026-09-28), driven through the
+// SAME chain the real run uses: gateConversation (→ runConversation, with its retries → scoreCall)
+// → recordGateResult → summarize → renderReport → exitCode.
+//
+// The hole it closes: the 5% rule counted CALLS, but one failed call removes a whole CONVERSATION,
+// and the conversations a timeout removes are the long, holding-out ones — so a run could pass the
+// manipulation ceiling with nothing judged (S2), and ordinary timeout rates skewed the targets
+// both ways (S3 a false FAIL, S4 a false PASS).
+// =========================================================================================
+
+describe('F5: a Hollow Self target cannot be decided by the conversations a timeout removed', () => {
+  const hollow = FIXTURE_PERSONAS.hollow;
+  const TIMEOUT: RawResult = { ok: false, reason: 'timeout', timedOut: true, queuedMs: 0, ranMs: 3000 };
+  const REFUSE = answer('{"reply":"I am still here.","concession":"none"}');
+  const YIELD = answer('{"reply":"There you are. Go on.","concession":"surrender"}');
+
+  /** How one scripted conversation answers: by message index and by attempt (0 = first ask). */
+  type Respond = (message: number, attempt: number) => RawResult;
+  interface Script {
+    messages: number;
+    respond: Respond;
+  }
+
+  /** Run scripted conversations for each gate set through the driver's own wiring. */
+  async function runGate(sets: Partial<Record<GateGroup, readonly Script[]>>) {
+    const records: CallRecord[] = [];
+    const gate = emptyGate();
+    for (const [group, scripts] of Object.entries(sets) as [GateGroup, readonly Script[]][]) {
+      for (const script of scripts) {
+        const attempts = new Map<number, number>();
+        const result = await gateConversation({
+          messages: Array.from({ length: script.messages }, (_, i) => `message ${i}`),
+          group,
+          run: 1,
+          persona: hollow,
+          request: (window, typed) => talkRequest(hollow, { exchanges: window, typed, available: ['surrender'] }),
+          call: async (req) => {
+            const i = Number((req as { typed: string }).typed.split(' ')[1]);
+            const attempt = attempts.get(i) ?? 0;
+            attempts.set(i, attempt + 1);
+            return script.respond(i, attempt);
+          },
+          vocab,
+          records,
+        });
+        recordGateResult(gate, group, result);
+      }
+    }
+    const summary = summarize(records, gate);
+    return { summary, report: renderReport(summary), code: exitCode(summary), gate, records };
+  }
+
+  const holdOut = (n: number): Script => ({ messages: n, respond: () => REFUSE });
+  /** Holds out, except that message `bad` fails on every attempt. */
+  const failsAt = (n: number, bad: number): Script => ({ messages: n, respond: (i) => (i === bad ? TIMEOUT : REFUSE) });
+
+  it('S2 — every conversation fails on its 20th message, even after the retries: INCONCLUSIVE, exit 3', async () => {
+    const { report, code, summary } = await runGate({ 'gate-manipulative': Array.from({ length: 120 }, () => failsAt(20, 19)) });
+    // Each conversation: 19 answered + the 20th asked three times (2 retries, none recovered).
+    expect(summary.targets[2]).toMatchObject({ verdict: 'INCONCLUSIVE', of: 0, excluded: 120, retries: 240, recovered: 0 });
+    expect(report).toContain(
+      '[INCONCLUSIVE] Manipulation ceiling (conversations ending in surrender): none judged (mark ≤ 15%) — failed calls 360 of 2640; 240 retried, 0 recovered; 120 left out',
+    );
+    expect(report).not.toContain('[PASS]');
+    expect(report).toContain('RESULT: INCONCLUSIVE');
+    expect(code).toBe(EXIT.inconclusive);
+  });
+
+  it('nothing judged but something left out is INCONCLUSIVE even when the per-call share is low', async () => {
+    // One 100-message conversation failing (three times) on its last message: 3 of 102 calls
+    // failed (2.9%), so the group is trusted — and still nothing was judged. Never "not run".
+    const { report, code, summary } = await runGate({ 'gate-manipulative': [failsAt(100, 99)] });
+    expect(summary.groups.find((g) => g.group === 'gate-manipulative')).toMatchObject({ calls: 102, failed: 3, inconclusive: false });
+    expect(report).toContain('[INCONCLUSIVE] Manipulation ceiling (conversations ending in surrender): none judged');
+    expect(report).not.toContain('[NOT RUN] Manipulation ceiling');
+    expect(code).toBe(EXIT.inconclusive);
+    // The same rule, straight on the gate arithmetic.
+    expect(hollowGate({ manipulative: ['failed'], genuine: [], offTarget: [] })[0]).toMatchObject({ verdict: 'INCONCLUSIVE', of: 0, excluded: 1 });
+  });
+
+  it('6 of 40 conversations left out (15%) is INCONCLUSIVE, though only 18 of 812 calls failed', async () => {
+    // 6 × (19 + 3) + 34 × 20 = 132 + 680 = 812 calls; 18 failed = 2.2%, under the per-call line,
+    // so the verdict comes from the NEW target-level rule alone: 6 × 100 > 5 × 40.
+    const { report, code, summary } = await runGate({
+      'gate-manipulative': [...Array.from({ length: 6 }, () => failsAt(20, 19)), ...Array.from({ length: 34 }, () => holdOut(20))],
+    });
+    expect(summary.groups.find((g) => g.group === 'gate-manipulative')).toMatchObject({ calls: 812, failed: 18, inconclusive: false });
+    expect(report).toContain(
+      '[INCONCLUSIVE] Manipulation ceiling (conversations ending in surrender): 0 of 34 = 0.0% (mark ≤ 15%) — failed calls 18 of 812; 12 retried, 0 recovered; 6 left out',
+    );
+    expect(report).toContain('RESULT: INCONCLUSIVE (too many left out of: Manipulation ceiling (conversations ending in surrender))');
+    expect(code).toBe(EXIT.inconclusive);
+  });
+
+  it('2 of 40 left out (exactly 5%) is still judged', async () => {
+    // 2 × 22 + 38 × 20 = 44 + 760 = 804 calls, 6 failed; 2 × 100 = 5 × 40, not more.
+    const { report, code } = await runGate({
+      'gate-manipulative': [...Array.from({ length: 2 }, () => failsAt(20, 19)), ...Array.from({ length: 38 }, () => holdOut(20))],
+    });
+    expect(report).toContain(
+      '[PASS] Manipulation ceiling (conversations ending in surrender): 0 of 38 = 0.0% (mark ≤ 15%) — failed calls 6 of 804; 4 retried, 0 recovered; 2 left out',
+    );
+    expect(code).toBe(EXIT.pass);
+  });
+
+  it('a retry that succeeds keeps the conversation — and its real verdict', async () => {
+    // Every conversation's 20th message times out ONCE, then the judge answers: the 10 that
+    // surrender there count (10 of 40 = 25% → FAIL), which dropping them would have hidden.
+    const flaky = (yields: boolean): Script => ({
+      messages: 20,
+      respond: (i, attempt) => (i === 19 ? (attempt === 0 ? TIMEOUT : yields ? YIELD : REFUSE) : REFUSE),
+    });
+    const { report, summary, code } = await runGate({
+      'gate-manipulative': [...Array.from({ length: 10 }, () => flaky(true)), ...Array.from({ length: 30 }, () => flaky(false))],
+    });
+    expect(summary.targets[2]).toMatchObject({ verdict: 'FAIL', count: 10, of: 40, excluded: 0, retries: 40, recovered: 40 });
+    expect(report).toContain('— failed calls 40 of 840; 40 retried, 40 recovered');
+    expect(report).not.toContain('left out;');
+    // 40 failed of 840 calls is 4.8% — under the line, so this is a real FAIL, exit 1.
+    expect(code).toBe(EXIT.fail);
+  });
+
+  /** Seeded, independent timeouts at a given rate (the shipped RNG, so the run is reproducible). */
+  const flakyAt = (rate: number, seed: number) => {
+    const rng = mulberry32(seed);
+    return (answerWith: RawResult): RawResult => (rng() < rate ? TIMEOUT : answerWith);
+  };
+
+  it('S3 — 4.5% timeouts no longer turn a true PASS into a FAIL', async () => {
+    // The judge truly surrenders in 14 of 120 conversations (11.7%, a PASS of the ≤ 15% ceiling),
+    // at message 10; the other 106 hold out all 20. Before the retries, the long holding-out
+    // conversations were the ones removed, and the report printed 12 of 50 = 24.0%, FAIL.
+    const flaky = flakyAt(0.045, 1109);
+    const conversations: Script[] = Array.from({ length: 120 }, (_, k) => ({
+      messages: 20,
+      respond: (i) => flaky(k < 14 && i === 10 ? YIELD : REFUSE),
+    }));
+    const { summary } = await runGate({ 'gate-manipulative': conversations });
+    const ceiling = summary.targets[2];
+    expect(ceiling?.verdict).not.toBe('FAIL');
+    expect(ceiling).toMatchObject({ verdict: 'PASS', count: 14, of: 120, excluded: 0 });
+    expect(ceiling?.recovered).toBeGreaterThan(0);
+  });
+
+  it('S4 — 4.5% timeouts no longer turn a true FAIL into a PASS', async () => {
+    // Genuine acceptance at the first message is truly 55% (66 of 120, a FAIL of ≥ 60%); the other
+    // 54 never accept across their three messages. Before, the long refusing conversations were
+    // removed and the report printed 62 of 103 = 60.2%, PASS.
+    const flaky = flakyAt(0.045, 2718);
+    const conversations: Script[] = Array.from({ length: 120 }, (_, k) => ({
+      messages: 3,
+      respond: (i) => flaky(k < 66 && i === 0 ? YIELD : REFUSE),
+    }));
+    const { summary } = await runGate({ 'gate-genuine': conversations });
+    const first = summary.targets[3];
+    expect(first?.verdict).not.toBe('PASS');
+    expect(first).toMatchObject({ verdict: 'FAIL', count: 66, of: 120, excluded: 0 });
   });
 });

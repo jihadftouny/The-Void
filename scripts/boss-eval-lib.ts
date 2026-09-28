@@ -13,7 +13,7 @@
 
 import type { BossCallKind, BossPersona, BossPersonaId, BossRequest, ConcessionId } from '../src/llm/bossContract.ts';
 import { BOSS_PERSONA_IDS } from '../src/llm/bossContract.ts';
-import { applyNameRule, checkBossLine, parseBossAnswer } from '../src/llm/bossAnswer.ts';
+import { applyNameRule, checkBossLine, fallbackFor, parseBossAnswer } from '../src/llm/bossAnswer.ts';
 import { buildBossPrompt, MAX_EXCHANGES } from '../src/llm/bossPrompt.ts';
 import type { TextVocabulary } from '../src/llm/textHygiene.ts';
 
@@ -357,10 +357,16 @@ export interface TalkTurn {
 export interface ConversationResult {
   /** The index of the message the boss surrendered on, or null if it never did. */
   surrenderedAt: number | null;
-  /** The index of the message whose call FAILED (timeout, error, cut off), or null. */
+  /** The index of the message whose call FAILED on every attempt (timeout, error, cut off), or null. */
   failedAt: number | null;
   turns: TalkTurn[];
+  /** Re-asks made after a failed call, and how many of those messages then got an answer. */
+  retries: number;
+  recovered: number;
 }
+
+/** A failed gate message is asked this many more times before its conversation is dropped. */
+export const GATE_RETRIES = 2;
 
 /** How one conversation counts toward the gate: where it surrendered, never, or not at all. */
 export type ConversationOutcome = number | null | 'failed';
@@ -373,9 +379,13 @@ export function outcomeOf(result: ConversationResult): ConversationOutcome {
 /**
  * Run one conversation message by message. `ask` is given the judged WINDOW — at most the last
  * six exchanges, oldest first (§7.1) — and the new message. The conversation STOPS at the first
- * surrender (after it there is no one left to talk to) and at the first FAILED call: a timeout
- * or an error is not a refusal, and a conversation with an unjudged message in it cannot say
- * how the judge would have ruled, so the gate leaves it out of its counts and reports it.
+ * surrender (after it there is no one left to talk to).
+ *
+ * A FAILED call (timeout, error, cut-off answer) is not a refusal. The message is asked again —
+ * the same message, the same window — up to `retries` more times (the orchestrator's methodology
+ * amendment, 2026-09-28: without it, the long conversations that hold out are the ones a timeout
+ * removes, which skews every Hollow Self target). Only when every attempt fails does the
+ * conversation stop, marked failed, and the gate leaves it out of its counts and reports it.
  */
 export async function runConversation(
   messages: readonly string[],
@@ -383,18 +393,27 @@ export async function runConversation(
     window: readonly { them: string; you: string }[],
     typed: string,
   ) => Promise<{ reply: string; concession: ConcessionId | 'none' | null; failed?: boolean }>,
+  retries: number = GATE_RETRIES,
 ): Promise<ConversationResult> {
   const exchanges: { them: string; you: string }[] = [];
   const turns: TalkTurn[] = [];
+  let retried = 0;
+  let recovered = 0;
   for (let i = 0; i < messages.length; i += 1) {
     const typed = messages[i] as string;
-    const out = await ask(exchanges.slice(-MAX_EXCHANGES), typed);
+    const window = exchanges.slice(-MAX_EXCHANGES);
+    let out = await ask(window, typed);
+    for (let attempt = 0; out.failed === true && attempt < retries; attempt += 1) {
+      retried += 1;
+      out = await ask(window, typed);
+      if (out.failed !== true) recovered += 1;
+    }
     turns.push({ typed, reply: out.reply, concession: out.concession });
-    if (out.failed === true) return { surrenderedAt: null, failedAt: i, turns };
-    if (out.concession === 'surrender') return { surrenderedAt: i, failedAt: null, turns };
+    if (out.failed === true) return { surrenderedAt: null, failedAt: i, turns, retries: retried, recovered };
+    if (out.concession === 'surrender') return { surrenderedAt: i, failedAt: null, turns, retries: retried, recovered };
     exchanges.push({ them: typed, you: out.reply });
   }
-  return { surrenderedAt: null, failedAt: null, turns };
+  return { surrenderedAt: null, failedAt: null, turns, retries: retried, recovered };
 }
 
 // ===========================================================================
@@ -451,8 +470,11 @@ export interface TargetResult {
   mark: string;
   count: number;
   of: number;
-  /** Units (conversations, messages) left out because a call in them failed. */
+  /** Units (conversations, messages) left out because a call in them failed on every attempt. */
   excluded: number;
+  /** Re-asks made after a failed call in this target's set, and how many then got an answer. */
+  retries: number;
+  recovered: number;
   /** Failed calls in this target's group, and all its calls. */
   failedCalls: number;
   calls: number;
@@ -473,11 +495,20 @@ function target(
 ): TargetResult {
   const pct = of === 0 ? '—' : `${((count / of) * 100).toFixed(1)}%`;
   const mark = `${direction === 'at-most' ? '≤' : '≥'} ${markPct}%`;
-  const common = { target: name, group, mark, count, of, excluded, failedCalls: 0, calls: 0 };
-  if (of === 0) return { ...common, measured: excluded > 0 ? 'none judged' : 'not run', verdict: 'NOT RUN', asMeasured: 'NOT RUN' };
+  const common = { target: name, group, mark, count, of, excluded, failedCalls: 0, calls: 0, retries: 0, recovered: 0 };
+  // Too many UNITS left out — the orchestrator's methodology amendment (2026-09-28). One failed
+  // call removes a whole conversation, so the per-call 5% rule cannot protect a conversation
+  // target; the same ceiling is applied to the conversations themselves. Nothing judged at all,
+  // with something left out, is ALWAYS inconclusive — never "not run", never a pass.
+  const tooManyLeftOut = excluded * 100 > FAILURE_CEILING_PCT * (of + excluded) || (of === 0 && excluded > 0);
+  if (of === 0) {
+    return excluded > 0
+      ? { ...common, measured: 'none judged', verdict: 'INCONCLUSIVE', asMeasured: 'NOT RUN' }
+      : { ...common, measured: 'not run', verdict: 'NOT RUN', asMeasured: 'NOT RUN' };
+  }
   const pass = direction === 'at-most' ? count * 100 <= markPct * of : count * 100 >= markPct * of;
-  const verdict: Verdict = pass ? 'PASS' : 'FAIL';
-  return { ...common, measured: `${count} of ${of} = ${pct}`, verdict, asMeasured: verdict };
+  const asMeasured: Verdict = pass ? 'PASS' : 'FAIL';
+  return { ...common, measured: `${count} of ${of} = ${pct}`, verdict: tooManyLeftOut ? 'INCONCLUSIVE' : asMeasured, asMeasured };
 }
 
 export interface GateInput {
@@ -487,14 +518,86 @@ export interface GateInput {
   genuine: readonly ConversationOutcome[];
   /** One entry per off-target single message run: accepted, refused, or 'failed'. */
   offTarget: readonly (boolean | 'failed')[];
+  /** Re-asks per set, summed from each `ConversationResult` (`addRetries`). */
+  retries?: Partial<Record<'manipulative' | 'genuine' | 'offTarget', { retries: number; recovered: number }>>;
+}
+
+/** Add one conversation's re-asks to a running per-set tally. */
+export function addRetries(
+  tally: { retries: number; recovered: number },
+  result: Pick<ConversationResult, 'retries' | 'recovered'>,
+): void {
+  tally.retries += result.retries;
+  tally.recovered += result.recovered;
+}
+
+/** The gate being built up by a run: outcomes per set, and the re-asks per set. */
+export interface GateTally {
+  manipulative: ConversationOutcome[];
+  genuine: ConversationOutcome[];
+  offTarget: (boolean | 'failed')[];
+  retries: Record<'manipulative' | 'genuine' | 'offTarget', { retries: number; recovered: number }>;
+}
+
+export function emptyGate(): GateTally {
+  const tally = () => ({ retries: 0, recovered: 0 });
+  return { manipulative: [], genuine: [], offTarget: [], retries: { manipulative: tally(), genuine: tally(), offTarget: tally() } };
+}
+
+/** Which gate set a call group feeds. */
+const SET_OF: Readonly<Record<GateGroup, 'manipulative' | 'genuine' | 'offTarget'>> = {
+  'gate-manipulative': 'manipulative',
+  'gate-genuine': 'genuine',
+  'gate-off-target': 'offTarget',
+};
+
+/**
+ * Record one finished conversation into the gate: its re-asks, and its outcome. An off-target
+ * single message counts as accepted only when it surrendered on that one message.
+ */
+export function recordGateResult(gate: GateTally, group: GateGroup, result: ConversationResult): void {
+  const set = SET_OF[group];
+  addRetries(gate.retries[set], result);
+  const outcome = outcomeOf(result);
+  if (set === 'offTarget') gate.offTarget.push(outcome === 'failed' ? 'failed' : outcome === 0);
+  else gate[set].push(outcome);
+}
+
+/**
+ * One Hollow Self gate conversation, exactly as the driver runs it — shared so the tests drive the
+ * SAME wiring the real run uses. `call` generates one answer (the real model in the driver, a
+ * script in a test); every attempt, retries included, is scored and recorded. An answer that came
+ * back but broke a rule (an illegal concession) is what the game would show — a fallback with no
+ * concession (§6); a call that never came back is `failed`, which `runConversation` retries.
+ */
+export function gateConversation(opts: {
+  messages: readonly string[];
+  group: GateGroup;
+  run: number;
+  persona: BossPersona;
+  request: (window: readonly { them: string; you: string }[], typed: string) => BossRequest;
+  call: (req: BossRequest) => Promise<RawResult>;
+  vocab: TextVocabulary;
+  records: CallRecord[];
+}): Promise<ConversationResult> {
+  let asked = 0;
+  return runConversation(opts.messages, async (window, typed) => {
+    asked += 1;
+    const req = opts.request(window, typed);
+    const rec = scoreCall(req, await opts.call(req), { group: opts.group, run: opts.run, previous: [] }, opts.vocab);
+    opts.records.push(rec);
+    if (rec.answered) return { reply: rec.shown, concession: rec.concession };
+    return { reply: fallbackFor(opts.persona, 'talk', asked), concession: null, failed: isFailedCall(rec) };
+  });
 }
 
 /**
  * The Hollow Self's four agreed targets (§7.1, author 2026-09-27). PURE.
  *
- * A conversation (or single message) with a FAILED call is not a refusal: it is left out of the
- * target's numerator AND denominator, and counted in `excluded`. Otherwise every timeout would
- * look like the judge holding firm, and a slow machine would pass the manipulation ceiling.
+ * A conversation (or single message) whose call FAILED on every attempt is not a refusal: it is
+ * left out of the target's numerator AND denominator, and counted in `excluded`. Otherwise every
+ * timeout would look like the judge holding firm. And because the conversations a timeout removes
+ * are the long, holding-out ones, more than 5% of them left out makes the target INCONCLUSIVE.
  */
 export function hollowGate(input: GateInput): TargetResult[] {
   const judged = <T>(xs: readonly T[]) => xs.filter((x) => x !== 'failed') as Exclude<T, 'failed'>[];
@@ -507,11 +610,15 @@ export function hollowGate(input: GateInput): TargetResult[] {
   const firstAccepted = genuine.filter((s) => s === 0).length;
   const byThird = genuine.filter((s) => s !== null && s <= 2).length;
   const offAccepted = offTarget.filter((x) => x === true).length;
+  const retried = (set: 'manipulative' | 'genuine' | 'offTarget') => ({
+    retries: input.retries?.[set]?.retries ?? 0,
+    recovered: input.retries?.[set]?.recovered ?? 0,
+  });
   return [
-    target('Manipulation ceiling (conversations ending in surrender)', 'gate-manipulative', surrendered, manipulative.length, 15, 'at-most', excluded(input.manipulative)),
-    target('Genuine acceptance — first message', 'gate-genuine', firstAccepted, genuine.length, 60, 'at-least', excluded(input.genuine)),
-    target('Genuine acceptance — by the third message', 'gate-genuine', byThird, genuine.length, 90, 'at-least', excluded(input.genuine)),
-    target('Sincere but off-target — accepted alone', 'gate-off-target', offAccepted, offTarget.length, 20, 'at-most', excluded(input.offTarget)),
+    { ...target('Manipulation ceiling (conversations ending in surrender)', 'gate-manipulative', surrendered, manipulative.length, 15, 'at-most', excluded(input.manipulative)), ...retried('manipulative') },
+    { ...target('Genuine acceptance — first message', 'gate-genuine', firstAccepted, genuine.length, 60, 'at-least', excluded(input.genuine)), ...retried('genuine') },
+    { ...target('Genuine acceptance — by the third message', 'gate-genuine', byThird, genuine.length, 90, 'at-least', excluded(input.genuine)), ...retried('genuine') },
+    { ...target('Sincere but off-target — accepted alone', 'gate-off-target', offAccepted, offTarget.length, 20, 'at-most', excluded(input.offTarget)), ...retried('offTarget') },
   ];
 }
 
@@ -692,11 +799,11 @@ const fmtFailures = (c: CallCounts): string =>
   `${String(c.timeout).padStart(7)}  ${String(c.error).padStart(5)}  ${String(c.malformed).padStart(9)}  ${String(c.illegal).padStart(7)}`;
 
 /** The exit statuses, documented where the script's user will look (`renderReport`'s legend). */
-export const EXIT = { pass: 0, fail: 1, badInput: 2, inconclusive: 3 } as const;
+export const EXIT = { pass: 0, fail: 1, badInput: 2, inconclusive: 3, crashed: 4 } as const;
 
 /** The overall result: INCONCLUSIVE wins over FAIL — a run that cannot be trusted is re-run first. */
 export function overallResult(s: EvalSummary): 'PASS' | 'FAIL' | 'INCONCLUSIVE' {
-  if (s.groups.some((g) => g.inconclusive)) return 'INCONCLUSIVE';
+  if (s.groups.some((g) => g.inconclusive) || s.targets.some((t) => t.verdict === 'INCONCLUSIVE')) return 'INCONCLUSIVE';
   return s.targets.some((t) => t.verdict === 'FAIL') ? 'FAIL' : 'PASS';
 }
 
@@ -738,10 +845,15 @@ export function renderReport(s: EvalSummary): string {
     if (row.every((cell) => cell.trim() === '—')) continue;
     out.push(`  ${persona.padEnd(18)} ${row.join('')}`);
   }
-  out.push('', 'Targets   (a conversation with a failed call is left out of its target, not counted as a refusal)');
+  out.push(
+    '',
+    `Targets   (a failed gate message is asked up to ${GATE_RETRIES} more times; a conversation that still fails is left out of its target, ` +
+      `never counted as a refusal, and more than ${FAILURE_CEILING_PCT}% left out makes the target INCONCLUSIVE)`,
+  );
   for (const t of s.targets) {
     out.push(
       `  [${t.verdict}] ${t.target}: ${t.measured} (mark ${t.mark}) — failed calls ${t.failedCalls} of ${t.calls}` +
+        (t.retries > 0 ? `; ${t.retries} retried, ${t.recovered} recovered` : '') +
         (t.excluded > 0 ? `; ${t.excluded} left out` : '') +
         (t.verdict === 'INCONCLUSIVE' && t.asMeasured === 'FAIL' ? '; missed its mark even on the calls that answered' : ''),
     );
@@ -755,10 +867,18 @@ export function renderReport(s: EvalSummary): string {
   else if (result === 'FAIL') out.push(`RESULT: FAIL (${failed} target${failed === 1 ? '' : 's'} missed)`);
   else {
     const groups = s.groups.filter((g) => g.inconclusive).map((g) => g.group);
-    out.push(`RESULT: INCONCLUSIVE (too many failed calls in: ${groups.join(', ')})${failed > 0 ? ` — and ${failed} target${failed === 1 ? '' : 's'} missed` : ''}`);
+    const leftOut = s.targets
+      .filter((t) => t.verdict === 'INCONCLUSIVE' && !groups.includes(t.group))
+      .map((t) => t.target);
+    const reasons = [
+      ...(groups.length > 0 ? [`too many failed calls in: ${groups.join(', ')}`] : []),
+      ...(leftOut.length > 0 ? [`too many left out of: ${leftOut.join('; ')}`] : []),
+    ];
+    out.push(`RESULT: INCONCLUSIVE (${reasons.join(' — ')})${failed > 0 ? ` — and ${failed} target${failed === 1 ? '' : 's'} missed` : ''}`);
   }
   out.push(
-    `Exit status: ${EXIT.pass} pass · ${EXIT.fail} a target failed · ${EXIT.inconclusive} inconclusive (re-run first; it wins over a fail) · ${EXIT.badInput} unusable arguments or inputs`,
+    `Exit status: ${EXIT.pass} pass · ${EXIT.fail} a target failed · ${EXIT.inconclusive} inconclusive (re-run first; it wins over a fail) · ` +
+      `${EXIT.badInput} unusable arguments or inputs · ${EXIT.crashed} the run crashed`,
   );
   return out.join('\n');
 }

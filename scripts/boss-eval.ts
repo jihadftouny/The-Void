@@ -25,7 +25,10 @@
 //   1  a target FAILED;
 //   2  unusable arguments or inputs (a bad flag, a broken message set or personas file, no model);
 //   3  INCONCLUSIVE — more than 5% of some group's calls failed (timeout, error, cut-off answer),
-//      so its targets cannot be trusted either way. It wins over 1: re-run before acting on a FAIL.
+//      or more than 5% of a Hollow Self target's conversations were left out (a message failed on
+//      all three attempts), so those targets cannot be trusted either way. It wins over 1: re-run
+//      before acting on a FAIL;
+//   4  the run CRASHED part-way (an exception inside the evaluation) — no report was produced.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -37,7 +40,6 @@ import { createSequenceQueue } from '../electron/llm-queue.mjs';
 import { createGrammarCache, runStructured } from '../electron/structured.mjs';
 import { validatePersona, type BossPersona, type BossRequest } from '../src/llm/bossContract.ts';
 import { toIpcRequest } from '../src/llm/bossPrompt.ts';
-import { fallbackFor } from '../src/llm/bossAnswer.ts';
 import { buildVocabulary } from '../src/llm/textHygiene.ts';
 import {
   FIXTURE_NAME,
@@ -63,15 +65,13 @@ import {
   planCalls,
   renderPlan,
   renderReport,
-  runConversation,
   scoreCall,
   summarize,
-  isFailedCall,
-  outcomeOf,
+  emptyGate,
+  gateConversation,
+  recordGateResult,
   type CallRecord,
-  type ConversationOutcome,
   type GateGroup,
-  type GateInput,
   type MessageSet,
   type RawResult,
 } from './boss-eval-lib.ts';
@@ -112,7 +112,14 @@ if (!options.run) process.exit(0);
 
 // ---- from here on, the real model (author only) --------------------------------------------
 
-await evaluate();
+try {
+  await evaluate();
+} catch (err) {
+  // A crash is its own status: without this it would exit 1, indistinguishable from "a target
+  // failed" to anything that reads only the status.
+  console.error('boss-eval: the run crashed —', err);
+  process.exitCode = EXIT.crashed;
+}
 
 async function evaluate(): Promise<void> {
   const userDataDir = electronUserDataDir({ platform: process.platform, env: process.env, home: os.homedir() });
@@ -133,11 +140,7 @@ async function evaluate(): Promise<void> {
   const cache = createGrammarCache();
   const vocab = buildVocabulary();
   const records: CallRecord[] = [];
-  const gate: { manipulative: ConversationOutcome[]; genuine: ConversationOutcome[]; offTarget: (boolean | 'failed')[] } = {
-    manipulative: [],
-    genuine: [],
-    offTarget: [],
-  };
+  const gate = emptyGate();
   let requestId = 0;
 
   /** One call through the shipped path. `seed` overrides the persona's (gate runs 2 and 3). */
@@ -204,9 +207,11 @@ async function evaluate(): Promise<void> {
     }
   }
 
-  // The Hollow Self's gate (§7.1): whole conversations, stopping at the first surrender — and at
-  // the first FAILED call (timeout, error, cut-off answer), which is not a refusal: that
-  // conversation is left out of its target and reported (fix round 1, F1).
+  // The Hollow Self's gate (§7.1): whole conversations, stopping at the first surrender. A FAILED
+  // call (timeout, error, cut-off answer) is not a refusal: `runConversation` asks the same message
+  // again, with the same window, up to twice more (the orchestrator's methodology amendment,
+  // 2026-09-28); only a message that fails every time drops its conversation, which is then left
+  // out of its target and reported — and more than 5% left out makes the target INCONCLUSIVE.
   if (want('hollow-gate')) {
     const hollow = personaById(personas, 'hollow');
     if (!hollow) fail('the personas have no Hollow Self — the gate cannot run');
@@ -215,35 +220,31 @@ async function evaluate(): Promise<void> {
     for (let run = 1; run <= runs; run += 1) {
       // Run 1 is production behaviour (the card's pinned seed); runs 2+ vary it for robustness.
       const seed = run === 1 ? undefined : (hollow.talk.seed ?? 0) + run - 1;
-      const converse = (messages: readonly string[], group: GateGroup) => {
-        let turn = 0;
-        return runConversation(messages, async (window, typed) => {
-          turn += 1;
-          const req = talkRequest(hollow, { exchanges: window, typed, available: ['surrender'] });
-          const rec = scoreCall(req, await call(req, seed), { group, run, previous: [] }, vocab);
-          records.push(rec);
-          if (rec.answered) return { reply: rec.shown, concession: rec.concession };
-          // An answer that came back but broke a rule (an illegal concession) is what the game
-          // would show as a fallback with no concession (§6); a call that never came back is not
-          // a ruling at all.
-          return { reply: fallbackFor(hollow, 'talk', turn), concession: null, failed: isFailedCall(rec) };
+      const converse = (messages: readonly string[], group: GateGroup) =>
+        gateConversation({
+          messages,
+          group,
+          run,
+          persona: hollow,
+          request: (window, typed) => talkRequest(hollow, { exchanges: window, typed, available: ['surrender'] }),
+          call: (req) => call(req, seed),
+          vocab,
+          records,
         });
-      };
       for (const c of set.hollowGate.manipulativeConversations.slice(0, cap)) {
-        gate.manipulative.push(outcomeOf(await converse(c.messages, 'gate-manipulative')));
+        recordGateResult(gate, 'gate-manipulative', await converse(c.messages, 'gate-manipulative'));
       }
       for (const c of set.hollowGate.genuineConversations.slice(0, cap)) {
-        gate.genuine.push(outcomeOf(await converse(c.messages, 'gate-genuine')));
+        recordGateResult(gate, 'gate-genuine', await converse(c.messages, 'gate-genuine'));
       }
       for (const m of set.hollowGate.offTargetSingles.slice(0, cap)) {
-        const outcome = outcomeOf(await converse([m], 'gate-off-target'));
-        gate.offTarget.push(outcome === 'failed' ? 'failed' : outcome === 0);
+        recordGateResult(gate, 'gate-off-target', await converse([m], 'gate-off-target'));
       }
     }
   }
 
   const vramAfter = await llama.getVramState().catch(() => null);
-  const summary = summarize(records, gate as GateInput, { before: vramBefore, after: vramAfter });
+  const summary = summarize(records, gate, { before: vramBefore, after: vramAfter });
   const report = renderReport(summary);
   console.log(`\n${report}`);
 
