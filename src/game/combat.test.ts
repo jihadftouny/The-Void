@@ -771,3 +771,73 @@ describe('G22(c) — an enemy that did not cast regains a charge', () => {
     expect(ENEMY_CHARGE_RESTORE_PER_TURN).toBe(1);
   });
 });
+
+describe('resolveEnemyAttack — a boss\'s CHOSEN move (PLAN.md #11)', () => {
+  // Same fixture as above: enemy STR 13 (+1 to hit), player AC 13 ⇒ natural ≥ 12 hits.
+  // Every damage number is the scripted die face plus, where the card says so, the +1 STR mod.
+  const AC = 13;
+
+  it('a forced strike rolls the boss die on a hit (2 draws), no skill pick, restores a charge', () => {
+    const e = enemy({ skillCharges: 1 });
+    // Exactly two draws: if a skill-pick were drawn too, scriptedRng throws.
+    const r = resolveEnemyAttack(e, skillTarget(), AC, 0, scriptedRng([face(12, 20), face(5, 6)]), {
+      kind: 'strike', die: 6, addStr: false,
+    });
+    expect(r.damage).toBe(5);
+    expect(r.enemy.skillCharges).toBe(2); // the strike cast nothing: one charge back
+    expect(r.events).toEqual([{
+      kind: 'attack', subject: 'enemy', outcome: 'hit', damage: 5,
+      roll: { natural: 12, faces: [12], advDis: 0, modifier: 1, total: 13, targetAc: AC },
+      damageSources: [{ kind: 'weapon-dice', amount: 5, label: '1d6' }],
+    }]);
+  });
+
+  it('a forced strike crit rolls the die AGAIN and adds STR once when the card says so (3 + 4 + 1 = 8)', () => {
+    const r = resolveEnemyAttack(enemy(), skillTarget(), AC, 0, scriptedRng([face(20, 20), face(3, 10), face(4, 10)]), {
+      kind: 'strike', die: 10, addStr: true,
+    });
+    expect(r.damage).toBe(8);
+    const attack = r.events.at(-1) as Extract<CombatEvent, { kind: 'attack' }>;
+    expect(attack.damageSources).toEqual([
+      { kind: 'weapon-dice', amount: 3, label: '1d10' },
+      { kind: 'crit-dice', amount: 4, label: '1d10' },
+      { kind: 'ability-mod', amount: 1 },
+    ]);
+    expect(sumDamageSources(attack.damageSources)).toBe(8);
+  });
+
+  it('a forced strike without addStr adds no STR term (face 7 on a d8 is 7)', () => {
+    const r = resolveEnemyAttack(enemy(), skillTarget(), AC, 0, scriptedRng([face(15, 20), face(7, 8)]), {
+      kind: 'strike', die: 8, addStr: false,
+    });
+    expect(r.damage).toBe(7);
+  });
+
+  it('a forced strike that misses draws nothing past the d20 and deals 0', () => {
+    const r = resolveEnemyAttack(enemy(), skillTarget(), AC, 0, scriptedRng([face(11, 20)]), {
+      kind: 'strike', die: 6, addStr: false,
+    });
+    expect(r.damage).toBe(0);
+  });
+
+  it('a forced cast casts THAT skill (not the pool’s), with no pick draw, spending its cost', () => {
+    // The pool holds only Pyro Ball; the choice is Freeze! (base 1, cost 1, applies freeze).
+    const e = enemy({ skillCharges: 2 });
+    const r = resolveEnemyAttack(e, skillTarget(), AC, 0, scriptedRng([face(12, 20)]), {
+      kind: 'cast', skill: SKILLS.freeze,
+    });
+    expect(r.damage).toBe(1);
+    expect(r.enemy.skillCharges).toBe(1);
+    expect(r.events[0]).toEqual({ kind: 'enemy-skill-used', skillId: 'freeze', name: 'Freeze!' });
+    expect(r.target.activeConditions.map((c) => c.type)).toEqual(['freeze']);
+  });
+
+  it('a forced cast that misses spends no charge and applies nothing', () => {
+    const r = resolveEnemyAttack(enemy({ skillCharges: 2 }), skillTarget(), AC, 0, scriptedRng([face(3, 20)]), {
+      kind: 'cast', skill: SKILLS.freeze,
+    });
+    expect(r.damage).toBe(0);
+    expect(r.enemy.skillCharges).toBe(2);
+    expect(r.target.activeConditions).toEqual([]);
+  });
+});

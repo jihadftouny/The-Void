@@ -27,7 +27,7 @@ import { getFamily } from './enemyFamily.ts';
 import { rollDie, type Rng } from './rng.ts';
 import { type CombatEvent, type CombatSubject, type DamageSource, withDamageSource } from './combatEvent.ts';
 import { tickConditions, type ConditionType } from './condition.ts';
-import { combineAdvDis, resolveEnemyAttack, resolvePlayerAttack } from './combat.ts';
+import { combineAdvDis, resolveEnemyAttack, resolvePlayerAttack, type ForcedEnemyMove } from './combat.ts';
 import { resolveSkill, type SkillDef, type SkillId } from './skill.ts';
 import { castSkill, clampMomentum, grantMomentum, usesMomentum } from './classKit.ts';
 import { perkModifiers } from './perks.ts';
@@ -965,6 +965,37 @@ function playerAction(
  * gauge granted — `actions` is already computed here. Nothing else in the loop moves.
  */
 export function resolveEnemyTurn(ctx: RoundContext, rng: Rng, rules: RoundRules): TurnOutcome {
+  const begun = beginEnemyTurn(ctx, rng, rules);
+  if (begun === 'enemy-died') return 'enemy-died';
+
+  // c. The actions.
+  for (let i = 0; i < begun.actions; i += 1) {
+    if (i === 1) ctx.events.push({ kind: 'tempo-extra-action', subject: 'enemy' });
+    const outcome = enemyAttack(ctx, begun.advDisOverride, rng);
+    if (outcome !== 'ongoing') return outcome;
+  }
+  return 'ongoing';
+}
+
+/** What the first half of the enemy's turn leaves: its actions, and its own tick's adv/dis. */
+export interface EnemyTurnStart {
+  actions: 0 | 1 | 2;
+  /** The adv/dis the enemy's OWN tick produced (fracture) — combined per action with its target's. */
+  advDisOverride: -1 | 0 | 1;
+}
+
+/**
+ * The first half of the enemy's turn — steps a and b of `resolveEnemyTurn`, unchanged: the tick
+ * and the gauge. Split out (PLAN.md #11) so a BOSS turn can stop here and ask for its choice.
+ * `skipGauge` (a granted `pause` concession) ticks the conditions but moves no gauge and grants
+ * no action. PURE apart from appending to `ctx`.
+ */
+export function beginEnemyTurn(
+  ctx: RoundContext,
+  rng: Rng,
+  rules: RoundRules,
+  skipGauge = false,
+): EnemyTurnStart | 'enemy-died' {
   // a. The tick.
   const etc = tickConditions(ctx.enemy, ctx.player, rng);
   const delta = etc.hpDelta < 0 ? etc.hpDelta * ctx.mods.dotTickMult : etc.hpDelta;
@@ -977,41 +1008,51 @@ export function resolveEnemyTurn(ctx: RoundContext, rng: Rng, rules: RoundRules)
   ctx.events.push(...etc.events);
   syncHp(ctx, 'enemy');
   if (ctx.enemy.hp <= 0) return 'enemy-died';
+  if (skipGauge) return { actions: 0, advDisOverride: etc.advDisOverride };
 
   // b. The gauge.
   const family = rules.familySpeed ? (getFamily(ctx.enemy.familyId)?.theme.speedTenths ?? 0) : 0;
   const rate = rules.enemyTempo ? tempoRate(ctx.enemy, rules.tempoRateCapTenths, family) : 0;
   const { actions } = moveGauge(ctx, 'enemy', rate, !etc.skipTurn);
+  return { actions, advDisOverride: etc.advDisOverride };
+}
 
-  // c. The actions.
-  for (let i = 0; i < actions; i += 1) {
-    if (i === 1) ctx.events.push({ kind: 'tempo-extra-action', subject: 'enemy' });
-    // M4: to-hit vs the player's real AC. G30: the adv/dis its TARGET imposes (Scavver evasion)
-    // combined with the override its OWN tick produced (fracture).
-    const enemyAdvDis = combineAdvDis(enemyAdvDisVs(ctx.player), etc.advDisOverride);
-    const ea = resolveEnemyAttack(ctx.enemy, ctx.player, playerArmorClass(ctx.player), enemyAdvDis, rng);
-    ctx.enemy = ea.enemy;
-    ctx.player = ea.target;
-    ctx.events.push(...ea.events);
-    // `resolveEnemyAttack` always pushes its `attack` event LAST (asserted in combat.test.ts).
-    const taken = applyDamageToPlayer(ctx.player, ctx.enemy, ea.damage, {
-      mods: ctx.mods,
-      firstHitDone: ctx.firstHitDone,
-      reviveUsed: ctx.reviveUsed,
-      events: ctx.events,
-      attackEventIndex: ctx.events.length - 1,
-    });
-    ctx.player = taken.player;
-    ctx.enemy = taken.enemy;
-    ctx.firstHitDone = taken.firstHitDone;
-    ctx.reviveUsed = taken.reviveUsed;
-    syncHp(ctx, 'player');
-    syncHp(ctx, 'enemy'); // an `onTakeDamage` reflect
-    // Momentum (Enforcer only): +1 for TAKING damage (post-reduction, post-shield).
-    if (usesMomentum(ctx.player) && taken.applied > 0) ctx.player = grantMomentum(ctx.player, 1);
-    if (taken.died) return 'player-died';
-    if (ctx.enemy.hp <= 0) return 'enemy-died';
-  }
+/**
+ * ONE enemy attack — to-hit, then what lands on a hit — and its ONE pass through the guarded
+ * damage path (first-hit reduction → shield → HP → `onTakeDamage` → revive). `forced` is a
+ * boss's chosen move (PLAN.md #11); omitted, the random affordable skill pick of today.
+ */
+function enemyAttack(
+  ctx: RoundContext,
+  advDisOverride: -1 | 0 | 1,
+  rng: Rng,
+  forced?: ForcedEnemyMove,
+): TurnOutcome {
+  // M4: to-hit vs the player's real AC. G30: the adv/dis its TARGET imposes (Scavver evasion)
+  // combined with the override its OWN tick produced (fracture).
+  const enemyAdvDis = combineAdvDis(enemyAdvDisVs(ctx.player), advDisOverride);
+  const ea = resolveEnemyAttack(ctx.enemy, ctx.player, playerArmorClass(ctx.player), enemyAdvDis, rng, forced);
+  ctx.enemy = ea.enemy;
+  ctx.player = ea.target;
+  ctx.events.push(...ea.events);
+  // `resolveEnemyAttack` always pushes its `attack` event LAST (asserted in combat.test.ts).
+  const taken = applyDamageToPlayer(ctx.player, ctx.enemy, ea.damage, {
+    mods: ctx.mods,
+    firstHitDone: ctx.firstHitDone,
+    reviveUsed: ctx.reviveUsed,
+    events: ctx.events,
+    attackEventIndex: ctx.events.length - 1,
+  });
+  ctx.player = taken.player;
+  ctx.enemy = taken.enemy;
+  ctx.firstHitDone = taken.firstHitDone;
+  ctx.reviveUsed = taken.reviveUsed;
+  syncHp(ctx, 'player');
+  syncHp(ctx, 'enemy'); // an `onTakeDamage` reflect
+  // Momentum (Enforcer only): +1 for TAKING damage (post-reduction, post-shield).
+  if (usesMomentum(ctx.player) && taken.applied > 0) ctx.player = grantMomentum(ctx.player, 1);
+  if (taken.died) return 'player-died';
+  if (ctx.enemy.hp <= 0) return 'enemy-died';
   return 'ongoing';
 }
 
