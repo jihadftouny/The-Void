@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld('void', {
       .invoke('llm:generate', { requestId, prompt, system })
       .finally(() => ipcRenderer.removeListener('llm:token', listener));
   },
+  // One boss call (PLAN.md #11). `request` is the plain-data IPC request the pure layer built
+  // (`src/llm/bossPrompt.ts` toIpcRequest). Resolves with a result object — never rejects for a
+  // timeout, a missing model or a failed generation; `ok:false` carries the reason.
+  boss(request) {
+    return ipcRenderer.invoke('llm:boss', request);
+  },
   // Forward a renderer log entry to the main process (written to the log file).
   log(entry) {
     try {

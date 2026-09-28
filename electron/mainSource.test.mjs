@@ -390,7 +390,10 @@ describe('preload.cjs — the bridge the renderer actually has', () => {
     // Non-vacuity first: all four lists are real, or every comparison below is empty == empty.
     expect(sends, 'the preload sends on nothing — this guard reads air').toContain('corpus:record');
     expect(sends).toContain('log:entry');
-    expect(invokes).toEqual(['llm:generate']);
+    // `llm:boss` (PLAN.md #11) is the second invoke channel, named here so the cross-check
+    // below cannot pass by both lists losing it together.
+    expect(invokes).toEqual(['llm:boss', 'llm:generate']);
+    expect(channels(MAIN, 'ipcMain', 'handle')).toContain('llm:boss');
     expect(listens.length).toBeGreaterThan(0);
     expect(handles.length).toBeGreaterThan(0);
 
@@ -966,7 +969,7 @@ describe('the game window sizes the PAGE, not the frame (UI-DESIGN.md §14)', ()
 // =========================================================================================
 
 describe('llm.mjs: narration and boss calls share ONE queue (AC-15)', () => {
-  const queueRuns = callsTo(LLM, 'queue\.run');
+  const queueRuns = callsTo(LLM, 'queue\\.run');
   const genAt = LLM.indexOf('async generate(');
   const structAt = LLM.indexOf('async generateStructured(');
 
@@ -1024,5 +1027,87 @@ describe('llm.mjs: narration and boss calls share ONE queue (AC-15)', () => {
     const tail = body.slice(body.search(/\}\s*catch\s*\(/));
     expect(tail.search(/op\.fail\s*\(/)).toBeGreaterThan(-1);
     expect(tail.search(/op\.fail\s*\(/)).toBeLessThan(tail.search(/return\s*\{\s*ok:\s*false/));
+  });
+});
+
+describe("main.mjs's llm:boss handler (AC-15, AC-16)", () => {
+  const handler = callsTo(MAIN, 'ipcMain\\.handle').find((c) => c.includes("'llm:boss'")) ?? '';
+  const logs = callsTo(handler, 'mlog');
+  const logNamed = (message) => logs.find((c) => argsOf(c)[2] === `'${message}'`);
+
+  it('the anchor exists, and the preload really invokes it', () => {
+    expect(handler.length, 'the llm:boss handler is gone').toBeGreaterThan(100);
+    expect(PRELOAD, 'the preload no longer exposes boss()').toMatch(/\bboss\s*\(\s*request\s*\)\s*\{/);
+    expect(PRELOAD).toMatch(/ipcRenderer\.invoke\s*\(\s*'llm:boss'\s*,\s*request\s*\)/);
+  });
+
+  it('with no model it returns no-model at once — it NEVER starts a load', () => {
+    // A boss turn cannot wait two minutes for a model. The polarity AND the effect are pinned:
+    // `if (narratorGate.isReady())` would send every call with a model to the fallback.
+    const gate = handler.match(/if\s*\(\s*!\s*narratorGate\.isReady\(\s*\)\s*\)\s*\{([\s\S]*?)\n  \}/);
+    expect(gate, 'the handler no longer checks readiness first — or checks it inverted').not.toBeNull();
+    expect(gate[1]).toMatch(/return\s*\{\s*ok:\s*false,\s*reason:\s*'no-model'\s*\}/);
+    expect(gate[1], 'the no-model path is silent').toMatch(/mlog\s*\(\s*'warn',\s*'boss',\s*'boss: no model'/);
+    expect(handler, 'a boss call can start a model load').not.toMatch(/ensureNarrator\s*\(|narratorGate\.ensure\s*\(/);
+    // The readiness check comes before the call — and the call uses the gate's ready narrator.
+    expect(handler.search(/narratorGate\.isReady\(/)).toBeLessThan(handler.search(/generateStructured\s*\(/));
+    expect(handler).toMatch(/narratorGate\.peek\(\s*\)\.generateStructured\s*\(\s*req\s*\)/);
+    expect(callsTo(MAIN, 'createNarrator').length, 'a second model load site appeared').toBe(1);
+  });
+
+  it('never throws over IPC: the catch logs, then RETURNS an error result', () => {
+    const tail = handler.slice(handler.search(/\}\s*catch\s*\(/));
+    expect(tail.length, 'the handler no longer catches').toBeGreaterThan(20);
+    expect(tail, 'the handler re-throws across IPC').not.toMatch(/\bthrow\b/);
+    const logAt = tail.search(/mlog\s*\(\s*'error',\s*'boss',\s*'boss: FAILED'/);
+    const retAt = tail.search(/return\s*\{\s*ok:\s*false,\s*reason:\s*'error'/);
+    expect(logAt, 'a thrown failure is not logged').toBeGreaterThan(-1);
+    expect(retAt, 'a thrown failure is not returned as a result').toBeGreaterThan(-1);
+    expect(logAt, 'it returns before it logs').toBeLessThan(retAt);
+  });
+
+  it('logs start, done, timeout, FAILED and no model — each at its level (AC-16)', () => {
+    expect(argsOf(logNamed('boss: start') ?? 'x()')[0]).toBe("'debug'");
+    expect(argsOf(logNamed('boss: timeout') ?? 'x()')[0]).toBe("'warn'");
+    expect(argsOf(logNamed('boss: FAILED') ?? 'x()')[0]).toBe("'error'");
+    expect(argsOf(logNamed('boss: no model') ?? 'x()')[0]).toBe("'warn'");
+    const done = logNamed('boss: done');
+    expect(done, 'a finished boss call is not logged').toBeDefined();
+    // info when healthy, warn when slow — by the derived threshold, the right way round.
+    expect(argsOf(done)[0]).toBe("slow ? 'warn' : 'info'");
+    expect(handler).toMatch(/\(r\.generateMs \?\? 0\) >= THRESHOLDS\.bossGenerate/);
+    expect(handler).toMatch(/\(r\.queuedMs \?\? 0\) >= THRESHOLDS\.bossGenerate/);
+  });
+
+  it('the start line carries the call; the outcome carries every timing (AC-16)', () => {
+    const start = logNamed('boss: start') ?? '';
+    for (const key of ['promptChars', 'maxTokens', 'temperature']) expect(start, key).toMatch(new RegExp(String.raw`\b${key}:`));
+    expect(handler).toMatch(/const call = \{ requestId:[^}]*kind:[^}]*persona:[^}]*\}/);
+    const outcome = handler.match(/const outcome = \{([\s\S]*?)\};/);
+    expect(outcome, 'the outcome payload is gone').not.toBeNull();
+    for (const key of ['queuedMs', 'grammarMs', 'ttftMs', 'generateMs', 'tokens', 'promptTokens', 'tokPerSec', 'timedOut', 'textChars']) {
+      expect(outcome[1], `the outcome no longer records ${key}`).toMatch(new RegExp(String.raw`\b${key}:`));
+    }
+    // Each ms value comes from the result, never a constant.
+    for (const key of ['queuedMs', 'grammarMs', 'ttftMs', 'generateMs']) {
+      expect(outcome[1], `${key} is fabricated`).toMatch(new RegExp(String.raw`\b${key}: r\.${key}\b`));
+    }
+    for (const message of ['boss: done', 'boss: timeout']) {
+      expect(argsOf(logNamed(message) ?? 'x()')[3], `${message} does not carry the timings`).toBe('outcome');
+    }
+  });
+
+  it('the player\'s typed words are never logged — only the prompt\'s length', () => {
+    // The prompt carries what the player typed. The only permitted reads of it are its type and
+    // its `.length`; anything else is the text itself, on its way into a log line.
+    const READ = /(typeof\s+)?\breq\.(prompt|system)\b(\.length)?/g;
+    const innocent = (m) => m[1] !== undefined || m[3] !== undefined;
+    const reads = [...handler.matchAll(READ)];
+    expect(reads.some((m) => m[3] !== undefined), 'the handler no longer reads the prompt length at all').toBe(true);
+    for (const m of reads) expect(innocent(m), `the prompt text itself is read: ${m[0]}`).toBe(true);
+    // The detector: a planted `prompt: req.prompt` is caught; the two innocent reads are not.
+    const planted = [..."mlog('debug','boss','x',{ prompt: req.prompt })".matchAll(READ)];
+    expect(planted.map(innocent)).toEqual([false]);
+    expect([..."typeof req.prompt === 'string' ? req.prompt.length : 0".matchAll(READ)].map(innocent)).toEqual([true, true]);
   });
 });
