@@ -150,7 +150,10 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ### 2026-09-28 — the bosses' model plumbing (`boss-llm`, #11 part B) — built, not merged
 
-**3476 → 3620 tests (4 skipped); typecheck, build and the full suite green.** Plan → build. Built beside
+**3476 → 3629 tests (4 skipped); typecheck, build and the full suite green.** Plan → build → test (FAIL) →
+one fix round: the evaluation report now counts timed-out and failed calls, times a timeout at the moment
+it was cut off, never counts a failed gate call as a refusal, and exits 3 (INCONCLUSIVE) when more than 5%
+of a group's calls fail; three test holes were closed. Built beside
 unit A (`boss-engine`) in a separate worktree; nothing in `src/game`, `src/data`, `src/render` or
 `src/desktop` was touched. **No real model was loaded at any point** (the GPU was in use) — every test
 uses a fake, and the evaluation script's first real run is the author's (`HUMAN-CHECKS.md`).

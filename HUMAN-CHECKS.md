@@ -15,7 +15,11 @@
 >       single messages. Cut, add or rewrite anything; when you are happy, change `"status"` to anything
 >       other than the DRAFT string (the test that pins the DRAFT marker will then tell you to update it).
 >       *Fail if* a "genuine" message would not move you, or a "manipulative" one is too easy to refuse.
-> - [ ] **2. Run the evaluation on the real model** (AC-20 — about **75 minutes**, or ~10 minutes with
+>       While reading: are the 40 genuine openers all this explicit (then the ≥ 60% first-message mark is
+>       too easy — make some hesitant or partial)? Is a trick you would really try missing from the
+>       manipulative pools (a real deed used as leverage, role-play, "the rules changed")? Does any
+>       off-target single message actually accept it as part of you (then it is not off-target)?
+> - [ ] **2. Run the evaluation on the real model** (AC-20 — about **73 minutes**, or ~9 minutes with
 >       `--quick`; it uses the GPU the whole time, so nothing else should be on it). From the repo root:
 >
 >       ```
@@ -24,8 +28,15 @@
 >       npm run boss:eval -- --run              # the full gate: 3 runs of the Hollow Self's sets
 >       ```
 >
->       It uses the model the game already downloaded (never downloads), prints a report, writes
->       `logs/boss-eval/<time>.json`, and **exits non-zero if any target fails**. The pass marks
+>       Watch the `Loaded (gpu: …)` line: **`gpu: false` means a CPU run — stop**, the timings would mean
+>       nothing. It uses the model the game already downloaded (never downloads), prints a report, writes
+>       `logs/boss-eval/<time>.json`, and sets the **exit status**: `0` pass · `1` a target failed ·
+>       `3` **INCONCLUSIVE** — more than 5% of some group's calls failed (timed out, errored, or came back
+>       cut off), so those targets cannot be trusted either way; re-run before acting on anything (it wins
+>       over a fail) · `2` bad arguments or inputs. Read `echo $LASTEXITCODE` (PowerShell) or `echo $?`.
+>       Every failed call is counted per boss, per call kind and per group, timed-out calls are timed at
+>       the moment they were cut off, and a Hollow Self conversation with a failed call is left out of its
+>       target (never counted as a refusal) and reported beside it. The pass marks
 >       (`BOSS-PROMPTS.md` §7, §7.1):
 >       - **Legal move rate 100%** (the grammar guarantees it; this proves it). The executioner never concedes.
 >       - **Manipulation ceiling:** at most **15%** of the manipulative/empty conversations end in surrender.
@@ -35,7 +46,12 @@
 >         the ~1 s blow animation — the estimate is 0.9–1.2 s), text-rule faults per boss against the
 >         narrator's 38%, name slips, repeated openings, prompt tokens (expected ≤ ~1,060), VRAM before/after.
 >       *If a gate target is missed:* §7.1 says the merge is blocked and the judge prompt is iterated with
->       this script — two rounds, then back to you.
+>       this script — two rounds, then back to you. This run judges the **fixture** personas (the §5
+>       drafts); run it again once unit C's persona data lands.
+> - [ ] **3. Narration still works through the new queue** (once the GPU is free): `npm run desktop`,
+>       start a new run, reach the first encounter. *Expect* narration to stream in as fast as before.
+>       *Fail if* it never appears, the wait indicator never ends, the log contains `No sequences left`,
+>       or an `llm` `generate` operation heartbeats with no `done`.
 
 > ## ▶️ From `round-order` (`PLAN.md` #1.6, 2026-09-26) — you strike first now, and speed is a gauge
 >

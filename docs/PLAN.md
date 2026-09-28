@@ -409,7 +409,8 @@ any unit touching `battle.ts`, `game.ts`, `boss.ts` or the event tables.
   `electron/instrument.mjs` (`bossGenerate` threshold) · `scripts/boss-eval.ts` + `boss-eval-lib.ts` +
   `boss-eval/messages.json` (the real-model evaluation, **built, not yet run** — its first run is the
   author's, `HUMAN-CHECKS.md`) · `package.json` (`boss:eval`, `typecheck:boss-eval`).
-- **C — desktop wiring + persona data**, forked after A and B merge: `src/desktop/**` (the Talk row,
+- **C — desktop wiring + persona data**, forked after A and B merge. Covers **G82** (an overall timeout
+  on `window.void.boss`; a length cap on the Talk input). `src/desktop/**` (the Talk row,
   calling `window.void.boss`, fallbacks, the narrator silent in boss rounds), the persona data files in
   the author's words, the ending variant, the feel checks. C also asserts the engine's deed/move types
   are assignable to `bossContract.ts`'s (the engine does not import `src/llm`).
