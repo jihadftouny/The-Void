@@ -361,6 +361,8 @@ This is why the art rungs on the increment ladder (§9, v1.3) get cheaper rather
 > - persona cards for **9 voices** (Kingpin, Reflection, five Sins, Warden/executioner, Hollow Self) — drafted by the pipeline, rewritten by the author.
 >
 > The 35–45 h estimate predates all of these; expect it to rise. **The plan must return a new figure before building starts.**
+>
+> **✅ RE-PRICED 2026-09-28 by the two plans (building since):** unit A (engine) **~36 h (32–42)**, unit B (model plumbing) **~24 h (21–27)**, unit C (wiring + screen) **~8–14 h** → **#11 ≈ 70 h (61–83)**, against the 35–45 h carried. **Remaining is now ~98 h (89–111)** — #11 ~70, block 4 16, block 5 12 — against **~107 h of capacity** (28 Sep → 31 Dec at 8 h/week): **slack ≈ −4 to +18 h, i.e. about zero.** The standing caveat applies harder than ever: these are *effort estimates the agents burn in wall-clock hours*; the binding constraint is the **author's own hours** — block 4's prose (now also the acknowledged-grace variant and nine persona cards to rewrite), reviews, play-tests and the first real-model evaluation run. **If it runs over, §6's cut ladder is the pre-agreed order; the narrator-judged talk field is no longer a lever (the full agents are being built).**
 
 ### What gives first if it runs over
 
