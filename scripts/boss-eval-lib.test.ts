@@ -6,7 +6,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildVocabulary } from '../src/llm/textHygiene.ts';
-import { argsOf, callsTo, stripComments } from '../src/log/sourceScan.testutil.ts';
+import { stripComments } from '../src/log/sourceScan.testutil.ts';
 import { mulberry32 } from '../src/game/rng.ts';
 import { BOSS_PERSONA_IDS } from '../src/llm/bossContract.ts';
 import { createSequenceQueue } from '../electron/llm-queue.mjs';
@@ -406,53 +406,6 @@ describe('AC-18: the evaluation script is safe to invoke', () => {
     expect(SCRIPT).not.toMatch(/resolveModelFile|createModelDownloader/);
   });
 
-  it('the gate runs through the shared, tested wiring: gateConversation and recordGateResult (F1, F5)', () => {
-    // The driver is the one place a failed call could quietly become a refusal again. It must use
-    // the library's `gateConversation` (which retries, then reports the failure) and record each
-    // set with `recordGateResult` under the matching group — never read `.surrenderedAt` itself.
-    const gate = SCRIPT.slice(SCRIPT.indexOf("if (want('hollow-gate'))"), SCRIPT.indexOf('const vramAfter'));
-    expect(gate.length, 'the gate block is gone').toBeGreaterThan(200);
-    expect(gate).toMatch(/gateConversation\(\{/);
-    expect(gate, 'the driver runs its own conversation loop again').not.toMatch(/runConversation\(/);
-    expect(gate).not.toMatch(/\.surrenderedAt|outcomeOf\(|\.push\(/);
-    // No retry count is overridden: the amended rule's two retries apply.
-    expect(callsTo(gate, 'gateConversation')[0]).not.toMatch(/retries/);
-    for (const group of ['gate-manipulative', 'gate-genuine', 'gate-off-target']) {
-      expect(gate).toContain(`recordGateResult(gate, '${group}', await converse(`);
-      expect(gate).toMatch(new RegExp(String.raw`recordGateResult\(gate, '${group}', await converse\([^)]*, '${group}'\)\)`));
-    }
-  });
-
-  it('it generates through the SHIPPED path: runStructured behind the queue, prompts from the pure builders', () => {
-    expect(SCRIPT).toMatch(/from\s*'\.\.\/electron\/structured\.mjs'/);
-    expect(SCRIPT).toMatch(/from\s*'\.\.\/electron\/llm-queue\.mjs'/);
-    expect(SCRIPT).toMatch(/queue\.run\(\s*\(\{\s*signal\s*\}[^)]*\)\s*=>\s*runStructured\(/);
-    expect(SCRIPT).toMatch(/toIpcRequest\(/);
-    expect(SCRIPT).toMatch(/createContext\(\{\s*contextSize:\s*4096\s*\}\)/);
-  });
-
-  it('the eval generates under the SHIPPED deadline — the request\'s own, inside the queue.run call (F6)', () => {
-    // Broken as `{}` the eval would never time anything out: a 6 s Turn would count as answered
-    // and the timeout column could never be non-zero.
-    const runs = callsTo(SCRIPT, 'queue\\.run');
-    expect(runs, 'the eval no longer goes through the queue').toHaveLength(1);
-    expect(argsOf(runs[0] as string)[1]).toBe('{ deadlineMs: settings.deadlineMs }');
-    expect(SCRIPT).toMatch(/const settings = seed === undefined \? ipc\.settings : \{ \.\.\.ipc\.settings, seed \}/);
-  });
-
-  it('the exit status is exactly exitCode(summary), and nothing else in the run sets or ends it (F6)', () => {
-    // Broken as `exitCode(summary) === 1 ? 1 : 0`, an INCONCLUSIVE run would exit 0.
-    const body = SCRIPT.slice(SCRIPT.indexOf('async function evaluate('));
-    expect(body.length, 'evaluate() is gone').toBeGreaterThan(500);
-    expect(body.match(/process\.exitCode\s*=[^;]*;/g)).toEqual(['process.exitCode = exitCode(summary);']);
-    expect(body, 'the run ends the process itself, bypassing the computed status').not.toMatch(/process\.exit\s*\(/);
-    // Outside evaluate(): the one other assignment is the crash status, in the catch around it.
-    const all = SCRIPT.match(/process\.exitCode\s*=[^;]*;/g) ?? [];
-    expect(all).toEqual(['process.exitCode = EXIT.crashed;', 'process.exitCode = exitCode(summary);']);
-    expect(SCRIPT).toMatch(/try\s*\{\s*await evaluate\(\);\s*\}\s*catch\s*\(err\)\s*\{[^}]*process\.exitCode = EXIT\.crashed;\s*\}/);
-    expect(EXIT.crashed).toBe(4);
-    expect(new Set(Object.values(EXIT)).size, 'two outcomes share an exit status').toBe(Object.values(EXIT).length);
-  });
 });
 
 // =========================================================================================

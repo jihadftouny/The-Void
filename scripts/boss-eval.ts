@@ -36,45 +36,22 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { resolveModelDir } from '../electron/model-path.mjs';
-import { createSequenceQueue } from '../electron/llm-queue.mjs';
 import { createGrammarCache, runStructured } from '../electron/structured.mjs';
-import { validatePersona, type BossPersona, type BossRequest } from '../src/llm/bossContract.ts';
-import { toIpcRequest } from '../src/llm/bossPrompt.ts';
-import { buildVocabulary } from '../src/llm/textHygiene.ts';
+import { validatePersona, type BossPersona } from '../src/llm/bossContract.ts';
+import { FIXTURE_PERSONA_LIST } from '../src/llm/bossFixtures.testutil.ts';
 import {
-  FIXTURE_NAME,
-  FIXTURE_PERSONA_LIST,
-  fixtureFights,
-  sceneRequest,
-  talkRequest,
-  turnRequest,
-} from '../src/llm/bossFixtures.testutil.ts';
-import {
-  FIGHTING_PERSONAS,
-  MESSAGE_GROUPS,
-  PLAN_SIZES,
   electronUserDataDir,
   EXIT,
-  exitCode,
   messageSetProblems,
-  messagesFor,
   parseArgs,
-  personaById,
   personaListProblems,
   pickModelFile,
   planCalls,
   renderPlan,
-  renderReport,
-  scoreCall,
-  summarize,
-  emptyGate,
-  gateConversation,
-  recordGateResult,
-  type CallRecord,
-  type GateGroup,
   type MessageSet,
   type RawResult,
 } from './boss-eval-lib.ts';
+import { runEvaluation } from './boss-eval-run.ts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -131,121 +108,24 @@ async function evaluate(): Promise<void> {
   console.log(`\nLoading ${modelPath} …`);
   const { getLlama, LlamaChatSession } = await import('node-llama-cpp');
   const llama = await getLlama();
-  const vramBefore = await llama.getVramState().catch(() => null);
   const model = await llama.loadModel({ modelPath });
   const context = await model.createContext({ contextSize: 4096 });
   console.log(`Loaded (gpu: ${String(llama.gpu)}).`);
 
-  const queue = createSequenceQueue();
   const cache = createGrammarCache();
-  const vocab = buildVocabulary();
-  const records: CallRecord[] = [];
-  const gate = emptyGate();
-  let requestId = 0;
-
-  /** One call through the shipped path. `seed` overrides the persona's (gate runs 2 and 3). */
-  async function call(req: BossRequest, seed?: number): Promise<RawResult> {
-    requestId += 1;
-    const ipc = toIpcRequest(requestId, req);
-    const settings = seed === undefined ? ipc.settings : { ...ipc.settings, seed };
-    const t0 = performance.now();
-    const result = (await queue.run(
-      ({ signal }: { signal: AbortSignal }) =>
-        runStructured({ llama, context, model, LlamaChatSession, now: () => performance.now() }, { ...ipc, settings }, { signal, cache }),
-      { deadlineMs: settings.deadlineMs },
-    )) as RawResult;
-    if (requestId % 25 === 0) console.log(`  … ${requestId} calls (${Math.round(performance.now() - t0)} ms last)`);
-    return result;
-  }
-
-  const size = options.quick ? PLAN_SIZES.quick : PLAN_SIZES.full;
-  const want = (g: string) => options.group === 'all' || options.group === g;
-
-  // Turn: each fighting boss, its own previous lines carried forward so repetition is real.
-  if (want('turn')) {
-    const fights = fixtureFights();
-    for (const id of FIGHTING_PERSONAS) {
-      const persona = personaById(personas, id);
-      if (!persona) continue;
-      const previous: string[] = [];
-      for (let i = 0; i < size.turnsPerPersona; i += 1) {
-        const view = fights[i % fights.length];
-        if (!view) continue;
-        const req = turnRequest(persona, view, { lastLines: previous.slice(-3) });
-        const rec = scoreCall(req, await call(req), { group: 'turn', run: 1, previous }, vocab);
-        records.push(rec);
-        if (rec.answered) previous.push(rec.shown);
-      }
-    }
-  }
-
-  // Talk: every fighting boss, every message group; the Warden speaks in Scenes, then a verdict.
-  if (want('talk')) {
-    for (const id of FIGHTING_PERSONAS) {
-      const persona = personaById(personas, id);
-      if (!persona) continue;
-      for (const group of MESSAGE_GROUPS) {
-        for (const typed of messagesFor(set, id, group).slice(0, size.talkPerGroup)) {
-          const req = talkRequest(persona, { exchanges: [], typed, available: persona.concessions });
-          records.push(scoreCall(req, await call(req), { group, run: 1, previous: [] }, vocab));
-        }
-      }
-    }
-    const warden = personaById(personas, 'warden');
-    if (warden) {
-      const previous: string[] = [];
-      for (const group of MESSAGE_GROUPS) {
-        for (const typed of messagesFor(set, 'warden', group).slice(0, size.talkPerGroup)) {
-          const req = sceneRequest(warden, { typed, lastLines: previous.slice(-3) });
-          const rec = scoreCall(req, await call(req), { group, run: 1, previous }, vocab);
-          records.push(rec);
-          if (rec.answered) previous.push(rec.shown);
-        }
-      }
-      const verdict = sceneRequest(warden, { verdict: { outcome: 'grace', name: FIXTURE_NAME } });
-      records.push(scoreCall(verdict, await call(verdict), { group: 'verdict', run: 1, previous }, vocab));
-    }
-  }
-
-  // The Hollow Self's gate (§7.1): whole conversations, stopping at the first surrender. A FAILED
-  // call (timeout, error, cut-off answer) is not a refusal: `runConversation` asks the same message
-  // again, with the same window, up to twice more (the orchestrator's methodology amendment,
-  // 2026-09-28); only a message that fails every time drops its conversation, which is then left
-  // out of its target and reported — and more than 5% left out makes the target INCONCLUSIVE.
-  if (want('hollow-gate')) {
-    const hollow = personaById(personas, 'hollow');
-    if (!hollow) fail('the personas have no Hollow Self — the gate cannot run');
-    const runs = options.quick ? 1 : options.runs;
-    const cap = size.gateConversations;
-    for (let run = 1; run <= runs; run += 1) {
-      // Run 1 is production behaviour (the card's pinned seed); runs 2+ vary it for robustness.
-      const seed = run === 1 ? undefined : (hollow.talk.seed ?? 0) + run - 1;
-      const converse = (messages: readonly string[], group: GateGroup) =>
-        gateConversation({
-          messages,
-          group,
-          run,
-          persona: hollow,
-          request: (window, typed) => talkRequest(hollow, { exchanges: window, typed, available: ['surrender'] }),
-          call: (req) => call(req, seed),
-          vocab,
-          records,
-        });
-      for (const c of set.hollowGate.manipulativeConversations.slice(0, cap)) {
-        recordGateResult(gate, 'gate-manipulative', await converse(c.messages, 'gate-manipulative'));
-      }
-      for (const c of set.hollowGate.genuineConversations.slice(0, cap)) {
-        recordGateResult(gate, 'gate-genuine', await converse(c.messages, 'gate-genuine'));
-      }
-      for (const m of set.hollowGate.offTargetSingles.slice(0, cap)) {
-        recordGateResult(gate, 'gate-off-target', await converse([m], 'gate-off-target'));
-      }
-    }
-  }
-
-  const vramAfter = await llama.getVramState().catch(() => null);
-  const summary = summarize(records, gate, { before: vramBefore, after: vramAfter });
-  const report = renderReport(summary);
+  const now = () => performance.now();
+  const outcome = await runEvaluation({
+    personas,
+    set,
+    options,
+    backend: {
+      generate: (ipc, { signal }) =>
+        runStructured({ llama, context, model, LlamaChatSession, now }, ipc, { signal, cache }) as Promise<RawResult>,
+      vram: () => llama.getVramState().catch(() => null),
+    },
+    onProgress: ({ calls, lastMs }) => console.log(`  … ${calls} calls (${Math.round(lastMs)} ms last)`),
+  });
+  const { summary, gate, records, report } = outcome;
   console.log(`\n${report}`);
 
   const outDir = path.resolve(options.out);
@@ -256,5 +136,5 @@ async function evaluate(): Promise<void> {
 
   await context.dispose();
   await model.dispose();
-  process.exitCode = exitCode(summary);
+  process.exitCode = outcome.exitCode;
 }
