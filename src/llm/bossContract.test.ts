@@ -58,7 +58,7 @@ describe('validatePersona', () => {
 // =========================================================================================
 
 const LLM_DIR = fileURLToPath(new URL('./', import.meta.url));
-const SHIPPING_BOSS_FILES = ['bossContract.ts', 'bossWords.ts'];
+const SHIPPING_BOSS_FILES = ['bossContract.ts', 'bossWords.ts', 'bossSchema.ts', 'bossPrompt.ts'];
 
 /** The purity sweep's own selection rule (src/log/purity.test.ts `shippingFiles`). */
 const puritySet = () => readdirSync(LLM_DIR).filter((n) => n.endsWith('.ts') && !n.endsWith('.test.ts'));
