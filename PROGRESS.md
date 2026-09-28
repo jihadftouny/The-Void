@@ -148,6 +148,30 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-09-28 — the bosses' model plumbing (`boss-llm`, #11 part B) — built, not merged
+
+**3476 → 3620 tests (4 skipped); typecheck, build and the full suite green.** Plan → build. Built beside
+unit A (`boss-engine`) in a separate worktree; nothing in `src/game`, `src/data`, `src/render` or
+`src/desktop` was touched. **No real model was loaded at any point** (the GPU was in use) — every test
+uses a fake, and the evaluation script's first real run is the author's (`HUMAN-CHECKS.md`).
+
+- **Every boss call is assembled from `BOSS-PROMPTS.md`** by pure builders in `src/llm/boss*.ts`: the card,
+  its example lines, what moves it and the shared rules with its name rule filled; then who they face, the
+  deeds it is told (filtered per boss, newest first), the karma as **manner words** (the author's answer,
+  G80), the fight in plain words, and the legal moves. No digit, label or id reaches the model outside the
+  move and yield lists — swept over every fixture request.
+- **An illegal move cannot be written:** the answer is held to a JSON grammar whose enum is the engine's
+  legal list, and the executioner's Talk has no concession field at all. The answer is re-checked on the way
+  back; the player's name is removed where a card forbids it; every line is checked against the narrator's
+  text rules plus the boss rules; fallback lines are chosen by round, never at random.
+- **A boss call and a narration can no longer collide** on the model's one sequence: both go through one
+  queue. A boss call has a 3 s deadline, counted from when it starts running; the new `llm:boss` channel never
+  starts a model load and never throws, and logs every timing.
+- **The real-model evaluation is built, not run:** `npm run boss:eval` prints the plan (3,651 calls, ~73 min);
+  with `--run` it measures legal moves, latency, text faults, name slips, repetition, concession rates, and
+  the Hollow Self's four agreed targets, and fails the exit status on a miss. The test set is a DRAFT for the
+  author (G81 records the measured prompt sizes).
+
 ### 2026-09-27 — your tempo is capped at ±0.4 ✅
 
 **`player-tempo-cap` merged** (the author's ruling). Dexterity 18 still fills +0.4 a round, but Quick no longer stacks past it (18 + Quick was +0.7, now +0.4), and the slowest characters lose turns slightly less often (DEX 6 + Slow −0.5 → −0.4). Enemies keep their ±0.3. **Win rate 29.5% → 29.4%** — the simulated players rarely went past 0.4, so almost nothing moved. Built directly rather than through the full pipeline, at the author's request (recorded in `.claude/pipeline-log.md`). The design doc's tempo section now records every tuning ruling, which it had missed.

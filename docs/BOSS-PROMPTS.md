@@ -51,6 +51,11 @@ USER    ┌─ WHO YOU ARE FACING  (the player: name if this boss may use it, cl
 | **Talk** | only when the player types in the Talk field; does not cost a turn | `{ "reply": "<≤ 30 words>", "concession": "none" \| <one still available> }` |
 | **Scene** | the Warden's grace conversation and verdict (no moves) | `{ "line": "<≤ 40 words>" }` |
 
+**A Talk call leaves out `YOUR LAST LINES`** — its own last lines are already the `You:` lines of the
+conversation block — and carries at most the **last six exchanges** (§7.1's judged window). Measured with the
+real tokenizer, the duplication cost ~83 tokens and pushed the Hollow Self's Talk to ~1,130 tokens; trimmed it
+is ~1,060. *(`boss-llm`, 2026-09-28 — a correction to the block list above, not a design change.)*
+
 **Suggested settings:** temperature **0.8** (voice needs variety), a light repetition penalty, `maxTokens`
 **80** for Turn and Talk, **110** for Scene. **Time limit 3 s**; on timeout or any failure the engine uses the
 fallback move and a fallback line (§6).
@@ -101,9 +106,17 @@ From the deed record (§22.31 D3), each deed rendered with its **place name**, n
 | Warden / executioner | all, up to 10 — and on the executioner's turns, **the one deed this blow is for** (§5.5) |
 | Hollow Self | all, up to 10 |
 
-**Karma, where a boss needs it (Warden, Hollow Self), is given as words, never numbers** —
-`merciful / cruel`, `restrained / greedy`, `reverent / desecrating`, `clear-eyed / deluded`, from the
-engine's own thresholds. §13: karma is felt, never metered.
+*(As built, `boss-llm` 2026-09-28: every boss's deeds are listed **newest first**, capped after any deed whose
+sentence would carry a digit is dropped; and a Sin's filter is its **axis**, so it also hears that axis's other
+pole — the Desecration hears offerings, as the Cruelty hears spares.)*
+
+**Karma, where a boss needs it (Warden, Hollow Self), is given as MANNER words, never as the axis
+names and never as numbers** — the narrator's own tone words (`src/llm/tone.ts`, `karmaTone`), one per
+axis by its sign: `gentle / cold`, `spare / hungry`, `hushed / profane`, `clear-eyed / unsure`; an axis
+at zero gives no word. §13: karma is felt, never metered — a boss that echoes "you are cold" has said
+something true of the person and nothing about a hidden score. *(Author, 2026-09-28, `boss-llm` plan
+OQ-1: this replaces the draft's axis-pole words, every one of which named the axis itself and matched
+the hidden-karma guard. Same list for both bosses. `FINDINGS.md` G80.)*
 
 ### The fight now — plain words
 ```
@@ -113,6 +126,9 @@ This is the fourth exchange.
 ```
 HP becomes one of *untouched · barely touched · hurt · badly hurt · near the end*; conditions become
 what they do (*bleeding*, *moving slowly*), never their labels.
+*(As built, `boss-llm`: the block labels the boss **"You"** and the player **"Them"** — the rules make "you"
+the boss's word for the player when it speaks, so the fight block has to say who is who. The words are
+§4's.)*
 
 ## 5. The personas
 
@@ -251,7 +267,7 @@ procedure is done, wearing their face. You have taken their name; it is yours no
 their enemy. You were always there.
 ```
 - **Name rule:** `The name {name} is YOURS now. Say it only about yourself. Never call them by it.`
-- **Karma block:** the four axes as words (§4).
+- **Karma block:** the manner words of the four axes (§4) — never the axis names.
 - **Moves:** `strike`, and `cast:<id>` for each of **their** warped skills.
 - **Talk — what moves it:** **acknowledgement** — the player accepts it as part of them, in their own
   words, and means it: naming something real (a deed, a loss, what it is to them). **Generic or

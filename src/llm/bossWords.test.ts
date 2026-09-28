@@ -175,4 +175,13 @@ describe('karma as manner words — the author\'s answer (2026-09-28)', () => {
     // The guard is live: an axis word would be caught.
     expect(AXIS_VOCABULARY.test('merciful')).toBe(true);
   });
+
+  it('the document gives the same manner words, and no longer offers the axis words', () => {
+    const start = DOC.indexOf('**Karma, where a boss needs it');
+    const block = DOC.slice(start, DOC.indexOf('### The fight now'));
+    expect(start, 'the karma paragraph of §4 is gone — this guard is stale').toBeGreaterThan(-1);
+    expect(block).toContain('`gentle / cold`, `spare / hungry`, `hushed / profane`, `clear-eyed / unsure`');
+    // `karma` itself is the paragraph's subject; every other axis stem is a regression.
+    expect(AXIS_VOCABULARY.test(block.replace(/karma/gi, '')), block).toBe(false);
+  });
 });

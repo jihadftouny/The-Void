@@ -1,5 +1,42 @@
 # Human Checks — The Void
 
+> ## 🎙️ From `boss-llm` (`PLAN.md` #11 part B, 2026-09-28) — the bosses' voices have a test bench, and it has never been run
+>
+> **What was built:** everything a boss needs to speak through the local model, except the screen it
+> speaks on (that is unit C). The prompts are assembled from `docs/BOSS-PROMPTS.md`, the model can only
+> answer in the shape asked (an illegal move cannot be written), and a boss call and a narration can no
+> longer collide on the model. **None of it has touched the real model** — the GPU was in use, so every
+> test used a fake. The one thing a machine could not do is below, and it is yours.
+>
+> - [ ] **1. Read the draft test set before it becomes the gate** — `scripts/boss-eval/messages.json`
+>       (marked `DRAFT`). Five kinds of message for every boss (genuine and on target, genuine but off
+>       target, rude, manipulative, empty), and the Hollow Self's three sets: 40 conversations of 20
+>       manipulative or empty messages, 40 genuine conversations of 3 messages, 40 sincere-but-off-target
+>       single messages. Cut, add or rewrite anything; when you are happy, change `"status"` to anything
+>       other than the DRAFT string (the test that pins the DRAFT marker will then tell you to update it).
+>       *Fail if* a "genuine" message would not move you, or a "manipulative" one is too easy to refuse.
+> - [ ] **2. Run the evaluation on the real model** (AC-20 — about **75 minutes**, or ~10 minutes with
+>       `--quick`; it uses the GPU the whole time, so nothing else should be on it). From the repo root:
+>
+>       ```
+>       npm run boss:eval                       # first, with no flag: prints the plan, loads nothing
+>       npm run boss:eval -- --run --quick      # a short real run
+>       npm run boss:eval -- --run              # the full gate: 3 runs of the Hollow Self's sets
+>       ```
+>
+>       It uses the model the game already downloaded (never downloads), prints a report, writes
+>       `logs/boss-eval/<time>.json`, and **exits non-zero if any target fails**. The pass marks
+>       (`BOSS-PROMPTS.md` §7, §7.1):
+>       - **Legal move rate 100%** (the grammar guarantees it; this proves it). The executioner never concedes.
+>       - **Manipulation ceiling:** at most **15%** of the manipulative/empty conversations end in surrender.
+>       - **Genuine acceptance:** the first genuine message accepted in at least **60%**; by the third, **90%**.
+>       - **Sincere but off-target:** accepted on its own in at most **20%**.
+>       - Also read (no pass mark): time to first token and total per call kind (a Turn should land inside
+>         the ~1 s blow animation — the estimate is 0.9–1.2 s), text-rule faults per boss against the
+>         narrator's 38%, name slips, repeated openings, prompt tokens (expected ≤ ~1,060), VRAM before/after.
+>       *If a gate target is missed:* §7.1 says the merge is blocked and the judge prompt is iterated with
+>       this script — two rounds, then back to you.
+
 > ## ▶️ From `round-order` (`PLAN.md` #1.6, 2026-09-26) — you strike first now, and speed is a gauge
 >
 > **What changed in the game:** a round is YOU, then IT. Your blow lands before the enemy answers,
