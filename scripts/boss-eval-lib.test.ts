@@ -1,4 +1,5 @@
-// The boss evaluation's pure core (AC-17), its safety (AC-18) and the drafted test set (AC-19).
+// The boss evaluation's pure core (AC-17), the entry's safety (AC-29, which replaced AC-18's scans)
+// and the drafted test set (AC-19).
 // NEVER the real model: every "model answer" below is a scripted string. Expected numbers are
 // derived by hand in the comments beside them.
 import { describe, it, expect } from 'vitest';
@@ -6,7 +7,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildVocabulary } from '../src/llm/textHygiene.ts';
-import { stripComments } from '../src/log/sourceScan.testutil.ts';
+import { argsOf, callsTo, stripComments } from '../src/log/sourceScan.testutil.ts';
 import { mulberry32 } from '../src/game/rng.ts';
 import { BOSS_PERSONA_IDS } from '../src/llm/bossContract.ts';
 import { createSequenceQueue } from '../electron/llm-queue.mjs';
@@ -350,7 +351,15 @@ describe('arguments and the model location', () => {
 });
 
 // =========================================================================================
-// AC-18 — the script loads the model ONLY with --run, and no test ever imports it.
+// AC-29 — the process entry stays safe (fix round 3: AC-18 re-pinned to the smallest set).
+//
+// Everything the old AC-18 scans guessed at by reading the driver's text is now BEHAVIOUR:
+// `boss-eval-run.test.ts` runs the real loops end to end, `boss-eval-cli.test.ts` drives the
+// command (nothing loads without --run, the model's directory, the exit status, a crash). Those
+// scans are DELETED, not kept alongside — a scan a refactor must be edited around is how three fix
+// rounds reopened the same hole. What is left here is only what no test can run: the ~40-line
+// entry that touches the real model, and a grep that the two tested modules stay pure of it.
+// Each detector is also proved red on planted breakage shaped the way the code would really break.
 // =========================================================================================
 
 function testFiles(dir: string): string[] {
@@ -364,10 +373,86 @@ function testFiles(dir: string): string[] {
   return out;
 }
 
-describe('AC-18: the evaluation script is safe to invoke', () => {
-  const SCRIPT = stripComments(readFileSync(path.join(HERE, 'boss-eval.ts'), 'utf8'));
+/** The `{ … }` block whose opening brace is at `open` (comments already stripped; quote-aware). */
+function blockAt(source: string, open: number): string {
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    const c = source[i] as string;
+    if (c === '"' || c === "'" || c === '`') {
+      i += 1;
+      while (i < source.length && source[i] !== c) i += source[i] === '\\' ? 2 : 1;
+      continue;
+    }
+    if (c === '{') depth += 1;
+    else if (c === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, i + 1);
+    }
+  }
+  return source.slice(open);
+}
 
-  it('no test imports boss-eval.ts (only its library)', () => {
+const LLAMA_IMPORT = /\bimport\s*\(\s*['"]node-llama-cpp['"]\s*\)/g;
+
+/** Why the entry is unsafe to invoke, or []. Every pin of AC-29 on `scripts/boss-eval.ts`. */
+function entryProblems(raw: string): string[] {
+  const s = stripComments(raw);
+  const problems: string[] = [];
+  if (/^\s*import\b[^;]*['"]node-llama-cpp['"]/m.test(s) || /\brequire\(\s*['"]node-llama-cpp['"]/.test(s)) {
+    problems.push('node-llama-cpp is imported statically — the native binding would load on every invocation');
+  }
+  const head = /\basync\s+loadBackend\s*\([^)]*\)\s*\{/.exec(s);
+  const body = head ? blockAt(s, head.index + head[0].length - 1) : '';
+  if (!head) problems.push('loadBackend is not a method of the deps object');
+  const imports = s.match(LLAMA_IMPORT) ?? [];
+  if (imports.length !== 1) problems.push(`node-llama-cpp is imported ${imports.length} times, not once`);
+  if (!/\bawait\s+import\s*\(\s*['"]node-llama-cpp['"]\s*\)/.test(body)) problems.push('the node-llama-cpp import is not awaited inside loadBackend');
+  if ((s.match(/\.loadModel\(/g) ?? []).length !== 1 || !/\.loadModel\(/.test(body)) problems.push('loadModel is not called exactly once, inside loadBackend');
+  // The status: exactly one assignment, and it IS the awaited result of main — nothing around it.
+  if ((s.match(/\bprocess\.exitCode\b/g) ?? []).length !== 1) problems.push('process.exitCode is touched more than once');
+  if (/\bprocess\.exit\s*\(/.test(s)) problems.push('the entry ends the process itself');
+  const at = s.search(/\bprocess\.exitCode\s*=/);
+  const stmt = at < 0 ? '' : s.slice(at);
+  const lead = /^process\.exitCode\s*=\s*await\s+(?=main\s*\(\s*process\.argv\.slice\(\s*2\s*\)\s*,)/.exec(stmt);
+  const mainCall = lead ? (callsTo(stmt.slice(lead[0].length), 'main')[0] ?? '') : '';
+  const after = lead ? stmt.slice(lead[0].length + mainCall.length) : '';
+  if (!lead || mainCall === '' || !/^\s*(?:;|$)/.test(after)) problems.push('process.exitCode is not exactly `await main(process.argv.slice(2), …)`');
+  // The shipped generation path, and the shipped context size.
+  const runs = callsTo(s, 'runStructured');
+  if (runs.length !== 1 || !body.includes(runs[0] as string)) problems.push('runStructured is not called exactly once, inside loadBackend');
+  else if (argsOf(runs[0] as string)[2]?.replace(/\s+/g, ' ') !== '{ signal, cache }') problems.push('runStructured is not given { signal, cache }');
+  if (!/\.createContext\(\s*\{\s*contextSize:\s*4096\s*\}\s*\)/.test(body) || (s.match(/\.createContext\(/g) ?? []).length !== 1) {
+    problems.push('the context is not createContext({ contextSize: 4096 }) inside loadBackend');
+  }
+  return problems;
+}
+
+/** Why a module may not stand next to the model, or []. */
+function modelPathProblems(raw: string): string[] {
+  const s = stripComments(raw);
+  return [
+    ...(/['"`]\.?\/?models['"`/\\]/.test(s) ? ['it names ./models'] : []),
+    ...(/resolveModelFile|createModelDownloader/.test(s) ? ['it could download a model'] : []),
+  ];
+}
+
+/** Why a tested module (run, cli) is not pure of the process and the native model, or []. */
+function testedModuleProblems(raw: string): string[] {
+  const s = stripComments(raw);
+  return [
+    ...(/\bprocess\s*\./.test(s) ? ['it reads or sets process state'] : []),
+    ...(/(?:from\s*|import\s*\(\s*|require\(\s*)['"](?:node:)?fs(?:\/promises)?['"]/.test(s) ? ['it imports the file system'] : []),
+    ...(/node-llama-cpp/.test(s) ? ['it names node-llama-cpp'] : []),
+  ];
+}
+
+describe('AC-29: the evaluation entry is safe to invoke, and the tested modules stay pure', () => {
+  const read = (name: string) => readFileSync(path.join(HERE, name), 'utf8');
+  const ENTRY = read('boss-eval.ts');
+  const RUN = read('boss-eval-run.ts');
+  const CLI = read('boss-eval-cli.ts');
+
+  it('no test imports boss-eval.ts (only the tested modules)', () => {
     const IMPORTS_DRIVER = /(?:from\s*|import\s*\(\s*)['"][^'"]*boss-eval(?:\.ts)?['"]/;
     // This file is left out: its detector cases below are string literals of exactly that import.
     const self = fileURLToPath(import.meta.url);
@@ -375,37 +460,56 @@ describe('AC-18: the evaluation script is safe to invoke', () => {
     expect(files.length).toBeGreaterThan(100);
     const offenders = files.filter((f) => IMPORTS_DRIVER.test(stripComments(readFileSync(f, 'utf8'))));
     expect(offenders).toEqual([]);
-    // The detector: the import that WOULD run the model is caught; the library's is not.
+    // The detector: the import that WOULD run the process is caught; the tested modules' are not.
     expect(IMPORTS_DRIVER.test("import x from './boss-eval.ts';")).toBe(true);
     expect(IMPORTS_DRIVER.test("await import('../scripts/boss-eval')")).toBe(true);
     expect(IMPORTS_DRIVER.test("import { x } from './boss-eval-lib.ts';")).toBe(false);
+    expect(IMPORTS_DRIVER.test("import { main } from './boss-eval-cli.ts';")).toBe(false);
+    expect(IMPORTS_DRIVER.test("import { runEvaluation } from './boss-eval-run.ts';")).toBe(false);
   });
 
-  it('node-llama-cpp is never imported at the top — only dynamically, after the --run gate', () => {
-    expect(SCRIPT, 'a static import would load the native binding on every invocation').not.toMatch(
-      /^import[^;]*from\s*'node-llama-cpp'/m,
-    );
-    const gate = SCRIPT.search(/if\s*\(\s*!\s*options\.run\s*\)\s*process\.exit\(\s*0\s*\)/);
-    const load = SCRIPT.search(/await\s+import\(\s*'node-llama-cpp'\s*\)/);
-    const evaluate = SCRIPT.search(/await\s+evaluate\(\s*\)/);
-    expect(gate, 'the --run gate is gone').toBeGreaterThan(-1);
-    expect(load, 'the model is no longer loaded dynamically').toBeGreaterThan(-1);
-    expect(evaluate).toBeGreaterThan(gate);
-    expect(SCRIPT.match(/await\s+evaluate\(\s*\)/g)).toHaveLength(1);
-    expect(SCRIPT.match(/\.loadModel\(/g)).toHaveLength(1);
-    // loadModel and the import live inside evaluate(), which is only reached past the gate.
-    const body = SCRIPT.slice(SCRIPT.indexOf('async function evaluate('));
-    expect(body).toMatch(/\.loadModel\(/);
-    expect(body).toMatch(/await\s+import\(\s*'node-llama-cpp'\s*\)/);
+  it('the entry: node-llama-cpp only inside loadBackend, the status only from main, the shipped path and context', () => {
+    expect(entryProblems(ENTRY)).toEqual([]);
+    const code = stripComments(ENTRY).split('\n').filter((l) => l.trim() !== '');
+    expect(code.length, 'the entry has grown back into a driver').toBeLessThanOrEqual(60);
   });
 
-  it('the model comes from the per-user directory via resolveModelDir — never ./models, never a download', () => {
-    expect(SCRIPT).toMatch(/resolveModelDir\(\s*\{\s*env:\s*process\.env,\s*userDataDir\s*\}\s*\)/);
-    expect(SCRIPT).toMatch(/import\s*\{\s*resolveModelDir\s*\}\s*from\s*'\.\.\/electron\/model-path\.mjs'/);
-    expect(SCRIPT).not.toMatch(/['"]\.?\/?models['"]/);
-    expect(SCRIPT).not.toMatch(/resolveModelFile|createModelDownloader/);
+  it('the entry detector goes red on each way the entry would really break', () => {
+    const mutate = (from: string | RegExp, to: string): string[] => {
+      const out = ENTRY.replace(from, to);
+      expect(out, `the planted change did not apply: ${String(from)}`).not.toBe(ENTRY);
+      return entryProblems(out);
+    };
+    // A static import, beside the file's other imports.
+    expect(mutate("import { main } from './boss-eval-cli.ts';", "import { main } from './boss-eval-cli.ts';\nimport { getLlama } from 'node-llama-cpp';")).not.toEqual([]);
+    // The import hoisted out of loadBackend to module scope.
+    expect(mutate('process.exitCode = await main(', "const nlc = await import('node-llama-cpp');\nprocess.exitCode = await main(")).not.toEqual([]);
+    // The status squashed (the round-2 mutation's shape), overwritten, or the process ended early.
+    expect(mutate(/process\.exitCode = await main\(([\s\S]*)\}\);\s*$/, 'process.exitCode = (await main($1})) === 1 ? 1 : 0;\n')).not.toEqual([]);
+    expect(mutate(/\}\);\s*$/, '});\nprocess.exitCode = 0;\n')).not.toEqual([]);
+    expect(mutate('process.exitCode = await main(', "if (process.argv.includes('--dry')) process.exit(0);\nprocess.exitCode = await main(")).not.toEqual([]);
+    // The deadline's signal dropped from generation; the context shrunk; the model loaded at the top.
+    expect(mutate('{ signal, cache })', '{ cache })')).not.toEqual([]);
+    expect(mutate('contextSize: 4096', 'contextSize: 2048')).not.toEqual([]);
+    expect(mutate('const llama = await getLlama();', 'const llama = await getLlama();\n    await llama.loadModel({ modelPath });')).not.toEqual([]);
   });
 
+  it('none of the three modules names ./models or could download a model', () => {
+    for (const [name, src] of [['boss-eval.ts', ENTRY], ['boss-eval-run.ts', RUN], ['boss-eval-cli.ts', CLI]] as const) {
+      expect(modelPathProblems(src), name).toEqual([]);
+    }
+    expect(modelPathProblems(`${CLI}\nconst dir = path.resolve('./models');`)).not.toEqual([]);
+    expect(modelPathProblems(`${CLI}\nconst dir = path.join(home, 'models');`)).not.toEqual([]);
+    expect(modelPathProblems(`${ENTRY}\nimport { resolveModelFile } from 'node-llama-cpp';`)).not.toEqual([]);
+  });
+
+  it('the run and the command touch no process state, no file system, no native model', () => {
+    expect(testedModuleProblems(RUN)).toEqual([]);
+    expect(testedModuleProblems(CLI)).toEqual([]);
+    expect(testedModuleProblems(`${CLI}\nconst dir = process.env.VOID_MODELS_DIR;`)).not.toEqual([]);
+    expect(testedModuleProblems(`import { readFileSync } from 'node:fs';\n${RUN}`)).not.toEqual([]);
+    expect(testedModuleProblems(`${RUN}\nconst m = await import('node-llama-cpp');`)).not.toEqual([]);
+  });
 });
 
 // =========================================================================================

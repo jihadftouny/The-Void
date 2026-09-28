@@ -14,5 +14,5 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["../boss-eval.ts", "../boss-eval-lib.ts", "../boss-eval-lib.test.ts", "../boss-eval-run.ts", "../boss-eval-run.test.ts"]
+  "include": ["../boss-eval.ts", "../boss-eval-lib.ts", "../boss-eval-lib.test.ts", "../boss-eval-run.ts", "../boss-eval-run.test.ts", "../boss-eval-cli.ts", "../boss-eval-cli.test.ts"]
 }

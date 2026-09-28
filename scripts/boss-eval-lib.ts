@@ -1,9 +1,11 @@
 // THE BOSS EVALUATION — its pure core (PLAN.md #11 part B; `docs/BOSS-PROMPTS.md` §7).
 //
-// `scripts/boss-eval.ts` drives the REAL model (author-run only — never an agent, never a test).
-// Everything that can be decided without the model lives here, so it is tested against a
-// scripted fake: which calls to make, how to read each answer, how a Hollow Self conversation
-// proceeds and when it stops, the §7.1 gate arithmetic, the report, and the exit status.
+// Three modules sit on this one: `boss-eval-run.ts` (the run — every loop, the queue, the gate),
+// `boss-eval-cli.ts` (the command — arguments, inputs, the model's location, the exit status) and
+// `boss-eval.ts` (the process entry, which hands them the REAL model — author-run only, never an
+// agent, never a test). Everything that can be decided without the model lives here, so it is
+// tested against a scripted fake: which calls to make, how to read each answer, how a Hollow Self
+// conversation proceeds and when it stops, the §7.1 gate arithmetic, the report, and the exit status.
 //
 // Every scoring step uses the SHIPPED pure layer (`src/llm/boss*.ts`) — the same builders, the
 // same parser, the same name rule and line check the game uses — so what the script measures is
