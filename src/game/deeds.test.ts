@@ -350,6 +350,25 @@ describe('save version 10 carries the record (AC-14)', () => {
     }
   });
 
+  it('fix round 2: a standing −1 with a stored −1 takes its tick from the player’s fracture', () => {
+    // The one case the arithmetic cannot decide (−1 combined with 0 or with −1 is −1). A fracture
+    // is the only condition that makes a tick, always −1, and it is still on the player in the
+    // pause — so: fractured → the tick is −1 (kept); not → 0 (dropped). Hand-derived both ways.
+    const enemy = { ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(3)), hp: 30, maxHp: 30 };
+    const fracture = { type: 'fracture' as const, remainingTurns: 5, maxTurns: 100, onsetDone: true };
+    for (const [conditions, tick] of [[[fracture], -1], [[], undefined]] as const) {
+      const player = { ...makePlayerForSave(), activeConditions: [...conditions] };
+      const battle: BattleState = { ...createBattle(player, enemy, 1, { openingAdvantage: -1 }), extraAction: true };
+      const v10: GameState = { ...createGame(11), player, phase: { kind: 'battle', battle, started: true, final: false } };
+      const raw = JSON.parse(encodeSave(v10)) as { version: number; deeds?: unknown; phase: { battle: Record<string, unknown> } };
+      delete raw.deeds;
+      raw.version = 9;
+      raw.phase.battle.extraActionAdvDis = -1;
+      const decoded = decodeSave(JSON.stringify(raw))!;
+      expect(decoded.phase.kind === 'battle' && decoded.phase.battle.extraActionAdvDis).toBe(tick ?? undefined);
+    }
+  });
+
   it('a hand-built 30-deed save is ACCEPTED, and the cap re-applies on the next write', () => {
     const thirty = Array.from({ length: 30 }, (_, i) => spare(i + 1));
     const s: GameState = { ...createGame(11), deeds: thirty };

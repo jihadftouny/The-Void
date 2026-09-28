@@ -443,16 +443,31 @@ function upgrade9to10(raw: unknown): unknown {
   if (!Array.isArray(next.deeds)) next.deeds = [];
   // Fix round 1: a battle paused for the player's extra action now stores only the round's TICK
   // adv/dis (`BattleState.extraActionAdvDis`), not the tick combined with the standing modifier.
-  // A v9 pause stored the combination, so the tick is recovered: the one value that, combined
-  // with the standing modifier, gives what was stored (v9 had no `weakness`, so the standing
-  // modifier is `playerAdvantage` alone). The second action then rolls exactly as v9 would have.
+  // A v9 pause stored the combination, so the tick is recovered: the value that, combined with the
+  // standing modifier, gives what was stored (v9 had no `weakness`, so the standing modifier is
+  // `playerAdvantage` alone). The second action then rolls exactly as v9 would have.
+  //
+  // One case the arithmetic cannot decide: a standing −1 with a stored −1 (the tick was 0 or −1 —
+  // −1 combined with −1 is still −1). The only condition that produces a tick is FRACTURE, always
+  // −1 (`condition.ts`), and a fracture that ticked this round is still on the player in the saved
+  // pause (only an expiring one is removed, and an expiring one produced no tick) — so its presence
+  // decides. A tick of +1 cannot occur, which settles the mirror case (standing +1, stored +1 → 0).
   if (isPlainObject(next.phase) && isPlainObject(next.phase.battle)) {
     const battle = next.phase.battle as Record<string, unknown>;
     if (battle.extraAction === true) {
       // An absent field was a combined 0 (only non-zero values were written).
       const combined = battle.extraActionAdvDis === 1 || battle.extraActionAdvDis === -1 ? battle.extraActionAdvDis : 0;
       const standing = battle.playerAdvantage === 1 || battle.playerAdvantage === -1 ? battle.playerAdvantage : 0;
-      const tick = combined === standing ? 0 : Math.max(-1, Math.min(1, combined - standing));
+      const player = isPlainObject(battle.player) ? battle.player : {};
+      const fractured =
+        Array.isArray(player.activeConditions) &&
+        player.activeConditions.some((c) => isPlainObject(c) && c.type === 'fracture');
+      const tick =
+        combined === standing
+          ? standing === -1 && fractured
+            ? -1
+            : 0
+          : Math.max(-1, Math.min(1, combined - standing));
       const migrated: Record<string, unknown> = { ...battle };
       if (tick === 0) delete migrated.extraActionAdvDis;
       else migrated.extraActionAdvDis = tick;
