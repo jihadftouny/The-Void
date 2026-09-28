@@ -62,6 +62,8 @@ import { type Rarity } from './weapon.ts';
 import { type DraftOption } from './draft.ts';
 import { effectiveMaxHp } from './statEffects.ts';
 import { type RunUnlocks } from './unlockStore.ts';
+import { createRng, randInt } from './rng.ts';
+import { bossCastDef, type BossMoveId } from './boss.ts';
 
 // ------- Public types --------------------------------------------------------
 
@@ -513,10 +515,60 @@ function chooseBattleAction(battle: BattleState, merciful: boolean): BattleActio
 }
 
 /**
- * The shared decision core, total over `Awaiting` — so it ALWAYS returns a legal input for the
- * phase it is asked about. `merciful` toggles the spare behaviour in `battle-action`.
+ * Who plays the BOSS's turn in a simulated run (PLAN.md #11, §22.31 D8 — "measure first": a
+ * random picker and a best-move picker show the range an agent-run boss could land in).
+ *  - `fallback` (default): answer `null`, so the ENGINE's seeded fallback plays it — the model-off
+ *    game, and the balance baseline every guard is measured on.
+ *  - `random`: a uniform pick over the legal moves, from the state's own seed (`bossRandomMove`).
+ *  - `best`: the strongest move by a simple reading (`bossBestMove`).
  */
-function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameInput {
+export type BossPicker = 'fallback' | 'random' | 'best';
+
+/** Options for the shipped policies. */
+export interface PolicyOptions {
+  boss?: BossPicker;
+}
+
+/**
+ * A uniform pick over the boss's legal moves — a PURE function of `res.state.rngState`: it seeds
+ * its own `createRng` from the state and never advances the state's accumulator (the header's rule
+ * for any policy wanting randomness). The engine then applies the id as given, so it takes no
+ * fallback draw of its own. `null` when no boss turn is open.
+ */
+export function bossRandomMove(res: StepResult): BossMoveId | null {
+  const phase = res.state.phase;
+  const legal = phase.kind === 'battle' ? phase.battle.bossChoice?.legal : undefined;
+  if (!legal || legal.length === 0) return null;
+  return legal[randInt(createRng(res.state.rngState).rng, legal.length)] ?? null;
+}
+
+/**
+ * The BEST move by a simple reading (the measurement's "best" row) — PURE, no RNG. The Kingpin
+ * calls his crew while he may (it deals damage every round after), then strikes; every other
+ * boss casts its highest-`baseDamage` affordable skill (the form it would really cast — the
+ * Hollow Self's warped one), else strikes. The Sin never grieves (a lost charge is not damage).
+ * `null` when no boss turn is open.
+ */
+export function bossBestMove(battle: BattleState): BossMoveId | null {
+  const legal = battle.bossChoice?.legal;
+  const boss = battle.boss;
+  if (!legal || !boss) return null;
+  if (boss.bossId === 'kingpin') return legal.includes('call_crew') ? 'call_crew' : 'strike';
+  let best: { id: BossMoveId; damage: number } | null = null;
+  for (const id of legal) {
+    if (!id.startsWith('cast:')) continue;
+    const def = bossCastDef(boss, id.slice('cast:'.length));
+    if (def && (!best || def.baseDamage > best.damage)) best = { id, damage: def.baseDamage };
+  }
+  return best?.id ?? 'strike';
+}
+
+/**
+ * The shared decision core, total over `Awaiting` — so it ALWAYS returns a legal input for the
+ * phase it is asked about. `merciful` toggles the spare behaviour in `battle-action`; `boss`
+ * chooses who plays the boss's turn (PLAN.md #11).
+ */
+function decide(res: StepResult, classId: PlayerClass, merciful: boolean, boss: BossPicker = 'fallback'): GameInput {
   const phase = res.state.phase;
   switch (res.awaiting) {
     case 'title':
@@ -568,7 +620,9 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
       return { kind: 'continue' };
     case 'boss-choice':
       // PLAN.md #11: the boss's move. `null` hands it to the engine's seeded fallback — the
-      // model-off game, and the balance baseline.
+      // model-off game, and the balance baseline. The other pickers are measurement only.
+      if (boss === 'random') return { kind: 'boss-choice', move: bossRandomMove(res) };
+      if (boss === 'best' && phase.kind === 'battle') return { kind: 'boss-choice', move: bossBestMove(phase.battle) };
       return { kind: 'boss-choice', move: null };
     case 'game-over':
       // Unreachable dispatch (the loop exits on this awaiting); return a valid input anyway.
@@ -577,16 +631,16 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
 }
 
 /** The default "reasonable, no-sacrifice, no-spare" policy for a given class. */
-export function heuristicPolicy(classId: PlayerClass): SimPolicy {
-  return (res) => decide(res, classId, false);
+export function heuristicPolicy(classId: PlayerClass, opts: PolicyOptions = {}): SimPolicy {
+  return (res) => decide(res, classId, false, opts.boss);
 }
 
 /**
  * A mercy policy: identical to `heuristicPolicy`, except it SPARES a living ⚖ non-boss enemy.
  * Used to exercise and report the grace path (which the kill-everything baseline never reaches).
  */
-export function mercifulPolicy(classId: PlayerClass): SimPolicy {
-  return (res) => decide(res, classId, true);
+export function mercifulPolicy(classId: PlayerClass, opts: PolicyOptions = {}): SimPolicy {
+  return (res) => decide(res, classId, true, opts.boss);
 }
 
 // ------- The run loop --------------------------------------------------------
