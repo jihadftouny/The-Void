@@ -85,6 +85,7 @@ import {
   getGraceEnding,
   getGraceAcknowledgedEnding,
   getDamnationEnding,
+  getDamnationTakenEnding,
   getIntro,
 } from './story.ts';
 import { playerArmorClass } from './defense.ts';
@@ -565,8 +566,10 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
 
     case 'verdict': {
       // M12: the act-4 reckoning is resolved (no combat). GRACE ends the run as a terminal
-      // ascension (act stays 4; act 5 is never constructed). CAST-DOWN advances to act 5 → the
-      // Hollow → the damnation ending.
+      // ascension (act stays 4; act 5 is never constructed). PLAN.md #11 (§22.31): CAST-DOWN is
+      // no longer a straight fall — the Warden turns EXECUTIONER and fights you; win or lose, you
+      // then fall to act 5 (`executioner-fall`). The grace path is unchanged: a conversation (unit
+      // B's Talk, no engine effect), then `continue` — "go on" — to the ending.
       if (input.kind !== 'continue') return noop;
       const player = requirePlayer(state);
       if (phase.outcome === 'grace') {
@@ -580,7 +583,7 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
           },
         ]);
       }
-      return advanceAct(state, finish);
+      return startExecutioner(state, player, rng, finish);
     }
 
     case 'ending': {
@@ -614,6 +617,8 @@ function roundRules(state: GameState, options: StepOptions): RoundRules {
     playerTempoRateCapTenths: options.playerTempoRateCapTenths ?? DEFAULT_ROUND_RULES.playerTempoRateCapTenths,
     enemyTempo: options.enemyTempo ?? DEFAULT_ROUND_RULES.enemyTempo,
     familySpeed: options.familySpeed ?? DEFAULT_ROUND_RULES.familySpeed,
+    // PLAN.md #11: the executioner names its blows for the run's deeds (§22.31).
+    deeds: state.deeds,
   };
 }
 
@@ -638,14 +643,24 @@ function requirePlayer(state: GameState): Player {
  * outro on entry to `act-outro`, and clears the `pending` advance flag. Reached from a
  * floor-boss victory (via `resolvePostVictory`) and from a cast-down verdict.
  */
-function advanceAct(state: GameState, finish: Finish): StepResult {
+function advanceAct(
+  state: GameState,
+  finish: Finish,
+  lead: GameEvent[] = [],
+  patch: Partial<Pick<GameState, 'player' | 'deeds'>> = {},
+): StepResult {
   const newAct = state.act + 1;
   const concluded = state.act;
   const outro = getActOutro(concluded) ?? { header: '', body: '' };
+  // PLAN.md #11: the executioner WON against — the only act-4 victory that schedules an advance —
+  // falls defiant: its line comes before the act-4 outro (the loss's line is `lead`, from the
+  // death branch).
+  const fall: GameEvent[] =
+    concluded === 4 && state.pending === 'advance-act' ? [{ kind: 'executioner-fall', outcome: 'defiant' }] : [];
   const result = finish(
     { kind: 'act-outro', newAct },
-    [{ kind: 'act-outro', act: concluded, header: outro.header, body: outro.body }],
-    { act: newAct, place: newAct - 1 },
+    [...lead, ...fall, { kind: 'act-outro', act: concluded, header: outro.header, body: outro.body }],
+    { ...patch, act: newAct, place: newAct - 1 },
   );
   // Clear the consumed routing flag so a LATER normal victory never re-advances the act.
   // (Removed as a key, not set to undefined — honors exactOptionalPropertyTypes + save shape.)
@@ -930,10 +945,46 @@ function settleBattleRound(
       if (!phase.final && battle.boss) patch.pending = 'advance-act';
       return finish({ kind: 'battle-victory', final: phase.final }, events, patch);
     }
-    case 'player-died':
+    case 'player-died': {
+      // PLAN.md #11: losing to the EXECUTIONER is not death (§22.31: "you fall to the True Void
+      // win or lose"). The fall restores you to FULL HP (the author's Q2 ruling), then the act-4
+      // outro — no game-over.
+      if (battle.boss?.bossId === 'executioner') {
+        const fallen: Player = { ...battle.player, hp: battle.player.maxHp };
+        return advanceAct(state, finish, [...events, { kind: 'executioner-fall', outcome: 'defeated' }], { player: fallen });
+      }
+      // PLAN.md #11 (the author's 2026-09-28 ruling): the Hollow Self KILLING you is DAMNATION —
+      // it takes you; the procedure completes. The same ending, and so the same Hollow unlock, as
+      // beating it by force, with its own prose (`path: 'taken'`). Not a plain death.
+      if (battle.boss?.bossId === 'hollow') {
+        const ending = getDamnationTakenEnding();
+        events.push({
+          kind: 'ending',
+          endingType: 'damnation',
+          path: 'taken',
+          header: ending.header,
+          body: substituteName(ending.body, battle.player.name),
+        });
+        return finish({ kind: 'ending', endingType: 'damnation', taken: true }, events, { player: battle.player });
+      }
       events.push({ kind: 'game-over', xp: battle.player.xp });
       return finish({ kind: 'game-over' }, events, { player: battle.player });
+    }
   }
+}
+
+/**
+ * The CAST-DOWN path's fight (PLAN.md #11, §22.31): the Warden turned executioner, at act 4.
+ * Generated like a floor boss (its card's kit, ×3 HP), unfleeable (it carries a boss), not the
+ * final battle. Win → `victory`, its XP, then the defiant fall; lose → the fall at full HP. Either
+ * way the run goes on to act 5.
+ */
+function startExecutioner(state: GameState, player: Player, rng: Rng, finish: Finish): StepResult {
+  const { enemy, boss } = generateBoss({ bossId: 'executioner', act: 4, player, karma: state.karma, rng });
+  const battle: BattleState = createBattle(player, enemy, 4, { boss });
+  return finish({ kind: 'battle', battle, started: false, final: false }, [
+    { kind: 'boss-encounter', bossId: 'executioner', enemyName: enemy.fullName },
+  ]);
 }
 
 /**

@@ -106,6 +106,7 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'deal-needs-room': { kind: 'deal-needs-room', reward: 'Legendary mainHand' },
   'item-discarded': { kind: 'item-discarded', name: 'Suture Kit', rarity: 'Common' },
   'boss-concession': { kind: 'boss-concession', bossId: 'kingpin', concession: 'pause' },
+  'executioner-fall': { kind: 'executioner-fall', outcome: 'defeated' },
 };
 
 const ALL_KINDS = Object.keys(SAMPLE) as GameEventKind[];
@@ -126,8 +127,8 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
     // ...and +4 combat: PLAN.md #1.6's tempo-changed, tempo-extra-action, tempo-lost-turn,
     // hp-changed.
     // ...and +2 combat: PLAN.md #11's boss-move, boss-grieve.
-    // ...and +1 narrative: PLAN.md #11's boss-concession.
-    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2 + 1);
+    // ...and +2 narrative: PLAN.md #11's boss-concession and executioner-fall.
+    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2 + 2);
     expect(new Set(Object.keys(LOG_ROUTING))).toEqual(new Set(ALL_KINDS));
   });
 
@@ -178,7 +179,9 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
       expect(logLines([SAMPLE[kind]]), `${kind} must not reach the log`).toEqual([]);
     }
     // 26 narrative + PLAN.md #2's four narrative kinds + `loot-left-behind`.
-    expect(paned).toBe(26 + 4 + 1 - 4);
+    // PLAN.md #11: + `executioner-fall` (after the fight — the story's). `boss-concession` is the
+    // one narrative kind the log owns, so it is not counted here.
+    expect(paned).toBe(26 + 4 + 1 - 4 + 1);
   });
 
   it('a rejected input IS logged, though the narrator stays silent about it', () => {

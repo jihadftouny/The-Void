@@ -397,6 +397,30 @@
 //  while floor 4 took fewer — the stronger bosses killed earlier runs that floor 4 used to kill.
 //  The weakest class is now the Neuromancer (15.2%), then the Penitent (15.8%); none under 10%.
 //
+//   ROW 2 (step 7) — THE CAST-DOWN PATH FIGHTS, AND THE HOLLOW SELF CAN TAKE YOU
+//   RULE CHANGED                                                   DIRECTION ON THESE RUNS
+//   cast-down + continue is a fight with the executioner (×3 HP,   more draws at act 4 on every
+//   1d10 + STR, its kit); win or lose you fall to act 5 — a loss    cast-down run; a loss is no
+//   restores you to FULL HP (author, Q2)                            longer anything but a fall
+//   the Hollow Self killing you is DAMNATION (`path: 'taken'`),     a floor-5 boss death becomes
+//   not a death (author, 2026-09-28)                                a (damnation) win
+//
+//  PREDICTION (written BEFORE the six runs below were re-measured): the three ENFORCER rows move
+//  and the three HOLLOW rows hold. All three Enforcer runs reach the act-4 reckoning with a neutral
+//  or negative ledger (the heuristic kills everything), so each now fights the executioner — new
+//  draws from act 4 on. Hollow 1 dies ON floor 4 before the gate opens (to a Radiant Hymn), and
+//  Hollows 2 and 3 die on floor 1: none reaches the verdict, so their streams cannot change.
+//  Direction on the report's 2,500 runs (the measurement copy's R2 row, fallback picker): the win
+//  rate RISES by about a point (29.4% -> ~30%) — the executioner usually wins, but its loss is a
+//  fall at full HP, so runs enter the True Void healthier (HP on entry 0.59 -> 0.88 of max in the
+//  copy); a handful (~6 in 2,500) of runs end in damnation taken; act-5 deaths fall.
+//  OBSERVED on the six: as predicted — the three Enforcer runs moved (each still unmakes the Hollow,
+//  now at level 25; the executioner fight and the fall's full HP reshaped the streams after act 4),
+//  and all three Hollow rows are byte-identical. On the report's 2,500 runs the direction and the
+//  size held: baseline 29.4% -> 30.2% (27 grace + 729 damnation, 6 of them taken by the Hollow
+//  Self); act-5 deaths 110. These equal, run for run, the measurement copy's R2 row that decided
+//  the dice — the copy drew in the same order as the shipped engine.
+//
 // Coverage: 3 seeds x 2 classes played end to end under the deterministic `heuristicPolicy`
 // (outcome, act, level, floors, step count, cause), the FINAL RNG ACCUMULATOR of a full run
 // (the sharpest possible probe of draw count and draw order — one extra or missing `rng()`
@@ -477,10 +501,11 @@ function lockedReport(r: AggregateReport): unknown {
 // first victory. The nearest thing to a control is the 500-run sample moving the OTHER WAY.
 // PLAN.md #1.6: five rows moved; Hollow seed 3 held byte-for-byte (see the ledger above).
 // PLAN.md #11 ROW 1: five rows moved and Hollow seed 3 held byte-for-byte, as predicted.
+// PLAN.md #11 ROW 2: the three Enforcer rows moved and the three Hollow rows held, as predicted.
 const GOLDEN_RUNS: readonly (LockedRecord & { rngState: number })[] = [
-  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 26, floorsCleared: 4, steps: 569, cause: 'unmade the Hollow (damnation)', rngState: 4011313400 },
-  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 26, floorsCleared: 4, steps: 450, cause: 'unmade the Hollow (damnation)', rngState: 1033051545 },
-  { seed: 3, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 27, floorsCleared: 4, steps: 458, cause: 'unmade the Hollow (damnation)', rngState: 4105559799 },
+  { seed: 1, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 25, floorsCleared: 4, steps: 530, cause: 'unmade the Hollow (damnation)', rngState: 186663383 },
+  { seed: 2, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 25, floorsCleared: 4, steps: 517, cause: 'unmade the Hollow (damnation)', rngState: 3138865543 },
+  { seed: 3, classId: 'Enforcer', outcome: 'damnation', diedAtAct: null, finalAct: 5, finalLevel: 25, floorsCleared: 4, steps: 479, cause: 'unmade the Hollow (damnation)', rngState: 1074263843 },
   { seed: 1, classId: 'Hollow', outcome: 'death', diedAtAct: 4, finalAct: 4, finalLevel: 15, floorsCleared: 3, steps: 342, cause: 'Radiant Hymn', rngState: 2894922557 },
   { seed: 2, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 4, floorsCleared: 0, steps: 96, cause: 'Undercity Kingpin', rngState: 657895369 },
   { seed: 3, classId: 'Hollow', outcome: 'death', diedAtAct: 1, finalAct: 1, finalLevel: 1, floorsCleared: 0, steps: 16, cause: 'Intoxicated Punk', rngState: 1951871910 },
@@ -514,15 +539,15 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
       damnation: 3,
       deaths: 3,
       winRate: 3 / 6,
-      // Summed from the GOLDEN_RUNS rows above: levels 26+26+27+15+4+1 = 99, floors
+      // Summed from the GOLDEN_RUNS rows above: levels 25+25+25+15+4+1 = 95, floors
       // 4+4+4+3+0+0 = 15. Written as the fraction so the two stay visibly tied together.
-      avgLevel: 99 / 6,
+      avgLevel: 95 / 6,
       avgFloorsCleared: 15 / 6,
       deathByAct: { 1: 2, 2: 0, 3: 0, 4: 1, 5: 0 },
       perClass: {
         Enforcer: {
           runs: 3, wins: 3, grace: 0, damnation: 3, deaths: 0,
-          winRate: 3 / 3, avgLevel: 79 / 3, avgFloorsCleared: 12 / 3,
+          winRate: 3 / 3, avgLevel: 75 / 3, avgFloorsCleared: 12 / 3,
           deathByAct: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
         },
         Hollow: {
@@ -531,6 +556,8 @@ describe('off-equivalence lock — a fixed-seed run is byte-identical across ref
           deathByAct: { 1: 2, 2: 0, 3: 0, 4: 1, 5: 0 },
         },
       },
+      // PLAN.md #11: none of these six is taken by the Hollow Self (all three Enforcers beat it).
+      damnationTaken: 0,
     });
   });
 });

@@ -879,8 +879,22 @@ describe('M12 act-4 verdict gate routes the two fates', () => {
     let r = step(state, { kind: 'menu', choice: 'continue' });
     expect(r.state.phase).toEqual({ kind: 'verdict', outcome: 'cast-down' });
 
-    // Continue: cast-down advances to act 5 (outro → intro → the Hollow battle).
+    // PLAN.md #11: continue from cast-down meets the Warden turned EXECUTIONER — a fight at act 4.
     r = step(r.state, { kind: 'continue' });
+    expect(r.events).toContainEqual(expect.objectContaining({ kind: 'boss-encounter', bossId: 'executioner' }));
+    expect(r.state.phase.kind === 'battle' && r.state.phase.battle.boss?.bossId).toBe('executioner');
+    // Win or lose, you fall to act 5 (outro → intro → the Hollow battle).
+    for (let i = 0; i < 400 && r.state.phase.kind !== 'act-outro'; i += 1) {
+      const input: GameInput =
+        r.awaiting === 'battle-action'
+          ? { kind: 'battle-action', action: 'fight' }
+          : r.awaiting === 'boss-choice'
+            ? { kind: 'boss-choice', move: null }
+            : r.awaiting === 'draft-pick'
+              ? { kind: 'draft-pick', index: 0 }
+              : { kind: 'continue' };
+      r = step(r.state, input);
+    }
     expect(r.state.phase.kind).toBe('act-outro');
     expect(r.state.act).toBe(5);
     r = step(r.state, { kind: 'continue' }); // act-outro → act-intro(5)

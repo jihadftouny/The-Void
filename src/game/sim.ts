@@ -97,6 +97,12 @@ export interface RunResult {
   startingWis: number | null;
   /** What each floor cost this run (PLAN.md #2). A floor never reached is all zeros. */
   perFloor: Record<FloorId, FloorCounters>;
+  /**
+   * PLAN.md #11: HOW the ending was reached, when not the plain way — `taken` (damnation because
+   * the Hollow Self killed you) or `acknowledged` (the late grace, which the sim never reaches: it
+   * never talks). Absent for every other run.
+   */
+  endingPath?: 'acknowledged' | 'taken';
 }
 
 /**
@@ -260,7 +266,9 @@ export function tallyStep(
     const before = pre.state.phase.kind === 'battle' ? pre.state.phase.battle.player.hp : 0;
     c.illusionHpLost += Math.max(0, before - hpAfter(post));
   }
-  if (count('defeat') > 0) {
+  // PLAN.md #11: a `defeat` that is NOT the run's end is not a death — the executioner's loss is a
+  // fall to act 5 (`executioner-fall`), and the Hollow Self's killing blow is damnation (`ending`).
+  if (count('defeat') > 0 && count('executioner-fall') === 0 && count('ending') === 0) {
     c.died = 1;
     if (illusory) c.diedInIllusion = 1;
   }
@@ -332,6 +340,12 @@ export interface AggregateReport {
   perClearedFloor: Record<FloorId, FloorCounters>;
   /** Win rate and floor-2 death share by starting Wisdom (runs with no character are skipped). */
   perWisBucket: Record<WisBucket, WisBucketStats>;
+  /**
+   * PLAN.md #11: of the `damnation` endings, how many the Hollow Self TOOK — it killed the run
+   * (the author's 2026-09-28 ruling) rather than being beaten by force. Counted inside `damnation`
+   * and so inside `wins`; reported apart so the ending mix is visible.
+   */
+  damnationTaken: number;
 }
 
 /**
@@ -597,6 +611,7 @@ export function runToTerminal(
   };
   let steps = 0;
   let endingType: 'grace' | 'damnation' | null = null;
+  let endingPath: 'acknowledged' | 'taken' | null = null;
   let floorsCleared = 0;
   let lastEnemy = '';
   let perFloor = emptyPerFloor();
@@ -616,7 +631,10 @@ export function runToTerminal(
     steps++;
     for (const e of res.events) {
       if (e.kind === 'act-outro') floorsCleared++;
-      else if (e.kind === 'ending') endingType = e.endingType;
+      else if (e.kind === 'ending') {
+        endingType = e.endingType;
+        endingPath = e.path ?? null;
+      }
       else if (
         e.kind === 'encounter-start' ||
         e.kind === 'boss-encounter' ||
@@ -635,10 +653,12 @@ export function runToTerminal(
     outcome === 'grace'
       ? 'ascended (grace)'
       : outcome === 'damnation'
-        ? 'unmade the Hollow (damnation)'
+        ? endingPath === 'taken'
+          ? 'taken by the Hollow (damnation)'
+          : 'unmade the Hollow (damnation)'
         : lastEnemy || 'the Void';
 
-  return {
+  const result: RunResult = {
     seed: initial.rngState,
     classId,
     outcome,
@@ -651,6 +671,8 @@ export function runToTerminal(
     startingWis,
     perFloor,
   };
+  if (endingPath !== null) result.endingPath = endingPath;
+  return result;
 }
 
 /**
@@ -702,6 +724,7 @@ export function simulateBatch(opts: {
   let wins = 0;
   let grace = 0;
   let damnation = 0;
+  let damnationTaken = 0;
   let deaths = 0;
   let levelSum = 0;
   let floorsSum = 0;
@@ -752,6 +775,7 @@ export function simulateBatch(opts: {
       }
 
       stat.runs++;
+      if (r.endingPath === 'taken') damnationTaken++;
       classLevelSum += r.finalLevel;
       classFloorsSum += r.floorsCleared;
       if (r.outcome === 'grace') {
@@ -804,6 +828,7 @@ export function simulateBatch(opts: {
       mid: bucketStats(wisTally.mid),
       high: bucketStats(wisTally.high),
     },
+    damnationTaken,
   };
 }
 

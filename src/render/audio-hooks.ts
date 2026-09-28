@@ -134,6 +134,7 @@ export const HOOK_BY_KIND: Readonly<Record<GameEventKind, AudioHookName | null>>
   'deal-needs-room': null,
   'item-discarded': null,
   'boss-concession': 'boss', // PLAN.md #11: a concession is a boss moment, in the arena
+  'executioner-fall': null, // PLAN.md #11: the fall is the pane's, after the fight
 };
 
 /** An attack's sound by outcome — exhaustive over `AttackOutcome`. A fumble is a miss to the ear. */

@@ -128,6 +128,7 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   'boss-move': 'fact',
   'boss-grieve': 'fact',
   'boss-concession': 'fact',
+  'executioner-fall': 'fact',
   // --- the 17 deliberate silences ---
   'cast-unavailable': 'silent',
   'spare-unavailable': 'silent',
@@ -196,8 +197,8 @@ describe('describeEvent covers every event kind (G13)', () => {
     // PLAN.md #1.6 added 4 combat kinds (tempo-changed, tempo-extra-action, tempo-lost-turn,
     // hp-changed).
     // PLAN.md #11 added 2 combat kinds (boss-move, boss-grieve).
-    // ...and 1 narrative kind (boss-concession).
-    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2 + 1);
+    // ...and 2 narrative kinds (boss-concession, executioner-fall).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2 + 2);
   });
 
   it('the classification is 51 facts and 17 deliberate silences', () => {
@@ -209,8 +210,8 @@ describe('describeEvent covers every event kind (G13)', () => {
     // PLAN.md #1.6: +2 facts (tempo-extra-action, tempo-lost-turn), +2 silences
     // (tempo-changed, hp-changed).
     // PLAN.md #11: +2 facts (boss-move, boss-grieve).
-    // PLAN.md #11: +1 fact (boss-concession).
-    expect(facts).toHaveLength(26 + 15 + 8 + 2 + 2 + 1);
+    // PLAN.md #11: +2 facts (boss-concession, executioner-fall).
+    expect(facts).toHaveLength(26 + 15 + 8 + 2 + 2 + 2);
     expect(DELIBERATELY_SILENT.size).toBe(15 + 2);
     expect(NEW_FACT_KINDS).toHaveLength(15);
     for (const k of NEW_FACT_KINDS) expect(EXPECTED[k]).toBe('fact');

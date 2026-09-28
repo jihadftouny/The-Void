@@ -361,6 +361,12 @@ export function describeEvent(e: GameEvent): string {
     // ---- PLAN.md #11: what Talk earned (§20, §22.7) — no number, no mechanic word ------------
     case 'boss-concession':
       return concessionFact(e.bossId, e.concession);
+    case 'executioner-fall':
+      // Win or lose you fall (§22.31) — defiance, not defeat, having won. Never a death word:
+      // losing this fight is not dying.
+      return e.outcome === 'defiant'
+        ? `You fall anyway — but you fall unbowed.`
+        : `It casts you down, and you fall into the dark below.`;
 
     // ---- G13: DELIBERATE SILENCE — seventeen kinds that return '' on purpose ----------
     //

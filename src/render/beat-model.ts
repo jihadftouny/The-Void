@@ -118,6 +118,7 @@ export const BEAT_ROLE: Readonly<Record<GameEventKind, BeatRole>> = {
   'deal-needs-room': 'pane',
   'item-discarded': 'pane',
   'boss-concession': 'attach', // PLAN.md #11: it happens inside the fight
+  'executioner-fall': 'pane', // PLAN.md #11: the fight is over; the fall is the story's
 };
 
 /** Which of the frame's three bars a beat may have changed. */

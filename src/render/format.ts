@@ -325,6 +325,8 @@ export function formatEvent(e: GameEvent): string {
     // --- PLAN.md #11 ---
     case 'boss-concession':
       return CONCESSION_LINE[e.concession];
+    case 'executioner-fall':
+      return e.outcome === 'defiant' ? 'You fall anyway — unbowed.' : 'You are cast down, and fall.';
   }
 }
 

@@ -41,6 +41,7 @@ import { fireFloorTriggers, fireTrigger, reviveActionFor } from './relicEffects.
 import { applyConsumable, type ConsumableSource } from './consumable.ts';
 import { ILLUSION_DC, type FloorId } from './floors.ts';
 import { PLAYER_TEMPO_RATE_CAP_TENTHS, TEMPO_RATE_CAP_TENTHS, advanceTempo, tempoRate, type TempoStep } from './tempo.ts';
+import { executionerDeeds, type Deed } from './deeds.ts';
 import {
   BOSSES,
   battleActionKey,
@@ -171,6 +172,11 @@ export interface RoundRules {
   enemyTempo: boolean;
   /** Whether an enemy family's data-driven speed is added to its rate. Shipped: true. MEASUREMENT ONLY. */
   familySpeed: boolean;
+  /**
+   * PLAN.md #11: the run's deed record, read by the EXECUTIONER to name each blow for a deed
+   * (§22.31). Passed in by `game.ts` so the battle never reaches for `GameState`. Absent ⇒ none.
+   */
+  deeds?: readonly Deed[];
 }
 
 /** No floor mechanic: full heals, the shipped illusion DC, the shipped tempo gauge. */
@@ -929,10 +935,22 @@ function bossAction(
   move: BossMoveId,
   advDisOverride: -1 | 0 | 1,
   rng: Rng,
-  _rules: RoundRules,
+  rules: RoundRules,
 ): TurnOutcome {
   const boss = ctx.boss!;
-  ctx.events.push({ kind: 'boss-move', bossId: boss.bossId, move });
+  const announce: Extract<CombatEvent, { kind: 'boss-move' }> = { kind: 'boss-move', bossId: boss.bossId, move };
+  // The executioner's blows are its reading of you (§22.31): each strike or cast is named for the
+  // next desecration or cruelty in the deed record, oldest first, wrapping. None ⇒ no name.
+  if (boss.bossId === 'executioner' && (move === 'strike' || move.startsWith('cast:'))) {
+    const named = executionerDeeds(rules.deeds ?? []);
+    if (named.length > 0) {
+      const cursor = boss.deedCursor ?? 0;
+      const { axis: _hidden, ...deed } = named[cursor % named.length]!;
+      announce.deed = deed;
+      boss.deedCursor = cursor + 1;
+    }
+  }
+  ctx.events.push(announce);
   if (move === 'strike') {
     const { die, addStr } = BOSSES[boss.bossId].strike;
     return enemyAttack(ctx, advDisOverride, rng, { kind: 'strike', die, addStr });

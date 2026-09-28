@@ -158,4 +158,5 @@ export const ONE_OF_EVERY_EVENT: { [K in GameEventKind]: Extract<GameEvent, { ki
   'item-discarded': { kind: 'item-discarded', name: 'Common ring', rarity: 'Common' },
   // PLAN.md #11 (narrative)
   'boss-concession': { kind: 'boss-concession', bossId: 'kingpin', concession: 'weakness' },
+  'executioner-fall': { kind: 'executioner-fall', outcome: 'defeated' },
 };
