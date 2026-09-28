@@ -76,6 +76,10 @@ describe('the scanned sources survived the comment strip (rule 2)', () => {
     expect(LLM, 'the strip ate the tail of llm.mjs — a hole below the last anchor').toMatch(
       /sequence\.dispose\s*\(\s*\)/,
     );
+    // generateStructured (PLAN.md #11) now holds the file's last statement.
+    expect(LLM, 'the strip ate the tail of llm.mjs — generateStructured is gone').toMatch(
+      /return \{ ok: false, reason: 'error', message: String\(err\?\.message \?\? err\) \};\s*\}\s*\},\s*\};\s*\}\s*$/,
+    );
     expect(stripReachesEndOfFile(RAW_LLM), 'the strip ran off the END of the file — a regex literal containing `/*` with no later `*/` swallows everything after it, and every anchor ABOVE it still passes').toBe(true);
     expect(LLM.length).toBeLessThan(RAW_LLM.length);
   });
@@ -153,8 +157,9 @@ describe('llm.mjs instruments every phase of the model load', () => {
       ...runCalls.map((c) => ['inst.run', c, 5]),
       ...callsTo(LLM, 'inst\\.begin').map((c) => ['inst.begin', c, 4]),
     ];
+    // Five load phases, plus two generations: the narration and the boss call (PLAN.md #11).
     expect(ops.length, 'no instrumented operations found — this guard has gone stale').toBe(
-      PHASES.length + 1,
+      PHASES.length + 2,
     );
     for (const [kind, call, arity] of ops) {
       const args = argsOf(call);
@@ -168,10 +173,13 @@ describe('llm.mjs instruments every phase of the model load', () => {
         /^THRESHOLDS\./,
       );
     }
-    // ...and the one `begin` really is the generation, with the generation's threshold.
+    // ...and the two `begin`s really are the two generations, each with its own threshold.
     const gen = callsTo(LLM, 'inst\\.begin')[0];
     expect(argsOf(gen)[1]).toBe("'generate'");
     expect(argsOf(gen)[3]).toBe('THRESHOLDS.generate');
+    const boss = callsTo(LLM, 'inst\\.begin')[1];
+    expect(argsOf(boss)[1]).toBe("'boss generate'");
+    expect(argsOf(boss)[3]).toBe('THRESHOLDS.bossGenerate');
   });
 
   it('records existedBefore, which is what tells a DOWNLOAD from a cache hit', () => {
@@ -944,5 +952,77 @@ describe('the game window sizes the PAGE, not the frame (UI-DESIGN.md §14)', ()
     expect(options).toMatch(/height:\s*820/);
     expect(Number(/\bwidth:\s*(\d+)/.exec(options)[1])).toBeGreaterThan(960);
     expect(Number(/\bheight:\s*(\d+)/.exec(options)[1])).toBeGreaterThan(640);
+  });
+});
+
+// =========================================================================================
+// ADDED BY `boss-llm` (PLAN.md #11 part B) — ADDITIVE ONLY.
+//
+// EVERY MODEL CALL GOES THROUGH THE ONE QUEUE. The context has one sequence; a boss call that
+// asked for it while a narration held it would throw "No sequences left". The queue itself is
+// behaviourally tested in `llm-queue.test.mjs`; what only a source read can prove is that
+// BOTH doors in `llm.mjs` actually go through it — a queue nobody calls is a queue that fixes
+// nothing, with the whole suite green.
+// =========================================================================================
+
+describe('llm.mjs: narration and boss calls share ONE queue (AC-15)', () => {
+  const queueRuns = callsTo(LLM, 'queue\.run');
+  const genAt = LLM.indexOf('async generate(');
+  const structAt = LLM.indexOf('async generateStructured(');
+
+  it('the anchors exist: the queue is built from its module, and both doors are there', () => {
+    expect(LLM).toMatch(/import\s*\{\s*createSequenceQueue\s*\}\s*from\s*'\.\/llm-queue\.mjs'/);
+    expect(LLM).toMatch(/const queue\s*=\s*createSequenceQueue\s*\(/);
+    expect(genAt, 'generate() is gone').toBeGreaterThan(-1);
+    expect(structAt, 'generateStructured() is gone').toBeGreaterThan(genAt);
+    expect(queueRuns.length, 'nothing runs through the queue').toBe(2);
+  });
+
+  it('generate returns queue.run(...) as its whole body — the sequence is taken inside it', () => {
+    const body = LLM.slice(genAt, structAt);
+    expect(body, 'generate does something before (or instead of) queueing').toMatch(
+      /^async generate\([^)]*\)\s*\{\s*return queue\.run\(/,
+    );
+    const run = queueRuns.find((c) => c.includes('context.getSequence('));
+    expect(run, 'the narration takes the sequence OUTSIDE the queue').toBeDefined();
+    expect(run).toMatch(/session\.prompt\s*\(/);
+  });
+
+  it('every session.prompt and every getSequence in llm.mjs sits inside a queue.run call', () => {
+    for (const re of [/session\.prompt\s*\(/g, /getSequence\s*\(/g]) {
+      const total = (LLM.match(re) ?? []).length;
+      const inside = queueRuns.reduce((n, c) => n + (c.match(re) ?? []).length, 0);
+      expect(total, `${re.source} is gone — this guard is stale`).toBeGreaterThan(0);
+      expect(inside, `${re.source}: ${total - inside} use(s) outside the queue`).toBe(total);
+    }
+  });
+
+  it('generateStructured runs runStructured inside queue.run, with the request\'s deadline and the queue\'s signal', () => {
+    const run = queueRuns.find((c) => c.includes('runStructured('));
+    expect(run, 'the boss call does not go through the queue').toBeDefined();
+    expect(argsOf(run)[0], 'the queue\'s abort signal is not handed to the call').toMatch(
+      /^\(\{\s*signal\s*\}\)\s*=>\s*runStructured\([\s\S]*\{\s*signal,\s*cache:\s*grammars\s*\}\s*\)$/,
+    );
+    expect(argsOf(run)[1], 'the boss call has no deadline').toMatch(/deadlineMs:\s*settings\.deadlineMs/);
+    expect(callsTo(LLM, 'runStructured').length, 'runStructured is called somewhere else too').toBe(1);
+  });
+
+  it('generateStructured is bracketed: begin BEFORE the queued call, done/fail AFTER it', () => {
+    const body = LLM.slice(structAt);
+    const begin = body.search(/inst\.begin\s*\(/);
+    const run = body.search(/await\s+queue\.run\s*\(/);
+    const done = body.search(/op\.done\s*\(/);
+    const fail = body.search(/op\.fail\s*\(/);
+    for (const [name, at] of [['begin', begin], ['queue.run', run], ['done', done], ['fail', fail]]) {
+      expect(at, `generateStructured has no ${name}`).toBeGreaterThan(-1);
+    }
+    expect(begin).toBeLessThan(run);
+    expect(run).toBeLessThan(done);
+    expect(run).toBeLessThan(fail);
+    expect(body.slice(begin, run), 'the operation is closed before the call is awaited').not.toMatch(/op\.(done|fail)\s*\(/);
+    // A thrown error is logged before the error result is returned, never swallowed.
+    const tail = body.slice(body.search(/\}\s*catch\s*\(/));
+    expect(tail.search(/op\.fail\s*\(/)).toBeGreaterThan(-1);
+    expect(tail.search(/op\.fail\s*\(/)).toBeLessThan(tail.search(/return\s*\{\s*ok:\s*false/));
   });
 });
