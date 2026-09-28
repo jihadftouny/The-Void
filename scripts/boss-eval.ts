@@ -2,7 +2,7 @@
 //
 //     npm run boss:eval                     # prints the plan and the estimated time; loads NOTHING
 //     npm run boss:eval -- --run            # AUTHOR ONLY: loads the model on the GPU (~75 min)
-//     npm run boss:eval -- --run --quick    # AUTHOR ONLY: one run, ten conversations a group (~15 min)
+//     npm run boss:eval -- --run --quick    # AUTHOR ONLY: one run, ten conversations a group (~9 min)
 //
 // Options: --personas <path|fixture> (default: the BOSS-PROMPTS §5 drafts, `fixture`),
 //          --messages <path> (default: scripts/boss-eval/messages.json),
@@ -20,7 +20,12 @@
 // models directory (`electron/model-path.mjs`) — never `./models`, and never downloaded here.
 //
 // It writes `<out>/<timestamp>.json` (every call record + the summary) and prints the report.
-// The exit status is non-zero when any target fails, so it can be the merge gate (§7.1).
+// EXIT STATUS (`EXIT` in boss-eval-lib.ts), so it can be the merge gate (§7.1):
+//   0  every target passed (or was not run);
+//   1  a target FAILED;
+//   2  unusable arguments or inputs (a bad flag, a broken message set or personas file, no model);
+//   3  INCONCLUSIVE — more than 5% of some group's calls failed (timeout, error, cut-off answer),
+//      so its targets cannot be trusted either way. It wins over 1: re-run before acting on a FAIL.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -47,6 +52,7 @@ import {
   MESSAGE_GROUPS,
   PLAN_SIZES,
   electronUserDataDir,
+  EXIT,
   exitCode,
   messageSetProblems,
   messagesFor,
@@ -60,7 +66,11 @@ import {
   runConversation,
   scoreCall,
   summarize,
+  isFailedCall,
+  outcomeOf,
   type CallRecord,
+  type ConversationOutcome,
+  type GateGroup,
   type GateInput,
   type MessageSet,
   type RawResult,
@@ -68,7 +78,7 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-function fail(message: string, code = 2): never {
+function fail(message: string, code: number = EXIT.badInput): never {
   console.error(`boss-eval: ${message}`);
   process.exit(code);
 }
@@ -123,7 +133,7 @@ async function evaluate(): Promise<void> {
   const cache = createGrammarCache();
   const vocab = buildVocabulary();
   const records: CallRecord[] = [];
-  const gate: { manipulative: (number | null)[]; genuine: (number | null)[]; offTarget: boolean[] } = {
+  const gate: { manipulative: ConversationOutcome[]; genuine: ConversationOutcome[]; offTarget: (boolean | 'failed')[] } = {
     manipulative: [],
     genuine: [],
     offTarget: [],
@@ -194,7 +204,9 @@ async function evaluate(): Promise<void> {
     }
   }
 
-  // The Hollow Self's gate (§7.1): whole conversations, stopping at the first surrender.
+  // The Hollow Self's gate (§7.1): whole conversations, stopping at the first surrender — and at
+  // the first FAILED call (timeout, error, cut-off answer), which is not a refusal: that
+  // conversation is left out of its target and reported (fix round 1, F1).
   if (want('hollow-gate')) {
     const hollow = personaById(personas, 'hollow');
     if (!hollow) fail('the personas have no Hollow Self — the gate cannot run');
@@ -203,21 +215,30 @@ async function evaluate(): Promise<void> {
     for (let run = 1; run <= runs; run += 1) {
       // Run 1 is production behaviour (the card's pinned seed); runs 2+ vary it for robustness.
       const seed = run === 1 ? undefined : (hollow.talk.seed ?? 0) + run - 1;
-      const converse = (messages: readonly string[]) => {
+      const converse = (messages: readonly string[], group: GateGroup) => {
         let turn = 0;
         return runConversation(messages, async (window, typed) => {
           turn += 1;
           const req = talkRequest(hollow, { exchanges: window, typed, available: ['surrender'] });
-          const rec = scoreCall(req, await call(req, seed), { group: 'gate', run, previous: [] }, vocab);
+          const rec = scoreCall(req, await call(req, seed), { group, run, previous: [] }, vocab);
           records.push(rec);
-          return rec.answered
-            ? { reply: rec.shown, concession: rec.concession }
-            : { reply: fallbackFor(hollow, 'talk', turn), concession: null };
+          if (rec.answered) return { reply: rec.shown, concession: rec.concession };
+          // An answer that came back but broke a rule (an illegal concession) is what the game
+          // would show as a fallback with no concession (§6); a call that never came back is not
+          // a ruling at all.
+          return { reply: fallbackFor(hollow, 'talk', turn), concession: null, failed: isFailedCall(rec) };
         });
       };
-      for (const c of set.hollowGate.manipulativeConversations.slice(0, cap)) gate.manipulative.push((await converse(c.messages)).surrenderedAt);
-      for (const c of set.hollowGate.genuineConversations.slice(0, cap)) gate.genuine.push((await converse(c.messages)).surrenderedAt);
-      for (const m of set.hollowGate.offTargetSingles.slice(0, cap)) gate.offTarget.push((await converse([m])).surrenderedAt === 0);
+      for (const c of set.hollowGate.manipulativeConversations.slice(0, cap)) {
+        gate.manipulative.push(outcomeOf(await converse(c.messages, 'gate-manipulative')));
+      }
+      for (const c of set.hollowGate.genuineConversations.slice(0, cap)) {
+        gate.genuine.push(outcomeOf(await converse(c.messages, 'gate-genuine')));
+      }
+      for (const m of set.hollowGate.offTargetSingles.slice(0, cap)) {
+        const outcome = outcomeOf(await converse([m], 'gate-off-target'));
+        gate.offTarget.push(outcome === 'failed' ? 'failed' : outcome === 0);
+      }
     }
   }
 

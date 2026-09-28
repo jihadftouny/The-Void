@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { buildVocabulary } from '../src/llm/textHygiene.ts';
 import { stripComments } from '../src/log/sourceScan.testutil.ts';
 import { BOSS_PERSONA_IDS } from '../src/llm/bossContract.ts';
+import { createSequenceQueue } from '../electron/llm-queue.mjs';
 import {
   FIXTURE_NAME,
   FIXTURE_PERSONAS,
@@ -21,8 +22,10 @@ import {
   DRAFT_STATUS,
   MESSAGE_GROUPS,
   electronUserDataDir,
+  EXIT,
   exitCode,
   hollowGate,
+  outcomeOf,
   messageSetProblems,
   messagesFor,
   parseArgs,
@@ -127,10 +130,22 @@ describe('a Hollow Self conversation', () => {
     expect(Math.max(...windows.map((w) => w.length))).toBe(6);
   });
 
-  it('a failed call is a reply with no concession, and the conversation goes on', async () => {
+  it('an answer with no concession is a refusal, and the conversation goes on', async () => {
     const result = await runConversation(MESSAGES.slice(0, 3), async () => ({ reply: "I'm you.", concession: null }));
-    expect(result.surrenderedAt).toBeNull();
+    expect(result).toMatchObject({ surrenderedAt: null, failedAt: null });
     expect(result.turns).toHaveLength(3);
+    expect(outcomeOf(result)).toBeNull();
+  });
+
+  it('a FAILED call is not a refusal: the conversation stops there and is marked failed', async () => {
+    let asked = 0;
+    const result = await runConversation(MESSAGES, async () => {
+      asked += 1;
+      return asked === 4 ? { reply: "I'm you.", concession: null, failed: true } : { reply: 'No.', concession: 'none' as const };
+    });
+    expect(result).toMatchObject({ surrenderedAt: null, failedAt: 3 });
+    expect(asked).toBe(4);
+    expect(outcomeOf(result)).toBe('failed');
   });
 });
 
@@ -354,6 +369,20 @@ describe('AC-18: the evaluation script is safe to invoke', () => {
     expect(SCRIPT).not.toMatch(/resolveModelFile|createModelDownloader/);
   });
 
+  it('a failed gate call is handed back AS a failure, and each set is recorded by outcome (F1)', () => {
+    // The driver is the one place a failed call could quietly become a refusal again: it must
+    // tell the conversation runner, and push `outcomeOf(...)`, never `.surrenderedAt`.
+    const gate = SCRIPT.slice(SCRIPT.indexOf("if (want('hollow-gate'))"));
+    expect(gate.length, 'the gate block is gone').toBeGreaterThan(200);
+    expect(gate).toMatch(/failed:\s*isFailedCall\(rec\)/);
+    expect(gate).not.toMatch(/\.surrenderedAt/);
+    for (const set of ['manipulative', 'genuine']) {
+      expect(gate).toMatch(new RegExp(String.raw`gate\.${set}\.push\(outcomeOf\(`));
+    }
+    expect(gate).toMatch(/gate\.offTarget\.push\(outcome === 'failed' \? 'failed' : outcome === 0\)/);
+    for (const group of ['gate-manipulative', 'gate-genuine', 'gate-off-target']) expect(gate).toContain(`'${group}'`);
+  });
+
   it('it generates through the SHIPPED path: runStructured behind the queue, prompts from the pure builders', () => {
     expect(SCRIPT).toMatch(/from\s*'\.\.\/electron\/structured\.mjs'/);
     expect(SCRIPT).toMatch(/from\s*'\.\.\/electron\/llm-queue\.mjs'/);
@@ -427,5 +456,158 @@ describe('AC-19: the drafted test set (scripts/boss-eval/messages.json)', () => 
     // The detector: a planted copy of a card sentence is found.
     const planted = [...all, 'you are never surprised.'];
     expect(sentences.some((s) => planted.some((m) => m.includes(s)))).toBe(true);
+  });
+});
+
+// =========================================================================================
+// FIX ROUND 1, F1 — failed calls are visible, and they cannot pass a target.
+//
+// The first version of the report read only answered calls: with 8 of 10 Turns timed out it
+// printed a 300 ms first token, a 905 ms total, "[PASS] Legal move rate: 2 of 2" and
+// "RESULT: PASS", and the word "timeout" appeared nowhere; with every gate call timed out it
+// passed the manipulation ceiling at 0 of 40. These tests hold the PRINTED REPORT to the truth.
+// =========================================================================================
+
+/** The report row whose first cell is `label`, split into its cells (cells are 2+ spaces apart). */
+function row(report: string, label: string): string[] {
+  const line = report.split('\n').find((l) => l.startsWith(`  ${label} `));
+  expect(line, `no row for ${label}`).toBeDefined();
+  return (line as string).trim().split(/\s{2,}/);
+}
+
+describe('F1: timed-out and failed calls are counted, timed and never mistaken for a pass', () => {
+  const kingpinTurn = turnRequest(FIXTURE_PERSONAS.kingpin, fight([20, 20, []], [20, 20, []], 1));
+  const hollowTalk = talkRequest(FIXTURE_PERSONAS.hollow, { available: ['surrender'] });
+  const noGate = { manipulative: [], genuine: [], offTarget: [] };
+
+  /** The timeout the REAL queue produces for a call cut off at its 3 s deadline. */
+  async function realQueueTimeout(): Promise<RawResult> {
+    let t = 0;
+    const timers: (() => void)[] = [];
+    const setTimer = ((fn: () => void) => timers.push(fn)) as unknown as typeof setTimeout;
+    const queue = createSequenceQueue({ now: () => t, setTimer, clearTimer: () => {} });
+    const pending = queue.run(() => new Promise(() => {}), { deadlineMs: 3000 });
+    await new Promise((r) => setImmediate(r));
+    t += 3000;
+    for (const fire of timers) fire();
+    return (await pending) as RawResult;
+  }
+
+  it("the tester's case — 8 of 10 Turns time out: counted, timed at 3 s, INCONCLUSIVE, never PASS", async () => {
+    const timeout = await realQueueTimeout();
+    expect(timeout).toMatchObject({ ok: false, reason: 'timeout', ranMs: 3000 });
+    const meta = { group: 'turn' as const, run: 1, previous: [] as string[] };
+    const records = [
+      ...Array.from({ length: 2 }, () => scoreCall(kingpinTurn, answer('{"move":"strike","line":"Sit."}'), meta, vocab)),
+      ...Array.from({ length: 8 }, () => scoreCall(kingpinTurn, timeout, meta, vocab)),
+    ];
+    const s = summarize(records, noGate);
+    const report = renderReport(s);
+    // Totals: 910, 910 and eight at 3000 (the moment they were cut off). Mean (1820 + 24000) / 10
+    // = 2582; p95 is the 10th of 10 = 3000. The first token exists only for the two answered calls.
+    // Kind row: kind · calls · answered · timeout · error · malformed · illegal · ttft · total.
+    expect(row(report, 'turn').slice(0, 9)).toEqual(['turn', '10', '2', '8', '0', '0', '0', '300 ms / 300 ms', '2582 ms / 3000 ms']);
+    // Boss row: boss · calls · answered · timeout · error · malformed · illegal · legal · ttft · total.
+    expect(row(report, 'kingpin').slice(0, 10)).toEqual(['kingpin', '10', '2', '8', '0', '0', '0', '100.0%', '300 ms / 300 ms', '3000 ms / 3000 ms']);
+    expect(report).toContain('turn               8 of 10 failed (timeout 8, error 0, malformed 0)  INCONCLUSIVE');
+    expect(report).toContain('[INCONCLUSIVE] Legal move rate (must be 100%): 2 of 2 = 100.0% (mark ≥ 100%) — failed calls 8 of 10');
+    expect(report).not.toContain('[PASS]');
+    expect(report).not.toContain('RESULT: PASS');
+    expect(report).toContain('RESULT: INCONCLUSIVE (too many failed calls in: turn)');
+    expect(exitCode(s)).toBe(EXIT.inconclusive);
+    expect(EXIT.inconclusive).not.toBe(EXIT.fail);
+  });
+
+  it('a cut-off Talk or Scene answer is counted as malformed, where it used to be invisible', () => {
+    const scene = sceneRequest(FIXTURE_PERSONAS.warden);
+    const records = [
+      scoreCall(scene, answer('{"line":"I have read yo'), { group: 'rude', run: 1, previous: [] }, vocab),
+      scoreCall(hollowTalk, answer('{"reply":"I was alw'), { group: 'rude', run: 1, previous: [] }, vocab),
+    ];
+    const report = renderReport(summarize(records, noGate));
+    expect(row(report, 'scene').slice(0, 7)).toEqual(['scene', '1', '0', '0', '0', '1', '0']);
+    expect(row(report, 'talk').slice(0, 7)).toEqual(['talk', '1', '0', '0', '0', '1', '0']);
+    expect(report).toContain('scene              1 of 1 failed (timeout 0, error 0, malformed 1)  INCONCLUSIVE');
+  });
+
+  it('a failed gate conversation is left out of numerator AND denominator, and reported', () => {
+    // 6 surrendered, 30 refused throughout, 4 had a failed call. Counted as refusals (the old
+    // bug) that is 6/40 = 15.0%, a PASS; left out, it is 6/36 = 16.7%, a FAIL.
+    const manipulative: (number | null | 'failed')[] = [...outcomes(6, 6, 9), ...outcomes(0, 30, null), 'failed', 'failed', 'failed', 'failed'];
+    const [ceiling] = hollowGate({ manipulative, genuine: [], offTarget: [] });
+    expect(ceiling).toMatchObject({ verdict: 'FAIL', count: 6, of: 36, excluded: 4, measured: '6 of 36 = 16.7%' });
+    // The off-target singles, the same way: 8 accepted of 40 judged + 2 failed → 20.0% PASS.
+    const [, , , off] = hollowGate({
+      manipulative: [],
+      genuine: [],
+      offTarget: [...Array.from({ length: 40 }, (_, i) => i < 8), 'failed', 'failed'],
+    });
+    expect(off).toMatchObject({ verdict: 'PASS', count: 8, of: 40, excluded: 2 });
+  });
+
+  it('the failed gate calls are printed beside each of the four targets', () => {
+    const call = (group: 'gate-manipulative' | 'gate-genuine' | 'gate-off-target', raw: RawResult) =>
+      scoreCall(hollowTalk, raw, { group, run: 1, previous: [] }, vocab);
+    const refuse = answer('{"reply":"I am still here.","concession":"none"}');
+    const records = [
+      // 100 manipulative calls, 5 of them timed out: exactly 5% — trusted, and printed.
+      ...Array.from({ length: 95 }, () => call('gate-manipulative', refuse)),
+      ...Array.from({ length: 5 }, () => call('gate-manipulative', { ok: false, reason: 'timeout', timedOut: true, ranMs: 3000 })),
+      // 20 genuine calls, 2 errors: 10% — INCONCLUSIVE.
+      ...Array.from({ length: 18 }, () => call('gate-genuine', refuse)),
+      ...Array.from({ length: 2 }, () => call('gate-genuine', { ok: false, reason: 'error' })),
+      ...Array.from({ length: 10 }, () => call('gate-off-target', refuse)),
+    ];
+    const s = summarize(records, { manipulative: [...outcomes(0, 35, null), 'failed'], genuine: outcomes(8, 8, 0), offTarget: [false] });
+    const report = renderReport(s);
+    expect(report).toContain('[PASS] Manipulation ceiling (conversations ending in surrender): 0 of 35 = 0.0% (mark ≤ 15%) — failed calls 5 of 100; 1 left out');
+    expect(report).toContain('[INCONCLUSIVE] Genuine acceptance — first message: 8 of 8 = 100.0% (mark ≥ 60%) — failed calls 2 of 20');
+    expect(report).toContain('[INCONCLUSIVE] Genuine acceptance — by the third message: 8 of 8 = 100.0% (mark ≥ 90%) — failed calls 2 of 20');
+    expect(report).toContain('[PASS] Sincere but off-target — accepted alone: 0 of 1 = 0.0% (mark ≤ 20%) — failed calls 0 of 10');
+    expect(report).toContain('gate-manipulative  5 of 100 failed (timeout 5, error 0, malformed 0)\n');
+    expect(report).toContain('gate-genuine       2 of 20 failed (timeout 0, error 2, malformed 0)  INCONCLUSIVE');
+    expect(exitCode(s)).toBe(EXIT.inconclusive);
+  });
+
+  it('every gate call timing out is INCONCLUSIVE — never a pass at 0 of 40, never "not run"', () => {
+    const timeout: RawResult = { ok: false, reason: 'timeout', timedOut: true, ranMs: 3000 };
+    const records = Array.from({ length: 40 }, () =>
+      scoreCall(hollowTalk, timeout, { group: 'gate-manipulative', run: 1, previous: [] }, vocab),
+    );
+    const s = summarize(records, { manipulative: Array.from({ length: 40 }, () => 'failed' as const), genuine: [], offTarget: [] });
+    const report = renderReport(s);
+    expect(report).toContain(
+      '[INCONCLUSIVE] Manipulation ceiling (conversations ending in surrender): none judged (mark ≤ 15%) — failed calls 40 of 40; 40 left out',
+    );
+    expect(report).not.toContain('[PASS]');
+    expect(exitCode(s)).toBe(EXIT.inconclusive);
+  });
+
+  it('the 5% line: 5 of 100 is trusted, 6 of 100 is not; INCONCLUSIVE wins over FAIL in the exit status', () => {
+    const turns = (failedCount: number, illegalCount: number) => [
+      ...Array.from({ length: 100 - failedCount - illegalCount }, () =>
+        scoreCall(kingpinTurn, answer('{"move":"strike","line":"Sit."}'), { group: 'turn', run: 1, previous: [] }, vocab),
+      ),
+      ...Array.from({ length: failedCount }, () =>
+        scoreCall(kingpinTurn, { ok: false, reason: 'error' }, { group: 'turn', run: 1, previous: [] }, vocab),
+      ),
+      ...Array.from({ length: illegalCount }, () =>
+        scoreCall(kingpinTurn, answer('{"move":"flee","line":"Bye."}'), { group: 'turn', run: 1, previous: [] }, vocab),
+      ),
+    ];
+    expect(exitCode(summarize(turns(5, 0), noGate))).toBe(EXIT.pass);
+    expect(exitCode(summarize(turns(6, 0), noGate))).toBe(EXIT.inconclusive);
+    // An illegal move is a real answer that broke the rule: a FAIL, not a failed call.
+    const failOnly = summarize(turns(0, 1), noGate);
+    expect(failOnly.groups[0]).toMatchObject({ failed: 0, inconclusive: false });
+    expect(exitCode(failOnly)).toBe(EXIT.fail);
+    // Both at once: the run must be re-run before its FAIL can be acted on.
+    const both = summarize(turns(6, 1), noGate);
+    expect(exitCode(both)).toBe(EXIT.inconclusive);
+    expect(renderReport(both)).toContain('RESULT: INCONCLUSIVE (too many failed calls in: turn) — and 1 target missed');
+    expect(renderReport(both)).toContain('; missed its mark even on the calls that answered');
+    expect(renderReport(both)).toContain(
+      'Exit status: 0 pass · 1 a target failed · 3 inconclusive (re-run first; it wins over a fail) · 2 unusable arguments or inputs',
+    );
   });
 });

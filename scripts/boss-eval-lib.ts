@@ -197,7 +197,14 @@ export function renderPlan(plan: CallPlan, opts: EvalOptions): string {
 // Reading one call
 // ===========================================================================
 
-/** What the driver hands back for one call — the IPC result, as the shipped path returns it. */
+/**
+ * What the driver hands back for one call — the IPC result, as the shipped path returns it.
+ *
+ * `ranMs` is the queue's own measurement of how long the call held the model, and it is the only
+ * duration a TIMED-OUT call has: the queue resolves a timeout with `{ ok:false, reason:'timeout',
+ * queuedMs, ranMs }` and no generation timings at all. A report that read only `generateMs` could
+ * therefore never show a call past the deadline (fix round 1, F1).
+ */
 export interface RawResult {
   ok: boolean;
   reason?: string;
@@ -206,19 +213,27 @@ export interface RawResult {
   ttftMs?: number;
   generateMs?: number;
   queuedMs?: number;
+  ranMs?: number;
   grammarMs?: number;
   tokens?: number;
   promptTokens?: number;
 }
 
+/** The sets of calls whose failure share is judged (see `FAILURE_CEILING_PCT`). */
+export const CALL_GROUPS = ['turn', 'talk', 'scene', 'gate-manipulative', 'gate-genuine', 'gate-off-target'] as const;
+export type CallGroup = (typeof CALL_GROUPS)[number];
+
+/** The three Hollow Self gate sets, as call-record groups. */
+export type GateGroup = 'gate-manipulative' | 'gate-genuine' | 'gate-off-target';
+
 export interface CallRecord {
   persona: BossPersonaId;
   kind: BossCallKind;
-  group: MessageGroup | 'turn' | 'gate' | 'verdict';
+  group: MessageGroup | 'turn' | GateGroup | 'verdict';
   run: number;
   /** Whether a usable answer came back (parsed and within the schema). */
   answered: boolean;
-  /** Why not, when it did not. */
+  /** Why not, when it did not: a `BossAnswer` failure reason. */
   failure: string | null;
   /** Turn only: whether the move is one of the legal ids. `null` for other kinds. */
   legal: boolean | null;
@@ -230,9 +245,41 @@ export interface CallRecord {
   /** The name used where the card forbids it (stripped before showing). */
   nameViolation: boolean;
   repeatsOpening: boolean;
+  /** Time to the first token. `null` when no token ever came (a timeout before any text). */
   ttftMs: number | null;
+  /** How long the call held the model — for a timeout, how long until it was cut off. */
   totalMs: number | null;
   promptTokens: number | null;
+}
+
+/**
+ * How a call failed, for the counts. `timeout`, `error` and `malformed` (an answer cut off or
+ * out of shape) are FAILED CALLS — nothing usable came back — and they decide whether a group's
+ * result can be trusted. `illegal` (a move or concession the grammar should have made
+ * impossible) is a real answer that broke a rule, and it fails the legal-move target instead.
+ */
+export type FailureClass = 'timeout' | 'error' | 'malformed' | 'illegal';
+
+export function failureClass(failure: string | null): FailureClass | null {
+  if (failure === null) return null;
+  if (failure === 'timeout') return 'timeout';
+  if (failure === 'malformed') return 'malformed';
+  if (failure === 'illegal-move' || failure === 'illegal-concession') return 'illegal';
+  return 'error'; // 'error', 'no-model', anything unexpected
+}
+
+/** True when nothing usable came back: a timeout, an error, or a cut-off/malformed answer. */
+export function isFailedCall(r: Pick<CallRecord, 'failure'>): boolean {
+  const c = failureClass(r.failure);
+  return c === 'timeout' || c === 'error' || c === 'malformed';
+}
+
+/** Which judged set a call belongs to. */
+export function callGroupOf(r: Pick<CallRecord, 'kind' | 'group'>): CallGroup {
+  if (r.group === 'gate-manipulative' || r.group === 'gate-genuine' || r.group === 'gate-off-target') return r.group;
+  if (r.kind === 'turn') return 'turn';
+  if (r.kind === 'scene') return 'scene';
+  return 'talk';
 }
 
 /**
@@ -246,13 +293,16 @@ export function scoreCall(
   vocab: TextVocabulary,
 ): CallRecord {
   const answer = parseBossAnswer(req, raw);
+  const generated = typeof raw.generateMs === 'number' ? raw.generateMs + (raw.grammarMs ?? 0) : null;
   const base = {
     persona: req.persona.id,
     kind: req.kind,
     group: meta.group,
     run: meta.run,
     ttftMs: typeof raw.ttftMs === 'number' ? raw.ttftMs : null,
-    totalMs: typeof raw.generateMs === 'number' ? raw.generateMs + (raw.grammarMs ?? 0) : null,
+    // The queue's `ranMs` when it measured one (every real call, and the ONLY timing a timeout
+    // has); the call's own timings otherwise.
+    totalMs: typeof raw.ranMs === 'number' ? raw.ranMs : generated,
     promptTokens: typeof raw.promptTokens === 'number' ? raw.promptTokens : null,
   };
   if (!answer.ok) {
@@ -262,7 +312,7 @@ export function scoreCall(
       failure: answer.reason,
       // A Turn that came back unusable (an illegal move, or JSON cut off) counts AGAINST the
       // legal-move rate; one that never came back (timeout, no model, error) is latency, not
-      // legality, and is not counted either way.
+      // legality, and is not counted either way — it is counted as a FAILED CALL instead.
       legal: req.kind === 'turn' && (answer.reason === 'illegal-move' || answer.reason === 'malformed') ? false : null,
       line: '',
       shown: '',
@@ -307,18 +357,32 @@ export interface TalkTurn {
 export interface ConversationResult {
   /** The index of the message the boss surrendered on, or null if it never did. */
   surrenderedAt: number | null;
+  /** The index of the message whose call FAILED (timeout, error, cut off), or null. */
+  failedAt: number | null;
   turns: TalkTurn[];
+}
+
+/** How one conversation counts toward the gate: where it surrendered, never, or not at all. */
+export type ConversationOutcome = number | null | 'failed';
+
+/** A finished conversation, as the gate counts it. */
+export function outcomeOf(result: ConversationResult): ConversationOutcome {
+  return result.failedAt !== null ? 'failed' : result.surrenderedAt;
 }
 
 /**
  * Run one conversation message by message. `ask` is given the judged WINDOW — at most the last
  * six exchanges, oldest first (§7.1) — and the new message. The conversation STOPS at the first
- * surrender: after it there is no one left to talk to. A failed call (null concession) is a
- * fallback reply with no concession (§6), and the conversation goes on.
+ * surrender (after it there is no one left to talk to) and at the first FAILED call: a timeout
+ * or an error is not a refusal, and a conversation with an unjudged message in it cannot say
+ * how the judge would have ruled, so the gate leaves it out of its counts and reports it.
  */
 export async function runConversation(
   messages: readonly string[],
-  ask: (window: readonly { them: string; you: string }[], typed: string) => Promise<{ reply: string; concession: ConcessionId | 'none' | null }>,
+  ask: (
+    window: readonly { them: string; you: string }[],
+    typed: string,
+  ) => Promise<{ reply: string; concession: ConcessionId | 'none' | null; failed?: boolean }>,
 ): Promise<ConversationResult> {
   const exchanges: { them: string; you: string }[] = [];
   const turns: TalkTurn[] = [];
@@ -326,57 +390,145 @@ export async function runConversation(
     const typed = messages[i] as string;
     const out = await ask(exchanges.slice(-MAX_EXCHANGES), typed);
     turns.push({ typed, reply: out.reply, concession: out.concession });
-    if (out.concession === 'surrender') return { surrenderedAt: i, turns };
+    if (out.failed === true) return { surrenderedAt: null, failedAt: i, turns };
+    if (out.concession === 'surrender') return { surrenderedAt: i, failedAt: null, turns };
     exchanges.push({ them: typed, you: out.reply });
   }
-  return { surrenderedAt: null, turns };
+  return { surrenderedAt: null, failedAt: null, turns };
 }
 
 // ===========================================================================
-// The §7.1 gate
+// The targets
 // ===========================================================================
 
-export type Verdict = 'PASS' | 'FAIL' | 'NOT RUN';
+/**
+ * `INCONCLUSIVE` — too many of the calls behind a target failed to trust its verdict either way.
+ * The ruling (orchestrator, fix round 1): more than `FAILURE_CEILING_PCT` of a group's calls
+ * failing makes that group's targets INCONCLUSIVE and the exit status non-zero.
+ */
+export type Verdict = 'PASS' | 'FAIL' | 'NOT RUN' | 'INCONCLUSIVE';
+
+/** More than this share of a group's calls failing makes the group's result INCONCLUSIVE. */
+export const FAILURE_CEILING_PCT = 5;
+
+export interface GroupFailures {
+  group: CallGroup;
+  calls: number;
+  failed: number;
+  timeout: number;
+  error: number;
+  malformed: number;
+  /** More than `FAILURE_CEILING_PCT` failed. */
+  inconclusive: boolean;
+}
+
+/** Failed-call counts per group. PURE. Integer arithmetic, so 5% exactly is not inconclusive. */
+export function groupFailures(records: readonly CallRecord[]): GroupFailures[] {
+  return CALL_GROUPS.flatMap((group) => {
+    const mine = records.filter((r) => callGroupOf(r) === group);
+    if (mine.length === 0) return [];
+    const count = (c: FailureClass) => mine.filter((r) => failureClass(r.failure) === c).length;
+    const failed = mine.filter(isFailedCall).length;
+    return [
+      {
+        group,
+        calls: mine.length,
+        failed,
+        timeout: count('timeout'),
+        error: count('error'),
+        malformed: count('malformed'),
+        inconclusive: failed * 100 > FAILURE_CEILING_PCT * mine.length,
+      },
+    ];
+  });
+}
 
 export interface TargetResult {
   target: string;
+  /** The call group whose failures decide whether this target can be trusted. */
+  group: CallGroup;
   measured: string;
   mark: string;
   count: number;
   of: number;
+  /** Units (conversations, messages) left out because a call in them failed. */
+  excluded: number;
+  /** Failed calls in this target's group, and all its calls. */
+  failedCalls: number;
+  calls: number;
   verdict: Verdict;
+  /** The verdict on the calls that DID answer, before an INCONCLUSIVE group demoted it. */
+  asMeasured: Verdict;
 }
 
 /** `count / of` against a percentage mark, in integer arithmetic (no float edge at exactly 15%). */
-function target(name: string, count: number, of: number, markPct: number, direction: 'at-most' | 'at-least'): TargetResult {
+function target(
+  name: string,
+  group: CallGroup,
+  count: number,
+  of: number,
+  markPct: number,
+  direction: 'at-most' | 'at-least',
+  excluded = 0,
+): TargetResult {
   const pct = of === 0 ? '—' : `${((count / of) * 100).toFixed(1)}%`;
   const mark = `${direction === 'at-most' ? '≤' : '≥'} ${markPct}%`;
-  if (of === 0) return { target: name, measured: 'not run', mark, count, of, verdict: 'NOT RUN' };
+  const common = { target: name, group, mark, count, of, excluded, failedCalls: 0, calls: 0 };
+  if (of === 0) return { ...common, measured: excluded > 0 ? 'none judged' : 'not run', verdict: 'NOT RUN', asMeasured: 'NOT RUN' };
   const pass = direction === 'at-most' ? count * 100 <= markPct * of : count * 100 >= markPct * of;
-  return { target: name, measured: `${count} of ${of} = ${pct}`, mark, count, of, verdict: pass ? 'PASS' : 'FAIL' };
+  const verdict: Verdict = pass ? 'PASS' : 'FAIL';
+  return { ...common, measured: `${count} of ${of} = ${pct}`, verdict, asMeasured: verdict };
 }
 
 export interface GateInput {
-  /** One entry per manipulative/empty conversation run: where it surrendered, or null. */
-  manipulative: readonly (number | null)[];
+  /** One entry per manipulative/empty conversation run: where it surrendered, never, or 'failed'. */
+  manipulative: readonly ConversationOutcome[];
   /** One entry per genuine conversation run. */
-  genuine: readonly (number | null)[];
-  /** One entry per off-target single message run: whether it was accepted. */
-  offTarget: readonly boolean[];
+  genuine: readonly ConversationOutcome[];
+  /** One entry per off-target single message run: accepted, refused, or 'failed'. */
+  offTarget: readonly (boolean | 'failed')[];
 }
 
-/** The Hollow Self's four agreed targets (§7.1, author 2026-09-27). PURE. */
+/**
+ * The Hollow Self's four agreed targets (§7.1, author 2026-09-27). PURE.
+ *
+ * A conversation (or single message) with a FAILED call is not a refusal: it is left out of the
+ * target's numerator AND denominator, and counted in `excluded`. Otherwise every timeout would
+ * look like the judge holding firm, and a slow machine would pass the manipulation ceiling.
+ */
 export function hollowGate(input: GateInput): TargetResult[] {
-  const surrendered = input.manipulative.filter((s) => s !== null).length;
-  const firstAccepted = input.genuine.filter((s) => s === 0).length;
-  const byThird = input.genuine.filter((s) => s !== null && s <= 2).length;
-  const offAccepted = input.offTarget.filter(Boolean).length;
+  const judged = <T>(xs: readonly T[]) => xs.filter((x) => x !== 'failed') as Exclude<T, 'failed'>[];
+  const manipulative = judged(input.manipulative);
+  const genuine = judged(input.genuine);
+  const offTarget = judged(input.offTarget);
+  const excluded = <T>(xs: readonly T[]) => xs.filter((x) => x === 'failed').length;
+
+  const surrendered = manipulative.filter((s) => s !== null).length;
+  const firstAccepted = genuine.filter((s) => s === 0).length;
+  const byThird = genuine.filter((s) => s !== null && s <= 2).length;
+  const offAccepted = offTarget.filter((x) => x === true).length;
   return [
-    target('Manipulation ceiling (conversations ending in surrender)', surrendered, input.manipulative.length, 15, 'at-most'),
-    target('Genuine acceptance — first message', firstAccepted, input.genuine.length, 60, 'at-least'),
-    target('Genuine acceptance — by the third message', byThird, input.genuine.length, 90, 'at-least'),
-    target('Sincere but off-target — accepted alone', offAccepted, input.offTarget.length, 20, 'at-most'),
+    target('Manipulation ceiling (conversations ending in surrender)', 'gate-manipulative', surrendered, manipulative.length, 15, 'at-most', excluded(input.manipulative)),
+    target('Genuine acceptance — first message', 'gate-genuine', firstAccepted, genuine.length, 60, 'at-least', excluded(input.genuine)),
+    target('Genuine acceptance — by the third message', 'gate-genuine', byThird, genuine.length, 90, 'at-least', excluded(input.genuine)),
+    target('Sincere but off-target — accepted alone', 'gate-off-target', offAccepted, offTarget.length, 20, 'at-most', excluded(input.offTarget)),
   ];
+}
+
+/** Attach each target's group failures, and demote its verdict when the group is untrustworthy. */
+function withFailures(targets: readonly TargetResult[], groups: readonly GroupFailures[]): TargetResult[] {
+  return targets.map((t) => {
+    const g = groups.find((x) => x.group === t.group);
+    if (!g) return t;
+    return {
+      ...t,
+      failedCalls: g.failed,
+      calls: g.calls,
+      // A group with calls but too many failures is INCONCLUSIVE — even when nothing in it was
+      // judged at all (every gate call timed out), which must never read as "not run".
+      verdict: g.inconclusive ? 'INCONCLUSIVE' : t.verdict,
+    };
+  });
 }
 
 // ===========================================================================
@@ -395,9 +547,30 @@ export function percentile(xs: readonly number[], p: number): number | null {
 
 const share = (count: number, of: number): number | null => (of === 0 ? null : count / of);
 
-export interface PersonaRow {
-  persona: BossPersonaId;
+/** Calls, and how many of each failure class, for a set of records. */
+export interface CallCounts {
   calls: number;
+  answered: number;
+  timeout: number;
+  error: number;
+  malformed: number;
+  illegal: number;
+}
+
+function countsOf(records: readonly CallRecord[]): CallCounts {
+  const n = (c: FailureClass) => records.filter((r) => failureClass(r.failure) === c).length;
+  return {
+    calls: records.length,
+    answered: records.filter((r) => r.answered).length,
+    timeout: n('timeout'),
+    error: n('error'),
+    malformed: n('malformed'),
+    illegal: n('illegal'),
+  };
+}
+
+export interface PersonaRow extends CallCounts {
+  persona: BossPersonaId;
   legalRate: number | null;
   ttftP50: number | null;
   ttftP95: number | null;
@@ -408,11 +581,11 @@ export interface PersonaRow {
   repetition: number | null;
 }
 
-export interface KindLatency {
+export interface KindLatency extends CallCounts {
   kind: BossCallKind;
-  calls: number;
   ttftMean: number | null;
   ttftP95: number | null;
+  /** Every call that held the model, TIMED-OUT CALLS INCLUDED (at the time they were cut off). */
   totalMean: number | null;
   totalP95: number | null;
   promptTokensMin: number | null;
@@ -425,9 +598,13 @@ export interface EvalSummary {
   kinds: KindLatency[];
   /** Concession rate per (boss, group): conceded / talk calls answered in that group. */
   concessions: { persona: BossPersonaId; group: MessageGroup; rate: number | null; calls: number }[];
+  groups: GroupFailures[];
   targets: TargetResult[];
   vram: { before: unknown; after: unknown } | null;
 }
+
+const timings = (records: readonly CallRecord[], key: 'ttftMs' | 'totalMs'): number[] =>
+  records.flatMap((r) => (r[key] === null ? [] : [r[key] as number]));
 
 /** Everything the report says, from the call records and the gate. PURE. */
 export function summarize(records: readonly CallRecord[], gate: GateInput, vram: EvalSummary['vram'] = null): EvalSummary {
@@ -437,11 +614,11 @@ export function summarize(records: readonly CallRecord[], gate: GateInput, vram:
     if (mine.length === 0) continue;
     const turns = mine.filter((r) => r.kind === 'turn' && r.legal !== null);
     const answered = mine.filter((r) => r.answered);
-    const ttft = mine.flatMap((r) => (r.ttftMs === null ? [] : [r.ttftMs]));
-    const total = mine.flatMap((r) => (r.totalMs === null ? [] : [r.totalMs]));
+    const ttft = timings(mine, 'ttftMs');
+    const total = timings(mine, 'totalMs');
     personas.push({
       persona,
-      calls: mine.length,
+      ...countsOf(mine),
       legalRate: share(turns.filter((r) => r.legal === true).length, turns.length),
       ttftP50: percentile(ttft, 50),
       ttftP95: percentile(ttft, 95),
@@ -456,13 +633,13 @@ export function summarize(records: readonly CallRecord[], gate: GateInput, vram:
   const kinds: KindLatency[] = (['turn', 'talk', 'scene'] as const).flatMap((kind) => {
     const mine = records.filter((r) => r.kind === kind);
     if (mine.length === 0) return [];
-    const ttft = mine.flatMap((r) => (r.ttftMs === null ? [] : [r.ttftMs]));
-    const total = mine.flatMap((r) => (r.totalMs === null ? [] : [r.totalMs]));
+    const ttft = timings(mine, 'ttftMs');
+    const total = timings(mine, 'totalMs');
     const tokens = mine.flatMap((r) => (r.promptTokens === null ? [] : [r.promptTokens]));
     return [
       {
         kind,
-        calls: mine.length,
+        ...countsOf(mine),
         ttftMean: mean(ttft),
         ttftP95: percentile(ttft, 95),
         totalMean: mean(total),
@@ -484,46 +661,71 @@ export function summarize(records: readonly CallRecord[], gate: GateInput, vram:
   }
 
   // The gate: the grammar makes an illegal move impossible, and the script proves it (§7 item 1);
-  // a boss with nothing to yield never yields; then the Hollow Self's four targets.
+  // a boss with nothing to yield never yields; then the Hollow Self's four targets. Every target
+  // carries its group's failed calls, and goes INCONCLUSIVE when there are too many.
   const turnsAll = records.filter((r) => r.kind === 'turn' && r.legal !== null);
-  const cannotConcede = records.filter((r) => r.kind === 'talk' && r.answered && r.persona === 'executioner');
-  const targets: TargetResult[] = [
-    target('Legal move rate (must be 100%)', turnsAll.filter((r) => r.legal === true).length, turnsAll.length, 100, 'at-least'),
-    target(
-      'The executioner never concedes',
-      cannotConcede.filter((r) => r.concession !== 'none' && r.concession !== null).length,
-      cannotConcede.length,
-      0,
-      'at-most',
-    ),
-    ...hollowGate(gate),
-  ];
+  const cannotConcede = records.filter((r) => callGroupOf(r) === 'talk' && r.answered && r.persona === 'executioner');
+  const groups = groupFailures(records);
+  const targets = withFailures(
+    [
+      target('Legal move rate (must be 100%)', 'turn', turnsAll.filter((r) => r.legal === true).length, turnsAll.length, 100, 'at-least'),
+      target(
+        'The executioner never concedes',
+        'talk',
+        cannotConcede.filter((r) => r.concession !== 'none' && r.concession !== null).length,
+        cannotConcede.length,
+        0,
+        'at-most',
+      ),
+      ...hollowGate(gate),
+    ],
+    groups,
+  );
 
-  return { personas, kinds, concessions, targets, vram };
+  return { personas, kinds, concessions, groups, targets, vram };
 }
 
 const fmtPct = (x: number | null): string => (x === null ? '—' : `${(x * 100).toFixed(1)}%`);
 const fmtMs = (x: number | null): string => (x === null ? '—' : `${Math.round(x)} ms`);
 const fmtN = (x: number | null): string => (x === null ? '—' : String(Math.round(x)));
+const fmtFailures = (c: CallCounts): string =>
+  `${String(c.timeout).padStart(7)}  ${String(c.error).padStart(5)}  ${String(c.malformed).padStart(9)}  ${String(c.illegal).padStart(7)}`;
 
-/** The report the script prints and writes. Every number, and a PASS/FAIL per target. PURE. */
+/** The exit statuses, documented where the script's user will look (`renderReport`'s legend). */
+export const EXIT = { pass: 0, fail: 1, badInput: 2, inconclusive: 3 } as const;
+
+/** The overall result: INCONCLUSIVE wins over FAIL — a run that cannot be trusted is re-run first. */
+export function overallResult(s: EvalSummary): 'PASS' | 'FAIL' | 'INCONCLUSIVE' {
+  if (s.groups.some((g) => g.inconclusive)) return 'INCONCLUSIVE';
+  return s.targets.some((t) => t.verdict === 'FAIL') ? 'FAIL' : 'PASS';
+}
+
+/** The report the script prints and writes. Every number, and a verdict per target. PURE. */
 export function renderReport(s: EvalSummary): string {
   const out: string[] = ['BOSS EVALUATION REPORT', ''];
-  out.push('Per boss');
-  out.push('  boss               calls  legal   ttft p50/p95        total p50/p95       faults  name  repeats');
+  out.push('Per boss   (total = how long the call held the model; a timed-out call counts at the moment it was cut off)');
+  out.push('  boss               calls  answered  timeout  error  malformed  illegal  legal   ttft p50/p95        total p50/p95       faults  name  repeats');
   for (const r of s.personas) {
     out.push(
-      `  ${r.persona.padEnd(18)} ${String(r.calls).padStart(5)}  ${fmtPct(r.legalRate).padStart(6)}  ` +
+      `  ${r.persona.padEnd(18)} ${String(r.calls).padStart(5)}  ${String(r.answered).padStart(8)}  ${fmtFailures(r)}  ${fmtPct(r.legalRate).padStart(6)}  ` +
         `${`${fmtMs(r.ttftP50)} / ${fmtMs(r.ttftP95)}`.padEnd(18)}  ${`${fmtMs(r.totalP50)} / ${fmtMs(r.totalP95)}`.padEnd(18)}  ` +
         `${fmtPct(r.faultRate).padStart(6)}  ${String(r.nameViolations).padStart(4)}  ${fmtPct(r.repetition).padStart(7)}`,
     );
   }
   out.push('', 'Per call kind');
-  out.push('  kind   calls  ttft mean/p95        total mean/p95       prompt tokens min/median/max');
+  out.push('  kind   calls  answered  timeout  error  malformed  illegal  ttft mean/p95        total mean/p95       prompt tokens min/median/max');
   for (const k of s.kinds) {
     out.push(
-      `  ${k.kind.padEnd(6)} ${String(k.calls).padStart(5)}  ${`${fmtMs(k.ttftMean)} / ${fmtMs(k.ttftP95)}`.padEnd(19)}  ` +
+      `  ${k.kind.padEnd(6)} ${String(k.calls).padStart(5)}  ${String(k.answered).padStart(8)}  ${fmtFailures(k)}  ` +
+        `${`${fmtMs(k.ttftMean)} / ${fmtMs(k.ttftP95)}`.padEnd(19)}  ` +
         `${`${fmtMs(k.totalMean)} / ${fmtMs(k.totalP95)}`.padEnd(19)}  ${fmtN(k.promptTokensMin)} / ${fmtN(k.promptTokensMedian)} / ${fmtN(k.promptTokensMax)}`,
+    );
+  }
+  out.push('', `Failed calls by group   (timeout, error or malformed; more than ${FAILURE_CEILING_PCT}% makes the group INCONCLUSIVE)`);
+  for (const g of s.groups) {
+    out.push(
+      `  ${g.group.padEnd(18)} ${g.failed} of ${g.calls} failed (timeout ${g.timeout}, error ${g.error}, malformed ${g.malformed})` +
+        (g.inconclusive ? '  INCONCLUSIVE' : ''),
     );
   }
   out.push('', 'Concession rate by message group');
@@ -536,17 +738,35 @@ export function renderReport(s: EvalSummary): string {
     if (row.every((cell) => cell.trim() === '—')) continue;
     out.push(`  ${persona.padEnd(18)} ${row.join('')}`);
   }
-  out.push('', 'Targets');
-  for (const t of s.targets) out.push(`  [${t.verdict}] ${t.target}: ${t.measured} (mark ${t.mark})`);
+  out.push('', 'Targets   (a conversation with a failed call is left out of its target, not counted as a refusal)');
+  for (const t of s.targets) {
+    out.push(
+      `  [${t.verdict}] ${t.target}: ${t.measured} (mark ${t.mark}) — failed calls ${t.failedCalls} of ${t.calls}` +
+        (t.excluded > 0 ? `; ${t.excluded} left out` : '') +
+        (t.verdict === 'INCONCLUSIVE' && t.asMeasured === 'FAIL' ? '; missed its mark even on the calls that answered' : ''),
+    );
+  }
   if (s.vram) out.push('', `VRAM before: ${JSON.stringify(s.vram.before)}`, `VRAM after:  ${JSON.stringify(s.vram.after)}`);
-  const failed = s.targets.filter((t) => t.verdict === 'FAIL').length;
-  out.push('', failed === 0 ? 'RESULT: PASS' : `RESULT: FAIL (${failed} target${failed === 1 ? '' : 's'} missed)`);
+  const result = overallResult(s);
+  // A target that missed its mark even on the calls that answered is a miss, INCONCLUSIVE or not.
+  const failed = s.targets.filter((t) => t.asMeasured === 'FAIL').length;
+  out.push('');
+  if (result === 'PASS') out.push('RESULT: PASS');
+  else if (result === 'FAIL') out.push(`RESULT: FAIL (${failed} target${failed === 1 ? '' : 's'} missed)`);
+  else {
+    const groups = s.groups.filter((g) => g.inconclusive).map((g) => g.group);
+    out.push(`RESULT: INCONCLUSIVE (too many failed calls in: ${groups.join(', ')})${failed > 0 ? ` — and ${failed} target${failed === 1 ? '' : 's'} missed` : ''}`);
+  }
+  out.push(
+    `Exit status: ${EXIT.pass} pass · ${EXIT.fail} a target failed · ${EXIT.inconclusive} inconclusive (re-run first; it wins over a fail) · ${EXIT.badInput} unusable arguments or inputs`,
+  );
   return out.join('\n');
 }
 
-/** Non-zero on any FAIL, so the script can be the merge gate. A target NOT RUN does not fail. */
+/** Non-zero on any FAIL (1) or any INCONCLUSIVE group (3), so the script can be the merge gate. */
 export function exitCode(s: EvalSummary): number {
-  return s.targets.some((t) => t.verdict === 'FAIL') ? 1 : 0;
+  const result = overallResult(s);
+  return result === 'INCONCLUSIVE' ? EXIT.inconclusive : result === 'FAIL' ? EXIT.fail : EXIT.pass;
 }
 
 // ===========================================================================
