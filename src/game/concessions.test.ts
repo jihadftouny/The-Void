@@ -15,6 +15,7 @@ import {
   CONCESSIONS,
   availableConcessions,
   generateBoss,
+  grantConcession,
   type BossState,
   type Concession,
 } from './boss.ts';
@@ -217,6 +218,56 @@ describe('weakness — two dice for the rest of the fight (AC-16)', () => {
   });
 });
 
+// ------- fix round 1: a concession granted BETWEEN the player's two actions ---------------------
+
+describe('a concession granted during the player’s extra-action pause reaches the second action (fix round 1)', () => {
+  // The player's gauge sits at 0.9 with a DEX-12 rate of +0.1, so the first Fight crosses +1.0 and
+  // the round PAUSES for a second action. A concession is granted in that pause; the second action
+  // must roll under it. Every d20 is scripted: face(f, 20) is exactly natural f.
+  function extraPaused(boss: BossState, extra: Partial<BattleState> = {}): BattleState {
+    const stats = { ...STATS, DEX: 12 };
+    const player = { ...makePlayer(), stats, mods: computeStatMods(stats) };
+    const battle: BattleState = { ...createBattle(player, makeBossEnemy(boss.bossId, 2), 2, { boss }), tempo: { player: 9, enemy: 0 }, ...extra };
+    // First action: natural 2 misses whatever the roll mode, and a miss draws no damage die.
+    const first = resolveRound(battle, 'fight', scriptedRng([face(2, 20), face(2, 20)]));
+    expect(first.state.extraAction, 'the round did not pause for an extra action').toBe(true);
+    return first.state;
+  }
+  const playerRoll = (events: readonly GameEvent[]) => {
+    const a = events.find((e) => e.kind === 'attack' && e.subject === 'player');
+    return a && a.kind === 'attack' ? a.roll : undefined;
+  };
+
+  it('weakness: the second action rolls TWO dice (faces 3 and 18, natural 18)', () => {
+    const paused = extraPaused({ bossId: 'kingpin', round: 0, minions: 0 });
+    const granted = grantConcession(paused, 'weakness').battle;
+    const second = resolveRound(granted, 'fight', scriptedRng([face(3, 20), face(18, 20), 0.5, 0.5]));
+    expect(playerRoll(second.events)).toMatchObject({ faces: [3, 18], natural: 18, advDis: 1 });
+  });
+
+  it('the Reflection’s drop_mechanic lifts its adaptation for the second action: ONE die, advDis 0', () => {
+    const boss: BossState = { bossId: 'reflection', round: 3, adapted: true, actionTally: { fight: 3 } };
+    const paused = extraPaused(boss, { playerAdvantage: -1 });
+    const granted = grantConcession(paused, 'drop_mechanic').battle;
+    expect(granted.playerAdvantage).toBeUndefined();
+    const second = resolveRound(granted, 'fight', scriptedRng([face(15, 20), 0.5, 0.5]));
+    expect(playerRoll(second.events)).toMatchObject({ faces: [15], natural: 15, advDis: 0 });
+  });
+
+  it('through step, as the probe played it: fight → the pause → weakness → fight rolls two faces', () => {
+    const stats = { ...STATS, DEX: 12 };
+    const player = { ...makePlayer(), stats, mods: computeStatMods(stats) };
+    const boss: BossState = { bossId: 'kingpin', round: 0, minions: 0 };
+    const battle: BattleState = { ...createBattle(player, makeBossEnemy('kingpin', 2), 2, { boss }), tempo: { player: 9, enemy: 0 } };
+    const p = step(gameOf(battle), FIGHT);
+    expect(battleOf(p.state).extraAction).toBe(true);
+    expect(p.awaiting).toBe('battle-action');
+    const g = step(p.state, concede('weakness'));
+    const next = step(g.state, FIGHT);
+    expect(playerRoll(next.events)?.faces).toHaveLength(2);
+  });
+});
+
 // ------- AC-16: drop_mechanic ------------------------------------------------------------
 
 describe('drop_mechanic — each boss gives up its own mechanic (AC-16)', () => {
@@ -290,6 +341,8 @@ describe('drop_mechanic — each boss gives up its own mechanic (AC-16)', () => 
     expect(battleOf(r.state).enemy).toMatchObject({ maxHp: 18, hp: 5 });
     const low = step(bossGame(boss, 3, makeBossEnemy('sin', 3, { hp: 5, maxHp: 12 })), concede('drop_mechanic'));
     expect(battleOf(low.state).enemy.hp).toBeGreaterThanOrEqual(1);
+    // 12 max − a 12 bonus would be 0: the shed never leaves a boss with no maximum at all.
+    expect(battleOf(low.state).enemy.maxHp).toBe(1);
   });
 });
 

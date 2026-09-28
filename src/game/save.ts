@@ -441,6 +441,24 @@ function upgrade9to10(raw: unknown): unknown {
   if (!isPlainObject(raw)) return raw;
   const next: Record<string, unknown> = { ...raw };
   if (!Array.isArray(next.deeds)) next.deeds = [];
+  // Fix round 1: a battle paused for the player's extra action now stores only the round's TICK
+  // adv/dis (`BattleState.extraActionAdvDis`), not the tick combined with the standing modifier.
+  // A v9 pause stored the combination, so the tick is recovered: the one value that, combined
+  // with the standing modifier, gives what was stored (v9 had no `weakness`, so the standing
+  // modifier is `playerAdvantage` alone). The second action then rolls exactly as v9 would have.
+  if (isPlainObject(next.phase) && isPlainObject(next.phase.battle)) {
+    const battle = next.phase.battle as Record<string, unknown>;
+    if (battle.extraAction === true) {
+      // An absent field was a combined 0 (only non-zero values were written).
+      const combined = battle.extraActionAdvDis === 1 || battle.extraActionAdvDis === -1 ? battle.extraActionAdvDis : 0;
+      const standing = battle.playerAdvantage === 1 || battle.playerAdvantage === -1 ? battle.playerAdvantage : 0;
+      const tick = combined === standing ? 0 : Math.max(-1, Math.min(1, combined - standing));
+      const migrated: Record<string, unknown> = { ...battle };
+      if (tick === 0) delete migrated.extraActionAdvDis;
+      else migrated.extraActionAdvDis = tick;
+      next.phase = { ...next.phase, battle: migrated };
+    }
+  }
   next.version = 10;
   return next;
 }

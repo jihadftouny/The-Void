@@ -106,9 +106,17 @@ export interface BattleState {
    */
   extraAction?: true;
   /**
-   * The paused round's own advantage/disadvantage (the standing modifier combined with the
-   * player's tick — e.g. a fracture's −1), so the SECOND action rolls exactly as the first did.
-   * Present only while paused, and only when non-zero.
+   * The paused round's TICK adv/dis — what the player's own conditions produced this round (e.g.
+   * a fracture's −1) — so the SECOND action rolls under the same tick as the first. Present only
+   * while paused, and only when non-zero.
+   *
+   * PLAN.md #11 fix round 1: this used to hold the tick ALREADY COMBINED with the standing
+   * modifiers, frozen at the first action. A boss concession granted between the two actions
+   * (`weakness`, or a Reflection's `drop_mechanic` lifting its adaptation) then never reached the
+   * second one, and a clamped combination cannot be taken apart again. Only the tick is stored
+   * now; the standing modifiers are read fresh for each action (`standingAdvDis`). A non-boss
+   * battle's standing modifier cannot change between its two actions, so its rolls are
+   * unchanged draw for draw.
    */
   extraActionAdvDis?: -1 | 1;
   /**
@@ -711,6 +719,16 @@ function newContext(state: BattleState): RoundContext {
   return ctx;
 }
 
+/**
+ * The player's STANDING adv/dis for this battle — the battle's own modifier (an ambush's +1, a
+ * Reflection's adaptation −1) combined with a `weakness` concession's +1 (PLAN.md #11; the two
+ * cancel against each other). Read fresh for every action, so a concession granted mid-round
+ * applies at once.
+ */
+function standingAdvDis(state: BattleState): -1 | 0 | 1 {
+  return combineAdvDis(state.playerAdvantage ?? 0, state.boss?.weaknessRevealed ? 1 : 0);
+}
+
 /** A finished step: the settled state, the events, a status, and a completed round. */
 function done(state: BattleState, ctx: RoundContext, status: RoundStatus): RoundResult {
   return { state: settle(state, ctx, null), events: ctx.events, status, resolved: true, roundComplete: true };
@@ -746,8 +764,9 @@ function victory(state: BattleState, ctx: RoundContext, rng: Rng): RoundResult {
  *     second, freely chosen input — status `ongoing`, `resolved: true`, `roundComplete: false`,
  *     `state.extraAction: true`. The enemy has not acted.
  * The SECOND action of a paused round (`state.extraAction` set):
- *  3'. PLAYER ACTION exactly as step 3 — no tick, no gauge, no illusion roll — at the round's
- *     own advantage (`extraActionAdvDis`), and the pause clears.
+ *  3'. PLAYER ACTION exactly as step 3 — no tick, no gauge, no illusion roll — under the round's
+ *     own tick (`extraActionAdvDis`) combined with the standing modifiers read afresh (a boss
+ *     concession granted in between counts), and the pause clears.
  * Then, if the fight is still on:
  *  4. THE ENEMY'S TURN — `resolveEnemyTurn`.
  *  5. `ongoing`, `roundComplete: true`.
@@ -764,6 +783,7 @@ function playRound(
 
   let actions: 0 | 1 | 2 = 1;
   let advDis: -1 | 0 | 1;
+  let tickAdvDis: -1 | 0 | 1;
   if (!second) {
     // 0. The passive Wisdom roll against an illusion.
     if (ctx.enemy.illusory) {
@@ -790,10 +810,8 @@ function playRound(
     ctx.events.push(...ptc.events);
     syncHp(ctx, 'player');
     if (playerDownAfterGate(ctx)) return defeat(state, ctx);
-    // PLAN.md #11: a `weakness` concession is a standing +1 for the rest of the fight, combined
-    // with the battle's own standing modifier (they cancel against a Reflection's adaptation).
-    const standing = combineAdvDis(state.playerAdvantage ?? 0, state.boss?.weaknessRevealed ? 1 : 0);
-    advDis = combineAdvDis(standing, ptc.advDisOverride);
+    tickAdvDis = ptc.advDisOverride;
+    advDis = combineAdvDis(standingAdvDis(state), tickAdvDis);
     // Empty Vessel: restore charge(s) at the player's turn (capped at max). No-op at 0.
     if (ctx.mods.chargePerTurn > 0) {
       ctx.player = {
@@ -810,7 +828,10 @@ function playRound(
       ctx.events.push({ kind: 'player-unable-to-act', conditionType: skipCause(ptc.events) });
     }
   } else {
-    advDis = state.extraActionAdvDis ?? 0;
+    // The paused round's second action: the round's own tick, with the standing modifiers read
+    // AGAIN — a concession granted between the two actions reaches this one (fix round 1).
+    tickAdvDis = state.extraActionAdvDis ?? 0;
+    advDis = combineAdvDis(standingAdvDis(state), tickAdvDis);
   }
 
   // 3. The player's action (the first of two, the only one, or the paused round's second).
@@ -823,7 +844,7 @@ function playRound(
     if (actions === 2 && !second) {
       ctx.events.push({ kind: 'tempo-extra-action', subject: 'player' });
       return {
-        state: settle(state, ctx, { advDis }),
+        state: settle(state, ctx, { advDis: tickAdvDis }),
         events: ctx.events,
         status: 'ongoing',
         resolved: true,

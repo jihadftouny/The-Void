@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import floorsData from '../data/floors.json';
 import { step, createGame, type GameState, type StepResult } from './game.ts';
-import { createBattle, type BattleState } from './battle.ts';
+import { createBattle, resolveRound, type BattleState } from './battle.ts';
 import {
   DEED_CAP,
   deedPlaceName,
@@ -20,13 +20,27 @@ import { createPlayer, type Player } from './player.ts';
 import { generateEnemy, type Enemy } from './enemy.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createKarma } from './karma.ts';
-import { mulberry32 } from './rng.ts';
+import { mulberry32, type Rng } from './rng.ts';
 import { describeCost, describeReward, type SacrificeDeal } from './deal.ts';
 import { SAVE_VERSION, encodeSave, decodeSave } from './save.ts';
 import { BOSSES, type BossState } from './boss.ts';
 import { heuristicPolicy, gearUpAtHub } from './sim.ts';
 
 // ------- Fixtures ------------------------------------------------------------
+
+/** A scripted rng: the given draws in order, then it throws. */
+function scripted(values: number[]): Rng {
+  let i = 0;
+  return () => {
+    if (i >= values.length) throw new Error('scripted rng exhausted');
+    return values[i++]!;
+  };
+}
+
+/** A plain player with every stat at 10 (a +0 to-hit from stats), for the save-migration case. */
+function makePlayerForSave(): Player {
+  return createPlayer({ name: 'Saved', classId: 'Enforcer', stats: { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 } });
+}
 
 function hero(overrides: Partial<Player> = {}): Player {
   return {
@@ -305,6 +319,35 @@ describe('save version 10 carries the record (AC-14)', () => {
       { ...base, deeds: [null] },
     ];
     for (const b of bad) expect(decodeSave(JSON.stringify(b)), JSON.stringify(b.deeds)).toBeNull();
+  });
+
+  it('fix round 1: a v9 save paused for the player’s extra action keeps its second roll exactly', () => {
+    // v9 stored the round's adv/dis ALREADY COMBINED with the battle's standing modifier; v10
+    // stores the tick alone and recombines. The migration recovers the tick, so the second action
+    // rolls as v9 would have. Hand cases, with an ambush's standing +1:
+    //   stored +1 (tick 0 or +1)            → tick 0, recombined +1 (two dice, higher)
+    //   stored nothing, i.e. 0 (tick −1)    → tick −1, recombined 0 (one die)
+    const player = makePlayerForSave();
+    const enemy = { ...generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(3)), hp: 30, maxHp: 30, armorClass: 10 };
+    const cases: [Record<string, unknown>, number, number][] = [
+      [{ extraActionAdvDis: 1 }, 1, 2],
+      [{}, 0, 1],
+    ];
+    for (const [stored, expectAdv, faces] of cases) {
+      const battle: BattleState = { ...createBattle(player, enemy, 1, { openingAdvantage: 1 }), extraAction: true };
+      const v10: GameState = { ...createGame(11), player, phase: { kind: 'battle', battle, started: true, final: false } };
+      const raw = JSON.parse(encodeSave(v10)) as { version: number; deeds?: unknown; phase: { battle: Record<string, unknown> } };
+      delete raw.deeds;
+      raw.version = 9;
+      delete raw.phase.battle.extraActionAdvDis;
+      Object.assign(raw.phase.battle, stored);
+      const decoded = decodeSave(JSON.stringify(raw))!;
+      expect(decoded.phase.kind).toBe('battle');
+      if (decoded.phase.kind !== 'battle') continue;
+      const r = resolveRound(decoded.phase.battle, 'fight', scripted([0.7, 0.3, 0.5, 0.5, 0.5, 0.5, 0.5]));
+      const a = r.events.find((e) => e.kind === 'attack' && e.subject === 'player');
+      expect(a && a.kind === 'attack' ? [a.roll.advDis, a.roll.faces.length] : null, JSON.stringify(stored)).toEqual([expectAdv, faces]);
+    }
   });
 
   it('a hand-built 30-deed save is ACCEPTED, and the cap re-applies on the next write', () => {
