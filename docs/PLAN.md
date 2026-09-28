@@ -395,7 +395,8 @@ one call per granted action; a boss agent's choice replaces the random skill pic
 any unit touching `battle.ts`, `game.ts`, `boss.ts` or the event tables.
 **Part A (the engine, `boss-engine`, 2026-09-28) closes G79 and G61 N2 and raises G80:** the Hollow
 Self's 1d10 + STR "real teeth" end only 0.8% of its fights (measured) — a balance lever for the
-author (its HP scale, base XP or casts), not part A's to pull. The dice and rulings are in
+author (its HP scale, base XP or casts), not part A's to pull. **G84 is unit C's:** the executioner's blow deed
+(`boss-move.deed`) is shown nowhere yet. The dice and rulings are in
 `GAME-DESIGN.md` §22.31 ("The engine rulings for #11").
 
 **#12 narrator to spec (reduced M11)** — grammar-constrained choices, the tool registry and
