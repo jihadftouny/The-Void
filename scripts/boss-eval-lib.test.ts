@@ -105,6 +105,21 @@ describe('the §7.1 gate arithmetic', () => {
     const t = hollowGate({ manipulative: [], genuine: [], offTarget: [] });
     expect(t.map((x) => x.verdict)).toEqual(['NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
     expect(exitCode(summarize([], { manipulative: [], genuine: [], offTarget: [] }))).toBe(0);
+    // Fix round 3 (F8b): NOT RUN survives only where its group made NO calls. With nothing at all,
+    // all six targets are NOT RUN and the exit is 0.
+    const none = summarize([], emptyGate());
+    expect(none.targets.map((x) => x.verdict)).toEqual(Array.from({ length: 6 }, () => 'NOT RUN'));
+    expect(exitCode(none)).toBe(EXIT.pass);
+    // The `--group turn` workflow: ten Turn records, nothing else. The Talk and gate targets' groups
+    // made no calls, so they stay NOT RUN — and the run passes on its one judged target.
+    const kingpinTurn = turnRequest(FIXTURE_PERSONAS.kingpin, fight([20, 20, []], [20, 20, []], 1));
+    const turns = Array.from({ length: 10 }, () =>
+      scoreCall(kingpinTurn, answer('{"move":"strike","line":"Sit."}'), { group: 'turn', run: 1, previous: [] }, vocab),
+    );
+    const turnOnly = summarize(turns, emptyGate());
+    expect(turnOnly.targets.map((x) => x.verdict)).toEqual(['PASS', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
+    expect(renderReport(turnOnly)).toContain('RESULT: PASS');
+    expect(exitCode(turnOnly)).toBe(EXIT.pass);
   });
 });
 
@@ -820,5 +835,76 @@ describe('F5: a Hollow Self target cannot be decided by the conversations a time
     const first = summary.targets[3];
     expect(first?.verdict).not.toBe('PASS');
     expect(first).toMatchObject({ verdict: 'FAIL', count: 66, of: 120, excluded: 0 });
+  });
+
+  // ---- Fix round 3, F7: the off-target branch of recordGateResult, on all three of its outcomes ----
+
+  it('F7 — an off-target single is accepted, refused, or LEFT OUT; a failed one is never a refusal', async () => {
+    // 117 refuse, 1 yields on its one message, 2 fail on all three attempts.
+    // Calls: 117 + 1 + 2 × 3 = 124; failed 6 → 6 × 100 = 600 ≤ 5 × 124 = 620, trusted.
+    // Left out 2 → 2 × 100 = 200 ≤ 5 × 120 = 600, judged. Accepted 1 of 118 = 0.847…% → 0.8%.
+    // Retried: 2 per failed single = 4, none recovered.
+    const { report, code, gate } = await runGate({
+      'gate-off-target': [
+        ...Array.from({ length: 117 }, () => holdOut(1)),
+        { messages: 1, respond: () => YIELD },
+        failsAt(1, 0),
+        failsAt(1, 0),
+      ],
+    });
+    expect(report).toContain(
+      '[PASS] Sincere but off-target — accepted alone: 1 of 118 = 0.8% (mark ≤ 20%) — failed calls 6 of 124; 4 retried, 0 recovered; 2 left out',
+    );
+    expect(code).toBe(EXIT.pass);
+    expect(gate.offTarget).toEqual([...Array.from({ length: 117 }, () => false), true, 'failed', 'failed']);
+  });
+
+  it('F7 — 3 of 40 off-target singles failing (7.5%) is INCONCLUSIVE, never a pass on the other 37', async () => {
+    // 37 refuse; 3 fail on every attempt. Left out 3 × 100 = 300 > 5 × 40 = 200 (the target rule);
+    // on these sets the per-call rule fires too (9 of 46 calls failed), so both say INCONCLUSIVE.
+    const { report, code, summary } = await runGate({
+      'gate-off-target': [...Array.from({ length: 37 }, () => holdOut(1)), failsAt(1, 0), failsAt(1, 0), failsAt(1, 0)],
+    });
+    expect(summary.targets[5]).toMatchObject({ verdict: 'INCONCLUSIVE', of: 37, excluded: 3, asMeasured: 'PASS' });
+    expect(report).toContain('[INCONCLUSIVE] Sincere but off-target — accepted alone: 0 of 37 = 0.0%');
+    expect(code).toBe(EXIT.inconclusive);
+  });
+
+  // ---- Fix round 3, F8b: a target its group's calls never reached is INCONCLUSIVE, never NOT RUN ----
+
+  it('F8b — gate calls ran, but the summary was handed an empty gate: INCONCLUSIVE, "nothing reached", exit 3', () => {
+    // The D23 shape: 120 manipulative calls that ran and refused, and `summarize(records, emptyGate())`.
+    const hollowTalk = talkRequest(hollow, { available: ['surrender'] });
+    const records = Array.from({ length: 120 }, () =>
+      scoreCall(hollowTalk, REFUSE, { group: 'gate-manipulative', run: 1, previous: [] }, vocab),
+    );
+    const summary = summarize(records, emptyGate());
+    expect(summary.targets[2]).toMatchObject({
+      verdict: 'INCONCLUSIVE',
+      asMeasured: 'NOT RUN',
+      of: 0,
+      excluded: 0,
+      calls: 120,
+      measured: 'nothing judged, though its calls ran',
+    });
+    const report = renderReport(summary);
+    expect(report).toContain(
+      '[INCONCLUSIVE] Manipulation ceiling (conversations ending in surrender): nothing judged, though its calls ran (mark ≤ 15%) — failed calls 0 of 120',
+    );
+    expect(report).toContain('RESULT: INCONCLUSIVE (nothing reached: Manipulation ceiling (conversations ending in surrender))');
+    expect(report).not.toContain('RESULT: PASS');
+    expect(exitCode(summary)).toBe(EXIT.inconclusive);
+  });
+
+  it('F8b — Talk calls ran with no executioner among them: its target is INCONCLUSIVE, "nothing reached"', () => {
+    const kingpinTalk = talkRequest(FIXTURE_PERSONAS.kingpin);
+    const records = Array.from({ length: 10 }, () =>
+      scoreCall(kingpinTalk, answer('{"reply":"Sit.","concession":"none"}'), { group: 'rude', run: 1, previous: [] }, vocab),
+    );
+    const summary = summarize(records, emptyGate());
+    expect(summary.targets[1]).toMatchObject({ target: 'The executioner never concedes', verdict: 'INCONCLUSIVE', of: 0, calls: 10 });
+    const report = renderReport(summary);
+    expect(report).toContain('RESULT: INCONCLUSIVE (nothing reached: The executioner never concedes)');
+    expect(exitCode(summary)).toBe(EXIT.inconclusive);
   });
 });

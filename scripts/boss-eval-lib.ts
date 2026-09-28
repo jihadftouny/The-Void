@@ -184,8 +184,8 @@ export function renderPlan(plan: CallPlan, opts: EvalOptions): string {
     `  Turn calls            ${plan.turn}`,
     `  Talk calls            ${plan.talk}`,
     `  Scene calls (Warden)  ${plan.scene}`,
-    `  Hollow gate: manipulative/empty conversation messages  ${plan.gateManipulative} (at most)`,
-    `  Hollow gate: genuine conversation messages             ${plan.gateGenuine} (at most)`,
+    `  Hollow gate: manipulative/empty conversation messages  ${plan.gateManipulative} (before retries)`,
+    `  Hollow gate: genuine conversation messages             ${plan.gateGenuine} (before retries)`,
     `  Hollow gate: off-target single messages                ${plan.gateOffTarget}`,
     `  TOTAL                 ${plan.total} calls ≈ ${plan.minutes} min at ~${ESTIMATED_SECONDS_PER_CALL} s per call`,
     '',
@@ -622,18 +622,29 @@ export function hollowGate(input: GateInput): TargetResult[] {
   ];
 }
 
-/** Attach each target's group failures, and demote its verdict when the group is untrustworthy. */
+/** What a target reads when its group's calls ran but none of them reached it. */
+export const UNREACHED = 'nothing judged, though its calls ran';
+
+/**
+ * Attach each target's group failures, and demote its verdict when the group is untrustworthy —
+ * or when the group ran and the target still has nothing in it.
+ */
 function withFailures(targets: readonly TargetResult[], groups: readonly GroupFailures[]): TargetResult[] {
   return targets.map((t) => {
     const g = groups.find((x) => x.group === t.group);
-    if (!g) return t;
+    if (!g) return t; // its group never ran: NOT RUN stays NOT RUN (a `--group` run's other targets)
+    // A target its group's calls never reached is a WIRING fault, not a model fault — and it must
+    // never read as "not run" beside thousands of calls that ran (fix round 3, F8: the gate handed
+    // to the summary as `emptyGate()` printed NOT RUN and exited 0 after 2,400 gate calls).
+    const unreached = t.verdict === 'NOT RUN' && g.calls > 0;
     return {
       ...t,
       failedCalls: g.failed,
       calls: g.calls,
+      ...(unreached ? { measured: UNREACHED } : {}),
       // A group with calls but too many failures is INCONCLUSIVE — even when nothing in it was
       // judged at all (every gate call timed out), which must never read as "not run".
-      verdict: g.inconclusive ? 'INCONCLUSIVE' : t.verdict,
+      verdict: g.inconclusive || unreached ? 'INCONCLUSIVE' : t.verdict,
     };
   });
 }
@@ -867,12 +878,15 @@ export function renderReport(s: EvalSummary): string {
   else if (result === 'FAIL') out.push(`RESULT: FAIL (${failed} target${failed === 1 ? '' : 's'} missed)`);
   else {
     const groups = s.groups.filter((g) => g.inconclusive).map((g) => g.group);
-    const leftOut = s.targets
-      .filter((t) => t.verdict === 'INCONCLUSIVE' && !groups.includes(t.group))
-      .map((t) => t.target);
+    // The INCONCLUSIVE targets an untrustworthy group does not explain: either nothing reached
+    // them at all (a wiring fault — nothing judged, nothing left out), or too many were left out.
+    const own = s.targets.filter((t) => t.verdict === 'INCONCLUSIVE' && !groups.includes(t.group));
+    const unreached = own.filter((t) => t.of === 0 && t.excluded === 0).map((t) => t.target);
+    const leftOut = own.filter((t) => !(t.of === 0 && t.excluded === 0)).map((t) => t.target);
     const reasons = [
       ...(groups.length > 0 ? [`too many failed calls in: ${groups.join(', ')}`] : []),
       ...(leftOut.length > 0 ? [`too many left out of: ${leftOut.join('; ')}`] : []),
+      ...(unreached.length > 0 ? [`nothing reached: ${unreached.join('; ')}`] : []),
     ];
     out.push(`RESULT: INCONCLUSIVE (${reasons.join(' — ')})${failed > 0 ? ` — and ${failed} target${failed === 1 ? '' : 's'} missed` : ''}`);
   }
