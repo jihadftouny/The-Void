@@ -50,6 +50,8 @@ import { createKarma } from '../game/karma.ts';
 import { ALL_CLASSES, heuristicPolicy, mercifulPolicy } from '../game/sim.ts';
 import type { SimPolicy } from '../game/sim.ts';
 import { ONE_OF_EVERY_EVENT, SAMPLE_STATS } from '../game/eventSamples.testutil.ts';
+import { AXIS_VOCABULARY } from '../game/karmaVocabulary.testutil.ts';
+import { buildVocabulary, detectTextFaults, ENGINE_TEXT_RULES } from './textHygiene.ts';
 
 // ---------------------------------------------------------------------------------------
 // The two compile-time-exhaustive maps
@@ -267,6 +269,31 @@ describe('the boss’s chosen move, as the narrator hears it (PLAN.md #11, AC-24
     const out = describeEvent({ kind: 'boss-grieve', amount: 1 });
     expect(out).toContain('your strength');
     expect(out).not.toMatch(/\d|charge/i);
+  });
+
+  it('EVERY #11 fact variant — each concession for each boss, both falls — is clean (AC-24)', () => {
+    // The shared sample table holds ONE value per kind; these kinds vary their line by field, so
+    // every branch is swept here: no number, no reserved word, no karma axis word, and no engine
+    // id or condition label (the engine rules of `textHygiene.ts`).
+    const vocab = buildVocabulary();
+    const lines: string[] = [];
+    for (const bossId of ['kingpin', 'reflection', 'sin', 'executioner', 'hollow'] as const) {
+      for (const concession of ['pause', 'weakness', 'drop_mechanic', 'surrender'] as const) {
+        lines.push(describeEvent({ kind: 'boss-concession', bossId, concession }));
+      }
+    }
+    for (const outcome of ['defiant', 'defeated'] as const) lines.push(describeEvent({ kind: 'executioner-fall', outcome }));
+    for (const move of ['hold_back', 'pause'] as const) lines.push(describeEvent({ kind: 'boss-move', bossId: 'kingpin', move }));
+    lines.push(describeEvent({ kind: 'boss-grieve', amount: 1 }));
+    expect(lines).toHaveLength(20 + 2 + 2 + 1);
+    for (const line of lines) {
+      expect(line.length, 'every variant speaks').toBeGreaterThan(0);
+      expect(line).not.toMatch(/\d/);
+      expect(line).not.toMatch(/\bhollow\b|made whole/i);
+      expect(line).not.toMatch(AXIS_VOCABULARY);
+      expect(line, 'a fall is never a death').not.toMatch(/\b(die|dies|died|dead|death)\b/i);
+      expect(detectTextFaults(line, vocab, { rules: ENGINE_TEXT_RULES }).faults, line).toEqual([]);
+    }
   });
 });
 
