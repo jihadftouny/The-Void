@@ -335,3 +335,21 @@ conversations per group, each run 3 times** — is drafted by the pipeline from 
 **If a target is missed: the merge is blocked.** The pipeline iterates the judge prompt with this script as
 the gate — **two rounds, then it comes back to the author** (who may then loosen a target by an explicit,
 recorded decision, never silently).
+
+**When a call fails — the orchestrator's methodology amendment (2026-09-28, `boss-llm` fix round 2).** A call
+that times out, errors or comes back cut off is **not a refusal**, and it must not decide a target either way.
+Measured on the evaluation's own arithmetic: one failed call removes a whole conversation, and the conversations
+a timeout removes are the long ones that held out — so dropping them skewed every target (a true pass read as a
+fail, a true fail as a pass) and, with a per-call limit only, a run could pass with nothing judged. The rule:
+1. **A failed message is asked again**, the same message with the same conversation so far, **up to twice more**.
+   Only a message that fails all three times drops its conversation. The report prints the retries and how many
+   recovered.
+2. A dropped conversation is **left out** of its target — numerator and denominator — and counted beside it. If
+   **more than 5%** of a target's conversations are left out (`left out × 100 > 5 × (judged + left out)`), the
+   target is **INCONCLUSIVE**. A target with nothing judged and something left out is **always** INCONCLUSIVE —
+   never "not run", never a pass.
+3. INCONCLUSIVE on any target — or more than 5% failed calls in any group of calls — makes the whole run
+   INCONCLUSIVE (exit status 3): re-run it before acting on any verdict in it.
+4. The per-call 5% rule still governs the Turn, Talk and Scene tables.
+*(Amends the "5% of a group's calls" ruling of fix round 1, which counted calls while these targets count
+conversations. `scripts/boss-eval-lib.ts` implements it; its tests drive the same wiring the real run uses.)*

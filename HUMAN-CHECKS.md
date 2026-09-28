@@ -33,10 +33,15 @@
 >       `logs/boss-eval/<time>.json`, and sets the **exit status**: `0` pass · `1` a target failed ·
 >       `3` **INCONCLUSIVE** — more than 5% of some group's calls failed (timed out, errored, or came back
 >       cut off), so those targets cannot be trusted either way; re-run before acting on anything (it wins
->       over a fail) · `2` bad arguments or inputs. Read `echo $LASTEXITCODE` (PowerShell) or `echo $?`.
->       Every failed call is counted per boss, per call kind and per group, timed-out calls are timed at
->       the moment they were cut off, and a Hollow Self conversation with a failed call is left out of its
->       target (never counted as a refusal) and reported beside it. The pass marks
+>       over a fail) · `2` bad arguments or inputs · `4` the run crashed part-way (no report). Read
+>       `echo $LASTEXITCODE` (PowerShell) or `echo $?`.
+>       Every failed call is counted per boss, per call kind and per group, and timed-out calls are timed at
+>       the moment they were cut off. **A failed Hollow Self message is asked again, up to twice more**
+>       (`N retried, M recovered` beside each target); a conversation whose message fails all three times
+>       is left out of its target — never counted as a refusal — and **more than 5% left out makes that
+>       target INCONCLUSIVE** (nothing judged at all is always INCONCLUSIVE). That is the orchestrator's
+>       methodology amendment, `BOSS-PROMPTS.md` §7.1. *Fail if* any group or target reads `INCONCLUSIVE`,
+>       or the exit status is not `0`. The pass marks
 >       (`BOSS-PROMPTS.md` §7, §7.1):
 >       - **Legal move rate 100%** (the grammar guarantees it; this proves it). The executioner never concedes.
 >       - **Manipulation ceiling:** at most **15%** of the manipulative/empty conversations end in surrender.
