@@ -10,14 +10,21 @@ import {
   REFLECTION_ADAPT_THRESHOLD,
   SIN_AXIS_PRIORITY,
   SIN_BY_AXIS,
-  SIN_DEFAULT_AXIS,
   SIN_HP_PER_POINT,
+  SIN_IDENTITIES,
+  BOSS_MOVE_KINDS,
+  CONCESSIONS,
+  EXECUTIONER_HP_SCALE,
+  bossCard,
   bossPostRound,
   computeVerdict,
   generateBoss,
   pickIndulgedAxis,
+  pickSinIdentity,
+  type BossId,
   type BossState,
 } from './boss.ts';
+import { SKILLS } from './skill.ts';
 import { createPlayer, type Player } from './player.ts';
 import { createKarma, type KarmaState } from './karma.ts';
 import { generateEnemy } from './enemy.ts';
@@ -108,12 +115,23 @@ describe('pickIndulgedAxis', () => {
     expect(SIN_AXIS_PRIORITY[0]).toBe('reverenceDesecration');
   });
 
-  it('returns the documented default when nothing was indulged (every axis ≥ 0)', () => {
-    expect(pickIndulgedAxis(createKarma())).toBe(SIN_DEFAULT_AXIS);
-    expect(pickIndulgedAxis(karma({ reverenceDesecration: 3, mercyCruelty: 2 }))).toBe(
-      SIN_DEFAULT_AXIS,
-    );
-    expect(SIN_DEFAULT_AXIS).toBe('reverenceDesecration');
+  it('returns null when nothing was indulged (every axis ≥ 0) — PLAN.md #11 retired the default axis', () => {
+    expect(pickIndulgedAxis(createKarma())).toBeNull();
+    expect(pickIndulgedAxis(karma({ reverenceDesecration: 3, mercyCruelty: 2 }))).toBeNull();
+  });
+});
+
+describe('pickSinIdentity — five identities, The Grief for a run that indulged nothing (AC-11)', () => {
+  it('every axis ≥ 0 ⇒ The Grief', () => {
+    expect(pickSinIdentity(createKarma())).toBe('grief');
+    expect(pickSinIdentity(karma({ reverenceDesecration: 4, restraintGreed: 1 }))).toBe('grief');
+  });
+
+  it('each negative axis ⇒ its own identity', () => {
+    expect(pickSinIdentity(karma({ reverenceDesecration: -1 }))).toBe('desecration');
+    expect(pickSinIdentity(karma({ mercyCruelty: -1 }))).toBe('cruelty');
+    expect(pickSinIdentity(karma({ restraintGreed: -1 }))).toBe('avarice');
+    expect(pickSinIdentity(karma({ clarityDelusion: -1 }))).toBe('delusion');
   });
 });
 
@@ -134,10 +152,35 @@ describe('generateBoss — Sin identity + scaling by the indulged axis', () => {
     expect(g.enemy.type).toBe(SIN_BY_AXIS.mercyCruelty.name);
   });
 
-  it('an all-non-negative karma picks the default-axis Sin', () => {
+  it('an all-non-negative karma meets The Grief, with no bonus HP (AC-11)', () => {
     const player = makePlayer();
-    const g = generateBoss({ bossId: 'sin', act: 3, player, karma: createKarma(), rng: mulberry32(7) });
-    expect(g.enemy.fullName).toBe(SIN_BY_AXIS[SIN_DEFAULT_AXIS].name);
+    const SEED = 7;
+    const g = generateBoss({ bossId: 'sin', act: 3, player, karma: karma({ mercyCruelty: 2 }), rng: mulberry32(SEED) });
+    expect(g.enemy.fullName).toBe('The Grief');
+    expect(g.boss.sinIdentity).toBe('grief');
+    expect(g.boss.sinBonusHp).toBe(0);
+    const base = generateEnemy({ act: 3, type: BOSSES.sin.name, playerXp: player.xp }, mulberry32(SEED));
+    expect(g.enemy.maxHp).toBe(base.maxHp);
+  });
+
+  it('each of the four indulged axes yields its Sin, with bonus HP = magnitude × SIN_HP_PER_POINT (AC-11)', () => {
+    const player = makePlayer();
+    const SEED = 31;
+    const base = generateEnemy({ act: 3, type: BOSSES.sin.name, playerXp: player.xp }, mulberry32(SEED));
+    const cases: [Partial<KarmaState>, string, string, number][] = [
+      [{ reverenceDesecration: -2 }, 'desecration', 'The Desecration', 2],
+      [{ mercyCruelty: -4 }, 'cruelty', 'The Cruelty', 4],
+      [{ restraintGreed: -1 }, 'avarice', 'The Avarice', 1],
+      [{ clarityDelusion: -3 }, 'delusion', 'The Delusion', 3],
+    ];
+    for (const [k, id, name, magnitude] of cases) {
+      const g = generateBoss({ bossId: 'sin', act: 3, player, karma: karma(k), rng: mulberry32(SEED) });
+      expect(g.boss.sinIdentity).toBe(id);
+      expect(g.enemy.fullName).toBe(name);
+      expect(g.boss.sinBonusHp).toBe(magnitude * 3);
+      expect(g.enemy.maxHp).toBe(base.maxHp + magnitude * 3);
+    }
+    expect(SIN_HP_PER_POINT).toBe(3);
   });
 
   it('bonus HP delta between two magnitudes equals Δmagnitude × SIN_HP_PER_POINT', () => {
@@ -216,6 +259,88 @@ describe('generateBoss — Hollow mirrors kit + stats and scales HP', () => {
     const base = generateEnemy({ act: 5, type: BOSSES.hollow.name, playerXp: FINAL_BOSS_XP }, mulberry32(SEED));
     expect(g.enemy.maxHp).toBe(Math.floor(base.maxHp * HOLLOW_HP_SCALE));
     expect(g.enemy.hp).toBe(Math.floor(base.hp * HOLLOW_HP_SCALE));
+  });
+});
+
+// ------- PLAN.md #11: the cards in bosses.json -----------------------------------
+
+describe('bosses.json — the five cards validate against the engine unions', () => {
+  const IDS: BossId[] = ['kingpin', 'reflection', 'sin', 'executioner', 'hollow'];
+
+  it('holds exactly the five boss ids, each with a name, a strike die, moves led by strike, and known concessions', () => {
+    expect(Object.keys(BOSSES).sort()).toEqual([...IDS].sort());
+    for (const id of IDS) {
+      const card = bossCard(id);
+      expect(card.name.length).toBeGreaterThan(0);
+      expect(Number.isInteger(card.strike.die) && card.strike.die >= 2).toBe(true);
+      expect(typeof card.strike.addStr).toBe('boolean');
+      expect(card.moves[0]).toBe('strike');
+      for (const m of card.moves) expect(BOSS_MOVE_KINDS).toContain(m);
+      for (const c of card.concessions) expect(CONCESSIONS).toContain(c);
+      for (const s of card.kit ?? []) expect(SKILLS[s as keyof typeof SKILLS], s).toBeDefined();
+    }
+  });
+
+  it('carries the author’s rulings: dice rising with depth, STR for the executioner and Hollow Self only', () => {
+    // GAME-DESIGN.md §22.31 (2026-09-28, second round) — quoted, not read back.
+    const dice = Object.fromEntries(IDS.map((id) => [id, [bossCard(id).strike.die, bossCard(id).strike.addStr]]));
+    expect(dice).toEqual({
+      kingpin: [6, false],
+      reflection: [8, false],
+      sin: [8, false],
+      executioner: [10, true],
+      hollow: [10, true],
+    });
+    expect(EXECUTIONER_HP_SCALE).toBe(3);
+    expect(HOLLOW_HP_SCALE).toBe(1.2);
+  });
+
+  it('carries each card’s concession list as the design names it', () => {
+    expect(bossCard('kingpin').concessions).toEqual(['pause', 'weakness', 'drop_mechanic', 'surrender']);
+    expect(bossCard('reflection').concessions).toEqual(['pause', 'drop_mechanic']);
+    expect(bossCard('sin').concessions).toEqual(['pause', 'weakness', 'drop_mechanic']);
+    expect(bossCard('executioner').concessions).toEqual([]);
+    expect(bossCard('hollow').concessions).toEqual(['surrender']);
+  });
+
+  it('names five Sin identities, The Grief alone without an axis', () => {
+    // The identity ids are checked through the names they carry (a list of the bare ids would
+    // read to the karma-vocabulary guard as a copy of the hidden words).
+    const names = ['The Grief', 'The Desecration', 'The Cruelty', 'The Avarice', 'The Delusion'];
+    expect(Object.values(SIN_IDENTITIES).map((d) => d.name).sort()).toEqual([...names].sort());
+    expect(SIN_IDENTITIES.grief).toEqual({ name: 'The Grief', axis: null });
+    const axes = Object.values(SIN_IDENTITIES).map((d) => d.axis).filter((a) => a !== null).sort();
+    expect(axes).toEqual([...SIN_AXIS_PRIORITY].sort());
+  });
+});
+
+describe('generateBoss — the executioner (the Warden turned)', () => {
+  it('fights with its data kit, named for the card, at ×3 the base enemy HP (hand-derived)', () => {
+    const player = makePlayer({ xp: 450 });
+    const SEED = 77;
+    const g = generateBoss({ bossId: 'executioner', act: 4, player, karma: createKarma(), rng: mulberry32(SEED) });
+    const base = generateEnemy({ act: 4, type: BOSSES.executioner.name, playerXp: player.xp }, mulberry32(SEED));
+    expect(g.enemy.skillPool).toEqual(['smiteWicked', 'blindingLight', 'wardingStrike']);
+    expect(g.enemy.fullName).toBe('The Warden');
+    expect(g.enemy.maxHp).toBe(Math.floor(base.maxHp * 3));
+    expect(g.enemy.hp).toBe(g.enemy.maxHp);
+    expect(g.enemy.karmaWeighted).toBe(false);
+    expect(g.boss).toEqual({ bossId: 'executioner', round: 0, deedCursor: 0 });
+  });
+});
+
+describe('generateBoss — the Hollow Self copies your warped kit', () => {
+  it('copies player.corruptedSkills onto boss.warpedSkills (a distinct copy)', () => {
+    const corruptedSkills = { siphon: 'bleeding', unmake: 'hungry' };
+    const player = makePlayer({ skillPool: ['siphon', 'unmake'], corruptedSkills });
+    const g = generateBoss({ bossId: 'hollow', act: 5, player, karma: createKarma(), rng: mulberry32(8) });
+    expect(g.boss.warpedSkills).toEqual(corruptedSkills);
+    expect(g.boss.warpedSkills).not.toBe(corruptedSkills);
+  });
+
+  it('a player with no warped kit leaves the field absent (unchanged JSON)', () => {
+    const g = generateBoss({ bossId: 'hollow', act: 5, player: makePlayer(), karma: createKarma(), rng: mulberry32(8) });
+    expect('warpedSkills' in g.boss).toBe(false);
   });
 });
 

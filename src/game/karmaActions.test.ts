@@ -652,7 +652,7 @@ describe('"The Delusion" can be the act-3 Sin now', () => {
     const r = seekAndAccept(newRunAtHub(5), 'whisper');
     expect(r.state.karma).toEqual({ ...createKarma(), clarityDelusion: -1 });
     expect(pickIndulgedAxis(r.state.karma)).toBe('clarityDelusion');
-    expect(SIN_BY_AXIS[pickIndulgedAxis(r.state.karma)].name).toBe('The Delusion');
+    expect(SIN_BY_AXIS.clarityDelusion.name).toBe('The Delusion');
 
     const boss = generateBoss({
       bossId: 'sin',
@@ -664,13 +664,14 @@ describe('"The Delusion" can be the act-3 Sin now', () => {
     expect(boss.enemy.fullName).toBe('The Delusion');
   });
 
-  it('CONTROL — the pre-#10a ledger still yields The Desecration, so the whisper is what moved it', () => {
-    // Before this unit `clarityDelusion` could not leave 0, `pickIndulgedAxis` needs `v < 0`,
-    // and an all-zero vector falls through to SIN_DEFAULT_AXIS. Without this control the test
-    // above would pass in a world where every Sin is called The Delusion.
+  it('CONTROL — the untouched ledger indulged nothing, so the whisper is what moved it', () => {
+    // `pickIndulgedAxis` needs `v < 0`. PLAN.md #11: an all-zero vector no longer falls through
+    // to a default axis — it indulged nothing, and meets The Grief. Without this control the
+    // test above would pass in a world where every Sin is called The Delusion.
     const neutral = createKarma();
-    expect(pickIndulgedAxis(neutral)).toBe('reverenceDesecration');
-    expect(SIN_BY_AXIS[pickIndulgedAxis(neutral)].name).toBe('The Desecration');
+    expect(pickIndulgedAxis(neutral)).toBeNull();
+    const boss = generateBoss({ bossId: 'sin', act: 3, player: newRunAtHub(5).state.player!, karma: neutral, rng: mulberry32(9) });
+    expect(boss.enemy.fullName).toBe('The Grief');
   });
 });
 

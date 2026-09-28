@@ -1,0 +1,57 @@
+{
+  "status": "PLAN.md #11 (boss agents), part A. The five boss cards the engine reads: display name, mechanic, the strike die (and whether the boss's STR mod is added — the author's 2026-09-28 ruling: executioner and Hollow Self only), the ordered move kinds the engine may list ('cast' stands for one entry per affordable skill), the concessions Talk may earn, and the executioner's kit and HP scale. The five Sin identities live here too. Persona text is NOT here — it is unit B's. Dice and hpScale are the author's rulings (GAME-DESIGN.md 22.31); every other magnitude stays in boss.ts.",
+  "bosses": {
+    "kingpin": {
+      "name": "Undercity Kingpin",
+      "mechanic": "summon-adds",
+      "strike": { "die": 6, "addStr": false },
+      "moves": ["strike", "call_crew", "hold_back"],
+      "concessions": ["pause", "weakness", "drop_mechanic", "surrender"]
+    },
+    "reflection": {
+      "name": "The Reflection",
+      "mechanic": "mirror-adapt",
+      "strike": { "die": 8, "addStr": false },
+      "moves": ["strike", "cast"],
+      "concessions": ["pause", "drop_mechanic"]
+    },
+    "sin": {
+      "name": "The Indulged",
+      "mechanic": "karma-scaled",
+      "strike": { "die": 8, "addStr": false },
+      "moves": ["strike", "cast", "grieve"],
+      "concessions": ["pause", "weakness", "drop_mechanic"]
+    },
+    "executioner": {
+      "name": "The Warden",
+      "mechanic": "deeds-as-blows",
+      "strike": { "die": 10, "addStr": true },
+      "moves": ["strike", "cast"],
+      "concessions": [],
+      "kit": ["smiteWicked", "blindingLight", "wardingStrike"],
+      "hpScale": 3
+    },
+    "hollow": {
+      "name": "Hollow Self",
+      "mechanic": "mirror-conditions",
+      "strike": { "die": 10, "addStr": true },
+      "moves": ["strike", "cast"],
+      "concessions": ["surrender"],
+      "hpScale": 1.2
+    }
+  },
+  "sinIdentities": {
+    "grief": { "name": "The Grief", "axis": null },
+    "desecration": { "name": "The Desecration", "axis": "reverenceDesecration" },
+    "cruelty": { "name": "The Cruelty", "axis": "mercyCruelty" },
+    "avarice": { "name": "The Avarice", "axis": "restraintGreed" },
+    "delusion": { "name": "The Delusion", "axis": "clarityDelusion" }
+  },
+  "moveDescriptions": {
+    "strike": "strike them yourself",
+    "call_crew": "call one of your people in; each wears them down every exchange",
+    "hold_back": "hold back and let your people do the work",
+    "grieve": "stop and mourn; the weight of it costs them a little of their strength",
+    "cast": "use {skill}"
+  }
+}
