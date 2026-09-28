@@ -41,6 +41,15 @@ import { fireFloorTriggers, fireTrigger, reviveActionFor } from './relicEffects.
 import { applyConsumable, type ConsumableSource } from './consumable.ts';
 import { ILLUSION_DC, type FloorId } from './floors.ts';
 import { PLAYER_TEMPO_RATE_CAP_TENTHS, TEMPO_RATE_CAP_TENTHS, advanceTempo, tempoRate, type TempoStep } from './tempo.ts';
+import {
+  BOSSES,
+  battleActionKey,
+  bossCastDef,
+  legalBossMoves,
+  pickFallbackMove,
+  type BossMoveId,
+  type BossState,
+} from './boss.ts';
 
 /** The full, serializable state of a battle in progress. */
 export interface BattleState {
@@ -63,12 +72,13 @@ export interface BattleState {
   reviveUsed?: boolean;
   /**
    * M12, OPTIONAL: the boss mechanic riding on this battle. ABSENT for every normal
-   * (non-boss) battle ⇒ byte-identical off-equivalence: `resolveRound` never reads it and it
-   * survives the `{ ...state, ... }` spreads untouched. The boss extras (`bossPostRound`) are
-   * layered by game.ts AFTER `resolveRound`, so combat stays fully off-equivalent. `BossState`
-   * is imported as a TYPE only (erased at build), so no runtime import cycle with `boss.ts`.
+   * (non-boss) battle ⇒ byte-identical off-equivalence: it survives the `{ ...state, ... }`
+   * spreads untouched. The per-round extras (`bossPostRound`) are layered by game.ts AFTER the
+   * round. PLAN.md #11: `resolveRound` now READS it for one thing — a boss's turn pauses for its
+   * choice (`bossChoice`) instead of drawing a random skill — and every non-boss path is
+   * unchanged, draw for draw.
    */
-  boss?: import('./boss.ts').BossState;
+  boss?: BossState;
   /**
    * G12, OPTIONAL: the player's STANDING advantage/disadvantage for THIS battle — the ambush
    * bonus a random encounter opens with (+1), or a boss's adaptation (-1). Battle-scoped by
@@ -100,6 +110,25 @@ export interface BattleState {
    * Present only while paused, and only when non-zero.
    */
   extraActionAdvDis?: -1 | 1;
+  /**
+   * PLAN.md #11, OPTIONAL: a BOSS round PAUSED for the boss's choice. The player's half has
+   * resolved; the boss's tick and gauge have run; its actions wait for a `boss-choice` input
+   * (the model's move, or `null` for the seeded fallback). Present only while paused, and only on
+   * a boss battle, so a normal battle's JSON — and every pre-#11 save — is unchanged.
+   */
+  bossChoice?: BossChoicePause;
+}
+
+/** The saved pause a boss round waits in (PLAN.md #11). Plain data. */
+export interface BossChoicePause {
+  /** The legal move ids, in the card's order — what the model may choose (§5.2). */
+  legal: BossMoveId[];
+  /** Actions the boss still has this turn: 2 on a doubled turn, then 1. */
+  remaining: 1 | 2;
+  /** The player's action this round, as `bossPostRound` tallies it (the Reflection). */
+  playerActionKey: string;
+  /** The adv/dis the boss's OWN tick produced this turn (fracture), for each of its to-hit rolls. */
+  advDis: -1 | 0 | 1;
 }
 
 /**
@@ -499,22 +528,22 @@ export function resolveRound(
       if (!skill || !state.player.skillPool.includes(action.skillId) || state.player.skillCharges < effectiveCost) {
         return rejected(state, { kind: 'cast-unavailable' });
       }
-      return playRound(state, { kind: 'cast', skill }, rng, rules);
+      return playRound(state, { kind: 'cast', skill }, rng, rules, battleActionKey(action));
     }
     // An item is available iff its backpack slot holds a usable def — a property of the pack
     // alone, so it is decided here, before the tick, with no side effect (`applyConsumable` is
     // pure; its result is discarded and the item is applied for real at the action).
     const probe = applyConsumable(state.player, state.enemy, action.source, { healPct: rules.healPct });
     if (!probe.consumed) return rejected(state, { kind: 'consumable-unavailable' });
-    return playRound(state, { kind: 'item', source: action.source }, rng, rules);
+    return playRound(state, { kind: 'item', source: action.source }, rng, rules, battleActionKey(action));
   }
   switch (action) {
     case 'fight':
-      return playRound(state, { kind: 'fight' }, rng, rules);
+      return playRound(state, { kind: 'fight' }, rng, rules, 'fight');
     case 'run':
       // G36: a REJECTED press. Nothing was resolved — no dice, no tick, no state change.
       if (!state.canFlee) return rejected(state, { kind: 'escape-impossible' });
-      return playRound(state, { kind: 'run' }, rng, rules);
+      return playRound(state, { kind: 'run' }, rng, rules, 'run');
     case 'spare':
       return resolveSpare(state);
     /* istanbul ignore next */
@@ -582,6 +611,8 @@ export interface RoundContext {
   tempo: { player: number; enemy: number };
   /** The HP each side last showed in an `hp-changed` (or held at the start of the step). */
   shownHp: { player: number; enemy: number };
+  /** PLAN.md #11: a working COPY of the battle's boss, when there is one (written back by `settle`). */
+  boss?: BossState;
 }
 
 /** How a turn ended: the fight goes on, or one side is down. */
@@ -635,15 +666,38 @@ function playerDownAfterGate(ctx: RoundContext): boolean {
  * when either is non-zero, so a round that moved nothing leaves the JSON shape unchanged), and
  * the extra-action pause (only while paused).
  */
-function settle(state: BattleState, ctx: RoundContext, paused: { advDis: -1 | 0 | 1 } | null): BattleState {
-  const { tempo: _tempo, extraAction: _extra, extraActionAdvDis: _adv, ...rest } = state;
+function settle(
+  state: BattleState,
+  ctx: RoundContext,
+  paused: { advDis: -1 | 0 | 1 } | null,
+  bossPause?: BossChoicePause,
+): BattleState {
+  const { tempo: _tempo, extraAction: _extra, extraActionAdvDis: _adv, bossChoice: _choice, ...rest } = state;
   const next = withFlags(rest, ctx.player, ctx.enemy, ctx.firstHitDone, ctx.reviveUsed);
+  if (ctx.boss) next.boss = ctx.boss;
   if (ctx.tempo.player !== 0 || ctx.tempo.enemy !== 0) next.tempo = { ...ctx.tempo };
   if (paused) {
     next.extraAction = true;
     if (paused.advDis !== 0) next.extraActionAdvDis = paused.advDis;
   }
+  if (bossPause) next.bossChoice = bossPause;
   return next;
+}
+
+/** The working copy of one step, rebuilt from the saved battle. */
+function newContext(state: BattleState): RoundContext {
+  const ctx: RoundContext = {
+    player: state.player,
+    enemy: state.enemy,
+    events: [],
+    mods: computeEquipModifiers(state.player.inventory),
+    firstHitDone: state.firstEnemyHitDone ?? false,
+    reviveUsed: state.reviveUsed ?? false,
+    tempo: { player: state.tempo?.player ?? 0, enemy: state.tempo?.enemy ?? 0 },
+    shownHp: { player: state.player.hp, enemy: state.enemy.hp },
+  };
+  if (state.boss) ctx.boss = { ...state.boss };
+  return ctx;
 }
 
 /** A finished step: the settled state, the events, a status, and a completed round. */
@@ -687,18 +741,15 @@ function victory(state: BattleState, ctx: RoundContext, rng: Rng): RoundResult {
  *  4. THE ENEMY'S TURN — `resolveEnemyTurn`.
  *  5. `ongoing`, `roundComplete: true`.
  */
-function playRound(state: BattleState, action: PlayerAction, rng: Rng, rules: RoundRules): RoundResult {
+function playRound(
+  state: BattleState,
+  action: PlayerAction,
+  rng: Rng,
+  rules: RoundRules,
+  actionKey: string,
+): RoundResult {
   const second = state.extraAction === true;
-  const ctx: RoundContext = {
-    player: state.player,
-    enemy: state.enemy,
-    events: [],
-    mods: computeEquipModifiers(state.player.inventory),
-    firstHitDone: state.firstEnemyHitDone ?? false,
-    reviveUsed: state.reviveUsed ?? false,
-    tempo: { player: state.tempo?.player ?? 0, enemy: state.tempo?.enemy ?? 0 },
-    shownHp: { player: state.player.hp, enemy: state.enemy.hp },
-  };
+  const ctx = newContext(state);
 
   let actions: 0 | 1 | 2 = 1;
   let advDis: -1 | 0 | 1;
@@ -767,11 +818,125 @@ function playRound(state: BattleState, action: PlayerAction, rng: Rng, rules: Ro
     }
   }
 
-  // 4. The enemy's turn.
+  // 4. The enemy's turn. PLAN.md #11: a BOSS's turn stops after its tick and gauge and waits for
+  //    its choice (`bossTurn`); every other enemy acts exactly as before.
+  if (ctx.boss) return bossTurn(state, ctx, rng, rules, actionKey);
   const enemyOutcome = resolveEnemyTurn(ctx, rng, rules);
   if (enemyOutcome === 'player-died') return defeat(state, ctx);
   if (enemyOutcome === 'enemy-died') return victory(state, ctx, rng);
   return done(state, ctx, 'ongoing');
+}
+
+/**
+ * A BOSS's turn up to its choice (PLAN.md #11, §17.3.2 — the boss's choice is an input like the
+ * player's). Its conditions tick first, as every enemy's do. Then:
+ *  - a granted `pause` (`boss.pausedTurn`): the turn passes — no gauge, no action — with a
+ *    `boss-move { move: 'pause' }`, the flag clears, and the round completes;
+ *  - no action granted (a control condition, a lost turn): the round completes;
+ *  - otherwise the round PAUSES: `bossChoice` holds the legal ids, the actions left, the player's
+ *    action key and the boss's own tick adv/dis. Status `ongoing`, `resolved: true`,
+ *    `roundComplete: false`; `resolveBossChoice` resumes it.
+ */
+function bossTurn(state: BattleState, ctx: RoundContext, rng: Rng, rules: RoundRules, actionKey: string): RoundResult {
+  const boss = ctx.boss!;
+  const paused = boss.pausedTurn === true;
+  const begun = beginEnemyTurn(ctx, rng, rules, paused);
+  if (begun === 'enemy-died') return victory(state, ctx, rng);
+  if (paused) {
+    delete boss.pausedTurn;
+    ctx.events.push({ kind: 'boss-move', bossId: boss.bossId, move: 'pause' });
+    return done(state, ctx, 'ongoing');
+  }
+  if (begun.actions === 0) return done(state, ctx, 'ongoing');
+  const pause: BossChoicePause = {
+    legal: legalBossMoves({ boss, enemy: ctx.enemy, player: ctx.player }).map((o) => o.id),
+    remaining: begun.actions,
+    playerActionKey: actionKey,
+    advDis: begun.advDisOverride,
+  };
+  return { state: settle(state, ctx, null, pause), events: ctx.events, status: 'ongoing', resolved: true, roundComplete: false };
+}
+
+/**
+ * Resume a boss round paused for its choice — PURE (PLAN.md #11). `move` is the boss's move:
+ * a legal id is applied exactly; `null` or an id the pause did not list takes the seeded
+ * FALLBACK (`pickFallbackMove`, one draw) — never a no-op, because a fallback is what §17.3.3
+ * rules and a no-op would stall the fight on a renderer or model bug.
+ *
+ * One action is resolved. If the boss had two (its gauge doubled the turn) and the fight is on,
+ * `tempo-extra-action { subject: 'enemy' }` is emitted and the round pauses again with
+ * `remaining: 1` and a RECOMPUTED legal list (a spent charge or a new crew member changes it).
+ * Otherwise the pause clears and the round completes (`roundComplete: true`), or the fight ends.
+ *
+ * Called on a battle with no open pause, it resolves nothing (`resolved: false`, no events).
+ */
+export function resolveBossChoice(
+  state: BattleState,
+  move: BossMoveId | null,
+  rng: Rng,
+  rules: RoundRules = DEFAULT_ROUND_RULES,
+): RoundResult {
+  const pause = state.bossChoice;
+  if (!pause || !state.boss) return { state, events: [], status: 'ongoing', resolved: false, roundComplete: false };
+  const ctx = newContext(state);
+  const chosen: BossMoveId = move !== null && pause.legal.includes(move) ? move : pickFallbackMove(pause.legal, rng);
+  const outcome = bossAction(ctx, chosen, pause.advDis, rng, rules);
+  if (outcome === 'player-died') return defeat(state, ctx);
+  if (outcome === 'enemy-died') return victory(state, ctx, rng);
+  if (pause.remaining === 2) {
+    ctx.events.push({ kind: 'tempo-extra-action', subject: 'enemy' });
+    const next: BossChoicePause = {
+      ...pause,
+      legal: legalBossMoves({ boss: ctx.boss!, enemy: ctx.enemy, player: ctx.player }).map((o) => o.id),
+      remaining: 1,
+    };
+    return { state: settle(state, ctx, null, next), events: ctx.events, status: 'ongoing', resolved: true, roundComplete: false };
+  }
+  return done(state, ctx, 'ongoing');
+}
+
+/**
+ * ONE boss action, applied to the working copy (PLAN.md #11). Every action first announces itself
+ * (`boss-move`), then:
+ *  - `strike` / `cast:<id>` — one `enemyAttack`, the to-hit roll first, then the chosen blow (the
+ *    card's die) or the chosen skill (the Hollow Self's WARPED form) on a hit;
+ *  - `call_crew` — one more of the Kingpin's crew (`boss-summon`); no blow this action;
+ *  - `hold_back` — nothing: the crew does the work at the round's end;
+ *  - `grieve` — no blow; the player loses one skill charge (`boss-grieve`).
+ */
+function bossAction(
+  ctx: RoundContext,
+  move: BossMoveId,
+  advDisOverride: -1 | 0 | 1,
+  rng: Rng,
+  _rules: RoundRules,
+): TurnOutcome {
+  const boss = ctx.boss!;
+  ctx.events.push({ kind: 'boss-move', bossId: boss.bossId, move });
+  if (move === 'strike') {
+    const { die, addStr } = BOSSES[boss.bossId].strike;
+    return enemyAttack(ctx, advDisOverride, rng, { kind: 'strike', die, addStr });
+  }
+  if (move.startsWith('cast:')) {
+    const def = bossCastDef(boss, move.slice('cast:'.length));
+    // A listed cast always resolves (the legal list is built from these same defs); an id that
+    // somehow names no skill still spends the action as a plain strike rather than stalling.
+    if (!def) return enemyAttack(ctx, advDisOverride, rng, { kind: 'strike', ...BOSSES[boss.bossId].strike });
+    return enemyAttack(ctx, advDisOverride, rng, { kind: 'cast', skill: def });
+  }
+  if (move === 'call_crew') {
+    boss.minions = (boss.minions ?? 0) + 1;
+    ctx.events.push({ kind: 'boss-summon', minions: boss.minions });
+    return 'ongoing';
+  }
+  if (move === 'grieve') {
+    const amount = Math.min(1, ctx.player.skillCharges);
+    ctx.player = { ...ctx.player, skillCharges: ctx.player.skillCharges - amount };
+    ctx.events.push({ kind: 'boss-grieve', amount });
+    return 'ongoing';
+  }
+  // hold_back
+  return 'ongoing';
 }
 
 /**

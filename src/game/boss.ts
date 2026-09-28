@@ -26,7 +26,8 @@ import { generateEnemy, type Enemy } from './enemy.ts';
 import { computeStatMods } from './character.ts';
 import { type Player } from './player.ts';
 import { type KarmaState } from './karma.ts';
-import { type Rng } from './rng.ts';
+import { randInt, type Rng } from './rng.ts';
+import { SKILLS, resolveSkill, type SkillDef, type SkillId } from './skill.ts';
 import { type BattleState, type BattleAction } from './battle.ts';
 import { type CombatEvent } from './combatEvent.ts';
 import { FINAL_BOSS_XP } from './progression.ts';
@@ -129,8 +130,8 @@ export const MOVE_DESCRIPTIONS: Record<BossMoveKind, string> = bossData.moveDesc
 // stacking flat damage every round. Softened across all three levers (slower summons, less
 // per-minion damage, a smaller crew) so the first boss is a threat, not a run-ender, and Act-1
 // deaths drop into line with the other floors. See docs/BALANCE-REPORT.md.
-/** Kingpin: summon a new minion every N rounds. M15: 2 → 3. */
-export const KINGPIN_SUMMON_EVERY_ROUNDS = 3;
+// PLAN.md #11: the summon CADENCE (`KINGPIN_SUMMON_EVERY_ROUNDS`, every 3 rounds) is retired —
+// the Kingpin calls his crew as a chosen move (`call_crew`), so the rhythm is his, not a timer's.
 /** Kingpin: extra damage the player takes per active minion, each round. M15: 2 → 1. */
 export const KINGPIN_MINION_DAMAGE = 1;
 /** Kingpin: the minion crew never grows past this many. M15: 3 → 2. */
@@ -376,8 +377,12 @@ export function generateBoss(args: {
 
 // ------- Per-round hook ------------------------------------------------------
 
-/** A stable key for tallying a repeated action (fight / cast:<id> / consumable:<src>). */
-function actionKey(action: BattleAction): string {
+/**
+ * A stable key for tallying a repeated action (fight / cast:<id> / consumable:<src>). Exported
+ * (PLAN.md #11) because a boss round now completes on the boss's step, after the player's action
+ * is gone: the key rides on the pause (`bossChoice.playerActionKey`) until then.
+ */
+export function battleActionKey(action: BattleAction): string {
   if (typeof action === 'string') return action;
   if (action.kind === 'cast') return `cast:${action.skillId}`;
   return `consumable:${JSON.stringify(action.source)}`;
@@ -407,16 +412,17 @@ export interface BossRoundResult {
  * only when a boss round resolved `ongoing`. Off-equivalent by construction: a battle with no
  * `boss` never reaches here (game.ts guards on `battle.boss`).
  *
- *  - kingpin: `round++`; on the fixed cadence (and under the cap) summon one minion
- *    (`boss-summon`); then the whole crew's `minions × KINGPIN_MINION_DAMAGE` is announced
+ *  - kingpin: `round++`; the whole crew's `minions × KINGPIN_MINION_DAMAGE` is announced
  *    (`boss-minion-damage`) and RETURNED as `playerDamage` for game.ts to apply (G29).
- *  - reflection: tally the action; the first time any tally reaches `REFLECTION_ADAPT_THRESHOLD`
- *    (and not yet adapted) the boss adapts — the player rolls at DISADVANTAGE for the rest of
- *    THIS battle (`battle.playerAdvantage = -1`, G12) and a `boss-adapt` fires.
- *  - sin / hollow: no per-round mechanic (theirs is entirely at generation); only `round++`
- *    for save-visibility, no events.
+ *    PLAN.md #11: the fixed three-round summon timer is GONE — the crew grows only when the
+ *    Kingpin chooses `call_crew` on his turn (§22.31: "the model sets the rhythm").
+ *  - reflection: tally the action (its `battleActionKey`); the first time any tally reaches
+ *    `REFLECTION_ADAPT_THRESHOLD` (and not yet adapted) the boss adapts — the player rolls at
+ *    DISADVANTAGE for the rest of THIS battle (`battle.playerAdvantage = -1`, G12) and a
+ *    `boss-adapt` fires. A granted `drop_mechanic` (`adaptDisabled`) stops it adapting.
+ *  - sin / hollow / executioner: no per-round mechanic; only `round++` for save-visibility.
  */
-export function bossPostRound(battle: BattleState, action: BattleAction): BossRoundResult {
+export function bossPostRound(battle: BattleState, actionKey: string): BossRoundResult {
   const boss = battle.boss;
   if (!boss) return { battle, events: [], playerDamage: 0 };
 
@@ -425,12 +431,7 @@ export function bossPostRound(battle: BattleState, action: BattleAction): BossRo
 
   switch (boss.bossId) {
     case 'kingpin': {
-      let minions = nextBoss.minions ?? 0;
-      if (nextBoss.round % KINGPIN_SUMMON_EVERY_ROUNDS === 0 && minions < KINGPIN_MAX_MINIONS) {
-        minions += 1;
-        events.push({ kind: 'boss-summon', minions });
-      }
-      nextBoss.minions = minions;
+      const minions = nextBoss.minions ?? 0;
       // G29: announce the damage and hand it back as a NUMBER. `game.ts` puts it through
       // `applyDamageToBattlePlayer`, which owns shield, relics and the revive gate — and owns
       // the one death decision. This module never writes `player.hp` again.
@@ -443,11 +444,11 @@ export function bossPostRound(battle: BattleState, action: BattleAction): BossRo
     }
     case 'reflection': {
       const tally = { ...(nextBoss.actionTally ?? {}) };
-      const key = actionKey(action);
+      const key = actionKey;
       tally[key] = (tally[key] ?? 0) + 1;
       nextBoss.actionTally = tally;
       const next: BattleState = { ...battle, boss: nextBoss };
-      if (!nextBoss.adapted && tally[key]! >= REFLECTION_ADAPT_THRESHOLD) {
+      if (!nextBoss.adapted && !nextBoss.adaptDisabled && tally[key]! >= REFLECTION_ADAPT_THRESHOLD) {
         nextBoss.adapted = true;
         // G12: the adaptation is a STANDING, BATTLE-SCOPED penalty, so it is written to
         // `battle.playerAdvantage` instead of onto the player. Written onto the player it
@@ -465,4 +466,102 @@ export function bossPostRound(battle: BattleState, action: BattleAction): BossRo
       // Mechanic is entirely at generation; only advance the save-visible round counter.
       return { battle: { ...battle, boss: nextBoss }, events, playerDamage: 0 };
   }
+}
+
+// ------- PLAN.md #11: the boss's turn as a CHOICE ------------------------------
+
+/**
+ * A boss move id — what the `boss-choice` input names and the model's grammar is built from
+ * (§5.2). One per kind, except `cast`, which names its skill: `cast:<SkillId>`.
+ */
+export type BossMoveId = 'strike' | 'call_crew' | 'hold_back' | 'grieve' | `cast:${string}`;
+
+/** One legal move, with the plain-words line the prompt lists (unit B) and the button reads (unit C). */
+export interface BossMoveOption {
+  id: BossMoveId;
+  kind: BossMoveKind;
+  /** The skill a `cast` move casts. */
+  skillId?: SkillId;
+  description: string;
+}
+
+/**
+ * The skill a boss actually casts for `skillId` — its WARPED form when the boss carries a copy
+ * of the player's warped kit (the Hollow Self, floor 5), else the plain def. `undefined` for an
+ * id the skill table does not know. PURE.
+ */
+export function bossCastDef(boss: BossState, skillId: string): SkillDef | undefined {
+  const base = SKILLS[skillId as SkillId];
+  if (!base) return undefined;
+  return boss.warpedSkills ? resolveSkill({ corruptedSkills: boss.warpedSkills }, skillId as SkillId) : base;
+}
+
+/** The fields of a battle the legal set reads (a `BattleState` satisfies it). */
+export type BossMoveContext = Pick<BattleState, 'boss' | 'enemy' | 'player'>;
+
+/**
+ * The legal moves for the boss riding on `battle`, in the card's order — PURE, RNG-free. `[]`
+ * for a battle with no boss. The rules (§5.2):
+ *  - `strike` — always.
+ *  - `cast:<id>` — one per skill in the enemy's pool whose cost (of the def it would really
+ *    cast — the Hollow Self's warped one) its charges cover.
+ *  - `call_crew` — only under the crew cap, and not once `drop_mechanic` disbanded the calling.
+ *  - `hold_back` — only with a crew to do the work (a crewless "let them work" is a null move).
+ *  - `grieve` — only while the player holds a charge to lose.
+ * The ENGINE computes this list; a model choice outside it falls back (§17.3.3).
+ */
+export function legalBossMoves(battle: BossMoveContext): BossMoveOption[] {
+  const boss = battle.boss;
+  if (!boss) return [];
+  const out: BossMoveOption[] = [];
+  const add = (id: BossMoveId, kind: BossMoveKind, skillId?: SkillId): void => {
+    const option: BossMoveOption = { id, kind, description: '' };
+    if (skillId !== undefined) option.skillId = skillId;
+    option.description = describeBossMove(option, boss);
+    out.push(option);
+  };
+  const minions = boss.minions ?? 0;
+  for (const kind of BOSSES[boss.bossId].moves) {
+    switch (kind) {
+      case 'strike':
+        add('strike', 'strike');
+        break;
+      case 'cast':
+        for (const id of battle.enemy.skillPool) {
+          const def = bossCastDef(boss, id);
+          if (def && def.chargeCost <= battle.enemy.skillCharges) add(`cast:${id}`, 'cast', id as SkillId);
+        }
+        break;
+      case 'call_crew':
+        if (minions < KINGPIN_MAX_MINIONS && !boss.crewDisbanded) add('call_crew', 'call_crew');
+        break;
+      case 'hold_back':
+        if (minions >= 1) add('hold_back', 'hold_back');
+        break;
+      case 'grieve':
+        if (battle.player.skillCharges >= 1) add('grieve', 'grieve');
+        break;
+    }
+  }
+  return out;
+}
+
+/**
+ * The plain-words line for a move (`bosses.json` `moveDescriptions`, `{skill}` filled with the
+ * skill's name as the boss would cast it). PURE.
+ */
+export function describeBossMove(option: Pick<BossMoveOption, 'kind' | 'skillId'>, boss?: BossState): string {
+  const template = MOVE_DESCRIPTIONS[option.kind];
+  if (option.kind !== 'cast' || option.skillId === undefined) return template;
+  const def = boss ? bossCastDef(boss, option.skillId) : SKILLS[option.skillId];
+  return template.split('{skill}').join(def?.name ?? option.skillId);
+}
+
+/**
+ * THE FALLBACK (the author's ruling, Q1a): a seeded UNIFORM pick over the legal ids — ONE
+ * `randInt` draw. Used when the model is off, times out, answers nothing, or answers something
+ * the engine did not list (§17.3.3), and as the simulator's baseline. PURE given `rng`.
+ */
+export function pickFallbackMove(legal: readonly BossMoveId[], rng: Rng): BossMoveId {
+  return legal[randInt(rng, legal.length)] ?? 'strike';
 }

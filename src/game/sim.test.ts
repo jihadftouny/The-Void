@@ -160,6 +160,9 @@ const ALLOWED: Record<Awaiting, ReadonlySet<GameInput['kind']>> = {
   // PLAN.md #2, Appendix A.3: make room with a discard, or back out (which is refusing).
   'deal-discard': new Set(['discard', 'deal-decision']),
   rest: new Set(['continue']), // PLAN.md #2: a found rest is taken at once; only continue remains
+  // PLAN.md #11: a paused boss round takes only the boss's move (a Talk concession is unit C's
+  // input and the sim never talks).
+  'boss-choice': new Set(['boss-choice']),
   'game-over': new Set(['continue']),
 };
 

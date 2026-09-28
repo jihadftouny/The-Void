@@ -8,6 +8,7 @@ import {
   openBattle,
   resetTransientCombatState,
   resolveRound,
+  resolveBossChoice,
   rollFlee,
   spareAvailable,
   type BattleState,
@@ -1047,16 +1048,22 @@ describe('G39 — a flee consumable cannot escape a battle that forbids fleeing'
         inventory: { ...base.player.inventory, backpack: [{ defId: 'smoke-vial' }] },
       },
     };
-    // PLAN.md #1.6 (AC-5): the item was a turn, so the enemy's turn follows — scripted to miss
-    // (face 5 + 1 = 6 < AC 13, no skill-pick).
-    const r = resolveRound(state, { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([face(5, 20)]));
+    // PLAN.md #1.6 (AC-5): the item was a turn, so the enemy's turn follows. PLAN.md #11: this is
+    // a BOSS, so its turn pauses for its choice (no draw yet) and the round completes when its
+    // move — a strike, scripted to miss (face 5 + 1 = 6 < AC 13) — is supplied.
+    const r = resolveRound(state, { kind: 'useConsumable', source: { index: 0 } }, scriptedRng([]));
     expect(r.status).toBe('ongoing');
     expect(r.events).toContainEqual({ kind: 'escape-impossible' });
-    expect(r.events.some((e) => e.kind === 'attack' && e.subject === 'enemy')).toBe(true);
-    // The turn WAS spent — the item is gone, and the round counts for the boss mechanic.
+    // The turn WAS spent — the item is gone.
     expect(r.state.player.inventory.backpack).toEqual([]);
     expect(r.resolved).toBe(true);
-    expect(r.roundComplete).toBe(true);
+    expect(r.roundComplete).toBe(false);
+    expect(r.state.bossChoice?.legal[0]).toBe('strike');
+    const b = resolveBossChoice(r.state, 'strike', scriptedRng([face(5, 20)]));
+    expect(b.status).toBe('ongoing');
+    expect(b.events.some((e) => e.kind === 'attack' && e.subject === 'enemy')).toBe(true);
+    // ...and the round counts for the boss mechanic once the boss has acted.
+    expect(b.roundComplete).toBe(true);
   });
 
   it('still works where fleeing IS allowed', () => {

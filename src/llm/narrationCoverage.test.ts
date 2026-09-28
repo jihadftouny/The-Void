@@ -122,6 +122,11 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   // --- the 2 facts PLAN.md #1.6 adds (the tempo gauge's two moments) ---
   'tempo-extra-action': 'fact',
   'tempo-lost-turn': 'fact',
+  // --- PLAN.md #11: the boss's chosen move and the Sin's grief. `boss-move` is a FACT kind whose
+  // strike/cast/call_crew/grieve values describe to '' on purpose (their own events speak) —
+  // pinned value by value in the #11 block below; the sample is `hold_back`, a spoken move.
+  'boss-move': 'fact',
+  'boss-grieve': 'fact',
   // --- the 17 deliberate silences ---
   'cast-unavailable': 'silent',
   'spare-unavailable': 'silent',
@@ -189,7 +194,8 @@ describe('describeEvent covers every event kind (G13)', () => {
     // potion itself (§22.6).
     // PLAN.md #1.6 added 4 combat kinds (tempo-changed, tempo-extra-action, tempo-lost-turn,
     // hp-changed).
-    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4);
+    // PLAN.md #11 added 2 combat kinds (boss-move, boss-grieve).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2);
   });
 
   it('the classification is 51 facts and 17 deliberate silences', () => {
@@ -200,7 +206,8 @@ describe('describeEvent covers every event kind (G13)', () => {
     // ...and PLAN.md #2's potion removal took one pre-G13 fact (potion-drunk) and two silences.
     // PLAN.md #1.6: +2 facts (tempo-extra-action, tempo-lost-turn), +2 silences
     // (tempo-changed, hp-changed).
-    expect(facts).toHaveLength(26 + 15 + 8 + 2);
+    // PLAN.md #11: +2 facts (boss-move, boss-grieve).
+    expect(facts).toHaveLength(26 + 15 + 8 + 2 + 2);
     expect(DELIBERATELY_SILENT.size).toBe(15 + 2);
     expect(NEW_FACT_KINDS).toHaveLength(15);
     for (const k of NEW_FACT_KINDS) expect(EXPECTED[k]).toBe('fact');
@@ -230,6 +237,34 @@ describe('describeEvent covers every event kind (G13)', () => {
 // ---------------------------------------------------------------------------------------
 // U3-U6 — what the new fact lines must say
 // ---------------------------------------------------------------------------------------
+
+describe('the boss’s chosen move, as the narrator hears it (PLAN.md #11, AC-24)', () => {
+  it('a move whose own events speak is never narrated a second time', () => {
+    // strike → `attack`; cast → `enemy-skill-used` + `attack`; call_crew → `boss-summon`;
+    // grieve → `boss-grieve`. Each of those already has its fact line, so the move says nothing.
+    for (const move of ['strike', 'cast:pyroBall', 'call_crew', 'grieve'] as const) {
+      expect(describeEvent({ kind: 'boss-move', bossId: 'sin', move }), move).toBe('');
+    }
+  });
+
+  it('the two moves with no event of their own get a line — no number, no reserved word', () => {
+    for (const move of ['hold_back', 'pause'] as const) {
+      const out = describeEvent({ kind: 'boss-move', bossId: 'kingpin', move });
+      expect(out.length, move).toBeGreaterThan(0);
+      expect(out, move).not.toMatch(/\d/);
+      expect(out, move).not.toMatch(/\bhollow\b|made whole/i);
+    }
+    expect(describeEvent({ kind: 'boss-move', bossId: 'kingpin', move: 'hold_back' })).not.toBe(
+      describeEvent({ kind: 'boss-move', bossId: 'kingpin', move: 'pause' }),
+    );
+  });
+
+  it('the grief says what it costs without a number', () => {
+    const out = describeEvent({ kind: 'boss-grieve', amount: 1 });
+    expect(out).toContain('your strength');
+    expect(out).not.toMatch(/\d|charge/i);
+  });
+});
 
 describe('the tempo gauge and the failed escape, as the narrator hears them (PLAN.md #1.6)', () => {
   it('reads the plan’s exact facts, with no number in any of them', () => {

@@ -32,7 +32,7 @@ import {
   type GameInput,
   type StepResult,
 } from './game.ts';
-import { ALL_CLASSES, heuristicPolicy, mercifulPolicy, type SimPolicy } from './sim.ts';
+import { ALL_CLASSES, gearUpAtHub, heuristicPolicy, mercifulPolicy, type SimPolicy } from './sim.ts';
 import {
   applyDeal,
   canAfford,
@@ -1242,6 +1242,11 @@ function playRun(seed: number, classId: PlayerClass, policy: SimPolicy, guard = 
   let karmaAtVerdict: KarmaState | null = null;
   let steps = 0;
   while (r.awaiting !== 'game-over' && steps < guard) {
+    // PLAN.md #11: gear up at the hub exactly as the sim does (`runToTerminal`), so these runs
+    // really are "as strong as the measured merciful baseline" (penitentPolicy's own claim). Before
+    // bosses struck with real dice, an ungeared run still reached the reckoning often enough to
+    // hide the gap; with them, 120 ungeared penitent/enforcer runs reached it twice.
+    if (r.awaiting === 'main-menu') r = { ...r, state: gearUpAtHub(r.state) };
     const phase = r.state.phase;
     const facing = phase.kind === 'battle' ? phase.battle.enemy.familyId : null;
     const offered = phase.kind === 'deal' ? phase.deal.cost.kind : null;

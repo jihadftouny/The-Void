@@ -29,16 +29,25 @@ import { createPlayer, rollStartStats, type Player, type PlayerClass } from './p
 import {
   applyDamageToBattlePlayer,
   DEFAULT_ROUND_RULES,
+  resolveBossChoice,
   resolveRound,
   openBattle,
   type BattleState,
   type BattleAction,
+  type RoundResult,
   type RoundRules,
 } from './battle.ts';
 import { dampenHeal, floorModifiers, floorOf, ILLUSION_DC } from './floors.ts';
 import { rollCorruptions } from './corruption.ts';
 import { createBattle } from './battle.ts';
-import { generateBoss, bossPostRound, computeVerdict, type BossId } from './boss.ts';
+import {
+  battleActionKey,
+  bossPostRound,
+  computeVerdict,
+  generateBoss,
+  type BossId,
+  type BossMoveId,
+} from './boss.ts';
 import {
   buildRandomBattle,
   buildChestLoot,
@@ -163,6 +172,10 @@ export type Awaiting =
   // PLAN.md #2: the found rest spot — the rest has already happened; only `continue` remains.
   // Its own value (not `continue`) so the renderer can give the one calm screen its scenery.
   | 'rest'
+  // PLAN.md #11: a boss round paused after the player's half, waiting for the BOSS's move — the
+  // model's choice, or the seeded fallback (`move: null`). Its own value so the renderer can
+  // tell "your turn" from "its turn".
+  | 'boss-choice'
   | 'game-over';
 
 /** The input the player (via the UI) supplies to `step`. */
@@ -179,7 +192,11 @@ export type GameInput =
   // PLAN.md #2: leave backpack item `index` behind. At the hub it is a plain discard; in the
   // `deal-discard` phase it is the room a bargain's reward needs (A.3). Either way it is an
   // ENGINE input, so a run still replays from `seed + inputs` (CLAUDE.md principle 1).
-  | { kind: 'discard'; index: number };
+  | { kind: 'discard'; index: number }
+  // PLAN.md #11: the BOSS's move for its paused turn — one of `battle.bossChoice.legal`, or `null`
+  // for the seeded fallback. An id not in the list is treated as `null` (§17.3.3). Like every
+  // input, it is how a run replays from `seed + inputs`.
+  | { kind: 'boss-choice'; move: BossMoveId | null };
 
 /**
  * Rule overrides for a `step` — a MEASUREMENT seam, never set by the game (PLAN.md #2).
@@ -246,7 +263,8 @@ export function awaitingFor(phase: Phase): Awaiting {
     case 'main-menu':
       return 'main-menu';
     case 'battle':
-      return phase.started ? 'battle-action' : 'continue';
+      if (!phase.started) return 'continue';
+      return phase.battle.bossChoice ? 'boss-choice' : 'battle-action';
     case 'battle-victory':
       return 'continue';
     case 'rest':
@@ -389,8 +407,17 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
         const opened = openBattle(phase.battle, floorOf(state));
         return finish({ ...phase, battle: opened.battle, started: true }, opened.events);
       }
+      const rules = roundRules(state, options);
+      // PLAN.md #11: while a boss round waits for the boss's move, only that move is accepted.
+      if (phase.battle.bossChoice) {
+        if (input.kind !== 'boss-choice') return noop;
+        const key = phase.battle.bossChoice.playerActionKey;
+        const round = resolveBossChoice(phase.battle, input.move, rng, rules);
+        return settleBattleRound(state, phase, round, key, rng, finish);
+      }
       if (input.kind !== 'battle-action') return noop;
-      return resolveBattleRound(state, phase, input.action, rng, finish, roundRules(state, options));
+      const round = resolveRound(phase.battle, input.action, rng, rules);
+      return settleBattleRound(state, phase, round, battleActionKey(input.action), rng, finish);
     }
 
     case 'battle-victory': {
@@ -747,15 +774,19 @@ function openDeal(state: GameState, rng: Rng, finish: Finish): StepResult {
   ]);
 }
 
-function resolveBattleRound(
+/**
+ * Everything after a battle step resolved — the boss's once-per-round mechanic and the routing on
+ * the round's status. PLAN.md #11: a boss round can complete on the BOSS's step
+ * (`resolveBossChoice`), after the player's action is gone, so the action arrives as its key.
+ */
+function settleBattleRound(
   state: GameState,
   phase: Extract<Phase, { kind: 'battle' }>,
-  action: BattleAction,
-  rng: Rng,
+  round: RoundResult,
+  actionKey: string,
+  _rng: Rng,
   finish: Finish,
-  rules: RoundRules,
 ): StepResult {
-  const round = resolveRound(phase.battle, action, rng, rules);
   const events: GameEvent[] = [...round.events];
   let battle = round.state;
   let status = round.status;
@@ -776,7 +807,7 @@ function resolveBattleRound(
   // one guarded damage path in `battle.ts` (shield -> onTakeDamage relics -> revive gate), so
   // the most common death in the game finally consults the defenses the player paid for.
   if (status === 'ongoing' && battle.boss && round.resolved && round.roundComplete) {
-    const post = bossPostRound(battle, action);
+    const post = bossPostRound(battle, actionKey);
     battle = post.battle;
     events.push(...post.events);
     if (post.playerDamage > 0) {

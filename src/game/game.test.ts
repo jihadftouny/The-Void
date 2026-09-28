@@ -16,7 +16,7 @@ import { createBattle, type BattleState } from './battle.ts';
 import { selectEncounter } from './encounter.ts';
 import { buildDeal, selectPool } from './deal.ts';
 import { FINAL_BOSS_NAME, FINAL_BOSS_XP, HOLLOW_GATE_XP } from './progression.ts';
-import { BOSSES, KINGPIN_MINION_DAMAGE, type BossState } from './boss.ts';
+import { BOSSES, KINGPIN_MINION_DAMAGE, type BossMoveId, type BossState } from './boss.ts';
 import { getGraceEnding, getDamnationEnding } from './story.ts';
 import { createRng, mulberry32 } from './rng.ts';
 import { type Stats } from './character.ts';
@@ -38,6 +38,21 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     ...createPlayer({ name: 'Hero', classId: 'Enforcer', stats: baseStats() }),
     ...overrides,
   };
+}
+
+/**
+ * PLAN.md #11: answer a paused boss turn — step `{ boss-choice, move }` until the round is no
+ * longer waiting on the boss — and return the last result with EVERY step's events, in order,
+ * so a test of "one round" still sees the whole round.
+ */
+function throughBoss(r: StepResult, move: BossMoveId | null = null): StepResult {
+  const events: GameEvent[] = [...r.events];
+  let out = r;
+  for (let guard = 0; out.awaiting === 'boss-choice' && guard < 4; guard += 1) {
+    out = step(out.state, { kind: 'boss-choice', move });
+    events.push(...out.events);
+  }
+  return { ...out, events };
 }
 
 function menuState(player: Player, rngState: number, act = 1): GameState {
@@ -1077,11 +1092,20 @@ describe('AC-15 (PLAN.md #1.6) — a boss gets exactly one post-round per COMPLE
     expect(first.state.phase.battle.boss?.round).toBe(0);
     expect(first.awaiting).toBe('battle-action');
 
+    // PLAN.md #11: the second Fight ends the player's half; the round then waits for the
+    // Kingpin's own move — still not complete, so the crew still has not struck.
     const second = step(first.state, { kind: 'battle-action', action: 'fight' });
-    expect(second.events.filter((e) => e.kind === 'boss-minion-damage')).toEqual([{ kind: 'boss-minion-damage', amount: 2 }]);
+    expect(second.awaiting).toBe('boss-choice');
+    expect(second.events.some((e) => e.kind === 'boss-minion-damage')).toBe(false);
     if (second.state.phase.kind !== 'battle') throw new Error('the fight ended early');
-    expect(second.state.phase.battle.boss?.round).toBe(1);
+    expect(second.state.phase.battle.boss?.round).toBe(0);
     expect(second.state.phase.battle.extraAction).toBeUndefined();
+
+    // The boss's move completes the round: the crew strikes exactly once.
+    const third = throughBoss(second, 'strike');
+    expect(third.events.filter((e) => e.kind === 'boss-minion-damage')).toEqual([{ kind: 'boss-minion-damage', amount: 2 }]);
+    if (third.state.phase.kind !== 'battle') throw new Error('the fight ended early');
+    expect(third.state.phase.battle.boss?.round).toBe(1);
   });
 });
 
@@ -1166,7 +1190,7 @@ describe('G36 — pressing a button the engine refuses costs nothing', () => {
     );
     let adapted = false;
     for (let i = 0; i < 3; i++) {
-      r = step(r.state, { kind: 'battle-action', action: 'fight' });
+      r = throughBoss(step(r.state, { kind: 'battle-action', action: 'fight' }));
       if (r.events.some((e) => e.kind === 'boss-adapt')) adapted = true;
     }
     expect(adapted).toBe(true);
@@ -1205,9 +1229,11 @@ describe('M12 Reflection adaptation drives a disadvantaged player attack', () =>
       awaiting: 'battle-action',
     };
     // Three fights reach the threshold; boss-adapt fires on the third.
+    // PLAN.md #11: each round completes on the boss's move — Brace, its only cast, when
+    // affordable (the fallback otherwise), so nothing it does touches the player's adv/dis.
     let adaptRound = -1;
     for (let i = 0; i < 3; i++) {
-      r = step(r.state, { kind: 'battle-action', action: 'fight' });
+      r = throughBoss(step(r.state, { kind: 'battle-action', action: 'fight' }), 'cast:brace');
       if (r.events.some((e) => e.kind === 'boss-adapt')) adaptRound = i;
     }
     expect(adaptRound).toBe(2); // the 3rd fight (0-indexed)
@@ -1473,6 +1499,8 @@ function decide(res: StepResult): GameInput {
       return { kind: 'continue' }; // PLAN.md #2: a found rest was taken already
     case 'deal-discard':
       return { kind: 'deal-decision', accept: false }; // never reached: this driver refuses deals
+    case 'boss-choice':
+      return { kind: 'boss-choice', move: null }; // PLAN.md #11: the boss plays its seeded fallback
     case 'game-over':
       return { kind: 'continue' };
   }

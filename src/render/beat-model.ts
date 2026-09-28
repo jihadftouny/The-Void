@@ -87,6 +87,8 @@ export const BEAT_ROLE: Readonly<Record<GameEventKind, BeatRole>> = {
   detonate: 'attach',
   'boss-summon': 'attach',
   'boss-adapt': 'attach',
+  'boss-move': 'attach', // PLAN.md #11
+  'boss-grieve': 'attach',
   // ---- the narration's, never the arena's ----
   'loot-left-behind': 'pane',
   title: 'pane',

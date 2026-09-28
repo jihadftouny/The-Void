@@ -261,6 +261,17 @@ export function describeEvent(e: GameEvent): string {
       // The mechanic is a to-hit penalty, so the clause carries no number: the narrator
       // is forbidden mechanics, and a to-hit modifier is nothing the player can observe.
       return `It reads your pattern; your next strike will be harder to land.`;
+    // ---- PLAN.md #11: the boss's chosen move --------------------------------------------
+    case 'boss-move':
+      // The move that has NO event of its own gets the line; every other move's own event
+      // already speaks (`attack` + `enemy-skill-used`, `boss-summon`, `boss-grieve`), and a second
+      // line would narrate one boss action twice.
+      if (e.move === 'hold_back') return `It holds back and lets the others do the work.`;
+      if (e.move === 'pause') return `It stops, and lets you breathe.`;
+      return '';
+    case 'boss-grieve':
+      // The Sin's new move (§22.31): no blow, one charge lost. No number, no resource word.
+      return `It mourns, and something of your strength goes with it.`;
     case 'boss-encounter':
       // Every floor's boss reveal. Mirrors the `final-battle-begins` shape above.
       return `${e.enemyName}, the master of this floor, stands before you.`;

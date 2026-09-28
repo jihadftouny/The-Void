@@ -180,6 +180,8 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'boss-summon': { kind: 'boss-summon', minions: 2 },
   'boss-minion-damage': { kind: 'boss-minion-damage', amount: 4 },
   'boss-adapt': { kind: 'boss-adapt' },
+  'boss-move': { kind: 'boss-move', bossId: 'sin', move: 'cast:pyroBall' },
+  'boss-grieve': { kind: 'boss-grieve', amount: 1 },
   // PLAN.md #2 (combat)
   'floor-drain': { kind: 'floor-drain', resource: 'skillCharge', amount: 2 },
   'illusion-struck': { kind: 'illusion-struck' },
@@ -237,7 +239,8 @@ describe('formatEvent — totality over every event kind', () => {
     // ...and the three potion kinds (§22.6).
     // PLAN.md #1.6 added 4 combat kinds (tempo-changed, tempo-extra-action, tempo-lost-turn,
     // hp-changed).
-    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4);
+    // PLAN.md #11 added 2 combat kinds (boss-move, boss-grieve).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2);
     for (const kind of ALL_KINDS) expect(SAMPLES[kind].kind).toBe(kind);
   });
 

@@ -552,6 +552,10 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
     case 'rest':
       // A found rest was taken the moment it was found (§22.26); only `continue` remains.
       return { kind: 'continue' };
+    case 'boss-choice':
+      // PLAN.md #11: the boss's move. `null` hands it to the engine's seeded fallback — the
+      // model-off game, and the balance baseline.
+      return { kind: 'boss-choice', move: null };
     case 'game-over':
       // Unreachable dispatch (the loop exits on this awaiting); return a valid input anyway.
       return { kind: 'continue' };

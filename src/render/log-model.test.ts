@@ -65,6 +65,8 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'boss-summon': { kind: 'boss-summon', minions: 1 },
   'boss-minion-damage': { kind: 'boss-minion-damage', amount: 2 },
   'boss-adapt': { kind: 'boss-adapt' },
+  'boss-move': { kind: 'boss-move', bossId: 'kingpin', move: 'call_crew' },
+  'boss-grieve': { kind: 'boss-grieve', amount: 1 },
   // PLAN.md #2 (combat)
   'floor-drain': { kind: 'floor-drain', resource: 'skillCharge', amount: 1 },
   'illusion-struck': { kind: 'illusion-struck' },
@@ -122,7 +124,8 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
     // ...and -3 combat: the potion kinds left with the potion (§22.6).
     // ...and +4 combat: PLAN.md #1.6's tempo-changed, tempo-extra-action, tempo-lost-turn,
     // hp-changed.
-    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4);
+    // ...and +2 combat: PLAN.md #11's boss-move, boss-grieve.
+    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2);
     expect(new Set(Object.keys(LOG_ROUTING))).toEqual(new Set(ALL_KINDS));
   });
 
@@ -160,7 +163,8 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
     // non-vacuity: 37 + PLAN.md #2's three in-fight kinds (floor-drain, illusion-struck,
     // illusion-dispelled). `loot-left-behind` is a combat kind routed to the PANE.
     // PLAN.md #1.6: +2 (tempo-extra-action, tempo-lost-turn); its other two are `hud`.
-    expect(logged).toBe(37 + 3 - 3 + 2);
+    // PLAN.md #11: +2 (boss-move, boss-grieve) — both inside a fight.
+    expect(logged).toBe(37 + 3 - 3 + 2 + 2);
   });
 
   it('every PANE-routed kind yields NO line at all', () => {
