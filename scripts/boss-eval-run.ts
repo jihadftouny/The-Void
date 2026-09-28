@@ -12,7 +12,7 @@
 // (via the library's `scoreCall`). Only `backend.generate` differs between the real run and a test —
 // the real one is `electron/structured.mjs`'s `runStructured`.
 //
-// No `process`, no file system, no `node-llama-cpp`: this module writes, prints and exits nothing.
+// No process state, no file system, no native model library: this module writes, prints and exits nothing.
 // The only clock is the queue's (injected in tests) and the one timing the progress callback.
 
 import { createSequenceQueue } from '../electron/llm-queue.mjs';
@@ -49,7 +49,7 @@ export interface EvalBackend {
    * pure request the IPC request was built from — the real backend ignores it; a fake scripts by it.
    */
   generate(ipc: BossIpcRequest, opts: { signal: AbortSignal; request: BossRequest }): Promise<RawResult>;
-  /** The GPU's memory state (node-llama-cpp's `getVramState`), or null. Read before and after. */
+  /** The GPU's memory state (the model library's `getVramState`), or null. Read before and after. */
   vram(): Promise<unknown | null>;
 }
 

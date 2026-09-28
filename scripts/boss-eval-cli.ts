@@ -8,7 +8,7 @@
 // could only guess at: nothing loads without `--run`, the model comes from the per-user directory,
 // the status is the outcome's, a crash is 4.
 //
-// No `process`, no file system, no `node-llama-cpp` here: the entry (`boss-eval.ts`) supplies them.
+// No process state, no file system, no native model library here: the entry (`boss-eval.ts`) supplies them.
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +34,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /** A loaded model, as the run needs it — plus what the command reports and releases. */
 export interface LoadedBackend extends EvalBackend {
-  /** node-llama-cpp's `llama.gpu` (false on a CPU-only run — the timings then mean nothing). */
+  /** The model library's `llama.gpu` (false on a CPU-only run — the timings then mean nothing). */
   gpu: string;
   dispose(): Promise<void>;
 }
