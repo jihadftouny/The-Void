@@ -347,9 +347,11 @@ fail, a true fail as a pass) and, with a per-call limit only, a run could pass w
 2. A dropped conversation is **left out** of its target — numerator and denominator — and counted beside it. If
    **more than 5%** of a target's conversations are left out (`left out × 100 > 5 × (judged + left out)`), the
    target is **INCONCLUSIVE**. A target with nothing judged and something left out is **always** INCONCLUSIVE —
-   never "not run", never a pass.
+   never "not run", never a pass. A target whose group of calls ran but which nothing reached — a wiring fault in the
+   evaluation, not a verdict of the model — is INCONCLUSIVE too, never "not run" (fix round 3).
 3. INCONCLUSIVE on any target — or more than 5% failed calls in any group of calls — makes the whole run
    INCONCLUSIVE (exit status 3): re-run it before acting on any verdict in it.
 4. The per-call 5% rule still governs the Turn, Talk and Scene tables.
 *(Amends the "5% of a group's calls" ruling of fix round 1, which counted calls while these targets count
-conversations. `scripts/boss-eval-lib.ts` implements it; its tests drive the same wiring the real run uses.)*
+conversations. `scripts/boss-eval-lib.ts` implements it; `scripts/boss-eval-run.test.ts` runs the real driver end to end
+against a fake model and checks every target's counts against hand-derived numbers.)*

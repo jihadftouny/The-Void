@@ -150,14 +150,19 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ### 2026-09-28 — the bosses' model plumbing (`boss-llm`, #11 part B) — built, not merged
 
-**3476 → 3639 tests (4 skipped); typecheck, build and the full suite green.** Plan → build → test (FAIL) →
-two fix rounds. Round 1: the evaluation report counts timed-out and failed calls, times a timeout at the
+**3476 → 3672 tests (4 skipped); typecheck, build and the full suite green.** Plan → build → test (FAIL) →
+three fix rounds. Round 1: the evaluation report counts timed-out and failed calls, times a timeout at the
 moment it was cut off, never counts a failed gate call as a refusal, and exits 3 (INCONCLUSIVE) when more
 than 5% of a group's calls fail; three test holes were closed. Round 2 (the orchestrator's methodology
 amendment, `BOSS-PROMPTS.md` §7.1): a failed Hollow Self message is asked again up to twice, and a target
 with more than 5% of its conversations left out is INCONCLUSIVE — a timeout can no longer decide a verdict
 either way; a crash exits 4; the driver's exit and deadline lines are pinned. FINDINGS G83 records three
-older renderer tests that time out under load, for a separate unit. Built beside
+older renderer tests that time out under load, for a separate unit. Round 3 (a re-plan): nothing the
+player sees changes — **the boss test bench can no longer report a pass for a check it never made**. The
+evaluation is split into an importable run (`scripts/boss-eval-run.ts`) and command (`boss-eval-cli.ts`),
+both driven end to end against a fake model with every §7.1 count derived by hand, behind a 40-line process
+entry (`boss-eval.ts`); a target whose own calls never reached it is INCONCLUSIVE, never "not run"; the
+source scans that three rounds kept editing around are deleted (FINDINGS G84). Built beside
 unit A (`boss-engine`) in a separate worktree; nothing in `src/game`, `src/data`, `src/render` or
 `src/desktop` was touched. **No real model was loaded at any point** (the GPU was in use) — every test
 uses a fake, and the evaluation script's first real run is the author's (`HUMAN-CHECKS.md`).
