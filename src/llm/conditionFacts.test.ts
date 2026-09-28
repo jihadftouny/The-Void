@@ -63,12 +63,13 @@ const STATS: Stats = { STR: 12, DEX: 12, CON: 12, INT: 12, WIS: 12, CHA: 12 };
 /** A hub state wrapping a player — the shape `createGame` produces, with `player` swapped in. */
 function hub(player: Player): GameState {
   return {
-    version: 9,
+    version: 10,
     rngState: 0,
     player,
     act: 1,
     place: 0,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'main-menu' },
   };
 }

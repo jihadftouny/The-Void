@@ -54,12 +54,13 @@ function frozenEnemy(overrides: Partial<Enemy> = {}): Enemy {
 function battleState(p: Player, enemy: Enemy, place: number, act = place + 1): GameState {
   const battle: BattleState = { player: p, enemy, act, canFlee: true };
   return {
-    version: 9,
+    version: 10,
     rngState: 77,
     player: p,
     act,
     place,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'battle', battle, started: true, final: false },
   };
 }

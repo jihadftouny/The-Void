@@ -80,6 +80,7 @@ function inBattle(battle: BattleState, started = true, act = 2): GameState {
     act,
     place: act - 1,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'battle', battle, started, final: false },
   };
 }

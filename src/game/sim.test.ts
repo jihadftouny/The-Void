@@ -63,12 +63,13 @@ describe('runToTerminal classifies outcomes in player terms', () => {
     // verdict; computeVerdict({reverence:+2}) = weighted sum 3×2 = 6 >= 1 ⇒ grace ⇒ the grace
     // ending is terminal at act 4 (act 5 is never constructed).
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 5,
       player: makePlayer({ name: 'Grace', xp: 240 }),
       act: 4,
       place: 3,
       karma: karmaOf({ reverenceDesecration: 2 }),
+      deeds: [],
       phase: { kind: 'main-menu' },
     };
     const r = runToTerminal(state, heuristicPolicy('Enforcer'));
@@ -94,12 +95,13 @@ describe('runToTerminal classifies outcomes in player terms', () => {
     };
     const battle: BattleState = { player, enemy, act: 5, canFlee: false };
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 7,
       player,
       act: 5,
       place: 4,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'battle', battle, started: true, final: true },
     };
     const r = runToTerminal(state, heuristicPolicy('Enforcer'));
@@ -124,12 +126,13 @@ describe('runToTerminal classifies outcomes in player terms', () => {
     };
     const battle: BattleState = { player, enemy, act: 3, canFlee: false };
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 11,
       player,
       act: 3,
       place: 2,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'battle', battle, started: true, final: false },
     };
     const r = runToTerminal(state, heuristicPolicy('Enforcer'));
@@ -306,12 +309,13 @@ function rolled(slot: 'helmet' | 'mainHand' | 'ring', rarity: 'Common' | 'Rare' 
 function hubWith(backpack: ItemInstance[]): GameState {
   const p = makePlayer();
   return {
-    version: 9,
+    version: 10,
     rngState: 1,
     player: { ...p, inventory: { ...p.inventory, backpack } },
     act: 1,
     place: 0,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'main-menu' },
   };
 }

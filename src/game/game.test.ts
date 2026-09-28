@@ -57,12 +57,13 @@ function throughBoss(r: StepResult, move: BossMoveId | null = null): StepResult 
 
 function menuState(player: Player, rngState: number, act = 1): GameState {
   return {
-    version: 9,
+    version: 10,
     rngState,
     player,
     act,
     place: act - 1,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'main-menu' },
   };
 }
@@ -77,7 +78,8 @@ describe('createGame', () => {
     expect(s.act).toBe(1);
     expect(s.place).toBe(0);
     expect(s.rngState).toBe(777);
-    expect(s.version).toBe(9); // PLAN.md #2 bumped the save format 8 -> 9
+    expect(s.version).toBe(10); // PLAN.md #2 bumped the save format 8 -> 9; PLAN.md #11 9 -> 10
+    expect(s.deeds).toEqual([]); // PLAN.md #11: a new run has done nothing yet
     expect(awaitingFor(s.phase)).toBe('title');
   });
 
@@ -158,12 +160,13 @@ describe('character creation transitions', () => {
     // armored AC is what the HUD sees.
     const stats: Stats = { STR: 12, DEX: 12, CON: 12, INT: 10, WIS: 10, CHA: 10 };
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 7,
       player: null,
       act: 1,
       place: 0,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'stats-roll', name: 'Zara', classId: 'Enforcer', stats },
     };
     const r = step(state, { kind: 'stats-decision', accept: true });
@@ -564,12 +567,13 @@ describe('entering Act 5', () => {
   /** A hub state on floor 5 at the given XP. */
   function act5Hub(xp: number, rngState = 314): GameState {
     return {
-      version: 9,
+      version: 10,
       rngState,
       player: makePlayer({ skillPool: ['heavyStrike', 'brace'], xp }),
       act: 5,
       place: 4,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'main-menu' },
     };
   }
@@ -664,12 +668,13 @@ describe('win / ending path', () => {
   it('victory in the final (Hollow) battle emits the DAMNATION ending, then goes terminal', () => {
     const player = makePlayer({ name: 'Zara' });
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 1,
       player,
       act: 5,
       place: 4,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'battle-victory', final: true },
     };
     const r = step(state, { kind: 'continue' });
@@ -708,12 +713,13 @@ describe('win / ending path', () => {
     const battle: BattleState = { player, enemy: boss, act: 5, canFlee: false };
     let r: StepResult = {
       state: {
-        version: 9,
+        version: 10,
         rngState: 7,
         player,
         act: 5,
         place: 4,
         karma: createKarma(),
+        deeds: [],
         phase: { kind: 'battle', battle, started: true, final: true },
       },
       events: [],
@@ -783,12 +789,13 @@ function bossVictoryState(
   let rngState = 7;
   while (1 + Math.floor(createRng(rngState).rng() * 20) === 1) rngState += 1;
   return {
-    version: 9,
+    version: 10,
     rngState,
     player,
     act,
     place: act - 1,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'battle', battle, started: true, final: false },
   };
 }
@@ -823,12 +830,13 @@ describe('M12 act-4 verdict gate routes the two fates', () => {
     // computeVerdict({reverence:+2}) = 3×2 = 6 ≥ 1 ⇒ grace (hand-derived).
     const player = makePlayer({ name: 'Zara', xp: 1000 });
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 5,
       player,
       act: 4,
       place: 3,
       karma: karmaOf({ reverenceDesecration: 2 }),
+      deeds: [],
       phase: { kind: 'main-menu' },
     };
     const r = step(state, { kind: 'menu', choice: 'continue' });
@@ -859,12 +867,13 @@ describe('M12 act-4 verdict gate routes the two fates', () => {
     // computeVerdict(all-zero) = 0 < 1 ⇒ cast-down (hand-derived).
     const player = makePlayer({ name: 'Zara', xp: 1000 });
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 5,
       player,
       act: 4,
       place: 3,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'main-menu' },
     };
     let r = step(state, { kind: 'menu', choice: 'continue' });
@@ -894,12 +903,13 @@ describe('M12 act-4 verdict gate routes the two fates', () => {
   it('reverence OUTWEIGHS cruelty at the gate → grace (3×2 + 1×−4 = 2 ≥ 1)', () => {
     const player = makePlayer({ xp: 1000 });
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 5,
       player,
       act: 4,
       place: 3,
       karma: karmaOf({ reverenceDesecration: 2, mercyCruelty: -4 }),
+      deeds: [],
       phase: { kind: 'main-menu' },
     };
     const r = step(state, { kind: 'menu', choice: 'continue' });
@@ -922,12 +932,13 @@ describe('M12 off-equivalence: a normal battle invokes no boss hook', () => {
     const enemy = generateEnemy({ act: 1, type: 'Beast', playerXp: 0 }, mulberry32(2));
     const battle: BattleState = { player, enemy: { ...enemy, hp: 50, maxHp: 50 }, act: 1, canFlee: true };
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 9,
       player,
       act: 1,
       place: 0,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'battle', battle, started: true, final: false },
     };
     const r = step(state, { kind: 'battle-action', action: 'fight' });
@@ -969,12 +980,13 @@ function bossBattleState(
   const battle: BattleState = { ...built, player: { ...built.player, ...patchPlayer } };
   return {
     state: {
-      version: 9,
+      version: 10,
       rngState,
       player,
       act,
       place: act - 1,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'battle', battle, started: true, final: false },
     },
     events: [],
@@ -1217,12 +1229,13 @@ describe('M12 Reflection adaptation drives a disadvantaged player attack', () =>
     };
     let r: StepResult = {
       state: {
-        version: 9,
+        version: 10,
         rngState: 3,
         player,
         act: 2,
         place: 1,
         karma: createKarma(),
+        deeds: [],
         phase: { kind: 'battle', battle, started: true, final: false },
       },
       events: [],
@@ -1279,12 +1292,13 @@ describe('JSON round-trip determinism', () => {
 function startedBattleState(player: Player, enemy: BattleState['enemy'], rngState: number): GameState {
   const battle: BattleState = { player, enemy, act: 1, canFlee: true };
   return {
-    version: 9,
+    version: 10,
     rngState,
     player,
     act: 1,
     place: 0,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'battle', battle, started: true, final: false },
   };
 }

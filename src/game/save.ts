@@ -21,6 +21,7 @@ import { EQUIP_SLOTS } from './item.ts';
 import { BACKPACK_CAPACITY } from './inventory.ts';
 import { type PlayerClass } from './player.ts';
 import { levelForXp } from './progression.ts';
+import { isValidDeed } from './deeds.ts';
 
 /**
  * The current save-format version. Single source of version truth: it mirrors the
@@ -28,7 +29,7 @@ import { levelForXp } from './progression.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 /** The valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -170,6 +171,10 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
       case 8:
         value = upgrade8to9(value);
         current = 9;
+        break;
+      case 9:
+        value = upgrade9to10(value);
+        current = 10;
         break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
@@ -423,6 +428,23 @@ function upgrade8to9(raw: unknown): unknown {
   return next;
 }
 
+/**
+ * Migrate a v9 save to the v10 shape (PLAN.md #11, the deed record) — PURE.
+ *
+ * The one shape change: `GameState.deeds`, the saved record of what the run did (§22.31 D3). A v9
+ * run kept no deeds — only the four karma numbers — and the deeds cannot be reconstructed from
+ * those, so an old save starts with an EMPTY record, in whatever phase it was saved (the author's
+ * ruling). Every other #11 addition is optional and additive (`BattleState.bossChoice`, the new
+ * `BossState` fields, the executioner) and cannot exist in a v9 save.
+ */
+function upgrade9to10(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (!Array.isArray(next.deeds)) next.deeds = [];
+  next.version = 10;
+  return next;
+}
+
 /** A v8 bargain whose reward is the retired `heal` kind. */
 function isHealDeal(deal: unknown): boolean {
   return isPlainObject(deal) && isPlainObject(deal.reward) && deal.reward.kind === 'heal';
@@ -467,6 +489,11 @@ function isValidGameState(v: unknown): v is GameState {
 
   // Karma vector: a plain object whose four axes are all finite numbers.
   if (!isValidKarma(v.karma)) return false;
+
+  // PLAN.md #11: the deed record — an array of deeds each with a known kind and a real floor
+  // (shallow, like the rest of this guard). A record longer than `DEED_CAP` is ACCEPTED: the cap
+  // re-applies on the next write (`recordDeed`), never at load.
+  if (!Array.isArray(v.deeds) || !v.deeds.every(isValidDeed)) return false;
 
   // `player` is null before creation, otherwise a full Player envelope.
   if (v.player !== null && !isValidPlayer(v.player)) return false;

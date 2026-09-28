@@ -66,7 +66,8 @@ describe('SAVE_VERSION', () => {
   it('mirrors the current GameState.version', () => {
     // Derived from game.ts: createGame stamps the current version. PLAN.md #2 bumped 8 -> 9
     // (potions and the banked rest counter left the player; the rest phase lost its decision).
-    expect(SAVE_VERSION).toBe(9);
+    // PLAN.md #11 bumped 9 -> 10 (the deed record, `deeds`).
+    expect(SAVE_VERSION).toBe(10);
     expect(createGame(SEED).version).toBe(SAVE_VERSION);
   });
 });
@@ -173,8 +174,8 @@ describe('migration v1 -> v3 (full ladder: karma + inventory injected, then ids 
     expect(migrated).toEqual(modern);
   });
 
-  it('rejects a future version 10 save without throwing', () => {
-    const s = { ...createGame(SEED), version: 10 };
+  it('rejects a future version 11 save without throwing', () => {
+    const s = { ...createGame(SEED), version: 11 };
     expect(() => decodeSave(JSON.stringify(s))).not.toThrow();
     expect(decodeSave(JSON.stringify(s))).toBeNull();
   });
@@ -242,6 +243,7 @@ describe('PLAN.md #1.6 — the tempo gauge and the extra-action pause survive a 
       act: 1,
       place: 0,
       karma: midRunState(SEED).karma,
+      deeds: [],
       phase: { kind: 'battle', battle, started: true, final: false },
     };
   }
@@ -918,8 +920,8 @@ describe('#0a legacy-save guard: a save written before this unit still loads and
   // behaviour when absent. That is the whole basis for not bumping `SAVE_VERSION`, so it is
   // asserted rather than assumed: a save with neither key must decode and tick as before.
 
-  it('SAVE_VERSION was unchanged by #0a (it stood at 8 until PLAN.md #2 bumped it to 9)', () => {
-    expect(SAVE_VERSION).toBe(9);
+  it('SAVE_VERSION was unchanged by #0a (it stood at 8 until PLAN.md #2 bumped it to 9, and #11 to 10)', () => {
+    expect(SAVE_VERSION).toBe(10);
   });
 
   it('a battle saved with NO playerAdvantage decodes, and reads as "no standing modifier"', () => {
@@ -1001,9 +1003,9 @@ describe('migration v8 -> v9 (PLAN.md #2)', () => {
     expect(s.phase).toEqual({ kind: 'rest' });
   });
 
-  it('(d) a fresh v9 state round-trips deep-equal (nothing to migrate)', () => {
+  it('(d) a fresh current (v10) state round-trips deep-equal (nothing to migrate)', () => {
     const fresh = midRunState(SEED);
-    expect(fresh.version).toBe(9);
+    expect(fresh.version).toBe(10);
     expect(decode(JSON.parse(encodeSave(fresh)))).toEqual(fresh);
   });
 
@@ -1098,7 +1100,7 @@ describe('migration v8 -> v9 (PLAN.md #2)', () => {
     expect(r.state.player!.inventory.backpack.at(-1)).toEqual(reward.instance);
   });
 
-  it('a v1 save walks the WHOLE ladder to v9 — potions included', () => {
+  it('a v1 save walks the WHOLE ladder to the current version — potions included, deeds empty', () => {
     const modern = midRunState(SEED);
     const old = JSON.parse(encodeSave(modern)) as Record<string, unknown>;
     delete old.karma;
@@ -1108,9 +1110,11 @@ describe('migration v8 -> v9 (PLAN.md #2)', () => {
     player.equippedArmorId = 'Jooj Armor 1';
     player.pots = 2;
     player.restsLeft = 1;
+    delete old.deeds;
     old.version = 1;
     const s = decode(old)!;
-    expect(s.version).toBe(9);
+    expect(s.version).toBe(10);
+    expect(s.deeds).toEqual([]);
     expect(s.player!.inventory.backpack).toEqual([{ defId: 'void-draught' }, { defId: 'void-draught' }]);
   });
 });

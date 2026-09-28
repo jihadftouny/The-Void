@@ -686,12 +686,13 @@ function detonateThroughStep(marks: ConditionType[]): GameEvent[] {
     enemy: { ...base.enemy, activeConditions: marks.map(makeCondition) },
   };
   const state: GameState = {
-    version: 9,
+    version: 10,
     rngState: 0,
     player,
     act: 1,
     place: 0,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'battle', battle, started: true, final: false },
   };
   return step(state, {

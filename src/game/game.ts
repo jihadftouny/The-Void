@@ -23,7 +23,8 @@
 
 import { createRng, type Rng } from './rng.ts';
 import { type Stats } from './character.ts';
-import { createKarma, recordKarmaWeighted, type KarmaAction, type KarmaState } from './karma.ts';
+import { createKarma, recordKarmaWeighted, KARMA_DELTAS, type KarmaAction, type KarmaState } from './karma.ts';
+import { recordDeed, isRecordedBargain, BARGAIN_AXIS, type Deed } from './deeds.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
 import {
@@ -47,6 +48,7 @@ import {
   generateBoss,
   type BossId,
   type BossMoveId,
+  type KarmaAxis,
 } from './boss.ts';
 import {
   buildRandomBattle,
@@ -121,8 +123,9 @@ export type Phase =
 /** The full, serializable game state. */
 export interface GameState {
   /** The save format — `SAVE_VERSION` (PLAN.md #2 bumped 8 -> 9: potions and the banked rest
-   *  counter left the player, and the rest phase lost its decision; see `save.ts` `upgrade8to9`). */
-  version: 9;
+   *  counter left the player, and the rest phase lost its decision; see `save.ts` `upgrade8to9`.
+   *  PLAN.md #11 bumped 9 -> 10: the deed record, `deeds`; see `upgrade9to10`). */
+  version: 10;
   /** mulberry32 accumulator — the serializable RNG state; JSON round-trips it. */
   rngState: number;
   player: Player | null;
@@ -143,6 +146,14 @@ export interface GameState {
    * transition, so it persists unchanged until a later milestone writes to it.
    */
   karma: KarmaState;
+  /**
+   * PLAN.md #11 (GAME-DESIGN.md §22.31 D3, FINDINGS.md G79): what the run DID — spares and ⚖ kills
+   * by name, karma-priced bargains with their price and reward, illusions seen through, bosses
+   * felled or talked down — each with its floor and its karma axis, oldest first, capped at
+   * `DEED_CAP` (boss deeds always kept). Written only by `step`, through `recordDeed`. Never a fled
+   * fight. The bosses read it (unit B); nothing in the rules does.
+   */
+  deeds: Deed[];
   /**
    * M13, OPTIONAL run-start SNAPSHOT of the meta-progression unlock sets (frozen for the
    * whole run so a fixed unlock-set is fully reproducible from the seed). Only the two sets
@@ -237,12 +248,13 @@ export interface StepResult {
  */
 export function createGame(seed: number, unlocks?: RunUnlocks): GameState {
   const state: GameState = {
-    version: 9,
+    version: 10,
     rngState: seed >>> 0,
     player: null,
     act: 1,
     place: 0,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'title' },
   };
   if (unlocks) state.unlocks = unlocks;
@@ -316,7 +328,7 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
   const finish = (
     phase: Phase,
     events: GameEvent[],
-    patch: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>> = {},
+    patch: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending' | 'deeds'>> = {},
   ): StepResult => {
     const next: GameState = {
       ...state,
@@ -575,7 +587,7 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
 type Finish = (
   phase: Phase,
   events: GameEvent[],
-  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>>,
+  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending' | 'deeds'>>,
 ) => StepResult;
 
 /**
@@ -829,16 +841,20 @@ function settleBattleRound(
       return finish({ ...phase, battle }, events);
     case 'fled':
       return finish({ kind: 'main-menu' }, events, { player: battle.player });
-    case 'dispelled':
+    case 'dispelled': {
       // PLAN.md #2, floor 2: the passive Wisdom roll saw through an illusion. The fight ends
       // with NO reward (plan Appendix A.1 — "a pure cost": the illusion's attacks were real, the
       // player's were not, and seeing through pays nothing but the clarity nudge). The player's
       // battle state carries to the hub, as on any exit. `seeThroughIllusion` goes through the
       // floor funnel like every karma write (x1 on floor 2).
+      const seen: KarmaAction = 'seeThroughIllusion';
       return finish({ kind: 'main-menu' }, events, {
         player: battle.player,
-        karma: recordOnFloor(state, state.karma, 'seeThroughIllusion'),
+        karma: recordOnFloor(state, state.karma, seen),
+        // PLAN.md #11: an illusion seen through is a deed (§22.31 D3), on the same action's axis.
+        deeds: recordDeed(state.deeds, { kind: 'illusion', floor: floorOf(state), axis: axisOf(seen) }),
       });
+    }
     case 'spared':
       // Mercy: end the encounter with no rewards. Record the spare on the karma vector. The
       // actions are data-sourced from the family (the karma seam), defaulting to the uniform
@@ -848,13 +864,18 @@ function settleBattleRound(
       // The Judged's spare is mercy AND reverence, not one instead of the other. Folded inline
       // rather than behind a helper so this, the only site that reads the seam, is also the
       // site the behavioural test watches.
+      const spareActions = getFamily(enemy.familyId)?.onSpare ?? DEFAULT_SPARE_ACTIONS;
       return finish({ kind: 'main-menu' }, events, {
         player: battle.player,
         // PLAN.md #2: each entry is weighted by the floor (floor 4 counts double).
-        karma: (getFamily(enemy.familyId)?.onSpare ?? DEFAULT_SPARE_ACTIONS).reduce(
-          (k, action) => recordOnFloor(state, k, action),
-          state.karma,
-        ),
+        karma: spareActions.reduce((k, action) => recordOnFloor(state, k, action), state.karma),
+        // PLAN.md #11: the spare is a deed, by name, on its first action's axis (§22.31 D3).
+        deeds: recordDeed(state.deeds, {
+          kind: 'spared',
+          floor: floorOf(state),
+          axis: axisOf(spareActions[0] ?? 'spareWeighted'),
+          name: enemy.fullName,
+        }),
       });
     case 'player-won': {
       // A moral (⚖) kill records cruelty; a plain enemy (and every boss) records nothing.
@@ -862,18 +883,37 @@ function settleBattleRound(
       //
       // PLAN.md #2 / §22.22: `onKill` is a LIST, folded in order in THIS one step, exactly as
       // `onSpare` is — killing The Judged records cruelty AND desecration (`killSacred`).
+      const killActions = getFamily(enemy.familyId)?.onKill ?? DEFAULT_KILL_ACTIONS;
       const karma = enemy.karmaWeighted
-        ? (getFamily(enemy.familyId)?.onKill ?? DEFAULT_KILL_ACTIONS).reduce(
-            (k, action) => recordOnFloor(state, k, action),
-            state.karma,
-          )
+        ? killActions.reduce((k, action) => recordOnFloor(state, k, action), state.karma)
         : state.karma;
+      // PLAN.md #11 (§22.31 D3): a ⚖ kill — one that could have been spared — is a deed, by name;
+      // a boss felled is a deed. A plain enemy's death records nothing.
+      let deeds = state.deeds;
+      if (enemy.karmaWeighted) {
+        deeds = recordDeed(deeds, {
+          kind: 'killed',
+          floor: floorOf(state),
+          axis: axisOf(killActions[0] ?? 'killWeighted'),
+          name: enemy.fullName,
+        });
+      }
+      if (battle.boss) {
+        deeds = recordDeed(deeds, {
+          kind: 'boss',
+          floor: floorOf(state),
+          name: enemy.fullName,
+          bossId: battle.boss.bossId,
+          outcome: 'felled',
+        });
+      }
       // M12: a floor-boss win (acts 1–3, non-final, boss present) schedules an act advance once
       // any earned level-ups drain (`resolvePostVictory`). The Hollow (final) routes to the
       // damnation ending via `battle-victory`. A normal victory is unchanged (no `pending`).
-      const patch: Partial<Pick<GameState, 'player' | 'karma' | 'pending'>> = {
+      const patch: Partial<Pick<GameState, 'player' | 'karma' | 'pending' | 'deeds'>> = {
         player: battle.player,
         karma,
+        deeds,
       };
       if (!phase.final && battle.boss) patch.pending = 'advance-act';
       return finish({ kind: 'battle-victory', final: phase.final }, events, patch);
@@ -971,7 +1011,7 @@ function resolveDealDecision(
   return finish(
     { kind: 'main-menu' },
     [{ kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
-    { player: result.player, karma: result.karma },
+    { player: result.player, karma: result.karma, deeds: withBargainDeed(state, deal) },
   );
 }
 
@@ -987,6 +1027,28 @@ function resolveDealDecision(
  */
 function declineDeal(finish: Finish): StepResult {
   return finish({ kind: 'main-menu' }, [{ kind: 'deal-declined' }]);
+}
+
+/**
+ * The deed record with a TAKEN bargain added — PLAN.md #11 (§22.31 D3). Only the four bargains
+ * whose price is karma are deeds (offering, desecration, greed, whisper); an HP, max-HP, stat,
+ * charge or relic price is a trade, not a deed, and leaves the record as it was. The price and
+ * the reward are kept in the words the player was shown.
+ */
+function withBargainDeed(state: GameState, deal: SacrificeDeal): Deed[] {
+  const cost = deal.cost.kind;
+  if (!isRecordedBargain(cost)) return state.deeds;
+  return recordDeed(state.deeds, {
+    kind: 'bargain',
+    floor: floorOf(state),
+    axis: BARGAIN_AXIS[cost],
+    bargain: { cost, paid: describeCost(deal.cost), got: describeReward(deal.reward) },
+  });
+}
+
+/** The karma axis an action leans on — the first axis its delta moves (`KARMA_DELTAS`). */
+function axisOf(action: KarmaAction): KarmaAxis {
+  return Object.keys(KARMA_DELTAS[action])[0] as KarmaAxis;
 }
 
 /** Is `index` a real backpack slot? Rejects non-integers, NaN and out-of-range (the G45 lesson). */
@@ -1075,7 +1137,7 @@ function discardForDeal(
   return finish(
     { kind: 'main-menu' },
     [...dropped, { kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
-    { player: result.player, karma: result.karma },
+    { player: result.player, karma: result.karma, deeds: withBargainDeed(state, deal) },
   );
 }
 

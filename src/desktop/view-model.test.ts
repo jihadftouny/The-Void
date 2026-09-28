@@ -71,12 +71,13 @@ describe('displayPlayer (desktop view-model)', () => {
     // that differs from the undamaged snapshot's hp.
     const damaged = { ...battle, player: { ...battle.player, hp: 3 } };
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 0,
       player: snapshot,
       act: 1,
       place: 0,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'battle', battle: damaged, started: true, final: false },
     };
     const shown = displayPlayer(state);
@@ -88,12 +89,13 @@ describe('displayPlayer (desktop view-model)', () => {
 
   it('returns the snapshot object outside battle', () => {
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 0,
       player: snapshot,
       act: 1,
       place: 0,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'main-menu' },
     };
     expect(displayPlayer(state)).toBe(state.player);
@@ -110,12 +112,13 @@ describe('displayPlayer (desktop view-model)', () => {
 // existing helper above; only `player`/`phase` vary across the cases below.
 function hub(player: Player | null): GameState {
   return {
-    version: 9,
+    version: 10,
     rngState: 0,
     player,
     act: 1,
     place: 0,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'main-menu' },
   };
 }

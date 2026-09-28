@@ -81,12 +81,13 @@ function fight(p: Player, e: Enemy): BattleState {
 
 function floorTwo(battle: BattleState, rngState: number): GameState {
   return {
-    version: 9,
+    version: 10,
     rngState,
     player: battle.player,
     act: 2,
     place: 1,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'battle', battle, started: true, final: false },
   };
 }

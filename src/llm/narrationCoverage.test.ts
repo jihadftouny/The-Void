@@ -765,12 +765,13 @@ describe('R6 — the terminal step gives the renderer nothing to draw (G42)', ()
     // standing between the player and a blank last screen is whether the renderer clears
     // the pane before or after it discovers the prompt is null.
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 12_345,
       player: createPlayer({ name: PROBE_NAME, classId: 'Enforcer', stats: STATS }),
       act: 4,
       place: 3,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'ending', endingType: 'grace' },
     };
     const r = step(state, { kind: 'continue' });
@@ -835,12 +836,13 @@ describe('R6 — the terminal step gives the renderer nothing to draw (G42)', ()
 
 describe('buildNarrationPrompt exposes the facts it built', () => {
   const state: GameState = {
-    version: 9,
+    version: 10,
     rngState: 1,
     player: null,
     act: 2,
     place: 1,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'main-menu' },
   };
 

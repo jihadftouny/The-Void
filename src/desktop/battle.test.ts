@@ -498,7 +498,7 @@ describe('G63-2 (AC-20): the bars move at the blow that moved them — a REAL en
     };
     const battle: BattleState = { ...createBattle(player, enemy, 1), tempo: { player: 0, enemy: 8 } };
     const wrap = (b: BattleState): GameState => ({
-      version: 9, rngState: 1, player: b.player, act: 1, place: 0, karma: createKarma(),
+      version: 10, rngState: 1, player: b.player, act: 1, place: 0, karma: createKarma(), deeds: [],
       phase: { kind: 'battle', battle: b, started: true, final: false },
     });
     const draws = [face(15, 20), face(4, 6), face(15, 20), 0.5, face(15, 20), 0.5];

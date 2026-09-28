@@ -53,12 +53,13 @@ function battleOf(boss: BossState, act: number, player: Player, enemy: Enemy): B
 
 function gameOf(battle: BattleState, rngState = 7): GameState {
   return {
-    version: 9,
+    version: 10,
     rngState,
     player: battle.player,
     act: battle.act,
     place: battle.act - 1,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'battle', battle, started: true, final: false },
   };
 }
