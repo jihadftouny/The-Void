@@ -171,6 +171,40 @@ describe('a BOSS: no Spare, and Run is a disabled row that says why (AC-29, G4, 
   });
 });
 
+describe('the boss’s paused turn — the one-button shim until unit C (PLAN.md #11 Q5a)', () => {
+  // This file is load-sensitive (FINDINGS G83 — unit B's row). Alone this case takes ~0.4 s; in a
+  // full suite on a busy machine it twice ran past 60 s (the stall was not isolated), so it carries
+  // a generous timeout.
+  it('offers exactly one Continue, which hands the turn to the engine’s fallback (move null)', async () => {
+    const bundle = bundleOf('hollow-fight');
+    // The same inputs, played headlessly: join, Fight (the boss's turn pauses), then the fallback.
+    const joined = step(bundle.state, { kind: 'continue' });
+    const fought = step(joined.state, { kind: 'battle-action', action: 'fight' });
+    expect(fought.awaiting, 'the fixture never reaches the boss’s turn').toBe('boss-choice');
+    const expected = step(fought.state, { kind: 'boss-choice', move: null });
+
+    const entries = await resume(bundle);
+    click('Continue');
+    await reach('battle-action');
+    click('Fight');
+    await reach('boss-choice');
+    expect(labels()).toEqual(['Continue']);
+    const before = entries.filter((e) => e.category === 'engine' && e.message === 'step').length;
+    click('Continue');
+    await vi.waitFor(
+      () => expect(entries.filter((e) => e.category === 'engine' && e.message === 'step').length).toBeGreaterThan(before),
+      { timeout: 20_000, interval: 10 },
+    );
+    const last = entries.filter((e) => e.category === 'engine' && e.message === 'step').at(-1)?.data as { input: string } | undefined;
+    expect(last?.input).toBe('boss-choice');
+    // The dispatched step is the NULL move's: its events are exactly the headless fallback step's.
+    const detail = entries.filter((e) => e.category === 'engine' && e.message === 'step detail').at(-1)?.data as
+      | { events: string[] }
+      | undefined;
+    expect(detail?.events).toEqual(expected.events.map((e) => e.kind));
+  }, 120_000);
+});
+
 describe('floor 3’s opening drain is a beat of its own (AC-28)', () => {
   it('joining the fight plays the drain on the stage, and the charges bar lands on the engine’s value', async () => {
     const bundle = bundleOf({ act: 3, xp: 30, target: { kind: 'encounter', familyId: 'mirrorSelves' } });
