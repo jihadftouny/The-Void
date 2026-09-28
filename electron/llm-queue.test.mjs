@@ -144,12 +144,18 @@ describe('the sequence queue', () => {
   it('the deadline starts at DEQUEUE: no clock runs for a call still waiting', async () => {
     const h = harness();
     const a = deferred();
+    const b = deferred();
     h.queue.run(() => a.promise); // a narration: no deadline
-    const pb = h.queue.run(async () => ({ ok: true }), { deadlineMs: 3000 });
+    const pb = h.queue.run(() => b.promise, { deadlineMs: 3000 });
     await flush();
     expect(h.armed(), 'a deadline was armed for a call that has not started').toEqual([]);
     h.advance(5000);
     a.resolve({ ok: true });
+    await flush();
+    // The boss call is RUNNING now, after waiting 5 s. Its deadline is the full 3 s from here —
+    // not 3 s minus the wait (which would be −2 s, i.e. an instant timeout).
+    expect(h.armed(), 'the deadline is not the full 3 s from the moment the call starts').toEqual([3000]);
+    b.resolve({ ok: true });
     await expect(pb).resolves.toMatchObject({ ok: true, queuedMs: 5000 });
   });
 

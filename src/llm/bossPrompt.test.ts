@@ -241,6 +241,16 @@ describe('AC-6: deeds per boss (§4 filter table)', () => {
     expect(user).not.toContain('WHAT THEY DID');
   });
 
+  it('scope "none" means none, whatever the cap says', () => {
+    // The Grief fixture pairs `none` with `max: 0`, which would hide a lost scope check. Real
+    // persona data may well write `{ scope: 'none', max: 10 }`.
+    const grief: BossPersona = { ...P('sin-grief'), deeds: { scope: 'none', max: 10 } };
+    expect(filterDeeds(grief, FIXTURE_DEEDS)).toEqual({ sentences: [], dropped: [] });
+    const built = buildBossPrompt(turnRequest(grief, fight([20, 20, []], [20, 20, []], 1)));
+    expect(built.user).not.toContain('WHAT THEY DID');
+    expect(built.blocks.map((b) => b.id)).not.toContain('memory');
+  });
+
   it('the Warden, the executioner and the Hollow Self hear everything, ten at most', () => {
     for (const id of ['warden', 'executioner', 'hollow'] as const) {
       const got = memory(id);
