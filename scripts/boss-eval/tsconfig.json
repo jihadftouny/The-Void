@@ -1,0 +1,18 @@
+{
+  // The boss evaluation is typechecked, unlike most of `scripts/` (the `scripts/art` precedent).
+  //
+  // `tsconfig.json` at the repo root includes `src` only. This script drives the real model for a
+  // run that takes over an hour, so a type error found at minute forty is expensive: a strict
+  // typecheck over exactly these files costs one config. Run by `npm run typecheck:boss-eval`.
+  //
+  // `allowJs` because the script imports the Electron main-process modules (`electron/*.mjs`),
+  // which are plain JavaScript; `checkJs` stays off, so those files are read for their shapes and
+  // not held to TypeScript's rules (they have their own tests).
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals"],
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["../boss-eval.ts", "../boss-eval-lib.ts", "../boss-eval-lib.test.ts"]
+}
