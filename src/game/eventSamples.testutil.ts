@@ -156,4 +156,6 @@ export const ONE_OF_EVERY_EVENT: { [K in GameEventKind]: Extract<GameEvent, { ki
   'skills-warped': { kind: 'skills-warped', count: 3 },
   'deal-needs-room': { kind: 'deal-needs-room', reward: 'Rare armor' },
   'item-discarded': { kind: 'item-discarded', name: 'Common ring', rarity: 'Common' },
+  // PLAN.md #11 (narrative)
+  'boss-concession': { kind: 'boss-concession', bossId: 'kingpin', concession: 'weakness' },
 };

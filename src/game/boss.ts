@@ -565,3 +565,80 @@ export function describeBossMove(option: Pick<BossMoveOption, 'kind' | 'skillId'
 export function pickFallbackMove(legal: readonly BossMoveId[], rng: Rng): BossMoveId {
   return legal[randInt(rng, legal.length)] ?? 'strike';
 }
+
+// ------- PLAN.md #11: concessions — what Talk can earn, once per fight --------------
+
+/**
+ * The concessions Talk may still earn against the boss on `battle` — its card's list, or `[]` once
+ * one was granted (§22.7: one concession per fight), or for a battle with no boss. The Talk
+ * grammar (unit B) is built from this. PURE.
+ */
+export function availableConcessions(battle: Pick<BattleState, 'boss'>): Concession[] {
+  const boss = battle.boss;
+  if (!boss || boss.conceded !== undefined) return [];
+  return [...BOSSES[boss.bossId].concessions];
+}
+
+/** What `grantConcession` returns. */
+export interface ConcessionResult {
+  battle: BattleState;
+  events: CombatEvent[];
+  /**
+   * True when the grant COMPLETED a round: a `pause` granted while the boss's turn was waiting
+   * for its move lets that turn pass instead of being played, so the round is over now.
+   */
+  roundComplete: boolean;
+}
+
+/**
+ * Grant a PAUSE, WEAKNESS or DROP_MECHANIC concession — PURE, RNG-free (a `surrender` ends the
+ * fight or the run, so `game.ts` routes it). The caller has checked `availableConcessions`. Every
+ * grant records `boss.conceded` (one per fight). The mechanics (the author's Q3, accepted):
+ *  - pause: the boss's next turn passes — no gauge, no action (its conditions still tick). If its
+ *    turn is already waiting for its move, THAT turn passes now: the pause clears, a
+ *    `boss-move { move: 'pause' }` says so, and the round completes.
+ *  - weakness: the player attacks at advantage for the rest of the fight.
+ *  - drop_mechanic: Kingpin — he stops CALLING the crew (the standing crew stays); Reflection — it
+ *    stops adapting, and an adaptation already made lifts; Sin — it sheds the bonus HP the
+ *    indulgence bought (`hp` never below 1). An open pause has its legal list recomputed.
+ */
+export function grantConcession(battle: BattleState, c: Exclude<Concession, 'surrender'>): ConcessionResult {
+  const boss: BossState = { ...battle.boss!, conceded: c };
+  let next: BattleState = { ...battle, boss };
+  const events: CombatEvent[] = [];
+  let roundComplete = false;
+  switch (c) {
+    case 'pause':
+      if (next.bossChoice) {
+        const { bossChoice: _open, ...rest } = next;
+        next = rest;
+        events.push({ kind: 'boss-move', bossId: boss.bossId, move: 'pause' });
+        roundComplete = true;
+      } else {
+        boss.pausedTurn = true;
+      }
+      break;
+    case 'weakness':
+      boss.weaknessRevealed = true;
+      break;
+    case 'drop_mechanic':
+      if (boss.bossId === 'kingpin') boss.crewDisbanded = true;
+      if (boss.bossId === 'reflection') {
+        boss.adaptDisabled = true;
+        if (boss.adapted && next.playerAdvantage === -1) {
+          const { playerAdvantage: _lifted, ...rest } = next;
+          next = rest;
+        }
+      }
+      if (boss.bossId === 'sin') {
+        const maxHp = Math.max(1, next.enemy.maxHp - (boss.sinBonusHp ?? 0));
+        next = { ...next, enemy: { ...next.enemy, maxHp, hp: Math.max(1, Math.min(next.enemy.hp, maxHp)) } };
+        boss.sinBonusHp = 0;
+      }
+      if (next.bossChoice) {
+        next = { ...next, bossChoice: { ...next.bossChoice, legal: legalBossMoves(next).map((o) => o.id) } };
+      }
+      break;
+  }
+  return { battle: next, events, roundComplete };
+}

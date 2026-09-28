@@ -40,8 +40,14 @@ export interface Story {
   actOutros: Record<number, StorySection>;
   /** The legacy single ending (kept for back-compat; no longer on the live path). */
   ending: StorySection;
-  /** M12: the two verdict-routed endings (placeholder prose; real text is M14). */
-  endings: { grace: StorySection; damnation: StorySection };
+  /**
+   * M12: the two verdict-routed endings (placeholder prose; real text is M14). PLAN.md #11 adds
+   * the two PATH variants of the same two endings (DRAFT prose — the author rewrites both):
+   * `graceAcknowledged` — the late grace, reached by acknowledging the Hollow Self in Talk (§22.31);
+   * `damnationTaken` — damnation reached because the Hollow Self killed you (the author's
+   * 2026-09-28 ruling: it did not have to fight you for it).
+   */
+  endings: { grace: StorySection; damnation: StorySection; graceAcknowledged: StorySection; damnationTaken: StorySection };
 }
 
 const STORY = storyData as Story;
@@ -83,4 +89,14 @@ export function getGraceEnding(): StorySection {
 /** The DAMNATION ending (act-5 Hollow fall). Carries no name token — see the G49 note above. */
 export function getDamnationEnding(): StorySection {
   return STORY.endings.damnation;
+}
+
+/** PLAN.md #11: the GRACE ending reached late, by acknowledgement. No name token (G49). */
+export function getGraceAcknowledgedEnding(): StorySection {
+  return STORY.endings.graceAcknowledged;
+}
+
+/** PLAN.md #11: the DAMNATION ending reached by the Hollow Self's killing blow. No name token (G49). */
+export function getDamnationTakenEnding(): StorySection {
+  return STORY.endings.damnationTaken;
 }

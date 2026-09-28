@@ -117,6 +117,7 @@ export const BEAT_ROLE: Readonly<Record<GameEventKind, BeatRole>> = {
   'skills-warped': 'pane',
   'deal-needs-room': 'pane',
   'item-discarded': 'pane',
+  'boss-concession': 'attach', // PLAN.md #11: it happens inside the fight
 };
 
 /** Which of the frame's three bars a beat may have changed. */

@@ -32,6 +32,7 @@ import {
   DEFAULT_ROUND_RULES,
   resolveBossChoice,
   resolveRound,
+  resolveSurrender,
   openBattle,
   type BattleState,
   type BattleAction,
@@ -42,12 +43,15 @@ import { dampenHeal, floorModifiers, floorOf, ILLUSION_DC } from './floors.ts';
 import { rollCorruptions } from './corruption.ts';
 import { createBattle } from './battle.ts';
 import {
+  availableConcessions,
   battleActionKey,
   bossPostRound,
+  grantConcession,
   computeVerdict,
   generateBoss,
   type BossId,
   type BossMoveId,
+  type Concession,
   type KarmaAxis,
 } from './boss.ts';
 import {
@@ -79,6 +83,7 @@ import {
   getActIntro,
   getActOutro,
   getGraceEnding,
+  getGraceAcknowledgedEnding,
   getDamnationEnding,
   getIntro,
 } from './story.ts';
@@ -117,7 +122,9 @@ export type Phase =
   | { kind: 'act-intro'; newAct: number }
   // M12: the act-4 verdict reckoning (no combat) — grace ends the run, cast-down falls to act 5.
   | { kind: 'verdict'; outcome: 'grace' | 'cast-down' }
-  | { kind: 'ending'; endingType: 'grace' | 'damnation' }
+  // PLAN.md #11: `acknowledged` — the late grace, the Hollow Self talked into surrender (§22.31).
+  // `taken` — damnation because the Hollow Self killed you (the author's 2026-09-28 ruling).
+  | { kind: 'ending'; endingType: 'grace' | 'damnation'; acknowledged?: true; taken?: true }
   | { kind: 'game-over' };
 
 /** The full, serializable game state. */
@@ -207,7 +214,10 @@ export type GameInput =
   // PLAN.md #11: the BOSS's move for its paused turn — one of `battle.bossChoice.legal`, or `null`
   // for the seeded fallback. An id not in the list is treated as `null` (§17.3.3). Like every
   // input, it is how a run replays from `seed + inputs`.
-  | { kind: 'boss-choice'; move: BossMoveId | null };
+  | { kind: 'boss-choice'; move: BossMoveId | null }
+  // PLAN.md #11: what the player's Talk EARNED (unit B's judge decides; the engine applies it). One
+  // per fight, only from the boss's own list (`availableConcessions`); anything else is a no-op.
+  | { kind: 'boss-concession'; concession: Concession };
 
 /**
  * Rule overrides for a `step` — a MEASUREMENT seam, never set by the game (PLAN.md #2).
@@ -420,6 +430,8 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
         return finish({ ...phase, battle: opened.battle, started: true }, opened.events);
       }
       const rules = roundRules(state, options);
+      // PLAN.md #11: a concession Talk earned is accepted whether or not the boss's turn is open.
+      if (input.kind === 'boss-concession') return resolveConcession(state, phase, input.concession, rng, finish, noop);
       // PLAN.md #11: while a boss round waits for the boss's move, only that move is accepted.
       if (phase.battle.bossChoice) {
         if (input.kind !== 'boss-choice') return noop;
@@ -904,7 +916,7 @@ function settleBattleRound(
           floor: floorOf(state),
           name: enemy.fullName,
           bossId: battle.boss.bossId,
-          outcome: 'felled',
+          outcome: round.surrendered ? 'surrendered' : 'felled',
         });
       }
       // M12: a floor-boss win (acts 1–3, non-final, boss present) schedules an act advance once
@@ -922,6 +934,79 @@ function settleBattleRound(
       events.push({ kind: 'game-over', xp: battle.player.xp });
       return finish({ kind: 'game-over' }, events, { player: battle.player });
   }
+}
+
+/**
+ * Apply a concession Talk earned — PLAN.md #11 (§20, §22.7, the author's Q3). Accepted only in a
+ * started BOSS battle, only for a concession on that boss's card, and only while none has been
+ * granted this fight (`availableConcessions`); anything else is a no-op (the reducer is total).
+ * The executioner's card lists none, so it accepts nothing.
+ *
+ *  - pause / weakness / drop_mechanic: `grantConcession`. A pause granted while the boss's turn
+ *    waits for its move lets that turn pass and COMPLETES the round, so the once-per-round
+ *    mechanic runs now (`settleBattleRound`).
+ *  - surrender, Kingpin: a full victory (`resolveSurrender` — XP and the loot roll, no `onKill`
+ *    relic), routed exactly as a kill: the floor ends and the "beat the Kingpin" unlock counts it.
+ *  - surrender, Hollow Self: the LATE GRACE (§22.31) — the grace ending, `acknowledged`, with its
+ *    own prose. No new feat: the grace ending's own unlock (Penitent) is the reward.
+ * Every grant records `boss.conceded` and emits `boss-concession` first.
+ */
+function resolveConcession(
+  state: GameState,
+  phase: Extract<Phase, { kind: 'battle' }>,
+  concession: Concession,
+  rng: Rng,
+  finish: Finish,
+  noop: StepResult,
+): StepResult {
+  const battle = phase.battle;
+  const boss = battle.boss;
+  if (!boss || !availableConcessions(battle).includes(concession)) return noop;
+  const granted: GameEvent = { kind: 'boss-concession', bossId: boss.bossId, concession };
+  if (concession === 'surrender') {
+    const conceded: BattleState = { ...battle, boss: { ...boss, conceded: 'surrender' } };
+    if (boss.bossId === 'hollow') {
+      const ending = getGraceAcknowledgedEnding();
+      const player = requirePlayer(state);
+      return finish(
+        { kind: 'ending', endingType: 'grace', acknowledged: true },
+        [
+          granted,
+          {
+            kind: 'ending',
+            endingType: 'grace',
+            path: 'acknowledged',
+            header: ending.header,
+            body: substituteName(ending.body, player.name),
+          },
+        ],
+        {
+          player: conceded.player,
+          deeds: recordDeed(state.deeds, {
+            kind: 'boss',
+            floor: floorOf(state),
+            name: battle.enemy.fullName,
+            bossId: 'hollow',
+            outcome: 'surrendered',
+          }),
+        },
+      );
+    }
+    const key = battle.bossChoice?.playerActionKey ?? 'talk';
+    return led(granted, settleBattleRound(state, phase, resolveSurrender(conceded, rng), key, rng, finish));
+  }
+  const result = grantConcession(battle, concession);
+  if (result.roundComplete) {
+    const key = battle.bossChoice?.playerActionKey ?? 'talk';
+    const round: RoundResult = { state: result.battle, events: result.events, status: 'ongoing', resolved: true, roundComplete: true };
+    return led(granted, settleBattleRound(state, phase, round, key, rng, finish));
+  }
+  return finish({ ...phase, battle: result.battle }, [granted, ...result.events]);
+}
+
+/** A step result with `first` placed ahead of its events. */
+function led(first: GameEvent, res: StepResult): StepResult {
+  return { ...res, events: [first, ...res.events] };
 }
 
 /**

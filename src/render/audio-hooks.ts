@@ -133,6 +133,7 @@ export const HOOK_BY_KIND: Readonly<Record<GameEventKind, AudioHookName | null>>
   'skills-warped': null,
   'deal-needs-room': null,
   'item-discarded': null,
+  'boss-concession': 'boss', // PLAN.md #11: a concession is a boss moment, in the arena
 };
 
 /** An attack's sound by outcome — exhaustive over `AttackOutcome`. A fumble is a miss to the ear. */

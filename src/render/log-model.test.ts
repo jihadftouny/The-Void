@@ -105,6 +105,7 @@ const SAMPLE: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'skills-warped': { kind: 'skills-warped', count: 2 },
   'deal-needs-room': { kind: 'deal-needs-room', reward: 'Legendary mainHand' },
   'item-discarded': { kind: 'item-discarded', name: 'Suture Kit', rarity: 'Common' },
+  'boss-concession': { kind: 'boss-concession', bossId: 'kingpin', concession: 'pause' },
 };
 
 const ALL_KINDS = Object.keys(SAMPLE) as GameEventKind[];
@@ -125,7 +126,8 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
     // ...and +4 combat: PLAN.md #1.6's tempo-changed, tempo-extra-action, tempo-lost-turn,
     // hp-changed.
     // ...and +2 combat: PLAN.md #11's boss-move, boss-grieve.
-    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2);
+    // ...and +1 narrative: PLAN.md #11's boss-concession.
+    expect(Object.keys(LOG_ROUTING)).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2 + 1);
     expect(new Set(Object.keys(LOG_ROUTING))).toEqual(new Set(ALL_KINDS));
   });
 
@@ -164,7 +166,8 @@ describe('LOG_ROUTING is total over GameEventKind', () => {
     // illusion-dispelled). `loot-left-behind` is a combat kind routed to the PANE.
     // PLAN.md #1.6: +2 (tempo-extra-action, tempo-lost-turn); its other two are `hud`.
     // PLAN.md #11: +2 (boss-move, boss-grieve) — both inside a fight.
-    expect(logged).toBe(37 + 3 - 3 + 2 + 2);
+    // ...+1 more: boss-concession, the one narrative kind the battle log owns.
+    expect(logged).toBe(37 + 3 - 3 + 2 + 2 + 1);
   });
 
   it('every PANE-routed kind yields NO line at all', () => {

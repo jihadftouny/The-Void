@@ -223,6 +223,7 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'skills-warped': { kind: 'skills-warped', count: 4 },
   'deal-needs-room': { kind: 'deal-needs-room', reward: 'Rare armor' },
   'item-discarded': { kind: 'item-discarded', name: 'Suture Kit', rarity: 'Common' },
+  'boss-concession': { kind: 'boss-concession', bossId: 'sin', concession: 'drop_mechanic' },
 };
 
 /** Derived from the mapped type's keys, so it cannot fall behind the union. */
@@ -240,7 +241,8 @@ describe('formatEvent — totality over every event kind', () => {
     // PLAN.md #1.6 added 4 combat kinds (tempo-changed, tempo-extra-action, tempo-lost-turn,
     // hp-changed).
     // PLAN.md #11 added 2 combat kinds (boss-move, boss-grieve).
-    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2);
+    // ...and 1 narrative kind (boss-concession).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2 + 1);
     for (const kind of ALL_KINDS) expect(SAMPLES[kind].kind).toBe(kind);
   });
 

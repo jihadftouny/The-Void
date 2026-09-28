@@ -221,6 +221,11 @@ export interface RoundResult {
    * Required, like `resolved`, so no return site can omit it.
    */
   roundComplete: boolean;
+  /**
+   * PLAN.md #11: the fight ended because the boss SURRENDERED to Talk (`resolveSurrender`), not
+   * because it fell. Present only then, so `game.ts` records the deed as `surrendered`.
+   */
+  surrendered?: true;
 }
 
 /**
@@ -779,7 +784,10 @@ function playRound(
     ctx.events.push(...ptc.events);
     syncHp(ctx, 'player');
     if (playerDownAfterGate(ctx)) return defeat(state, ctx);
-    advDis = combineAdvDis(state.playerAdvantage ?? 0, ptc.advDisOverride);
+    // PLAN.md #11: a `weakness` concession is a standing +1 for the rest of the fight, combined
+    // with the battle's own standing modifier (they cancel against a Reflection's adaptation).
+    const standing = combineAdvDis(state.playerAdvantage ?? 0, state.boss?.weaknessRevealed ? 1 : 0);
+    advDis = combineAdvDis(standing, ptc.advDisOverride);
     // Empty Vessel: restore charge(s) at the player's turn (capped at max). No-op at 0.
     if (ctx.mods.chargePerTurn > 0) {
       ctx.player = {
@@ -893,6 +901,18 @@ export function resolveBossChoice(
     return { state: settle(state, ctx, null, next), events: ctx.events, status: 'ongoing', resolved: true, roundComplete: false };
   }
   return done(state, ctx, 'ongoing');
+}
+
+/**
+ * A boss SURRENDERS to Talk (PLAN.md #11, the Kingpin's `surrender` concession) — PURE. A FULL
+ * VICTORY (the author's Q3d): the enemy's XP and the same single loot roll a kill takes, through
+ * the shared victory block — but NO `onKill` relic trigger, because nothing died. Any open boss
+ * pause is cleared. Status `player-won`, `surrendered: true`.
+ */
+export function resolveSurrender(state: BattleState, rng: Rng): RoundResult {
+  const { bossChoice: _open, ...rest } = state;
+  const result = applyVictory(rest, state.player, state.enemy, [], rng);
+  return { ...result, surrendered: true };
 }
 
 /**

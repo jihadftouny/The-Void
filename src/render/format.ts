@@ -30,7 +30,15 @@ import { CONDITION_DATA } from '../game/condition.ts';
 import type { ConditionType } from '../game/condition.ts';
 import { getCatalogItemById, type TriggerType } from '../game/item.ts';
 import { SKILLS, type SkillId } from '../game/skill.ts';
-import type { BossMoveId } from '../game/boss.ts';
+import type { BossMoveId, Concession } from '../game/boss.ts';
+
+/** The log line for each concession Talk can earn (PLAN.md #11). */
+const CONCESSION_LINE: Record<Concession, string> = {
+  pause: 'It concedes a pause — its next turn passes.',
+  weakness: 'It shows you a weakness — your attacks land easier for the rest of the fight.',
+  drop_mechanic: 'It gives up one of its advantages for the rest of the fight.',
+  surrender: 'It surrenders.',
+};
 
 /**
  * The log line for a boss's chosen move (PLAN.md #11). A cast names the skill by its DISPLAY
@@ -314,6 +322,9 @@ export function formatEvent(e: GameEvent): string {
       return `Your pack is full. Leave something behind to take ${e.reward}.`;
     case 'item-discarded':
       return `You leave ${e.name} behind.`;
+    // --- PLAN.md #11 ---
+    case 'boss-concession':
+      return CONCESSION_LINE[e.concession];
   }
 }
 

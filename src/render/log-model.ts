@@ -140,6 +140,9 @@ export const LOG_ROUTING: Record<GameEventKind, LogRoute> = {
   'skills-warped': 'pane',
   'deal-needs-room': 'pane',
   'item-discarded': 'pane',
+  // PLAN.md #11: a concession is a narrative event that happens INSIDE a fight, so the battle log
+  // records it (the one narrative kind the log owns): the player should see what Talk earned.
+  'boss-concession': 'log',
 };
 
 /**

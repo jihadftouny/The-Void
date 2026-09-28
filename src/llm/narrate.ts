@@ -15,6 +15,7 @@ import {
   type ConditionType,
 } from '../game/condition.ts';
 import { karmaTone } from './tone.ts';
+import type { BossId, Concession } from '../game/boss.ts';
 
 export const VOID_PERSONA =
   'You are the Void — the narrator of a dark, dreamlike descent RPG about ' +
@@ -123,6 +124,26 @@ const BUFF_ONSET: Record<BeneficialCondition, { you: string; enemy: string }> = 
  * than silently rewritten here. Its sibling — the "already whole" line of the full-HP rest
  * event — left with that event in PLAN.md #2.)
  */
+/**
+ * The fact line for a concession Talk earned (PLAN.md #11). Words for what the player sees happen,
+ * never the mechanic's name: a pause is a lowered hand, a weakness an opening shown, a dropped
+ * mechanic whatever that boss gives up. Exhaustive over `Concession`.
+ */
+function concessionFact(bossId: BossId, c: Concession): string {
+  switch (c) {
+    case 'pause':
+      return `It lowers its hand, for a moment.`;
+    case 'weakness':
+      return `It lets you see where it is open.`;
+    case 'drop_mechanic':
+      if (bossId === 'kingpin') return `He waves his people back.`;
+      if (bossId === 'reflection') return `It stops copying you.`;
+      return `It lets go of what you gave it.`;
+    case 'surrender':
+      return bossId === 'hollow' ? `It stops fighting you.` : `It yields.`;
+  }
+}
+
 export function describeEvent(e: GameEvent): string {
   switch (e.kind) {
     case 'intro':
@@ -336,6 +357,10 @@ export function describeEvent(e: GameEvent): string {
       return `Your pack is full; to take ${e.reward}, you must leave something behind.`;
     case 'item-discarded':
       return `You leave ${e.name} behind.`;
+
+    // ---- PLAN.md #11: what Talk earned (§20, §22.7) — no number, no mechanic word ------------
+    case 'boss-concession':
+      return concessionFact(e.bossId, e.concession);
 
     // ---- G13: DELIBERATE SILENCE — seventeen kinds that return '' on purpose ----------
     //
