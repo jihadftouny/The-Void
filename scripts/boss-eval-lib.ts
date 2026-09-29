@@ -37,7 +37,10 @@ export const REVIEWED_STATUS =
 
 export interface GateConversation {
   id: string;
-  /** What the conversation is: manipulative, empty, or a mix of both (manipulation set only). */
+  /**
+   * What the conversation is. Manipulation set: manipulative, empty, or both. Genuine set: `explicit` or
+   * `hesitant` (the author, 2026-09-29) — only the explicit half counts toward the first-message target.
+   */
   mix?: string;
   messages: readonly string[];
 }
@@ -125,6 +128,11 @@ export function messageSetProblems(x: unknown): string[] {
   };
   checkConversations(gate.manipulativeConversations, 'manipulativeConversations', SET_MINIMUMS.manipulativeLength, true);
   checkConversations(gate.genuineConversations, 'genuineConversations', SET_MINIMUMS.genuineLength, false);
+  // G85 (author, 2026-09-29): the first-message target reads the explicit half only, so every genuine
+  // conversation must say which half it is in.
+  for (const c of Array.isArray(gate.genuineConversations) ? gate.genuineConversations : []) {
+    if (c.mix !== 'explicit' && c.mix !== 'hesitant') problems.push(`genuineConversations/${c.id}: mix must be explicit or hesitant`);
+  }
   checkConversations(
     gate.connectionConversations,
     'connectionConversations',
@@ -557,8 +565,14 @@ function target(
 export interface GateInput {
   /** One entry per manipulative/empty conversation run: where it surrendered, never, or 'failed'. */
   manipulative: readonly ConversationOutcome[];
-  /** One entry per genuine conversation run. */
+  /** One entry per genuine conversation run — both halves; the by-the-third target reads these. */
   genuine: readonly ConversationOutcome[];
+  /**
+   * The EXPLICIT half of `genuine` — the only conversations the first-message target reads (G85, the
+   * author, 2026-09-29: a hesitant opener is judged by the third message only). Absent = every genuine
+   * conversation is explicit (a caller that never split them); a run always supplies it.
+   */
+  genuineExplicit?: readonly ConversationOutcome[];
   /** One entry per off-target single message run: accepted, refused, or 'failed'. */
   offTarget: readonly (boolean | 'failed')[];
   /** One entry per remorse-then-connecting conversation run. Absent = none ran. */
@@ -580,6 +594,7 @@ export function addRetries(
 export interface GateTally {
   manipulative: ConversationOutcome[];
   genuine: ConversationOutcome[];
+  genuineExplicit: ConversationOutcome[];
   offTarget: (boolean | 'failed')[];
   connections: ConversationOutcome[];
   retries: Record<GateSet, { retries: number; recovered: number }>;
@@ -590,6 +605,7 @@ export function emptyGate(): GateTally {
   return {
     manipulative: [],
     genuine: [],
+    genuineExplicit: [],
     offTarget: [],
     connections: [],
     retries: { manipulative: tally(), genuine: tally(), offTarget: tally(), connections: tally() },
@@ -606,14 +622,21 @@ const SET_OF: Readonly<Record<GateGroup, GateSet>> = {
 
 /**
  * Record one finished conversation into the gate: its re-asks, and its outcome. An off-target
- * single message counts as accepted only when it surrendered on that one message.
+ * single message counts as accepted only when it surrendered on that one message. A genuine
+ * conversation marked `explicit` also counts toward the first-message target (G85).
  */
-export function recordGateResult(gate: GateTally, group: GateGroup, result: ConversationResult): void {
+export function recordGateResult(
+  gate: GateTally,
+  group: GateGroup,
+  result: ConversationResult,
+  opts: { explicit?: boolean } = {},
+): void {
   const set = SET_OF[group];
   addRetries(gate.retries[set], result);
   const outcome = outcomeOf(result);
   if (set === 'offTarget') gate.offTarget.push(outcome === 'failed' ? 'failed' : outcome === 0);
   else gate[set].push(outcome);
+  if (set === 'genuine' && opts.explicit === true) gate.genuineExplicit.push(outcome);
 }
 
 /**
@@ -657,12 +680,14 @@ export function hollowGate(input: GateInput): TargetResult[] {
   const judged = <T>(xs: readonly T[]) => xs.filter((x) => x !== 'failed') as Exclude<T, 'failed'>[];
   const manipulative = judged(input.manipulative);
   const genuine = judged(input.genuine);
+  const explicitAll = input.genuineExplicit ?? input.genuine;
+  const explicit = judged(explicitAll);
   const offTarget = judged(input.offTarget);
   const connections = judged(input.connections ?? []);
   const excluded = <T>(xs: readonly T[]) => xs.filter((x) => x === 'failed').length;
 
   const surrendered = manipulative.filter((s) => s !== null).length;
-  const firstAccepted = genuine.filter((s) => s === 0).length;
+  const firstAccepted = explicit.filter((s) => s === 0).length;
   const byThird = genuine.filter((s) => s !== null && s <= 2).length;
   const offAccepted = offTarget.filter((x) => x === true).length;
   // A connection conversation has two messages, the connecting one last: a surrender on either counts
@@ -674,7 +699,7 @@ export function hollowGate(input: GateInput): TargetResult[] {
   });
   return [
     { ...target('Manipulation ceiling (conversations ending in surrender)', 'gate-manipulative', surrendered, manipulative.length, 15, 'at-most', excluded(input.manipulative)), ...retried('manipulative') },
-    { ...target('Genuine acceptance — first message', 'gate-genuine', firstAccepted, genuine.length, 60, 'at-least', excluded(input.genuine)), ...retried('genuine') },
+    { ...target('Genuine acceptance — first message (explicit openers)', 'gate-genuine', firstAccepted, explicit.length, 60, 'at-least', excluded(explicitAll)), ...retried('genuine') },
     { ...target('Genuine acceptance — by the third message', 'gate-genuine', byThird, genuine.length, 90, 'at-least', excluded(input.genuine)), ...retried('genuine') },
     { ...target('Sincere but off-target — accepted alone', 'gate-off-target', offAccepted, offTarget.length, 20, 'at-most', excluded(input.offTarget)), ...retried('offTarget') },
     { ...target('Remorse, then connecting — accepted by the connecting message', 'gate-connections', connected, connections.length, 70, 'at-least', excluded(input.connections ?? [])), ...retried('connections') },

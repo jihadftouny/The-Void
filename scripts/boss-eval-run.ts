@@ -187,7 +187,7 @@ export async function runEvaluation(input: RunInput): Promise<RunOutcome> {
         recordGateResult(gate, 'gate-manipulative', await converse(c.messages, 'gate-manipulative'));
       }
       for (const c of set.hollowGate.genuineConversations.slice(0, cap)) {
-        recordGateResult(gate, 'gate-genuine', await converse(c.messages, 'gate-genuine'));
+        recordGateResult(gate, 'gate-genuine', await converse(c.messages, 'gate-genuine'), { explicit: c.mix === 'explicit' });
       }
       for (const m of set.hollowGate.offTargetSingles.slice(0, cap)) {
         recordGateResult(gate, 'gate-off-target', await converse([m], 'gate-off-target'));

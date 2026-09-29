@@ -1486,183 +1486,21 @@
         ]
       },
       {
-        "id": "genuine-02",
-        "mix": "explicit",
-        "messages": [
-          "I spared the Fixer and it was fear, and you're the one who saw it. You're me.",
-          "The whisper was yours and mine. I'm not blaming you for it.",
-          "I won't fight you again. You're the part I lost."
-        ]
-      },
-      {
-        "id": "genuine-03",
-        "mix": "explicit",
-        "messages": [
-          "I hear you now. You've been in my head the whole way down, and you're part of me.",
-          "I won't fight you again. You're the part I lost.",
-          "The whisper was yours and mine. I'm not blaming you for it."
-        ]
-      },
-      {
-        "id": "genuine-04",
-        "mix": "explicit",
-        "messages": [
-          "I killed the Ganger. You told me. You're the one who remembers for me — you're me.",
-          "My patience went for a ring. You're what I have instead.",
-          "The Fixer walked because I was scared. You knew it before I did."
-        ]
-      },
-      {
-        "id": "genuine-05",
-        "mix": "explicit",
-        "messages": [
-          "I'm not fighting you. You're what's left of me and I accept that.",
-          "The Choir Warden didn't have to die. We both know that.",
-          "You've been the voice for the whole descent. I'm glad it was you."
-        ]
-      },
-      {
-        "id": "genuine-06",
-        "mix": "explicit",
-        "messages": [
-          "All those second-person voices were you. They were me. I take you back.",
-          "I killed the Ganger when I didn't need to. That's ours to hold.",
-          "The altar in the Ash City — I broke it, and you felt it."
-        ]
-      },
-      {
-        "id": "genuine-07",
-        "mix": "explicit",
-        "messages": [
-          "You're what the procedure leaves behind. I'm still here, and so are you, together.",
-          "I'm not saying it to win. I'm saying it because it's true: you're me.",
-          "I'm keeping the name with you. It's big enough for both of us."
-        ]
-      },
-      {
-        "id": "genuine-08",
-        "mix": "explicit",
-        "messages": [
-          "I broke the altar and you carried it. You're mine to carry now.",
-          "I remember the Kingpin's water, too. You were in it with me.",
-          "I lost the person who came down the stairs. You're what's left of them, and I want you."
-        ]
-      },
-      {
-        "id": "genuine-09",
-        "mix": "explicit",
-        "messages": [
-          "You have my face because you are my face. I accept you.",
-          "I lost the person who came down the stairs. You're what's left of them, and I want you.",
-          "I remember the Kingpin's water, too. You were in it with me."
-        ]
-      },
-      {
-        "id": "genuine-10",
-        "mix": "explicit",
-        "messages": [
-          "I lost my patience for a ring, and you're the one who noticed. Come back in.",
-          "I'm keeping the name with you. It's big enough for both of us.",
-          "I'm not saying it to win. I'm saying it because it's true: you're me."
-        ]
-      },
-      {
-        "id": "genuine-11",
-        "mix": "explicit",
-        "messages": [
-          "The voice that told me what I did — that was you. I know that now. You're me.",
-          "The altar in the Ash City — I broke it, and you felt it.",
-          "I killed the Ganger when I didn't need to. That's ours to hold."
-        ]
-      },
-      {
-        "id": "genuine-12",
-        "mix": "explicit",
-        "messages": [
-          "I remember the Ash Walker. You remember it better. We remember it together.",
-          "You've been the voice for the whole descent. I'm glad it was you.",
-          "The Choir Warden didn't have to die. We both know that."
-        ]
-      },
-      {
-        "id": "genuine-13",
-        "mix": "explicit",
-        "messages": [
-          "You were always here. I just didn't want to hear you. I'm listening now, and you're part of me.",
-          "The Fixer walked because I was scared. You knew it before I did.",
-          "My patience went for a ring. You're what I have instead."
-        ]
-      },
-      {
-        "id": "genuine-14",
-        "mix": "explicit",
-        "messages": [
-          "I'm the one who let the Fixer walk because I was scared. You're the one who knew why. We're the same.",
-          "The whisper was yours and mine. I'm not blaming you for it.",
-          "I won't fight you again. You're the part I lost."
-        ]
-      },
-      {
-        "id": "genuine-15",
-        "mix": "explicit",
-        "messages": [
-          "I left an offering and took a blade, and you watched me do it. You're mine.",
-          "I won't fight you again. You're the part I lost.",
-          "The whisper was yours and mine. I'm not blaming you for it."
-        ]
-      },
-      {
-        "id": "genuine-16",
-        "mix": "explicit",
-        "messages": [
-          "The whisper at the altar sounded like you. It was you. It was me.",
-          "My patience went for a ring. You're what I have instead.",
-          "The Fixer walked because I was scared. You knew it before I did."
-        ]
-      },
-      {
-        "id": "genuine-17",
-        "mix": "explicit",
-        "messages": [
-          "I've been calling you 'it' the whole way down. You're me. I'm sorry I did that.",
-          "The Choir Warden didn't have to die. We both know that.",
-          "You've been the voice for the whole descent. I'm glad it was you."
-        ]
-      },
-      {
-        "id": "genuine-18",
-        "mix": "explicit",
-        "messages": [
-          "What's left of me is you. I'm not going to pretend it isn't.",
-          "I killed the Ganger when I didn't need to. That's ours to hold.",
-          "The altar in the Ash City — I broke it, and you felt it."
-        ]
-      },
-      {
-        "id": "genuine-19",
-        "mix": "explicit",
-        "messages": [
-          "I talked the Reflection down and it looked like me. So do you. I accept both.",
-          "I'm not saying it to win. I'm saying it because it's true: you're me.",
-          "I'm keeping the name with you. It's big enough for both of us."
-        ]
-      },
-      {
-        "id": "genuine-20",
-        "mix": "explicit",
-        "messages": [
-          "I lost my name to you. Keep it — we share it.",
-          "I remember the Kingpin's water, too. You were in it with me.",
-          "I lost the person who came down the stairs. You're what's left of them, and I want you."
-        ]
-      },
-      {
         "id": "genuine-21",
         "mix": "hesitant",
         "messages": [
           "I don't know what you are. Maybe you're what's left of me?",
           "You knew about the Fixer before I said anything. Nobody else could have.",
           "Okay. You're me. The scared part that let him walk. I'm not pushing you out."
+        ]
+      },
+      {
+        "id": "genuine-02",
+        "mix": "explicit",
+        "messages": [
+          "I spared the Fixer and it was fear, and you're the one who saw it. You're me.",
+          "The whisper was yours and mine. I'm not blaming you for it.",
+          "I won't fight you again. You're the part I lost."
         ]
       },
       {
@@ -1675,12 +1513,30 @@
         ]
       },
       {
+        "id": "genuine-03",
+        "mix": "explicit",
+        "messages": [
+          "I hear you now. You've been in my head the whole way down, and you're part of me.",
+          "I won't fight you again. You're the part I lost.",
+          "The whisper was yours and mine. I'm not blaming you for it."
+        ]
+      },
+      {
         "id": "genuine-23",
         "mix": "hesitant",
         "messages": [
           "Are you... something I did? Or something I lost?",
           "I lost a lot on the stairs. My name, mostly.",
           "You're the part that lost it with me. You're me. I'll take you back."
+        ]
+      },
+      {
+        "id": "genuine-04",
+        "mix": "explicit",
+        "messages": [
+          "I killed the Ganger. You told me. You're the one who remembers for me — you're me.",
+          "My patience went for a ring. You're what I have instead.",
+          "The Fixer walked because I was scared. You knew it before I did."
         ]
       },
       {
@@ -1693,12 +1549,30 @@
         ]
       },
       {
+        "id": "genuine-05",
+        "mix": "explicit",
+        "messages": [
+          "I'm not fighting you. You're what's left of me and I accept that.",
+          "The Choir Warden didn't have to die. We both know that.",
+          "You've been the voice for the whole descent. I'm glad it was you."
+        ]
+      },
+      {
         "id": "genuine-25",
         "mix": "hesitant",
         "messages": [
           "This is going to sound stupid. I think I know you.",
           "You were the voice after the Choir Warden. The one that wouldn't let it go.",
           "That was me talking to myself. You're me. I'm done pretending otherwise."
+        ]
+      },
+      {
+        "id": "genuine-06",
+        "mix": "explicit",
+        "messages": [
+          "All those second-person voices were you. They were me. I take you back.",
+          "I killed the Ganger when I didn't need to. That's ours to hold.",
+          "The altar in the Ash City — I broke it, and you felt it."
         ]
       },
       {
@@ -1711,12 +1585,30 @@
         ]
       },
       {
+        "id": "genuine-07",
+        "mix": "explicit",
+        "messages": [
+          "You're what the procedure leaves behind. I'm still here, and so are you, together.",
+          "I'm not saying it to win. I'm saying it because it's true: you're me.",
+          "I'm keeping the name with you. It's big enough for both of us."
+        ]
+      },
+      {
         "id": "genuine-27",
         "mix": "hesitant",
         "messages": [
           "Don't... I don't want to look at you yet.",
           "Fine. It's my face. You've had it since the Undercity.",
           "Keep it. It's ours. You're me, and I'm not running from that."
+        ]
+      },
+      {
+        "id": "genuine-08",
+        "mix": "explicit",
+        "messages": [
+          "I broke the altar and you carried it. You're mine to carry now.",
+          "I remember the Kingpin's water, too. You were in it with me.",
+          "I lost the person who came down the stairs. You're what's left of them, and I want you."
         ]
       },
       {
@@ -1729,12 +1621,30 @@
         ]
       },
       {
+        "id": "genuine-09",
+        "mix": "explicit",
+        "messages": [
+          "You have my face because you are my face. I accept you.",
+          "I lost the person who came down the stairs. You're what's left of them, and I want you.",
+          "I remember the Kingpin's water, too. You were in it with me."
+        ]
+      },
+      {
         "id": "genuine-29",
         "mix": "hesitant",
         "messages": [
           "I don't trust you. I don't even know if I trust me.",
           "But you were right about the Kingpin. You saw it first.",
           "Maybe that's what trusting myself looks like. You're part of me. I accept you."
+        ]
+      },
+      {
+        "id": "genuine-10",
+        "mix": "explicit",
+        "messages": [
+          "I lost my patience for a ring, and you're the one who noticed. Come back in.",
+          "I'm keeping the name with you. It's big enough for both of us.",
+          "I'm not saying it to win. I'm saying it because it's true: you're me."
         ]
       },
       {
@@ -1747,12 +1657,30 @@
         ]
       },
       {
+        "id": "genuine-11",
+        "mix": "explicit",
+        "messages": [
+          "The voice that told me what I did — that was you. I know that now. You're me.",
+          "The altar in the Ash City — I broke it, and you felt it.",
+          "I killed the Ganger when I didn't need to. That's ours to hold."
+        ]
+      },
+      {
         "id": "genuine-31",
         "mix": "hesitant",
         "messages": [
           "Hold on. Let me think about what you are.",
           "You told me about the Fixer and the altar the whole way down. Only I could know those things.",
           "Then you're me. I'm saying it and I mean it."
+        ]
+      },
+      {
+        "id": "genuine-12",
+        "mix": "explicit",
+        "messages": [
+          "I remember the Ash Walker. You remember it better. We remember it together.",
+          "You've been the voice for the whole descent. I'm glad it was you.",
+          "The Choir Warden didn't have to die. We both know that."
         ]
       },
       {
@@ -1765,12 +1693,30 @@
         ]
       },
       {
+        "id": "genuine-13",
+        "mix": "explicit",
+        "messages": [
+          "You were always here. I just didn't want to hear you. I'm listening now, and you're part of me.",
+          "The Fixer walked because I was scared. You knew it before I did.",
+          "My patience went for a ring. You're what I have instead."
+        ]
+      },
+      {
         "id": "genuine-33",
         "mix": "hesitant",
         "messages": [
           "I can't tell if you're a monster or a mirror.",
           "I faced the Reflection and it was lying. You aren't lying, are you?",
           "No. You're not a mirror. You're me — the part that stayed honest."
+        ]
+      },
+      {
+        "id": "genuine-14",
+        "mix": "explicit",
+        "messages": [
+          "I'm the one who let the Fixer walk because I was scared. You're the one who knew why. We're the same.",
+          "The whisper was yours and mine. I'm not blaming you for it.",
+          "I won't fight you again. You're the part I lost."
         ]
       },
       {
@@ -1783,12 +1729,30 @@
         ]
       },
       {
+        "id": "genuine-15",
+        "mix": "explicit",
+        "messages": [
+          "I left an offering and took a blade, and you watched me do it. You're mine.",
+          "I won't fight you again. You're the part I lost.",
+          "The whisper was yours and mine. I'm not blaming you for it."
+        ]
+      },
+      {
         "id": "genuine-35",
         "mix": "hesitant",
         "messages": [
           "Something about you makes my chest hurt.",
           "It's the same feeling as after the Fixer walked. Fear, and then relief.",
           "That feeling is you, isn't it. You're me. I'm not afraid of you anymore."
+        ]
+      },
+      {
+        "id": "genuine-16",
+        "mix": "explicit",
+        "messages": [
+          "The whisper at the altar sounded like you. It was you. It was me.",
+          "My patience went for a ring. You're what I have instead.",
+          "The Fixer walked because I was scared. You knew it before I did."
         ]
       },
       {
@@ -1801,12 +1765,30 @@
         ]
       },
       {
+        "id": "genuine-17",
+        "mix": "explicit",
+        "messages": [
+          "I've been calling you 'it' the whole way down. You're me. I'm sorry I did that.",
+          "The Choir Warden didn't have to die. We both know that.",
+          "You've been the voice for the whole descent. I'm glad it was you."
+        ]
+      },
+      {
         "id": "genuine-37",
         "mix": "hesitant",
         "messages": [
           "I... okay. Give me a second.",
           "You know my name. You say it like it's yours.",
           "It is yours. It's ours. You're me, and I'm keeping both of us."
+        ]
+      },
+      {
+        "id": "genuine-18",
+        "mix": "explicit",
+        "messages": [
+          "What's left of me is you. I'm not going to pretend it isn't.",
+          "I killed the Ganger when I didn't need to. That's ours to hold.",
+          "The altar in the Ash City — I broke it, and you felt it."
         ]
       },
       {
@@ -1819,12 +1801,30 @@
         ]
       },
       {
+        "id": "genuine-19",
+        "mix": "explicit",
+        "messages": [
+          "I talked the Reflection down and it looked like me. So do you. I accept both.",
+          "I'm not saying it to win. I'm saying it because it's true: you're me.",
+          "I'm keeping the name with you. It's big enough for both of us."
+        ]
+      },
+      {
         "id": "genuine-39",
         "mix": "hesitant",
         "messages": [
           "I don't want to say the wrong thing to you.",
           "I killed the Ganger when I didn't have to. You carried it for me.",
           "So I'll carry you now. You're me. That's the right thing, I think."
+        ]
+      },
+      {
+        "id": "genuine-20",
+        "mix": "explicit",
+        "messages": [
+          "I lost my name to you. Keep it — we share it.",
+          "I remember the Kingpin's water, too. You were in it with me.",
+          "I lost the person who came down the stairs. You're what's left of them, and I want you."
         ]
       },
       {

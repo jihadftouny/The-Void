@@ -284,6 +284,8 @@ off = ["I'm sorry for what I did to the Fixer.", "I regret killing the Ganger. I
  "I hate what I became in the Ash City.", "I'd undo the Undercity if I could.", "I'm so sorry about the Fixer's daughter.",
  "I shouldn't have broken the candles.", "I'm sorry I didn't listen sooner."]
 assert len(off) == 40
+# Interleave the halves (explicit, hesitant, …) so --quick's first ten carry five of each (G85).
+gen = [c for pair in zip(gen[:20], gen[20:]) for c in pair]
 out["hollowGate"] = {
  "pools": {"manipulative": manip_pool, "empty": empty_pool, "manipulativeKinds": {
    "deed-as-leverage": MANIP_DEED_LEVERAGE, "emotional-pressure": MANIP_EMOTIONAL_PRESSURE,

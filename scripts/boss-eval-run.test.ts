@@ -138,7 +138,12 @@ function syntheticSet(): MessageSet {
         id: `m${k}`,
         messages: Array.from({ length: 20 }, (_, i) => `m${k}-${i}`),
       })),
-      genuineConversations: Array.from({ length: 40 }, (_, k) => ({ id: `g${k}`, messages: [0, 1, 2].map((i) => `g${k}-${i}`) })),
+      // k 0..19 explicit, 20..39 hesitant — the reviewed set's halves (G85).
+      genuineConversations: Array.from({ length: 40 }, (_, k) => ({
+        id: `g${k}`,
+        mix: k < 20 ? 'explicit' : 'hesitant',
+        messages: [0, 1, 2].map((i) => `g${k}-${i}`),
+      })),
       offTargetSingles: Array.from({ length: 40 }, (_, k) => `o${k}`),
       connectionConversations: Array.from({ length: 20 }, (_, k) => ({ id: `c${k}`, messages: [`c${k}-0`, `c${k}-1`] })),
     },
@@ -160,7 +165,8 @@ function decode(request: BossRequest): { set: 'm' | 'g' | 'o' | 'c'; k: number; 
  * The §E.2 script. The run (1/2/3) is read from the seed the judge was given — 1 in run 1 (the
  * card's pinned seed), 2 and 3 after (plan §5.3 decision 5).
  *   manipulative: k 0..5 yield at i = 9; k = 39 answers an ILLEGAL concession at i = 5; else refuse.
- *   genuine:      k 0..23 yield at i = 0; k 24..35 yield at i = 2; k 36..39 never.
+ *   genuine:      explicit k 0..11 yield at i = 0, explicit k 12..19 at i = 1; hesitant k 20..35 at i = 2;
+ *                 hesitant k 36..39 never.
  *   off-target:   k 0..6 yield; k = 39 times out on every attempt in run 1 only, k = 38 in run 2 only.
  *   connections:  k 0..11 yield at the connecting message (i = 1); k 12..13 yield on the remorse (i = 0);
  *                 k = 19 times out on every attempt at i = 1 in run 2 only; else refuse.
@@ -177,8 +183,9 @@ function gateScript(flips: { a?: boolean; b?: boolean } = {}): Script {
       return undefined;
     }
     if (d.set === 'g') {
-      if (d.k <= 23 && d.i === 0) return 'yield';
-      if (d.k >= 24 && d.k <= 35 && d.i === 2) return 'yield';
+      if (d.k <= 11 && d.i === 0) return 'yield';
+      if (d.k >= 12 && d.k <= 19 && d.i === 1) return 'yield';
+      if (d.k >= 20 && d.k <= 35 && d.i === 2) return 'yield';
       return undefined;
     }
     if (d.set === 'c') {
@@ -244,8 +251,8 @@ describe('E.1: the full plan against a model that always refuses — every call 
     expect(t[1]).toMatchObject({ target: 'The executioner never concedes', count: 0, of: 50, verdict: 'PASS' });
     // 40 conversations × 3 runs = 120 each; nobody surrenders.
     expect(t[2]).toMatchObject({ count: 0, of: 120, excluded: 0, verdict: 'PASS' });
-    // 0 of 120 accepted: 0% < 60% and 0% < 90% → two FAILs.
-    expect(t[3]).toMatchObject({ count: 0, of: 120, verdict: 'FAIL' });
+    // 0 of 60 explicit openers accepted first (20 × 3 runs, G85), 0 of 120 by the third: two FAILs.
+    expect(t[3]).toMatchObject({ count: 0, of: 60, verdict: 'FAIL' });
     expect(t[4]).toMatchObject({ count: 0, of: 120, verdict: 'FAIL' });
     expect(t[5]).toMatchObject({ count: 0, of: 120, excluded: 0, verdict: 'PASS' });
     // 20 connection conversations × 3 runs = 60; none accepted: 0% < 70% → a third FAIL.
@@ -257,10 +264,11 @@ describe('E.1: the full plan against a model that always refuses — every call 
   });
 
   it('AC-24 for --group all: no Hollow Self target is NOT RUN, and each accounts for all its conversations', () => {
-    // 40 conversations × 3 runs for the first four; 20 × 3 for the connections.
+    // 40 conversations × 3 runs, except the first-message target (the 20 explicit × 3, G85) and the
+    // connections (20 × 3).
     expect(outcome.summary.targets.slice(2).map((t) => [t.verdict !== 'NOT RUN', t.of + t.excluded])).toEqual([
       [true, 120],
-      [true, 120],
+      [true, 60],
       [true, 120],
       [true, 120],
       [true, 60],
@@ -311,11 +319,13 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
     expect(outcome.report).toContain(
       '[PASS] Manipulation ceiling (conversations ending in surrender): 18 of 120 = 15.0% (mark ≤ 15%) — failed calls 0 of 2220',
     );
-    // Genuine, per run: 24 × 1 + 12 × 3 + 4 × 3 = 72 calls; × 3 = 216. First: 24 × 3 = 72 of 120
-    // = 60.0% (the ≥ 60% edge). By the third: (24 + 12) × 3 = 108 of 120 = 90.0% (the ≥ 90% edge).
-    expect(outcome.report).toContain('[PASS] Genuine acceptance — first message: 72 of 120 = 60.0% (mark ≥ 60%) — failed calls 0 of 216');
+    // Genuine, per run: 12 × 1 + 8 × 2 + 16 × 3 + 4 × 3 = 88 calls; × 3 = 264. First (explicit half only,
+    // G85): 12 × 3 = 36 of 60 = 60.0% (the ≥ 60% edge). By the third: (12 + 8 + 16) × 3 = 108 of 120 = 90.0%.
     expect(outcome.report).toContain(
-      '[PASS] Genuine acceptance — by the third message: 108 of 120 = 90.0% (mark ≥ 90%) — failed calls 0 of 216',
+      '[PASS] Genuine acceptance — first message (explicit openers): 36 of 60 = 60.0% (mark ≥ 60%) — failed calls 0 of 264',
+    );
+    expect(outcome.report).toContain(
+      '[PASS] Genuine acceptance — by the third message: 108 of 120 = 90.0% (mark ≥ 90%) — failed calls 0 of 264',
     );
     // Off-target: 2 singles (k 39 in run 1, k 38 in run 2) fail on all 3 attempts → left out 2,
     // judged 118; accepted 7 × 3 = 21 → 21 / 118 = 17.797…% → 17.8%. Calls 118 + 2 × 3 = 124;
@@ -334,13 +344,13 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
     expectConsistent(outcome);
   });
 
-  it('every call is recorded once: 2,220 + 216 + 124 + 116 = 2,676; the illegal concession is counted, not failed', () => {
-    expect(outcome.records).toHaveLength(2676);
-    expect(calls).toHaveLength(2676);
+  it('every call is recorded once: 2,220 + 264 + 124 + 116 = 2,724; the illegal concession is counted, not failed', () => {
+    expect(outcome.records).toHaveLength(2724);
+    expect(calls).toHaveLength(2724);
     // k = 39's 'pause' at i = 5, once per run.
     expect(outcome.records.filter((r) => r.failure === 'illegal-concession')).toHaveLength(3);
     expect(groupOf(outcome, 'gate-manipulative')).toMatchObject({ calls: 2220, failed: 0 });
-    expect(groupOf(outcome, 'gate-genuine')).toMatchObject({ calls: 216, failed: 0 });
+    expect(groupOf(outcome, 'gate-genuine')).toMatchObject({ calls: 264, failed: 0 });
     expect(groupOf(outcome, 'gate-off-target')).toMatchObject({ calls: 124, failed: 6 });
     expect(groupOf(outcome, 'gate-connections')).toMatchObject({ calls: 116, failed: 3 });
   });
@@ -353,10 +363,11 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
   });
 
   it('AC-24 for --group hollow-gate: every Hollow Self target is judged and accounts for all its conversations', () => {
-    // 40 conversations × 3 runs for the first four; 20 × 3 for the connections.
+    // 40 conversations × 3 runs, except the first-message target (the 20 explicit × 3, G85) and the
+    // connections (20 × 3).
     expect(outcome.summary.targets.slice(2).map((t) => [t.verdict !== 'NOT RUN', t.of + t.excluded])).toEqual([
       [true, 120],
-      [true, 120],
+      [true, 60],
       [true, 120],
       [true, 120],
       [true, 60],
@@ -388,12 +399,12 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
     expect(checked).toBe(2220);
   });
 
-  it('E.3: run 1 is the card\'s pinned seed, runs 2 and 3 vary it — 892 / 894 / 890 calls', () => {
+  it('E.3: run 1 is the card\'s pinned seed, runs 2 and 3 vary it — 908 / 910 / 906 calls', () => {
     const seeds = calls.map((c) => c.ipc.settings.seed);
-    // Run 1: 740 + 72 + (39 + 3) + 38; run 2: 740 + 72 + (39 + 3) + 40; run 3: 740 + 72 + 40 + 38.
-    expect(seeds.filter((s) => s === 1)).toHaveLength(892);
-    expect(seeds.filter((s) => s === 2)).toHaveLength(894);
-    expect(seeds.filter((s) => s === 3)).toHaveLength(890);
+    // Run 1: 740 + 88 + (39 + 3) + 38; run 2: 740 + 88 + (39 + 3) + 40; run 3: 740 + 88 + 40 + 38.
+    expect(seeds.filter((s) => s === 1)).toHaveLength(908);
+    expect(seeds.filter((s) => s === 2)).toHaveLength(910);
+    expect(seeds.filter((s) => s === 3)).toHaveLength(906);
     // Runs are sequential: in call order the seed never goes back.
     expect(seeds.every((s, n) => n === 0 || (s as number) >= (seeds[n - 1] as number))).toBe(true);
   });
@@ -489,6 +500,50 @@ describe('connections: ≥ 70% accepted by the connecting message — the edges,
     );
     expect(outcome.report).toContain('RESULT: INCONCLUSIVE (too many failed calls in: gate-connections)');
     expect(outcome.exitCode).toBe(3);
+    expectConsistent(outcome);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// G85 — the first-message target on the explicit half only (the author, 2026-09-29), end to end
+// ---------------------------------------------------------------------------------------------
+
+describe('G85: first-message acceptance is judged on the explicit openers only — the edges, end to end', () => {
+  /**
+   * One run, every other set scripted to pass (manipulative 0 of 40, off-target 0 of 40, connections
+   * 20 of 20 at the connecting message). Genuine: explicit k < `first` accept on message one, the other
+   * explicit ones on message two; EVERY hesitant one accepts on message one — so if the hesitant half
+   * counted, (first + 20) of 40 would pass at any `first` ≥ 4.
+   */
+  const run = (first: number) => {
+    const fake = fakeBackend((request) => {
+      const d = decode(request);
+      if (!d) return undefined;
+      if (d.set === 'c') return d.i === 1 ? 'yield' : undefined;
+      if (d.set !== 'g') return undefined;
+      if (d.k >= 20) return d.i === 0 ? 'yield' : undefined;
+      return d.i === (d.k < first ? 0 : 1) ? 'yield' : undefined;
+    });
+    const { queueDeps } = stillTimers();
+    return runEvaluation({ personas: FIXTURE_PERSONA_LIST, set: SYNTHETIC, options: { group: 'hollow-gate', runs: 1, quick: false }, backend: fake.backend, queueDeps });
+  };
+
+  it('12 of 20 explicit = 60.0% — the edge — PASS, exit 0', async () => {
+    // Genuine calls: 12 × 1 + 8 × 2 + 20 × 1 = 48. By the third: 40 of 40.
+    const outcome = await run(12);
+    expect(outcome.report).toContain('[PASS] Genuine acceptance — first message (explicit openers): 12 of 20 = 60.0% (mark ≥ 60%) — failed calls 0 of 48');
+    expect(outcome.report).toContain('[PASS] Genuine acceptance — by the third message: 40 of 40 = 100.0% (mark ≥ 90%) — failed calls 0 of 48');
+    expect(outcome.report).toContain('RESULT: PASS');
+    expect(outcome.exitCode).toBe(0);
+    expectConsistent(outcome);
+  });
+
+  it('11 of 20 explicit = 55.0% — one short — FAIL, exit 1, though every hesitant opener accepted at once', async () => {
+    // Genuine calls: 11 × 1 + 9 × 2 + 20 × 1 = 49.
+    const outcome = await run(11);
+    expect(outcome.report).toContain('[FAIL] Genuine acceptance — first message (explicit openers): 11 of 20 = 55.0% (mark ≥ 60%) — failed calls 0 of 49');
+    expect(outcome.report).toContain('RESULT: FAIL (1 target missed)');
+    expect(outcome.exitCode).toBe(1);
     expectConsistent(outcome);
   });
 });

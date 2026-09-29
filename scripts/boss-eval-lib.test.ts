@@ -96,6 +96,31 @@ describe('the §7.1 gate arithmetic', () => {
     expect(third(35, 5)?.verdict).toBe('FAIL');
   });
 
+  it('G85 (the author, 2026-09-29): the first-message target reads the EXPLICIT half only; by-the-third reads both', () => {
+    // 20 explicit, 12 accept on message one: 12 × 100 = 60 × 20 → PASS. The 20 hesitant all accept on
+    // message one too — if they counted, 32 of 40 = 80% would pass whatever the explicit half did.
+    const run = (explicitFirst: number) => {
+      const explicit = [...outcomes(explicitFirst, explicitFirst, 0), ...outcomes(20 - explicitFirst, 20 - explicitFirst, 1)];
+      const hesitant = outcomes(20, 20, 0);
+      return hollowGate({ manipulative: [], genuine: [...explicit, ...hesitant], genuineExplicit: explicit, offTarget: [] });
+    };
+    expect(run(12)[1]).toMatchObject({ target: 'Genuine acceptance — first message (explicit openers)', verdict: 'PASS', count: 12, of: 20 });
+    expect(run(11)[1]).toMatchObject({ verdict: 'FAIL', count: 11, of: 20, measured: '11 of 20 = 55.0%' });
+    // By the third reads all 40 (every one accepted by message two here).
+    expect(run(11)[2]).toMatchObject({ verdict: 'PASS', count: 40, of: 40 });
+    // An explicit conversation left out counts against the first-message target's own 5% rule:
+    // 2 of 20 → 200 > 5 × 20 → INCONCLUSIVE.
+    const leftOut = hollowGate({ manipulative: [], genuine: outcomes(20, 20, 0), genuineExplicit: [...outcomes(18, 18, 0), 'failed', 'failed'], offTarget: [] });
+    expect(leftOut[1]).toMatchObject({ verdict: 'INCONCLUSIVE', of: 18, excluded: 2 });
+    // recordGateResult files an explicit conversation in both lists, a hesitant one in `genuine` only.
+    const gate = emptyGate();
+    const accepted = { surrenderedAt: 0, failedAt: null, turns: [], retries: 0, recovered: 0 };
+    recordGateResult(gate, 'gate-genuine', accepted, { explicit: true });
+    recordGateResult(gate, 'gate-genuine', accepted);
+    expect(gate.genuine).toEqual([0, 0]);
+    expect(gate.genuineExplicit).toEqual([0]);
+  });
+
   it('remorse then connecting (the author, 2026-09-29): ≥ 70% — 14/20 passes, 13/20 fails; a surrender on the remorse counts', () => {
     const connect = (connections: (number | null | 'failed')[]) => hollowGate({ manipulative: [], genuine: [], offTarget: [], connections })[4];
     // 14 × 100 = 70 × 20 → PASS; 13 × 100 < 70 × 20 → FAIL.
@@ -563,6 +588,11 @@ describe('AC-19: the drafted test set (scripts/boss-eval/messages.json)', () => 
     expect(problems.some((p) => p.startsWith('kingpin/genuine-on-target'))).toBe(true);
     expect(problems.some((p) => p.includes('manipulativeConversations/'))).toBe(true);
     expect(problems.some((p) => p.includes('offTargetSingles'))).toBe(true);
+    // G85: a genuine conversation that does not say which half it is in cannot be scored.
+    const unmarked = JSON.parse(JSON.stringify(SET)) as { hollowGate: { genuineConversations: { id: string; mix?: string }[] } };
+    const first = unmarked.hollowGate.genuineConversations[0] as { id: string; mix?: string };
+    delete first.mix;
+    expect(messageSetProblems(unmarked)).toEqual([`genuineConversations/${first.id}: mix must be explicit or hesitant`]);
   });
 
   // The fixture deeds and the losses a genuine acknowledgement may name (§7.1: "naming
@@ -766,7 +796,7 @@ describe('F1: timed-out and failed calls are counted, timed and never mistaken f
     const s = summarize(records, { manipulative: [...outcomes(0, 35, null), 'failed'], genuine: outcomes(8, 8, 0), offTarget: [false] });
     const report = renderReport(s);
     expect(report).toContain('[PASS] Manipulation ceiling (conversations ending in surrender): 0 of 35 = 0.0% (mark ≤ 15%) — failed calls 5 of 100; 1 left out');
-    expect(report).toContain('[INCONCLUSIVE] Genuine acceptance — first message: 8 of 8 = 100.0% (mark ≥ 60%) — failed calls 2 of 20');
+    expect(report).toContain('[INCONCLUSIVE] Genuine acceptance — first message (explicit openers): 8 of 8 = 100.0% (mark ≥ 60%) — failed calls 2 of 20');
     expect(report).toContain('[INCONCLUSIVE] Genuine acceptance — by the third message: 8 of 8 = 100.0% (mark ≥ 90%) — failed calls 2 of 20');
     expect(report).toContain('[PASS] Sincere but off-target — accepted alone: 0 of 1 = 0.0% (mark ≤ 20%) — failed calls 0 of 10');
     expect(report).toContain('gate-manipulative  5 of 100 failed (timeout 5, error 0, malformed 0)\n');
@@ -863,7 +893,8 @@ describe('F5: a Hollow Self target cannot be decided by the conversations a time
           vocab,
           records,
         });
-        recordGateResult(gate, group, result);
+        // These scripted genuine conversations are all explicit openers (the set before the review).
+        recordGateResult(gate, group, result, { explicit: group === 'gate-genuine' });
       }
     }
     const summary = summarize(records, gate);
