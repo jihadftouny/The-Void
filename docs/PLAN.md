@@ -399,7 +399,7 @@ any unit touching `battle.ts`, `game.ts`, `boss.ts` or the event tables.
   move, the legal-move list, the seeded fallback policy, the boss's choice entering `step`,
   concessions' engine effects, surrender → grace, per-boss damage dice. Territory: `src/game/**`,
   `src/data/**`, `src/render/**`, the save.
-- **B — `boss-llm`** (built 2026-09-28, the model plumbing). Covers **G80 G81 G84**. Territory:
+- **B — `boss-llm`** (built 2026-09-28, the model plumbing). Covers **G80 G81 G84 G85**. Territory:
   `src/llm/bossContract.ts` (the shared plain-data shapes) · `bossWords.ts` (HP, condition, exchange,
   deed and karma words) · `bossSchema.ts` (the grammar schemas) · `bossPrompt.ts` (SYSTEM/USER
   assembly, settings) · `bossAnswer.ts` (parse, name rule, line check, fallback line) ·
@@ -408,7 +408,8 @@ any unit touching `battle.ts`, `game.ts`, `boss.ts` or the event tables.
   (`generateStructured`) · `electron/main.mjs` + `preload.cjs` (the `llm:boss` channel) ·
   `electron/instrument.mjs` (`bossGenerate` threshold) · `scripts/boss-eval.ts` (the process entry) +
   `boss-eval-cli.ts` (the command) + `boss-eval-run.ts` (the run) + `boss-eval-lib.ts` +
-  `boss-eval/messages.json` (the real-model evaluation, **built, not yet run** — its first run is the
+  `boss-eval/messages.json` + `boss-eval/draft-messages.py` (its seeded draw; reviewed by the author
+  2026-09-29, G85 open) (the real-model evaluation, **built, not yet run** — its first run is the
   author's, `HUMAN-CHECKS.md`) · `package.json` (`boss:eval`, `typecheck:boss-eval`).
 - **C — desktop wiring + persona data**, forked after A and B merge. Covers **G82** (an overall timeout
   on `window.void.boss`; a length cap on the Talk input). `src/desktop/**` (the Talk row,

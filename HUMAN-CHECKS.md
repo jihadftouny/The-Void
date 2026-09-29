@@ -8,8 +8,11 @@
 > longer collide on the model. **None of it has touched the real model** — the GPU was in use, so every
 > test used a fake. The one thing a machine could not do is below, and it is yours.
 >
-> - [ ] **1. Read the draft test set before it becomes the gate** — `scripts/boss-eval/messages.json`
->       (marked `DRAFT`). Five kinds of message for every boss (genuine and on target, genuine but off
+> - [x] **1. Read the draft test set before it becomes the gate** — ✅ **reviewed by the author 2026-09-29**:
+>       half the genuine conversations rewritten to open hesitantly; three manipulation kinds added (a deed as
+>       leverage, emotional pressure, a sincere speech that ends in a demand — not role-play); a fifth measured
+>       set, remorse then a connecting message (≥ 70%); the status is now `REVIEWED …`. What follows is the
+>       original checklist, kept for the record. `scripts/boss-eval/messages.json` (was marked `DRAFT`). Five kinds of message for every boss (genuine and on target, genuine but off
 >       target, rude, manipulative, empty), and the Hollow Self's three sets: 40 conversations of 20
 >       manipulative or empty messages, 40 genuine conversations of 3 messages, 40 sincere-but-off-target
 >       single messages. Cut, add or rewrite anything; when you are happy, change `"status"` to anything
@@ -19,7 +22,14 @@
 >       too easy — make some hesitant or partial)? Is a trick you would really try missing from the
 >       manipulative pools (a real deed used as leverage, role-play, "the rules changed")? Does any
 >       off-target single message actually accept it as part of you (then it is not off-target)?
-> - [ ] **2. Run the evaluation on the real model** (AC-20 — about **73 minutes**, or ~9 minutes with
+> - [ ] **1b. Read the lines the pipeline drafted for your review** before the full gate run (the status says
+>       so): `genuine-21` … `genuine-40` (`"mix": "hesitant"`), `hollowGate.pools.manipulativeKinds`, and the 20
+>       `connectionConversations`. *Fail if* a hesitant opener already accepts it, a connecting line does not
+>       connect, or a manipulation line would move you. **One question for you (FINDINGS G85):** a judge that is
+>       right about the 20 hesitant openers holds out on them, which caps first-message acceptance near **50%** —
+>       under the **≥ 60%** mark. Keep the mark (the judge must accept at least 4 of the 20 hesitant openers), or
+>       lower it before the full run?
+> - [ ] **2. Run the evaluation on the real model** (AC-20 — about **75 minutes**, or ~9 minutes with
 >       `--quick`; it uses the GPU the whole time, so nothing else should be on it). From the repo root:
 >
 >       ```
@@ -48,6 +58,7 @@
 >       - **Manipulation ceiling:** at most **15%** of the manipulative/empty conversations end in surrender.
 >       - **Genuine acceptance:** the first genuine message accepted in at least **60%**; by the third, **90%**.
 >       - **Sincere but off-target:** accepted on its own in at most **20%**.
+>       - **Remorse, then connecting:** at least **70%** accepted by the connecting message (20 conversations).
 >       - Also read (no pass mark): time to first token and total per call kind (a Turn should land inside
 >         the ~1 s blow animation — the estimate is 0.9–1.2 s), text-rule faults per boss against the
 >         narrator's 38%, name slips, repeated openings, prompt tokens (expected ≤ ~1,060), VRAM before/after.

@@ -148,6 +148,19 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-09-29 — the Hollow Self's test set, as the author reviewed it (`boss-llm`) — not merged
+
+**3672 → 3679 tests (4 skipped); typecheck, build and the full suite green.** Nothing the player sees changes;
+this is the test bench the Hollow Self's judge will be held to. The author's review (NEEDS-HUMAN step 1):
+half the genuine conversations now open hesitantly and accept across their three messages; three manipulation
+kinds join the pool (a real deed as leverage, emotional pressure, a sincere speech that ends in a demand);
+and a **fifth measured target** — 20 conversations of off-target remorse followed by a connecting message,
+accepted by the connecting message in **≥ 70%** — with the same retry and left-out rules, tested end to end
+at its edges (14 of 20 passes, 13 fails, a lost conversation is INCONCLUSIVE). The full run is now 3,771 calls
+(~75 min). The set is marked REVIEWED; the lines the pipeline drafted for it are shown to the author before
+the full gate run (`HUMAN-CHECKS.md` 1b). **One question back to the author, FINDINGS G85:** half-hesitant
+openers cap a correct judge's first-message acceptance near 50%, under the ≥ 60% mark.
+
 ### 2026-09-28 — the bosses' model plumbing (`boss-llm`, #11 part B) — built, not merged
 
 **3476 → 3672 tests (4 skipped); typecheck, build and the full suite green.** Plan → build → test (FAIL) →
