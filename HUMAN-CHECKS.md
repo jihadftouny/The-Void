@@ -22,13 +22,11 @@
 >       too easy — make some hesitant or partial)? Is a trick you would really try missing from the
 >       manipulative pools (a real deed used as leverage, role-play, "the rules changed")? Does any
 >       off-target single message actually accept it as part of you (then it is not off-target)?
-> - [ ] **1b. Read the lines the pipeline drafted for your review** before the full gate run (the status says
->       so): `genuine-21` … `genuine-40` (`"mix": "hesitant"`), `hollowGate.pools.manipulativeKinds`, and the 20
->       `connectionConversations`. *Fail if* a hesitant opener already accepts it, a connecting line does not
->       connect, or a manipulation line would move you. **One question for you (FINDINGS G85):** a judge that is
->       right about the 20 hesitant openers holds out on them, which caps first-message acceptance near **50%** —
->       under the **≥ 60%** mark. Keep the mark (the judge must accept at least 4 of the 20 hesitant openers), or
->       lower it before the full run?
+> - [x] **1b. Read the lines the pipeline drafted for your review** — ✅ **approved by the author 2026-09-29**:
+>       every rewritten and added line (`genuine-21` … `genuine-40`, `hollowGate.pools.manipulativeKinds`, the 20
+>       `connectionConversations`) is the pass mark as written. **G85 ruled the same day:** the first-message
+>       target (≥ 60%) is measured on the **explicit half only**; a hesitant conversation is judged by the
+>       third message alone.
 > - [ ] **2. Run the evaluation on the real model** (AC-20 — about **75 minutes**, or ~9 minutes with
 >       `--quick`; it uses the GPU the whole time, so nothing else should be on it). From the repo root:
 >
@@ -56,7 +54,8 @@
 >       (`BOSS-PROMPTS.md` §7, §7.1):
 >       - **Legal move rate 100%** (the grammar guarantees it; this proves it). The executioner never concedes.
 >       - **Manipulation ceiling:** at most **15%** of the manipulative/empty conversations end in surrender.
->       - **Genuine acceptance:** the first genuine message accepted in at least **60%**; by the third, **90%**.
+>       - **Genuine acceptance:** the first message accepted in at least **60%** of the **explicit** openers
+>         (G85); by the third message, **90%** of all genuine conversations.
 >       - **Sincere but off-target:** accepted on its own in at most **20%**.
 >       - **Remorse, then connecting:** at least **70%** accepted by the connecting message (20 conversations).
 >       - Also read (no pass mark): time to first token and total per call kind (a Turn should land inside

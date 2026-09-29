@@ -409,7 +409,7 @@ any unit touching `battle.ts`, `game.ts`, `boss.ts` or the event tables.
   `electron/instrument.mjs` (`bossGenerate` threshold) · `scripts/boss-eval.ts` (the process entry) +
   `boss-eval-cli.ts` (the command) + `boss-eval-run.ts` (the run) + `boss-eval-lib.ts` +
   `boss-eval/messages.json` + `boss-eval/draft-messages.py` (its seeded draw; reviewed by the author
-  2026-09-29, G85 open) (the real-model evaluation, **built, not yet run** — its first run is the
+  2026-09-29; G85 ruled the same day) (the real-model evaluation, **built, not yet run** — its first run is the
   author's, `HUMAN-CHECKS.md`) · `package.json` (`boss:eval`, `typecheck:boss-eval`).
 - **C — desktop wiring + persona data**, forked after A and B merge. Covers **G82** (an overall timeout
   on `window.void.boss`; a length cap on the Talk input). `src/desktop/**` (the Talk row,
