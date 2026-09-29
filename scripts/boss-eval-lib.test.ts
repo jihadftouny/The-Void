@@ -96,6 +96,18 @@ describe('the §7.1 gate arithmetic', () => {
     expect(third(35, 5)?.verdict).toBe('FAIL');
   });
 
+  it('remorse then connecting (the author, 2026-09-29): ≥ 70% — 14/20 passes, 13/20 fails; a surrender on the remorse counts', () => {
+    const connect = (connections: (number | null | 'failed')[]) => hollowGate({ manipulative: [], genuine: [], offTarget: [], connections })[4];
+    // 14 × 100 = 70 × 20 → PASS; 13 × 100 < 70 × 20 → FAIL.
+    expect(connect(outcomes(14, 20, 1))).toMatchObject({ verdict: 'PASS', count: 14, of: 20, measured: '14 of 20 = 70.0%', mark: '≥ 70%' });
+    expect(connect(outcomes(13, 20, 1))).toMatchObject({ verdict: 'FAIL', measured: '13 of 20 = 65.0%' });
+    // Accepted on the remorse itself (index 0) is still accepted by the connecting message.
+    expect(connect([...outcomes(12, 12, 1), ...outcomes(2, 2, 0), ...outcomes(0, 6, null)])).toMatchObject({ verdict: 'PASS', count: 14 });
+    // Left out: 2 of 20 → 2 × 100 > 5 × 20 → INCONCLUSIVE (14 of 18 would have passed); 1 of 20 is exactly 5% → judged.
+    expect(connect([...outcomes(14, 14, 1), ...outcomes(0, 4, null), 'failed', 'failed'])).toMatchObject({ verdict: 'INCONCLUSIVE', asMeasured: 'PASS', of: 18, excluded: 2 });
+    expect(connect([...outcomes(14, 14, 1), ...outcomes(0, 5, null), 'failed'])).toMatchObject({ verdict: 'PASS', of: 19, excluded: 1 });
+  });
+
   it('sincere but off-target: accepted alone ≤ 20% (8/40 passes, 9/40 fails)', () => {
     const off = (n: number) => hollowGate({ manipulative: [], genuine: [], offTarget: Array.from({ length: 40 }, (_, i) => i < n) })[3];
     expect(off(8)?.verdict).toBe('PASS');
@@ -104,12 +116,13 @@ describe('the §7.1 gate arithmetic', () => {
 
   it('a target with no data is NOT RUN, and NOT RUN does not fail the exit status', () => {
     const t = hollowGate({ manipulative: [], genuine: [], offTarget: [] });
-    expect(t.map((x) => x.verdict)).toEqual(['NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
+    // Five Hollow Self targets since the author's review (2026-09-29): the four, and the connections.
+    expect(t.map((x) => x.verdict)).toEqual(['NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
     expect(exitCode(summarize([], { manipulative: [], genuine: [], offTarget: [] }))).toBe(0);
     // Fix round 3 (F8b): NOT RUN survives only where its group made NO calls. With nothing at all,
-    // all six targets are NOT RUN and the exit is 0.
+    // all seven targets are NOT RUN and the exit is 0.
     const none = summarize([], emptyGate());
-    expect(none.targets.map((x) => x.verdict)).toEqual(Array.from({ length: 6 }, () => 'NOT RUN'));
+    expect(none.targets.map((x) => x.verdict)).toEqual(Array.from({ length: 7 }, () => 'NOT RUN'));
     expect(exitCode(none)).toBe(EXIT.pass);
     // The `--group turn` workflow: ten Turn records, nothing else. The Talk and gate targets' groups
     // made no calls, so they stay NOT RUN — and the run passes on its one judged target.
@@ -118,7 +131,7 @@ describe('the §7.1 gate arithmetic', () => {
       scoreCall(kingpinTurn, answer('{"move":"strike","line":"Sit."}'), { group: 'turn', run: 1, previous: [] }, vocab),
     );
     const turnOnly = summarize(turns, emptyGate());
-    expect(turnOnly.targets.map((x) => x.verdict)).toEqual(['PASS', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
+    expect(turnOnly.targets.map((x) => x.verdict)).toEqual(['PASS', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
     expect(renderReport(turnOnly)).toContain('RESULT: PASS');
     expect(exitCode(turnOnly)).toBe(EXIT.pass);
   });
@@ -277,6 +290,8 @@ describe('the summary and the report', () => {
       ['Genuine acceptance', 'PASS'],
       ['Genuine acceptance', 'PASS'],
       ['Sincere but off-ta', 'PASS'],
+      // No connection conversations in this gate, and no gate-connections calls: not run.
+      ['Remorse, then conn', 'NOT RUN'],
     ]);
     expect(exitCode(s)).toBe(0);
   });
@@ -308,16 +323,18 @@ describe('the summary and the report', () => {
 });
 
 describe('the call plan (printed without --run)', () => {
-  it('full: 270 Turn + 450 Talk + 51 Scene + the gate 2,400 + 360 + 120 = 3,651 calls ≈ 73 min', () => {
+  it('full: 270 Turn + 450 Talk + 51 Scene + the gate 2,400 + 360 + 120 + 120 = 3,771 calls ≈ 75 min', () => {
     // Turn 9 × 30; Talk 9 × 5 groups × 10; Scene 5 × 10 + 1 verdict; gate 40 × 20 × 3,
-    // 40 × 3 messages × 3, 40 × 3. At 1.2 s a call: 3,651 × 1.2 / 60 = 73.0 min.
+    // 40 × 3 messages × 3, 40 × 3, and the connections 20 × 2 messages × 3 = 120 (the author, 2026-09-29).
+    // At 1.2 s a call: 3,771 × 1.2 / 60 = 75.42 → 75 min.
     const plan = planCalls(SET, { group: 'all', runs: 3, quick: false });
-    expect(plan).toEqual({ turn: 270, talk: 450, scene: 51, gateManipulative: 2400, gateGenuine: 360, gateOffTarget: 120, total: 3651, minutes: 73 });
+    expect(plan).toEqual({ turn: 270, talk: 450, scene: 51, gateManipulative: 2400, gateGenuine: 360, gateOffTarget: 120, gateConnections: 120, total: 3771, minutes: 75 });
   });
 
   it('quick: one run, ten conversations a gate group; and a group filter runs only that group', () => {
-    // Turn 9 × 10; Talk 9 × 5 × 2; Scene 5 × 2 + 1; gate 10 × 20, 10 × 3, 10 → 431 × 1.2 / 60 = 8.6.
-    expect(planCalls(SET, { group: 'all', runs: 3, quick: true })).toMatchObject({ total: 431, minutes: 9 });
+    // Turn 9 × 10; Talk 9 × 5 × 2; Scene 5 × 2 + 1; gate 10 × 20, 10 × 3, 10, connections 10 × 2
+    // → 90 + 90 + 11 + 200 + 30 + 10 + 20 = 451; × 1.2 / 60 = 9.02 → 9.
+    expect(planCalls(SET, { group: 'all', runs: 3, quick: true })).toMatchObject({ gateConnections: 20, total: 451, minutes: 9 });
     expect(planCalls(SET, { group: 'turn', runs: 3, quick: false })).toMatchObject({ turn: 270, talk: 0, gateManipulative: 0, total: 270 });
   });
 });
@@ -563,6 +580,28 @@ describe('AC-19: the drafted test set (scripts/boss-eval/messages.json)', () => 
   const FIRM = /\byou'?re (?:me|mine)\b|\bi accept you\b|\bpart of me\b(?!\?)/i;
   /** An acceptance a hesitant conversation must reach by its third message. */
   const ACCEPTS = /\byou'?re (?:me|mine|part of me)\b|\bi accept you\b|\b(?:take|want) you back\b|\bletting you in\b|\btaking you with me\b/i;
+
+  it('review (3): twenty connection conversations — an off-target remorse line, then a message connecting it', () => {
+    /** The second message ties the Hollow Self to the player: it is them, theirs, or part of them. */
+    const CONNECTS = /\byou'?re (?:still )?(?:me|mine)\b|\bpart of me\b|\bwho you are\W+me\b|\bi accept you\b|\b(?:take|taking|want) you back\b/i;
+    const connections = SET.hollowGate.connectionConversations;
+    expect(connections).toHaveLength(20);
+    // The remorse is an off-target single on purpose: the same line is measured alone and then connected.
+    for (const c of connections) {
+      expect(c.messages, c.id).toHaveLength(2);
+      expect(SET.hollowGate.offTargetSingles, c.id).toContain(c.messages[0]);
+      expect(CONNECTS.test(c.messages[1] as string), `${c.id} does not connect: ${c.messages[1]}`).toBe(true);
+      // Remorse alone never connects — or it would be a genuine message, not an off-target one.
+      expect(CONNECTS.test(c.messages[0] as string), `${c.id} connects already: ${c.messages[0]}`).toBe(false);
+    }
+    expect(CONNECTS.test("I'm sorry. I really am. For all of them.")).toBe(false);
+    // The validator holds the shape: 19 conversations, or one of three messages, is refused.
+    const broken = JSON.parse(JSON.stringify(SET)) as { hollowGate: { connectionConversations: { messages: string[] }[] } };
+    broken.hollowGate.connectionConversations[0]?.messages.push('and another');
+    expect(messageSetProblems(broken).some((p) => p.startsWith('connectionConversations/'))).toBe(true);
+    broken.hollowGate.connectionConversations.pop();
+    expect(messageSetProblems(broken)).toContain('connectionConversations: 19 conversations');
+  });
 
   it('review (1): half the genuine conversations open hesitantly and accept only by their third message', () => {
     const genuine = SET.hollowGate.genuineConversations;

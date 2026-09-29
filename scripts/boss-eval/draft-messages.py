@@ -294,7 +294,7 @@ out["hollowGate"] = {
  "connectionConversations": [{"id": "connect-%02d" % (i + 1), "messages": m} for i, m in enumerate([
   ["I'm sorry for what I did to the Fixer.", "...and you're what's left of that. The fear that let him go. You're me."],
   ["I regret killing the Ganger. I think about it.", "You're the part of me that can't stop thinking about it. You're me."],
-  ["I wish I'd left the altar alone.", "You felt it break because I did. You're not separate from me."],
+  ["I wish I'd left the altar alone.", "You felt it break because I did. You're part of me, not separate from me."],
   ["I'm sorry I traded my patience away.", "And you're the patience I gave away. You're still mine. Come back."],
   ["I shouldn't have listened to the whisper.", "But the part of me that listened was you. I'm not throwing you out."],
   ["I'm ashamed of what I did in the Undercity.", "You're the one who carried the shame for me. You're me, and I'll carry it now."],

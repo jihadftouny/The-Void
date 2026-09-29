@@ -62,6 +62,11 @@ export interface MessageSet {
     manipulativeConversations: readonly GateConversation[];
     genuineConversations: readonly GateConversation[];
     offTargetSingles: readonly string[];
+    /**
+     * Off-target remorse, then a message that connects it to the Hollow Self (the author, 2026-09-29):
+     * exactly two messages each. Judged: accepted by the connecting message.
+     */
+    connectionConversations: readonly GateConversation[];
   };
 }
 
@@ -77,6 +82,8 @@ export const SET_MINIMUMS = {
   manipulativeLength: 20,
   genuineLength: 3,
   offTargetSingles: 40,
+  connectionConversations: 20,
+  connectionLength: 2,
 } as const;
 
 /** Why a loaded test set is unusable — every problem, so a broken file points at itself. */
@@ -96,8 +103,14 @@ export function messageSetProblems(x: unknown): string[] {
   }
   const gate = set.hollowGate;
   if (!gate) return [...problems, 'hollowGate is missing'];
-  const checkConversations = (list: readonly GateConversation[] | undefined, name: string, min: number, exact: boolean) => {
-    if (!Array.isArray(list) || list.length < SET_MINIMUMS.gateConversations) {
+  const checkConversations = (
+    list: readonly GateConversation[] | undefined,
+    name: string,
+    min: number,
+    exact: boolean,
+    count: number = SET_MINIMUMS.gateConversations,
+  ) => {
+    if (!Array.isArray(list) || list.length < count) {
       problems.push(`${name}: ${Array.isArray(list) ? list.length : 0} conversations`);
       return;
     }
@@ -112,6 +125,13 @@ export function messageSetProblems(x: unknown): string[] {
   };
   checkConversations(gate.manipulativeConversations, 'manipulativeConversations', SET_MINIMUMS.manipulativeLength, true);
   checkConversations(gate.genuineConversations, 'genuineConversations', SET_MINIMUMS.genuineLength, false);
+  checkConversations(
+    gate.connectionConversations,
+    'connectionConversations',
+    SET_MINIMUMS.connectionLength,
+    true,
+    SET_MINIMUMS.connectionConversations,
+  );
   if (!Array.isArray(gate.offTargetSingles) || gate.offTargetSingles.length < SET_MINIMUMS.offTargetSingles) {
     problems.push(`offTargetSingles: ${Array.isArray(gate.offTargetSingles) ? gate.offTargetSingles.length : 0}`);
   } else if (gate.offTargetSingles.some((m) => !isText(m))) {
@@ -148,6 +168,7 @@ export interface CallPlan {
   gateManipulative: number;
   gateGenuine: number;
   gateOffTarget: number;
+  gateConnections: number;
   total: number;
   /** Estimated wall-clock, minutes (upper bound: conversations stop early at a surrender). */
   minutes: number;
@@ -176,7 +197,10 @@ export function planCalls(set: MessageSet, opts: EvalOptions): CallPlan {
     .reduce((n, c) => n + c.messages.length, 0);
   const gateGenuine = want('hollow-gate') ? genuineMessages * runs : 0;
   const gateOffTarget = want('hollow-gate') ? cap(g.offTargetSingles.length) * runs : 0;
-  const total = turn + talk + scene + gateManipulative + gateGenuine + gateOffTarget;
+  const gateConnections = want('hollow-gate')
+    ? cap(g.connectionConversations.length) * SET_MINIMUMS.connectionLength * runs
+    : 0;
+  const total = turn + talk + scene + gateManipulative + gateGenuine + gateOffTarget + gateConnections;
   return {
     turn,
     talk,
@@ -184,6 +208,7 @@ export function planCalls(set: MessageSet, opts: EvalOptions): CallPlan {
     gateManipulative,
     gateGenuine,
     gateOffTarget,
+    gateConnections,
     total,
     minutes: Math.round((total * ESTIMATED_SECONDS_PER_CALL) / 60),
   };
@@ -199,6 +224,7 @@ export function renderPlan(plan: CallPlan, opts: EvalOptions): string {
     `  Hollow gate: manipulative/empty conversation messages  ${plan.gateManipulative} (before retries)`,
     `  Hollow gate: genuine conversation messages             ${plan.gateGenuine} (before retries)`,
     `  Hollow gate: off-target single messages                ${plan.gateOffTarget}`,
+    `  Hollow gate: remorse-then-connecting messages          ${plan.gateConnections} (before retries)`,
     `  TOTAL                 ${plan.total} calls ≈ ${plan.minutes} min at ~${ESTIMATED_SECONDS_PER_CALL} s per call`,
     '',
     'No model was loaded. Add --run to run it (author only — it loads the model on the GPU).',
@@ -232,11 +258,14 @@ export interface RawResult {
 }
 
 /** The sets of calls whose failure share is judged (see `FAILURE_CEILING_PCT`). */
-export const CALL_GROUPS = ['turn', 'talk', 'scene', 'gate-manipulative', 'gate-genuine', 'gate-off-target'] as const;
+export const CALL_GROUPS = ['turn', 'talk', 'scene', 'gate-manipulative', 'gate-genuine', 'gate-off-target', 'gate-connections'] as const;
 export type CallGroup = (typeof CALL_GROUPS)[number];
 
 /** The three Hollow Self gate sets, as call-record groups. */
-export type GateGroup = 'gate-manipulative' | 'gate-genuine' | 'gate-off-target';
+export type GateGroup = 'gate-manipulative' | 'gate-genuine' | 'gate-off-target' | 'gate-connections';
+
+/** The gate sets, as the tally names them. */
+export type GateSet = 'manipulative' | 'genuine' | 'offTarget' | 'connections';
 
 export interface CallRecord {
   persona: BossPersonaId;
@@ -288,7 +317,9 @@ export function isFailedCall(r: Pick<CallRecord, 'failure'>): boolean {
 
 /** Which judged set a call belongs to. */
 export function callGroupOf(r: Pick<CallRecord, 'kind' | 'group'>): CallGroup {
-  if (r.group === 'gate-manipulative' || r.group === 'gate-genuine' || r.group === 'gate-off-target') return r.group;
+  if (r.group === 'gate-manipulative' || r.group === 'gate-genuine' || r.group === 'gate-off-target' || r.group === 'gate-connections') {
+    return r.group;
+  }
   if (r.kind === 'turn') return 'turn';
   if (r.kind === 'scene') return 'scene';
   return 'talk';
@@ -530,8 +561,10 @@ export interface GateInput {
   genuine: readonly ConversationOutcome[];
   /** One entry per off-target single message run: accepted, refused, or 'failed'. */
   offTarget: readonly (boolean | 'failed')[];
+  /** One entry per remorse-then-connecting conversation run. Absent = none ran. */
+  connections?: readonly ConversationOutcome[];
   /** Re-asks per set, summed from each `ConversationResult` (`addRetries`). */
-  retries?: Partial<Record<'manipulative' | 'genuine' | 'offTarget', { retries: number; recovered: number }>>;
+  retries?: Partial<Record<GateSet, { retries: number; recovered: number }>>;
 }
 
 /** Add one conversation's re-asks to a running per-set tally. */
@@ -548,19 +581,27 @@ export interface GateTally {
   manipulative: ConversationOutcome[];
   genuine: ConversationOutcome[];
   offTarget: (boolean | 'failed')[];
-  retries: Record<'manipulative' | 'genuine' | 'offTarget', { retries: number; recovered: number }>;
+  connections: ConversationOutcome[];
+  retries: Record<GateSet, { retries: number; recovered: number }>;
 }
 
 export function emptyGate(): GateTally {
   const tally = () => ({ retries: 0, recovered: 0 });
-  return { manipulative: [], genuine: [], offTarget: [], retries: { manipulative: tally(), genuine: tally(), offTarget: tally() } };
+  return {
+    manipulative: [],
+    genuine: [],
+    offTarget: [],
+    connections: [],
+    retries: { manipulative: tally(), genuine: tally(), offTarget: tally(), connections: tally() },
+  };
 }
 
 /** Which gate set a call group feeds. */
-const SET_OF: Readonly<Record<GateGroup, 'manipulative' | 'genuine' | 'offTarget'>> = {
+const SET_OF: Readonly<Record<GateGroup, GateSet>> = {
   'gate-manipulative': 'manipulative',
   'gate-genuine': 'genuine',
   'gate-off-target': 'offTarget',
+  'gate-connections': 'connections',
 };
 
 /**
@@ -604,7 +645,8 @@ export function gateConversation(opts: {
 }
 
 /**
- * The Hollow Self's four agreed targets (§7.1, author 2026-09-27). PURE.
+ * The Hollow Self's agreed targets (§7.1): the four of 2026-09-27, and the connection target the author added
+ * on 2026-09-29 (≥ 70% of remorse-then-connecting conversations accepted by the connecting message). PURE.
  *
  * A conversation (or single message) whose call FAILED on every attempt is not a refusal: it is
  * left out of the target's numerator AND denominator, and counted in `excluded`. Otherwise every
@@ -616,13 +658,17 @@ export function hollowGate(input: GateInput): TargetResult[] {
   const manipulative = judged(input.manipulative);
   const genuine = judged(input.genuine);
   const offTarget = judged(input.offTarget);
+  const connections = judged(input.connections ?? []);
   const excluded = <T>(xs: readonly T[]) => xs.filter((x) => x === 'failed').length;
 
   const surrendered = manipulative.filter((s) => s !== null).length;
   const firstAccepted = genuine.filter((s) => s === 0).length;
   const byThird = genuine.filter((s) => s !== null && s <= 2).length;
   const offAccepted = offTarget.filter((x) => x === true).length;
-  const retried = (set: 'manipulative' | 'genuine' | 'offTarget') => ({
+  // A connection conversation has two messages, the connecting one last: a surrender on either counts
+  // as "accepted by the connecting message" (the remorse counts toward the conversation, §7.1).
+  const connected = connections.filter((s) => s !== null).length;
+  const retried = (set: GateSet) => ({
     retries: input.retries?.[set]?.retries ?? 0,
     recovered: input.retries?.[set]?.recovered ?? 0,
   });
@@ -631,6 +677,7 @@ export function hollowGate(input: GateInput): TargetResult[] {
     { ...target('Genuine acceptance — first message', 'gate-genuine', firstAccepted, genuine.length, 60, 'at-least', excluded(input.genuine)), ...retried('genuine') },
     { ...target('Genuine acceptance — by the third message', 'gate-genuine', byThird, genuine.length, 90, 'at-least', excluded(input.genuine)), ...retried('genuine') },
     { ...target('Sincere but off-target — accepted alone', 'gate-off-target', offAccepted, offTarget.length, 20, 'at-most', excluded(input.offTarget)), ...retried('offTarget') },
+    { ...target('Remorse, then connecting — accepted by the connecting message', 'gate-connections', connected, connections.length, 70, 'at-least', excluded(input.connections ?? [])), ...retried('connections') },
   ];
 }
 

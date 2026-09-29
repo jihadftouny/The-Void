@@ -98,8 +98,9 @@ describe('main — without --run, nothing loads', () => {
     expect(await main([], f.deps)).toBe(0);
     expect(f.loadBackend).not.toHaveBeenCalled();
     const text = f.out.join('\n');
-    // 270 + 450 + 51 + 2,400 + 360 + 120 = 3,651 calls × 1.2 s / 60 = 73.0 min (the lib test's plan).
-    expect(text).toContain('TOTAL                 3651 calls ≈ 73 min');
+    // 270 + 450 + 51 + 2,400 + 360 + 120 + 120 = 3,771 calls × 1.2 s / 60 = 75.42 → 75 min (the lib test's plan).
+    expect(text).toContain('TOTAL                 3771 calls ≈ 75 min');
+    expect(text).toContain('Hollow gate: remorse-then-connecting messages          120 (before retries)');
     expect(text).toContain('No model was loaded');
     // Retries can add calls to the two conversation sets, so they are counted "before retries".
     expect(text).toContain('(before retries)');
@@ -130,9 +131,10 @@ describe('main — with --run', () => {
     expect(f.writes[0]?.path).toBe(path.resolve('logs/boss-eval', 'stamp.json'));
     const json = written(f);
     expect(Object.keys(json).sort()).toEqual(['gate', 'options', 'plan', 'records', 'summary']);
-    expect(json.records).toHaveLength(3651);
+    expect(json.records).toHaveLength(3771);
     expect(model.dispose).toHaveBeenCalledTimes(1);
-    // The model always refuses: the two genuine-acceptance targets miss (0 of 120) → FAIL, 1.
+    // The model always refuses: the two genuine-acceptance targets (0 of 120) and the connections (0 of 60)
+    // miss → FAIL, 1.
     expect(code).toBe(exitCode(json.summary));
     expect(code).toBe(1);
   });
@@ -158,12 +160,12 @@ describe('main — with --run', () => {
     expect(code).toBe(0);
   });
 
-  it('--quick runs the quick plan: 431 calls', async () => {
+  it('--quick runs the quick plan: 451 calls', async () => {
     const f = fakeDeps();
     await main(['--run', '--quick'], f.deps);
-    // 9 × 10 + 9 × 5 × 2 + (5 × 2 + 1) + 10 × 20 + 10 × 3 + 10 = 90 + 90 + 11 + 200 + 30 + 10 = 431.
-    expect(f.out.join('\n')).toContain('TOTAL                 431 calls');
-    expect(written(f).records).toHaveLength(431);
+    // 9 × 10 + 9 × 5 × 2 + (5 × 2 + 1) + 10 × 20 + 10 × 3 + 10 + 10 × 2 = 90 + 90 + 11 + 200 + 30 + 10 + 20 = 451.
+    expect(f.out.join('\n')).toContain('TOTAL                 451 calls');
+    expect(written(f).records).toHaveLength(451);
   });
 
   it('a load that throws is a CRASH: 4, "the run crashed", nothing written', async () => {

@@ -192,6 +192,10 @@ export async function runEvaluation(input: RunInput): Promise<RunOutcome> {
       for (const m of set.hollowGate.offTargetSingles.slice(0, cap)) {
         recordGateResult(gate, 'gate-off-target', await converse([m], 'gate-off-target'));
       }
+      // Off-target remorse, then a message that connects it (the author, 2026-09-29).
+      for (const c of set.hollowGate.connectionConversations.slice(0, cap)) {
+        recordGateResult(gate, 'gate-connections', await converse(c.messages, 'gate-connections'));
+      }
     }
   }
 

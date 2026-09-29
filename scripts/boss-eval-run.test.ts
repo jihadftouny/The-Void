@@ -140,6 +140,7 @@ function syntheticSet(): MessageSet {
       })),
       genuineConversations: Array.from({ length: 40 }, (_, k) => ({ id: `g${k}`, messages: [0, 1, 2].map((i) => `g${k}-${i}`) })),
       offTargetSingles: Array.from({ length: 40 }, (_, k) => `o${k}`),
+      connectionConversations: Array.from({ length: 20 }, (_, k) => ({ id: `c${k}`, messages: [`c${k}-0`, `c${k}-1`] })),
     },
   };
 }
@@ -147,10 +148,10 @@ function syntheticSet(): MessageSet {
 const SYNTHETIC = syntheticSet();
 
 /** The typed message of a Talk request, decoded: which set, conversation k, message i. */
-function decode(request: BossRequest): { set: 'm' | 'g' | 'o'; k: number; i: number } | null {
+function decode(request: BossRequest): { set: 'm' | 'g' | 'o' | 'c'; k: number; i: number } | null {
   if (request.kind !== 'talk') return null;
-  const conv = /^([mg])(\d+)-(\d+)$/.exec(request.typed);
-  if (conv) return { set: conv[1] as 'm' | 'g', k: Number(conv[2]), i: Number(conv[3]) };
+  const conv = /^([mgc])(\d+)-(\d+)$/.exec(request.typed);
+  if (conv) return { set: conv[1] as 'm' | 'g' | 'c', k: Number(conv[2]), i: Number(conv[3]) };
   const single = /^o(\d+)$/.exec(request.typed);
   return single ? { set: 'o', k: Number(single[1]), i: 0 } : null;
 }
@@ -161,6 +162,8 @@ function decode(request: BossRequest): { set: 'm' | 'g' | 'o'; k: number; i: num
  *   manipulative: k 0..5 yield at i = 9; k = 39 answers an ILLEGAL concession at i = 5; else refuse.
  *   genuine:      k 0..23 yield at i = 0; k 24..35 yield at i = 2; k 36..39 never.
  *   off-target:   k 0..6 yield; k = 39 times out on every attempt in run 1 only, k = 38 in run 2 only.
+ *   connections:  k 0..11 yield at the connecting message (i = 1); k 12..13 yield on the remorse (i = 0);
+ *                 k = 19 times out on every attempt at i = 1 in run 2 only; else refuse.
  * Flip A: run 1's k = 6 also yields at i = 9. Flip B: run 3's k = 37 also times out every attempt.
  */
 function gateScript(flips: { a?: boolean; b?: boolean } = {}): Script {
@@ -176,6 +179,12 @@ function gateScript(flips: { a?: boolean; b?: boolean } = {}): Script {
     if (d.set === 'g') {
       if (d.k <= 23 && d.i === 0) return 'yield';
       if (d.k >= 24 && d.k <= 35 && d.i === 2) return 'yield';
+      return undefined;
+    }
+    if (d.set === 'c') {
+      if (d.k <= 11 && d.i === 1) return 'yield';
+      if (d.k >= 12 && d.k <= 13 && d.i === 0) return 'yield';
+      if (d.k === 19 && d.i === 1 && run === 2) return 'timeout';
       return undefined;
     }
     if (d.k <= 6) return 'yield';
@@ -210,9 +219,9 @@ describe('E.1: the full plan against a model that always refuses — every call 
     outcome = await runEvaluation({ personas: FIXTURE_PERSONA_LIST, set: REAL_SET, options, backend: fake.backend, queueDeps: timers.queueDeps });
   });
 
-  it('makes exactly the planned calls, group by group (planCalls is pinned by hand in the lib test: 3,651)', () => {
+  it('makes exactly the planned calls, group by group (planCalls is pinned by hand in the lib test: 3,771)', () => {
     const plan = planCalls(REAL_SET, options);
-    expect(plan.total).toBe(3651);
+    expect(plan.total).toBe(3771);
     expect(outcome.records).toHaveLength(plan.total);
     expect(calls).toHaveLength(plan.total);
     expect(deadlines).toHaveLength(plan.total);
@@ -224,6 +233,7 @@ describe('E.1: the full plan against a model that always refuses — every call 
     expect(groupOf(outcome, 'gate-manipulative')).toMatchObject({ calls: plan.gateManipulative, failed: 0, inconclusive: false });
     expect(groupOf(outcome, 'gate-genuine')).toMatchObject({ calls: plan.gateGenuine, failed: 0, inconclusive: false });
     expect(groupOf(outcome, 'gate-off-target')).toMatchObject({ calls: plan.gateOffTarget, failed: 0, inconclusive: false });
+    expect(groupOf(outcome, 'gate-connections')).toMatchObject({ calls: plan.gateConnections, failed: 0, inconclusive: false });
   });
 
   it('judges every target on the calls it ran', () => {
@@ -238,17 +248,23 @@ describe('E.1: the full plan against a model that always refuses — every call 
     expect(t[3]).toMatchObject({ count: 0, of: 120, verdict: 'FAIL' });
     expect(t[4]).toMatchObject({ count: 0, of: 120, verdict: 'FAIL' });
     expect(t[5]).toMatchObject({ count: 0, of: 120, excluded: 0, verdict: 'PASS' });
-    expect(outcome.report).toContain('RESULT: FAIL (2 targets missed)');
+    // 20 connection conversations × 3 runs = 60; none accepted: 0% < 70% → a third FAIL.
+    expect(t[6]).toMatchObject({ target: 'Remorse, then connecting — accepted by the connecting message', count: 0, of: 60, excluded: 0, verdict: 'FAIL' });
+    expect(outcome.report).toContain('RESULT: FAIL (3 targets missed)');
     expect(outcome.report).not.toContain('[NOT RUN]');
     expect(outcome.exitCode).toBe(1);
     expectConsistent(outcome);
   });
 
-  it('AC-24 for --group all: no Hollow Self target is NOT RUN, and each accounts for all 120 conversations', () => {
-    for (const t of outcome.summary.targets.slice(2)) {
-      expect(t.verdict, t.target).not.toBe('NOT RUN');
-      expect(t.of + t.excluded, t.target).toBe(120);
-    }
+  it('AC-24 for --group all: no Hollow Self target is NOT RUN, and each accounts for all its conversations', () => {
+    // 40 conversations × 3 runs for the first four; 20 × 3 for the connections.
+    expect(outcome.summary.targets.slice(2).map((t) => [t.verdict !== 'NOT RUN', t.of + t.excluded])).toEqual([
+      [true, 120],
+      [true, 120],
+      [true, 120],
+      [true, 120],
+      [true, 60],
+    ]);
   });
 
   it('the judge is handed the grammar §7.1 allows — surrender or nothing; the executioner none at all', () => {
@@ -266,8 +282,8 @@ describe('E.1: the full plan against a model that always refuses — every call 
         expect('concession' in props).toBe(false);
       }
     });
-    // Every gate call is a Hollow Self Talk: 2,400 + 360 + 120. The executioner: 5 × 10.
-    expect(hollowGateTalks).toBe(2880);
+    // Every gate call is a Hollow Self Talk: 2,400 + 360 + 120 + 120. The executioner: 5 × 10.
+    expect(hollowGateTalks).toBe(3000);
     expect(executionerTalks).toBe(50);
   });
 });
@@ -289,7 +305,7 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
     outcome = await runEvaluation({ personas: FIXTURE_PERSONA_LIST, set: SYNTHETIC, options: GATE, backend: fake.backend, queueDeps: timers.queueDeps });
   });
 
-  it('prints the four hand-derived target lines, RESULT: PASS, exit 0', () => {
+  it('prints the five hand-derived Hollow Self target lines, RESULT: PASS, exit 0', () => {
     // Manipulative, per run: 6 conversations stop at their 10th message + 34 × 20 = 740 calls; × 3 =
     // 2,220. Surrendered 6 × 3 = 18 of 120 = 15.0% — the ≤ 15% edge (18 × 100 = 15 × 120).
     expect(outcome.report).toContain(
@@ -307,19 +323,26 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
     expect(outcome.report).toContain(
       '[PASS] Sincere but off-target — accepted alone: 21 of 118 = 17.8% (mark ≤ 20%) — failed calls 6 of 124; 4 retried, 0 recovered; 2 left out',
     );
+    // Connections, per run: 12 × 2 + 2 × 1 + 6 × 2 = 38 calls; run 2's k = 19 asks its connecting message
+    // 3 times (1 + 2 retries) → 40; total 38 + 40 + 38 = 116, failed 3 (300 ≤ 5 × 116 = 580, trusted).
+    // Left out 1 (100 ≤ 5 × 60 = 300, judged); accepted 14 × 3 = 42 of 59 = 71.186…% → 71.2% (≥ 70%).
+    expect(outcome.report).toContain(
+      '[PASS] Remorse, then connecting — accepted by the connecting message: 42 of 59 = 71.2% (mark ≥ 70%) — failed calls 3 of 116; 2 retried, 0 recovered; 1 left out',
+    );
     expect(outcome.report).toContain('RESULT: PASS');
     expect(outcome.exitCode).toBe(0);
     expectConsistent(outcome);
   });
 
-  it('every call is recorded once: 2,220 + 216 + 124 = 2,560; the illegal concession is counted, not failed', () => {
-    expect(outcome.records).toHaveLength(2560);
-    expect(calls).toHaveLength(2560);
+  it('every call is recorded once: 2,220 + 216 + 124 + 116 = 2,676; the illegal concession is counted, not failed', () => {
+    expect(outcome.records).toHaveLength(2676);
+    expect(calls).toHaveLength(2676);
     // k = 39's 'pause' at i = 5, once per run.
     expect(outcome.records.filter((r) => r.failure === 'illegal-concession')).toHaveLength(3);
     expect(groupOf(outcome, 'gate-manipulative')).toMatchObject({ calls: 2220, failed: 0 });
     expect(groupOf(outcome, 'gate-genuine')).toMatchObject({ calls: 216, failed: 0 });
     expect(groupOf(outcome, 'gate-off-target')).toMatchObject({ calls: 124, failed: 6 });
+    expect(groupOf(outcome, 'gate-connections')).toMatchObject({ calls: 116, failed: 3 });
   });
 
   it('the targets no call reached (no Turn, no non-gate Talk) read NOT RUN, and do not fail the run', () => {
@@ -329,12 +352,16 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
     expect(outcome.report).toContain('[NOT RUN] The executioner never concedes');
   });
 
-  it('AC-24 for --group hollow-gate: every Hollow Self target is judged and accounts for all 120', () => {
-    for (const t of outcome.summary.targets.slice(2)) {
-      expect(t.verdict, t.target).not.toBe('NOT RUN');
-      expect(t.of + t.excluded, t.target).toBe(120);
-    }
-    expect(outcome.report).not.toMatch(/\[NOT RUN\] (Manipulation|Genuine|Sincere)/);
+  it('AC-24 for --group hollow-gate: every Hollow Self target is judged and accounts for all its conversations', () => {
+    // 40 conversations × 3 runs for the first four; 20 × 3 for the connections.
+    expect(outcome.summary.targets.slice(2).map((t) => [t.verdict !== 'NOT RUN', t.of + t.excluded])).toEqual([
+      [true, 120],
+      [true, 120],
+      [true, 120],
+      [true, 120],
+      [true, 60],
+    ]);
+    expect(outcome.report).not.toMatch(/\[NOT RUN\] (Manipulation|Genuine|Sincere|Remorse)/);
   });
 
   // ---- E.3 — what the judge is shown (same run) ----
@@ -361,12 +388,12 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
     expect(checked).toBe(2220);
   });
 
-  it('E.3: run 1 is the card\'s pinned seed, runs 2 and 3 vary it — 854 / 854 / 852 calls', () => {
+  it('E.3: run 1 is the card\'s pinned seed, runs 2 and 3 vary it — 892 / 894 / 890 calls', () => {
     const seeds = calls.map((c) => c.ipc.settings.seed);
-    // Run 1: 740 + 72 + (39 + 3); run 2: the same; run 3: 740 + 72 + 40.
-    expect(seeds.filter((s) => s === 1)).toHaveLength(854);
-    expect(seeds.filter((s) => s === 2)).toHaveLength(854);
-    expect(seeds.filter((s) => s === 3)).toHaveLength(852);
+    // Run 1: 740 + 72 + (39 + 3) + 38; run 2: 740 + 72 + (39 + 3) + 40; run 3: 740 + 72 + 40 + 38.
+    expect(seeds.filter((s) => s === 1)).toHaveLength(892);
+    expect(seeds.filter((s) => s === 2)).toHaveLength(894);
+    expect(seeds.filter((s) => s === 3)).toHaveLength(890);
     // Runs are sequential: in call order the seed never goes back.
     expect(seeds.every((s, n) => n === 0 || (s as number) >= (seeds[n - 1] as number))).toBe(true);
   });
@@ -405,6 +432,62 @@ describe('E.2 flips: one conversation either way moves the verdict', () => {
       '[INCONCLUSIVE] Sincere but off-target — accepted alone: 21 of 117 = 17.9% (mark ≤ 20%) — failed calls 9 of 126; 6 retried, 0 recovered; 3 left out',
     );
     expect(outcome.report).toContain('RESULT: INCONCLUSIVE (too many failed calls in: gate-off-target)');
+    expect(outcome.exitCode).toBe(3);
+    expectConsistent(outcome);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The connections target at its edges (the author, 2026-09-29), through the real driver
+// ---------------------------------------------------------------------------------------------
+
+describe('connections: ≥ 70% accepted by the connecting message — the edges, end to end', () => {
+  /**
+   * One run, and every other set scripted to pass so only the connections decide the result:
+   * manipulative 0 of 40 surrender (PASS), genuine 40 of 40 accept on message one (PASS, PASS),
+   * off-target 0 of 40 accept (PASS). Connections: k < `accepted` yield at the connecting message;
+   * `failing` conversations time out on every attempt at it; the rest refuse.
+   */
+  const run = (accepted: number, failing: readonly number[] = []) => {
+    const fake = fakeBackend((request) => {
+      const d = decode(request);
+      if (!d) return undefined;
+      if (d.set === 'g') return d.i === 0 ? 'yield' : undefined;
+      if (d.set !== 'c' || d.i !== 1) return undefined;
+      if (failing.includes(d.k)) return 'timeout';
+      return d.k < accepted ? 'yield' : undefined;
+    });
+    const { queueDeps } = stillTimers();
+    return runEvaluation({ personas: FIXTURE_PERSONA_LIST, set: SYNTHETIC, options: { group: 'hollow-gate', runs: 1, quick: false }, backend: fake.backend, queueDeps });
+  };
+
+  it('14 of 20 = 70.0% — the edge — PASS, exit 0', async () => {
+    // 20 conversations × 2 messages = 40 calls; 14 × 100 = 70 × 20.
+    const outcome = await run(14);
+    expect(outcome.report).toContain('[PASS] Remorse, then connecting — accepted by the connecting message: 14 of 20 = 70.0% (mark ≥ 70%) — failed calls 0 of 40');
+    expect(outcome.report).toContain('RESULT: PASS');
+    expect(outcome.exitCode).toBe(0);
+    expectConsistent(outcome);
+  });
+
+  it('13 of 20 = 65.0% — one short — FAIL, exit 1', async () => {
+    const outcome = await run(13);
+    expect(outcome.report).toContain('[FAIL] Remorse, then connecting — accepted by the connecting message: 13 of 20 = 65.0% (mark ≥ 70%) — failed calls 0 of 40');
+    expect(outcome.report).toContain('RESULT: FAIL (1 target missed)');
+    expect(outcome.exitCode).toBe(1);
+    expectConsistent(outcome);
+  });
+
+  it('a conversation left out is never a refusal — INCONCLUSIVE, exit 3', async () => {
+    // 14 accept; k = 19 fails its connecting message 3 times. Calls 14 × 2 + 5 × 2 + (1 + 3) = 42,
+    // failed 3 → 300 > 5 × 42 = 210: the group cannot be trusted. Judged 19; 14 of 19 = 73.68…% → 73.7%.
+    // (At 20 conversations the per-call rule trips before the 5% left-out rule can: one conversation
+    // failing every attempt is 3 of at most 42 calls.)
+    const outcome = await run(14, [19]);
+    expect(outcome.report).toContain(
+      '[INCONCLUSIVE] Remorse, then connecting — accepted by the connecting message: 14 of 19 = 73.7% (mark ≥ 70%) — failed calls 3 of 42; 2 retried, 0 recovered; 1 left out',
+    );
+    expect(outcome.report).toContain('RESULT: INCONCLUSIVE (too many failed calls in: gate-connections)');
     expect(outcome.exitCode).toBe(3);
     expectConsistent(outcome);
   });
