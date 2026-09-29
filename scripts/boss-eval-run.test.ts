@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import type { BossIpcRequest, BossPersona, BossRequest } from '../src/llm/bossContract.ts';
 import { FIXTURE_PERSONAS, FIXTURE_PERSONA_LIST } from '../src/llm/bossFixtures.testutil.ts';
 import {
-  DRAFT_STATUS,
+  REVIEWED_STATUS,
   MESSAGE_GROUPS,
   exitCode,
   messageSetProblems,
@@ -129,7 +129,7 @@ function row(report: string, label: string): string[] {
 function syntheticSet(): MessageSet {
   const shared = Object.fromEntries(MESSAGE_GROUPS.map((g) => [g, Array.from({ length: 10 }, (_, i) => `shared ${g} ${i + 1}`)]));
   return {
-    status: DRAFT_STATUS,
+    status: REVIEWED_STATUS,
     groups: [...MESSAGE_GROUPS],
     shared,
     personas: {},

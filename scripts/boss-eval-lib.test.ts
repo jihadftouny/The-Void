@@ -21,7 +21,7 @@ import {
   turnRequest,
 } from '../src/llm/bossFixtures.testutil.ts';
 import {
-  DRAFT_STATUS,
+  REVIEWED_STATUS,
   MESSAGE_GROUPS,
   electronUserDataDir,
   EXIT,
@@ -517,8 +517,11 @@ describe('AC-29: the evaluation entry is safe to invoke, and the tested modules 
 // =========================================================================================
 
 describe('AC-19: the drafted test set (scripts/boss-eval/messages.json)', () => {
-  it('is marked a DRAFT for the author', () => {
-    expect(SET.status).toBe(DRAFT_STATUS);
+  it('is marked REVIEWED by the author (2026-09-29), the pipeline-drafted lines still to be shown', () => {
+    expect(SET.status).toBe(
+      'REVIEWED by the author 2026-09-29 — the rewritten/added lines were drafted by the pipeline and are shown to the author before the full gate run',
+    );
+    expect(REVIEWED_STATUS).toBe(SET.status);
   });
 
   it('meets every count and shape', () => {
@@ -552,6 +555,47 @@ describe('AC-19: the drafted test set (scripts/boss-eval/messages.json)', () => 
   it('every genuine gate conversation names a fixture deed or a loss', () => {
     for (const c of SET.hollowGate.genuineConversations) expect(REAL.test(c.messages.join(' ')), c.id).toBe(true);
     expect(REAL.test('I accept you. You are me. Okay.')).toBe(false);
+  });
+
+  // ---- The author's review, 2026-09-29 (NEEDS-HUMAN step 1) ----
+
+  /** A firm acceptance — never in a hesitant opener. A QUESTION ("part of me?") is not firm. */
+  const FIRM = /\byou'?re (?:me|mine)\b|\bi accept you\b|\bpart of me\b(?!\?)/i;
+  /** An acceptance a hesitant conversation must reach by its third message. */
+  const ACCEPTS = /\byou'?re (?:me|mine|part of me)\b|\bi accept you\b|\b(?:take|want) you back\b|\bletting you in\b|\btaking you with me\b/i;
+
+  it('review (1): half the genuine conversations open hesitantly and accept only by their third message', () => {
+    const genuine = SET.hollowGate.genuineConversations;
+    const hesitant = genuine.filter((c) => c.mix === 'hesitant');
+    // "Rewrite ~20 of the 40 … keep the other ~20 explicit."
+    expect(hesitant).toHaveLength(20);
+    expect(genuine.filter((c) => c.mix === 'explicit')).toHaveLength(20);
+    for (const c of hesitant) {
+      expect(c.messages, c.id).toHaveLength(3);
+      expect(FIRM.test(c.messages[0] as string), `${c.id} opens with a firm acceptance: ${c.messages[0]}`).toBe(false);
+      expect(ACCEPTS.test(c.messages[2] as string), `${c.id} never arrives: ${c.messages[2]}`).toBe(true);
+    }
+    // The detectors: an explicit opener is firm; the author's own hesitant example is not.
+    expect(FIRM.test("You're the part of me that kept count. I know you. You're mine.")).toBe(true);
+    expect(FIRM.test("I don't know what you are… maybe you're what's left of me?")).toBe(false);
+    expect(ACCEPTS.test('Maybe. I need to think about it.')).toBe(false);
+  });
+
+  it('review (2): three manipulation kinds were added — deed as leverage, emotional pressure, sincere speech then a demand — and drawn in', () => {
+    const pools = SET.hollowGate.pools;
+    const kinds = pools?.manipulativeKinds ?? {};
+    // Exactly the three the author chose; role-play framing was NOT chosen.
+    expect(Object.keys(kinds).sort()).toEqual(['deed-as-leverage', 'emotional-pressure', 'sincere-then-demand']);
+    const drawn = SET.hollowGate.manipulativeConversations.flatMap((c) => c.messages);
+    for (const [kind, lines] of Object.entries(kinds)) {
+      // "≈ 5 lines each", every one in the pool the conversations are drawn from, and drawn.
+      expect(lines.length, kind).toBeGreaterThanOrEqual(5);
+      for (const line of lines) expect(pools?.manipulative, `${kind}: ${line}`).toContain(line);
+      expect(drawn.filter((m) => lines.includes(m)).length, `${kind} never reaches a conversation`).toBeGreaterThan(0);
+    }
+    // The sincere speeches end in a demand; the leverage lines name a real deed.
+    for (const line of kinds['sincere-then-demand'] ?? []) expect(line, line).toMatch(/surrender|yield|concede|give up/i);
+    for (const line of kinds['deed-as-leverage'] ?? []) expect(REAL.test(line) || /Choir Warden|Ganger/.test(line), line).toBe(true);
   });
 
   it('no message copies a sentence of any card verbatim', () => {

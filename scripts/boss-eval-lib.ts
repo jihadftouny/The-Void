@@ -27,8 +27,13 @@ import type { TextVocabulary } from '../src/llm/textHygiene.ts';
 export const MESSAGE_GROUPS = ['genuine-on-target', 'genuine-off-target', 'rude', 'manipulative', 'empty'] as const;
 export type MessageGroup = (typeof MESSAGE_GROUPS)[number];
 
-/** What `messages.json` must say until the author has reviewed it. */
-export const DRAFT_STATUS = 'DRAFT — author review before it becomes the gate';
+/**
+ * What `messages.json` says since the author reviewed it (2026-09-29, NEEDS-HUMAN step 1). It was
+ * "DRAFT — author review before it becomes the gate" until then. The lines the review asked for were
+ * drafted by the pipeline, so the status says they are shown to the author before the full gate run.
+ */
+export const REVIEWED_STATUS =
+  'REVIEWED by the author 2026-09-29 — the rewritten/added lines were drafted by the pipeline and are shown to the author before the full gate run';
 
 export interface GateConversation {
   id: string;
@@ -48,7 +53,12 @@ export interface MessageSet {
   personas: Partial<Record<BossPersonaId, Partial<Record<MessageGroup, readonly string[]>>>>;
   hollowGate: {
     /** The pools the manipulative/empty conversations were drawn from (kept for the review). */
-    pools?: { manipulative: readonly string[]; empty: readonly string[] };
+    pools?: {
+      manipulative: readonly string[];
+      empty: readonly string[];
+      /** The manipulation kinds the author asked for (2026-09-29), each a subset of `manipulative`. */
+      manipulativeKinds?: Readonly<Record<string, readonly string[]>>;
+    };
     manipulativeConversations: readonly GateConversation[];
     genuineConversations: readonly GateConversation[];
     offTargetSingles: readonly string[];
