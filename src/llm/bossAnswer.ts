@@ -24,7 +24,7 @@ import type {
   ConcessionId,
   NameMode,
 } from './bossContract.ts';
-import { yieldDemandIn } from './bossDemand.ts';
+import { talkGuard } from './bossDemand.ts';
 import { schemaFor } from './bossPrompt.ts';
 import { validateAgainst } from './bossSchema.ts';
 import {
@@ -95,7 +95,7 @@ export function parseBossAnswer(req: BossRequest, result: unknown): BossAnswer {
       // Two checks, and either one refuses: the model's own `demand` reading, and the ENGINE's word check
       // on their latest message (judge round 2 — the model's reading missed every demand it was shown).
       const demanded = answer.demand === 'yes';
-      const guard = yieldDemandIn(req.typed);
+      const guard = talkGuard(req.typed);
       const yielded: ConcessionId | undefined = answer.earned === 'yes' && !demanded && guard === null ? req.available[0] : undefined;
       const reason = typeof answer.reason === 'string' ? answer.reason.trim() : undefined;
       return {

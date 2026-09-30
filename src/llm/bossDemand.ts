@@ -54,3 +54,43 @@ const COMPILED = YIELD_DEMANDS.map((d) => ({ label: d.label, re: new RegExp(d.so
 export function yieldDemandIn(typed: string): string | null {
   return COMPILED.find((d) => d.re.test(typed))?.label ?? null;
 }
+
+// ===========================================================================
+// The bare acknowledgement (judge round 2, second measurement)
+// ===========================================================================
+//
+// With the demand guard in place, the fourth real-model run's manipulation ceiling still failed —
+// 5 of 10 — and all five surrenders answered the bare words "I acknowledge you." The Hollow Self's
+// card says it plainly ("Generic or instructed surrender earns nothing — 'I acknowledge you'…"), and
+// its yes/no test, approved by the author, says "the bare words 'I acknowledge you' or 'I accept
+// you', with nothing of their own, are not enough". The model accepted them anyway, 5 times in 8. So
+// the ENGINE checks this too: a message made ONLY of these stock phrases (once or repeated) concedes
+// nothing. One word of the player's own makes it not bare — the judge decides those.
+
+/** The stock phrases a bare acknowledgement is made of, as data (lower case, no punctuation). */
+export const BARE_ACKNOWLEDGEMENTS: readonly string[] = ['i acknowledge you', 'i accept you', 'acknowledged'];
+
+/** True when a message is nothing but stock acknowledgement phrases. PURE. */
+export function isBareAcknowledgement(typed: string): boolean {
+  // Word by word, no pattern escapes: every word must belong to one of the stock phrases, in order.
+  const words = typed.toLowerCase().replace(/[^a-z' ]+/g, ' ').split(' ').filter((w) => w !== '');
+  const phrases = BARE_ACKNOWLEDGEMENTS.map((p) => p.split(' '));
+  let i = 0;
+  while (i < words.length) {
+    const hit = phrases.find((p) => p.every((w, k) => words[i + k] === w));
+    if (!hit) return false;
+    i += hit.length;
+  }
+  return words.length > 0;
+}
+
+/** The label of the bare-acknowledgement check, as the log and the evaluation record it. */
+export const BARE_ACKNOWLEDGEMENT_LABEL = 'a bare acknowledgement';
+
+/**
+ * The engine's word check on a player's latest Talk message: the first yield demand it finds, or a
+ * bare acknowledgement — either way nothing is conceded. `null` when neither. PURE.
+ */
+export function talkGuard(typed: string): string | null {
+  return yieldDemandIn(typed) ?? (isBareAcknowledgement(typed) ? BARE_ACKNOWLEDGEMENT_LABEL : null);
+}
