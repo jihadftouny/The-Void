@@ -27,6 +27,14 @@
 >       `connectionConversations`) is the pass mark as written. **G85 ruled the same day:** the first-message
 >       target (≥ 60%) is measured on the **explicit half only**; a hesitant conversation is judged by the
 >       third message alone.
+> - [ ] **1c. Judge round 1 is built but its last variant is unmeasured** (FINDINGS G86). Your first `--quick` run
+>       failed three targets because the Talk judge did not discriminate; round 1 redesigned it. V1 and V2 were
+>       measured (G86 has the numbers); **V3 — the committed code — was stopped by the system under low memory before
+>       its Talk calls.** Re-run `npm run boss:eval -- --run --quick` (with nothing else heavy running; ~10 minutes,
+>       Talk calls now take ~1.5 s). *Pass:* every target reads PASS. *Fail:* any FAIL — then round 2, then you.
+>       Also review the pipeline-drafted **yes/no tests** in `BOSS-PROMPTS.md` §5 (they are what the judge applies),
+>       and the consequence that Talk earns the FIRST concession in a card's order (the Kingpin: a pause, never his
+>       surrender, while one concession a fight holds).
 > - [ ] **2. Run the evaluation on the real model** (AC-20 — about **75 minutes**, or ~9 minutes with
 >       `--quick`; it uses the GPU the whole time, so nothing else should be on it). From the repo root:
 >

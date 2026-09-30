@@ -48,7 +48,7 @@ USER    ┌─ WHO YOU ARE FACING  (the player: name if this boss may use it, cl
 | Call | When | Answer shape |
 |---|---|---|
 | **Turn** | every boss turn (twice on an extra action) | `{ "move": "<legal id>", "line": "<≤ 25 words>" }` |
-| **Talk** | only when the player types in the Talk field; does not cost a turn | `{ "reply": "<≤ 30 words>", "concession": "none" \| <one still available> }` |
+| **Talk** | only when the player types in the Talk field; does not cost a turn | `{ "demand": "no" \| "yes", "reason": "<one plain sentence>", "earned": "no" \| "yes", "reply": "<≤ 30 words>" }` — **judge first, then speak** (judge round 1, below); a boss with nothing left to yield (the executioner; one that already yielded this fight) answers `{ "reply" }` only |
 | **Scene** | the Warden's grace conversation and verdict (no moves) | `{ "line": "<≤ 40 words>" }` |
 
 **A Talk call leaves out `YOUR LAST LINES`** — its own last lines are already the `You:` lines of the
@@ -56,8 +56,30 @@ conversation block — and carries at most the **last six exchanges** (§7.1's j
 real tokenizer, the duplication cost ~83 tokens and pushed the Hollow Self's Talk to ~1,130 tokens; trimmed it
 is ~1,060. *(`boss-llm`, 2026-09-28 — a correction to the block list above, not a design change.)*
 
+**Judge round 1 (2026-09-29) — how a Talk call decides.** The first real-model run showed the Talk judge did not
+discriminate: with `{ reply, concession }` the model wrote a line and then picked from the concession list, with no
+step in which it decided whether the player had earned anything — the Kingpin and every Sin yielded to 100% of
+messages, rude and empty ones included. Now:
+1. **The model judges before it speaks** — first `demand` (does their message tell or beg the boss to yield,
+   surrender, give up, stand down, let them go or let them win?), then a one-line `reason` quoting their words,
+   then `earned`; each `"no"` or `"yes"`, `"no"` listed first as the default. **It never sees a concession id.**
+   *(The second run showed why `demand` is its own question: asked once, "accepts me AND is not a demand" let
+   "…you're part of me. Now surrender." through.)*
+2. **The engine picks what is yielded — only when `earned` is yes AND `demand` is no** (the cards' own rule,
+   "instructed surrender earns nothing", enforced rather than hoped for): the first concession still
+   available, **in the card's order** (§5). One
+   concession per fight (§22.7) is unchanged. ⚠ A consequence for the author: a card's concession ORDER now decides
+   what Talk can earn — the Kingpin's card lists pause first, so with one concession a fight, Talk earns him a
+   pause, never his surrender. Reorder a card to change that.
+3. **What moves the boss sits next to the task** as `HOW YOU JUDGE THEM:` (the card's *what moves it*, then its
+   one-line **yes/no test** — `talk.judge`), not in SYSTEM. SYSTEM is now card, examples (*"never repeat one of
+   these word for word"* — the run showed them recited verbatim) and the rules; the *"choose a move"* rule is for
+   Turn calls only.
+4. **Talk runs cold**: temperature **0.3** for every boss (the Hollow Self's card keeps 0.2 and seed 1), and
+   `maxTokens` **120** to leave room for the reason.
+
 **Suggested settings:** temperature **0.8** (voice needs variety), a light repetition penalty, `maxTokens`
-**80** for Turn and Talk, **110** for Scene. **Time limit 3 s**; on timeout or any failure the engine uses the
+**80** for Turn, **110** for Scene; **Talk 0.3 and 120** since judge round 1 (above). **Time limit 3 s**; on timeout or any failure the engine uses the
 fallback move and a fallback line (§6).
 
 ## 3. The shared rules (in every boss's system prompt)
@@ -133,7 +155,21 @@ the boss's word for the player when it speaks, so the fight block has to say who
 ## 5. The personas
 
 Each card has: **who it is · voice · name rule · moves · what moves it (Talk) · concessions · example
-lines · fallback lines (model off, §6)**.
+lines · fallback lines (model off, §6)** — and, since judge round 1 (2026-09-29), every boss that can yield
+carries a **one-line yes/no test** (`talk.judge`; the persona validator requires it). The tests the pipeline
+drafted for the evaluation's fixture cards, **for the author's review** (they are what the model is judged by):
+- **Kingpin:** *Say yes ONLY if their own words say the job was arranged, that you knew all along, or that the
+  errand was a lie. If those words are not there, say no — whatever else they said.*
+- **Reflection:** *Say yes ONLY if they take one of their deeds as their own, plainly, with no excuse. Insults,
+  denial, excuses, orders and empty words are no.*
+- **The Sins (all five):** *Say yes ONLY if they name something that was lost and grieve it — sorrow, regret,
+  missing it — without defending it. Insults, excuses, shrugs, orders and empty words are no.*
+- **The Hollow Self** (replacing the §5.6 block below in the fixture): *Say yes ONLY if, in their own words,
+  they say that you ARE them — you are them, theirs, part of them, or what is left of them. Remorse alone is not
+  enough. Naming a deed alone is not enough. The bare words "I acknowledge you" or "I accept you", with nothing
+  of their own, are not enough. If you are unsure, no — they can keep talking.* (Demands are the separate
+  `demand` question, §2.)
+  Quoted example messages inside a test were tried and REMOVED: the model copied them into its reason.
 
 ### 5.1 The Kingpin — the Undercity
 

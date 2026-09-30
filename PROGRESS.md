@@ -148,6 +148,18 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-09-30 — the bosses' Talk judge, round 1 of 2 (`boss-llm`) — not merged
+
+**Typecheck green; the `src/llm`, `scripts` and `electron` suites green (1,026 tests). The full suite was not re-run: the machine was short of memory.** The author's
+first real-model run showed the bosses' Talk judge did not judge: six bosses yielded to every message, rude and
+empty ones included, and the Hollow Self accepted no genuine acknowledgement. Round 1 makes the model decide
+before it speaks (did they demand a yield? why? did they earn it?), lets the engine pick what is yielded and refuse
+anything demanded, and gives each boss a one-line yes/no test. Two variants measured on the real model: the
+concession matrix now discriminates and three of five Hollow Self targets pass, but manipulation and connections
+still miss (FINDINGS G86). The third variant is built and tested but unmeasured — the system stopped its run under
+low memory. Also: G85 ruled and built (first-message acceptance on the explicit openers only), and the author
+approved every drafted line.
+
 ### 2026-09-29 — the Hollow Self's test set, as the author reviewed it (`boss-llm`) — not merged
 
 **3672 → 3679 tests (4 skipped); typecheck, build and the full suite green.** Nothing the player sees changes;
