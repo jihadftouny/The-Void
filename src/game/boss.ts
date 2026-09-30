@@ -572,6 +572,10 @@ export function pickFallbackMove(legal: readonly BossMoveId[], rng: Rng): BossMo
  * The concessions Talk may still earn against the boss on `battle` — its card's list, or `[]` once
  * one was granted (§22.7: one concession per fight), or for a battle with no boss. The Talk
  * grammar (unit B) is built from this. PURE.
+ *
+ * Since the author's 2026-09-30 ruling each card lists ONE signature concession (Kingpin and Hollow
+ * Self: surrender · Reflection and every Sin: drop_mechanic · executioner: none), so this is at most
+ * one entry — and "the first still available" is always the signature.
  */
 export function availableConcessions(battle: Pick<BattleState, 'boss'>): Concession[] {
   const boss = battle.boss;
@@ -592,7 +596,9 @@ export interface ConcessionResult {
 
 /**
  * Grant a PAUSE, WEAKNESS or DROP_MECHANIC concession — PURE, RNG-free (a `surrender` ends the
- * fight or the run, so `game.ts` routes it). The caller has checked `availableConcessions`. Every
+ * fight or the run, so `game.ts` routes it). ⚠ Since 2026-09-30 only the Reflection's and the Sins'
+ * drop_mechanic are reachable (each card lists one signature); pause, weakness and the Kingpin's
+ * drop_mechanic are DORMANT — kept, and tested, for a card that lists them again. The caller has checked `availableConcessions`. Every
  * grant records `boss.conceded` (one per fight). The mechanics (the author's Q3, accepted):
  *  - pause: the boss's next turn passes — no gauge, no action (its conditions still tick). If its
  *    turn is already waiting for its move, THAT turn passes now: the pause clears, a

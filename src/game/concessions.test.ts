@@ -1,11 +1,12 @@
 // PLAN.md #11 — CONCESSIONS: what Talk earns, applied by the engine (AC-15, AC-16, AC-17), and the
 // Warden's grace scene pinned so it cannot drift (§5.8).
 //
-// The mechanics are the author's Q3 rulings, accepted as stated: pause = the boss's next turn passes
-// (its conditions tick); weakness = the player at advantage for the rest of the fight; Kingpin
-// drop_mechanic = he stops calling (the standing crew stays); surrender = a full victory with the
-// loot roll and no onKill relic (Kingpin) or the late grace (Hollow Self). Each is asserted in what
-// the player sees — never read back from the implementation.
+// The author's 2026-09-30 ruling: each boss's Talk earns ONE SIGNATURE concession — the Kingpin and
+// the Hollow Self surrender (a full victory; the late grace), the Reflection and every Sin drop their
+// mechanic (it stops adapting; it sheds its indulgence HP), the executioner nothing. The Q3 mechanics
+// of pause, weakness and the Kingpin's drop_mechanic stay in code, DORMANT: no card lists them, and
+// they are tested both as unreachable through step and as still correct if a card lists them again.
+// Each is asserted in what the player sees — never read back from the implementation.
 
 import { describe, expect, it } from 'vitest';
 import { createGame, step, type GameInput, type GameState, type StepResult } from './game.ts';
@@ -13,11 +14,13 @@ import { createBattle, resolveRound, type BattleState } from './battle.ts';
 import {
   BOSSES,
   CONCESSIONS,
+  SIN_IDENTITIES,
   availableConcessions,
   generateBoss,
   grantConcession,
   type BossState,
   type Concession,
+  type SinIdentity,
 } from './boss.ts';
 import { createPlayer, type Player } from './player.ts';
 import { generateEnemy, type Enemy } from './enemy.ts';
@@ -90,46 +93,97 @@ function expectNoop(s: GameState, input: GameInput): void {
   expect(r.events).toEqual([]);
 }
 
+// ------- The author's 2026-09-30 ruling: ONE SIGNATURE concession per boss -----------------
+
+/** Each boss's signature (GAME-DESIGN.md §22.31), re-stated from the ruling, not read from data. */
+const SIGNATURE: Record<string, readonly Concession[]> = {
+  kingpin: ['surrender'],
+  reflection: ['drop_mechanic'],
+  sin: ['drop_mechanic'],
+  executioner: [],
+  hollow: ['surrender'],
+};
+
+/** One started battle per boss — and every Sin identity, The Grief included. */
+function everyBoss(): { label: string; state: GameState }[] {
+  const out: { label: string; state: GameState }[] = [
+    { label: 'kingpin', state: bossGame({ bossId: 'kingpin', round: 0, minions: 0 }, 1) },
+    { label: 'reflection', state: bossGame({ bossId: 'reflection', round: 0, adapted: false, actionTally: {} }, 2) },
+    { label: 'executioner', state: bossGame({ bossId: 'executioner', round: 0, deedCursor: 0 }, 4) },
+    { label: 'hollow', state: bossGame({ bossId: 'hollow', round: 0 }, 5) },
+  ];
+  // Read from the cards (a list of the bare identity ids would read to the karma-word guard as a copy).
+  for (const sinIdentity of Object.keys(SIN_IDENTITIES) as SinIdentity[]) {
+    out.push({ label: `sin:${sinIdentity}`, state: bossGame({ bossId: 'sin', round: 0, sinIdentity, sinBonusHp: 0 }, 3) });
+  }
+  return out;
+}
+
+describe('each boss’s Talk earns ONE signature concession (the author, 2026-09-30)', () => {
+  it('availableConcessions is exactly the signature — every boss, every Sin identity', () => {
+    expect(everyBoss()).toHaveLength(4 + 5); // non-vacuity: all five Sin identities are swept
+    for (const { label, state } of everyBoss()) {
+      const bossId = label.split(':')[0]!;
+      expect(availableConcessions(battleOf(state)), label).toEqual(SIGNATURE[bossId]);
+    }
+  });
+
+  it('any NON-signature concession is rejected through step — a no-op, every boss', () => {
+    for (const { label, state } of everyBoss()) {
+      const bossId = label.split(':')[0]!;
+      for (const c of CONCESSIONS) {
+        if (SIGNATURE[bossId]!.includes(c)) continue;
+        expectNoop(state, concede(c));
+      }
+    }
+  });
+
+  it('the signature IS granted through step (Reflection and every Sin drop a mechanic; the surrenders below)', () => {
+    for (const { label, state } of everyBoss()) {
+      const bossId = label.split(':')[0]!;
+      if (SIGNATURE[bossId]![0] !== 'drop_mechanic') continue;
+      const r = step(state, concede('drop_mechanic'));
+      expect(r.events[0], label).toEqual({ kind: 'boss-concession', bossId, concession: 'drop_mechanic' });
+      expect(battleOf(r.state).boss?.conceded, label).toBe('drop_mechanic');
+    }
+  });
+
+  it('the executioner accepts nothing at all', () => {
+    const s = bossGame({ bossId: 'executioner', round: 0, deedCursor: 0 }, 4);
+    for (const c of CONCESSIONS) expectNoop(s, concede(c));
+  });
+
+  it('pause and weakness are DORMANT: no card lists them, so Talk can never reach them', () => {
+    for (const { label, state } of everyBoss()) {
+      expectNoop(state, concede('pause'));
+      expectNoop(state, concede('weakness'));
+      expect(availableConcessions(battleOf(state)), label).not.toContain('pause');
+      expect(availableConcessions(battleOf(state)), label).not.toContain('weakness');
+    }
+    for (const card of Object.values(BOSSES)) {
+      expect(card.concessions).not.toContain('pause');
+      expect(card.concessions).not.toContain('weakness');
+    }
+    // The Kingpin's drop_mechanic (stop calling the crew) is dormant the same way.
+    expectNoop(bossGame({ bossId: 'kingpin', round: 0, minions: 1 }), concede('drop_mechanic'));
+  });
+});
+
 // ------- AC-15: where a concession is accepted -----------------------------------
 
-describe('a concession is accepted only where the card allows it (AC-15)', () => {
-  it('at the battle-action awaiting AND at the boss-choice awaiting of a boss battle', () => {
-    const atAction = bossGame({ bossId: 'kingpin', round: 0, minions: 0 });
-    const r1 = step(atAction, concede('weakness'));
-    expect(r1.events[0]).toEqual({ kind: 'boss-concession', bossId: 'kingpin', concession: 'weakness' });
-    expect(battleOf(r1.state).boss?.conceded).toBe('weakness');
+describe('a concession is accepted only in a started boss battle (AC-15)', () => {
+  it('at the battle-action awaiting AND at the boss-choice awaiting (the Reflection’s signature)', () => {
+    const reflection: BossState = { bossId: 'reflection', round: 0, adapted: false, actionTally: {} };
+    const atAction = bossGame(reflection, 2);
+    const r1 = step(atAction, concede('drop_mechanic'));
+    expect(r1.events[0]).toEqual({ kind: 'boss-concession', bossId: 'reflection', concession: 'drop_mechanic' });
+    expect(battleOf(r1.state).boss?.conceded).toBe('drop_mechanic');
 
     const paused = step(atAction, FIGHT);
     expect(paused.awaiting).toBe('boss-choice');
-    const r2 = step(paused.state, concede('weakness'));
-    expect(r2.events[0]).toEqual({ kind: 'boss-concession', bossId: 'kingpin', concession: 'weakness' });
-    expect(r2.awaiting).toBe('boss-choice'); // weakness does not end the boss's turn
-  });
-
-  it('never outside the boss’s own list: each card, every concession', () => {
-    // The cards (bosses.json), re-stated from the plan's §5.6, not read from the data.
-    const allowed: Record<string, readonly Concession[]> = {
-      kingpin: ['pause', 'weakness', 'drop_mechanic', 'surrender'],
-      reflection: ['pause', 'drop_mechanic'],
-      sin: ['pause', 'weakness', 'drop_mechanic'],
-      executioner: [],
-      hollow: ['surrender'],
-    };
-    const bosses: BossState[] = [
-      { bossId: 'kingpin', round: 0, minions: 0 },
-      { bossId: 'reflection', round: 0, adapted: false, actionTally: {} },
-      { bossId: 'sin', round: 0, sinIdentity: 'grief', sinBonusHp: 0 },
-      { bossId: 'executioner', round: 0, deedCursor: 0 },
-      { bossId: 'hollow', round: 0 },
-    ];
-    for (const boss of bosses) {
-      const s = bossGame(boss, boss.bossId === 'hollow' ? 5 : boss.bossId === 'executioner' ? 4 : 1);
-      expect(availableConcessions(battleOf(s)), boss.bossId).toEqual(allowed[boss.bossId]);
-      for (const c of CONCESSIONS) {
-        if (allowed[boss.bossId]!.includes(c)) continue;
-        expectNoop(s, concede(c));
-      }
-    }
+    const r2 = step(paused.state, concede('drop_mechanic'));
+    expect(r2.events[0]).toEqual({ kind: 'boss-concession', bossId: 'reflection', concession: 'drop_mechanic' });
+    expect(r2.awaiting).toBe('boss-choice'); // dropping a mechanic does not end the boss's turn
   });
 
   it('a non-boss battle, and every phase that is not a started battle, accept nothing', () => {
@@ -147,9 +201,13 @@ describe('a concession is accepted only where the card allows it (AC-15)', () =>
 // ------- AC-17: one per fight ---------------------------------------------------
 
 describe('one concession per fight (AC-17)', () => {
-  it('after any grant, a second concession of ANY kind is a no-op', () => {
-    for (const first of ['pause', 'weakness', 'drop_mechanic'] as const) {
-      const granted = step(bossGame({ bossId: 'kingpin', round: 0, minions: 0 }), concede(first)).state;
+  it('after a grant, a second concession of ANY kind is a no-op', () => {
+    const cases: [BossState, number][] = [
+      [{ bossId: 'reflection', round: 0, adapted: false, actionTally: {} }, 2],
+      [{ bossId: 'sin', round: 0, sinIdentity: 'grief', sinBonusHp: 0 }, 3],
+    ];
+    for (const [boss, act] of cases) {
+      const granted = step(bossGame(boss, act), concede('drop_mechanic')).state;
       expect(availableConcessions(battleOf(granted))).toEqual([]);
       for (const c of CONCESSIONS) expectNoop(granted, concede(c));
     }
@@ -158,19 +216,26 @@ describe('one concession per fight (AC-17)', () => {
   it('a new battle starts unconceded', () => {
     const { boss } = generateBoss({ bossId: 'kingpin', act: 1, player: makePlayer(), karma: createKarma(), rng: mulberry32(2) });
     expect(boss.conceded).toBeUndefined();
-    expect(availableConcessions({ boss })).toEqual(['pause', 'weakness', 'drop_mechanic', 'surrender']);
+    expect(availableConcessions({ boss })).toEqual(['surrender']);
   });
 });
 
-// ------- AC-16: pause ---------------------------------------------------------------
+// ------- the DORMANT mechanics still behave as specified (if data ever lists them again) ------------
+//
+// The 2026-09-30 ruling took pause, weakness and the Kingpin's drop_mechanic off every card; the
+// code stays, dormant. These drive it directly through `grantConcession` (bypassing the card), so a
+// future card that lists them gets exactly the author's Q3 mechanics — and the tests above prove no
+// card reaches them today.
 
-describe('pause — the boss’s next turn passes; its conditions still tick (AC-16)', () => {
+describe('dormant — pause: the boss’s next turn passes; its conditions still tick', () => {
   it('granted before the round: the next round has no boss attack and no pause for its move, and completes', () => {
     // A poison already past its onset on the Kingpin: its tick must still hurt it on the passed turn.
     const enemy = makeBossEnemy('kingpin', 1, { activeConditions: [{ ...makeCondition('poison'), remainingTurns: 1 }] });
-    const s = step(bossGame({ bossId: 'kingpin', round: 0, minions: 0 }, 1, enemy), concede('pause')).state;
-    expect(battleOf(s).boss?.pausedTurn).toBe(true);
-    const r = step(s, FIGHT);
+    const start = battleOf(bossGame({ bossId: 'kingpin', round: 0, minions: 0 }, 1, enemy));
+    const granted = grantConcession(start, 'pause');
+    expect(granted.roundComplete).toBe(false);
+    expect(granted.battle.boss?.pausedTurn).toBe(true);
+    const r = step(gameOf(granted.battle), FIGHT);
     expect(r.awaiting).toBe('battle-action'); // no pause for a move: the turn passed
     expect(r.events).toContainEqual({ kind: 'boss-move', bossId: 'kingpin', move: 'pause' });
     expect(r.events.some((e) => e.kind === 'attack' && e.subject === 'enemy')).toBe(false);
@@ -181,20 +246,18 @@ describe('pause — the boss’s next turn passes; its conditions still tick (AC
     expect(step(r.state, FIGHT).awaiting).toBe('boss-choice');
   });
 
-  it('granted while the boss’s turn waits for its move: that turn passes now and the round completes', () => {
+  it('granted while the boss’s turn waits for its move: that turn passes now and the round is complete', () => {
     const paused = step(bossGame({ bossId: 'kingpin', round: 0, minions: 1 }), FIGHT);
     expect(paused.awaiting).toBe('boss-choice');
-    const r = step(paused.state, concede('pause'));
-    expect(r.awaiting).toBe('battle-action');
-    expect(r.events.map((e) => e.kind)).toEqual(['boss-concession', 'boss-move', 'boss-minion-damage']);
-    expect(battleOf(r.state).bossChoice).toBeUndefined();
-    expect(battleOf(r.state).boss?.round).toBe(1);
+    const granted = grantConcession(battleOf(paused.state), 'pause');
+    expect(granted.roundComplete).toBe(true);
+    expect(granted.events).toEqual([{ kind: 'boss-move', bossId: 'kingpin', move: 'pause' }]);
+    expect(granted.battle.bossChoice).toBeUndefined();
+    expect(granted.battle.boss?.pausedTurn).toBeUndefined();
   });
 });
 
-// ------- AC-16: weakness --------------------------------------------------------------
-
-describe('weakness — two dice for the rest of the fight (AC-16)', () => {
+describe('dormant — weakness: two dice for the rest of the fight', () => {
   it('a scripted 3 then 18: before, one face; after, faces [3, 18] and the 18 counts', () => {
     const boss: BossState = { bossId: 'kingpin', round: 0, minions: 0 };
     const battle = createBattle(makePlayer(), makeBossEnemy('kingpin', 1), 1, { boss });
@@ -204,17 +267,36 @@ describe('weakness — two dice for the rest of the fight (AC-16)', () => {
     const beforeRoll = before.events.find((e) => e.kind === 'attack' && e.subject === 'player');
     expect(beforeRoll && beforeRoll.kind === 'attack' ? beforeRoll.roll.faces : null).toEqual([3]);
 
-    const weak: BattleState = { ...battle, boss: { ...boss, conceded: 'weakness', weaknessRevealed: true } };
+    const weak = grantConcession(battle, 'weakness').battle;
+    expect(weak.boss?.weaknessRevealed).toBe(true);
     const after = resolveRound(weak, 'fight', scriptedRng(script));
     const afterRoll = after.events.find((e) => e.kind === 'attack' && e.subject === 'player');
     expect(afterRoll && afterRoll.kind === 'attack' ? afterRoll.roll : null).toMatchObject({ faces: [3, 18], natural: 18, advDis: 1 });
   });
+});
 
-  it('through step: the grant sets it for the rest of the fight', () => {
-    const r = step(bossGame({ bossId: 'sin', round: 0, sinIdentity: 'grief', sinBonusHp: 0 }, 3), concede('weakness'));
-    expect(battleOf(r.state).boss?.weaknessRevealed).toBe(true);
-    const next = step(r.state, FIGHT);
-    expect(next.events).toContainEqual({ kind: 'advantage', subject: 'player' });
+describe('dormant — the Kingpin’s drop_mechanic: he stops calling; the standing crew stays', () => {
+  it('call_crew leaves the open legal list, and no minion ever arrives again', () => {
+    const paused = step(bossGame({ bossId: 'kingpin', round: 0, minions: 1 }), FIGHT);
+    expect(battleOf(paused.state).bossChoice?.legal).toEqual(['strike', 'call_crew', 'hold_back']);
+    const granted = grantConcession(battleOf(paused.state), 'drop_mechanic').battle;
+    expect(granted.bossChoice?.legal).toEqual(['strike', 'hold_back']);
+    // Asking for the crew anyway falls back to a legal move — never a new minion.
+    let s = step(gameOf(granted), { kind: 'boss-choice', move: 'call_crew' }).state;
+    for (let i = 0; i < 6; i += 1) {
+      const a = step(s, FIGHT);
+      const b = step(a.state, { kind: 'boss-choice', move: 'call_crew' });
+      expect(b.events.some((e) => e.kind === 'boss-summon')).toBe(false);
+      s = b.state;
+    }
+    expect(battleOf(s).boss?.minions).toBe(1);
+  });
+
+  it('granted with a crew of 2: the standing crew keeps dealing 2 a round', () => {
+    const granted = grantConcession(battleOf(bossGame({ bossId: 'kingpin', round: 0, minions: 2 })), 'drop_mechanic').battle;
+    const a = step(gameOf(granted), FIGHT);
+    const b = step(a.state, { kind: 'boss-choice', move: 'hold_back' });
+    expect(b.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 });
   });
 });
 
@@ -238,7 +320,7 @@ describe('a concession granted during the player’s extra-action pause reaches 
     return a && a.kind === 'attack' ? a.roll : undefined;
   };
 
-  it('weakness: the second action rolls TWO dice (faces 3 and 18, natural 18)', () => {
+  it('weakness (dormant): the second action rolls TWO dice (faces 3 and 18, natural 18)', () => {
     const paused = extraPaused({ bossId: 'kingpin', round: 0, minions: 0 });
     const granted = grantConcession(paused, 'weakness').battle;
     const second = resolveRound(granted, 'fight', scriptedRng([face(3, 20), face(18, 20), 0.5, 0.5]));
@@ -254,50 +336,28 @@ describe('a concession granted during the player’s extra-action pause reaches 
     expect(playerRoll(second.events)).toMatchObject({ faces: [15], natural: 15, advDis: 0 });
   });
 
-  it('through step, as the probe played it: fight → the pause → weakness → fight rolls two faces', () => {
+  it('through step: fight → the pause → the Reflection’s drop_mechanic → fight rolls ONE face', () => {
     const stats = { ...STATS, DEX: 12 };
     const player = { ...makePlayer(), stats, mods: computeStatMods(stats) };
-    const boss: BossState = { bossId: 'kingpin', round: 0, minions: 0 };
-    const battle: BattleState = { ...createBattle(player, makeBossEnemy('kingpin', 2), 2, { boss }), tempo: { player: 9, enemy: 0 } };
+    const boss: BossState = { bossId: 'reflection', round: 3, adapted: true, actionTally: { fight: 3 } };
+    const battle: BattleState = {
+      ...createBattle(player, makeBossEnemy('reflection', 2, { skillPool: [] }), 2, { boss }),
+      tempo: { player: 9, enemy: 0 },
+      playerAdvantage: -1,
+    };
     const p = step(gameOf(battle), FIGHT);
     expect(battleOf(p.state).extraAction).toBe(true);
     expect(p.awaiting).toBe('battle-action');
-    const g = step(p.state, concede('weakness'));
+    expect(playerRoll(p.events)?.faces).toHaveLength(2); // the first action, at disadvantage
+    const g = step(p.state, concede('drop_mechanic'));
     const next = step(g.state, FIGHT);
-    expect(playerRoll(next.events)?.faces).toHaveLength(2);
+    expect(playerRoll(next.events)?.faces).toHaveLength(1);
   });
 });
 
-// ------- AC-16: drop_mechanic ------------------------------------------------------------
+// ------- AC-16: drop_mechanic, the signature of the Reflection and every Sin ------------------------
 
-describe('drop_mechanic — each boss gives up its own mechanic (AC-16)', () => {
-  it('Kingpin: call_crew leaves the open legal list, and no minion ever arrives again', () => {
-    const paused = step(bossGame({ bossId: 'kingpin', round: 0, minions: 1 }), FIGHT);
-    expect(paused.state.phase.kind === 'battle' && paused.state.phase.battle.bossChoice?.legal).toEqual([
-      'strike',
-      'call_crew',
-      'hold_back',
-    ]);
-    const r = step(paused.state, concede('drop_mechanic'));
-    expect(battleOf(r.state).bossChoice?.legal).toEqual(['strike', 'hold_back']);
-    // Asking for the crew anyway falls back to a legal move — never a new minion.
-    let s = step(r.state, { kind: 'boss-choice', move: 'call_crew' }).state;
-    for (let i = 0; i < 6; i += 1) {
-      const a = step(s, FIGHT);
-      const b = step(a.state, { kind: 'boss-choice', move: 'call_crew' });
-      expect(b.events.some((e) => e.kind === 'boss-summon')).toBe(false);
-      s = b.state;
-    }
-    expect(battleOf(s).boss?.minions).toBe(1);
-  });
-
-  it('Kingpin granted with a crew of 2: the standing crew keeps dealing 2 a round', () => {
-    const s = step(bossGame({ bossId: 'kingpin', round: 0, minions: 2 }), concede('drop_mechanic')).state;
-    const a = step(s, FIGHT);
-    const b = step(a.state, { kind: 'boss-choice', move: 'hold_back' });
-    expect(b.events).toContainEqual({ kind: 'boss-minion-damage', amount: 2 });
-  });
-
+describe('drop_mechanic — the Reflection stops adapting; a Sin sheds its indulgence (AC-16)', () => {
   it('Reflection already adapted: the disadvantage lifts, and it never adapts again', () => {
     const boss: BossState = { bossId: 'reflection', round: 3, adapted: true, actionTally: { fight: 3 } };
     const battle: BattleState = { ...createBattle(makePlayer(), makeBossEnemy('reflection', 2, { skillPool: [] }), 2, { boss }), playerAdvantage: -1 };
@@ -332,6 +392,15 @@ describe('drop_mechanic — each boss gives up its own mechanic (AC-16)', () => 
     expect(e.maxHp).toBe(neutral.enemy.maxHp);
     expect(e.hp).toBe(Math.min(g.enemy.hp, neutral.enemy.maxHp));
     expect(battleOf(r.state).boss?.sinBonusHp).toBe(0);
+  });
+
+  it('The Grief (no indulgence) drops its mechanic too — it has nothing to shed, so its HP is unchanged', () => {
+    const player = makePlayer();
+    const g = generateBoss({ bossId: 'sin', act: 3, player, karma: createKarma(), rng: mulberry32(21) });
+    expect(g.boss.sinIdentity).toBe('grief');
+    const r = step(gameOf(createBattle(player, g.enemy, 3, { boss: g.boss })), concede('drop_mechanic'));
+    expect(r.events[0]).toEqual({ kind: 'boss-concession', bossId: 'sin', concession: 'drop_mechanic' });
+    expect(battleOf(r.state).enemy).toMatchObject({ maxHp: g.enemy.maxHp, hp: g.enemy.hp });
   });
 
   it('Sin: a boss already cut below the shed amount is left at 1 HP, never 0', () => {

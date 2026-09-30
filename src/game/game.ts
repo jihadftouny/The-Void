@@ -993,7 +993,9 @@ function startExecutioner(state: GameState, player: Player, rng: Rng, finish: Fi
  * granted this fight (`availableConcessions`); anything else is a no-op (the reducer is total).
  * The executioner's card lists none, so it accepts nothing.
  *
- *  - pause / weakness / drop_mechanic: `grantConcession`. A pause granted while the boss's turn
+ *  - pause / weakness / drop_mechanic: `grantConcession`. (Since the author's 2026-09-30 ruling
+ *    each card lists ONE signature — Kingpin and Hollow Self surrender, the Reflection and every Sin
+ *    drop_mechanic — so pause and weakness are dormant: no card reaches them.) A pause granted while the boss's turn
  *    waits for its move lets that turn pass and COMPLETES the round, so the once-per-round
  *    mechanic runs now (`settleBattleRound`).
  *  - surrender, Kingpin: a full victory (`resolveSurrender` — XP and the loot roll, no `onKill`

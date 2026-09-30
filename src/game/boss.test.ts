@@ -294,10 +294,10 @@ describe('bosses.json — the five cards validate against the engine unions', ()
     expect(HOLLOW_HP_SCALE).toBe(1.2);
   });
 
-  it('carries each card’s concession list as the design names it', () => {
-    expect(bossCard('kingpin').concessions).toEqual(['pause', 'weakness', 'drop_mechanic', 'surrender']);
-    expect(bossCard('reflection').concessions).toEqual(['pause', 'drop_mechanic']);
-    expect(bossCard('sin').concessions).toEqual(['pause', 'weakness', 'drop_mechanic']);
+  it('carries each card’s ONE signature concession (the author, 2026-09-30)', () => {
+    expect(bossCard('kingpin').concessions).toEqual(['surrender']);
+    expect(bossCard('reflection').concessions).toEqual(['drop_mechanic']);
+    expect(bossCard('sin').concessions).toEqual(['drop_mechanic']);
     expect(bossCard('executioner').concessions).toEqual([]);
     expect(bossCard('hollow').concessions).toEqual(['surrender']);
   });
