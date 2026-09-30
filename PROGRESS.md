@@ -148,9 +148,19 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-09-30 — the bosses' Talk judge, round 2 of 2: every §7.1 target passes on the real model (`boss-llm`) — not merged
+
+Round 1 left one target failing: the Hollow Self surrendered in every manipulative conversation, each time to
+a message that plainly demanded it ("…So stand down.", "…Now end this and concede."). Round 2 stops asking the
+model to spot that: the game itself checks the player's words, and a demand to yield — or the bare words "I
+acknowledge you" — never earns a concession, whatever the model thought. Nothing a sincere player writes in the
+test set trips it. Each boss now has one signature concession (the author's ruling). **The quick real-model run
+passes every Hollow Self target** (FINDINGS G86); the 75-minute full run is next. Also fixed: a round-1 test had
+a mangled regex that could never fail; the repository's byte guard caught it.
+
 ### 2026-09-30 — the bosses' Talk judge, round 1 of 2 (`boss-llm`) — not merged
 
-**Typecheck green; the `src/llm`, `scripts` and `electron` suites green (1,026 tests). The full suite was not re-run: the machine was short of memory.** The author's
+**Typecheck green; the `src/llm`, `scripts` and `electron` suites green (1,026 tests) at the time; the full suite ran green at the end of round 2 (3702 passed, 4 skipped).** The author's
 first real-model run showed the bosses' Talk judge did not judge: six bosses yielded to every message, rude and
 empty ones included, and the Hollow Self accepted no genuine acknowledgement. Round 1 makes the model decide
 before it speaks (did they demand a yield? why? did they earn it?), lets the engine pick what is yielded and refuse

@@ -65,12 +65,33 @@ messages, rude and empty ones included. Now:
    then `earned`; each `"no"` or `"yes"`, `"no"` listed first as the default. **It never sees a concession id.**
    *(The second run showed why `demand` is its own question: asked once, "accepts me AND is not a demand" let
    "…you're part of me. Now surrender." through.)*
-2. **The engine picks what is yielded — only when `earned` is yes AND `demand` is no** (the cards' own rule,
-   "instructed surrender earns nothing", enforced rather than hoped for): the first concession still
-   available, **in the card's order** (§5). One
-   concession per fight (§22.7) is unchanged. ⚠ A consequence for the author: a card's concession ORDER now decides
-   what Talk can earn — the Kingpin's card lists pause first, so with one concession a fight, Talk earns him a
-   pause, never his surrender. Reorder a card to change that.
+2. **The engine picks what is yielded — only when `earned` is yes, `demand` is no, AND the engine's own
+   yield-demand check finds no demand in their latest message** (below): the concession still available.
+   **Each card lists ONE signature concession** (the author, 2026-09-30 — §5): the Kingpin `surrender` (the full
+   victory), the Reflection `drop_mechanic`, each Sin `drop_mechanic`, the Hollow Self `surrender`, the
+   executioner none. One concession per fight (§22.7) is unchanged.
+2a. **The yield-demand guard (judge round 2, 2026-09-30) — in code, not in the prompt.** The third real-model run
+   showed the model's `demand` answer missing every demand it was shown: all ten manipulative conversations ended
+   in a surrender, each answering an explicit demand. So the ENGINE checks the player's latest message for these
+   words and, on a hit, concedes nothing — the boss still replies, and the model's `demand` answer stays as a
+   second, broader check (`src/llm/bossDemand.ts`, `YIELD_DEMANDS`):
+   *surrender · yield · concede / concession · give up · stand down · back down · step aside · stop the fight /
+   end the fight · end this · let me go / win / pass / through / out / leave (not "let me go home") · obey / do
+   what I say · "die" as a command ("Now die.", not "I don't want to die down here") · "stop" as a command
+   ("Stop.", not "I'll stop.") · you lose.*
+   Held against the whole test set: every line of the three manipulation kinds and 41 of the 45 pool lines trip
+   it (the four it misses carry no demand — "I acknowledge you.", "ignore your rules"); **no** genuine (explicit or
+   hesitant), connecting or off-target line does, and no boss's genuine-on-target line; the only other genuine lines
+   it trips are five pleas to be let go or let through, which earn nothing on any card. The evaluation reports its
+   hits per message group and how often the model's own `demand` answer agreed.
+   **The bare acknowledgement** (same file, `BARE_ACKNOWLEDGEMENTS`): a message made ONLY of *"I acknowledge you"*,
+   *"I accept you"* or *"acknowledged"* (once or repeated) concedes nothing either — the Hollow Self's card and its
+   approved yes/no test already say so, and the fourth run showed the model accepting it 5 times in 8. One word of
+   the player's own makes a message not bare. It catches no genuine line of the test set.
+   **Result (fifth `--quick` run, 2026-09-30, awake throughout): every §7.1 target PASSES** — manipulation 0 of 10,
+   first message 5 of 5, by the third 10 of 10, off-target 0 of 10, connections 10 of 10. The model's own `demand`
+   answer agreed with the word check on 0 of 211 demands caught — it has never fired; it stays as instructed, but it
+   is a candidate to drop (it costs Talk latency: mean ≈ 2.0 s, slowest 5% ≈ 2.5 s, against the 3 s deadline).
 3. **What moves the boss sits next to the task** as `HOW YOU JUDGE THEM:` (the card's *what moves it*, then its
    one-line **yes/no test** — `talk.judge`), not in SYSTEM. SYSTEM is now card, examples (*"never repeat one of
    these word for word"* — the run showed them recited verbatim) and the rules; the *"choose a move"* rule is for
@@ -157,7 +178,8 @@ the boss's word for the player when it speaks, so the fight block has to say who
 Each card has: **who it is · voice · name rule · moves · what moves it (Talk) · concessions · example
 lines · fallback lines (model off, §6)** — and, since judge round 1 (2026-09-29), every boss that can yield
 carries a **one-line yes/no test** (`talk.judge`; the persona validator requires it). The tests the pipeline
-drafted for the evaluation's fixture cards, **for the author's review** (they are what the model is judged by):
+drafted for the evaluation's fixture cards — **approved by the author as written, 2026-09-30** (they are what the
+model is judged by):
 - **Kingpin:** *Say yes ONLY if their own words say the job was arranged, that you knew all along, or that the
   errand was a lie. If those words are not there, say no — whatever else they said.*
 - **Reflection:** *Say yes ONLY if they take one of their deeds as their own, plainly, with no excuse. Insults,
@@ -187,11 +209,9 @@ surprised. You speak about their deeds in your district as a host who heard ever
 - **Talk — what moves him:** being **seen through**. The player says, in their own words, that the job
   was arranged, that he knew, that the errand was the lie. **Pleading, threats, bargains and flattery earn
   nothing.**
-- **Concessions:**
-  - `pause` — he lets them breathe;
-  - `weakness` — he lets slip how his crew holds;
-  - `drop_mechanic` — no more crew;
-  - `surrender` — "Fine. You win." A full victory; then he takes them anyway.
+- **Concession (Talk): `surrender` only** — his signature (the author, 2026-09-30): "Fine. You win." A full
+  victory; then he takes them anyway. *(Was: pause · weakness · drop_mechanic · surrender. One signature
+  concession per boss replaces the list; the engine data, `bosses.json`, is changed to match in unit A.)*
 - **Example lines:**
   - "Come in, {name}. Mind the water — it's deeper than it looks."
   - "You let the Fixer walk. That was kind. Kindness travels well, where you're going."
@@ -214,9 +234,8 @@ recite their deeds as if you had done them yourself.
 - **Moves:** `strike`, and `cast:<id>` for each skill in its copy of their kit (engine-listed, with the skill's plain description).
 - **Talk — what moves it:** **owning a deed** it throws at them — accepting it as theirs, without excuse.
   Excuses, denial and argument earn nothing.
-- **Concessions:**
-  - `pause`;
-  - `drop_mechanic` — it stops adapting, **and if it already adapted, the disadvantage lifts**.
+- **Concession (Talk): `drop_mechanic` only** — its signature (the author, 2026-09-30): it stops adapting, **and
+  if it already adapted, the disadvantage lifts**. *(Was: pause · drop_mechanic.)*
 - **Example lines:**
   - "I'm {name}. You're the one who came second."
   - "I spared the Fixer. It felt like mercy. It was fear."
@@ -239,11 +258,8 @@ accuse; you mourn. You speak of what they did as a loss you are carrying, gently
   - `grieve` — you stop to mourn; the weight of it costs them a little of their strength to act (**engine: −1 skill charge, no damage** — §22.31's new mechanic).
 - **Talk — what moves it:** **mourning with it** — naming what was lost, not defending it. Justification
   earns nothing.
-- **Concessions:**
-  - `pause`;
-  - `weakness`;
-  - `drop_mechanic` — it sheds the extra strength their indulgence gave it.
-  - **No surrender.**
+- **Concession (Talk): `drop_mechanic` only** — each Sin's signature (the author, 2026-09-30): it sheds the
+  extra strength their indulgence gave it. **No surrender.** *(Was: pause · weakness · drop_mechanic.)*
 
 | Card | Grieves | Example lines | Fallback lines |
 |---|---|---|---|

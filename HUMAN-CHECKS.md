@@ -32,9 +32,11 @@
 >       measured (G86 has the numbers); **V3 — the committed code — was stopped by the system under low memory before
 >       its Talk calls.** Re-run `npm run boss:eval -- --run --quick` (with nothing else heavy running; ~10 minutes,
 >       Talk calls now take ~1.5 s). *Pass:* every target reads PASS. *Fail:* any FAIL — then round 2, then you.
->       Also review the pipeline-drafted **yes/no tests** in `BOSS-PROMPTS.md` §5 (they are what the judge applies),
->       and the consequence that Talk earns the FIRST concession in a card's order (the Kingpin: a pause, never his
->       surrender, while one concession a fight holds).
+>       *(2026-09-30: V3 was measured — manipulation still 100% FAIL, every surrender on an explicit demand; the
+>       yes/no tests were **approved**; each card now lists **one signature concession**; round 2 added an engine-side
+>       word check — a yield demand or a bare acknowledgement concedes nothing. **The round-2 `--quick` run PASSES
+>       every §7.1 target** (FINDINGS G86). Still to read: the per-boss leaks G86 lists — "You're pathetic." once
+>       earning the Reflection and the Hollow Self a concession, three Sins taking a justification for mourning.)*
 > - [ ] **2. Run the evaluation on the real model** (AC-20 — about **75 minutes**, or ~9 minutes with
 >       `--quick`; it uses the GPU the whole time, so nothing else should be on it). From the repo root:
 >
