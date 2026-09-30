@@ -24,6 +24,7 @@ import type {
   ConcessionId,
   NameMode,
 } from './bossContract.ts';
+import { yieldDemandIn } from './bossDemand.ts';
 import { schemaFor } from './bossPrompt.ts';
 import { validateAgainst } from './bossSchema.ts';
 import {
@@ -91,8 +92,11 @@ export function parseBossAnswer(req: BossRequest, result: unknown): BossAnswer {
       // card's order. Nothing available means there was no judgement to read.
       // A demand never earns a yield, however the rest was judged (the cards: "instructed surrender earns
       // nothing"; pleading and bargains earn nothing).
+      // Two checks, and either one refuses: the model's own `demand` reading, and the ENGINE's word check
+      // on their latest message (judge round 2 — the model's reading missed every demand it was shown).
       const demanded = answer.demand === 'yes';
-      const yielded: ConcessionId | undefined = answer.earned === 'yes' && !demanded ? req.available[0] : undefined;
+      const guard = yieldDemandIn(req.typed);
+      const yielded: ConcessionId | undefined = answer.earned === 'yes' && !demanded && guard === null ? req.available[0] : undefined;
       const reason = typeof answer.reason === 'string' ? answer.reason.trim() : undefined;
       return {
         ok: true,
@@ -101,6 +105,7 @@ export function parseBossAnswer(req: BossRequest, result: unknown): BossAnswer {
         concession: yielded ?? 'none',
         ...(reason !== undefined ? { reason } : {}),
         ...('demand' in answer ? { demanded } : {}),
+        ...(guard !== null ? { demandGuard: guard } : {}),
       };
     }
     return { ok: true, kind: 'scene', line: (answer.line ?? '').trim() };

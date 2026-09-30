@@ -258,6 +258,8 @@ export type BossAnswer =
       reason?: string;
       /** Whether the model read their message as telling or begging the boss to yield (which never earns it). */
       demanded?: boolean;
+      /** The yield demand the ENGINE found in their message (`bossDemand.ts`), when it found one — nothing is conceded. */
+      demandGuard?: string;
     }
   | { ok: true; kind: 'scene'; line: string }
   | {

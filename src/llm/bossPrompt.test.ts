@@ -350,7 +350,7 @@ describe('AC-8: each call is held to its schema', () => {
     // No concession id reaches the model: not in the schema, and no list of them in the prompt. ("surrender"
     // may appear as an English verb in the task's list of what never earns a yield.)
     for (const id of ['pause', 'weakness', 'drop_mechanic', 'surrender']) expect(JSON.stringify(kingpin.schema), id).not.toContain(id);
-    expect(kingpin.user + kingpin.system).not.toMatch(/(pause|weakness|drop_mechanic)/);
+    expect(kingpin.user + kingpin.system).not.toMatch(/\b(pause|weakness|drop_mechanic)\b/);
     expect(kingpin.user).not.toContain('YOU MAY YIELD');
     expect(kingpin.user).toContain(`HOW YOU JUDGE THEM:\n${P('kingpin').talk.moves}`);
     expect(kingpin.user.endsWith(TALK_JUDGE_TASK)).toBe(true);

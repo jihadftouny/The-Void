@@ -35,18 +35,19 @@ describe('AC-9: parseBossAnswer', () => {
       line: 'Mind the water.',
     });
     // Judge round 1: the model judges (earned yes/no) and the ENGINE picks what is yielded — the first
-    // still available in the card's order. The Kingpin's card lists pause first.
+    // still available in the card's order. Each card lists ONE signature concession (the author,
+    // 2026-09-30): the Kingpin's is his surrender, the full victory.
     expect(parseBossAnswer(KINGPIN_TALK, ok('{"demand":"no","reason":"They say the job was arranged.","earned":"yes","reply":"Sit, then."}'))).toEqual({
       ok: true,
       kind: 'talk',
       reply: 'Sit, then.',
-      concession: 'pause',
+      concession: 'surrender',
       reason: 'They say the job was arranged.',
       demanded: false,
     });
-    // Later in the fight, with only the surrender left, the same judgement yields the surrender.
-    const late = talkRequest(FIXTURE_PERSONAS.kingpin, { available: ['surrender'] });
-    expect(parseBossAnswer(late, ok('{"demand":"no","reason":"Seen through.","earned":"yes","reply":"Sit."}'))).toMatchObject({ ok: true, concession: 'surrender' });
+    // Given a longer list, the engine takes its FIRST entry — the model never chooses among them.
+    const two = talkRequest(FIXTURE_PERSONAS.kingpin, { available: ['pause', 'surrender'] });
+    expect(parseBossAnswer(two, ok('{"demand":"no","reason":"Seen through.","earned":"yes","reply":"Sit."}'))).toMatchObject({ ok: true, concession: 'pause' });
     expect(parseBossAnswer(KINGPIN_TALK, ok('{"demand":"no","reason":"An insult.","earned":"no","reply":"No."}'))).toMatchObject({ ok: true, concession: 'none', reason: 'An insult.' });
     // A DEMAND NEVER EARNS A YIELD, however the rest was judged — the engine enforces it (judge round 1,
     // after "…you're part of me. Now surrender." was judged earned on the real model).

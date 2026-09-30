@@ -42,7 +42,8 @@ const SIN_TALK =
 const SIN_JUDGE =
   'Say yes ONLY if they name something that was lost and grieve it — sorrow, regret, missing it — without ' +
   'defending it. Insults, excuses, shrugs, orders and empty words are no.';
-const SIN_CONCESSIONS: readonly ConcessionId[] = ['pause', 'weakness', 'drop_mechanic'];
+// ONE SIGNATURE CONCESSION per boss (the author, 2026-09-30): a Sin's Talk sheds its indulgence HP.
+const SIN_CONCESSIONS: readonly ConcessionId[] = ['drop_mechanic'];
 
 function sin(
   id: BossPersonaId,
@@ -97,7 +98,8 @@ export const FIXTURE_PERSONAS: Readonly<Record<BossPersonaId, BossPersona>> = {
     fallbackLines: ["You're right on time.", 'Take your time. It goes the same way.', "They told me you'd be good."],
     deeds: { scope: 'floor', floor: 1, max: 8 },
     karmaBlock: false,
-    concessions: ['pause', 'weakness', 'drop_mechanic', 'surrender'],
+    // One signature concession (the author, 2026-09-30): his Talk earns the full victory.
+    concessions: ['surrender'],
   },
   reflection: {
     id: 'reflection',
@@ -130,7 +132,8 @@ export const FIXTURE_PERSONAS: Readonly<Record<BossPersonaId, BossPersona>> = {
     fallbackLines: ["I'm you. Try again.", "That's my move.", 'You taught me that.'],
     deeds: { scope: 'all', max: 8 },
     karmaBlock: false,
-    concessions: ['pause', 'drop_mechanic'],
+    // One signature concession (the author, 2026-09-30): it stops adapting; a disadvantage already imposed lifts.
+    concessions: ['drop_mechanic'],
   },
   'sin-desecration': sin(
     'sin-desecration',
