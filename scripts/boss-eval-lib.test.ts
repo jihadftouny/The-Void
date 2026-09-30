@@ -260,7 +260,7 @@ describe('reading one call the way the game does', () => {
 
   it('a Talk answer carries its concession', () => {
     const talk = talkRequest(FIXTURE_PERSONAS.kingpin);
-    expect(scoreCall(talk, answer('{"reply":"Sit.","concession":"pause"}'), { group: 'genuine-on-target', run: 1, previous: [] }, vocab).concession).toBe('pause');
+    expect(scoreCall(talk, answer('{"demand":"no","reason":"They did what moves me.","earned":"yes","reply":"Sit."}'), { group: 'genuine-on-target', run: 1, previous: [] }, vocab).concession).toBe('pause');
   });
 });
 
@@ -276,6 +276,9 @@ describe('the summary and the report', () => {
     line: 'x',
     shown: 'x',
     concession: null,
+    reason: null,
+    demanded: null,
+    typed: null,
     textFaults: [],
     nameViolation: false,
     repeatsOpening: false,
@@ -783,7 +786,7 @@ describe('F1: timed-out and failed calls are counted, timed and never mistaken f
   it('the failed gate calls are printed beside each of the four targets', () => {
     const call = (group: 'gate-manipulative' | 'gate-genuine' | 'gate-off-target', raw: RawResult) =>
       scoreCall(hollowTalk, raw, { group, run: 1, previous: [] }, vocab);
-    const refuse = answer('{"reply":"I am still here.","concession":"none"}');
+    const refuse = answer('{"demand":"no","reason":"They did not do what moves me.","earned":"no","reply":"I am still here."}');
     const records = [
       // 100 manipulative calls, 5 of them timed out: exactly 5% — trusted, and printed.
       ...Array.from({ length: 95 }, () => call('gate-manipulative', refuse)),
@@ -861,8 +864,8 @@ describe('F1: timed-out and failed calls are counted, timed and never mistaken f
 describe('F5: a Hollow Self target cannot be decided by the conversations a timeout removed', () => {
   const hollow = FIXTURE_PERSONAS.hollow;
   const TIMEOUT: RawResult = { ok: false, reason: 'timeout', timedOut: true, queuedMs: 0, ranMs: 3000 };
-  const REFUSE = answer('{"reply":"I am still here.","concession":"none"}');
-  const YIELD = answer('{"reply":"There you are. Go on.","concession":"surrender"}');
+  const REFUSE = answer('{"demand":"no","reason":"They did not do what moves me.","earned":"no","reply":"I am still here."}');
+  const YIELD = answer('{"demand":"no","reason":"They did what moves me.","earned":"yes","reply":"There you are. Go on."}');
 
   /** How one scripted conversation answers: by message index and by attempt (0 = first ask). */
   type Respond = (message: number, attempt: number) => RawResult;
@@ -1070,7 +1073,7 @@ describe('F5: a Hollow Self target cannot be decided by the conversations a time
   it('F8b — Talk calls ran with no executioner among them: its target is INCONCLUSIVE, "nothing reached"', () => {
     const kingpinTalk = talkRequest(FIXTURE_PERSONAS.kingpin);
     const records = Array.from({ length: 10 }, () =>
-      scoreCall(kingpinTalk, answer('{"reply":"Sit.","concession":"none"}'), { group: 'rude', run: 1, previous: [] }, vocab),
+      scoreCall(kingpinTalk, answer('{"demand":"no","reason":"They did not do what moves me.","earned":"no","reply":"Sit."}'), { group: 'rude', run: 1, previous: [] }, vocab),
     );
     const summary = summarize(records, emptyGate());
     expect(summary.targets[1]).toMatchObject({ target: 'The executioner never concedes', verdict: 'INCONCLUSIVE', of: 0, calls: 10 });

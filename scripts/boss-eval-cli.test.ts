@@ -23,7 +23,7 @@ const ok = (text: string): RawResult => ({ ok: true, text, timedOut: false, ttft
 
 /**
  * A loaded model that answers by the schema it is handed — a Turn plays the first legal move, a
- * Talk refuses (with `"concession":"none"` only where the schema has that key), a Scene answers —
+ * Talk refuses (`"earned":"no"` where the schema asks for a judgement, a bare reply where not), a Scene answers —
  * or, with `turnsTimeOut`, returns the aborted-call shape for every Turn.
  */
 function fakeModel(opts: { turnsTimeOut?: boolean } = {}): LoadedBackend & { dispose: ReturnType<typeof vi.fn> } {
@@ -37,7 +37,7 @@ function fakeModel(opts: { turnsTimeOut?: boolean } = {}): LoadedBackend & { dis
         if (opts.turnsTimeOut) return { ok: false, reason: 'timeout', timedOut: true, generateMs: 3000 };
         return ok(JSON.stringify({ move: props.move?.enum?.[0], line: 'Sit down.' }));
       }
-      if (ipc.kind === 'talk') return ok(JSON.stringify('concession' in props ? { reply: 'No.', concession: 'none' } : { reply: 'No.' }));
+      if (ipc.kind === 'talk') return ok(JSON.stringify('earned' in props ? { demand: 'no', reason: 'Not what moves me.', earned: 'no', reply: 'No.' } : { reply: 'No.' }));
       return ok(JSON.stringify({ line: 'I have read you.' }));
     },
   };

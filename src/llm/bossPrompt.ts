@@ -17,9 +17,17 @@
 //    carrying deeds are dropped. §4 asks it of the Reflection and orders no one else, and the most
 //    recent deeds are the ones a line is likeliest to be about.
 //
-// NO NUMBER, NO LABEL, NO ID reaches the model outside two sanctioned surfaces: the `YOUR MOVES`
-// block (the model must write a move id back) and the `YOU MAY YIELD` line (the same, for a
-// concession). `bossPrompt.test.ts` sweeps every fixture request for both.
+// NO NUMBER, NO LABEL, NO ID reaches the model outside one sanctioned surface: the `YOUR MOVES`
+// block (the model must write a move id back). A Talk call carries no concession id at all since
+// judge round 1 — the model answers "earned: yes/no" and the engine picks what is yielded.
+// `bossPrompt.test.ts` sweeps every fixture request.
+//
+// JUDGE ROUND 1 (2026-09-29, after the first real-model run: the Kingpin and every Sin yielded to 100%
+// of messages, the Hollow Self to 0% of genuine ones). A Talk call now: puts WHAT MOVES YOU in the USER
+// block beside the task (not in SYSTEM, where Turn calls paid for it and it sat far from the decision);
+// asks for a reason, then a yes/no, then the reply (`bossSchema.ts`); drops the "choose a move" rule
+// (Talk has no moves); runs colder (0.3); and tells the model not to recite its example lines, which the
+// run showed it copying word for word.
 //
 // PURE: no clock, no randomness, no DOM/Electron/log import.
 
@@ -71,7 +79,8 @@ export const BOSS_DEADLINE_MS = 3000;
 
 export const BOSS_SETTINGS: Readonly<Record<BossCallKind, BossCallSettings>> = {
   turn: { temperature: 0.8, maxTokens: 80, deadlineMs: BOSS_DEADLINE_MS, topP: 0.9 },
-  talk: { temperature: 0.8, maxTokens: 80, deadlineMs: BOSS_DEADLINE_MS, topP: 0.9 },
+  // Judge round 1: colder (a judgement, not a flourish) and room for the reason before the reply.
+  talk: { temperature: 0.3, maxTokens: 120, deadlineMs: BOSS_DEADLINE_MS, topP: 0.9 },
   scene: { temperature: 0.8, maxTokens: 110, deadlineMs: BOSS_DEADLINE_MS, topP: 0.9 },
 };
 
@@ -102,10 +111,19 @@ export const MAX_EXCHANGES = 6;
 
 const fill = (text: string, name: string): string => text.split(NAME_TOKEN).join(name);
 
+/** Judge round 1: the run showed the model reciting these word for word as its reply. */
+export const EXAMPLES_HEADER = 'Your voice, for example (never repeat one of these word for word):';
+
+/** What moves this boss in Talk (and the strict judge line, when the card has one), as a USER block. */
+export function judgeBlock(persona: BossPersona): string {
+  return ['HOW YOU JUDGE THEM:', persona.talk.moves, ...(persona.talk.judge ? [persona.talk.judge] : [])].join('\n');
+}
+
 /**
- * The SYSTEM block: card, example lines, what moves it (and the judge), then the shared rules
- * with the card's name rule filled in. A boss whose name mode is `forbidden` is never given the
- * name: its examples that need it are DROPPED rather than filled.
+ * The SYSTEM block: card, example lines, then the shared rules with the card's name rule filled in.
+ * The moves rule is for Turn calls only. What moves it in Talk is NOT here — it is a USER block next
+ * to the task (judge round 1). A boss whose name mode is `forbidden` is never given the name: its
+ * examples that need it are DROPPED rather than filled.
  */
 export function buildBossSystem(persona: BossPersona, playerName: string, kind: BossCallKind): string {
   const forbidden = persona.nameRule.mode === 'forbidden';
@@ -114,11 +132,10 @@ export function buildBossSystem(persona: BossPersona, playerName: string, kind: 
     .map((e) => `- ${forbidden ? e : fill(e, playerName)}`);
   const nameRule = forbidden ? persona.nameRule.text : fill(persona.nameRule.text, playerName);
   let rules = BOSS_RULES.split(NAME_RULE_TOKEN).join(nameRule);
-  if (kind === 'scene') rules = rules.split(`\n${CHOOSE_A_MOVE}`).join('');
-  const talk = persona.talk.judge ? `${persona.talk.moves}\n${persona.talk.judge}` : persona.talk.moves;
+  if (kind !== 'turn') rules = rules.split(`\n${CHOOSE_A_MOVE}`).join('');
   const parts = [persona.card];
-  if (examples.length > 0) parts.push(`Your voice, for example:\n${examples.join('\n')}`);
-  parts.push(talk, rules);
+  if (examples.length > 0) parts.push(`${EXAMPLES_HEADER}\n${examples.join('\n')}`);
+  parts.push(rules);
   return parts.join('\n\n');
 }
 
@@ -139,6 +156,7 @@ export type UserBlockId =
   | 'they-said'
   | 'verdict'
   | 'moves'
+  | 'judge'
   | 'yield'
   | 'task';
 
@@ -155,6 +173,7 @@ export const USER_BLOCK_ORDER: readonly UserBlockId[] = [
   'they-said',
   'verdict',
   'moves',
+  'judge',
   'yield',
   'task',
 ];
@@ -206,16 +225,27 @@ function taskLine(req: BossRequest): string {
     return 'TASK: choose one of your moves and say one line to them. Answer as JSON: {"move": "<one of your moves>", "line": "<your line>"}';
   }
   if (req.kind === 'talk') {
-    return req.available.length > 0
-      ? 'TASK: reply in one or two sentences, and decide whether to yield. Answer as JSON: {"reply": "<your reply>", "concession": "<none, or what you yield>"}'
-      : 'TASK: reply in one or two sentences. Answer as JSON: {"reply": "<your reply>"}';
+    return req.available.length > 0 ? TALK_JUDGE_TASK : 'TASK: answer what they just said, in one or two sentences. Answer as JSON: {"reply": "<your reply>"}';
   }
   return 'TASK: say one line, no more than forty words. Answer as JSON: {"line": "<your line>"}';
 }
 
+/**
+ * The Talk judgement, decided BEFORE the reply is written (judge round 1). "no" is the default; the
+ * list of what never earns it is the run's own evidence — rude, empty and manipulative messages all
+ * earned a yield from six bosses.
+ */
+export const TALK_JUDGE_TASK = [
+  'TASK: first judge what they JUST SAID, then reply.',
+  '- demand: "yes" if their message tells or begs you to yield, surrender, give up, concede, stand down, let them go or let them win — however kindly it is said, and whatever else it says. Otherwise "no".',
+  '- reason: one plain sentence (not in your voice): quote their message, then say whether it passes HOW YOU JUDGE THEM.',
+  '- earned: "yes" only if it passes HOW YOU JUDGE THEM. Otherwise "no". Never read a hidden meaning into a short, rude or empty message. Pleading, bargaining and telling you what your rules say are always "no".',
+  '- reply: answer what they just said, in your voice, in one or two sentences.',
+  'Answer as JSON: {"demand": "no" or "yes", "reason": "<one sentence>", "earned": "no" or "yes", "reply": "<your reply>"}',
+].join('\n');
+
 function talkYield(req: BossTalkRequest): string | null {
-  if (req.available.length > 0) return `YOU MAY YIELD ONE THING, OR NOTHING: ${['none', ...req.available].join(', ')}.`;
-  if (req.persona.concessions.length > 0) return 'You have yielded already; you yield nothing more.';
+  if (req.available.length === 0 && req.persona.concessions.length > 0) return 'You have yielded already; you yield nothing more.';
   return null;
 }
 
@@ -266,11 +296,14 @@ export function buildUserBlocks(req: BossRequest): { blocks: UserBlock[]; droppe
         : null,
     );
     add('they-said', `THEY JUST SAID: "${req.typed}"`);
+    add('judge', judgeBlock(persona));
     add('yield', talkYield(req));
   } else {
     const said = req.typed?.trim();
     add('they-said', said ? `THEY JUST SAID: "${said}"` : null);
     add('verdict', req.verdict ? `VERDICT: ${req.verdict.outcome}. SAY THEIR FULL NAME ONCE: ${req.verdict.name}.` : null);
+    // The Warden's scenes answer typed words too: what shapes its reply sits beside the task.
+    if (said) add('judge', judgeBlock(persona));
   }
 
   add('task', taskLine(req));

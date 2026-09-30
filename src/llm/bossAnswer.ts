@@ -72,18 +72,35 @@ export function parseBossAnswer(req: BossRequest, result: unknown): BossAnswer {
     const check = validateAgainst(schemaFor(req), value);
     if (!check.ok) {
       if (check.key === 'move' && check.problem === 'not one of the listed ids') return fail('illegal-move');
-      if (check.key === 'concession' && check.problem !== 'missing') return fail('illegal-concession');
+      // A judgement outside yes/no, a judgement from a boss that has nothing to yield (the executioner),
+      // or any answer that tries to NAME a concession itself: the answer broke the concession rule.
+      if (req.kind === 'talk' && isRecord(value)) {
+        const judged = 'earned' in schemaFor(req).properties;
+        if ('concession' in value) return fail('illegal-concession');
+        for (const key of ['earned', 'demand'] as const) {
+          if (key in value && (!judged || (value[key] !== 'no' && value[key] !== 'yes'))) return fail('illegal-concession');
+        }
+      }
       return fail('malformed', `${check.key ?? 'answer'}: ${check.problem}`);
     }
 
     const answer = value as Record<string, string>;
     if (req.kind === 'turn') return { ok: true, kind: 'turn', move: answer.move ?? '', line: (answer.line ?? '').trim() };
     if (req.kind === 'talk') {
+      // The model only judged; the ENGINE picks what is yielded — the first still available, in the
+      // card's order. Nothing available means there was no judgement to read.
+      // A demand never earns a yield, however the rest was judged (the cards: "instructed surrender earns
+      // nothing"; pleading and bargains earn nothing).
+      const demanded = answer.demand === 'yes';
+      const yielded: ConcessionId | undefined = answer.earned === 'yes' && !demanded ? req.available[0] : undefined;
+      const reason = typeof answer.reason === 'string' ? answer.reason.trim() : undefined;
       return {
         ok: true,
         kind: 'talk',
         reply: (answer.reply ?? '').trim(),
-        concession: (answer.concession ?? 'none') as ConcessionId | 'none',
+        concession: yielded ?? 'none',
+        ...(reason !== undefined ? { reason } : {}),
+        ...('demand' in answer ? { demanded } : {}),
       };
     }
     return { ok: true, kind: 'scene', line: (answer.line ?? '').trim() };

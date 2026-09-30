@@ -33,6 +33,8 @@ describe('validatePersona', () => {
     ['a bad axis', (p) => (p.deeds = { scope: 'all', axes: ['luck'], max: 3 })],
     ['a non-boolean karma flag', (p) => (p.karmaBlock = 'yes')],
     ['a non-numeric temperature', (p) => (p.talk = { moves: 'x', temperature: 'hot' })],
+    // Judge round 1: a boss that can yield must carry its yes/no test.
+    ['a yielding boss with no judge line', (p) => (p.talk = { moves: 'What moves you: being seen through.' })],
   ];
 
   for (const [what, breakIt] of BROKEN) {

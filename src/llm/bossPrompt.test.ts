@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { buildVocabulary, detectTextFaults, ENGINE_TEXT_RULES } from './textHygiene.ts';
 import {
   BOSS_SETTINGS,
+  TALK_JUDGE_TASK,
   MAX_EXCHANGES,
   buildBossPrompt,
   filterDeeds,
@@ -45,7 +46,8 @@ const HEADERS: readonly [string, RegExp][] = [
   ['they-said', /^THEY JUST SAID: "/],
   ['verdict', /^VERDICT: grace\. SAY THEIR FULL NAME ONCE: /],
   ['moves', /^YOUR MOVES:\n- /],
-  ['yield', /^(YOU MAY YIELD ONE THING, OR NOTHING: none, |You have yielded already)/],
+  ['judge', /^HOW YOU JUDGE THEM:\n/],
+  ['yield', /^You have yielded already/],
   ['task', /^TASK: /],
 ];
 
@@ -82,9 +84,10 @@ describe('AC-3: the USER block has the §2 blocks in §2 order; SYSTEM is card +
       expect(built.blocks.map((b) => b.id), where).toEqual(ids);
       if (req.kind === 'turn') {
         for (const must of ['fight', 'player-just', 'moves']) expect(ids, where).toContain(must);
-        for (const never of ['conversation', 'they-said', 'yield', 'verdict']) expect(ids, where).not.toContain(never);
+        for (const never of ['conversation', 'they-said', 'yield', 'verdict', 'judge']) expect(ids, where).not.toContain(never);
       } else if (req.kind === 'talk') {
         expect(ids, where).toContain('they-said');
+        expect(ids, where).toContain('judge');
         for (const never of ['last-lines', 'moves', 'player-just', 'blow', 'verdict']) expect(ids, where).not.toContain(never);
       } else {
         for (const never of ['fight', 'moves', 'yield', 'conversation', 'player-just']) expect(ids, where).not.toContain(never);
@@ -92,28 +95,31 @@ describe('AC-3: the USER block has the §2 blocks in §2 order; SYSTEM is card +
     }
   });
 
-  it('SYSTEM = card, then examples, then what moves it, then the rules with the name rule filled', () => {
+  it('SYSTEM = card, then examples, then the rules with the name rule filled (judge round 1: what moves it left SYSTEM)', () => {
     for (const req of REQUESTS) {
       const { system } = buildBossPrompt(req);
       const p = req.persona;
       const parts = system.split('\n\n');
       const where = `${p.id}/${req.kind}`;
       expect(parts[0], where).toBe(p.card);
-      expect(parts[1]?.startsWith('Your voice, for example:\n- '), where).toBe(true);
-      expect(parts[2], where).toBe(p.talk.judge ? `${p.talk.moves}\n${p.talk.judge}` : p.talk.moves);
-      expect(parts[3]?.startsWith('RULES — never break these:\n'), where).toBe(true);
-      expect(parts.length, where).toBe(4);
+      expect(parts[1]?.startsWith('Your voice, for example (never repeat one of these word for word):\n- '), where).toBe(true);
+      expect(parts[2]?.startsWith('RULES — never break these:\n'), where).toBe(true);
+      expect(parts.length, where).toBe(3);
+      expect(system, `${where}: what moves it belongs next to the task, not in SYSTEM`).not.toContain(p.talk.moves);
       expect(system, where).not.toContain('{NAME_RULE}');
       expect(system, where).not.toContain('{name}');
       expect(system, where).not.toContain('{');
       const ruleLine = p.nameRule.text.split('{name}').join(FIXTURE_NAME);
-      expect(parts[3], where).toContain(`\n- ${ruleLine}\n`.replace(/\n$/, ''));
+      expect(parts[2], where).toContain(`\n- ${ruleLine}\n`.replace(/\n$/, ''));
     }
   });
 
-  it('the Warden\'s Scene is told no "choose a move" rule; every fighting call is', () => {
+  it('only a Turn is told "choose a move" — never a Scene, and never a Talk (it has no moves)', () => {
     const scene = buildBossPrompt(sceneRequest(P('warden'))).system;
     expect(scene).not.toContain('Choose exactly one of YOUR MOVES');
+    for (const id of ['kingpin', 'hollow', 'sin-grief'] as const) {
+      expect(buildBossPrompt(talkRequest(P(id))).system, id).not.toContain('Choose exactly one of YOUR MOVES');
+    }
     expect(scene.endsWith('- You do not know their name until the verdict.')).toBe(true);
     for (const id of ['kingpin', 'hollow', 'executioner'] as const) {
       expect(buildBossPrompt(turnRequest(P(id), fight([20, 20, []], [20, 20, []], 1))).system.endsWith(
@@ -123,7 +129,7 @@ describe('AC-3: the USER block has the §2 blocks in §2 order; SYSTEM is card +
   });
 
   it('the rules are §3, word for word', () => {
-    const rules = buildBossPrompt(turnRequest(P('kingpin'), fight([20, 20, []], [20, 20, []], 1))).system.split('\n\n')[3];
+    const rules = buildBossPrompt(turnRequest(P('kingpin'), fight([20, 20, []], [20, 20, []], 1))).system.split('\n\n')[2];
     expect(rules).toBe(
       [
         'RULES — never break these:',
@@ -142,11 +148,11 @@ describe('AC-3: the USER block has the §2 blocks in §2 order; SYSTEM is card +
   });
 });
 
-/** The USER block with the two sanctioned id surfaces removed: YOUR MOVES and the yield line. */
+/** The USER block with its one sanctioned id surface removed: YOUR MOVES. (A Talk call names no concession id.) */
 function withoutIdSurfaces(user: string): string {
   return user
     .split('\n\n')
-    .filter((b) => !b.startsWith('YOUR MOVES:\n') && !b.startsWith('YOU MAY YIELD ONE THING'))
+    .filter((b) => !b.startsWith('YOUR MOVES:\n'))
     .join('\n\n');
 }
 
@@ -337,13 +343,23 @@ describe('AC-8: each call is held to its schema', () => {
     const req = turnRequest(P('kingpin'), fight([20, 20, []], [20, 20, []], 1));
     expect(buildBossPrompt(req).schema.properties.move).toEqual({ enum: ['strike', 'call_crew', 'hold_back'] });
   });
-  it('Talk: none plus available; the executioner has no concession key; a boss that yielded neither', () => {
-    expect(buildBossPrompt(talkRequest(P('kingpin'))).schema.properties.concession).toEqual({
-      enum: ['none', 'pause', 'weakness', 'drop_mechanic', 'surrender'],
-    });
-    expect('concession' in buildBossPrompt(talkRequest(P('executioner'))).schema.properties).toBe(false);
+  it('Talk: judged (demand, reason, earned, reply) while something is available; the executioner and a boss that yielded are not', () => {
+    const kingpin = buildBossPrompt(talkRequest(P('kingpin')));
+    expect(Object.keys(kingpin.schema.properties)).toEqual(['demand', 'reason', 'earned', 'reply']);
+    expect(kingpin.schema.properties.earned).toEqual({ enum: ['no', 'yes'] });
+    // No concession id reaches the model: not in the schema, and no list of them in the prompt. ("surrender"
+    // may appear as an English verb in the task's list of what never earns a yield.)
+    for (const id of ['pause', 'weakness', 'drop_mechanic', 'surrender']) expect(JSON.stringify(kingpin.schema), id).not.toContain(id);
+    expect(kingpin.user + kingpin.system).not.toMatch(/(pause|weakness|drop_mechanic)/);
+    expect(kingpin.user).not.toContain('YOU MAY YIELD');
+    expect(kingpin.user).toContain(`HOW YOU JUDGE THEM:\n${P('kingpin').talk.moves}`);
+    expect(kingpin.user.endsWith(TALK_JUDGE_TASK)).toBe(true);
+    const hollow = buildBossPrompt(talkRequest(P('hollow'))).user;
+    expect(hollow).toContain(`HOW YOU JUDGE THEM:\n${P('hollow').talk.moves}\n${P('hollow').talk.judge}`);
+    expect(Object.keys(buildBossPrompt(talkRequest(P('executioner'))).schema.properties)).toEqual(['reply']);
     const spent = buildBossPrompt(talkRequest(P('kingpin'), { available: [] }));
-    expect('concession' in spent.schema.properties).toBe(false);
+    expect(Object.keys(spent.schema.properties)).toEqual(['reply']);
+    expect(spent.user).not.toContain(TALK_JUDGE_TASK);
     expect(spent.user).toContain('You have yielded already; you yield nothing more.');
     const exec = buildBossPrompt(talkRequest(P('executioner'))).user;
     expect(exec).not.toContain('YOU MAY YIELD');
@@ -357,15 +373,16 @@ describe('AC-8: each call is held to its schema', () => {
 describe('settings per call kind (BOSS-PROMPTS §2; plan §5.3 decision 5)', () => {
   it('the table', () => {
     expect(BOSS_SETTINGS.turn).toEqual({ temperature: 0.8, maxTokens: 80, deadlineMs: 3000, topP: 0.9 });
-    expect(BOSS_SETTINGS.talk).toEqual({ temperature: 0.8, maxTokens: 80, deadlineMs: 3000, topP: 0.9 });
+    // Judge round 1: every boss's Talk judge runs cold (0.3), with room for its reason (120 tokens).
+    expect(BOSS_SETTINGS.talk).toEqual({ temperature: 0.3, maxTokens: 120, deadlineMs: 3000, topP: 0.9 });
     expect(BOSS_SETTINGS.scene).toEqual({ temperature: 0.8, maxTokens: 110, deadlineMs: 3000, topP: 0.9 });
   });
   it('the Hollow Self\'s Talk judge runs cold and pinned; its Turn does not', () => {
-    expect(buildBossPrompt(talkRequest(P('hollow'))).settings).toEqual({ temperature: 0.2, maxTokens: 80, deadlineMs: 3000, topP: 0.9, seed: 1 });
+    expect(buildBossPrompt(talkRequest(P('hollow'))).settings).toEqual({ temperature: 0.2, maxTokens: 120, deadlineMs: 3000, topP: 0.9, seed: 1 });
     const turn = buildBossPrompt(turnRequest(P('hollow'), fight([20, 20, []], [20, 20, []], 1))).settings;
     expect(turn.temperature).toBe(0.8);
     expect('seed' in turn).toBe(false);
-    expect(buildBossPrompt(talkRequest(P('kingpin'))).settings.temperature).toBe(0.8);
+    expect(buildBossPrompt(talkRequest(P('kingpin'))).settings.temperature).toBe(0.3);
   });
 });
 
@@ -389,7 +406,12 @@ describe('Talk trims what it does not need (plan §4 measurement)', () => {
 
 describe('AC-12: the token budget (measured 3.73 chars per token with the real tokenizer)', () => {
   const CHARS_PER_TOKEN = 3.73;
-  const CEILING = 4100;
+  // Judge round 1 (2026-09-29): 4,100 → 4,700 chars (≈ 1,260 tokens). The Talk judge task and each card's
+  // yes/no test cost Talk calls ≈ 150–200 tokens (the Hollow Self's worst case is 4,639 chars ≈ 1,244 tokens;
+  // the first real-model run of the judged shape measured a 1,256-token maximum with the chat template),
+  // while every Turn prompt shrank by moving what-moves-it out of SYSTEM. Against the 4,096-token context
+  // this still leaves more than 2,700 tokens of headroom.
+  const CEILING = 4700;
 
   it('every persona and kind at worst-case inputs stays within the ceiling', () => {
     const report: string[] = [];

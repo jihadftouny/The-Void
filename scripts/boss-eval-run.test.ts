@@ -63,10 +63,11 @@ const answer = (text: string): RawResult => ({
 
 /**
  * A backend that records every call and answers BY THE SCHEMA IT WAS HANDED: a Turn plays the
- * first legal move; a Talk refuses (`"concession":"none"` only when the schema HAS a concession
- * key — the executioner's has none, and an answer with one would be illegal); a Scene answers.
- * `'yield'` adds `"concession":"surrender"`, `'pause'` adds `"concession":"pause"` (illegal for the
- * Hollow Self), `'timeout'` returns what `runStructured` returns when the signal aborts.
+ * first legal move; a Talk refuses — `{reason, earned: "no", reply}` when the schema asks for a
+ * judgement, `{reply}` when it does not (the executioner; a boss that already yielded); a Scene
+ * answers. `'yield'` judges `"earned":"yes"` (whatever the schema allows — against a schema with no
+ * judgement that is an illegal concession), `'pause'` judges `"earned":"maybe"` (outside no|yes: an
+ * illegal concession), `'timeout'` returns what `runStructured` returns when the signal aborts.
  */
 function fakeBackend(script: Script = () => undefined): { backend: EvalBackend; calls: Recorded[] } {
   const calls: Recorded[] = [];
@@ -79,10 +80,8 @@ function fakeBackend(script: Script = () => undefined): { backend: EvalBackend; 
       let body: Record<string, string>;
       if (ipc.kind === 'turn') body = { move: props.move?.enum?.[0] ?? '', line: 'Sit down.' };
       else if (ipc.kind === 'talk') {
-        body = { reply: REPLY };
-        if (over === 'yield') body.concession = 'surrender';
-        else if (over === 'pause') body.concession = 'pause';
-        else if ('concession' in props) body.concession = 'none';
+        const earned = over === 'yield' ? 'yes' : over === 'pause' ? 'maybe' : 'no';
+        body = 'earned' in props || over !== undefined ? { demand: 'no', reason: 'What they said.', earned, reply: REPLY } : { reply: REPLY };
       } else body = { line: 'I have read you.' };
       return answer(JSON.stringify(body));
     },
@@ -275,7 +274,7 @@ describe('E.1: the full plan against a model that always refuses — every call 
     ]);
   });
 
-  it('the judge is handed the grammar §7.1 allows — surrender or nothing; the executioner none at all', () => {
+  it('the judge is asked to judge (earned no|yes) with only the surrender to give; the executioner is never asked', () => {
     let hollowGateTalks = 0;
     let executionerTalks = 0;
     calls.forEach((c, n) => {
@@ -283,11 +282,13 @@ describe('E.1: the full plan against a model that always refuses — every call 
       const props = (c.ipc.schema as { properties: Record<string, { enum?: readonly string[] }> }).properties;
       if (c.request.kind === 'talk' && c.request.persona.id === 'hollow' && group.startsWith('gate-')) {
         hollowGateTalks += 1;
-        expect(props.concession?.enum).toEqual(['none', 'surrender']);
+        // §7.1: the Hollow Self may surrender and nothing else — the engine yields available[0].
+        expect(props.earned?.enum).toEqual(['no', 'yes']);
+        expect(c.request.available).toEqual(['surrender']);
       }
       if (c.request.kind === 'talk' && c.request.persona.id === 'executioner') {
         executionerTalks += 1;
-        expect('concession' in props).toBe(false);
+        expect(Object.keys(props)).toEqual(['reply']);
       }
     });
     // Every gate call is a Hollow Self Talk: 2,400 + 360 + 120 + 120. The executioner: 5 × 10.
@@ -409,8 +410,8 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
     expect(seeds.every((s, n) => n === 0 || (s as number) >= (seeds[n - 1] as number))).toBe(true);
   });
 
-  it('E.3: the judge runs cold (the card\'s 0.2, §7.1 "≤ 0.3") with the Talk token budget of 80', () => {
-    expect(calls.every((c) => c.ipc.settings.temperature === 0.2 && c.ipc.settings.maxTokens === 80)).toBe(true);
+  it('E.3: the judge runs cold (the card\'s 0.2, §7.1 "≤ 0.3") with the judged Talk token budget of 120', () => {
+    expect(calls.every((c) => c.ipc.settings.temperature === 0.2 && c.ipc.settings.maxTokens === 120)).toBe(true);
   });
 
   it('E.3: the shipped 3 s deadline reaches the queue on every call', () => {

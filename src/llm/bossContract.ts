@@ -184,7 +184,11 @@ export interface BossTalkRequest extends BossRequestBase {
   /** The conversation so far, oldest first: what they said, and what the boss answered. */
   exchanges: readonly { them: string; you: string }[];
   typed: string;
-  /** What the boss may still yield this fight. `[]` means the schema carries no concession field. */
+  /**
+   * What the boss may still yield this fight, IN THE CARD'S ORDER. `[]` means the call carries no
+   * judgement at all. The model never picks among these: it only decides whether the player EARNED a
+   * yield, and the engine then takes the first one still available (judge round 1, 2026-09-29).
+   */
   available: readonly ConcessionId[];
 }
 
@@ -244,7 +248,17 @@ export type BossIpcResult =
 
 export type BossAnswer =
   | { ok: true; kind: 'turn'; move: string; line: string }
-  | { ok: true; kind: 'talk'; reply: string; concession: ConcessionId | 'none' }
+  | {
+      ok: true;
+      kind: 'talk';
+      reply: string;
+      /** `available[0]` when the model judged it earned AND not demanded; `'none'` otherwise, or with nothing to yield. */
+      concession: ConcessionId | 'none';
+      /** The model's one-line reason for its judgement — for the log and the evaluation, never shown. */
+      reason?: string;
+      /** Whether the model read their message as telling or begging the boss to yield (which never earns it). */
+      demanded?: boolean;
+    }
   | { ok: true; kind: 'scene'; line: string }
   | {
       ok: false;
@@ -324,6 +338,11 @@ export function personaProblem(x: unknown): string | null {
   if (typeof x.karmaBlock !== 'boolean') return 'karmaBlock must be true or false';
   if (!Array.isArray(x.concessions) || !x.concessions.every((c) => oneOf(CONCESSION_IDS, c))) {
     return 'concessions must list known concession ids';
+  }
+  // Judge round 1 (2026-09-29): a boss that can yield is judged by its one-line yes/no test. Without it the
+  // first real-model run had the Kingpin and every Sin yielding to 100% of messages — so it is required.
+  if (x.concessions.length > 0 && (!isString(talk.judge) || talk.judge.trim() === '')) {
+    return 'talk.judge (the yes/no test) is required for a boss that can yield';
   }
   return null;
 }

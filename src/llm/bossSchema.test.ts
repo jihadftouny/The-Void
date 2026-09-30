@@ -28,11 +28,18 @@ describe('turnSchema', () => {
 });
 
 describe('talkSchema', () => {
-  it('the concession enum is none plus what is still available', () => {
+  it('decide first (judge round 1): demand no|yes, a reason, earned no|yes (no first), then the reply — never a concession id', () => {
     const s = talkSchema(['pause', 'surrender']);
-    expect(s.properties.concession).toEqual({ enum: ['none', 'pause', 'surrender'] });
+    // Key order IS the order the grammar makes the model write them in: judge, then speak.
+    expect(Object.keys(s.properties)).toEqual(['demand', 'reason', 'earned', 'reply']);
+    expect(s.properties.demand).toEqual({ enum: ['no', 'yes'] });
+    expect(s.properties.reason).toEqual({ type: 'string', maxLength: 160 });
+    expect(s.properties.earned).toEqual({ enum: ['no', 'yes'] });
     expect(s.properties.reply).toEqual({ type: 'string', maxLength: 240 });
-    expect(s.required).toEqual(['reply', 'concession']);
+    expect(s.required).toEqual(['demand', 'reason', 'earned', 'reply']);
+    // The ids never reach the model: the schema is the same whatever is still available.
+    expect(talkSchema(['surrender'])).toEqual(s);
+    expect(JSON.stringify(s)).not.toMatch(/pause|surrender|concession/);
   });
 
   it('with nothing available (the executioner; a boss that already yielded) there is NO concession key', () => {
@@ -46,8 +53,10 @@ describe('talkSchema', () => {
     expect(validateAgainst(s, { reply: 'For the altar.' })).toEqual({ ok: true });
   });
 
-  it('a concession not offered is refused', () => {
-    expect(validateAgainst(talkSchema(['pause']), { reply: 'No.', concession: 'surrender' })).toMatchObject({ ok: false });
+  it('a judgement outside no|yes, or an answer naming a concession, is refused', () => {
+    expect(validateAgainst(talkSchema(['pause']), { demand: 'no', reason: 'x', earned: 'maybe', reply: 'No.' })).toMatchObject({ ok: false, key: 'earned' });
+    expect(validateAgainst(talkSchema(['pause']), { demand: 'no', reason: 'x', earned: 'no', reply: 'No.', concession: 'pause' })).toMatchObject({ ok: false, key: 'concession' });
+    expect(validateAgainst(talkSchema(['pause']), { demand: 'no', reason: 'x', earned: 'no', reply: 'No.' })).toEqual({ ok: true });
   });
 });
 

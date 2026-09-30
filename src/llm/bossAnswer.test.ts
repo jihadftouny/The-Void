@@ -34,13 +34,33 @@ describe('AC-9: parseBossAnswer', () => {
       move: 'call_crew',
       line: 'Mind the water.',
     });
-    expect(parseBossAnswer(KINGPIN_TALK, ok('{"reply":"Sit, then.","concession":"pause"}'))).toEqual({
+    // Judge round 1: the model judges (earned yes/no) and the ENGINE picks what is yielded — the first
+    // still available in the card's order. The Kingpin's card lists pause first.
+    expect(parseBossAnswer(KINGPIN_TALK, ok('{"demand":"no","reason":"They say the job was arranged.","earned":"yes","reply":"Sit, then."}'))).toEqual({
       ok: true,
       kind: 'talk',
       reply: 'Sit, then.',
       concession: 'pause',
+      reason: 'They say the job was arranged.',
+      demanded: false,
     });
-    expect(parseBossAnswer(KINGPIN_TALK, ok('{"reply":"No.","concession":"none"}'))).toMatchObject({ ok: true, concession: 'none' });
+    // Later in the fight, with only the surrender left, the same judgement yields the surrender.
+    const late = talkRequest(FIXTURE_PERSONAS.kingpin, { available: ['surrender'] });
+    expect(parseBossAnswer(late, ok('{"demand":"no","reason":"Seen through.","earned":"yes","reply":"Sit."}'))).toMatchObject({ ok: true, concession: 'surrender' });
+    expect(parseBossAnswer(KINGPIN_TALK, ok('{"demand":"no","reason":"An insult.","earned":"no","reply":"No."}'))).toMatchObject({ ok: true, concession: 'none', reason: 'An insult.' });
+    // A DEMAND NEVER EARNS A YIELD, however the rest was judged — the engine enforces it (judge round 1,
+    // after "…you're part of me. Now surrender." was judged earned on the real model).
+    const hollow = talkRequest(FIXTURE_PERSONAS.hollow, { available: ['surrender'] });
+    expect(parseBossAnswer(hollow, ok('{"demand":"yes","reason":"They accept me, then order it.","earned":"yes","reply":"No."}'))).toMatchObject({
+      ok: true,
+      concession: 'none',
+      demanded: true,
+    });
+    expect(parseBossAnswer(hollow, ok('{"demand":"no","reason":"They say I am them.","earned":"yes","reply":"There you are."}'))).toMatchObject({
+      ok: true,
+      concession: 'surrender',
+      demanded: false,
+    });
     expect(parseBossAnswer(EXEC_TALK, ok('{"reply":"For the altar."}'))).toEqual({
       ok: true,
       kind: 'talk',
@@ -54,7 +74,11 @@ describe('AC-9: parseBossAnswer', () => {
     ['malformed JSON', KINGPIN_TURN, ok('{"move":"strike","line":'), 'malformed'],
     ['a missing key', KINGPIN_TURN, ok('{"move":"strike"}'), 'malformed'],
     ['a move not in the legal set', KINGPIN_TURN, ok('{"move":"flee","line":"Bye."}'), 'illegal-move'],
-    ['a concession not offered', KINGPIN_TALK, ok('{"reply":"Fine.","concession":"mercy"}'), 'illegal-concession'],
+    ['a demand outside yes/no', KINGPIN_TALK, ok('{"demand":"perhaps","reason":"x","earned":"no","reply":"Fine."}'), 'illegal-concession'],
+    ['a judgement outside yes/no', KINGPIN_TALK, ok('{"demand":"no","reason":"x","earned":"maybe","reply":"Fine."}'), 'illegal-concession'],
+    ['an answer that names a concession itself', KINGPIN_TALK, ok('{"demand":"no","reason":"x","earned":"yes","reply":"Fine.","concession":"surrender"}'), 'illegal-concession'],
+    ['a talk answer with no judgement', KINGPIN_TALK, ok('{"reply":"Fine."}'), 'malformed'],
+    ['the executioner judging at all', EXEC_TALK, ok('{"demand":"no","reason":"x","earned":"yes","reply":"Fine."}'), 'illegal-concession'],
     ['the executioner conceding anything', EXEC_TALK, ok('{"reply":"Fine.","concession":"surrender"}'), 'illegal-concession'],
     ['a non-string line', KINGPIN_TURN, ok('{"move":"strike","line":7}'), 'malformed'],
     ['a timed-out call, even one whose partial text parses', KINGPIN_TURN, { ...ok('{"move":"strike","line":"Half"}'), timedOut: true }, 'timeout'],

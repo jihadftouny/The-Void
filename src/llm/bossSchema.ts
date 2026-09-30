@@ -39,6 +39,11 @@ export interface BossAnswerSchema {
 export const LINE_MAX_CHARS = 220;
 export const REPLY_MAX_CHARS = 240;
 export const SCENE_MAX_CHARS = 320;
+/** The Talk judge's one-line reason (≈ 25 words). */
+export const REASON_MAX_CHARS = 160;
+
+/** A Talk judgement's two answers, `no` FIRST: the default a 4B model falls back on is the safe one. */
+export const EARNED_VALUES = ['no', 'yes'] as const;
 
 function objectSchema(properties: Record<string, PropertySchema>): BossAnswerSchema {
   return { type: 'object', properties, required: Object.keys(properties), additionalProperties: false };
@@ -53,15 +58,27 @@ export function turnSchema(legalIds: readonly string[]): BossAnswerSchema {
 }
 
 /**
- * Talk: `{ reply, concession: 'none' | <still available> }`. With nothing available — the
- * executioner, or a boss that has already yielded this fight — there is NO concession key at
- * all, so the model cannot even write "none" and nothing can be mistaken for a yield.
+ * Talk: DECIDE FIRST, then speak — `{ demand, reason, earned, reply }`, each judgement "no" | "yes" (judge round 1,
+ * 2026-09-29). The first real-model run showed the old `{ reply, concession }` shape had no step in
+ * which the model decided whether the player earned anything: it wrote a line, then picked from the
+ * enum (the Kingpin and every Sin yielded to 100% of messages, rude and empty ones included). Now it
+ * first answers one simple question — did they tell or beg you to yield (`demand`)? — then states its
+ * reason, then whether they earned it, and never sees a concession id. The ENGINE yields the first one
+ * still available only when `earned` is yes AND `demand` is no (`parseBossAnswer`): "a demand earns
+ * nothing" is enforced, not hoped for. (The second real-model run showed why: one compound question —
+ * "accepts me, and is not a demand" — let "…you're part of me. Now surrender." through.) With nothing available — the executioner, or a boss that has
+ * already yielded this fight — there is no judgement at all: `{ reply }`.
  */
 export function talkSchema(available: readonly string[]): BossAnswerSchema {
   const reply: StringSchema = { type: 'string', maxLength: REPLY_MAX_CHARS };
   return available.length === 0
     ? objectSchema({ reply })
-    : objectSchema({ reply, concession: { enum: ['none', ...available] } });
+    : objectSchema({
+        demand: { enum: [...EARNED_VALUES] },
+        reason: { type: 'string', maxLength: REASON_MAX_CHARS },
+        earned: { enum: [...EARNED_VALUES] },
+        reply,
+      });
 }
 
 /** Scene (the Warden): `{ line }`, longer. */

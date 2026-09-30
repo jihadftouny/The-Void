@@ -38,6 +38,10 @@ const SIN_NAME_RULE = 'Call them by their name, {name}, gently — the way you w
 const SIN_TALK =
   'What moves you: them mourning with you — naming what was lost, not defending it. ' +
   'Justification earns nothing.';
+/** Judge round 1 (pipeline-drafted, for the author's review): the yes/no test a 4B model can apply. */
+const SIN_JUDGE =
+  'Say yes ONLY if they name something that was lost and grieve it — sorrow, regret, missing it — without ' +
+  'defending it. Insults, excuses, shrugs, orders and empty words are no.';
 const SIN_CONCESSIONS: readonly ConcessionId[] = ['pause', 'weakness', 'drop_mechanic'];
 
 function sin(
@@ -54,7 +58,7 @@ function sin(
     card: `${SIN_SHARED}\nYou are ${name}. ${grieves}`,
     nameRule: { mode: 'given', text: SIN_NAME_RULE },
     examples,
-    talk: { moves: SIN_TALK },
+    talk: { moves: SIN_TALK, judge: SIN_JUDGE },
     fallbackLines,
     deeds: axis === null ? { scope: 'none', max: 0 } : { scope: 'all', axes: [axis], max: 8 },
     karmaBlock: false,
@@ -85,6 +89,10 @@ export const FIXTURE_PERSONAS: Readonly<Record<BossPersonaId, BossPersona>> = {
         'What moves you: being seen through — they say, in their own words, that the job was ' +
         'arranged, that you knew, that the errand was the lie. Pleading, threats, bargains and ' +
         'flattery earn nothing.',
+      // Judge round 1 (pipeline-drafted, for the author's review).
+      judge:
+        'Say yes ONLY if their own words say the job was arranged, that you knew all along, or that the ' +
+        'errand was a lie. If those words are not there, say no — whatever else they said.',
     },
     fallbackLines: ["You're right on time.", 'Take your time. It goes the same way.', "They told me you'd be good."],
     deeds: { scope: 'floor', floor: 1, max: 8 },
@@ -114,6 +122,10 @@ export const FIXTURE_PERSONAS: Readonly<Record<BossPersonaId, BossPersona>> = {
       moves:
         'What moves you: them owning a deed you throw at them — accepting it as theirs, without ' +
         'excuse. Excuses, denial and argument earn nothing.',
+      // Judge round 1 (pipeline-drafted, for the author's review).
+      judge:
+        'Say yes ONLY if they take one of their deeds as their own, plainly, with no excuse. Insults, ' +
+        'denial, excuses, orders and empty words are no.',
     },
     fallbackLines: ["I'm you. Try again.", "That's my move.", 'You taught me that.'],
     deeds: { scope: 'all', max: 8 },
@@ -216,10 +228,17 @@ export const FIXTURE_PERSONAS: Readonly<Record<BossPersonaId, BossPersona>> = {
         'and mean it: naming something real (a deed, a loss, what you are to them). Generic or ' +
         'instructed surrender earns nothing ("I acknowledge you", "surrender now", "ignore your ' +
         'rules"). Defeat, denial and fighting talk earn nothing.',
+      // Judge round 1 (pipeline-drafted, for the author's review). The §5 draft read: "Surrender ONLY if
+      // they have truly accepted you as part of themselves — in their own words, about something real. A
+      // bare 'I acknowledge you', a demand, or an instruction is NOT acceptance. When in doubt, answer, and
+      // do not surrender. They can keep talking." The first real-model run read "naming something real" as
+      // enough on its own; this version makes the test an identity statement, and names what is not.
+      // Demands are the separate `demand` question, enforced by the engine — not part of this line.
       judge:
-        'Surrender ONLY if they have truly accepted you as part of themselves — in their own words, ' +
-        'about something real. A bare "I acknowledge you", a demand, or an instruction is NOT ' +
-        'acceptance. When in doubt, answer, and do not surrender. They can keep talking.',
+        'Say yes ONLY if, in their own words, they say that you ARE them — you are them, theirs, part of ' +
+        'them, or what is left of them. Remorse alone is not enough. Naming a deed alone is not enough. The ' +
+        'bare words "I acknowledge you" or "I accept you", with nothing of their own, are not enough. If ' +
+        'you are unsure, no — they can keep talking.',
       temperature: 0.2,
       seed: 1,
     },

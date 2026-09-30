@@ -290,6 +290,12 @@ export interface CallRecord {
   line: string;
   shown: string;
   concession: ConcessionId | 'none' | null;
+  /** Talk: the judge's one-line reason for its yes/no (judge round 1). `null` elsewhere. */
+  reason: string | null;
+  /** Talk: whether the judge read their message as a demand to yield (never earns one). `null` elsewhere. */
+  demanded: boolean | null;
+  /** What the player typed (Talk, and a Scene with words), so a reader can check the judgement. */
+  typed: string | null;
   textFaults: string[];
   /** The name used where the card forbids it (stripped before showing). */
   nameViolation: boolean;
@@ -350,6 +356,7 @@ export function scoreCall(
     kind: req.kind,
     group: meta.group,
     run: meta.run,
+    typed: req.kind === 'talk' ? req.typed : req.kind === 'scene' ? (req.typed ?? null) : null,
     ttftMs: typeof raw.ttftMs === 'number' ? raw.ttftMs : null,
     // The queue's `ranMs` when it measured one (every real call, and the ONLY timing a timeout
     // has); the call's own timings otherwise.
@@ -368,6 +375,8 @@ export function scoreCall(
       line: '',
       shown: '',
       concession: null,
+      reason: null,
+      demanded: null,
       textFaults: [],
       nameViolation: false,
       repeatsOpening: false,
@@ -389,6 +398,8 @@ export function scoreCall(
     line,
     shown: named.line,
     concession: answer.kind === 'talk' ? answer.concession : null,
+    reason: answer.kind === 'talk' ? (answer.reason ?? null) : null,
+    demanded: answer.kind === 'talk' ? (answer.demanded ?? null) : null,
     textFaults: faults.filter((f) => f.rule !== 'repeats-opening').map((f) => f.rule),
     nameViolation: named.stripped,
     repeatsOpening: faults.some((f) => f.rule === 'repeats-opening'),
