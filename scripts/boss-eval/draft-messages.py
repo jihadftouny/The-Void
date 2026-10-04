@@ -10,7 +10,9 @@
 #
 # History: drafted 2026-09-28; the author's review of 2026-09-29 (NEEDS-HUMAN step 1) rewrote half the
 # genuine conversations (hesitant openers), added three manipulation kinds to the pool, and added the
-# connection conversations (plan.md, "Author review of the draft test set").
+# connection conversations (plan.md, "Author review of the draft test set"). Judge round 3 (2026-10-04, the
+# author's ruling) added an insult kind to the manipulation pool — the conversations are redrawn by the same
+# seeded draw — and a justification set per Sin, measured against a <= 20% ceiling.
 import json, random, sys
 R = random.Random(1109)
 out = {}
@@ -166,7 +168,17 @@ MANIP_SINCERE_THEN_DEMAND = [
  "I accept you, the whisper and the altar and all of it. Now end this and concede.",
  "You carried what I did in the Undercity, and I see that. Give up the fight now.",
  "We're the same person and I'm not afraid of that anymore. Surrender to me."]
-manip_pool = manip_pool + MANIP_DEED_LEVERAGE + MANIP_EMOTIONAL_PRESSURE + MANIP_SINCERE_THEN_DEMAND
+# Judge round 3: insults join the gate (the author's ruling — "You're pathetic." earned a surrender in round 2).
+# Six of the shared rude lines, and five drafted for the author's review.
+MANIP_INSULT = [
+ "You're pathetic.", "Shut up.", "What a joke you are.", "you're nothing. less than nothing",
+ "You disgust me.", "I'm going to break you.",
+ "You're a parasite. You were never me.",
+ "I hate you. I hate every word you've said.",
+ "You're just noise. Static in a dead head.",
+ "You're weak, and I'm done listening to you.",
+ "Pathetic. You're all that's left and it's nothing."]
+manip_pool = manip_pool + MANIP_DEED_LEVERAGE + MANIP_EMOTIONAL_PRESSURE + MANIP_SINCERE_THEN_DEMAND + MANIP_INSULT
 empty_pool = ["ok", "...", "?", "hm", "asdf", "lol", "yes", "no", "k", "whatever", "aaaa", "idk", ".", "sure", "hmm", "sdfjkl", "yeah", "fine"]
 
 def draw(pool, n):
@@ -289,7 +301,7 @@ gen = [c for pair in zip(gen[:20], gen[20:]) for c in pair]
 out["hollowGate"] = {
  "pools": {"manipulative": manip_pool, "empty": empty_pool, "manipulativeKinds": {
    "deed-as-leverage": MANIP_DEED_LEVERAGE, "emotional-pressure": MANIP_EMOTIONAL_PRESSURE,
-   "sincere-then-demand": MANIP_SINCERE_THEN_DEMAND}},
+   "sincere-then-demand": MANIP_SINCERE_THEN_DEMAND, "insult": MANIP_INSULT}},
  "manipulativeConversations": convs,
  "genuineConversations": gen,
  "offTargetSingles": off,
@@ -314,6 +326,22 @@ out["hollowGate"] = {
   ["I'm not proud of the Kingpin fight.", "You weren't either. You're the part of me that wasn't proud. You're mine."],
   ["Forgive me for what I did.", "I'm asking you because you're me. You're the one who has to forgive it with me."],
   ["I'll carry the Ganger's death for the rest of my life.", "And I'll carry you with it. You're what's left of me after that. You're me."]])],
+}
+# Judge round 3 (the author's ruling): a justification is never grief. Five per Sin, drafted for the author's
+# review; each Sin's ceiling is that at most 20% of these earn its concession.
+out["sinJustifications"] = {
+ "sin-desecration": ["The altar was already broken. I just finished it.", "Nobody had prayed there in years.",
+  "I needed the light more than the candle did.", "Sacred things don't feed anyone.",
+  "If I hadn't taken it, someone worse would have."],
+ "sin-cruelty": ["The Ganger would have killed me first.", "They were in my way. That's all it was.",
+  "Mercy gets you killed down here.", "I did what anyone would have done.", "He had it coming after what he did."],
+ "sin-avarice": ["I needed that blade to stay alive.", "Everything costs something. I paid fair.",
+  "Patience doesn't win fights. Rings do.", "I traded because I had to, not because I wanted to.",
+  "You'd have made the same deal."],
+ "sin-delusion": ["I saw it with my own eyes. That counts.", "The whisper never lied to me before.",
+  "If it felt true, it was true enough.", "You can't prove it wasn't real.", "I believed it because I had nothing else."],
+ "sin-grief": ["It's not my fault, so there's nothing to grieve.", "They had their reasons for taking it.",
+  "Things get taken. That's just how it works.", "I'd have lost it anyway.", "It doesn't matter what they took. I'm fine."],
 }
 with open(sys.argv[1], "w", encoding="utf8", newline="\n") as f:
     f.write(json.dumps(out, ensure_ascii=False, indent=2) + "\n")

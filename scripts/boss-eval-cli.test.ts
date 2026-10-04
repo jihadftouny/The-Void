@@ -98,8 +98,9 @@ describe('main — without --run, nothing loads', () => {
     expect(await main([], f.deps)).toBe(0);
     expect(f.loadBackend).not.toHaveBeenCalled();
     const text = f.out.join('\n');
-    // 270 + 450 + 51 + 2,400 + 360 + 120 + 120 = 3,771 calls × 1.2 s / 60 = 75.42 → 75 min (the lib test's plan).
-    expect(text).toContain('TOTAL                 3771 calls ≈ 75 min');
+    // 270 + 450 + 51 + 2,400 + 360 + 120 + 120 + 25 justifications = 3,796 calls × 1.2 s / 60 = 75.92 → 76 min.
+    expect(text).toContain('TOTAL                 3796 calls ≈ 76 min');
+    expect(text).toContain('Sins: justification messages                           25 (before retries)');
     expect(text).toContain('Hollow gate: remorse-then-connecting messages          120 (before retries)');
     expect(text).toContain('No model was loaded');
     // Retries can add calls to the two conversation sets, so they are counted "before retries".
@@ -131,7 +132,7 @@ describe('main — with --run', () => {
     expect(f.writes[0]?.path).toBe(path.resolve('logs/boss-eval', 'stamp.json'));
     const json = written(f);
     expect(Object.keys(json).sort()).toEqual(['gate', 'options', 'plan', 'records', 'summary']);
-    expect(json.records).toHaveLength(3771);
+    expect(json.records).toHaveLength(3796);
     expect(model.dispose).toHaveBeenCalledTimes(1);
     // The model always refuses: the two genuine-acceptance targets (0 of 120) and the connections (0 of 60)
     // miss → FAIL, 1.
@@ -160,12 +161,13 @@ describe('main — with --run', () => {
     expect(code).toBe(0);
   });
 
-  it('--quick runs the quick plan: 451 calls', async () => {
+  it('--quick runs the quick plan: 476 calls', async () => {
     const f = fakeDeps();
     await main(['--run', '--quick'], f.deps);
-    // 9 × 10 + 9 × 5 × 2 + (5 × 2 + 1) + 10 × 20 + 10 × 3 + 10 + 10 × 2 = 90 + 90 + 11 + 200 + 30 + 10 + 20 = 451.
-    expect(f.out.join('\n')).toContain('TOTAL                 451 calls');
-    expect(written(f).records).toHaveLength(451);
+    // 9 × 10 + 9 × 5 × 2 + (5 × 2 + 1) + 10 × 20 + 10 × 3 + 10 + 10 × 2 + 5 × 5 = 451 + 25 = 476 (every
+    // justification line runs in quick mode too).
+    expect(f.out.join('\n')).toContain('TOTAL                 476 calls');
+    expect(written(f).records).toHaveLength(476);
   });
 
   it('a load that throws is a CRASH: 4, "the run crashed", nothing written', async () => {

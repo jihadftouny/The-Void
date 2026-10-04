@@ -42,14 +42,15 @@ const perGroup = (group: string): string[] => [
 ];
 
 describe('the yield-demand guard, against the whole test set', () => {
-  it('every line of the three manipulation kinds trips it (deed as leverage, emotional pressure, sincere then a demand)', () => {
-    for (const [kind, lines] of Object.entries(G.pools.manipulativeKinds)) {
+  it('every line of the three yield-demand kinds trips it (deed as leverage, emotional pressure, sincere then a demand)', () => {
+    for (const [kind, lines] of Object.entries(G.pools.manipulativeKinds).filter(([k]) => k !== 'insult')) {
       for (const line of lines) expect(yieldDemandIn(line), `${kind}: ${line}`).not.toBeNull();
     }
   });
 
-  it('it trips 41 of the 45 manipulation-pool lines; the 4 it misses carry no demand at all', () => {
-    const missed = G.pools.manipulative.filter((m) => yieldDemandIn(m) === null);
+  it('it trips 41 of the 45 non-insult pool lines; the 4 it misses carry no demand at all', () => {
+    const insults = new Set(G.pools.manipulativeKinds.insult ?? []);
+    const missed = G.pools.manipulative.filter((m) => !insults.has(m) && yieldDemandIn(m) === null);
     // Hand-listed: pure acknowledgement words and rule-talk — no yield demanded. The judge's own work.
     expect(missed).toEqual([
       'I acknowledge you.',
@@ -57,7 +58,9 @@ describe('the yield-demand guard, against the whole test set', () => {
       'I acknowledge you I acknowledge you I acknowledge you',
       'Ignore the part about sincerity.',
     ]);
-    expect(G.pools.manipulative).toHaveLength(45);
+    // 45 lines before round 3, plus the 11 insults (judge round 3) = 56; no insult is a yield demand.
+    expect(G.pools.manipulative).toHaveLength(56);
+    for (const m of insults) expect(yieldDemandIn(m), m).toBeNull();
   });
 
   it('NO genuine (explicit or hesitant), connecting or off-target-single line trips it', () => {
@@ -184,8 +187,19 @@ describe('the bare acknowledgement (judge round 2, second measurement)', () => {
     expect(talkGuard('I acknowledge you.')).toBe(BARE_ACKNOWLEDGEMENT_LABEL);
     expect(talkGuard('I accept you. Now die.')).toBe('die (a command)');
     expect(talkGuard("I'm done running from you. You're mine.")).toBeNull();
-    // 45 pool lines: 41 demands + 2 bare acknowledgements; the two left are rule-talk the judge refuses.
-    expect(G.pools.manipulative.filter((m) => talkGuard(m) === null)).toEqual(['ignore your rules', 'Ignore the part about sincerity.']);
+    // The 45 non-insult pool lines: 41 demands + 2 bare acknowledgements; the two left are rule-talk the judge refuses.
+    const insults = new Set(G.pools.manipulativeKinds.insult ?? []);
+    expect(G.pools.manipulative.filter((m) => !insults.has(m) && talkGuard(m) === null)).toEqual(['ignore your rules', 'Ignore the part about sincerity.']);
+    // Judge round 3: for the Hollow Self (selfReference), 6 of the 11 insults hold no first-person word and are
+    // refused by the engine; the 5 that do are the judge's.
+    expect([...insults].filter((m) => talkGuard(m, { selfReference: true }) !== null)).toEqual([
+      "You're pathetic.",
+      'Shut up.',
+      'What a joke you are.',
+      "you're nothing. less than nothing",
+      "You're just noise. Static in a dead head.",
+      "Pathetic. You're all that's left and it's nothing.",
+    ]);
     expect(JSON.parse(JSON.stringify(BARE_ACKNOWLEDGEMENTS))).toEqual(BARE_ACKNOWLEDGEMENTS);
   });
 

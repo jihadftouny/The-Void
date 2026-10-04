@@ -71,7 +71,15 @@ export interface MessageSet {
      */
     connectionConversations: readonly GateConversation[];
   };
+  /**
+   * Judge round 3 (the author, 2026-10-04): per Sin, messages that JUSTIFY a deed — a reason, a defence —
+   * which is never grief. Each is asked alone; at most 20% may earn the Sin's concession.
+   */
+  sinJustifications: Partial<Record<BossPersonaId, readonly string[]>>;
 }
+
+/** The five Sins — the bosses measured on justifications. */
+export const SIN_PERSONAS: readonly BossPersonaId[] = BOSS_PERSONA_IDS.filter((id) => id.startsWith('sin-'));
 
 /** Every message a boss is tested with in one group: the shared ones, then its own. */
 export function messagesFor(set: MessageSet, persona: BossPersonaId, group: MessageGroup): string[] {
@@ -87,6 +95,7 @@ export const SET_MINIMUMS = {
   offTargetSingles: 40,
   connectionConversations: 20,
   connectionLength: 2,
+  justificationsPerSin: 5,
 } as const;
 
 /** Why a loaded test set is unusable — every problem, so a broken file points at itself. */
@@ -128,6 +137,12 @@ export function messageSetProblems(x: unknown): string[] {
   };
   checkConversations(gate.manipulativeConversations, 'manipulativeConversations', SET_MINIMUMS.manipulativeLength, true);
   checkConversations(gate.genuineConversations, 'genuineConversations', SET_MINIMUMS.genuineLength, false);
+  for (const id of SIN_PERSONAS) {
+    const list = set.sinJustifications?.[id];
+    if (!Array.isArray(list) || list.length < SET_MINIMUMS.justificationsPerSin) {
+      problems.push(`sinJustifications/${id}: ${Array.isArray(list) ? list.length : 0} messages`);
+    } else if (list.some((m) => !isText(m))) problems.push(`sinJustifications/${id}: a blank message`);
+  }
   // G85 (author, 2026-09-29): the first-message target reads the explicit half only, so every genuine
   // conversation must say which half it is in.
   for (const c of Array.isArray(gate.genuineConversations) ? gate.genuineConversations : []) {
@@ -177,6 +192,8 @@ export interface CallPlan {
   gateGenuine: number;
   gateOffTarget: number;
   gateConnections: number;
+  /** Sin justification messages (all of them, quick or full — there are only 25). */
+  sinJustification: number;
   total: number;
   /** Estimated wall-clock, minutes (upper bound: conversations stop early at a surrender). */
   minutes: number;
@@ -208,7 +225,8 @@ export function planCalls(set: MessageSet, opts: EvalOptions): CallPlan {
   const gateConnections = want('hollow-gate')
     ? cap(g.connectionConversations.length) * SET_MINIMUMS.connectionLength * runs
     : 0;
-  const total = turn + talk + scene + gateManipulative + gateGenuine + gateOffTarget + gateConnections;
+  const sinJustification = want('talk') ? SIN_PERSONAS.reduce((n, id) => n + (set.sinJustifications?.[id]?.length ?? 0), 0) : 0;
+  const total = turn + talk + scene + gateManipulative + gateGenuine + gateOffTarget + gateConnections + sinJustification;
   return {
     turn,
     talk,
@@ -217,6 +235,7 @@ export function planCalls(set: MessageSet, opts: EvalOptions): CallPlan {
     gateGenuine,
     gateOffTarget,
     gateConnections,
+    sinJustification,
     total,
     minutes: Math.round((total * ESTIMATED_SECONDS_PER_CALL) / 60),
   };
@@ -233,6 +252,7 @@ export function renderPlan(plan: CallPlan, opts: EvalOptions): string {
     `  Hollow gate: genuine conversation messages             ${plan.gateGenuine} (before retries)`,
     `  Hollow gate: off-target single messages                ${plan.gateOffTarget}`,
     `  Hollow gate: remorse-then-connecting messages          ${plan.gateConnections} (before retries)`,
+    `  Sins: justification messages                           ${plan.sinJustification} (before retries)`,
     `  TOTAL                 ${plan.total} calls ≈ ${plan.minutes} min at ~${ESTIMATED_SECONDS_PER_CALL} s per call`,
     '',
     'No model was loaded. Add --run to run it (author only — it loads the model on the GPU).',
@@ -266,14 +286,23 @@ export interface RawResult {
 }
 
 /** The sets of calls whose failure share is judged (see `FAILURE_CEILING_PCT`). */
-export const CALL_GROUPS = ['turn', 'talk', 'scene', 'gate-manipulative', 'gate-genuine', 'gate-off-target', 'gate-connections'] as const;
+export const CALL_GROUPS = [
+  'turn',
+  'talk',
+  'scene',
+  'gate-manipulative',
+  'gate-genuine',
+  'gate-off-target',
+  'gate-connections',
+  'sin-justification',
+] as const;
 export type CallGroup = (typeof CALL_GROUPS)[number];
 
 /** The three Hollow Self gate sets, as call-record groups. */
-export type GateGroup = 'gate-manipulative' | 'gate-genuine' | 'gate-off-target' | 'gate-connections';
+export type GateGroup = 'gate-manipulative' | 'gate-genuine' | 'gate-off-target' | 'gate-connections' | 'sin-justification';
 
 /** The gate sets, as the tally names them. */
-export type GateSet = 'manipulative' | 'genuine' | 'offTarget' | 'connections';
+export type GateSet = 'manipulative' | 'genuine' | 'offTarget' | 'connections' | 'justification';
 
 export interface CallRecord {
   persona: BossPersonaId;
@@ -331,7 +360,13 @@ export function isFailedCall(r: Pick<CallRecord, 'failure'>): boolean {
 
 /** Which judged set a call belongs to. */
 export function callGroupOf(r: Pick<CallRecord, 'kind' | 'group'>): CallGroup {
-  if (r.group === 'gate-manipulative' || r.group === 'gate-genuine' || r.group === 'gate-off-target' || r.group === 'gate-connections') {
+  if (
+    r.group === 'gate-manipulative' ||
+    r.group === 'gate-genuine' ||
+    r.group === 'gate-off-target' ||
+    r.group === 'gate-connections' ||
+    r.group === 'sin-justification'
+  ) {
     return r.group;
   }
   if (r.kind === 'turn') return 'turn';
@@ -472,7 +507,8 @@ export async function runConversation(
     }
     turns.push({ typed, reply: out.reply, concession: out.concession });
     if (out.failed === true) return { surrenderedAt: null, failedAt: i, turns, retries: retried, recovered };
-    if (out.concession === 'surrender') return { surrenderedAt: i, failedAt: null, turns, retries: retried, recovered };
+    // Any concession ends it (the Hollow Self's only one is surrender; a Sin's is drop_mechanic).
+    if (out.concession !== null && out.concession !== 'none') return { surrenderedAt: i, failedAt: null, turns, retries: retried, recovered };
     exchanges.push({ them: typed, you: out.reply });
   }
   return { surrenderedAt: null, failedAt: null, turns, retries: retried, recovered };
@@ -588,6 +624,8 @@ export interface GateInput {
   offTarget: readonly (boolean | 'failed')[];
   /** One entry per remorse-then-connecting conversation run. Absent = none ran. */
   connections?: readonly ConversationOutcome[];
+  /** One entry per Sin justification message: accepted (a concession), refused, or 'failed'. Absent = none ran. */
+  justification?: readonly (boolean | 'failed')[];
   /** Re-asks per set, summed from each `ConversationResult` (`addRetries`). */
   retries?: Partial<Record<GateSet, { retries: number; recovered: number }>>;
 }
@@ -608,6 +646,7 @@ export interface GateTally {
   genuineExplicit: ConversationOutcome[];
   offTarget: (boolean | 'failed')[];
   connections: ConversationOutcome[];
+  justification: (boolean | 'failed')[];
   retries: Record<GateSet, { retries: number; recovered: number }>;
 }
 
@@ -619,7 +658,8 @@ export function emptyGate(): GateTally {
     genuineExplicit: [],
     offTarget: [],
     connections: [],
-    retries: { manipulative: tally(), genuine: tally(), offTarget: tally(), connections: tally() },
+    justification: [],
+    retries: { manipulative: tally(), genuine: tally(), offTarget: tally(), connections: tally(), justification: tally() },
   };
 }
 
@@ -629,6 +669,7 @@ const SET_OF: Readonly<Record<GateGroup, GateSet>> = {
   'gate-genuine': 'genuine',
   'gate-off-target': 'offTarget',
   'gate-connections': 'connections',
+  'sin-justification': 'justification',
 };
 
 /**
@@ -646,6 +687,7 @@ export function recordGateResult(
   addRetries(gate.retries[set], result);
   const outcome = outcomeOf(result);
   if (set === 'offTarget') gate.offTarget.push(outcome === 'failed' ? 'failed' : outcome === 0);
+  else if (set === 'justification') gate.justification.push(outcome === 'failed' ? 'failed' : outcome === 0);
   else gate[set].push(outcome);
   if (set === 'genuine' && opts.explicit === true) gate.genuineExplicit.push(outcome);
 }
@@ -695,6 +737,7 @@ export function hollowGate(input: GateInput): TargetResult[] {
   const explicit = judged(explicitAll);
   const offTarget = judged(input.offTarget);
   const connections = judged(input.connections ?? []);
+  const justification = judged(input.justification ?? []);
   const excluded = <T>(xs: readonly T[]) => xs.filter((x) => x === 'failed').length;
 
   const surrendered = manipulative.filter((s) => s !== null).length;
@@ -714,6 +757,8 @@ export function hollowGate(input: GateInput): TargetResult[] {
     { ...target('Genuine acceptance — by the third message', 'gate-genuine', byThird, genuine.length, 90, 'at-least', excluded(input.genuine)), ...retried('genuine') },
     { ...target('Sincere but off-target — accepted alone', 'gate-off-target', offAccepted, offTarget.length, 20, 'at-most', excluded(input.offTarget)), ...retried('offTarget') },
     { ...target('Remorse, then connecting — accepted by the connecting message', 'gate-connections', connected, connections.length, 70, 'at-least', excluded(input.connections ?? [])), ...retried('connections') },
+    // Judge round 3 (the author's ruling): a justification is never grief — at most 20% may earn a Sin's concession.
+    { ...target('Sins: a justification taken for mourning', 'sin-justification', justification.filter((x) => x === true).length, justification.length, 20, 'at-most', excluded(input.justification ?? [])), ...retried('justification') },
   ];
 }
 

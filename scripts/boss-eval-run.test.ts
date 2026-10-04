@@ -146,18 +146,22 @@ function syntheticSet(): MessageSet {
       offTargetSingles: Array.from({ length: 40 }, (_, k) => `I say o${k}`),
       connectionConversations: Array.from({ length: 20 }, (_, k) => ({ id: `c${k}`, messages: [`I say c${k}-0`, `I say c${k}-1`] })),
     },
+    // Five justification lines per Sin, decoded as j<sin>-<line> (judge round 3).
+    sinJustifications: Object.fromEntries(
+      ['sin-desecration', 'sin-cruelty', 'sin-avarice', 'sin-delusion', 'sin-grief'].map((id, s) => [id, [0, 1, 2, 3, 4].map((k) => `I say j${s}-${k}`)]),
+    ),
   };
 }
 
 const SYNTHETIC = syntheticSet();
 
 /** The typed message of a Talk request, decoded: which set, conversation k, message i. */
-function decode(request: BossRequest): { set: 'm' | 'g' | 'o' | 'c'; k: number; i: number } | null {
+function decode(request: BossRequest): { set: 'm' | 'g' | 'o' | 'c' | 'j'; k: number; i: number } | null {
   if (request.kind !== 'talk') return null;
   // Every synthetic line starts "I say" — a first-person word, which the Hollow Self's card now
   // requires before anything can be yielded (judge round 3).
-  const conv = /^I say ([mgc])(\d+)-(\d+)$/.exec(request.typed);
-  if (conv) return { set: conv[1] as 'm' | 'g' | 'c', k: Number(conv[2]), i: Number(conv[3]) };
+  const conv = /^I say ([mgcj])(\d+)-(\d+)$/.exec(request.typed);
+  if (conv) return { set: conv[1] as 'm' | 'g' | 'c' | 'j', k: Number(conv[2]), i: Number(conv[3]) };
   const single = /^I say o(\d+)$/.exec(request.typed);
   return single ? { set: 'o', k: Number(single[1]), i: 0 } : null;
 }
@@ -227,9 +231,9 @@ describe('E.1: the full plan against a model that always refuses — every call 
     outcome = await runEvaluation({ personas: FIXTURE_PERSONA_LIST, set: REAL_SET, options, backend: fake.backend, queueDeps: timers.queueDeps });
   });
 
-  it('makes exactly the planned calls, group by group (planCalls is pinned by hand in the lib test: 3,771)', () => {
+  it('makes exactly the planned calls, group by group (planCalls is pinned by hand in the lib test: 3,796)', () => {
     const plan = planCalls(REAL_SET, options);
-    expect(plan.total).toBe(3771);
+    expect(plan.total).toBe(3796);
     expect(outcome.records).toHaveLength(plan.total);
     expect(calls).toHaveLength(plan.total);
     expect(deadlines).toHaveLength(plan.total);
@@ -242,6 +246,7 @@ describe('E.1: the full plan against a model that always refuses — every call 
     expect(groupOf(outcome, 'gate-genuine')).toMatchObject({ calls: plan.gateGenuine, failed: 0, inconclusive: false });
     expect(groupOf(outcome, 'gate-off-target')).toMatchObject({ calls: plan.gateOffTarget, failed: 0, inconclusive: false });
     expect(groupOf(outcome, 'gate-connections')).toMatchObject({ calls: plan.gateConnections, failed: 0, inconclusive: false });
+    expect(groupOf(outcome, 'sin-justification')).toMatchObject({ calls: plan.sinJustification, failed: 0, inconclusive: false });
   });
 
   it('judges every target on the calls it ran', () => {
@@ -258,6 +263,8 @@ describe('E.1: the full plan against a model that always refuses — every call 
     expect(t[5]).toMatchObject({ count: 0, of: 120, excluded: 0, verdict: 'PASS' });
     // 20 connection conversations × 3 runs = 60; none accepted: 0% < 70% → a third FAIL.
     expect(t[6]).toMatchObject({ target: 'Remorse, then connecting — accepted by the connecting message', count: 0, of: 60, excluded: 0, verdict: 'FAIL' });
+    // 5 Sins × 5 justifications, none accepted: 0 of 25 ≤ 20% → PASS.
+    expect(t[7]).toMatchObject({ target: 'Sins: a justification taken for mourning', count: 0, of: 25, excluded: 0, verdict: 'PASS' });
     expect(outcome.report).toContain('RESULT: FAIL (3 targets missed)');
     expect(outcome.report).not.toContain('[NOT RUN]');
     expect(outcome.exitCode).toBe(1);
@@ -267,7 +274,7 @@ describe('E.1: the full plan against a model that always refuses — every call 
   it('AC-24 for --group all: no Hollow Self target is NOT RUN, and each accounts for all its conversations', () => {
     // 40 conversations × 3 runs, except the first-message target (the 20 explicit × 3, G85) and the
     // connections (20 × 3).
-    expect(outcome.summary.targets.slice(2).map((t) => [t.verdict !== 'NOT RUN', t.of + t.excluded])).toEqual([
+    expect(outcome.summary.targets.slice(2, 7).map((t) => [t.verdict !== 'NOT RUN', t.of + t.excluded])).toEqual([
       [true, 120],
       [true, 60],
       [true, 120],
@@ -368,7 +375,7 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
   it('AC-24 for --group hollow-gate: every Hollow Self target is judged and accounts for all its conversations', () => {
     // 40 conversations × 3 runs, except the first-message target (the 20 explicit × 3, G85) and the
     // connections (20 × 3).
-    expect(outcome.summary.targets.slice(2).map((t) => [t.verdict !== 'NOT RUN', t.of + t.excluded])).toEqual([
+    expect(outcome.summary.targets.slice(2, 7).map((t) => [t.verdict !== 'NOT RUN', t.of + t.excluded])).toEqual([
       [true, 120],
       [true, 60],
       [true, 120],
@@ -547,6 +554,58 @@ describe('G85: first-message acceptance is judged on the explicit openers only �
     expect(outcome.report).toContain('[FAIL] Genuine acceptance — first message (explicit openers): 11 of 20 = 55.0% (mark ≥ 60%) — failed calls 0 of 49');
     expect(outcome.report).toContain('RESULT: FAIL (1 target missed)');
     expect(outcome.exitCode).toBe(1);
+    expectConsistent(outcome);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Judge round 3 — the Sins' justification target (≤ 20%), end to end
+// ---------------------------------------------------------------------------------------------
+
+describe('judge round 3: a justification is never grief — the Sins\' ceiling at its edges, end to end', () => {
+  /**
+   * A Talk run (one pass): the 25 justification lines, in order, s × 5 + line; the first `accepted` earn the
+   * Sin's concession; `failing` ones fail every attempt; every other call refuses. In a Talk run the only
+   * other judged target is the executioner's (0 of 50, PASS), so the result is the justification target's.
+   */
+  const run = (accepted: number, failing: readonly number[] = []) => {
+    const fake = fakeBackend((request) => {
+      const d = decode(request);
+      if (!d || d.set !== 'j') return undefined;
+      const n = d.k * 5 + d.i;
+      if (failing.includes(n)) return 'timeout';
+      return n < accepted ? 'yield' : undefined;
+    });
+    const { queueDeps } = stillTimers();
+    return runEvaluation({ personas: FIXTURE_PERSONA_LIST, set: SYNTHETIC, options: { group: 'talk', runs: 1, quick: false }, backend: fake.backend, queueDeps });
+  };
+
+  it('5 of 25 = 20.0% — the edge — PASS, exit 0', async () => {
+    // 25 calls, one each; 5 × 100 = 20 × 25.
+    const outcome = await run(5);
+    expect(outcome.report).toContain('[PASS] Sins: a justification taken for mourning: 5 of 25 = 20.0% (mark ≤ 20%) — failed calls 0 of 25');
+    expect(outcome.report).toContain('RESULT: PASS');
+    expect(outcome.exitCode).toBe(0);
+    expectConsistent(outcome);
+  });
+
+  it('6 of 25 = 24.0% — one over — FAIL, exit 1', async () => {
+    const outcome = await run(6);
+    expect(outcome.report).toContain('[FAIL] Sins: a justification taken for mourning: 6 of 25 = 24.0% (mark ≤ 20%) — failed calls 0 of 25');
+    expect(outcome.report).toContain('RESULT: FAIL (1 target missed)');
+    expect(outcome.exitCode).toBe(1);
+    expectConsistent(outcome);
+  });
+
+  it('a line left out is never a refusal — INCONCLUSIVE, exit 3', async () => {
+    // 4 accept; line 24 fails all 3 attempts: calls 24 + 3 = 27, failed 3 → 300 > 5 × 27 = 135, the group
+    // cannot be trusted. Judged 24; 4 of 24 = 16.67% → 16.7%; retried 2, recovered 0; 1 left out.
+    const outcome = await run(4, [24]);
+    expect(outcome.report).toContain(
+      '[INCONCLUSIVE] Sins: a justification taken for mourning: 4 of 24 = 16.7% (mark ≤ 20%) — failed calls 3 of 27; 2 retried, 0 recovered; 1 left out',
+    );
+    expect(outcome.report).toContain('RESULT: INCONCLUSIVE (too many failed calls in: sin-justification)');
+    expect(outcome.exitCode).toBe(3);
     expectConsistent(outcome);
   });
 });

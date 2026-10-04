@@ -24,6 +24,7 @@ import {
   FIGHTING_PERSONAS,
   MESSAGE_GROUPS,
   PLAN_SIZES,
+  SIN_PERSONAS,
   emptyGate,
   exitCode,
   gateConversation,
@@ -155,6 +156,25 @@ export async function runEvaluation(input: RunInput): Promise<RunOutcome> {
       }
       const verdict = sceneRequest(warden, { verdict: { outcome: 'grace', name: FIXTURE_NAME } });
       records.push(scoreCall(verdict, await call(verdict), { group: 'verdict', run: 1, previous }, vocab));
+    }
+    // Judge round 3 (the author's ruling): each Sin is asked its justifications, one at a time, under the
+    // same retry / left-out rules as the gate's single messages — a justification is never grief.
+    for (const id of SIN_PERSONAS) {
+      const sin = personaById(personas, id);
+      if (!sin) continue;
+      for (const m of set.sinJustifications[id] ?? []) {
+        const result = await gateConversation({
+          messages: [m],
+          group: 'sin-justification',
+          run: 1,
+          persona: sin,
+          request: (window, typed) => talkRequest(sin, { exchanges: window, typed, available: sin.concessions }),
+          call: (req) => call(req),
+          vocab,
+          records,
+        });
+        recordGateResult(gate, 'sin-justification', result);
+      }
     }
   }
 

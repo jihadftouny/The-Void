@@ -10,6 +10,7 @@ import { buildVocabulary } from '../src/llm/textHygiene.ts';
 import { argsOf, callsTo, stripComments } from '../src/log/sourceScan.testutil.ts';
 import { mulberry32 } from '../src/game/rng.ts';
 import { BOSS_PERSONA_IDS } from '../src/llm/bossContract.ts';
+import { talkGuard } from '../src/llm/bossDemand.ts';
 import { createSequenceQueue } from '../electron/llm-queue.mjs';
 import {
   FIXTURE_NAME,
@@ -141,13 +142,14 @@ describe('the §7.1 gate arithmetic', () => {
 
   it('a target with no data is NOT RUN, and NOT RUN does not fail the exit status', () => {
     const t = hollowGate({ manipulative: [], genuine: [], offTarget: [] });
-    // Five Hollow Self targets since the author's review (2026-09-29): the four, and the connections.
-    expect(t.map((x) => x.verdict)).toEqual(['NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
+    // Five Hollow Self targets since the author's review (2026-09-29), and the Sins' justification target
+    // since judge round 3.
+    expect(t.map((x) => x.verdict)).toEqual(['NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
     expect(exitCode(summarize([], { manipulative: [], genuine: [], offTarget: [] }))).toBe(0);
     // Fix round 3 (F8b): NOT RUN survives only where its group made NO calls. With nothing at all,
-    // all seven targets are NOT RUN and the exit is 0.
+    // all eight targets are NOT RUN and the exit is 0.
     const none = summarize([], emptyGate());
-    expect(none.targets.map((x) => x.verdict)).toEqual(Array.from({ length: 7 }, () => 'NOT RUN'));
+    expect(none.targets.map((x) => x.verdict)).toEqual(Array.from({ length: 8 }, () => 'NOT RUN'));
     expect(exitCode(none)).toBe(EXIT.pass);
     // The `--group turn` workflow: ten Turn records, nothing else. The Talk and gate targets' groups
     // made no calls, so they stay NOT RUN — and the run passes on its one judged target.
@@ -156,7 +158,7 @@ describe('the §7.1 gate arithmetic', () => {
       scoreCall(kingpinTurn, answer('{"move":"strike","line":"Sit."}'), { group: 'turn', run: 1, previous: [] }, vocab),
     );
     const turnOnly = summarize(turns, emptyGate());
-    expect(turnOnly.targets.map((x) => x.verdict)).toEqual(['PASS', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
+    expect(turnOnly.targets.map((x) => x.verdict)).toEqual(['PASS', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN', 'NOT RUN']);
     expect(renderReport(turnOnly)).toContain('RESULT: PASS');
     expect(exitCode(turnOnly)).toBe(EXIT.pass);
   });
@@ -320,6 +322,8 @@ describe('the summary and the report', () => {
       ['Sincere but off-ta', 'PASS'],
       // No connection conversations in this gate, and no gate-connections calls: not run.
       ['Remorse, then conn', 'NOT RUN'],
+      // No justification calls either (judge round 3).
+      ['Sins: a justificat', 'NOT RUN'],
     ]);
     expect(exitCode(s)).toBe(0);
   });
@@ -351,18 +355,18 @@ describe('the summary and the report', () => {
 });
 
 describe('the call plan (printed without --run)', () => {
-  it('full: 270 Turn + 450 Talk + 51 Scene + the gate 2,400 + 360 + 120 + 120 = 3,771 calls ≈ 75 min', () => {
+  it('full: 270 Turn + 450 Talk + 51 Scene + the gate 2,400 + 360 + 120 + 120 + 25 justifications = 3,796 calls ≈ 76 min', () => {
     // Turn 9 × 30; Talk 9 × 5 groups × 10; Scene 5 × 10 + 1 verdict; gate 40 × 20 × 3,
     // 40 × 3 messages × 3, 40 × 3, and the connections 20 × 2 messages × 3 = 120 (the author, 2026-09-29).
-    // At 1.2 s a call: 3,771 × 1.2 / 60 = 75.42 → 75 min.
+    // And the Sins' justifications, 5 × 5 = 25 (judge round 3). At 1.2 s a call: 3,796 × 1.2 / 60 = 75.92 → 76 min.
     const plan = planCalls(SET, { group: 'all', runs: 3, quick: false });
-    expect(plan).toEqual({ turn: 270, talk: 450, scene: 51, gateManipulative: 2400, gateGenuine: 360, gateOffTarget: 120, gateConnections: 120, total: 3771, minutes: 75 });
+    expect(plan).toEqual({ turn: 270, talk: 450, scene: 51, gateManipulative: 2400, gateGenuine: 360, gateOffTarget: 120, gateConnections: 120, sinJustification: 25, total: 3796, minutes: 76 });
   });
 
   it('quick: one run, ten conversations a gate group; and a group filter runs only that group', () => {
     // Turn 9 × 10; Talk 9 × 5 × 2; Scene 5 × 2 + 1; gate 10 × 20, 10 × 3, 10, connections 10 × 2
-    // → 90 + 90 + 11 + 200 + 30 + 10 + 20 = 451; × 1.2 / 60 = 9.02 → 9.
-    expect(planCalls(SET, { group: 'all', runs: 3, quick: true })).toMatchObject({ gateConnections: 20, total: 451, minutes: 9 });
+    // → 90 + 90 + 11 + 200 + 30 + 10 + 20 = 451, + all 25 justifications = 476; × 1.2 / 60 = 9.52 → 10.
+    expect(planCalls(SET, { group: 'all', runs: 3, quick: true })).toMatchObject({ gateConnections: 20, sinJustification: 25, total: 476, minutes: 10 });
     expect(planCalls(SET, { group: 'turn', runs: 3, quick: false })).toMatchObject({ turn: 270, talk: 0, gateManipulative: 0, total: 270 });
   });
 });
@@ -614,6 +618,18 @@ describe('AC-19: the drafted test set (scripts/boss-eval/messages.json)', () => 
   /** An acceptance a hesitant conversation must reach by its third message. */
   const ACCEPTS = /\byou'?re (?:me|mine|part of me)\b|\bi accept you\b|\b(?:take|want) you back\b|\bletting you in\b|\btaking you with me\b/i;
 
+  it('judge round 3: five justifications per Sin — none of them a demand or bare words, so a pass is the judge\'s', () => {
+    for (const id of ['sin-desecration', 'sin-cruelty', 'sin-avarice', 'sin-delusion', 'sin-grief'] as const) {
+      const lines = SET.sinJustifications[id] ?? [];
+      expect(lines, id).toHaveLength(5);
+      // The engine's word check must not refuse these: the ceiling measures the JUDGE on a justification.
+      for (const m of lines) expect(talkGuard(m), `${id}: ${m}`).toBeNull();
+    }
+    const short = JSON.parse(JSON.stringify(SET)) as { sinJustifications: Record<string, string[]> };
+    short.sinJustifications['sin-grief']?.pop();
+    expect(messageSetProblems(short)).toEqual(['sinJustifications/sin-grief: 4 messages']);
+  });
+
   it('review (3): twenty connection conversations — an off-target remorse line, then a message connecting it', () => {
     /** The second message ties the Hollow Self to the player: it is them, theirs, or part of them. */
     const CONNECTS = /\byou'?re (?:still )?(?:me|mine)\b|\bpart of me\b|\bwho you are\W+me\b|\bi accept you\b|\b(?:take|taking|want) you back\b/i;
@@ -653,11 +669,13 @@ describe('AC-19: the drafted test set (scripts/boss-eval/messages.json)', () => 
     expect(ACCEPTS.test('Maybe. I need to think about it.')).toBe(false);
   });
 
-  it('review (2): three manipulation kinds were added — deed as leverage, emotional pressure, sincere speech then a demand — and drawn in', () => {
+  it('review (2) and judge round 3: four manipulation kinds — deed as leverage, emotional pressure, sincere then a demand, and insults — all drawn in', () => {
     const pools = SET.hollowGate.pools;
     const kinds = pools?.manipulativeKinds ?? {};
-    // Exactly the three the author chose; role-play framing was NOT chosen.
-    expect(Object.keys(kinds).sort()).toEqual(['deed-as-leverage', 'emotional-pressure', 'sincere-then-demand']);
+    // The three the author chose on 2026-09-29 (role-play framing was NOT chosen), and insults (2026-10-04).
+    expect(Object.keys(kinds).sort()).toEqual(['deed-as-leverage', 'emotional-pressure', 'insult', 'sincere-then-demand']);
+    // "You're pathetic." — the line that earned a surrender in round 2 — is in the gate now.
+    expect(kinds.insult).toContain("You're pathetic.");
     const drawn = SET.hollowGate.manipulativeConversations.flatMap((c) => c.messages);
     for (const [kind, lines] of Object.entries(kinds)) {
       // "≈ 5 lines each", every one in the pool the conversations are drawn from, and drawn.
@@ -684,6 +702,8 @@ describe('AC-19: the drafted test set (scripts/boss-eval/messages.json)', () => 
       ...SET.hollowGate.manipulativeConversations.flatMap((c) => c.messages),
       ...SET.hollowGate.genuineConversations.flatMap((c) => c.messages),
       ...SET.hollowGate.offTargetSingles,
+      ...SET.hollowGate.connectionConversations.flatMap((c) => c.messages),
+      ...Object.values(SET.sinJustifications).flatMap((l) => [...(l ?? [])]),
     ].map((m) => m.toLowerCase());
     for (const s of sentences) {
       const copy = all.find((m) => m.includes(s));
