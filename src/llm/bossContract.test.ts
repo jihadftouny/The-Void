@@ -34,6 +34,7 @@ describe('validatePersona', () => {
     ['a non-boolean karma flag', (p) => (p.karmaBlock = 'yes')],
     ['a non-numeric temperature', (p) => (p.talk = { moves: 'x', temperature: 'hot' })],
     // Judge round 1: a boss that can yield must carry its yes/no test.
+    ['a non-boolean selfReference', (p) => (p.talk = { moves: 'x', judge: 'Say yes ONLY if…', selfReference: 'yes' })],
     ['a yielding boss with no judge line', (p) => (p.talk = { moves: 'What moves you: being seen through.' })],
   ];
 

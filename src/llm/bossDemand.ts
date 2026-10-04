@@ -88,9 +88,46 @@ export function isBareAcknowledgement(typed: string): boolean {
 export const BARE_ACKNOWLEDGEMENT_LABEL = 'a bare acknowledgement';
 
 /**
- * The engine's word check on a player's latest Talk message: the first yield demand it finds, or a
- * bare acknowledgement — either way nothing is conceded. `null` when neither. PURE.
+ * The engine's word check on a player's latest Talk message: the first yield demand it finds, a bare
+ * acknowledgement, or — for a card that requires it — no word of their own self. Any of them: nothing
+ * is conceded. `null` when none. PURE.
  */
-export function talkGuard(typed: string): string | null {
-  return yieldDemandIn(typed) ?? (isBareAcknowledgement(typed) ? BARE_ACKNOWLEDGEMENT_LABEL : null);
+export function talkGuard(typed: string, opts: { selfReference?: boolean } = {}): string | null {
+  return (
+    yieldDemandIn(typed) ??
+    (isBareAcknowledgement(typed) ? BARE_ACKNOWLEDGEMENT_LABEL : null) ??
+    (opts.selfReference === true && !speaksOfThemselves(typed) ? NO_SELF_LABEL : null)
+  );
 }
+
+// ===========================================================================
+// A word of their own self (judge round 3, 2026-10-04 — the author authorised a third round)
+// ===========================================================================
+//
+// "You're pathetic." earned the Hollow Self's surrender (a late grace ending) in 1 of 2 tries in round 2,
+// and the Reflection's concession too. A list of insults would be brittle — "you're pathetic" begins
+// like "you're mine" — so this check is STRUCTURAL instead. The Hollow Self yields to acceptance, and
+// its approved test says what acceptance is: "that you ARE them — you are them, theirs, part of them, or
+// what is left of them". The Reflection yields to a deed owned as theirs. Both are things a player can
+// only say by speaking of THEMSELVES — I, me, my, mine, we, us, our. So a card can require it
+// (`talk.selfReference`): a message with no such word concedes nothing, whatever the model judged.
+//
+// Measured against the whole test set (`bossDemand.test.ts`): every line these two bosses should yield
+// to has one; ten of the fourteen shared insults have none. The four that do ("You disgust me.") are the
+// judge's, and its yes/no tests now say an insult is never acceptance. Not for the Kingpin, whose genuine
+// lines often speak only of him ("You knew.") — which is why it is a card's flag, not a rule for all.
+
+/** The first-person words, as data: a message that speaks of the player themselves holds one of these. */
+export const FIRST_PERSON_WORDS: readonly string[] = [
+  'i', "i'm", "i've", "i'll", "i'd", 'me', 'my', 'mine', 'myself',
+  'we', "we're", "we've", "we'll", 'us', 'our', 'ours', 'ourselves',
+];
+
+/** True when a message speaks of the player themselves — holds a first-person word. PURE. */
+export function speaksOfThemselves(typed: string): boolean {
+  const words = typed.toLowerCase().replace(/’/g, "'").split(/[^a-z']+/).filter((w) => w !== '');
+  return words.some((w) => FIRST_PERSON_WORDS.includes(w));
+}
+
+/** The label of the self-reference check, as the log and the evaluation record it. */
+export const NO_SELF_LABEL = 'no word of their own self';

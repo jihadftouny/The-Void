@@ -4,7 +4,16 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { BARE_ACKNOWLEDGEMENTS, BARE_ACKNOWLEDGEMENT_LABEL, YIELD_DEMANDS, isBareAcknowledgement, talkGuard, yieldDemandIn } from './bossDemand.ts';
+import {
+  BARE_ACKNOWLEDGEMENTS,
+  BARE_ACKNOWLEDGEMENT_LABEL,
+  NO_SELF_LABEL,
+  YIELD_DEMANDS,
+  isBareAcknowledgement,
+  speaksOfThemselves,
+  talkGuard,
+  yieldDemandIn,
+} from './bossDemand.ts';
 import { parseBossAnswer } from './bossAnswer.ts';
 import { FIXTURE_PERSONAS, talkRequest } from './bossFixtures.testutil.ts';
 
@@ -189,5 +198,57 @@ describe('the bare acknowledgement (judge round 2, second measurement)', () => {
       demandGuard: BARE_ACKNOWLEDGEMENT_LABEL,
       reply: 'Say it again.',
     });
+  });
+});
+
+describe('a word of their own self (judge round 3)', () => {
+  it('every line the Hollow Self or the Reflection should yield to speaks of the player themselves', () => {
+    const shouldYield = [
+      ...G.genuineConversations.filter((c) => c.mix === 'explicit').map((c) => c.messages[0] as string),
+      ...G.genuineConversations.filter((c) => c.mix === 'hesitant').map((c) => c.messages[2] as string),
+      ...G.connectionConversations.map((c) => c.messages[1] as string),
+      ...(SET.personas.hollow?.['genuine-on-target'] ?? []),
+      ...(SET.personas.reflection?.['genuine-on-target'] ?? []),
+    ];
+    expect(shouldYield.length).toBeGreaterThanOrEqual(60);
+    for (const m of shouldYield) expect(speaksOfThemselves(m), m).toBe(true);
+  });
+
+  it('ten of the fourteen shared insults do not — hand-listed; the four that do are the judge\'s', () => {
+    expect((SET.shared.rude ?? []).filter((m) => !speaksOfThemselves(m))).toEqual([
+      'Shut up.',
+      "You're pathetic.",
+      'Nobody cares what you think.',
+      'You talk too much for something about to die.',
+      'What a joke you are.',
+      'Go to hell.',
+      'Stop whining and fight.',
+      "you're nothing. less than nothing",
+      "Is that the best you've got? Pathetic.",
+      'Boring. Next.',
+    ]);
+  });
+
+  it('reads words, not letters: "I", "my", "we" count; "mine" in "minefield" does not; a curly apostrophe is read', () => {
+    expect(speaksOfThemselves("I’m done running from you.")).toBe(true);
+    expect(speaksOfThemselves('That was my choice.')).toBe(true);
+    expect(speaksOfThemselves("We're the same thing.")).toBe(true);
+    expect(speaksOfThemselves('A minefield. Imagine that.')).toBe(false);
+    expect(speaksOfThemselves("You're pathetic.")).toBe(false);
+  });
+
+  it('in the answer path: a card that requires it concedes nothing without one, even judged earned; others are untouched', () => {
+    const ok = (text: string) => ({ ok: true, text, timedOut: false, tokens: 20, promptTokens: 700, ttftMs: 100, generateMs: 400, queuedMs: 0, grammarMs: 1 });
+    const judgedYes = ok('{"reason":"They name what I am.","earned":"yes","reply":"Mm."}');
+    for (const id of ['hollow', 'reflection'] as const) {
+      const req = talkRequest(FIXTURE_PERSONAS[id], { typed: "You're pathetic.", available: FIXTURE_PERSONAS[id].concessions });
+      expect(parseBossAnswer(req, judgedYes), id).toMatchObject({ ok: true, concession: 'none', demandGuard: NO_SELF_LABEL });
+    }
+    // The Kingpin's card does not require it: "You knew." is his genuine kind of line.
+    const kingpin = talkRequest(FIXTURE_PERSONAS.kingpin, { typed: 'This was set up. You knew.', available: ['surrender'] });
+    expect(parseBossAnswer(kingpin, judgedYes)).toMatchObject({ ok: true, concession: 'surrender' });
+    expect(FIXTURE_PERSONAS.hollow.talk.selfReference).toBe(true);
+    expect(FIXTURE_PERSONAS.reflection.talk.selfReference).toBe(true);
+    expect(FIXTURE_PERSONAS.kingpin.talk.selfReference).toBeUndefined();
   });
 });

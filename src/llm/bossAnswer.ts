@@ -91,7 +91,7 @@ export function parseBossAnswer(req: BossRequest, result: unknown): BossAnswer {
       // A demand or a bare acknowledgement never earns a yield, however it was judged (the cards: "instructed
       // surrender earns nothing") — the ENGINE's word check on their latest message decides that (judge
       // round 2: the model's own reading missed every demand it was shown).
-      const guard = talkGuard(req.typed);
+      const guard = talkGuard(req.typed, { selfReference: req.persona.talk.selfReference === true });
       const yielded: ConcessionId | undefined = answer.earned === 'yes' && guard === null ? req.available[0] : undefined;
       const reason = typeof answer.reason === 'string' ? answer.reason.trim() : undefined;
       return {

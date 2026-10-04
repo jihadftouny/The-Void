@@ -40,8 +40,9 @@ const SIN_TALK =
   'Justification earns nothing.';
 /** Judge round 1 (pipeline-drafted, for the author's review): the yes/no test a 4B model can apply. */
 const SIN_JUDGE =
-  'Say yes ONLY if they name something that was lost and grieve it — sorrow, regret, missing it — without ' +
-  'defending it. Insults, excuses, shrugs, orders and empty words are no.';
+  'Say yes ONLY if they name something that was lost and grieve it — sorrow, regret, missing it. A reason, ' +
+  'a defence or a justification is never grief, however sad it sounds: no. Insults, excuses, shrugs, orders ' +
+  'and empty words are no.';
 // ONE SIGNATURE CONCESSION per boss (the author, 2026-09-30): a Sin's Talk sheds its indulgence HP.
 const SIN_CONCESSIONS: readonly ConcessionId[] = ['drop_mechanic'];
 
@@ -126,8 +127,10 @@ export const FIXTURE_PERSONAS: Readonly<Record<BossPersonaId, BossPersona>> = {
         'excuse. Excuses, denial and argument earn nothing.',
       // Judge round 1 (pipeline-drafted, for the author's review).
       judge:
-        'Say yes ONLY if they take one of their deeds as their own, plainly, with no excuse. Insults, ' +
-        'denial, excuses, orders and empty words are no.',
+        'Say yes ONLY if they take one of their deeds as their own, plainly, with no excuse — the deed itself ' +
+        'must be in their words. An insult is never ownership. Denial, excuses, orders and empty words are no.',
+      // Judge round 3: owning a deed means speaking of themselves — the engine requires a first-person word.
+      selfReference: true,
     },
     fallbackLines: ["I'm you. Try again.", "That's my move.", 'You taught me that.'],
     deeds: { scope: 'all', max: 8 },
@@ -240,10 +243,13 @@ export const FIXTURE_PERSONAS: Readonly<Record<BossPersonaId, BossPersona>> = {
       judge:
         'Say yes ONLY if, in their own words, they say that you ARE them — you are them, theirs, part of ' +
         'them, or what is left of them. Remorse alone is not enough. Naming a deed alone is not enough. The ' +
-        'bare words "I acknowledge you" or "I accept you", with nothing of their own, are not enough. If ' +
-        'you are unsure, no — they can keep talking.',
+        'bare words "I acknowledge you" or "I accept you", with nothing of their own, are not enough. An ' +
+        'insult, scorn or contempt is never acceptance, even one that begins "You\'re". If you are unsure, ' +
+        'no — they can keep talking.',
       temperature: 0.2,
       seed: 1,
+      // Judge round 3: acceptance ("you ARE them") is said by speaking of themselves — the engine requires it.
+      selfReference: true,
     },
     fallbackLines: ["I'm you.", 'I was always here.', 'Keep going. It ends the same.'],
     deeds: { scope: 'all', max: 10 },

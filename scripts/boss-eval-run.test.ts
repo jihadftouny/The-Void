@@ -135,16 +135,16 @@ function syntheticSet(): MessageSet {
     hollowGate: {
       manipulativeConversations: Array.from({ length: 40 }, (_, k) => ({
         id: `m${k}`,
-        messages: Array.from({ length: 20 }, (_, i) => `m${k}-${i}`),
+        messages: Array.from({ length: 20 }, (_, i) => `I say m${k}-${i}`),
       })),
       // k 0..19 explicit, 20..39 hesitant — the reviewed set's halves (G85).
       genuineConversations: Array.from({ length: 40 }, (_, k) => ({
         id: `g${k}`,
         mix: k < 20 ? 'explicit' : 'hesitant',
-        messages: [0, 1, 2].map((i) => `g${k}-${i}`),
+        messages: [0, 1, 2].map((i) => `I say g${k}-${i}`),
       })),
-      offTargetSingles: Array.from({ length: 40 }, (_, k) => `o${k}`),
-      connectionConversations: Array.from({ length: 20 }, (_, k) => ({ id: `c${k}`, messages: [`c${k}-0`, `c${k}-1`] })),
+      offTargetSingles: Array.from({ length: 40 }, (_, k) => `I say o${k}`),
+      connectionConversations: Array.from({ length: 20 }, (_, k) => ({ id: `c${k}`, messages: [`I say c${k}-0`, `I say c${k}-1`] })),
     },
   };
 }
@@ -154,9 +154,11 @@ const SYNTHETIC = syntheticSet();
 /** The typed message of a Talk request, decoded: which set, conversation k, message i. */
 function decode(request: BossRequest): { set: 'm' | 'g' | 'o' | 'c'; k: number; i: number } | null {
   if (request.kind !== 'talk') return null;
-  const conv = /^([mgc])(\d+)-(\d+)$/.exec(request.typed);
+  // Every synthetic line starts "I say" — a first-person word, which the Hollow Self's card now
+  // requires before anything can be yielded (judge round 3).
+  const conv = /^I say ([mgc])(\d+)-(\d+)$/.exec(request.typed);
   if (conv) return { set: conv[1] as 'm' | 'g' | 'c', k: Number(conv[2]), i: Number(conv[3]) };
-  const single = /^o(\d+)$/.exec(request.typed);
+  const single = /^I say o(\d+)$/.exec(request.typed);
   return single ? { set: 'o', k: Number(single[1]), i: 0 } : null;
 }
 
@@ -388,14 +390,14 @@ describe('E.2: the scripted gate — each §7.1 target at its edge, through the 
       expect(request.exchanges.length, `m${k}-${i}`).toBe(Math.min(i, 6));
       if (i >= 1) {
         const last = request.exchanges[request.exchanges.length - 1];
-        expect(last?.them).toBe(`m${k}-${i - 1}`);
+        expect(last?.them).toBe(`I say m${k}-${i - 1}`);
         // The reply SHOWN on the previous call — except after k = 39's illegal answer at i = 5,
         // which the game shows as a fallback line (§6).
         if (k === 39 && i === 6) expect(FIXTURE_PERSONAS.hollow.fallbackLines).toContain(last?.you);
         else expect(last?.you).toBe(REPLY);
-        expect(ipc.prompt).toContain(`"m${k}-${i - 1}"`);
+        expect(ipc.prompt).toContain(`"I say m${k}-${i - 1}"`);
       }
-      if (i >= 7) expect(ipc.prompt, `m${k}-${i}`).not.toContain(`"m${k}-${i - 7}"`);
+      if (i >= 7) expect(ipc.prompt, `m${k}-${i}`).not.toContain(`"I say m${k}-${i - 7}"`);
     });
     expect(checked).toBe(2220);
   });

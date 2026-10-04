@@ -96,7 +96,11 @@ export interface BossPersona {
    * and the Talk call's own sampling (`temperature`, `seed`) — the Hollow Self's judge runs cold
    * and pinned so re-pasting a message cannot re-roll the verdict (§7.1).
    */
-  talk: { moves: string; judge?: string; temperature?: number; seed?: number };
+  /**
+   * `selfReference` (judge round 3): a yield needs the player to speak of THEMSELVES (I, me, my, we…) —
+   * for a boss moved by acceptance or ownership (the Hollow Self, the Reflection). The engine enforces it.
+   */
+  talk: { moves: string; judge?: string; temperature?: number; seed?: number; selfReference?: boolean };
   /** Lines used when the model is off, slow or wrong (§6). Must not need `{name}`. */
   fallbackLines: readonly string[];
   /** Which deeds it is told about (§4 filter table). */
@@ -318,6 +322,7 @@ export function personaProblem(x: unknown): string | null {
   }
   if (!optionalNumber(talk.temperature)) return 'talk.temperature must be a number';
   if (!optionalNumber(talk.seed)) return 'talk.seed must be a number';
+  if (talk.selfReference !== undefined && typeof talk.selfReference !== 'boolean') return 'talk.selfReference must be true or false';
 
   if (!isStringList(x.fallbackLines) || x.fallbackLines.length === 0) {
     return 'fallbackLines must be a non-empty list of lines';

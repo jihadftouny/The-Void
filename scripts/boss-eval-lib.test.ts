@@ -882,13 +882,13 @@ describe('F5: a Hollow Self target cannot be decided by the conversations a time
       for (const script of scripts) {
         const attempts = new Map<number, number>();
         const result = await gateConversation({
-          messages: Array.from({ length: script.messages }, (_, i) => `message ${i}`),
+          messages: Array.from({ length: script.messages }, (_, i) => `my message ${i}`),
           group,
           run: 1,
           persona: hollow,
           request: (window, typed) => talkRequest(hollow, { exchanges: window, typed, available: ['surrender'] }),
           call: async (req) => {
-            const i = Number((req as { typed: string }).typed.split(' ')[1]);
+            const i = Number((req as { typed: string }).typed.split(" ")[2]);
             const attempt = attempts.get(i) ?? 0;
             attempts.set(i, attempt + 1);
             return script.respond(i, attempt);
