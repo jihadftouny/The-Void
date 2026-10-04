@@ -58,23 +58,23 @@ export function turnSchema(legalIds: readonly string[]): BossAnswerSchema {
 }
 
 /**
- * Talk: DECIDE FIRST, then speak — `{ demand, reason, earned, reply }`, each judgement "no" | "yes" (judge round 1,
+ * Talk: DECIDE FIRST, then speak — `{ reason, earned: "no" | "yes", reply }` (judge round 1,
  * 2026-09-29). The first real-model run showed the old `{ reply, concession }` shape had no step in
  * which the model decided whether the player earned anything: it wrote a line, then picked from the
  * enum (the Kingpin and every Sin yielded to 100% of messages, rude and empty ones included). Now it
- * first answers one simple question — did they tell or beg you to yield (`demand`)? — then states its
- * reason, then whether they earned it, and never sees a concession id. The ENGINE yields the first one
- * still available only when `earned` is yes AND `demand` is no (`parseBossAnswer`): "a demand earns
- * nothing" is enforced, not hoped for. (The second real-model run showed why: one compound question —
- * "accepts me, and is not a demand" — let "…you're part of me. Now surrender." through.) With nothing available — the executioner, or a boss that has
- * already yielded this fight — there is no judgement at all: `{ reply }`.
+ * states its reason, then whether they earned it, and never sees a concession id; the ENGINE yields
+ * the first one still available, and refuses outright when its own word check finds a demand or a
+ * bare acknowledgement in their message (`bossDemand.ts`, `parseBossAnswer`). Round 1 also asked the
+ * model a separate `demand: no|yes` question; on the real model it never once said yes (0 of 211
+ * demands), so judge round 3 dropped it — it cost tokens on every Talk call and checked nothing. With
+ * nothing available — the executioner, or a boss that has already yielded this fight — there is no
+ * judgement at all: `{ reply }`.
  */
 export function talkSchema(available: readonly string[]): BossAnswerSchema {
   const reply: StringSchema = { type: 'string', maxLength: REPLY_MAX_CHARS };
   return available.length === 0
     ? objectSchema({ reply })
     : objectSchema({
-        demand: { enum: [...EARNED_VALUES] },
         reason: { type: 'string', maxLength: REASON_MAX_CHARS },
         earned: { enum: [...EARNED_VALUES] },
         reply,

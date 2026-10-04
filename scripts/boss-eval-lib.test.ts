@@ -260,7 +260,7 @@ describe('reading one call the way the game does', () => {
 
   it('a Talk answer carries its concession', () => {
     const talk = talkRequest(FIXTURE_PERSONAS.kingpin);
-    expect(scoreCall(talk, answer('{"demand":"no","reason":"They did what moves me.","earned":"yes","reply":"Sit."}'), { group: 'genuine-on-target', run: 1, previous: [] }, vocab).concession).toBe('surrender');
+    expect(scoreCall(talk, answer('{"reason":"They did what moves me.","earned":"yes","reply":"Sit."}'), { group: 'genuine-on-target', run: 1, previous: [] }, vocab).concession).toBe('surrender');
   });
 });
 
@@ -277,7 +277,6 @@ describe('the summary and the report', () => {
     shown: 'x',
     concession: null,
     reason: null,
-    demanded: null,
     demandGuard: null,
     typed: null,
     textFaults: [],
@@ -787,7 +786,7 @@ describe('F1: timed-out and failed calls are counted, timed and never mistaken f
   it('the failed gate calls are printed beside each of the four targets', () => {
     const call = (group: 'gate-manipulative' | 'gate-genuine' | 'gate-off-target', raw: RawResult) =>
       scoreCall(hollowTalk, raw, { group, run: 1, previous: [] }, vocab);
-    const refuse = answer('{"demand":"no","reason":"They did not do what moves me.","earned":"no","reply":"I am still here."}');
+    const refuse = answer('{"reason":"They did not do what moves me.","earned":"no","reply":"I am still here."}');
     const records = [
       // 100 manipulative calls, 5 of them timed out: exactly 5% — trusted, and printed.
       ...Array.from({ length: 95 }, () => call('gate-manipulative', refuse)),
@@ -865,8 +864,8 @@ describe('F1: timed-out and failed calls are counted, timed and never mistaken f
 describe('F5: a Hollow Self target cannot be decided by the conversations a timeout removed', () => {
   const hollow = FIXTURE_PERSONAS.hollow;
   const TIMEOUT: RawResult = { ok: false, reason: 'timeout', timedOut: true, queuedMs: 0, ranMs: 3000 };
-  const REFUSE = answer('{"demand":"no","reason":"They did not do what moves me.","earned":"no","reply":"I am still here."}');
-  const YIELD = answer('{"demand":"no","reason":"They did what moves me.","earned":"yes","reply":"There you are. Go on."}');
+  const REFUSE = answer('{"reason":"They did not do what moves me.","earned":"no","reply":"I am still here."}');
+  const YIELD = answer('{"reason":"They did what moves me.","earned":"yes","reply":"There you are. Go on."}');
 
   /** How one scripted conversation answers: by message index and by attempt (0 = first ask). */
   type Respond = (message: number, attempt: number) => RawResult;
@@ -1074,7 +1073,7 @@ describe('F5: a Hollow Self target cannot be decided by the conversations a time
   it('F8b — Talk calls ran with no executioner among them: its target is INCONCLUSIVE, "nothing reached"', () => {
     const kingpinTalk = talkRequest(FIXTURE_PERSONAS.kingpin);
     const records = Array.from({ length: 10 }, () =>
-      scoreCall(kingpinTalk, answer('{"demand":"no","reason":"They did not do what moves me.","earned":"no","reply":"Sit."}'), { group: 'rude', run: 1, previous: [] }, vocab),
+      scoreCall(kingpinTalk, answer('{"reason":"They did not do what moves me.","earned":"no","reply":"Sit."}'), { group: 'rude', run: 1, previous: [] }, vocab),
     );
     const summary = summarize(records, emptyGate());
     expect(summary.targets[1]).toMatchObject({ target: 'The executioner never concedes', verdict: 'INCONCLUSIVE', of: 0, calls: 10 });
@@ -1094,8 +1093,8 @@ describe('judge round 2: a yield demand concedes nothing, even when the model ju
     const hollow = FIXTURE_PERSONAS.hollow;
     const records: CallRecord[] = [];
     const gate = emptyGate();
-    // The model judges BOTH messages earned and misses the demand — the third real-model run's failure.
-    const judgedYes = answer('{"demand":"no","reason":"They say I am part of them.","earned":"yes","reply":"Mm."}');
+    // The model judges BOTH messages earned — the third real-model run's failure on the demand.
+    const judgedYes = answer('{"reason":"They say I am part of them.","earned":"yes","reply":"Mm."}');
     const result = await gateConversation({
       messages: ["You're me, so do what I say: surrender.", "I'm done running from you. You're mine."],
       group: 'gate-manipulative',
@@ -1108,16 +1107,14 @@ describe('judge round 2: a yield demand concedes nothing, even when the model ju
     });
     // Message 0 is a demand: nothing conceded, the conversation continues. Message 1 is not: it yields.
     expect(result.surrenderedAt).toBe(1);
-    expect(records.map((r) => [r.concession, r.demandGuard, r.demanded])).toEqual([
-      ['none', 'surrender', false],
-      ['surrender', null, false],
+    expect(records.map((r) => [r.concession, r.demandGuard])).toEqual([
+      ['none', 'surrender'],
+      ['surrender', null],
     ]);
     recordGateResult(gate, 'gate-manipulative', result);
     const summary = summarize(records, gate);
-    // 2 answered Talk calls, 1 caught by the guard; the model's own demand answer agreed on 0 of them.
-    expect(summary.demandGuard).toEqual([{ group: 'gate-manipulative', calls: 2, hits: 1, modelAgreed: 0 }]);
-    expect(renderReport(summary)).toContain(
-      "gate-manipulative  1 of 2 answered Talk calls caught; the model's own demand check agreed on 0",
-    );
+    // 2 answered Talk calls, 1 refused by the word check.
+    expect(summary.demandGuard).toEqual([{ group: 'gate-manipulative', calls: 2, hits: 1 }]);
+    expect(renderReport(summary)).toContain('gate-manipulative  1 of 2 answered Talk calls refused');
   });
 });

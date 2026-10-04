@@ -28,15 +28,14 @@ describe('turnSchema', () => {
 });
 
 describe('talkSchema', () => {
-  it('decide first (judge round 1): demand no|yes, a reason, earned no|yes (no first), then the reply — never a concession id', () => {
+  it('decide first: a reason, earned no|yes (no first), then the reply — never a concession id, and no demand question (round 3)', () => {
     const s = talkSchema(['pause', 'surrender']);
     // Key order IS the order the grammar makes the model write them in: judge, then speak.
-    expect(Object.keys(s.properties)).toEqual(['demand', 'reason', 'earned', 'reply']);
-    expect(s.properties.demand).toEqual({ enum: ['no', 'yes'] });
+    expect(Object.keys(s.properties)).toEqual(['reason', 'earned', 'reply']);
     expect(s.properties.reason).toEqual({ type: 'string', maxLength: 160 });
     expect(s.properties.earned).toEqual({ enum: ['no', 'yes'] });
     expect(s.properties.reply).toEqual({ type: 'string', maxLength: 240 });
-    expect(s.required).toEqual(['demand', 'reason', 'earned', 'reply']);
+    expect(s.required).toEqual(['reason', 'earned', 'reply']);
     // The ids never reach the model: the schema is the same whatever is still available.
     expect(talkSchema(['surrender'])).toEqual(s);
     expect(JSON.stringify(s)).not.toMatch(/pause|surrender|concession/);
@@ -54,9 +53,9 @@ describe('talkSchema', () => {
   });
 
   it('a judgement outside no|yes, or an answer naming a concession, is refused', () => {
-    expect(validateAgainst(talkSchema(['pause']), { demand: 'no', reason: 'x', earned: 'maybe', reply: 'No.' })).toMatchObject({ ok: false, key: 'earned' });
-    expect(validateAgainst(talkSchema(['pause']), { demand: 'no', reason: 'x', earned: 'no', reply: 'No.', concession: 'pause' })).toMatchObject({ ok: false, key: 'concession' });
-    expect(validateAgainst(talkSchema(['pause']), { demand: 'no', reason: 'x', earned: 'no', reply: 'No.' })).toEqual({ ok: true });
+    expect(validateAgainst(talkSchema(['pause']), { reason: 'x', earned: 'maybe', reply: 'No.' })).toMatchObject({ ok: false, key: 'earned' });
+    expect(validateAgainst(talkSchema(['pause']), { reason: 'x', earned: 'no', reply: 'No.', concession: 'pause' })).toMatchObject({ ok: false, key: 'concession' });
+    expect(validateAgainst(talkSchema(['pause']), { reason: 'x', earned: 'no', reply: 'No.' })).toEqual({ ok: true });
   });
 });
 

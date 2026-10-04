@@ -81,7 +81,7 @@ function fakeBackend(script: Script = () => undefined): { backend: EvalBackend; 
       if (ipc.kind === 'turn') body = { move: props.move?.enum?.[0] ?? '', line: 'Sit down.' };
       else if (ipc.kind === 'talk') {
         const earned = over === 'yield' ? 'yes' : over === 'pause' ? 'maybe' : 'no';
-        body = 'earned' in props || over !== undefined ? { demand: 'no', reason: 'What they said.', earned, reply: REPLY } : { reply: REPLY };
+        body = 'earned' in props || over !== undefined ? { reason: 'What they said.', earned, reply: REPLY } : { reply: REPLY };
       } else body = { line: 'I have read you.' };
       return answer(JSON.stringify(body));
     },

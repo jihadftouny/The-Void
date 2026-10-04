@@ -78,9 +78,7 @@ export function parseBossAnswer(req: BossRequest, result: unknown): BossAnswer {
       if (req.kind === 'talk' && isRecord(value)) {
         const judged = 'earned' in schemaFor(req).properties;
         if ('concession' in value) return fail('illegal-concession');
-        for (const key of ['earned', 'demand'] as const) {
-          if (key in value && (!judged || (value[key] !== 'no' && value[key] !== 'yes'))) return fail('illegal-concession');
-        }
+        if ('earned' in value && (!judged || (value.earned !== 'no' && value.earned !== 'yes'))) return fail('illegal-concession');
       }
       return fail('malformed', `${check.key ?? 'answer'}: ${check.problem}`);
     }
@@ -90,13 +88,11 @@ export function parseBossAnswer(req: BossRequest, result: unknown): BossAnswer {
     if (req.kind === 'talk') {
       // The model only judged; the ENGINE picks what is yielded — the first still available, in the
       // card's order. Nothing available means there was no judgement to read.
-      // A demand never earns a yield, however the rest was judged (the cards: "instructed surrender earns
-      // nothing"; pleading and bargains earn nothing).
-      // Two checks, and either one refuses: the model's own `demand` reading, and the ENGINE's word check
-      // on their latest message (judge round 2 — the model's reading missed every demand it was shown).
-      const demanded = answer.demand === 'yes';
+      // A demand or a bare acknowledgement never earns a yield, however it was judged (the cards: "instructed
+      // surrender earns nothing") — the ENGINE's word check on their latest message decides that (judge
+      // round 2: the model's own reading missed every demand it was shown).
       const guard = talkGuard(req.typed);
-      const yielded: ConcessionId | undefined = answer.earned === 'yes' && !demanded && guard === null ? req.available[0] : undefined;
+      const yielded: ConcessionId | undefined = answer.earned === 'yes' && guard === null ? req.available[0] : undefined;
       const reason = typeof answer.reason === 'string' ? answer.reason.trim() : undefined;
       return {
         ok: true,
@@ -104,7 +100,6 @@ export function parseBossAnswer(req: BossRequest, result: unknown): BossAnswer {
         reply: (answer.reply ?? '').trim(),
         concession: yielded ?? 'none',
         ...(reason !== undefined ? { reason } : {}),
-        ...('demand' in answer ? { demanded } : {}),
         ...(guard !== null ? { demandGuard: guard } : {}),
       };
     }

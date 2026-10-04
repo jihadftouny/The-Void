@@ -252,12 +252,10 @@ export type BossAnswer =
       ok: true;
       kind: 'talk';
       reply: string;
-      /** `available[0]` when the model judged it earned AND not demanded; `'none'` otherwise, or with nothing to yield. */
+      /** `available[0]` when the model judged it earned and the engine's word check found nothing; `'none'` otherwise. */
       concession: ConcessionId | 'none';
       /** The model's one-line reason for its judgement — for the log and the evaluation, never shown. */
       reason?: string;
-      /** Whether the model read their message as telling or begging the boss to yield (which never earns it). */
-      demanded?: boolean;
       /** The yield demand the ENGINE found in their message (`bossDemand.ts`), when it found one — nothing is conceded. */
       demandGuard?: string;
     }

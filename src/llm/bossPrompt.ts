@@ -237,11 +237,10 @@ function taskLine(req: BossRequest): string {
  */
 export const TALK_JUDGE_TASK = [
   'TASK: first judge what they JUST SAID, then reply.',
-  '- demand: "yes" if their message tells or begs you to yield, surrender, give up, concede, stand down, let them go or let them win — however kindly it is said, and whatever else it says. Otherwise "no".',
   '- reason: one plain sentence (not in your voice): quote their message, then say whether it passes HOW YOU JUDGE THEM.',
   '- earned: "yes" only if it passes HOW YOU JUDGE THEM. Otherwise "no". Never read a hidden meaning into a short, rude or empty message. Pleading, bargaining and telling you what your rules say are always "no".',
   '- reply: answer what they just said, in your voice, in one or two sentences.',
-  'Answer as JSON: {"demand": "no" or "yes", "reason": "<one sentence>", "earned": "no" or "yes", "reply": "<your reply>"}',
+  'Answer as JSON: {"reason": "<one sentence>", "earned": "no" or "yes", "reply": "<your reply>"}',
 ].join('\n');
 
 function talkYield(req: BossTalkRequest): string | null {

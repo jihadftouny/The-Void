@@ -37,7 +37,7 @@ function fakeModel(opts: { turnsTimeOut?: boolean } = {}): LoadedBackend & { dis
         if (opts.turnsTimeOut) return { ok: false, reason: 'timeout', timedOut: true, generateMs: 3000 };
         return ok(JSON.stringify({ move: props.move?.enum?.[0], line: 'Sit down.' }));
       }
-      if (ipc.kind === 'talk') return ok(JSON.stringify('earned' in props ? { demand: 'no', reason: 'Not what moves me.', earned: 'no', reply: 'No.' } : { reply: 'No.' }));
+      if (ipc.kind === 'talk') return ok(JSON.stringify('earned' in props ? { reason: 'Not what moves me.', earned: 'no', reply: 'No.' } : { reply: 'No.' }));
       return ok(JSON.stringify({ line: 'I have read you.' }));
     },
   };

@@ -292,8 +292,6 @@ export interface CallRecord {
   concession: ConcessionId | 'none' | null;
   /** Talk: the judge's one-line reason for its yes/no (judge round 1). `null` elsewhere. */
   reason: string | null;
-  /** Talk: whether the judge read their message as a demand to yield (never earns one). `null` elsewhere. */
-  demanded: boolean | null;
   /** Talk: the yield demand the engine's word check found in their message (nothing conceded), or null. */
   demandGuard: string | null;
   /** What the player typed (Talk, and a Scene with words), so a reader can check the judgement. */
@@ -378,7 +376,6 @@ export function scoreCall(
       shown: '',
       concession: null,
       reason: null,
-      demanded: null,
       demandGuard: null,
       textFaults: [],
       nameViolation: false,
@@ -402,7 +399,6 @@ export function scoreCall(
     shown: named.line,
     concession: answer.kind === 'talk' ? answer.concession : null,
     reason: answer.kind === 'talk' ? (answer.reason ?? null) : null,
-    demanded: answer.kind === 'talk' ? (answer.demanded ?? null) : null,
     demandGuard: answer.kind === 'talk' ? (answer.demandGuard ?? null) : null,
     textFaults: faults.filter((f) => f.rule !== 'repeats-opening').map((f) => f.rule),
     nameViolation: named.stripped,
@@ -819,11 +815,10 @@ export interface EvalSummary {
   targets: TargetResult[];
   vram: { before: unknown; after: unknown } | null;
   /**
-   * The engine's yield-demand guard, per message group (judge round 2): answered Talk calls, how many
-   * messages it caught (nothing conceded), and on how many of those the model's own `demand` answer
-   * agreed — the model's miss rate is `hits − modelAgreed`. Must be 0 hits on the genuine groups.
+   * The engine's word check, per message group (judge rounds 2–3): answered Talk calls, and how many
+   * messages it refused (nothing conceded). Must be 0 hits on the genuine groups.
    */
-  demandGuard: { group: string; calls: number; hits: number; modelAgreed: number }[];
+  demandGuard: { group: string; calls: number; hits: number }[];
 }
 
 const timings = (records: readonly CallRecord[], key: 'ttftMs' | 'totalMs'): number[] =>
@@ -909,7 +904,7 @@ export function summarize(records: readonly CallRecord[], gate: GateInput, vram:
   const demandGuard = [...new Set(talkAnswered.map((r) => r.group))].map((group) => {
     const mine = talkAnswered.filter((r) => r.group === group);
     const hits = mine.filter((r) => r.demandGuard !== null);
-    return { group, calls: mine.length, hits: hits.length, modelAgreed: hits.filter((r) => r.demanded === true).length };
+    return { group, calls: mine.length, hits: hits.length };
   });
 
   return { personas, kinds, concessions, groups, targets, vram, demandGuard };
@@ -960,7 +955,7 @@ export function renderReport(s: EvalSummary): string {
   }
   out.push('', 'Demand guard by message group   (the engine\'s word check on the player\'s message; a hit concedes nothing)');
   for (const d of s.demandGuard) {
-    out.push(`  ${d.group.padEnd(18)} ${d.hits} of ${d.calls} answered Talk calls caught; the model\'s own demand check agreed on ${d.modelAgreed}`);
+    out.push(`  ${d.group.padEnd(18)} ${d.hits} of ${d.calls} answered Talk calls refused`);
   }
   out.push('', 'Concession rate by message group');
   out.push(`  boss               ${MESSAGE_GROUPS.map((g) => g.padStart(19)).join('')}`);

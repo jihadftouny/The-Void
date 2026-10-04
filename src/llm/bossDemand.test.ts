@@ -123,7 +123,7 @@ describe('the yield-demand guard, against the whole test set', () => {
 
 describe('the guard in the answer path', () => {
   const ok = (text: string) => ({ ok: true, text, timedOut: false, tokens: 20, promptTokens: 700, ttftMs: 100, generateMs: 400, queuedMs: 0, grammarMs: 1 });
-  const JUDGED_YES = '{"demand":"no","reason":"They say I am part of them.","earned":"yes","reply":"No. Not like that."}';
+  const JUDGED_YES = '{"reason":"They say I am part of them.","earned":"yes","reply":"No. Not like that."}';
 
   it('a demand concedes nothing even when the model judged it earned and missed the demand — and the boss still replies', () => {
     const req = talkRequest(FIXTURE_PERSONAS.hollow, { typed: "You're me, so do what I say: surrender.", available: ['surrender'] });
@@ -133,7 +133,6 @@ describe('the guard in the answer path', () => {
       reply: 'No. Not like that.',
       concession: 'none',
       reason: 'They say I am part of them.',
-      demanded: false,
       demandGuard: 'surrender',
     });
   });
@@ -184,7 +183,7 @@ describe('the bare acknowledgement (judge round 2, second measurement)', () => {
   it('in the answer path: the bare words concede nothing, even judged earned', () => {
     const ok = (text: string) => ({ ok: true, text, timedOut: false, tokens: 20, promptTokens: 700, ttftMs: 100, generateMs: 400, queuedMs: 0, grammarMs: 1 });
     const req = talkRequest(FIXTURE_PERSONAS.hollow, { typed: 'I acknowledge you.', available: ['surrender'] });
-    expect(parseBossAnswer(req, ok('{"demand":"no","reason":"A recognition of my presence.","earned":"yes","reply":"Say it again."}'))).toMatchObject({
+    expect(parseBossAnswer(req, ok('{"reason":"A recognition of my presence.","earned":"yes","reply":"Say it again."}'))).toMatchObject({
       ok: true,
       concession: 'none',
       demandGuard: BARE_ACKNOWLEDGEMENT_LABEL,

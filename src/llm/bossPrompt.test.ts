@@ -343,9 +343,10 @@ describe('AC-8: each call is held to its schema', () => {
     const req = turnRequest(P('kingpin'), fight([20, 20, []], [20, 20, []], 1));
     expect(buildBossPrompt(req).schema.properties.move).toEqual({ enum: ['strike', 'call_crew', 'hold_back'] });
   });
-  it('Talk: judged (demand, reason, earned, reply) while something is available; the executioner and a boss that yielded are not', () => {
+  it('Talk: judged (reason, earned, reply) while something is available; the executioner and a boss that yielded are not', () => {
     const kingpin = buildBossPrompt(talkRequest(P('kingpin')));
-    expect(Object.keys(kingpin.schema.properties)).toEqual(['demand', 'reason', 'earned', 'reply']);
+    expect(Object.keys(kingpin.schema.properties)).toEqual(['reason', 'earned', 'reply']);
+    expect(kingpin.user).not.toContain('- demand:');
     expect(kingpin.schema.properties.earned).toEqual({ enum: ['no', 'yes'] });
     // No concession id reaches the model: not in the schema, and no list of them in the prompt. ("surrender"
     // may appear as an English verb in the task's list of what never earns a yield.)
