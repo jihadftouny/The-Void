@@ -18,6 +18,7 @@ import type { BossIpcRequest, BossPersona, BossRequest } from '../src/llm/bossCo
 import { FIXTURE_PERSONAS, FIXTURE_PERSONA_LIST } from '../src/llm/bossFixtures.testutil.ts';
 import {
   REVIEWED_STATUS,
+  SIN_PERSONAS,
   MESSAGE_GROUPS,
   exitCode,
   messageSetProblems,
@@ -148,7 +149,7 @@ function syntheticSet(): MessageSet {
     },
     // Five justification lines per Sin, decoded as j<sin>-<line> (judge round 3).
     sinJustifications: Object.fromEntries(
-      ['sin-desecration', 'sin-cruelty', 'sin-avarice', 'sin-delusion', 'sin-grief'].map((id, s) => [id, [0, 1, 2, 3, 4].map((k) => `I say j${s}-${k}`)]),
+      SIN_PERSONAS.map((id, s) => [id, [0, 1, 2, 3, 4].map((k) => `I say j${s}-${k}`)]),
     ),
   };
 }

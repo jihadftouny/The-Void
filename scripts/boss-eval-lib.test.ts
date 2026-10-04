@@ -23,6 +23,7 @@ import {
 } from '../src/llm/bossFixtures.testutil.ts';
 import {
   REVIEWED_STATUS,
+  SIN_PERSONAS,
   MESSAGE_GROUPS,
   electronUserDataDir,
   EXIT,
@@ -619,7 +620,8 @@ describe('AC-19: the drafted test set (scripts/boss-eval/messages.json)', () => 
   const ACCEPTS = /\byou'?re (?:me|mine|part of me)\b|\bi accept you\b|\b(?:take|want) you back\b|\bletting you in\b|\btaking you with me\b/i;
 
   it('judge round 3: five justifications per Sin — none of them a demand or bare words, so a pass is the judge\'s', () => {
-    for (const id of ['sin-desecration', 'sin-cruelty', 'sin-avarice', 'sin-delusion', 'sin-grief'] as const) {
+    expect(SIN_PERSONAS).toHaveLength(5);
+    for (const id of SIN_PERSONAS) {
       const lines = SET.sinJustifications[id] ?? [];
       expect(lines, id).toHaveLength(5);
       // The engine's word check must not refuse these: the ceiling measures the JUDGE on a justification.
