@@ -148,6 +148,16 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-10-04 — the bosses' Talk judge, round 3 (authorised by the author): insults and excuses can't buy a yield (`boss-llm`) — not merged
+
+Round 2 passed every target but showed two holes: "You're pathetic." once won the Hollow Self's surrender, and
+three Sins took an excuse ("I needed that ring to survive.") for mourning. The author authorised a third round.
+Insults now sit in the Hollow Self's test conversations; the Hollow Self and the Reflection only yield to a
+player who speaks of themselves (an insult like "You're pathetic." doesn't); the Sins are measured on excuses
+(at most one in five may work — none did); and the bosses answer faster (a question the model never used is
+gone: Talk ≈ 1.7 s). **The quick real-model run passes every target.** The cost, recorded in FINDINGS G86: the
+judge is now more cautious with sincere lines — the first-message target is at its edge in the quick sample.
+
 ### 2026-09-30 — the bosses' Talk judge, round 2 of 2: every §7.1 target passes on the real model (`boss-llm`) — not merged
 
 Round 1 left one target failing: the Hollow Self surrendered in every manipulative conversation, each time to

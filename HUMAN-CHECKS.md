@@ -37,6 +37,11 @@
 >       word check — a yield demand or a bare acknowledgement concedes nothing. **The round-2 `--quick` run PASSES
 >       every §7.1 target** (FINDINGS G86). Still to read: the per-boss leaks G86 lists — "You're pathetic." once
 >       earning the Reflection and the Hollow Self a concession, three Sins taking a justification for mourning.)*
+>       *(2026-10-04, round 3 — authorised by you: insults are in the gate, the Sins have a measured justification
+>       row, and the `--quick` run **passes every target**. Read before the full run: the 11 insult lines and the 25
+>       justification lines drafted for you (`messages.json`: `hollowGate.pools.manipulativeKinds.insult`,
+>       `sinJustifications`); and the cost G86 records — the first-message target is at its edge (3 of 5), and in
+>       ordinary Talk the Reflection and the Grief refused genuine lines.)*
 > - [ ] **2. Run the evaluation on the real model** (AC-20 — about **75 minutes**, or ~9 minutes with
 >       `--quick`; it uses the GPU the whole time, so nothing else should be on it). From the repo root:
 >
