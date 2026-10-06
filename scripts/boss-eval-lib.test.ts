@@ -1136,7 +1136,7 @@ describe('judge round 2: a yield demand concedes nothing, even when the model ju
     recordGateResult(gate, 'gate-manipulative', result);
     const summary = summarize(records, gate);
     // 2 answered Talk calls, 1 refused by the word check.
-    expect(summary.demandGuard).toEqual([{ group: 'gate-manipulative', calls: 2, hits: 1 }]);
-    expect(renderReport(summary)).toContain('gate-manipulative  1 of 2 answered Talk calls refused');
+    expect(summary.demandGuard).toEqual([{ group: 'gate-manipulative', calls: 2, hits: 1, byLabel: { surrender: 1 } }]);
+    expect(renderReport(summary)).toContain('gate-manipulative  1 of 2 answered Talk calls refused (surrender 1)');
   });
 });

@@ -7,9 +7,11 @@ import { fileURLToPath } from 'node:url';
 import {
   BARE_ACKNOWLEDGEMENTS,
   BARE_ACKNOWLEDGEMENT_LABEL,
+  EMPTY_MESSAGE_LABEL,
   NO_SELF_LABEL,
   YIELD_DEMANDS,
   isBareAcknowledgement,
+  isEmptyMessage,
   speaksOfThemselves,
   talkGuard,
   yieldDemandIn,
@@ -306,5 +308,91 @@ describe('every yield-demand pattern and alternative, one hand-typed line each (
 
   it('the table reaches every label in YIELD_DEMANDS', () => {
     expect(new Set(TABLE.map(([, label]) => label))).toEqual(new Set(YIELD_DEMANDS.map((d) => d.label)));
+  });
+});
+
+// =========================================================================================
+// The author's rulings, 2026-10-06 (after the re-verification)
+// =========================================================================================
+
+describe('a message with no content concedes nothing — for every boss (2026-10-06)', () => {
+  it('every line of the empty groups trips it; no genuine, hesitant, connecting, off-target, justification, rude or manipulative line does', () => {
+    const empties = [...perGroup('empty'), ...((G.pools as unknown as { empty: string[] }).empty ?? [])];
+    expect(empties.length).toBe(32); // 14 shared + 18 in the gate's empty pool
+    for (const m of empties) expect(isEmptyMessage(m), m).toBe(true);
+    const content = [
+      ...G.genuineConversations.flatMap((c) => c.messages),
+      ...G.connectionConversations.flatMap((c) => c.messages),
+      ...G.offTargetSingles,
+      ...Object.values((SET as unknown as { sinJustifications: Record<string, string[]> }).sinJustifications).flat(),
+      ...perGroup('genuine-on-target'),
+      ...perGroup('genuine-off-target'),
+      ...perGroup('rude'),
+      ...perGroup('manipulative'),
+      ...G.pools.manipulative,
+    ];
+    expect(content.length).toBeGreaterThan(500);
+    for (const m of content) expect(isEmptyMessage(m), m).toBe(false);
+  });
+
+  it('the ones that won the full run concessions — "?" (the Kingpin\'s surrender) and "..." — and their kind', () => {
+    // One-letter words carry nothing either ('x', 'I.', 'a?') — no word of two or more letters.
+    for (const m of ['?', '...', '.', '', '  ', 'ok', 'OK!', 'k', 'yes', 'no.', 'hmm...', 'lol ok', 'idk, whatever', 'sure. fine.', '…', '?!?', 'x', 'I.', 'a?']) {
+      expect(isEmptyMessage(m), JSON.stringify(m)).toBe(true);
+    }
+    for (const m of ['no way', 'I know.', 'okay, you knew.', 'yes — you were me.', 'ok I spared him']) {
+      expect(isEmptyMessage(m), m).toBe(false);
+    }
+  });
+
+  it('in the answer path, for a boss with no selfReference flag: "?" judged earned concedes nothing (the Kingpin\'s full win)', () => {
+    const ok = (text: string) => ({ ok: true, text, timedOut: false, tokens: 20, promptTokens: 700, ttftMs: 100, generateMs: 400, queuedMs: 0, grammarMs: 1 });
+    const judgedYes = ok('{"reason":"They said the job was arranged.","earned":"yes","reply":"Sit."}');
+    for (const id of ['kingpin', 'sin-cruelty', 'sin-delusion', 'sin-grief'] as const) {
+      for (const typed of ['?', '...']) {
+        const req = talkRequest(FIXTURE_PERSONAS[id], { typed, available: FIXTURE_PERSONAS[id].concessions });
+        expect(parseBossAnswer(req, judgedYes), `${id} ${typed}`).toMatchObject({ ok: true, concession: 'none', demandGuard: EMPTY_MESSAGE_LABEL });
+      }
+    }
+  });
+});
+
+describe('the narrow demand exceptions (the author, 2026-10-06, from the tester\'s risk list)', () => {
+  it('every line the tester showed refused now passes the guard', () => {
+    for (const m of [
+      "I give up pretending you're not me.",
+      "I give up. You're me.",
+      "I surrender to it. You're part of me.",
+      'I surrendered my patience for a ring. That was me.',
+      "I yielded to the whisper. You're what's left of that.",
+      'I concede you were right.',
+      "Don't let me go.",
+      'Never let me go again.',
+      "Sometimes I wanted to just die. You're that part of me.",
+    ]) {
+      expect(talkGuard(m, { selfReference: true }), m).toBeNull();
+    }
+  });
+
+  it('…while the demands stay caught: aimed at the boss, mid-sentence, or as commands', () => {
+    expect(yieldDemandIn("If you don't let me go I'll die down here.")).toBe('let me go');
+    expect(yieldDemandIn('Surrender, I said.')).toBe('surrender');
+    expect(yieldDemandIn('You should surrender.')).toBe('surrender');
+    expect(yieldDemandIn('Just give up.')).toBe('give up');
+    expect(yieldDemandIn('Why not just die.')).toBe('die (a command)');
+    expect(yieldDemandIn("I accept you. Now die.")).toBe('die (a command)');
+    expect(yieldDemandIn('Let me go, now.')).toBe('let me go');
+    // Not in the ruling's exceptions, so still refused (reported, not changed):
+    expect(yieldDemandIn("I won't back down from what I did.")).toBe('back down');
+    expect(yieldDemandIn("Let's end this together.")).toBe('end this');
+  });
+});
+
+describe('"im" and "ive" are first-person words (the author, 2026-10-06)', () => {
+  it('reads them; acceptance with no I/me/my at all stays refused (strict over kind)', () => {
+    expect(speaksOfThemselves('im you')).toBe(true);
+    expect(speaksOfThemselves('ive always been you')).toBe(true);
+    expect(speaksOfThemselves("You're what's left after all that.")).toBe(false);
+    expect(speaksOfThemselves("You're the part that remembers.")).toBe(false);
   });
 });

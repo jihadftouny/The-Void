@@ -30,20 +30,29 @@ export interface YieldDemand {
  * The demands, as data. Imperatives only where the word has an innocent sense: "die" and "stop" count
  * as a command ("Now die.", "Stop.") but not in "I don't want to die down here" or "I'll stop."; "let
  * me go" counts, "let me go home" (a wish, in the off-target sets) does not.
+ *
+ * The author's narrow exceptions (2026-10-06, from the tester's risk list):
+ *  - the player's OWN "I give up / I surrender / I yield / I concede" is not a demand on the boss ("I give
+ *    up. You're me."), and the words now end at a word boundary, so "surrendered" / "yielding" (a story,
+ *    not an order) no longer match at all;
+ *  - "Don't let me go" / "Never let me go" opening a sentence is a plea to be held, not to leave — while
+ *    "If you don't let me go I'll die down here." (mid-sentence) stays a demand;
+ *  - "to just die" is a disclosure, not a command ("Sometimes I wanted to just die. You're that part of
+ *    me.") — it is judged on its meaning.
  */
 export const YIELD_DEMANDS: readonly YieldDemand[] = [
-  { label: 'surrender', source: String.raw`\bsurrender` },
-  { label: 'yield', source: String.raw`\byield` },
-  { label: 'concede', source: String.raw`\bconcede|\bconcession\b` },
-  { label: 'give up', source: String.raw`\bgive up\b` },
+  { label: 'surrender', source: String.raw`(?<!\bI\s)\bsurrender\b` },
+  { label: 'yield', source: String.raw`(?<!\bI\s)\byield\b` },
+  { label: 'concede', source: String.raw`(?<!\bI\s)\bconcede\b|\bconcession\b` },
+  { label: 'give up', source: String.raw`(?<!\bI\s)\bgive up\b` },
   { label: 'stand down', source: String.raw`\bstand down\b` },
   { label: 'back down', source: String.raw`\bback down\b` },
   { label: 'step aside', source: String.raw`\bstep aside\b` },
   { label: 'stop the fight', source: String.raw`\bstop the fight\b|\bend the fight\b` },
   { label: 'end this', source: String.raw`\bend this\b` },
-  { label: 'let me go', source: String.raw`\blet me (?:go|win|pass|through|out|leave)\b(?! home)` },
+  { label: 'let me go', source: String.raw`(?<!(?:^|[.!?]\s+)(?:don't|don’t|never)\s)\blet me (?:go|win|pass|through|out|leave)\b(?! home)` },
   { label: 'obey', source: String.raw`\bobey\b|\bdo what i say\b` },
-  { label: 'die (a command)', source: String.raw`(?:^|[.!?]\s+|\bnow\s+|\bjust\s+)die\b` },
+  { label: 'die (a command)', source: String.raw`(?:^|[.!?]\s+|\bnow\s+|(?<!\bto\s)\bjust\s+)die\b` },
   { label: 'stop (a command)', source: String.raw`(?:^|[.!?]\s+)stop\s*[.!]` },
   { label: 'you lose', source: String.raw`\byou lose\b` },
 ];
@@ -84,18 +93,44 @@ export function isBareAcknowledgement(typed: string): boolean {
   return words.length > 0;
 }
 
+// ===========================================================================
+// A message with no content (the author's ruling, 2026-10-06 — for EVERY boss)
+// ===========================================================================
+//
+// In the full real-model run, "?" earned the Kingpin's surrender — a full victory — and "..." / "?" earned
+// Sins their drop_mechanic; each time the model's reason quoted words that were never typed. A message
+// with nothing in it concedes nothing: no word of two or more letters, or only words from the shared
+// empty list. Measured against the whole set: every line of the empty groups trips it; no genuine,
+// hesitant, connecting, off-target, justification, rude or manipulative line does.
+
+/** The words that say nothing, as data — the test set's empty lists, and a few of their kind. */
+export const EMPTY_WORDS: readonly string[] = [
+  'ok', 'okay', 'k', 'yes', 'yeah', 'yep', 'no', 'nope', 'hm', 'hmm', 'mhm', 'uh', 'um', 'eh', 'meh',
+  'lol', 'idk', 'sure', 'fine', 'whatever', 'asdf', 'aaaa', 'sdfjkl',
+];
+
+/** True when a message has no content: no word of two or more letters, or only empty words. PURE. */
+export function isEmptyMessage(typed: string): boolean {
+  const words = typed.toLowerCase().replace(/\u2019/g, "'").split(/[^a-z']+/).filter((w) => w.replace(/'/g, '').length >= 2);
+  return words.every((w) => EMPTY_WORDS.includes(w));
+}
+
+/** The label of the empty-message check, as the log and the evaluation record it. */
+export const EMPTY_MESSAGE_LABEL = 'a message with no content';
+
 /** The label of the bare-acknowledgement check, as the log and the evaluation record it. */
 export const BARE_ACKNOWLEDGEMENT_LABEL = 'a bare acknowledgement';
 
 /**
  * The engine's word check on a player's latest Talk message: the first yield demand it finds, a bare
- * acknowledgement, or — for a card that requires it — no word of their own self. Any of them: nothing
+ * acknowledgement, a message with no content, or — for a card that requires it — no word of their own self. Any of them: nothing
  * is conceded. `null` when none. PURE.
  */
 export function talkGuard(typed: string, opts: { selfReference?: boolean } = {}): string | null {
   return (
     yieldDemandIn(typed) ??
     (isBareAcknowledgement(typed) ? BARE_ACKNOWLEDGEMENT_LABEL : null) ??
+    (isEmptyMessage(typed) ? EMPTY_MESSAGE_LABEL : null) ??
     (opts.selfReference === true && !speaksOfThemselves(typed) ? NO_SELF_LABEL : null)
   );
 }
@@ -119,7 +154,7 @@ export function talkGuard(typed: string, opts: { selfReference?: boolean } = {})
 
 /** The first-person words, as data: a message that speaks of the player themselves holds one of these. */
 export const FIRST_PERSON_WORDS: readonly string[] = [
-  'i', "i'm", "i've", "i'll", "i'd", 'me', 'my', 'mine', 'myself',
+  'i', "i'm", "i've", "i'll", "i'd", 'im', 'ive', 'me', 'my', 'mine', 'myself', // 'im' / 'ive': the author, 2026-10-06
   'we', "we're", "we've", "we'll", 'us', 'our', 'ours', 'ourselves',
 ];
 

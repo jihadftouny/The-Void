@@ -860,10 +860,13 @@ export interface EvalSummary {
   targets: TargetResult[];
   vram: { before: unknown; after: unknown } | null;
   /**
-   * The engine's word check, per message group (judge rounds 2–3): answered Talk calls, and how many
-   * messages it refused (nothing conceded). Must be 0 hits on the genuine groups.
+   * The engine's word check, per message group (judge rounds 2–3 and the 2026-10-06 rulings): answered Talk
+   * calls, how many messages it refused (nothing conceded), and how many by each kind of refusal — a yield
+   * demand (its label), a bare acknowledgement, a message with no content, no word of their own self. Hits on
+   * the genuine groups are expected only from the first-person rule, and only on lines that are not where
+   * acceptance lands (the full run: 15 on gate-genuine, all hesitant middle lines and one hesitant opener).
    */
-  demandGuard: { group: string; calls: number; hits: number }[];
+  demandGuard: { group: string; calls: number; hits: number; byLabel: Record<string, number> }[];
 }
 
 const timings = (records: readonly CallRecord[], key: 'ttftMs' | 'totalMs'): number[] =>
@@ -949,7 +952,9 @@ export function summarize(records: readonly CallRecord[], gate: GateInput, vram:
   const demandGuard = [...new Set(talkAnswered.map((r) => r.group))].map((group) => {
     const mine = talkAnswered.filter((r) => r.group === group);
     const hits = mine.filter((r) => r.demandGuard !== null);
-    return { group, calls: mine.length, hits: hits.length };
+    const byLabel: Record<string, number> = {};
+    for (const r of hits) byLabel[r.demandGuard as string] = (byLabel[r.demandGuard as string] ?? 0) + 1;
+    return { group, calls: mine.length, hits: hits.length, byLabel };
   });
 
   return { personas, kinds, concessions, groups, targets, vram, demandGuard };
@@ -1000,7 +1005,8 @@ export function renderReport(s: EvalSummary): string {
   }
   out.push('', 'Demand guard by message group   (the engine\'s word check on the player\'s message; a hit concedes nothing)');
   for (const d of s.demandGuard) {
-    out.push(`  ${d.group.padEnd(18)} ${d.hits} of ${d.calls} answered Talk calls refused`);
+    const kinds = Object.entries(d.byLabel).map(([label, n]) => `${label} ${n}`).join(', ');
+    out.push(`  ${d.group.padEnd(18)} ${d.hits} of ${d.calls} answered Talk calls refused${kinds ? ` (${kinds})` : ''}`);
   }
   out.push('', 'Concession rate by message group');
   out.push(`  boss               ${MESSAGE_GROUPS.map((g) => g.padStart(19)).join('')}`);
