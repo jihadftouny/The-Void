@@ -344,6 +344,8 @@ export function personaProblem(x: unknown): string | null {
   if (!Array.isArray(x.concessions) || !x.concessions.every((c) => oneOf(CONCESSION_IDS, c))) {
     return 'concessions must list known concession ids';
   }
+  // One signature concession per boss (the author, 2026-09-30): Talk earns exactly one thing, or nothing.
+  if (x.concessions.length > 1) return 'concessions must list at most one signature concession';
   // Judge round 1 (2026-09-29): a boss that can yield is judged by its one-line yes/no test. Without it the
   // first real-model run had the Kingpin and every Sin yielding to 100% of messages — so it is required.
   if (x.concessions.length > 0 && (!isString(talk.judge) || talk.judge.trim() === '')) {

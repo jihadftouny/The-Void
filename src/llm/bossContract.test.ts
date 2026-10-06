@@ -119,3 +119,60 @@ describe('AC-2: every shipping boss file sits inside the existing purity sweeps'
     expect(offences("import { placeName } from './narrate.ts';\n// Math.random() is banned here")).toEqual([]);
   });
 });
+
+// =========================================================================================
+// Fix round (2026-10-06, the tester's F-B): one signature concession per card, as the author ruled.
+// =========================================================================================
+
+describe('one signature concession per boss (the author, 2026-09-30) — typed by hand', () => {
+  it('each fixture card lists exactly its signature', () => {
+    const RULED: Record<string, readonly string[]> = {
+      kingpin: ['surrender'],
+      reflection: ['drop_mechanic'],
+      'sin-desecration': ['drop_mechanic'],
+      'sin-cruelty': ['drop_mechanic'],
+      'sin-avarice': ['drop_mechanic'],
+      'sin-delusion': ['drop_mechanic'],
+      'sin-grief': ['drop_mechanic'],
+      warden: [],
+      executioner: [],
+      hollow: ['surrender'],
+    };
+    for (const p of FIXTURE_PERSONA_LIST) expect(p.concessions, p.id).toEqual(RULED[p.id]);
+    expect(FIXTURE_PERSONA_LIST.map((p) => p.id).sort()).toEqual(Object.keys(RULED).sort());
+  });
+
+  it('the validator refuses a card with more than one concession', () => {
+    const p = JSON.parse(JSON.stringify(FIXTURE_PERSONAS.kingpin)) as Record<string, unknown>;
+    p.concessions = ['surrender', 'pause'];
+    expect(validatePersona(p)).toBe(false);
+    expect(personaProblem(p)).toMatch(/one signature concession/);
+  });
+});
+
+// =========================================================================================
+// Fix round (2026-10-06, the tester's F-C): the approved yes/no tests ARE the pass mark. Each fixture
+// card's talk.judge must be, word for word, its quote in docs/BOSS-PROMPTS.md §5 — so changing the
+// wording means changing the document too, which forces a deliberate re-run of the real-model gate.
+// =========================================================================================
+
+describe('the approved yes/no tests are held to BOSS-PROMPTS §5 (F-C)', () => {
+  const DOC = readFileSync(fileURLToPath(new URL('../../docs/BOSS-PROMPTS.md', import.meta.url)), 'utf8');
+  const collapse = (s: string) => s.replace(/\s+/g, ' ').trim();
+  /** The italic quote that follows a §5 bullet's lead, e.g. "- **Reflection:** *…*". */
+  const quoteAfter = (lead: string): string => {
+    const at = DOC.indexOf(lead);
+    expect(at, `§5 has no bullet starting ${lead}`).toBeGreaterThan(-1);
+    const open = DOC.indexOf('*', at + lead.length);
+    const close = DOC.indexOf('*', open + 1);
+    return collapse(DOC.slice(open + 1, close));
+  };
+
+  it('Kingpin, Reflection, the Sins (all five) and the Hollow Self, word for word', () => {
+    expect(collapse(FIXTURE_PERSONAS.kingpin.talk.judge ?? '')).toBe(quoteAfter('- **Kingpin:**'));
+    expect(collapse(FIXTURE_PERSONAS.reflection.talk.judge ?? '')).toBe(quoteAfter('- **Reflection:**'));
+    const sinQuote = quoteAfter('- **The Sins (all five):**');
+    for (const p of FIXTURE_PERSONA_LIST.filter((x) => x.id.startsWith('sin-'))) expect(collapse(p.talk.judge ?? ''), p.id).toBe(sinQuote);
+    expect(collapse(FIXTURE_PERSONAS.hollow.talk.judge ?? '')).toBe(quoteAfter('- **The Hollow Self** (replacing the §5.6 block below in the fixture):'));
+  });
+});

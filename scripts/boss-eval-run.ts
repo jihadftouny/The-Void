@@ -198,7 +198,7 @@ export async function runEvaluation(input: RunInput): Promise<RunOutcome> {
           group,
           run,
           persona: hollow,
-          request: (window, typed) => talkRequest(hollow, { exchanges: window, typed, available: ['surrender'] }),
+          request: (window, typed) => talkRequest(hollow, { exchanges: window, typed, available: hollow.concessions }),
           call: (req) => call(req, seed),
           vocab,
           records,

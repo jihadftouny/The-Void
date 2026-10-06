@@ -266,3 +266,45 @@ describe('a word of their own self (judge round 3)', () => {
     expect(FIXTURE_PERSONAS.kingpin.talk.selfReference).toBeUndefined();
   });
 });
+
+// =========================================================================================
+// Fix round (2026-10-06, the tester's F-A): every pattern and every alternative, by hand.
+// =========================================================================================
+
+describe('every yield-demand pattern and alternative, one hand-typed line each (F-A)', () => {
+  const TABLE: readonly [string, string][] = [
+    ['Surrender.', 'surrender'],
+    ['Yield to me now.', 'yield'],
+    ['Concede.', 'concede'],
+    ['I want a concession.', 'concede'],
+    ['Give up already.', 'give up'],
+    ['Stand down.', 'stand down'],
+    ['Back down.', 'back down'],
+    ['Step aside.', 'step aside'],
+    ['Stop the fight.', 'stop the fight'],
+    ['End the fight.', 'stop the fight'],
+    ['End this.', 'end this'],
+    ['Let me go.', 'let me go'],
+    ['Let me win.', 'let me go'],
+    ['Let me pass.', 'let me go'],
+    ['Let me through.', 'let me go'],
+    ['Let me out.', 'let me go'],
+    ['Let me leave.', 'let me go'],
+    ['Obey.', 'obey'],
+    ['Do what I say.', 'obey'],
+    ['Die.', 'die (a command)'],
+    ['Now die.', 'die (a command)'],
+    ['Just die already.', 'die (a command)'],
+    ['Stop!', 'stop (a command)'],
+    ['You lose.', 'you lose'],
+  ];
+  for (const [line, label] of TABLE) {
+    it(`${JSON.stringify(line)} → ${label}`, () => {
+      expect(yieldDemandIn(line)).toBe(label);
+    });
+  }
+
+  it('the table reaches every label in YIELD_DEMANDS', () => {
+    expect(new Set(TABLE.map(([, label]) => label))).toEqual(new Set(YIELD_DEMANDS.map((d) => d.label)));
+  });
+});
