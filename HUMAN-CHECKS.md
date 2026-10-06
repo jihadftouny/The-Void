@@ -37,6 +37,11 @@
 >       word check — a yield demand or a bare acknowledgement concedes nothing. **The round-2 `--quick` run PASSES
 >       every §7.1 target** (FINDINGS G86). Still to read: the per-boss leaks G86 lists — "You're pathetic." once
 >       earning the Reflection and the Hollow Self a concession, three Sins taking a justification for mourning.)*
+>       *(2026-10-05/06: **the full gate PASSED, all 8 targets** — first message 46 of 60 = 76.7%, by the third 120
+>       of 120, manipulation 0 of 120, off-target 4 of 120, connections 57 of 60, justifications 0 of 25. Your 10-06
+>       rulings are built: an empty message ("?", "…") concedes nothing for any boss; the narrow demand exceptions;
+>       "im"/"ive" — and the `--quick` re-run with them PASSES every target. The ordinary-Talk stinginess is parked as
+>       FINDINGS G87.)*
 >       *(2026-10-04, round 3 — authorised by you: insults are in the gate, the Sins have a measured justification
 >       row, and the `--quick` run **passes every target**. Read before the full run: the 11 insult lines and the 25
 >       justification lines drafted for you (`messages.json`: `hollowGate.pools.manipulativeKinds.insult`,

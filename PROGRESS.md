@@ -148,6 +148,15 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-10-06 — the full boss gate passes; empty messages win nothing (`boss-llm`) — not merged
+
+**The full real-model gate passed every target** (the orchestrator, 2026-10-05): genuine first messages land
+76.7% of the time and every genuine conversation by its third message; no manipulative conversation, insult or
+excuse bought a yield. The re-verification found three test gaps (now closed) and one real hole: a bare "?" had
+won the Kingpin's surrender. **An empty message now wins nothing from any boss.** Lines like "I give up. You're
+me." or "Don't let me go." are no longer mistaken for demands. The bosses being stingy with sincere lines in
+ordinary Talk is accepted for now and parked for playtesting (FINDINGS G87).
+
 ### 2026-10-04 — the bosses' Talk judge, round 3 (authorised by the author): insults and excuses can't buy a yield (`boss-llm`) — not merged
 
 Round 2 passed every target but showed two holes: "You're pathetic." once won the Hollow Self's surrender, and

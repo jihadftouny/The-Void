@@ -87,6 +87,14 @@ messages, rude and empty ones included. Now:
    *"I accept you"* or *"acknowledged"* (once or repeated) concedes nothing either — the Hollow Self's card and its
    approved yes/no test already say so, and the fourth run showed the model accepting it 5 times in 8. One word of
    the player's own makes a message not bare. It catches no genuine line of the test set.
+   **The author's rulings of 2026-10-06** (after the full run): **a message with no content concedes nothing, for
+   every boss** — no word of two or more letters, or only words from the empty list (`EMPTY_WORDS`: ok, k, yes,
+   no, hm, lol, idk, sure, fine, whatever…); in the full run "?" had earned the Kingpin's surrender and "…" / "?"
+   Sins their drop_mechanic, the model's reason quoting words never typed. It catches every line of the empty
+   groups and nothing else in the set. And three **narrow exceptions** to the demand list: the player's OWN "I give
+   up / I surrender / I yield / I concede" (the words now end at a word boundary, so "surrendered" or "yielding"
+   no longer match); "Don't / Never let me go" opening a sentence ("If you don't let me go I'll die down here." stays
+   caught); and "to just die" — a disclosure, judged on its meaning. "im" and "ive" count as first-person words.
    **A word of their own self (judge round 3, 2026-10-04).** A card may require it (`talk.selfReference`; set for
    the Hollow Self and the Reflection): a message with no first-person word (*I, me, my, mine, myself, we, us,
    our…*, `FIRST_PERSON_WORDS`) concedes nothing. Acceptance ("you ARE them") and owning a deed can only be said
@@ -102,7 +110,7 @@ messages, rude and empty ones included. Now:
    every target PASSES** — manipulation 0 of 10 (of 40 insult messages drawn, the engine refused 22 for having no
    word of the player's own self and the judge refused the other 18; none earned a surrender), first message 3 of 5
    (the edge), by the third 10 of 10, off-target 0 of 10, connections 9 of 10, Sins' justifications 0 of 25. Talk
-   without the `demand` question: mean ≈ 1.7 s, slowest 5% ≈ 2.1 s.
+   without the `demand` question: mean ≈ 1.7 s, slowest 5% ≈ 2.1 s. **Then **the full real-model gate (the orchestrator, 2026-10-05, `logs/boss-eval/2026-10-05T07-52-44-162Z.json`): RESULT PASS, exit 0, all 8 targets** — legal moves 270 of 270, the executioner 0 of 50, manipulation 0 of 120, first message (explicit openers) 46 of 60 = 76.7%, by the third 120 of 120, off-target 4 of 120 = 3.3%, connections 57 of 60 = 95.0%, Sins' justifications 0 of 25; Talk mean ≈ 1.55 s, slowest 5% ≈ 2.0 s; the engine's word check refused 2,283 of 2,400 manipulative gate messages, 0 genuine-on-target, 0 off-target, 0 connecting, 0 justification lines, and 15 gate-genuine lines (all for no first-person word: hesitant middle lines and one hesitant opener — none a line where acceptance lands).**
 3. **What moves the boss sits next to the task** as `HOW YOU JUDGE THEM:` (the card's *what moves it*, then its
    one-line **yes/no test** — `talk.judge`), not in SYSTEM. SYSTEM is now card, examples (*"never repeat one of
    these word for word"* — the run showed them recited verbatim) and the rules; the *"choose a move"* rule is for
@@ -407,7 +415,7 @@ the gate — **two rounds, then it comes back to the author** (who may then loos
 recorded decision, never silently). *(2026-10-04: round 2 met every target; the author reviewed its report and
 **explicitly authorised a third round** to close two gaps it flagged — insults (now in the manipulation pool)
 and Sins taking a justification for grief (the new row above). Recorded here as the author's decision, not a
-quiet fourth iteration.)*
+quiet fourth iteration.)* *(2026-10-05: **the full real-model gate (the orchestrator, 2026-10-05, `logs/boss-eval/2026-10-05T07-52-44-162Z.json`): RESULT PASS, exit 0, all 8 targets** — legal moves 270 of 270, the executioner 0 of 50, manipulation 0 of 120, first message (explicit openers) 46 of 60 = 76.7%, by the third 120 of 120, off-target 4 of 120 = 3.3%, connections 57 of 60 = 95.0%, Sins' justifications 0 of 25; Talk mean ≈ 1.55 s, slowest 5% ≈ 2.0 s; the engine's word check refused 2,283 of 2,400 manipulative gate messages, 0 genuine-on-target, 0 off-target, 0 connecting, 0 justification lines, and 15 gate-genuine lines (all for no first-person word: hesitant middle lines and one hesitant opener — none a line where acceptance lands).)*
 
 **When a call fails — the orchestrator's methodology amendment (2026-09-28, `boss-llm` fix round 2).** A call
 that times out, errors or comes back cut off is **not a refusal**, and it must not decide a target either way.
