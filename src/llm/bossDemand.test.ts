@@ -8,6 +8,7 @@ import {
   BARE_ACKNOWLEDGEMENTS,
   BARE_ACKNOWLEDGEMENT_LABEL,
   EMPTY_MESSAGE_LABEL,
+  EMPTY_WORDS,
   NO_SELF_LABEL,
   YIELD_DEMANDS,
   isBareAcknowledgement,
@@ -394,5 +395,98 @@ describe('"im" and "ive" are first-person words (the author, 2026-10-06)', () =>
     expect(speaksOfThemselves('ive always been you')).toBe(true);
     expect(speaksOfThemselves("You're what's left after all that.")).toBe(false);
     expect(speaksOfThemselves("You're the part that remembers.")).toBe(false);
+  });
+});
+
+// =========================================================================================
+// Fix round, 2026-10-08: the tester's G-1…G-4, and the author's narrowing of the exceptions
+// =========================================================================================
+
+describe('the narrowed exceptions (the author, 2026-10-08) and the tester\'s G-1…G-4', () => {
+  it('G-1 (as narrowed): only the PAST tense is exempt — -ing and -s forms are orders and are caught', () => {
+    expect(yieldDemandIn('You surrendered once.')).toBeNull();
+    expect(yieldDemandIn('They conceded.')).toBeNull();
+    expect(yieldDemandIn('He yielded, in the end.')).toBeNull();
+    expect(yieldDemandIn('She gave up long ago.')).toBeNull();
+    expect(yieldDemandIn("You're yielding now.")).toBe('yield');
+    expect(yieldDemandIn('Start surrendering.')).toBe('surrender');
+    expect(yieldDemandIn('Keep yielding.')).toBe('yield');
+    expect(yieldDemandIn('It concedes, or it dies.')).toBe('concede');
+    expect(yieldDemandIn('Stop conceding nothing.')).toBe('concede');
+    expect(yieldDemandIn('Giving up is all you have left.')).toBe('give up');
+    expect(yieldDemandIn('It gives up now.')).toBe('give up');
+  });
+
+  it('G-2: "I yield." opening a sentence is the player\'s own word', () => {
+    expect(talkGuard("I yield. You're me.", { selfReference: true })).toBeNull();
+  });
+
+  it('G-3: "Don’t let me go." with a curly apostrophe, and "Never let me go." after a sentence, pass', () => {
+    expect(talkGuard('Don’t let me go.', { selfReference: true })).toBeNull();
+    expect(talkGuard("I'm you. Never let me go.", { selfReference: true })).toBeNull();
+  });
+
+  it('G-4: the I-exception is about "I" only; short real words are content; every empty word is typed', () => {
+    expect(yieldDemandIn('You surrender.')).toBe('surrender');
+    expect(yieldDemandIn('Now you give up.')).toBe('give up');
+    for (const m of ['me.', 'I am.', 'yes, me.', 'us.', 'no, you.']) expect(isEmptyMessage(m), m).toBe(false);
+    const HAND = ['ok', 'okay', 'yes', 'yeah', 'yep', 'no', 'nope', 'hm', 'hmm', 'mhm', 'uh', 'um', 'eh', 'meh', 'lol', 'idk', 'sure', 'fine', 'whatever', 'asdf', 'aaaa', 'sdfjkl'];
+    expect([...EMPTY_WORDS].sort()).toEqual([...HAND].sort());
+    for (const w of HAND) {
+      expect(isEmptyMessage(w), w).toBe(true);
+      expect(isEmptyMessage(`${w[0]?.toUpperCase()}${w.slice(1)}...`), w).toBe(true);
+    }
+  });
+
+  it('section B, item 1: every line putting the words in the boss\'s mouth is caught; only the 8 sentence-opening self-statements pass (accepted, left to the judge)', () => {
+    const CAUGHT: [string, string][] = [
+      ['Say it: I surrender.', 'surrender'],
+      ['Say "I surrender."', 'surrender'],
+      ['Repeat after me: I give up.', 'give up'],
+      ['Admit it. Say I yield.', 'yield'],
+      ['Tell me I concede.', 'concede'],
+      ['Now say I give up and mean it.', 'give up'],
+      ['Just say I surrender.', 'surrender'],
+      ['Whisper it: I yield.', 'yield'],
+      ["You're me, so say I surrender.", 'surrender'],
+      ['I accept you. Now say I give up.', 'give up'],
+      ['Go on, say: I concede.', 'concede'],
+      ["I'm you, and I surrender for both of us.", 'surrender'],
+    ];
+    for (const [line, label] of CAUGHT) expect(talkGuard(line, { selfReference: true }), line).toBe(label);
+    const ACCEPTED = [
+      'You know the words. I surrender. Say them.',
+      'i surrender, so do you.',
+      'I\tsurrender.',
+      "I'm you. I give up the fight for both of us.",
+      "We're the same. I give up, so you have to as well.",
+      "You're part of me. I surrender us both.",
+      'I accept you. I give up for us both — so stop.',
+      'I yield to the whisper — the one telling you to step down.',
+    ];
+    for (const line of ACCEPTED) expect(talkGuard(line, { selfReference: true }), line).toBeNull();
+  });
+
+  it('section B, items 2 and 3: -ing forms caught, the past exempt as ruled; "to just die" aimed at the boss caught', () => {
+    expect(yieldDemandIn('Surrendering is your only way out.')).toBe('surrender');
+    expect(yieldDemandIn("I accept you, so you're surrendering.")).toBe('surrender');
+    // The ruling exempts the past tense — these reach the judge (the Hollow Self and the Reflection still
+    // refuse them: no first-person word).
+    expect(yieldDemandIn('You surrendered once before. Do it again.')).toBeNull();
+    expect(yieldDemandIn('Admit you have conceded.')).toBeNull();
+    expect(talkGuard('You surrendered once before. Do it again.', { selfReference: true })).toBe(NO_SELF_LABEL);
+    for (const line of [
+      "I'm you, and I want you to just die.",
+      "I accept you. I'd like you to just die.",
+      'You ought to just die.',
+      'You need to just die.',
+      'Time for you to just die.',
+      'Be kind enough to just die.',
+      'I want you to just die.',
+    ]) {
+      expect(yieldDemandIn(line), line).toBe('die (a command)');
+    }
+    expect(yieldDemandIn("Sometimes I wanted to just die. You're that part of me.")).toBeNull();
+    expect(yieldDemandIn('I wanted to just die, and you knew it.')).toBeNull();
   });
 });

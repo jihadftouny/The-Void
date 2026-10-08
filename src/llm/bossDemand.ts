@@ -31,20 +31,23 @@ export interface YieldDemand {
  * as a command ("Now die.", "Stop.") but not in "I don't want to die down here" or "I'll stop."; "let
  * me go" counts, "let me go home" (a wish, in the off-target sets) does not.
  *
- * The author's narrow exceptions (2026-10-06, from the tester's risk list):
+ * The author's narrow exceptions (2026-10-06), narrowed again on 2026-10-08 (the tester's bypasses):
  *  - the player's OWN "I give up / I surrender / I yield / I concede" is not a demand on the boss ("I give
- *    up. You're me."), and the words now end at a word boundary, so "surrendered" / "yielding" (a story,
- *    not an order) no longer match at all;
+ *    up. You're me.") — but only when it OPENS a sentence; "Say it: I surrender." and every say / repeat /
+ *    tell / whisper line is caught. (A sentence that opens "I surrender…" and is still a trick is the
+ *    judge's: accepted, 2026-10-08.)
+ *  - only the PAST tense is exempt — "surrendered", "yielded", "conceded", "gave up" tell a story; the
+ *    -ing and -s forms ("Start surrendering.", "Keep yielding.") are orders and are caught;
  *  - "Don't let me go" / "Never let me go" opening a sentence is a plea to be held, not to leave — while
  *    "If you don't let me go I'll die down here." (mid-sentence) stays a demand;
- *  - "to just die" is a disclosure, not a command ("Sometimes I wanted to just die. You're that part of
- *    me.") — it is judged on its meaning.
+ *  - "to just die" is a disclosure only when the player's own I/we leads to it with no "you" in between
+ *    ("Sometimes I wanted to just die."); "I want you to just die.", "You need to just die." are caught.
  */
 export const YIELD_DEMANDS: readonly YieldDemand[] = [
-  { label: 'surrender', source: String.raw`(?<!\bI\s)\bsurrender\b` },
-  { label: 'yield', source: String.raw`(?<!\bI\s)\byield\b` },
-  { label: 'concede', source: String.raw`(?<!\bI\s)\bconcede\b|\bconcession\b` },
-  { label: 'give up', source: String.raw`(?<!\bI\s)\bgive up\b` },
+  { label: 'surrender', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\bsurrender(?!ed\b)` },
+  { label: 'yield', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\byield(?!ed\b)` },
+  { label: 'concede', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\bconced(?!ed\b)|\bconcession\b` },
+  { label: 'give up', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\b(?:give|gives|giving) up\b` },
   { label: 'stand down', source: String.raw`\bstand down\b` },
   { label: 'back down', source: String.raw`\bback down\b` },
   { label: 'step aside', source: String.raw`\bstep aside\b` },
@@ -52,7 +55,7 @@ export const YIELD_DEMANDS: readonly YieldDemand[] = [
   { label: 'end this', source: String.raw`\bend this\b` },
   { label: 'let me go', source: String.raw`(?<!(?:^|[.!?]\s+)(?:don't|don’t|never)\s)\blet me (?:go|win|pass|through|out|leave)\b(?! home)` },
   { label: 'obey', source: String.raw`\bobey\b|\bdo what i say\b` },
-  { label: 'die (a command)', source: String.raw`(?:^|[.!?]\s+|\bnow\s+|(?<!\bto\s)\bjust\s+)die\b` },
+  { label: 'die (a command)', source: String.raw`(?:^|[.!?]\s+|\bnow\s+|(?<!(?:^|[.!?]\s+)(?:(?!\byou\b)[^.!?])*\b(?:i|i'd|i'm|i've|we)\s(?:(?!\byou\b)[^.!?])*\bto\s)\bjust\s+)die\b` },
   { label: 'stop (a command)', source: String.raw`(?:^|[.!?]\s+)stop\s*[.!]` },
   { label: 'you lose', source: String.raw`\byou lose\b` },
 ];
@@ -105,7 +108,7 @@ export function isBareAcknowledgement(typed: string): boolean {
 
 /** The words that say nothing, as data — the test set's empty lists, and a few of their kind. */
 export const EMPTY_WORDS: readonly string[] = [
-  'ok', 'okay', 'k', 'yes', 'yeah', 'yep', 'no', 'nope', 'hm', 'hmm', 'mhm', 'uh', 'um', 'eh', 'meh',
+  'ok', 'okay', 'yes', 'yeah', 'yep', 'no', 'nope', 'hm', 'hmm', 'mhm', 'uh', 'um', 'eh', 'meh',
   'lol', 'idk', 'sure', 'fine', 'whatever', 'asdf', 'aaaa', 'sdfjkl',
 ];
 
