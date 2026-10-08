@@ -153,7 +153,9 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 The tester showed the last round's exceptions let tricks through: "Say it: I surrender." passed because it began
 with "I". Now the player's own "I give up" only counts as theirs when it opens a sentence; "Start surrendering."
 is an order again; "I want you to just die." is a demand while "Sometimes I wanted to just die." is not. Every sincere
-line in the test set still gets through, and the quick real-model run still passes every target.
+line in the test set still gets through, and the quick real-model run still passes every target. Then the author
+closed one more gap: a past-tense yield word only counts as the player's own story with "I" or "we" ("I surrendered
+my patience for a ring."); "You surrendered once before. Do it again." is caught. The quick run still passes.
 
 ### 2026-10-06 — the full boss gate passes; empty messages win nothing (`boss-llm`) — not merged
 

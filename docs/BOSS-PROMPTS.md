@@ -99,7 +99,10 @@ messages, rude and empty ones included. Now:
    "I give up / I surrender…" exemption holds only when it **opens a sentence** — "Say it: I surrender." and every
    say / repeat / tell / whisper line is caught (eight sentence-opening self-statements, such as "You're part of me. I
    surrender us both.", are left to the judge, accepted); only the **past tense** is exempt ("surrendered", "gave
-   up"), while "-ing" and "-s" forms ("Start surrendering.") are caught; and "to just die" is exempt only when the
+   up") — and only when the player speaks of themselves, with an **I/we subject** ("I surrendered my patience for a
+   ring.", "We gave up so much."); aimed at the boss or anyone else it is caught ("You surrendered once before. Do it
+   again.", "Admit you have conceded.", "They conceded.") — while "-ing" and "-s" forms ("Start surrendering.") are
+   always caught; and "to just die" is exempt only when the
    player's own I/we leads to it with no "you" between ("I want you to just die.", "You need to just die." are caught).
    A `--quick` re-run with these rules PASSES every target.
    **A word of their own self (judge round 3, 2026-10-04).** A card may require it (`talk.selfReference`; set for
