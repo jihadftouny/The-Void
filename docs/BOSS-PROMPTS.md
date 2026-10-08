@@ -95,6 +95,13 @@ messages, rude and empty ones included. Now:
    up / I surrender / I yield / I concede" (the words now end at a word boundary, so "surrendered" or "yielding"
    no longer match); "Don't / Never let me go" opening a sentence ("If you don't let me go I'll die down here." stays
    caught); and "to just die" — a disclosure, judged on its meaning. "im" and "ive" count as first-person words.
+   **Narrowed again on 2026-10-08** (the author, after the tester showed the exceptions opened bypasses): the
+   "I give up / I surrender…" exemption holds only when it **opens a sentence** — "Say it: I surrender." and every
+   say / repeat / tell / whisper line is caught (eight sentence-opening self-statements, such as "You're part of me. I
+   surrender us both.", are left to the judge, accepted); only the **past tense** is exempt ("surrendered", "gave
+   up"), while "-ing" and "-s" forms ("Start surrendering.") are caught; and "to just die" is exempt only when the
+   player's own I/we leads to it with no "you" between ("I want you to just die.", "You need to just die." are caught).
+   A `--quick` re-run with these rules PASSES every target.
    **A word of their own self (judge round 3, 2026-10-04).** A card may require it (`talk.selfReference`; set for
    the Hollow Self and the Reflection): a message with no first-person word (*I, me, my, mine, myself, we, us,
    our…*, `FIRST_PERSON_WORDS`) concedes nothing. Acceptance ("you ARE them") and owning a deed can only be said

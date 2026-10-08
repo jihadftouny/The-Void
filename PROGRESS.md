@@ -148,6 +148,13 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-10-08 — the bosses' demand check, narrowed again (`boss-llm`) — not merged
+
+The tester showed the last round's exceptions let tricks through: "Say it: I surrender." passed because it began
+with "I". Now the player's own "I give up" only counts as theirs when it opens a sentence; "Start surrendering."
+is an order again; "I want you to just die." is a demand while "Sometimes I wanted to just die." is not. Every sincere
+line in the test set still gets through, and the quick real-model run still passes every target.
+
 ### 2026-10-06 — the full boss gate passes; empty messages win nothing (`boss-llm`) — not merged
 
 **The full real-model gate passed every target** (the orchestrator, 2026-10-05): genuine first messages land
