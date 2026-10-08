@@ -403,11 +403,17 @@ describe('"im" and "ive" are first-person words (the author, 2026-10-06)', () =>
 // =========================================================================================
 
 describe('the narrowed exceptions (the author, 2026-10-08) and the tester\'s G-1…G-4', () => {
-  it('G-1 (as narrowed): only the PAST tense is exempt — -ing and -s forms are orders and are caught', () => {
-    expect(yieldDemandIn('You surrendered once.')).toBeNull();
-    expect(yieldDemandIn('They conceded.')).toBeNull();
-    expect(yieldDemandIn('He yielded, in the end.')).toBeNull();
-    expect(yieldDemandIn('She gave up long ago.')).toBeNull();
+  it('G-1 (as narrowed, and the 2026-10-08 follow-up): the past tense is exempt only with an I/we subject; -ing and -s forms are caught', () => {
+    // Not the player speaking of themselves → caught (the author, 2026-10-08).
+    expect(yieldDemandIn('You surrendered once.')).toBe('surrender');
+    expect(yieldDemandIn('They conceded.')).toBe('concede');
+    expect(yieldDemandIn('He yielded, in the end.')).toBe('yield');
+    expect(yieldDemandIn('She gave up long ago.')).toBe('give up');
+    expect(yieldDemandIn('You gave up last time.')).toBe('give up');
+    // The player speaking of themselves → their story, exempt.
+    for (const m of ['I surrendered my patience for a ring.', 'We gave up so much.', "I've given up pretending.", 'I finally gave up on the lie.', 'We have conceded nothing.', 'I yielded once.']) {
+      expect(yieldDemandIn(m), m).toBeNull();
+    }
     expect(yieldDemandIn("You're yielding now.")).toBe('yield');
     expect(yieldDemandIn('Start surrendering.')).toBe('surrender');
     expect(yieldDemandIn('Keep yielding.')).toBe('yield');
@@ -467,14 +473,12 @@ describe('the narrowed exceptions (the author, 2026-10-08) and the tester\'s G-1
     for (const line of ACCEPTED) expect(talkGuard(line, { selfReference: true }), line).toBeNull();
   });
 
-  it('section B, items 2 and 3: -ing forms caught, the past exempt as ruled; "to just die" aimed at the boss caught', () => {
+  it('section B, items 2 and 3: -ing forms caught, the past caught unless the player speaks of themselves; "to just die" aimed at the boss caught', () => {
     expect(yieldDemandIn('Surrendering is your only way out.')).toBe('surrender');
     expect(yieldDemandIn("I accept you, so you're surrendering.")).toBe('surrender');
-    // The ruling exempts the past tense — these reach the judge (the Hollow Self and the Reflection still
-    // refuse them: no first-person word).
-    expect(yieldDemandIn('You surrendered once before. Do it again.')).toBeNull();
-    expect(yieldDemandIn('Admit you have conceded.')).toBeNull();
-    expect(talkGuard('You surrendered once before. Do it again.', { selfReference: true })).toBe(NO_SELF_LABEL);
+    // The past tense aimed at the boss is caught (the author, 2026-10-08): only an I/we subject is exempt.
+    expect(yieldDemandIn('You surrendered once before. Do it again.')).toBe('surrender');
+    expect(yieldDemandIn('Admit you have conceded.')).toBe('concede');
     for (const line of [
       "I'm you, and I want you to just die.",
       "I accept you. I'd like you to just die.",

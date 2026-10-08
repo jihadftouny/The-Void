@@ -36,18 +36,20 @@ export interface YieldDemand {
  *    up. You're me.") — but only when it OPENS a sentence; "Say it: I surrender." and every say / repeat /
  *    tell / whisper line is caught. (A sentence that opens "I surrender…" and is still a trick is the
  *    judge's: accepted, 2026-10-08.)
- *  - only the PAST tense is exempt — "surrendered", "yielded", "conceded", "gave up" tell a story; the
- *    -ing and -s forms ("Start surrendering.", "Keep yielding.") are orders and are caught;
+ *  - only the PAST tense is exempt, and only when the player speaks of THEMSELVES — an I/we subject (the
+ *    author, 2026-10-08): "I surrendered my patience for a ring.", "We gave up so much." tell their story;
+ *    aimed at the boss or anyone else it is caught ("You surrendered once before. Do it again.", "Admit
+ *    you have conceded.", "They conceded."). The -ing and -s forms ("Start surrendering.") are always caught;
  *  - "Don't let me go" / "Never let me go" opening a sentence is a plea to be held, not to leave — while
  *    "If you don't let me go I'll die down here." (mid-sentence) stays a demand;
  *  - "to just die" is a disclosure only when the player's own I/we leads to it with no "you" in between
  *    ("Sometimes I wanted to just die."); "I want you to just die.", "You need to just die." are caught.
  */
 export const YIELD_DEMANDS: readonly YieldDemand[] = [
-  { label: 'surrender', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\bsurrender(?!ed\b)` },
-  { label: 'yield', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\byield(?!ed\b)` },
-  { label: 'concede', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\bconced(?!ed\b)|\bconcession\b` },
-  { label: 'give up', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\b(?:give|gives|giving) up\b` },
+  { label: 'surrender', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\bsurrender(?!ed\b)|(?<!\b(?:i|we)(?:'ve|'d|’ve|’d)?\s+(?:\w+ly\s+)?(?:(?:have|had)\s+)?)\bsurrendered\b` },
+  { label: 'yield', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\byield(?!ed\b)|(?<!\b(?:i|we)(?:'ve|'d|’ve|’d)?\s+(?:\w+ly\s+)?(?:(?:have|had)\s+)?)\byielded\b` },
+  { label: 'concede', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\bconced(?!ed\b)|(?<!\b(?:i|we)(?:'ve|'d|’ve|’d)?\s+(?:\w+ly\s+)?(?:(?:have|had)\s+)?)\bconceded\b|\bconcession\b` },
+  { label: 'give up', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\b(?:give|gives|giving) up\b|(?<!\b(?:i|we)(?:'ve|'d|’ve|’d)?\s+(?:\w+ly\s+)?(?:(?:have|had)\s+)?)\b(?:gave|given) up\b` },
   { label: 'stand down', source: String.raw`\bstand down\b` },
   { label: 'back down', source: String.raw`\bback down\b` },
   { label: 'step aside', source: String.raw`\bstep aside\b` },
