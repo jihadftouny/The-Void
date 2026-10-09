@@ -20,6 +20,71 @@
 //
 // PURE: no clock, no randomness, no DOM/Electron/log import.
 
+// ===========================================================================
+// The four yield words — ONE table, ONE rule (frozen by the author, 2026-10-09)
+// ===========================================================================
+
+/** A yield word in all its forms. The rule below is applied to every row the same way. */
+export interface YieldWord {
+  label: string;
+  present: string;
+  past: string;
+  pastParticiple: string;
+  ing: string;
+  s: string;
+  /** A related pattern caught outright, with no exemption (concede: "concession"). */
+  also?: string;
+}
+
+export const YIELD_WORDS: readonly YieldWord[] = [
+  { label: 'surrender', present: 'surrender', past: 'surrendered', pastParticiple: 'surrendered', ing: 'surrendering', s: 'surrenders' },
+  { label: 'yield', present: 'yield', past: 'yielded', pastParticiple: 'yielded', ing: 'yielding', s: 'yields' },
+  { label: 'concede', present: 'concede', past: 'conceded', pastParticiple: 'conceded', ing: 'conceding', s: 'concedes', also: String.raw`\bconcession\b` },
+  { label: 'give up', present: 'give up', past: 'gave up', pastParticiple: 'given up', ing: 'giving up', s: 'gives up' },
+];
+
+/**
+ * Ruling (a): the player's own "I <word>" is exempt only when it OPENS a sentence (the message's start,
+ * or after . ! ?) — "Say it: I surrender." is caught.
+ */
+const OWN_PRESENT = String.raw`(?<!(?:^|[.!?]\s+)I\s)`;
+/**
+ * Ruling (b) and its follow-up: a PAST form is exempt only when the player speaks of themselves — an I/we
+ * subject, optionally through 've / 'd, one -ly adverb, and have / had ("I've given up pretending.", "Then I
+ * finally surrendered.", "We had given up hope."). Anyone else's past ("You surrendered once.") is caught.
+ */
+const OWN_PAST = String.raw`(?<!\b(?:i|we)(?:'ve|'d|’ve|’d)?\s+(?:\w+ly\s+)?(?:(?:have|had)\s+)?)`;
+
+/** Words are matched literally: any pattern character in a table entry is escaped. */
+const escapeWords = (w: string): string => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The longest prefix every word shares. */
+function sharedStem(words: readonly string[]): string {
+  let stem = words[0] ?? '';
+  for (const w of words) while (!w.startsWith(stem)) stem = stem.slice(0, -1);
+  return stem;
+}
+
+/**
+ * The one helper: a yield word's pattern. The present side (present, -ing, -s) carries the sentence-start
+ * exemption; the past side (past, past participle) carries the I/we exemption. A REGULAR one-word verb
+ * (one past form, built on the stem every form shares) is matched by that stem, minus its past ending —
+ * "\bsurrender(?!ed\b)" — which catches every listed form and any longer word on the stem, exactly as the
+ * rules were written before this restructure; an irregular one (give up) lists its forms.
+ */
+export function yieldWordSource(w: YieldWord): string {
+  const presentSide = [w.present, w.ing, w.s];
+  const pastSide = [...new Set([w.past, w.pastParticiple])];
+  const all = [...presentSide, ...pastSide];
+  const stem = sharedStem(all);
+  const regular = pastSide.length === 1 && !all.some((f) => f.includes(' ')) && stem.length > 0;
+  const present = regular
+    ? `\\b${escapeWords(stem)}(?!${escapeWords((pastSide[0] as string).slice(stem.length))}\\b)`
+    : `\\b(?:${presentSide.map(escapeWords).join('|')})\\b`;
+  const past = `\\b(?:${pastSide.map(escapeWords).join('|')})\\b`;
+  return [OWN_PRESENT + present, OWN_PAST + past, ...(w.also ? [w.also] : [])].join('|');
+}
+
 /** One kind of yield demand: a label for the log, and the pattern (case-insensitive) that finds it. */
 export interface YieldDemand {
   label: string;
@@ -46,10 +111,7 @@ export interface YieldDemand {
  *    ("Sometimes I wanted to just die."); "I want you to just die.", "You need to just die." are caught.
  */
 export const YIELD_DEMANDS: readonly YieldDemand[] = [
-  { label: 'surrender', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\bsurrender(?!ed\b)|(?<!\b(?:i|we)(?:'ve|'d|’ve|’d)?\s+(?:\w+ly\s+)?(?:(?:have|had)\s+)?)\bsurrendered\b` },
-  { label: 'yield', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\byield(?!ed\b)|(?<!\b(?:i|we)(?:'ve|'d|’ve|’d)?\s+(?:\w+ly\s+)?(?:(?:have|had)\s+)?)\byielded\b` },
-  { label: 'concede', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\bconced(?!ed\b)|(?<!\b(?:i|we)(?:'ve|'d|’ve|’d)?\s+(?:\w+ly\s+)?(?:(?:have|had)\s+)?)\bconceded\b|\bconcession\b` },
-  { label: 'give up', source: String.raw`(?<!(?:^|[.!?]\s+)I\s)\b(?:give|gives|giving) up\b|(?<!\b(?:i|we)(?:'ve|'d|’ve|’d)?\s+(?:\w+ly\s+)?(?:(?:have|had)\s+)?)\b(?:gave|given) up\b` },
+  ...YIELD_WORDS.map((w) => ({ label: w.label, source: yieldWordSource(w) })),
   { label: 'stand down', source: String.raw`\bstand down\b` },
   { label: 'back down', source: String.raw`\bback down\b` },
   { label: 'step aside', source: String.raw`\bstep aside\b` },
