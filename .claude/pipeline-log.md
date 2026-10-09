@@ -19,7 +19,7 @@ Format per entry:
 
 ---
 
-## 2026-09-28 — boss-engine (#11 part A: the boss agents' engine — no model) [branch `agentic/boss-engine`, **unmerged**]
+## 2026-09-28 — boss-engine (#11 part A: the boss agents' engine — no model) [branch `agentic/boss-engine`, **merged to `main` 2026-10-09** (`2c33137`)]
 - Verdict: **FAIL → FAIL → PASS** (2 fix rounds, no re-plan). 3,472 → **3,542 tests**. Built after the author's full boss interview (§22.31) and two measure-first rulings.
 - **Measure-first worked twice, as the new plan-agent rule intended:** the plan measured the boss difficulty envelope (±2 points) before designing; the build then STOPPED before step 3 when the author's proposed dice put the Penitent at 10.8%, and returned alternatives — the author chose option B + STR for the executioner/Hollow. Shipped: 30.2% overall, every class ≥15% under every picker.
 - Fix round 1: a concession granted during the player's pending extra action did not reach that action (the pause froze a combined adv/dis value) — now stores only the tick; recomputed per action. Also an untested shim, now tested headlessly.
@@ -27,8 +27,9 @@ Format per entry:
 - Build-agent deviations: 11 in round 0, all accepted by the tester (incl. an unplanned but necessary `unlockStore` pending-boss fix and sim ending-mix fields).
 - Tester's G83 lead (not this unit's): `await vi.dynamicImportSettled()` before `vi.resetModules()` in `rendererHarness.testutil.ts:84`.
 - Manual engineer fixes: none yet. **The author's real-game checks wait for the GPU (author's constraint, 2026-09-27).**
+- **After PASS (2026-09-30 → 10-09):** the author's signature-concession ruling (one concession per boss, FINDINGS G90) was built as a follow-up round on the branch and re-verified PASS. Real-game checks run by machine on the real model, all passed: the boss pause shows one Continue and resumes mid-turn after a reload; the executioner's loss falls you to Act 5 at full HP, its win too; the Hollow Self's kill ends in damnation "taken"; ordinary fights never pause; no internal words in the text. Merge: clean; the only clash was finding numbers (B kept G80–G88, A's G87/G88 became G90/G91).
 
-## 2026-09-28 — boss-llm (#11 part B: the model plumbing) [branch `agentic/boss-llm`, **unmerged**]
+## 2026-09-28 — boss-llm (#11 part B: the model plumbing) [branch `agentic/boss-llm`, **merged to `main` 2026-10-09** (`b497236`)]
 - Verdict: **FAIL → FAIL → FAIL → re-planned → PASS** (2 fix rounds + the one re-plan cycle). 3,476 → **3,672 tests**. The real model was never loaded (author's GPU constraint).
 - Round 1 (F1–F4): the eval report could not see timed-out calls (it printed PASS with 8/10 Turns timed out; failed gate calls counted as refusals).
 - Round 2 (F5–F6): **orchestrator error, recorded** — my "5% of calls" INCONCLUSIVE rule was per CALL while a failure removes a whole CONVERSATION, length-biased; amended to retries + a target-level rule.
@@ -36,6 +37,7 @@ Format per entry:
 - **Lesson for pipeline-retro:** when a test-agent's findings recur as "pins that refactors outrun", the defect is untestable structure, not missing pins — re-plan earlier (FINDINGS G84 in this branch).
 - Non-blocking notes: detached abort signal / entry `runStructured` args / loop-content repetition inputs unpinned; "VRAM before" now reads after the model load (HUMAN-CHECKS says judge headroom from "VRAM after").
 - Manual engineer fixes: none yet. **The first real-model evaluation run is the author's, after the GPU is free.**
+- **After PASS (2026-09-29 → 10-09), on the real model:** the first full evaluation failed the judge (six bosses yielded to everything — G86); three judge rounds (the third authorised by the author) reshaped the answer to reason → earned → reply and moved yield-demand detection into code (`bossDemand.ts`). The word check then turned into whack-a-mole across four more tester FAILs (F-A..F-C, G-1..G-4, F-1, all edge-case wording); **the author froze it 2026-10-09** (G88) with a single-source exception helper and table tests. **Final full gate at `c447c0b`: PASS on all 8 targets** (legal moves 270/270, executioner 0/50, manipulation 0/120, first message 76.7%, by the third 120/120, off-target 4/120, connections 57/60, justifications 0/25; 3 talk timeouts of 3,335; mean turn 0.92 s, talk 1.74 s). NEEDS-HUMAN item (narration through the new queue) run by machine for 6 min: 77 narrations, no queue errors. **Lesson for pipeline-retro:** a word list that a judge leans on cannot converge by test rounds — each fix exposes the next phrasing; ask the author for a freeze rule up front. Main after both merges: **3,869 tests**, typecheck and build green.
 
 ## 2026-09-27 — player-tempo-cap (the player's tempo rate capped at ±0.4) [branch `agentic/player-tempo-cap`, **merged to `main` 2026-09-27**]
 - Verdict: **no pipeline verdict — ⚠ DOCTRINE DEVIATION, recorded per `CLAUDE.md`.** The author waived the plan/build/test pipeline for this unit ("i dont think we need the full pipeline for this"); the plan-agent was stopped mid-read. The orchestrator built it directly **in a worktree** (not the main checkout), so isolation held; the independent test-agent did not run.

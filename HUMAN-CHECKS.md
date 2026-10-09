@@ -1,6 +1,8 @@
 # Human Checks — The Void
 
-> ## 🎙️ From `boss-llm` (`PLAN.md` #11 part B, 2026-09-28) — the bosses' voices have a test bench, and it has never been run
+> ## 🎙️ From `boss-llm` (`PLAN.md` #11 part B, 2026-09-28; **merged 2026-10-09** with `boss-engine`, part A) — the bosses' voices have a test bench, and it passes
+>
+> **2026-10-09: all three open items below were run by machine on the real model and passed** — nothing in this block is left for you. What still needs your eyes and hands comes with unit C, when the bosses get a screen to talk on.
 >
 > **What was built:** everything a boss needs to speak through the local model, except the screen it
 > speaks on (that is unit C). The prompts are assembled from `docs/BOSS-PROMPTS.md`, the model can only
@@ -27,7 +29,7 @@
 >       `connectionConversations`) is the pass mark as written. **G85 ruled the same day:** the first-message
 >       target (≥ 60%) is measured on the **explicit half only**; a hesitant conversation is judged by the
 >       third message alone.
-> - [ ] **1c. Judge round 1 is built but its last variant is unmeasured** (FINDINGS G86). Your first `--quick` run
+> - [x] **1c. Judge round 1 is built but its last variant is unmeasured** — ✅ superseded: rounds 2 and 3 were measured, and the full gate passed (item 2). (FINDINGS G86). Your first `--quick` run
 >       failed three targets because the Talk judge did not discriminate; round 1 redesigned it. V1 and V2 were
 >       measured (G86 has the numbers); **V3 — the committed code — was stopped by the system under low memory before
 >       its Talk calls.** Re-run `npm run boss:eval -- --run --quick` (with nothing else heavy running; ~10 minutes,
@@ -47,7 +49,7 @@
 >       justification lines drafted for you (`messages.json`: `hollowGate.pools.manipulativeKinds.insult`,
 >       `sinJustifications`); and the cost G86 records — the first-message target is at its edge (3 of 5), and in
 >       ordinary Talk the Reflection and the Grief refused genuine lines.)*
-> - [ ] **2. Run the evaluation on the real model** (AC-20 — about **75 minutes**, or ~9 minutes with
+> - [x] **2. Run the evaluation on the real model** — ✅ **2026-10-09, the final full run at `c447c0b` PASSED all 8 targets, exit 0**: legal moves 270/270, the executioner conceded 0/50, manipulation 0/120, first message 46/60 = 76.7%, by the third 120/120, off-target 4/120, connections 57/60, justifications 0/25; 3 Talk timeouts of 3,335 calls; a Turn averaged 0.92 s, a Talk 1.74 s. The original instructions are kept for re-runs (after unit C's persona data lands, run it again). (AC-20 — about **75 minutes**, or ~9 minutes with
 >       `--quick`; it uses the GPU the whole time, so nothing else should be on it). From the repo root:
 >
 >       ```
@@ -84,7 +86,7 @@
 >       *If a gate target is missed:* §7.1 says the merge is blocked and the judge prompt is iterated with
 >       this script — two rounds, then back to you. This run judges the **fixture** personas (the §5
 >       drafts); run it again once unit C's persona data lands.
-> - [ ] **3. Narration still works through the new queue** (once the GPU is free): `npm run desktop`,
+> - [x] **3. Narration still works through the new queue** — ✅ **2026-10-09, run by machine for 6 minutes on the real game**: 77 narrations streamed (median 1.6 s each), no `No sequences left`, no error lines, no heartbeat without a `done`. Two fight rounds stalled 39 s and 52 s — traced to Chromium slowing timers in the hidden window, not the queue (FINDINGS G92). (once the GPU is free): `npm run desktop`,
 >       start a new run, reach the first encounter. *Expect* narration to stream in as fast as before.
 >       *Fail if* it never appears, the wait indicator never ends, the log contains `No sequences left`,
 >       or an `llm` `generate` operation heartbeats with no `done`.

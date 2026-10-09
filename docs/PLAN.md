@@ -402,11 +402,11 @@ mechanic, the executioner none; pause and weakness are dormant. The dice and rul
 `GAME-DESIGN.md` §22.31 ("The engine rulings for #11").
 
 **#11 is built as THREE units (planned 2026-09-27; prompts and shapes in `BOSS-PROMPTS.md`):**
-- **A — `boss-engine`**: the saved deed record (§22.31 D3, G79), the executioner boss, the `grieve`
+- **A — `boss-engine`** (**✅ merged 2026-10-09**, `2c33137`): the saved deed record (§22.31 D3, G79), the executioner boss, the `grieve`
   move, the legal-move list, the seeded fallback policy, the boss's choice entering `step`,
   concessions' engine effects, surrender → grace, per-boss damage dice. Territory: `src/game/**`,
   `src/data/**`, `src/render/**`, the save.
-- **B — `boss-llm`** (built 2026-09-28, the model plumbing). Covers **G80 G81 G84 G85 G86 G87 G88**. Territory:
+- **B — `boss-llm`** (built 2026-09-28, the model plumbing; **✅ merged 2026-10-09**, `b497236`, after the final full real-model gate passed). Covers **G80 G81 G84 G85 G86 G87 G88**. Territory:
   `src/llm/bossContract.ts` (the shared plain-data shapes) · `bossWords.ts` (HP, condition, exchange,
   deed and karma words) · `bossSchema.ts` (the grammar schemas) · `bossPrompt.ts` (SYSTEM/USER
   assembly, settings) · `bossAnswer.ts` (parse, name rule, line check, fallback line) ·

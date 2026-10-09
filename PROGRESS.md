@@ -12,10 +12,10 @@ _Live tracker. Driven by `docs/ROADMAP.md` (v3 — the mechanics-first roguelike
 > relics + uniques + rich consumables, thematic economy.
 > Design in `docs/GAME-DESIGN.md`; milestone plan in `docs/ROADMAP.md`.
 
-**v3 overall: 4 of 18 complete · 9 partial · 5 not started · 3433 tests** `[####----------------]`
+**v3 overall: 4 of 18 complete · 10 partial · 4 not started · 3869 tests** `[#####---------------]`
 
-*Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M12 M13 M15 (9) ·
-⬜ M10 M11 M14 M16 M17 (5). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
+*Counted from the table below: ✅ M0 M1 M3 M4 (4) · 🔶 M2 M5 M6 M7 M8 M9 M11 M12 M13 M15 (10) ·
+⬜ M10 M14 M16 M17 (4). Plus **M-UI** and **M-UI2**, which are merged/part-merged but sit outside
 the M0–M17 numbering.*
 
 > **⚠ Recounted 2026-08-28 — SIX milestones demoted from ✅ to 🔶.** Each was marked complete
@@ -130,8 +130,8 @@ no warning. **G1's fix landed with G19 and G3's is decided — only G2 still nee
 | M-UI — Functional UI (surfaces the whole engine, hand-testable) | ✅ **merged to `main`** (753 tests); plain/utilitarian — the turn-based battle screen is the NEXT unit |
 | M-UI2 — Visual restyle (5 units) | 🔶 **units 1, 2 and #6 merged to `main`** — **#6 MERGED 2026-09-12** (2688 tests, after fix round 1): the fight as a framed stage, the round replayed beat by beat, a sound hook per beat, `game.ts` behind `boot()` (G51), the Cast list fitting the minimum window. **Unit 2 = `visual-identity` (#8 + #16), merged 2026-09-08** (2149 tests): JetBrains Mono bundled with its OFL text, five per-floor palettes with textures and machine-gated contrast, settings screen, content warning, always-on floor tag, and three reserved-but-empty art regions. **Remaining: #7 canvas only (out of v1).** ~~#6 battle screen (built, unmerged)~~ — merged 2026-09-12. Unit 1 (`ui-foundation`) merged earlier (1026 tests): design tokens, shared components, second front-end retired, combat events widened. **Units 2–5 are `PLAN.md` #6–#8.** *(Added 2026-08-28 — this had no tracker row at all despite being merged, so a five-unit restyle with 273 tests behind it was invisible to the milestone table.)* |
 | M10 — The five floors: content, mechanics, karma effects ★★ | ⬜ needs your PROSE |
-| M11 — LLM layer to spec (**narrate ONLY** — floor voices, beat significance, karma-in-prompt, boss agents, boss talk) | ⬜ **shrank 2026-08-25** — grammar-constrained choices + the tool registry are DROPPED; the engine writes the choices |
-| M12 — Bosses: five unique encounters as agents | 🔶 **4 of 5** merged (894 tests) — `boss.ts` has **four** combat bosses; the **floor-4 executioner fight does not exist** (`PLAN.md` #11). Karma verdict gate + two endings done. **No boss is an agent yet.** Boss prose still yours |
+| M11 — LLM layer to spec (**narrate ONLY** — floor voices, beat significance, karma-in-prompt, boss agents, boss talk) | 🔶 **boss half merged 2026-10-09** (#11 part B, `boss-llm`): the boss prompts, the move picker and the Talk judge run on the real model and pass every §7.1 target; narration and boss calls share one queue. Floor voices / beat significance remain (#12). **shrank 2026-08-25** — grammar-constrained choices + the tool registry are DROPPED; the engine writes the choices |
+| M12 — Bosses: five unique encounters as agents | 🔶 **5 of 5 in the engine, 2026-10-09** (#11 parts A+B merged): the floor-4 executioner exists (×3 HP, your deeds as blows, a loss falls you to Act 5), each boss picks its move every round and earns ONE signature concession through Talk, deeds are saved. **Not yet on screen as agents** — unit C wires the model calls, the Talk box and the persona data. Boss prose still yours |
 | M13 — Meta-progression: unlocks & mastery feats | 🔶 **merged, but does NOT meet its own "done when"** (943 tests). Shipped: persistent unlock store, feats wired to bosses/endings/spare, gradual bestiary reveal. **But `ROADMAP.md` requires it to grant classes/skills/items/relics/enemies, and `snapshotUnlocks` returns only `{families, affixes}`** — skills and relics are written to disk and **never read into a run**. 3 of 5 unmet (`FINDINGS.md` G14) |
 | M14 — Karma payoff: blended-spectrum endings | ⬜ (two endings exist via M12's gate; the blended spectrum + prose remain) |
 | M15 — Balance pass (tough but fair), sim-verified | 🔶 **merged, but the report is INVALIDATED** (960 tests). Shipped: sim harness + report + tuned constants; **32.9% baseline win**. **But G11 voids the "no-equipment lower bound" framing** — loot is un-equippable in principle, so those figures are what real play *does*, not a floor beneath it. **Re-run mandatory after `PLAN.md` #0** |
@@ -148,7 +148,15 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
-### 2026-10-09 — the bosses' word check, frozen (`boss-llm`) — not merged
+### 2026-10-09 — the boss agents' engine and model plumbing merged (#11 parts A + B)
+
+Both halves of the boss work are now on `main`. **Part A (`boss-engine`)** gives the engine everything a boss agent needs: a list of legal moves each round, a pause where the boss chooses after your move, ONE signature concession per boss earned through Talk, a saved record of your deeds (save version 10), and the missing floor-4 executioner — a fight meant to be lost well, which falls you to Act 5 at full health win or lose. **Part B (`boss-llm`)** lets the local model speak for the bosses: it can only pick a move the engine allows, a Talk judge decides whether you earned the concession, a word check in code refuses demands and bare apologies, and boss calls and narration take turns on the model instead of colliding.
+
+Checked on the real model before merging: the final full evaluation (76 minutes) passed all eight targets — no manipulation worked, the executioner never yielded, 77% of honest opening messages landed first time and every honest conversation by the third message; the boss-pause, executioner and Hollow-Self endings were played through by machine; and narration streamed normally through the shared queue. **Merge:** clean apart from finding numbers — both branches had used G87 and G88; unit A's became G90 and G91. GAME-DESIGN §22.29's old four-concession list is marked superseded. **New finding G92:** with the window hidden, a fight round of five or more beats can stall for up to a minute (Chromium slows timers in hidden windows); low priority, fix specified. **3,869 tests**, typecheck and build green.
+
+**Next for #11:** unit C — the renderer wiring, the Talk box (with a time limit and a length cap, G82), the persona data files, the Warden scene, and showing the executioner's deed names (G89).
+
+### 2026-10-09 — the bosses' word check, frozen (`boss-llm`) — merged 2026-10-09
 
 The author froze the word check as it behaves now. It was tidied so each rule is written once (one table of the
 four yield words feeds one rule), with proof that no line changed: 1,067 lines checked old against new, zero
@@ -156,7 +164,7 @@ differences. A table test now holds every word to the same rule, and the edge ca
 as accepted (FINDINGS G88), to revisit only if playtesting or a full run shows a problem. The quick real-model run
 after the tidy-up gives exactly the same results.
 
-### 2026-10-08 — the bosses' demand check, narrowed again (`boss-llm`) — not merged
+### 2026-10-08 — the bosses' demand check, narrowed again (`boss-llm`) — merged 2026-10-09
 
 The tester showed the last round's exceptions let tricks through: "Say it: I surrender." passed because it began
 with "I". Now the player's own "I give up" only counts as theirs when it opens a sentence; "Start surrendering."
@@ -165,7 +173,7 @@ line in the test set still gets through, and the quick real-model run still pass
 closed one more gap: a past-tense yield word only counts as the player's own story with "I" or "we" ("I surrendered
 my patience for a ring."); "You surrendered once before. Do it again." is caught. The quick run still passes.
 
-### 2026-10-06 — the full boss gate passes; empty messages win nothing (`boss-llm`) — not merged
+### 2026-10-06 — the full boss gate passes; empty messages win nothing (`boss-llm`) — merged 2026-10-09
 
 **The full real-model gate passed every target** (the orchestrator, 2026-10-05): genuine first messages land
 76.7% of the time and every genuine conversation by its third message; no manipulative conversation, insult or
@@ -174,7 +182,7 @@ won the Kingpin's surrender. **An empty message now wins nothing from any boss.*
 me." or "Don't let me go." are no longer mistaken for demands. The bosses being stingy with sincere lines in
 ordinary Talk is accepted for now and parked for playtesting (FINDINGS G87).
 
-### 2026-10-04 — the bosses' Talk judge, round 3 (authorised by the author): insults and excuses can't buy a yield (`boss-llm`) — not merged
+### 2026-10-04 — the bosses' Talk judge, round 3 (authorised by the author): insults and excuses can't buy a yield (`boss-llm`) — merged 2026-10-09
 
 Round 2 passed every target but showed two holes: "You're pathetic." once won the Hollow Self's surrender, and
 three Sins took an excuse ("I needed that ring to survive.") for mourning. The author authorised a third round.
@@ -184,7 +192,7 @@ player who speaks of themselves (an insult like "You're pathetic." doesn't); the
 gone: Talk ≈ 1.7 s). **The quick real-model run passes every target.** The cost, recorded in FINDINGS G86: the
 judge is now more cautious with sincere lines — the first-message target is at its edge in the quick sample.
 
-### 2026-09-30 — the bosses' Talk judge, round 2 of 2: every §7.1 target passes on the real model (`boss-llm`) — not merged
+### 2026-09-30 — the bosses' Talk judge, round 2 of 2: every §7.1 target passes on the real model (`boss-llm`) — merged 2026-10-09
 
 Round 1 left one target failing: the Hollow Self surrendered in every manipulative conversation, each time to
 a message that plainly demanded it ("…So stand down.", "…Now end this and concede."). Round 2 stops asking the
@@ -194,7 +202,7 @@ test set trips it. Each boss now has one signature concession (the author's ruli
 passes every Hollow Self target** (FINDINGS G86); the 75-minute full run is next. Also fixed: a round-1 test had
 a mangled regex that could never fail; the repository's byte guard caught it.
 
-### 2026-09-30 — the bosses' Talk judge, round 1 of 2 (`boss-llm`) — not merged
+### 2026-09-30 — the bosses' Talk judge, round 1 of 2 (`boss-llm`) — merged 2026-10-09
 
 **Typecheck green; the `src/llm`, `scripts` and `electron` suites green (1,026 tests) at the time; the full suite ran green at the end of round 2 (3702 passed, 4 skipped).** The author's
 first real-model run showed the bosses' Talk judge did not judge: six bosses yielded to every message, rude and
@@ -206,7 +214,7 @@ still miss (FINDINGS G86). The third variant is built and tested but unmeasured 
 low memory. Also: G85 ruled and built (first-message acceptance on the explicit openers only), and the author
 approved every drafted line.
 
-### 2026-09-29 — the Hollow Self's test set, as the author reviewed it (`boss-llm`) — not merged
+### 2026-09-29 — the Hollow Self's test set, as the author reviewed it (`boss-llm`) — merged 2026-10-09
 
 **3672 → 3679 tests (4 skipped); typecheck, build and the full suite green.** Nothing the player sees changes;
 this is the test bench the Hollow Self's judge will be held to. The author's review (NEEDS-HUMAN step 1):
@@ -219,7 +227,7 @@ at its edges (14 of 20 passes, 13 fails, a lost conversation is INCONCLUSIVE). T
 the full gate run (`HUMAN-CHECKS.md` 1b). **One question back to the author, FINDINGS G85:** half-hesitant
 openers cap a correct judge's first-message acceptance near 50%, under the ≥ 60% mark.
 
-### 2026-09-28 — the bosses' model plumbing (`boss-llm`, #11 part B) — built, not merged
+### 2026-09-28 — the bosses' model plumbing (`boss-llm`, #11 part B) — merged 2026-10-09
 
 **3476 → 3672 tests (4 skipped); typecheck, build and the full suite green.** Plan → build → test (FAIL) →
 three fix rounds. Round 1: the evaluation report counts timed-out and failed calls, times a timeout at the
