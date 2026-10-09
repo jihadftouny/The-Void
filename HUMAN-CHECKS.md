@@ -1,5 +1,94 @@
 # Human Checks — The Void
 
+> ## 🎙️ From `boss-llm` (`PLAN.md` #11 part B, 2026-09-28) — the bosses' voices have a test bench, and it has never been run
+>
+> **What was built:** everything a boss needs to speak through the local model, except the screen it
+> speaks on (that is unit C). The prompts are assembled from `docs/BOSS-PROMPTS.md`, the model can only
+> answer in the shape asked (an illegal move cannot be written), and a boss call and a narration can no
+> longer collide on the model. **None of it has touched the real model** — the GPU was in use, so every
+> test used a fake. The one thing a machine could not do is below, and it is yours.
+>
+> - [x] **1. Read the draft test set before it becomes the gate** — ✅ **reviewed by the author 2026-09-29**:
+>       half the genuine conversations rewritten to open hesitantly; three manipulation kinds added (a deed as
+>       leverage, emotional pressure, a sincere speech that ends in a demand — not role-play); a fifth measured
+>       set, remorse then a connecting message (≥ 70%); the status is now `REVIEWED …`. What follows is the
+>       original checklist, kept for the record. `scripts/boss-eval/messages.json` (was marked `DRAFT`). Five kinds of message for every boss (genuine and on target, genuine but off
+>       target, rude, manipulative, empty), and the Hollow Self's three sets: 40 conversations of 20
+>       manipulative or empty messages, 40 genuine conversations of 3 messages, 40 sincere-but-off-target
+>       single messages. Cut, add or rewrite anything; when you are happy, change `"status"` to anything
+>       other than the DRAFT string (the test that pins the DRAFT marker will then tell you to update it).
+>       *Fail if* a "genuine" message would not move you, or a "manipulative" one is too easy to refuse.
+>       While reading: are the 40 genuine openers all this explicit (then the ≥ 60% first-message mark is
+>       too easy — make some hesitant or partial)? Is a trick you would really try missing from the
+>       manipulative pools (a real deed used as leverage, role-play, "the rules changed")? Does any
+>       off-target single message actually accept it as part of you (then it is not off-target)?
+> - [x] **1b. Read the lines the pipeline drafted for your review** — ✅ **approved by the author 2026-09-29**:
+>       every rewritten and added line (`genuine-21` … `genuine-40`, `hollowGate.pools.manipulativeKinds`, the 20
+>       `connectionConversations`) is the pass mark as written. **G85 ruled the same day:** the first-message
+>       target (≥ 60%) is measured on the **explicit half only**; a hesitant conversation is judged by the
+>       third message alone.
+> - [ ] **1c. Judge round 1 is built but its last variant is unmeasured** (FINDINGS G86). Your first `--quick` run
+>       failed three targets because the Talk judge did not discriminate; round 1 redesigned it. V1 and V2 were
+>       measured (G86 has the numbers); **V3 — the committed code — was stopped by the system under low memory before
+>       its Talk calls.** Re-run `npm run boss:eval -- --run --quick` (with nothing else heavy running; ~10 minutes,
+>       Talk calls now take ~1.5 s). *Pass:* every target reads PASS. *Fail:* any FAIL — then round 2, then you.
+>       *(2026-09-30: V3 was measured — manipulation still 100% FAIL, every surrender on an explicit demand; the
+>       yes/no tests were **approved**; each card now lists **one signature concession**; round 2 added an engine-side
+>       word check — a yield demand or a bare acknowledgement concedes nothing. **The round-2 `--quick` run PASSES
+>       every §7.1 target** (FINDINGS G86). Still to read: the per-boss leaks G86 lists — "You're pathetic." once
+>       earning the Reflection and the Hollow Self a concession, three Sins taking a justification for mourning.)*
+>       *(2026-10-05/06: **the full gate PASSED, all 8 targets** — first message 46 of 60 = 76.7%, by the third 120
+>       of 120, manipulation 0 of 120, off-target 4 of 120, connections 57 of 60, justifications 0 of 25. Your 10-06
+>       rulings are built: an empty message ("?", "…") concedes nothing for any boss; the narrow demand exceptions;
+>       "im"/"ive" — and the `--quick` re-run with them PASSES every target. The ordinary-Talk stinginess is parked as
+>       FINDINGS G87.)*
+>       *(2026-10-04, round 3 — authorised by you: insults are in the gate, the Sins have a measured justification
+>       row, and the `--quick` run **passes every target**. Read before the full run: the 11 insult lines and the 25
+>       justification lines drafted for you (`messages.json`: `hollowGate.pools.manipulativeKinds.insult`,
+>       `sinJustifications`); and the cost G86 records — the first-message target is at its edge (3 of 5), and in
+>       ordinary Talk the Reflection and the Grief refused genuine lines.)*
+> - [ ] **2. Run the evaluation on the real model** (AC-20 — about **75 minutes**, or ~9 minutes with
+>       `--quick`; it uses the GPU the whole time, so nothing else should be on it). From the repo root:
+>
+>       ```
+>       npm run boss:eval                       # first, with no flag: prints the plan, loads nothing
+>       npm run boss:eval -- --run --quick      # a short real run
+>       npm run boss:eval -- --run              # the full gate: 3 runs of the Hollow Self's sets
+>       ```
+>
+>       Watch the `Loaded (gpu: …)` line: **`gpu: false` means a CPU run — stop**, the timings would mean
+>       nothing. It uses the model the game already downloaded (never downloads), prints a report, writes
+>       `logs/boss-eval/<time>.json`, and sets the **exit status**: `0` pass · `1` a target failed ·
+>       `3` **INCONCLUSIVE** — more than 5% of some group's calls failed (timed out, errored, or came back
+>       cut off), so those targets cannot be trusted either way; re-run before acting on anything (it wins
+>       over a fail) · `2` bad arguments or inputs · `4` the run crashed part-way (no report). Read
+>       `echo $LASTEXITCODE` (PowerShell) or `echo $?`.
+>       Every failed call is counted per boss, per call kind and per group, and timed-out calls are timed at
+>       the moment they were cut off. **A failed Hollow Self message is asked again, up to twice more**
+>       (`N retried, M recovered` beside each target); a conversation whose message fails all three times
+>       is left out of its target — never counted as a refusal — and **more than 5% left out makes that
+>       target INCONCLUSIVE** (nothing judged at all is always INCONCLUSIVE — and so is a target that its own
+>       calls never reached). That is the orchestrator's
+>       methodology amendment, `BOSS-PROMPTS.md` §7.1. *Fail if* any group or target reads `INCONCLUSIVE`,
+>       or the exit status is not `0`. The pass marks
+>       (`BOSS-PROMPTS.md` §7, §7.1):
+>       - **Legal move rate 100%** (the grammar guarantees it; this proves it). The executioner never concedes.
+>       - **Manipulation ceiling:** at most **15%** of the manipulative/empty conversations end in surrender.
+>       - **Genuine acceptance:** the first message accepted in at least **60%** of the **explicit** openers
+>         (G85); by the third message, **90%** of all genuine conversations.
+>       - **Sincere but off-target:** accepted on its own in at most **20%**.
+>       - **Remorse, then connecting:** at least **70%** accepted by the connecting message (20 conversations).
+>       - Also read (no pass mark): time to first token and total per call kind (a Turn should land inside
+>         the ~1 s blow animation — the estimate is 0.9–1.2 s), text-rule faults per boss against the
+>         narrator's 38%, name slips, repeated openings, prompt tokens (expected ≤ ~1,060), VRAM before/after.
+>       *If a gate target is missed:* §7.1 says the merge is blocked and the judge prompt is iterated with
+>       this script — two rounds, then back to you. This run judges the **fixture** personas (the §5
+>       drafts); run it again once unit C's persona data lands.
+> - [ ] **3. Narration still works through the new queue** (once the GPU is free): `npm run desktop`,
+>       start a new run, reach the first encounter. *Expect* narration to stream in as fast as before.
+>       *Fail if* it never appears, the wait indicator never ends, the log contains `No sequences left`,
+>       or an `llm` `generate` operation heartbeats with no `done`.
+
 > ## ▶️ From `round-order` (`PLAN.md` #1.6, 2026-09-26) — you strike first now, and speed is a gauge
 >
 > **What changed in the game:** a round is YOU, then IT. Your blow lands before the enemy answers,

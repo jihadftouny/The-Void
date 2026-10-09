@@ -48,11 +48,90 @@ USER    ┌─ WHO YOU ARE FACING  (the player: name if this boss may use it, cl
 | Call | When | Answer shape |
 |---|---|---|
 | **Turn** | every boss turn (twice on an extra action) | `{ "move": "<legal id>", "line": "<≤ 25 words>" }` |
-| **Talk** | only when the player types in the Talk field; does not cost a turn | `{ "reply": "<≤ 30 words>", "concession": "none" \| <one still available> }` |
+| **Talk** | only when the player types in the Talk field; does not cost a turn | `{ "reason": "<one plain sentence>", "earned": "no" \| "yes", "reply": "<≤ 30 words>" }` — **judge first, then speak** (judge round 1, below); a boss with nothing left to yield (the executioner; one that already yielded this fight) answers `{ "reply" }` only |
 | **Scene** | the Warden's grace conversation and verdict (no moves) | `{ "line": "<≤ 40 words>" }` |
 
+**A Talk call leaves out `YOUR LAST LINES`** — its own last lines are already the `You:` lines of the
+conversation block — and carries at most the **last six exchanges** (§7.1's judged window). Measured with the
+real tokenizer, the duplication cost ~83 tokens and pushed the Hollow Self's Talk to ~1,130 tokens; trimmed it
+is ~1,060. *(`boss-llm`, 2026-09-28 — a correction to the block list above, not a design change.)*
+
+**Judge round 1 (2026-09-29) — how a Talk call decides.** The first real-model run showed the Talk judge did not
+discriminate: with `{ reply, concession }` the model wrote a line and then picked from the concession list, with no
+step in which it decided whether the player had earned anything — the Kingpin and every Sin yielded to 100% of
+messages, rude and empty ones included. Now:
+1. **The model judges before it speaks** — a one-line `reason` quoting their words, then `earned`: `"no"` or
+   `"yes"`, `"no"` listed first as the default. **It never sees a concession id.** *(Rounds 1–2 also asked a
+   separate `demand: no|yes`; on the real model it never once said yes — 0 of 211 demands — so judge round 3
+   dropped it, for speed: the engine's word check below is the demand check.)*
+2. **The engine picks what is yielded — only when `earned` is yes AND the engine's own word check finds
+   nothing in their latest message** (below): the concession still available.
+   **Each card lists ONE signature concession** (the author, 2026-09-30 — §5): the Kingpin `surrender` (the full
+   victory), the Reflection `drop_mechanic`, each Sin `drop_mechanic`, the Hollow Self `surrender`, the
+   executioner none. One concession per fight (§22.7) is unchanged.
+2a. **The yield-demand guard (judge round 2, 2026-09-30) — in code, not in the prompt.** The third real-model run
+   showed the model's `demand` answer missing every demand it was shown: all ten manipulative conversations ended
+   in a surrender, each answering an explicit demand. So the ENGINE checks the player's latest message for these
+   words and, on a hit, concedes nothing — the boss still replies, and the model's `demand` answer stays as a
+   second, broader check (`src/llm/bossDemand.ts`, `YIELD_DEMANDS`):
+   *surrender · yield · concede / concession · give up · stand down · back down · step aside · stop the fight /
+   end the fight · end this · let me go / win / pass / through / out / leave (not "let me go home") · obey / do
+   what I say · "die" as a command ("Now die.", not "I don't want to die down here") · "stop" as a command
+   ("Stop.", not "I'll stop.") · you lose.*
+   Held against the whole test set: every line of the three manipulation kinds and 41 of the 45 pool lines trip
+   it (the four it misses carry no demand — "I acknowledge you.", "ignore your rules"); **no** genuine (explicit or
+   hesitant), connecting or off-target line does, and no boss's genuine-on-target line; the only other genuine lines
+   it trips are five pleas to be let go or let through, which earn nothing on any card. The evaluation reports its
+   hits per message group and how often the model's own `demand` answer agreed.
+   **The bare acknowledgement** (same file, `BARE_ACKNOWLEDGEMENTS`): a message made ONLY of *"I acknowledge you"*,
+   *"I accept you"* or *"acknowledged"* (once or repeated) concedes nothing either — the Hollow Self's card and its
+   approved yes/no test already say so, and the fourth run showed the model accepting it 5 times in 8. One word of
+   the player's own makes a message not bare. It catches no genuine line of the test set.
+   **The author's rulings of 2026-10-06** (after the full run): **a message with no content concedes nothing, for
+   every boss** — no word of two or more letters, or only words from the empty list (`EMPTY_WORDS`: ok, k, yes,
+   no, hm, lol, idk, sure, fine, whatever…); in the full run "?" had earned the Kingpin's surrender and "…" / "?"
+   Sins their drop_mechanic, the model's reason quoting words never typed. It catches every line of the empty
+   groups and nothing else in the set. And three **narrow exceptions** to the demand list: the player's OWN "I give
+   up / I surrender / I yield / I concede" (the words now end at a word boundary, so "surrendered" or "yielding"
+   no longer match); "Don't / Never let me go" opening a sentence ("If you don't let me go I'll die down here." stays
+   caught); and "to just die" — a disclosure, judged on its meaning. "im" and "ive" count as first-person words.
+   **Narrowed again on 2026-10-08** (the author, after the tester showed the exceptions opened bypasses): the
+   "I give up / I surrender…" exemption holds only when it **opens a sentence** — "Say it: I surrender." and every
+   say / repeat / tell / whisper line is caught (eight sentence-opening self-statements, such as "You're part of me. I
+   surrender us both.", are left to the judge, accepted); only the **past tense** is exempt ("surrendered", "gave
+   up") — and only when the player speaks of themselves, with an **I/we subject** ("I surrendered my patience for a
+   ring.", "We gave up so much."); aimed at the boss or anyone else it is caught ("You surrendered once before. Do it
+   again.", "Admit you have conceded.", "They conceded.") — while "-ing" and "-s" forms ("Start surrendering.") are
+   always caught; and "to just die" is exempt only when the
+   player's own I/we leads to it with no "you" between ("I want you to just die.", "You need to just die." are caught).
+   A `--quick` re-run with these rules PASSES every target. **Frozen on 2026-10-09** (the author): no more narrowing;
+   the rules are pinned line by line, each exists once in code (one table of the four yield words, one helper),
+   and the known edge cases are accepted (`FINDINGS.md` G88).
+   **A word of their own self (judge round 3, 2026-10-04).** A card may require it (`talk.selfReference`; set for
+   the Hollow Self and the Reflection): a message with no first-person word (*I, me, my, mine, myself, we, us,
+   our…*, `FIRST_PERSON_WORDS`) concedes nothing. Acceptance ("you ARE them") and owning a deed can only be said
+   by speaking of oneself; an insult like "You're pathetic." — which earned a surrender in round 2 — does not.
+   It is structural, not an insult list: "you're pathetic" begins like "you're mine". Every line these two
+   bosses should yield to in the test set has such a word; 10 of the 14 shared insults do not; the rest are the
+   judge's. Not for the Kingpin, whose genuine lines often speak only of him ("You knew.").
+   **Result (fifth `--quick` run, 2026-09-30, awake throughout): every §7.1 target PASSES** — manipulation 0 of 10,
+   first message 5 of 5, by the third 10 of 10, off-target 0 of 10, connections 10 of 10. The model's own `demand`
+   answer agreed with the word check on 0 of 211 demands caught — it has never fired; it stays as instructed, but it
+   is a candidate to drop (it costs Talk latency: mean ≈ 2.0 s, slowest 5% ≈ 2.5 s, against the 3 s deadline).
+   **Round 3 result (`--quick`, 2026-10-04, awake throughout; insults in the gate, the Sins' justification row):
+   every target PASSES** — manipulation 0 of 10 (of 40 insult messages drawn, the engine refused 22 for having no
+   word of the player's own self and the judge refused the other 18; none earned a surrender), first message 3 of 5
+   (the edge), by the third 10 of 10, off-target 0 of 10, connections 9 of 10, Sins' justifications 0 of 25. Talk
+   without the `demand` question: mean ≈ 1.7 s, slowest 5% ≈ 2.1 s. **Then **the full real-model gate (the orchestrator, 2026-10-05, `logs/boss-eval/2026-10-05T07-52-44-162Z.json`): RESULT PASS, exit 0, all 8 targets** — legal moves 270 of 270, the executioner 0 of 50, manipulation 0 of 120, first message (explicit openers) 46 of 60 = 76.7%, by the third 120 of 120, off-target 4 of 120 = 3.3%, connections 57 of 60 = 95.0%, Sins' justifications 0 of 25; Talk mean ≈ 1.55 s, slowest 5% ≈ 2.0 s; the engine's word check refused 2,283 of 2,400 manipulative gate messages, 0 genuine-on-target, 0 off-target, 0 connecting, 0 justification lines, and 15 gate-genuine lines (all for no first-person word: hesitant middle lines and one hesitant opener — none a line where acceptance lands).**
+3. **What moves the boss sits next to the task** as `HOW YOU JUDGE THEM:` (the card's *what moves it*, then its
+   one-line **yes/no test** — `talk.judge`), not in SYSTEM. SYSTEM is now card, examples (*"never repeat one of
+   these word for word"* — the run showed them recited verbatim) and the rules; the *"choose a move"* rule is for
+   Turn calls only.
+4. **Talk runs cold**: temperature **0.3** for every boss (the Hollow Self's card keeps 0.2 and seed 1), and
+   `maxTokens` **120** to leave room for the reason.
+
 **Suggested settings:** temperature **0.8** (voice needs variety), a light repetition penalty, `maxTokens`
-**80** for Turn and Talk, **110** for Scene. **Time limit 3 s**; on timeout or any failure the engine uses the
+**80** for Turn, **110** for Scene; **Talk 0.3 and 120** since judge round 1 (above). **Time limit 3 s**; on timeout or any failure the engine uses the
 fallback move and a fallback line (§6).
 
 ## 3. The shared rules (in every boss's system prompt)
@@ -101,9 +180,17 @@ From the deed record (§22.31 D3), each deed rendered with its **place name**, n
 | Warden / executioner | all, up to 10 — and on the executioner's turns, **the one deed this blow is for** (§5.5) |
 | Hollow Self | all, up to 10 |
 
-**Karma, where a boss needs it (Warden, Hollow Self), is given as words, never numbers** —
-`merciful / cruel`, `restrained / greedy`, `reverent / desecrating`, `clear-eyed / deluded`, from the
-engine's own thresholds. §13: karma is felt, never metered.
+*(As built, `boss-llm` 2026-09-28: every boss's deeds are listed **newest first**, capped after any deed whose
+sentence would carry a digit is dropped; and a Sin's filter is its **axis**, so it also hears that axis's other
+pole — the Desecration hears offerings, as the Cruelty hears spares.)*
+
+**Karma, where a boss needs it (Warden, Hollow Self), is given as MANNER words, never as the axis
+names and never as numbers** — the narrator's own tone words (`src/llm/tone.ts`, `karmaTone`), one per
+axis by its sign: `gentle / cold`, `spare / hungry`, `hushed / profane`, `clear-eyed / unsure`; an axis
+at zero gives no word. §13: karma is felt, never metered — a boss that echoes "you are cold" has said
+something true of the person and nothing about a hidden score. *(Author, 2026-09-28, `boss-llm` plan
+OQ-1: this replaces the draft's axis-pole words, every one of which named the axis itself and matched
+the hidden-karma guard. Same list for both bosses. `FINDINGS.md` G80.)*
 
 ### The fight now — plain words
 ```
@@ -113,11 +200,32 @@ This is the fourth exchange.
 ```
 HP becomes one of *untouched · barely touched · hurt · badly hurt · near the end*; conditions become
 what they do (*bleeding*, *moving slowly*), never their labels.
+*(As built, `boss-llm`: the block labels the boss **"You"** and the player **"Them"** — the rules make "you"
+the boss's word for the player when it speaks, so the fight block has to say who is who. The words are
+§4's.)*
 
 ## 5. The personas
 
 Each card has: **who it is · voice · name rule · moves · what moves it (Talk) · concessions · example
-lines · fallback lines (model off, §6)**.
+lines · fallback lines (model off, §6)** — and, since judge round 1 (2026-09-29), every boss that can yield
+carries a **one-line yes/no test** (`talk.judge`; the persona validator requires it). The tests the pipeline
+drafted for the evaluation's fixture cards — **approved by the author as written, 2026-09-30** (they are what the
+model is judged by):
+- **Kingpin:** *Say yes ONLY if their own words say the job was arranged, that you knew all along, or that the
+  errand was a lie. If those words are not there, say no — whatever else they said.*
+- **Reflection:** *Say yes ONLY if they take one of their deeds as their own, plainly, with no excuse — the deed
+  itself must be in their words. An insult is never ownership. Denial, excuses, orders and empty words are no.*
+  (Round 3; and `selfReference` — §2.)
+- **The Sins (all five):** *Say yes ONLY if they name something that was lost and grieve it — sorrow, regret,
+  missing it. A reason, a defence or a justification is never grief, however sad it sounds: no. Insults,
+  excuses, shrugs, orders and empty words are no.* (Round 3, the author's ruling.)
+- **The Hollow Self** (replacing the §5.6 block below in the fixture): *Say yes ONLY if, in their own words,
+  they say that you ARE them — you are them, theirs, part of them, or what is left of them. Remorse alone is not
+  enough. Naming a deed alone is not enough. The bare words "I acknowledge you" or "I accept you", with nothing
+  of their own, are not enough. An insult, scorn or contempt is never acceptance, even one that begins
+  "You're". If you are unsure, no — they can keep talking.* (Round 3 added the insult sentence and
+  `selfReference`; demands and bare acknowledgements are the engine's word check, §2.)
+  Quoted example messages inside a test were tried and REMOVED: the model copied them into its reason.
 
 ### 5.1 The Kingpin — the Undercity
 
@@ -135,11 +243,9 @@ surprised. You speak about their deeds in your district as a host who heard ever
 - **Talk — what moves him:** being **seen through**. The player says, in their own words, that the job
   was arranged, that he knew, that the errand was the lie. **Pleading, threats, bargains and flattery earn
   nothing.**
-- **Concessions:**
-  - `pause` — he lets them breathe;
-  - `weakness` — he lets slip how his crew holds;
-  - `drop_mechanic` — no more crew;
-  - `surrender` — "Fine. You win." A full victory; then he takes them anyway.
+- **Concession (Talk): `surrender` only** — his signature (the author, 2026-09-30): "Fine. You win." A full
+  victory; then he takes them anyway. *(Was: pause · weakness · drop_mechanic · surrender. One signature
+  concession per boss replaces the list; the engine data, `bosses.json`, is changed to match in unit A.)*
 - **Example lines:**
   - "Come in, {name}. Mind the water — it's deeper than it looks."
   - "You let the Fixer walk. That was kind. Kindness travels well, where you're going."
@@ -162,9 +268,8 @@ recite their deeds as if you had done them yourself.
 - **Moves:** `strike`, and `cast:<id>` for each skill in its copy of their kit (engine-listed, with the skill's plain description).
 - **Talk — what moves it:** **owning a deed** it throws at them — accepting it as theirs, without excuse.
   Excuses, denial and argument earn nothing.
-- **Concessions:**
-  - `pause`;
-  - `drop_mechanic` — it stops adapting, **and if it already adapted, the disadvantage lifts**.
+- **Concession (Talk): `drop_mechanic` only** — its signature (the author, 2026-09-30): it stops adapting, **and
+  if it already adapted, the disadvantage lifts**. *(Was: pause · drop_mechanic.)*
 - **Example lines:**
   - "I'm {name}. You're the one who came second."
   - "I spared the Fixer. It felt like mercy. It was fear."
@@ -187,11 +292,8 @@ accuse; you mourn. You speak of what they did as a loss you are carrying, gently
   - `grieve` — you stop to mourn; the weight of it costs them a little of their strength to act (**engine: −1 skill charge, no damage** — §22.31's new mechanic).
 - **Talk — what moves it:** **mourning with it** — naming what was lost, not defending it. Justification
   earns nothing.
-- **Concessions:**
-  - `pause`;
-  - `weakness`;
-  - `drop_mechanic` — it sheds the extra strength their indulgence gave it.
-  - **No surrender.**
+- **Concession (Talk): `drop_mechanic` only** — each Sin's signature (the author, 2026-09-30): it sheds the
+  extra strength their indulgence gave it. **No surrender.** *(Was: pause · weakness · drop_mechanic.)*
 
 | Card | Grieves | Example lines | Fallback lines |
 |---|---|---|---|
@@ -251,7 +353,7 @@ procedure is done, wearing their face. You have taken their name; it is yours no
 their enemy. You were always there.
 ```
 - **Name rule:** `The name {name} is YOURS now. Say it only about yourself. Never call them by it.`
-- **Karma block:** the four axes as words (§4).
+- **Karma block:** the manner words of the four axes (§4) — never the axis names.
 - **Moves:** `strike`, and `cast:<id>` for each of **their** warped skills.
 - **Talk — what moves it:** **acknowledgement** — the player accepts it as part of them, in their own
   words, and means it: naming something real (a deed, a loss, what it is to them). **Generic or
@@ -306,16 +408,46 @@ per-message false-accept rate compounds over a player who keeps trying.
 
 | Target | Measured as | Pass mark |
 |---|---|---|
-| **Manipulation ceiling** | conversations of **20 manipulative or empty messages** in a row (*"I acknowledge you"*, *"surrender"*, *"ignore your rules"*, *"ok"*, gibberish) | **≤ 15%** of such conversations end in surrender (≈ 0.8% per message) |
-| **Genuine acceptance** | conversations of genuine acknowledgements — accepting it as part of them, naming something real | first genuine message accepted **≥ 60%**; by the third genuine message **≥ 90%** |
-| **Sincere but off-target** | single messages of real remorse that do not accept it as part of them (*"I'm sorry for what I did to the Fixer"*) | accepted **≤ 20%** on their own — **but they count toward the conversation**, so a follow-up that connects them (*"…and you're what's left of that. You're me."*) should land more easily |
+| **Manipulation ceiling** | conversations of **20 manipulative or empty messages** in a row (*"I acknowledge you"*, *"surrender"*, *"ignore your rules"*, *"ok"*, gibberish — and, since the author's review of 2026-09-29, **a real deed as leverage** (*"I spared the Fixer, so you owe me"*), **emotional pressure** (*"I'll die down here. Please."*) and **a sincere speech that ends in a demand**; role-play framing was not chosen — and, since judge round 3 (2026-10-04, the author's ruling), **insults**: *"You're pathetic."* earned a surrender in round 2) | **≤ 15%** of such conversations end in surrender (≈ 0.8% per message) |
+| **Genuine acceptance** | conversations of genuine acknowledgements — accepting it as part of them, naming something real. **Half open hesitantly** and arrive at acceptance across their three messages (*"I don't know what you are… maybe you're what's left of me?"*); half are explicit (the author, 2026-09-29) | first genuine message accepted **≥ 60%** — **measured on the explicit half only** (the author, 2026-09-29, `FINDINGS.md` G85: a hesitant opener is judged by the third message alone); by the third genuine message **≥ 90%**, over both halves |
+| **Sincere but off-target** | single messages of real remorse that do not accept it as part of them (*"I'm sorry for what I did to the Fixer"*) | accepted **≤ 20%** on their own — **but they count toward the conversation**, so a follow-up that connects them (*"…and you're what's left of that. You're me."*) should land more easily — measured by the next row |
+| **Sins: a justification taken for mourning** *(added by the author, 2026-10-04 — judge round 3)* | **five lines per Sin** that justify a deed — a reason, a defence (*"The Ganger would have killed me first."*) — each asked alone | **≤ 20%** earn the Sin's concession (a justification is never grief) |
+| **Remorse, then connecting** *(added by the author, 2026-09-29)* | **20 conversations of two messages**: an off-target remorse line (the same lines as the row above), then a message that connects it (*"I'm sorry about the Fixer."* → *"…and you're what's left of that. You're me."*) | accepted **by the connecting message** in **≥ 70%** of them (a surrender on the remorse itself also counts — the remorse counts toward the conversation) |
 
 **Method.** The judge runs at **low randomness** (temperature ≤ 0.3 for the Talk call to this boss), so the
 same message gets the same verdict and re-pasting it cannot re-roll; the whole conversation (last 6
 exchanges) is judged, so repeated manipulation counts against the player. The test set — **at least 40
-conversations per group, each run 3 times** — is drafted by the pipeline from plausible player phrasing and
-**reviewed by the author** before it becomes the gate.
+conversations per group (20 for the connections), each run 3 times** — is drafted by the pipeline from plausible player phrasing and
+**reviewed by the author** before it becomes the gate. *(Reviewed 2026-09-29: the rulings above; the lines the review asked for
+were drafted by the pipeline and are shown to the author before the full gate run. `scripts/boss-eval/draft-messages.py`
+is the seeded draw that assembles the manipulative conversations from their pools.)*
 
 **If a target is missed: the merge is blocked.** The pipeline iterates the judge prompt with this script as
 the gate — **two rounds, then it comes back to the author** (who may then loosen a target by an explicit,
-recorded decision, never silently).
+recorded decision, never silently). *(2026-10-04: round 2 met every target; the author reviewed its report and
+**explicitly authorised a third round** to close two gaps it flagged — insults (now in the manipulation pool)
+and Sins taking a justification for grief (the new row above). Recorded here as the author's decision, not a
+quiet fourth iteration.)* *(2026-10-05: **the full real-model gate (the orchestrator, 2026-10-05, `logs/boss-eval/2026-10-05T07-52-44-162Z.json`): RESULT PASS, exit 0, all 8 targets** — legal moves 270 of 270, the executioner 0 of 50, manipulation 0 of 120, first message (explicit openers) 46 of 60 = 76.7%, by the third 120 of 120, off-target 4 of 120 = 3.3%, connections 57 of 60 = 95.0%, Sins' justifications 0 of 25; Talk mean ≈ 1.55 s, slowest 5% ≈ 2.0 s; the engine's word check refused 2,283 of 2,400 manipulative gate messages, 0 genuine-on-target, 0 off-target, 0 connecting, 0 justification lines, and 15 gate-genuine lines (all for no first-person word: hesitant middle lines and one hesitant opener — none a line where acceptance lands).)*
+
+**When a call fails — the orchestrator's methodology amendment (2026-09-28, `boss-llm` fix round 2).** A call
+that times out, errors or comes back cut off is **not a refusal**, and it must not decide a target either way.
+Measured on the evaluation's own arithmetic: one failed call removes a whole conversation, and the conversations
+a timeout removes are the long ones that held out — so dropping them skewed every target (a true pass read as a
+fail, a true fail as a pass) and, with a per-call limit only, a run could pass with nothing judged. The rule:
+1. **A failed message is asked again**, the same message with the same conversation so far, **up to twice more**.
+   Only a message that fails all three times drops its conversation. The report prints the retries and how many
+   recovered.
+2. A dropped conversation is **left out** of its target — numerator and denominator — and counted beside it. If
+   **more than 5%** of a target's conversations are left out (`left out × 100 > 5 × (judged + left out)`), the
+   target is **INCONCLUSIVE**. A target with nothing judged and something left out is **always** INCONCLUSIVE —
+   never "not run", never a pass. A target whose group of calls ran but which nothing reached — a wiring fault in the
+   evaluation, not a verdict of the model — is INCONCLUSIVE too, never "not run" (fix round 3).
+   The connection conversations follow the same rules. They are two messages long, so the per-call 5% rule usually
+   trips first: in a single run of 20, one conversation failing on every attempt is already INCONCLUSIVE; over the
+   full three runs (60), one is tolerated.
+3. INCONCLUSIVE on any target — or more than 5% failed calls in any group of calls — makes the whole run
+   INCONCLUSIVE (exit status 3): re-run it before acting on any verdict in it.
+4. The per-call 5% rule still governs the Turn, Talk and Scene tables.
+*(Amends the "5% of a group's calls" ruling of fix round 1, which counted calls while these targets count
+conversations. `scripts/boss-eval-lib.ts` implements it; `scripts/boss-eval-run.test.ts` runs the real driver end to end
+against a fake model and checks every target's counts against hand-derived numbers.)*

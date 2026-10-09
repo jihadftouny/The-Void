@@ -393,13 +393,36 @@ is one exported function, `resolveEnemyTurn` in `battle.ts`, which runs the tick
 one call per granted action; a boss agent's choice replaces the random skill pick inside
 `resolveEnemyAttack`, and a boss with an extra action is asked twice. Do not run #11 in parallel with
 any unit touching `battle.ts`, `game.ts`, `boss.ts` or the event tables.
-**Part A (the engine, `boss-engine`, 2026-09-28) closes G79 and G61 N2 and raises G88:** the Hollow
+**Part A (the engine, `boss-engine`, 2026-09-28) closes G79 and G61 N2 and raises G91:** the Hollow
 Self's 1d10 + STR "real teeth" end only 0.8% of its fights (measured) — a balance lever for the
 author (its HP scale, base XP or casts), not part A's to pull. **G89 is unit C's:** the executioner's blow deed
-(`boss-move.deed`) is shown nowhere yet. **G87 (2026-09-30, author, built):** each boss's Talk earns ONE
+(`boss-move.deed`) is shown nowhere yet. **G90 (2026-09-30, author, built):** each boss's Talk earns ONE
 signature concession — Kingpin and Hollow Self surrender, the Reflection and every Sin drop a
 mechanic, the executioner none; pause and weakness are dormant. The dice and rulings are in
 `GAME-DESIGN.md` §22.31 ("The engine rulings for #11").
+
+**#11 is built as THREE units (planned 2026-09-27; prompts and shapes in `BOSS-PROMPTS.md`):**
+- **A — `boss-engine`**: the saved deed record (§22.31 D3, G79), the executioner boss, the `grieve`
+  move, the legal-move list, the seeded fallback policy, the boss's choice entering `step`,
+  concessions' engine effects, surrender → grace, per-boss damage dice. Territory: `src/game/**`,
+  `src/data/**`, `src/render/**`, the save.
+- **B — `boss-llm`** (built 2026-09-28, the model plumbing). Covers **G80 G81 G84 G85 G86 G87 G88**. Territory:
+  `src/llm/bossContract.ts` (the shared plain-data shapes) · `bossWords.ts` (HP, condition, exchange,
+  deed and karma words) · `bossSchema.ts` (the grammar schemas) · `bossPrompt.ts` (SYSTEM/USER
+  assembly, settings) · `bossAnswer.ts` (parse, name rule, line check, fallback line) ·
+  `bossFixtures.testutil.ts` (the §5 drafts, test-only) · `electron/llm-queue.mjs` (one call at a time
+  on the one sequence) · `electron/structured.mjs` (the grammar-constrained call) · `electron/llm.mjs`
+  (`generateStructured`) · `electron/main.mjs` + `preload.cjs` (the `llm:boss` channel) ·
+  `electron/instrument.mjs` (`bossGenerate` threshold) · `scripts/boss-eval.ts` (the process entry) +
+  `boss-eval-cli.ts` (the command) + `boss-eval-run.ts` (the run) + `boss-eval-lib.ts` +
+  `boss-eval/messages.json` + `boss-eval/draft-messages.py` (its seeded draw; reviewed by the author
+  2026-09-29; G85 ruled the same day) (the real-model evaluation, **built, not yet run** — its first run is the
+  author's, `HUMAN-CHECKS.md`) · `package.json` (`boss:eval`, `typecheck:boss-eval`).
+- **C — desktop wiring + persona data**, forked after A and B merge. Covers **G82** (an overall timeout
+  on `window.void.boss`; a length cap on the Talk input). `src/desktop/**` (the Talk row,
+  calling `window.void.boss`, fallbacks, the narrator silent in boss rounds), the persona data files in
+  the author's words, the ending variant, the feel checks. C also asserts the engine's deed/move types
+  are assignable to `bossContract.ts`'s (the engine does not import `src/llm`).
 
 **#12 narrator to spec (reduced M11)** — grammar-constrained choices, the tool registry and
 free-text mapping are **dropped**. What remains: the persona rewrite (the narrator *is* the

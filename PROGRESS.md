@@ -148,6 +148,113 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-10-09 — the bosses' word check, frozen (`boss-llm`) — not merged
+
+The author froze the word check as it behaves now. It was tidied so each rule is written once (one table of the
+four yield words feeds one rule), with proof that no line changed: 1,067 lines checked old against new, zero
+differences. A table test now holds every word to the same rule, and the edge cases the tester found are recorded
+as accepted (FINDINGS G88), to revisit only if playtesting or a full run shows a problem. The quick real-model run
+after the tidy-up gives exactly the same results.
+
+### 2026-10-08 — the bosses' demand check, narrowed again (`boss-llm`) — not merged
+
+The tester showed the last round's exceptions let tricks through: "Say it: I surrender." passed because it began
+with "I". Now the player's own "I give up" only counts as theirs when it opens a sentence; "Start surrendering."
+is an order again; "I want you to just die." is a demand while "Sometimes I wanted to just die." is not. Every sincere
+line in the test set still gets through, and the quick real-model run still passes every target. Then the author
+closed one more gap: a past-tense yield word only counts as the player's own story with "I" or "we" ("I surrendered
+my patience for a ring."); "You surrendered once before. Do it again." is caught. The quick run still passes.
+
+### 2026-10-06 — the full boss gate passes; empty messages win nothing (`boss-llm`) — not merged
+
+**The full real-model gate passed every target** (the orchestrator, 2026-10-05): genuine first messages land
+76.7% of the time and every genuine conversation by its third message; no manipulative conversation, insult or
+excuse bought a yield. The re-verification found three test gaps (now closed) and one real hole: a bare "?" had
+won the Kingpin's surrender. **An empty message now wins nothing from any boss.** Lines like "I give up. You're
+me." or "Don't let me go." are no longer mistaken for demands. The bosses being stingy with sincere lines in
+ordinary Talk is accepted for now and parked for playtesting (FINDINGS G87).
+
+### 2026-10-04 — the bosses' Talk judge, round 3 (authorised by the author): insults and excuses can't buy a yield (`boss-llm`) — not merged
+
+Round 2 passed every target but showed two holes: "You're pathetic." once won the Hollow Self's surrender, and
+three Sins took an excuse ("I needed that ring to survive.") for mourning. The author authorised a third round.
+Insults now sit in the Hollow Self's test conversations; the Hollow Self and the Reflection only yield to a
+player who speaks of themselves (an insult like "You're pathetic." doesn't); the Sins are measured on excuses
+(at most one in five may work — none did); and the bosses answer faster (a question the model never used is
+gone: Talk ≈ 1.7 s). **The quick real-model run passes every target.** The cost, recorded in FINDINGS G86: the
+judge is now more cautious with sincere lines — the first-message target is at its edge in the quick sample.
+
+### 2026-09-30 — the bosses' Talk judge, round 2 of 2: every §7.1 target passes on the real model (`boss-llm`) — not merged
+
+Round 1 left one target failing: the Hollow Self surrendered in every manipulative conversation, each time to
+a message that plainly demanded it ("…So stand down.", "…Now end this and concede."). Round 2 stops asking the
+model to spot that: the game itself checks the player's words, and a demand to yield — or the bare words "I
+acknowledge you" — never earns a concession, whatever the model thought. Nothing a sincere player writes in the
+test set trips it. Each boss now has one signature concession (the author's ruling). **The quick real-model run
+passes every Hollow Self target** (FINDINGS G86); the 75-minute full run is next. Also fixed: a round-1 test had
+a mangled regex that could never fail; the repository's byte guard caught it.
+
+### 2026-09-30 — the bosses' Talk judge, round 1 of 2 (`boss-llm`) — not merged
+
+**Typecheck green; the `src/llm`, `scripts` and `electron` suites green (1,026 tests) at the time; the full suite ran green at the end of round 2 (3702 passed, 4 skipped).** The author's
+first real-model run showed the bosses' Talk judge did not judge: six bosses yielded to every message, rude and
+empty ones included, and the Hollow Self accepted no genuine acknowledgement. Round 1 makes the model decide
+before it speaks (did they demand a yield? why? did they earn it?), lets the engine pick what is yielded and refuse
+anything demanded, and gives each boss a one-line yes/no test. Two variants measured on the real model: the
+concession matrix now discriminates and three of five Hollow Self targets pass, but manipulation and connections
+still miss (FINDINGS G86). The third variant is built and tested but unmeasured — the system stopped its run under
+low memory. Also: G85 ruled and built (first-message acceptance on the explicit openers only), and the author
+approved every drafted line.
+
+### 2026-09-29 — the Hollow Self's test set, as the author reviewed it (`boss-llm`) — not merged
+
+**3672 → 3679 tests (4 skipped); typecheck, build and the full suite green.** Nothing the player sees changes;
+this is the test bench the Hollow Self's judge will be held to. The author's review (NEEDS-HUMAN step 1):
+half the genuine conversations now open hesitantly and accept across their three messages; three manipulation
+kinds join the pool (a real deed as leverage, emotional pressure, a sincere speech that ends in a demand);
+and a **fifth measured target** — 20 conversations of off-target remorse followed by a connecting message,
+accepted by the connecting message in **≥ 70%** — with the same retry and left-out rules, tested end to end
+at its edges (14 of 20 passes, 13 fails, a lost conversation is INCONCLUSIVE). The full run is now 3,771 calls
+(~75 min). The set is marked REVIEWED; the lines the pipeline drafted for it are shown to the author before
+the full gate run (`HUMAN-CHECKS.md` 1b). **One question back to the author, FINDINGS G85:** half-hesitant
+openers cap a correct judge's first-message acceptance near 50%, under the ≥ 60% mark.
+
+### 2026-09-28 — the bosses' model plumbing (`boss-llm`, #11 part B) — built, not merged
+
+**3476 → 3672 tests (4 skipped); typecheck, build and the full suite green.** Plan → build → test (FAIL) →
+three fix rounds. Round 1: the evaluation report counts timed-out and failed calls, times a timeout at the
+moment it was cut off, never counts a failed gate call as a refusal, and exits 3 (INCONCLUSIVE) when more
+than 5% of a group's calls fail; three test holes were closed. Round 2 (the orchestrator's methodology
+amendment, `BOSS-PROMPTS.md` §7.1): a failed Hollow Self message is asked again up to twice, and a target
+with more than 5% of its conversations left out is INCONCLUSIVE — a timeout can no longer decide a verdict
+either way; a crash exits 4; the driver's exit and deadline lines are pinned. FINDINGS G83 records three
+older renderer tests that time out under load, for a separate unit. Round 3 (a re-plan): nothing the
+player sees changes — **the boss test bench can no longer report a pass for a check it never made**. The
+evaluation is split into an importable run (`scripts/boss-eval-run.ts`) and command (`boss-eval-cli.ts`),
+both driven end to end against a fake model with every §7.1 count derived by hand, behind a 40-line process
+entry (`boss-eval.ts`); a target whose own calls never reached it is INCONCLUSIVE, never "not run"; the
+source scans that three rounds kept editing around are deleted (FINDINGS G84). Built beside
+unit A (`boss-engine`) in a separate worktree; nothing in `src/game`, `src/data`, `src/render` or
+`src/desktop` was touched. **No real model was loaded at any point** (the GPU was in use) — every test
+uses a fake, and the evaluation script's first real run is the author's (`HUMAN-CHECKS.md`).
+
+- **Every boss call is assembled from `BOSS-PROMPTS.md`** by pure builders in `src/llm/boss*.ts`: the card,
+  its example lines, what moves it and the shared rules with its name rule filled; then who they face, the
+  deeds it is told (filtered per boss, newest first), the karma as **manner words** (the author's answer,
+  G80), the fight in plain words, and the legal moves. No digit, label or id reaches the model outside the
+  move and yield lists — swept over every fixture request.
+- **An illegal move cannot be written:** the answer is held to a JSON grammar whose enum is the engine's
+  legal list, and the executioner's Talk has no concession field at all. The answer is re-checked on the way
+  back; the player's name is removed where a card forbids it; every line is checked against the narrator's
+  text rules plus the boss rules; fallback lines are chosen by round, never at random.
+- **A boss call and a narration can no longer collide** on the model's one sequence: both go through one
+  queue. A boss call has a 3 s deadline, counted from when it starts running; the new `llm:boss` channel never
+  starts a model load and never throws, and logs every timing.
+- **The real-model evaluation is built, not run:** `npm run boss:eval` prints the plan (3,651 calls, ~73 min);
+  with `--run` it measures legal moves, latency, text faults, name slips, repetition, concession rates, and
+  the Hollow Self's four agreed targets, and fails the exit status on a miss. The test set is a DRAFT for the
+  author (G81 records the measured prompt sizes).
+
 ### 2026-09-27 — your tempo is capped at ±0.4 ✅
 
 **`player-tempo-cap` merged** (the author's ruling). Dexterity 18 still fills +0.4 a round, but Quick no longer stacks past it (18 + Quick was +0.7, now +0.4), and the slowest characters lose turns slightly less often (DEX 6 + Slow −0.5 → −0.4). Enemies keep their ±0.3. **Win rate 29.5% → 29.4%** — the simulated players rarely went past 0.4, so almost nothing moved. Built directly rather than through the full pipeline, at the author's request (recorded in `.claude/pipeline-log.md`). The design doc's tempo section now records every tuning ruling, which it had missed.

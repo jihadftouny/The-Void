@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:art": "tsc -p scripts/art/tsconfig.json --noEmit",
     "art": "vite-node scripts/art/generate.ts",
+    "boss:eval": "vite-node scripts/boss-eval.ts",
+    "typecheck:boss-eval": "tsc -p scripts/boss-eval/tsconfig.json --noEmit",
     "spike:pull": "node scripts/spike-llm.mjs --pull-only",
     "spike:llm": "node scripts/spike-llm.mjs",
     "desktop": "node scripts/desktop-dev.mjs",

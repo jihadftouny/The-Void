@@ -55,6 +55,8 @@ export const HEARTBEAT_MAX = 60;
  *  - `generate` 20 000 — 89 tok/s x 400 tokens is ~4.5 s healthy, 7.6 tok/s is ~53 s.
  *  - `windowLoad` 5 000 — `loadURL` against a LOCAL dev server; over 5 s means the URL is
  *    wrong or the server is not ours, which is G41's symptom exactly.
+ *  - `bossGenerate` 3 000 — a boss call's own deadline (`docs/BOSS-PROMPTS.md` §2). At or past
+ *    it the boss has already fallen back, so the line is a warning by definition.
  */
 export const THRESHOLDS = Object.freeze({
   modelResolve: 30_000,
@@ -65,6 +67,7 @@ export const THRESHOLDS = Object.freeze({
   generate: 20_000,
   windowLoad: 5_000,
   narratorLoad: 120_000,
+  bossGenerate: 3_000,
 });
 
 /** Two decimals, and `-1` for an unmeasurable duration. Mirrors `src/log/timing.ts`. */

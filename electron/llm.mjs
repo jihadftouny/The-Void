@@ -13,6 +13,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { selectGpuDevice, makeSpawnProbe } from './gpu.mjs';
 import { createInstrument, THRESHOLDS } from './instrument.mjs';
+import { createSequenceQueue } from './llm-queue.mjs';
+import { createGrammarCache, runStructured } from './structured.mjs';
 
 // 4B only (the N1 decision). Q4_K_M GGUF, Apache-2.0, ~2.5GB.
 const MODEL_URI =
@@ -139,69 +141,124 @@ export async function createNarrator({ onStatus, modelsDir, log, now, setTimer, 
     deviceIndex: sel.index,
   });
 
+  // ONE CALL AT A TIME on the context's one sequence (PLAN.md #11). Narration and boss calls
+  // both go through this queue, so a boss turn arriving mid-narration waits its turn instead of
+  // asking the pool for a second sequence it does not have ("No sequences left"). The grammar
+  // cache lives beside it: a boss's schema is compiled once, not once per turn.
+  const queue = createSequenceQueue();
+  const grammars = createGrammarCache();
+
   return {
     gpu: llama.gpu,
     device: sel.name,
     unified,
     vram,
     deviceIndex: sel.index,
+    /** How many model calls are waiting behind the one running — for the boss handler's log. */
+    queueDepth: () => queue.depth(),
     async generate({ prompt, system, maxTokens = 400, onToken, requestId } = {}) {
-      // Capture the sequence so we can reclaim it: the context has a finite pool
-      // of sequences, and disposing only the session (as before) leaked one per
-      // call — after the pool drained, node-llama-cpp threw "No sequences left".
-      const sequence = context.getSequence();
-      const session = new LlamaChatSession({
-        contextSequence: sequence,
-        systemPrompt: system ?? DEFAULT_SYSTEM,
+      // Through the queue, with no deadline: narration streams, and the renderer owns its own
+      // time limit. The body below is unchanged from before the queue existed; the queue adds
+      // `queuedMs`/`ranMs` to the result, so a narration that waited behind a boss call says so.
+      return queue.run(async () => {
+        // Capture the sequence so we can reclaim it: the context has a finite pool
+        // of sequences, and disposing only the session (as before) leaked one per
+        // call — after the pool drained, node-llama-cpp threw "No sequences left".
+        const sequence = context.getSequence();
+        const session = new LlamaChatSession({
+          contextSequence: sequence,
+          systemPrompt: system ?? DEFAULT_SYSTEM,
+        });
+        // ⭐ THE FREEZE DETECTOR. `begin` (not `run`) because the heartbeat needs `note()`
+        // called from inside the token callback: two heartbeats with the SAME `chunks` mean
+        // the stream has stopped, two with DIFFERENT `chunks` mean it is merely slow. That
+        // one distinction is what the reported incident had no way to answer.
+        const op = inst.begin(
+          'llm',
+          'generate',
+          {
+            requestId: requestId ?? null,
+            promptChars: (prompt ?? '').length,
+            systemChars: (system ?? DEFAULT_SYSTEM).length,
+            maxTokens,
+          },
+          THRESHOLDS.generate,
+        );
+        let firstMs = null;
+        let chunks = 0;
+        const t0 = performance.now();
+        try {
+          const text = await session.prompt(prompt, {
+            maxTokens,
+            onTextChunk(chunk) {
+              if (firstMs === null) firstMs = performance.now() - t0;
+              chunks += 1;
+              op.note({ chunks, ttftMs: Math.round(firstMs) });
+              onToken?.(chunk);
+            },
+          });
+          const total = performance.now() - t0;
+          const tokens = model.tokenize(text).length;
+          const tokensPerSecond = (tokens / Math.max(1, total - (firstMs ?? 0))) * 1000;
+          op.done({ tokens, tokensPerSecond: Math.round(tokensPerSecond), textChars: text.length });
+          return {
+            text,
+            tokens,
+            ttftMs: firstMs ?? 0,
+            tokensPerSecond,
+            // Returned so the renderer can subtract it from its own round trip and see the
+            // IPC/queue overhead separately from the model. Computed already; thrown away
+            // until now.
+            totalMs: total,
+          };
+        } catch (err) {
+          op.fail(err);
+          throw err;
+        } finally {
+          session.dispose();
+          sequence.dispose();
+        }
       });
-      // ⭐ THE FREEZE DETECTOR. `begin` (not `run`) because the heartbeat needs `note()`
-      // called from inside the token callback: two heartbeats with the SAME `chunks` mean
-      // the stream has stopped, two with DIFFERENT `chunks` mean it is merely slow. That
-      // one distinction is what the reported incident had no way to answer.
+    },
+
+    /**
+     * One grammar-constrained boss call (PLAN.md #11, `docs/BOSS-PROMPTS.md`). The renderer's pure
+     * layer built the prompt, the schema and the settings; this only compiles and generates.
+     *
+     * Through the SAME queue as narration, with the call's own deadline — which starts when the
+     * call starts running, not while it waits (the queue's header says why). Bracketed by the
+     * instrument, so a boss call that hangs heartbeats like a narration does. Never throws: every
+     * outcome is a result object the IPC handler can return as it is.
+     */
+    async generateStructured(req = {}) {
+      const settings = req.settings ?? {};
       const op = inst.begin(
         'llm',
-        'generate',
+        'boss generate',
         {
-          requestId: requestId ?? null,
-          promptChars: (prompt ?? '').length,
-          systemChars: (system ?? DEFAULT_SYSTEM).length,
-          maxTokens,
+          requestId: req.requestId ?? null,
+          kind: req.kind ?? null,
+          persona: req.persona ?? null,
+          promptChars: (req.prompt ?? '').length,
+          maxTokens: settings.maxTokens ?? null,
+          waiting: queue.depth(),
         },
-        THRESHOLDS.generate,
+        THRESHOLDS.bossGenerate,
       );
-      let firstMs = null;
-      let chunks = 0;
-      const t0 = performance.now();
       try {
-        const text = await session.prompt(prompt, {
-          maxTokens,
-          onTextChunk(chunk) {
-            if (firstMs === null) firstMs = performance.now() - t0;
-            chunks += 1;
-            op.note({ chunks, ttftMs: Math.round(firstMs) });
-            onToken?.(chunk);
-          },
-        });
-        const total = performance.now() - t0;
-        const tokens = model.tokenize(text).length;
-        const tokensPerSecond = (tokens / Math.max(1, total - (firstMs ?? 0))) * 1000;
-        op.done({ tokens, tokensPerSecond: Math.round(tokensPerSecond), textChars: text.length });
-        return {
-          text,
-          tokens,
-          ttftMs: firstMs ?? 0,
-          tokensPerSecond,
-          // Returned so the renderer can subtract it from its own round trip and see the
-          // IPC/queue overhead separately from the model. Computed already; thrown away
-          // until now.
-          totalMs: total,
-        };
+        const result = await queue.run(
+          ({ signal }) => runStructured({ llama, context, model, LlamaChatSession, log }, req, { signal, cache: grammars }),
+          { deadlineMs: settings.deadlineMs ?? THRESHOLDS.bossGenerate },
+        );
+        if (result.ok || result.reason === 'timeout') {
+          op.done({ ok: result.ok, timedOut: result.timedOut === true, queuedMs: result.queuedMs ?? null });
+        } else {
+          op.fail(new Error(result.message ?? 'boss call failed'), { queuedMs: result.queuedMs ?? null });
+        }
+        return result;
       } catch (err) {
         op.fail(err);
-        throw err;
-      } finally {
-        session.dispose();
-        sequence.dispose();
+        return { ok: false, reason: 'error', message: String(err?.message ?? err) };
       }
     },
   };

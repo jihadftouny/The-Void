@@ -226,6 +226,71 @@ ipcMain.handle('llm:generate', async (event, { requestId, prompt, system }) => {
   }
 });
 
+// A BOSS CALL (PLAN.md #11, docs/BOSS-PROMPTS.md). The renderer's pure layer built the whole
+// prompt, the answer schema and the settings; this side only compiles the grammar and generates,
+// through the same one-at-a-time queue as narration.
+//
+// TWO RULES, both load-bearing:
+//  - IT NEVER STARTS A MODEL LOAD. A boss turn cannot wait two minutes: with no model ready it
+//    returns `no-model` at once and the renderer plays the fallback. The boot already started the
+//    load; this handler only ever reads the gate.
+//  - IT NEVER THROWS OVER IPC. Every outcome — done, timeout, failure, no model — is logged here
+//    and returned as a result, so the renderer's fallback path is one branch.
+// The player's typed words travel inside `prompt`; only its LENGTH is logged, never the text.
+ipcMain.handle('llm:boss', async (_event, request) => {
+  const t0 = Date.now();
+  const req = request ?? {};
+  const settings = req.settings ?? {};
+  const call = { requestId: req.requestId ?? null, kind: req.kind ?? null, persona: req.persona ?? null };
+  mlog('debug', 'boss', 'boss: start', {
+    ...call,
+    promptChars: typeof req.prompt === 'string' ? req.prompt.length : 0,
+    maxTokens: settings.maxTokens ?? null,
+    temperature: settings.temperature ?? null,
+  });
+  if (!narratorGate.isReady()) {
+    mlog('warn', 'boss', 'boss: no model', { ...call, ms: Date.now() - t0 });
+    return { ok: false, reason: 'no-model' };
+  }
+  try {
+    const r = await narratorGate.peek().generateStructured(req);
+    const decodeMs = (r.generateMs ?? 0) - (r.ttftMs ?? 0);
+    const outcome = {
+      ...call,
+      queuedMs: r.queuedMs ?? null,
+      grammarMs: r.grammarMs ?? null,
+      ttftMs: r.ttftMs ?? null,
+      generateMs: r.generateMs ?? null,
+      tokens: r.tokens ?? null,
+      promptTokens: r.promptTokens ?? null,
+      tokPerSec: r.tokens && decodeMs > 0 ? Math.round((r.tokens / decodeMs) * 1000) : null,
+      timedOut: r.timedOut === true,
+      textChars: typeof r.text === 'string' ? r.text.length : 0,
+      ms: Date.now() - t0,
+    };
+    if (r.ok) {
+      // Slow is a warning: past the deadline the boss has already fallen back, and a long wait
+      // in the queue is the player staring at a frozen fight.
+      const slow =
+        (r.generateMs ?? 0) >= THRESHOLDS.bossGenerate || (r.queuedMs ?? 0) >= THRESHOLDS.bossGenerate;
+      mlog(slow ? 'warn' : 'info', 'boss', 'boss: done', outcome);
+    } else if (r.reason === 'timeout') {
+      mlog('warn', 'boss', 'boss: timeout', outcome);
+    } else {
+      mlog('error', 'boss', 'boss: FAILED', { ...outcome, message: String(r.message ?? r.reason ?? '') });
+    }
+    return r;
+  } catch (err) {
+    mlog('error', 'boss', 'boss: FAILED', {
+      ...call,
+      ms: Date.now() - t0,
+      message: String(err?.message ?? err),
+      stack: String(err?.stack ?? ''),
+    });
+    return { ok: false, reason: 'error', message: String(err?.message ?? err) };
+  }
+});
+
 // Renderer forwards its log entries here so everything lands in one file.
 ipcMain.on('log:entry', (_e, entry) => fileLog(entry));
 
