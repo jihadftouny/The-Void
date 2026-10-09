@@ -212,6 +212,10 @@ export function emptyRunSummary(): RunSummary {
  *  - `spared` ⇒ spareCount++.
  *  - `victory` ⇒ if a boss is pending, record the kill and clear it; if the battle took no
  *    damage, mark wonBattleUnhurt (sticky true).
+ *  - `defeat` ⇒ clear the pending boss (PLAN.md #11). A defeat used to end the run, so a boss left
+ *    pending could never be credited; losing to the EXECUTIONER does not end it (you fall to act 5),
+ *    and without this the NEXT victory — any floor-5 fight — would be recorded as the
+ *    executioner's kill.
  *  - `ending{endingType}` ⇒ record the ending.
  */
 export function foldRunEvents(
@@ -254,6 +258,9 @@ export function foldRunEvents(
         break;
       case 'spared':
         spareCount += 1;
+        break;
+      case 'defeat':
+        pendingBoss = undefined;
         break;
       case 'victory':
         if (pendingBoss !== undefined) {

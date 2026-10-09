@@ -91,6 +91,10 @@ export const ONE_OF_EVERY_EVENT: { [K in GameEventKind]: Extract<GameEvent, { ki
   'boss-summon': { kind: 'boss-summon', minions: 2 },
   'boss-minion-damage': { kind: 'boss-minion-damage', amount: 4 },
   'boss-adapt': { kind: 'boss-adapt' },
+  // PLAN.md #11 (combat). `hold_back` is the sample because it is a move the narrator SPEAKS
+  // (strike/cast/call_crew/grieve describe to '' — their own events speak; tested separately).
+  'boss-move': { kind: 'boss-move', bossId: 'kingpin', move: 'hold_back' },
+  'boss-grieve': { kind: 'boss-grieve', amount: 1 },
   // PLAN.md #2 (combat)
   'floor-drain': { kind: 'floor-drain', resource: 'skillCharge', amount: 1 },
   'illusion-struck': { kind: 'illusion-struck' },
@@ -152,4 +156,7 @@ export const ONE_OF_EVERY_EVENT: { [K in GameEventKind]: Extract<GameEvent, { ki
   'skills-warped': { kind: 'skills-warped', count: 3 },
   'deal-needs-room': { kind: 'deal-needs-room', reward: 'Rare armor' },
   'item-discarded': { kind: 'item-discarded', name: 'Common ring', rarity: 'Common' },
+  // PLAN.md #11 (narrative)
+  'boss-concession': { kind: 'boss-concession', bossId: 'kingpin', concession: 'weakness' },
+  'executioner-fall': { kind: 'executioner-fall', outcome: 'defeated' },
 };

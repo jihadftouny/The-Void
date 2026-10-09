@@ -744,7 +744,7 @@ async function realRoundSnapshots(animate: boolean): Promise<Element[]> {
     activeConditions: [], familyId: 'Beast', karmaWeighted: false,
   };
   const wrap = (b: BattleState): GameState => ({
-    version: 9, rngState: 1, player: b.player, act: 1, place: 0, karma: createKarma(),
+    version: 10, rngState: 1, player: b.player, act: 1, place: 0, karma: createKarma(), deeds: [],
     phase: { kind: 'battle', battle: b, started: true, final: false },
   });
   const scripted = (values: number[]) => {

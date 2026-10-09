@@ -17,6 +17,8 @@ import type { SkillId } from './skill.ts';
 import type { StatKey } from './character.ts';
 import type { TriggerType, EffectActionKind } from './item.ts';
 import type { Rarity } from './weapon.ts';
+import type { BossId, BossMoveId } from './boss.ts';
+import type { Deed } from './deeds.ts';
 
 /** Who an event is about. */
 export type CombatSubject = 'player' | 'enemy';
@@ -178,6 +180,27 @@ export type CombatEvent =
   | { kind: 'boss-minion-damage'; amount: number; text?: string }
   /** Reflection: the boss read an over-used tactic; the player's next attack is disadvantaged. */
   | { kind: 'boss-adapt'; text?: string }
+  // ---- PLAN.md #11 boss agents (only a boss battle emits these) ----
+  /**
+   * The boss took this move — emitted FIRST for every boss action (then the move's own events:
+   * the `attack`, the `boss-summon`, the `boss-grieve`), and for a turn a granted `pause` let
+   * pass (`move: 'pause'`). The seam unit C reads to show what the boss chose; the narrator
+   * says nothing for a move whose own events already speak.
+   */
+  | {
+      kind: 'boss-move';
+      bossId: BossId;
+      move: BossMoveId | 'pause';
+      /**
+       * The executioner only: the deed this blow is named for (§22.31) — a ⚖ kill or a
+       * desecration bargain from the record. Its karma AXIS is left out on purpose: karma stays
+       * hidden from every surface an event reaches.
+       */
+      deed?: Omit<Deed, 'axis'>;
+      text?: string;
+    }
+  /** The Sin grieved: no blow, and the player lost `amount` skill charges. */
+  | { kind: 'boss-grieve'; amount: number; text?: string }
   // ---- PLAN.md #2 floor mechanics (only the floor that carries the mechanic emits these) ----
   /**
    * Floor 3's slow weight took `amount` of the player's skill charges as the battle opened.

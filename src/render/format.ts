@@ -1,8 +1,8 @@
 // Player-facing text formatting for The Void's UI shell — PURE, Kaplay-free.
 //
 // LOAD-BEARING PRINCIPLES honored here:
-//  - Pure logic / render split: imports only TYPES from src/game plus three PURE,
-//    RNG-free lookups — the `STAT_KEYS` / `CONDITION_DATA` data tables and the
+//  - Pure logic / render split: imports only TYPES from src/game plus four PURE,
+//    RNG-free lookups — the `STAT_KEYS` / `CONDITION_DATA` / `SKILLS` data tables and the
 //    `getCatalogItemById` catalog accessor. No Kaplay / DOM. Unit-tested under `node`.
 //  - #3 Data-driven: `formatEvent` prefers a `text` the logic already populated;
 //    otherwise it renders a hand-written per-kind template. It FORMATS already-
@@ -29,6 +29,30 @@ import type { Stats } from '../game/character.ts';
 import { CONDITION_DATA } from '../game/condition.ts';
 import type { ConditionType } from '../game/condition.ts';
 import { getCatalogItemById, type TriggerType } from '../game/item.ts';
+import { SKILLS, type SkillId } from '../game/skill.ts';
+import type { BossMoveId, Concession } from '../game/boss.ts';
+
+/** The log line for each concession Talk can earn (PLAN.md #11). */
+const CONCESSION_LINE: Record<Concession, string> = {
+  pause: 'It concedes a pause — its next turn passes.',
+  weakness: 'It shows you a weakness — your attacks land easier for the rest of the fight.',
+  drop_mechanic: 'It gives up one of its advantages for the rest of the fight.',
+  surrender: 'It surrenders.',
+};
+
+/**
+ * The log line for a boss's chosen move (PLAN.md #11). A cast names the skill by its DISPLAY
+ * name (never the `cast:<id>` id — the C9 rule); the move's own events follow with the numbers.
+ */
+function bossMoveLine(move: BossMoveId | 'pause'): string {
+  if (move === 'strike') return `It strikes.`;
+  if (move === 'call_crew') return `It calls in its crew.`;
+  if (move === 'hold_back') return `It holds back and lets its crew do the work.`;
+  if (move === 'grieve') return `It stops to grieve.`;
+  if (move === 'pause') return `It holds back and lets you breathe.`;
+  const name = SKILLS[move.slice('cast:'.length) as SkillId]?.name ?? 'a skill';
+  return `It reaches for ${name}.`;
+}
 
 /** "hp/maxHp" — e.g. hpText(8, 20) === "8/20". Formats; computes nothing. */
 export function hpText(hp: number, maxHp: number): string {
@@ -204,6 +228,11 @@ export function formatEvent(e: GameEvent): string {
       return `The crew strikes you for ${e.amount} damage.`;
     case 'boss-adapt':
       return `Your foe reads your pattern — your next strike falters.`;
+    // --- PLAN.md #11 boss agents ---
+    case 'boss-move':
+      return bossMoveLine(e.move);
+    case 'boss-grieve':
+      return `It stops to grieve — you lose ${e.amount} skill charge${e.amount === 1 ? '' : 's'}.`;
     // --- PLAN.md #2 floor mechanics ---
     case 'floor-drain':
       return `This place drains ${e.amount} skill charge${e.amount === 1 ? '' : 's'} from you.`;
@@ -293,6 +322,11 @@ export function formatEvent(e: GameEvent): string {
       return `Your pack is full. Leave something behind to take ${e.reward}.`;
     case 'item-discarded':
       return `You leave ${e.name} behind.`;
+    // --- PLAN.md #11 ---
+    case 'boss-concession':
+      return CONCESSION_LINE[e.concession];
+    case 'executioner-fall':
+      return e.outcome === 'defiant' ? 'You fall anyway — unbowed.' : 'You are cast down, and fall.';
   }
 }
 

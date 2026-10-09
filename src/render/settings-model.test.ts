@@ -627,6 +627,10 @@ describe('every screen is classified into one of the three stage layouts', () =>
     'deal-decision': 'side',
     'deal-discard': 'side', // PLAN.md #2, Appendix A.3: a short list of actions, beside the prose
     rest: 'side', // PLAN.md #2: the found rest spot (it lost its decision)
+    // PLAN.md #11 (unit A): the boss's paused turn. Until unit C builds its screen, the renderer
+    // shows one "Continue" button that hands the turn to the fallback — a short action list, so
+    // `side`. Unit C re-classifies it when the boss's turn is drawn inside the battle frame.
+    'boss-choice': 'side',
   };
 
   it('maps every one of them exactly as the design says', () => {
@@ -642,9 +646,10 @@ describe('every screen is classified into one of the three stage layouts', () =>
     expect(modes.filter((m) => m === 'wide').length, 'the document screens moved').toBe(7);
     // PLAN.md #2: +1 side screen — the full-pack bargain (`deal-discard`, Appendix A.3);
     // `rest-decision` became `rest` (same count). PLAN.md #6: the battle left for `stage`.
-    expect(modes.filter((m) => m === 'side').length, 'the action screens moved').toBe(10);
+    // PLAN.md #11: +1 side screen — the boss's paused turn (`boss-choice`), until unit C.
+    expect(modes.filter((m) => m === 'side').length, 'the action screens moved').toBe(11);
     expect(modes.filter((m) => m === 'stage').length, 'the battle is not the framed stage').toBe(1);
-    expect(modes.length, 'a screen key was dropped from the table').toBe(18);
+    expect(modes.length, 'a screen key was dropped from the table').toBe(19);
   });
 
   it('an unknown key is `side` — the mode that guarantees the prose its floor', () => {

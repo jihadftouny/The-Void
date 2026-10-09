@@ -1611,6 +1611,11 @@ function renderChoices(awaiting: Awaiting): void {
       sceneryEl.appendChild(buildArtSlotById('scenery'));
       choice('Continue', () => void dispatch({ kind: 'continue' }));
       break;
+    case 'boss-choice':
+      // PLAN.md #11 SHIM (unit A): the boss's paused turn, played by the engine's seeded
+      // fallback (`move: null`) until unit C wires the model's move and replaces this arm.
+      choice('Continue', () => void dispatch({ kind: 'boss-choice', move: null }));
+      break;
     case 'game-over': {
       // G2 / GAME-DESIGN.md §22.15: a finished run gets a WRITTEN RECORD. This is the
       // FACTUAL half — outcome, depth, bosses by name, spares, unlocks by name. The Void's

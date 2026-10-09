@@ -370,6 +370,7 @@ function battleState(options: { usables: number; boss?: boolean }): GameState {
     act: 1,
     place: 0,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'battle', battle, started: true, final: false },
   };
 }

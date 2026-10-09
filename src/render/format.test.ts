@@ -180,6 +180,8 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'boss-summon': { kind: 'boss-summon', minions: 2 },
   'boss-minion-damage': { kind: 'boss-minion-damage', amount: 4 },
   'boss-adapt': { kind: 'boss-adapt' },
+  'boss-move': { kind: 'boss-move', bossId: 'sin', move: 'cast:pyroBall' },
+  'boss-grieve': { kind: 'boss-grieve', amount: 1 },
   // PLAN.md #2 (combat)
   'floor-drain': { kind: 'floor-drain', resource: 'skillCharge', amount: 2 },
   'illusion-struck': { kind: 'illusion-struck' },
@@ -221,6 +223,8 @@ const SAMPLES: { [K in GameEventKind]: Extract<GameEvent, { kind: K }> } = {
   'skills-warped': { kind: 'skills-warped', count: 4 },
   'deal-needs-room': { kind: 'deal-needs-room', reward: 'Rare armor' },
   'item-discarded': { kind: 'item-discarded', name: 'Suture Kit', rarity: 'Common' },
+  'boss-concession': { kind: 'boss-concession', bossId: 'sin', concession: 'drop_mechanic' },
+  'executioner-fall': { kind: 'executioner-fall', outcome: 'defiant' },
 };
 
 /** Derived from the mapped type's keys, so it cannot fall behind the union. */
@@ -237,7 +241,9 @@ describe('formatEvent — totality over every event kind', () => {
     // ...and the three potion kinds (§22.6).
     // PLAN.md #1.6 added 4 combat kinds (tempo-changed, tempo-extra-action, tempo-lost-turn,
     // hp-changed).
-    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4);
+    // PLAN.md #11 added 2 combat kinds (boss-move, boss-grieve).
+    // ...and 2 narrative kinds (boss-concession, executioner-fall).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2 + 2);
     for (const kind of ALL_KINDS) expect(SAMPLES[kind].kind).toBe(kind);
   });
 
@@ -683,12 +689,13 @@ function detonateThroughStep(marks: ConditionType[]): GameEvent[] {
     enemy: { ...base.enemy, activeConditions: marks.map(makeCondition) },
   };
   const state: GameState = {
-    version: 9,
+    version: 10,
     rngState: 0,
     player,
     act: 1,
     place: 0,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'battle', battle, started: true, final: false },
   };
   return step(state, {

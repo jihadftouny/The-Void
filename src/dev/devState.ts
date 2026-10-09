@@ -421,6 +421,8 @@ export function buildJump(spec: JumpSpec): JumpBundle {
     // floor names; it is derived here rather than accepted, so it cannot disagree.
     place: act - 1,
     karma,
+    // PLAN.md #11: a jumped-to state has done nothing yet, so its deed record is empty.
+    deeds: [],
     phase,
   };
   if (spec.unlocks) state.unlocks = spec.unlocks;

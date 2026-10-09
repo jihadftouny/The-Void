@@ -62,6 +62,8 @@ import { type Rarity } from './weapon.ts';
 import { type DraftOption } from './draft.ts';
 import { effectiveMaxHp } from './statEffects.ts';
 import { type RunUnlocks } from './unlockStore.ts';
+import { createRng, randInt } from './rng.ts';
+import { bossCastDef, type BossMoveId } from './boss.ts';
 
 // ------- Public types --------------------------------------------------------
 
@@ -97,6 +99,12 @@ export interface RunResult {
   startingWis: number | null;
   /** What each floor cost this run (PLAN.md #2). A floor never reached is all zeros. */
   perFloor: Record<FloorId, FloorCounters>;
+  /**
+   * PLAN.md #11: HOW the ending was reached, when not the plain way — `taken` (damnation because
+   * the Hollow Self killed you) or `acknowledged` (the late grace, which the sim never reaches: it
+   * never talks). Absent for every other run.
+   */
+  endingPath?: 'acknowledged' | 'taken';
 }
 
 /**
@@ -260,7 +268,9 @@ export function tallyStep(
     const before = pre.state.phase.kind === 'battle' ? pre.state.phase.battle.player.hp : 0;
     c.illusionHpLost += Math.max(0, before - hpAfter(post));
   }
-  if (count('defeat') > 0) {
+  // PLAN.md #11: a `defeat` that is NOT the run's end is not a death — the executioner's loss is a
+  // fall to act 5 (`executioner-fall`), and the Hollow Self's killing blow is damnation (`ending`).
+  if (count('defeat') > 0 && count('executioner-fall') === 0 && count('ending') === 0) {
     c.died = 1;
     if (illusory) c.diedInIllusion = 1;
   }
@@ -332,6 +342,12 @@ export interface AggregateReport {
   perClearedFloor: Record<FloorId, FloorCounters>;
   /** Win rate and floor-2 death share by starting Wisdom (runs with no character are skipped). */
   perWisBucket: Record<WisBucket, WisBucketStats>;
+  /**
+   * PLAN.md #11: of the `damnation` endings, how many the Hollow Self TOOK — it killed the run
+   * (the author's 2026-09-28 ruling) rather than being beaten by force. Counted inside `damnation`
+   * and so inside `wins`; reported apart so the ending mix is visible.
+   */
+  damnationTaken: number;
 }
 
 /**
@@ -499,10 +515,60 @@ function chooseBattleAction(battle: BattleState, merciful: boolean): BattleActio
 }
 
 /**
- * The shared decision core, total over `Awaiting` — so it ALWAYS returns a legal input for the
- * phase it is asked about. `merciful` toggles the spare behaviour in `battle-action`.
+ * Who plays the BOSS's turn in a simulated run (PLAN.md #11, §22.31 D8 — "measure first": a
+ * random picker and a best-move picker show the range an agent-run boss could land in).
+ *  - `fallback` (default): answer `null`, so the ENGINE's seeded fallback plays it — the model-off
+ *    game, and the balance baseline every guard is measured on.
+ *  - `random`: a uniform pick over the legal moves, from the state's own seed (`bossRandomMove`).
+ *  - `best`: the strongest move by a simple reading (`bossBestMove`).
  */
-function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameInput {
+export type BossPicker = 'fallback' | 'random' | 'best';
+
+/** Options for the shipped policies. */
+export interface PolicyOptions {
+  boss?: BossPicker;
+}
+
+/**
+ * A uniform pick over the boss's legal moves — a PURE function of `res.state.rngState`: it seeds
+ * its own `createRng` from the state and never advances the state's accumulator (the header's rule
+ * for any policy wanting randomness). The engine then applies the id as given, so it takes no
+ * fallback draw of its own. `null` when no boss turn is open.
+ */
+export function bossRandomMove(res: StepResult): BossMoveId | null {
+  const phase = res.state.phase;
+  const legal = phase.kind === 'battle' ? phase.battle.bossChoice?.legal : undefined;
+  if (!legal || legal.length === 0) return null;
+  return legal[randInt(createRng(res.state.rngState).rng, legal.length)] ?? null;
+}
+
+/**
+ * The BEST move by a simple reading (the measurement's "best" row) — PURE, no RNG. The Kingpin
+ * calls his crew while he may (it deals damage every round after), then strikes; every other
+ * boss casts its highest-`baseDamage` affordable skill (the form it would really cast — the
+ * Hollow Self's warped one), else strikes. The Sin never grieves (a lost charge is not damage).
+ * `null` when no boss turn is open.
+ */
+export function bossBestMove(battle: BattleState): BossMoveId | null {
+  const legal = battle.bossChoice?.legal;
+  const boss = battle.boss;
+  if (!legal || !boss) return null;
+  if (boss.bossId === 'kingpin') return legal.includes('call_crew') ? 'call_crew' : 'strike';
+  let best: { id: BossMoveId; damage: number } | null = null;
+  for (const id of legal) {
+    if (!id.startsWith('cast:')) continue;
+    const def = bossCastDef(boss, id.slice('cast:'.length));
+    if (def && (!best || def.baseDamage > best.damage)) best = { id, damage: def.baseDamage };
+  }
+  return best?.id ?? 'strike';
+}
+
+/**
+ * The shared decision core, total over `Awaiting` — so it ALWAYS returns a legal input for the
+ * phase it is asked about. `merciful` toggles the spare behaviour in `battle-action`; `boss`
+ * chooses who plays the boss's turn (PLAN.md #11).
+ */
+function decide(res: StepResult, classId: PlayerClass, merciful: boolean, boss: BossPicker = 'fallback'): GameInput {
   const phase = res.state.phase;
   switch (res.awaiting) {
     case 'title':
@@ -552,6 +618,12 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
     case 'rest':
       // A found rest was taken the moment it was found (§22.26); only `continue` remains.
       return { kind: 'continue' };
+    case 'boss-choice':
+      // PLAN.md #11: the boss's move. `null` hands it to the engine's seeded fallback — the
+      // model-off game, and the balance baseline. The other pickers are measurement only.
+      if (boss === 'random') return { kind: 'boss-choice', move: bossRandomMove(res) };
+      if (boss === 'best' && phase.kind === 'battle') return { kind: 'boss-choice', move: bossBestMove(phase.battle) };
+      return { kind: 'boss-choice', move: null };
     case 'game-over':
       // Unreachable dispatch (the loop exits on this awaiting); return a valid input anyway.
       return { kind: 'continue' };
@@ -559,16 +631,16 @@ function decide(res: StepResult, classId: PlayerClass, merciful: boolean): GameI
 }
 
 /** The default "reasonable, no-sacrifice, no-spare" policy for a given class. */
-export function heuristicPolicy(classId: PlayerClass): SimPolicy {
-  return (res) => decide(res, classId, false);
+export function heuristicPolicy(classId: PlayerClass, opts: PolicyOptions = {}): SimPolicy {
+  return (res) => decide(res, classId, false, opts.boss);
 }
 
 /**
  * A mercy policy: identical to `heuristicPolicy`, except it SPARES a living ⚖ non-boss enemy.
  * Used to exercise and report the grace path (which the kill-everything baseline never reaches).
  */
-export function mercifulPolicy(classId: PlayerClass): SimPolicy {
-  return (res) => decide(res, classId, true);
+export function mercifulPolicy(classId: PlayerClass, opts: PolicyOptions = {}): SimPolicy {
+  return (res) => decide(res, classId, true, opts.boss);
 }
 
 // ------- The run loop --------------------------------------------------------
@@ -593,6 +665,7 @@ export function runToTerminal(
   };
   let steps = 0;
   let endingType: 'grace' | 'damnation' | null = null;
+  let endingPath: 'acknowledged' | 'taken' | null = null;
   let floorsCleared = 0;
   let lastEnemy = '';
   let perFloor = emptyPerFloor();
@@ -612,7 +685,10 @@ export function runToTerminal(
     steps++;
     for (const e of res.events) {
       if (e.kind === 'act-outro') floorsCleared++;
-      else if (e.kind === 'ending') endingType = e.endingType;
+      else if (e.kind === 'ending') {
+        endingType = e.endingType;
+        endingPath = e.path ?? null;
+      }
       else if (
         e.kind === 'encounter-start' ||
         e.kind === 'boss-encounter' ||
@@ -631,10 +707,12 @@ export function runToTerminal(
     outcome === 'grace'
       ? 'ascended (grace)'
       : outcome === 'damnation'
-        ? 'unmade the Hollow (damnation)'
+        ? endingPath === 'taken'
+          ? 'taken by the Hollow (damnation)'
+          : 'unmade the Hollow (damnation)'
         : lastEnemy || 'the Void';
 
-  return {
+  const result: RunResult = {
     seed: initial.rngState,
     classId,
     outcome,
@@ -647,6 +725,8 @@ export function runToTerminal(
     startingWis,
     perFloor,
   };
+  if (endingPath !== null) result.endingPath = endingPath;
+  return result;
 }
 
 /**
@@ -698,6 +778,7 @@ export function simulateBatch(opts: {
   let wins = 0;
   let grace = 0;
   let damnation = 0;
+  let damnationTaken = 0;
   let deaths = 0;
   let levelSum = 0;
   let floorsSum = 0;
@@ -748,6 +829,7 @@ export function simulateBatch(opts: {
       }
 
       stat.runs++;
+      if (r.endingPath === 'taken') damnationTaken++;
       classLevelSum += r.finalLevel;
       classFloorsSum += r.floorsCleared;
       if (r.outcome === 'grace') {
@@ -800,6 +882,7 @@ export function simulateBatch(opts: {
       mid: bucketStats(wisTally.mid),
       high: bucketStats(wisTally.high),
     },
+    damnationTaken,
   };
 }
 
