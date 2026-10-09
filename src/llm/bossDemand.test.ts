@@ -557,6 +557,13 @@ describe('frozen: the same rule on every yield word (the tester\'s table, 2026-1
     expect(yieldDemandIn('You know, I want to just die.')).toBe('die (a command)');
   });
 
+  it('a regular yield word is matched by its stem: the "-in\'" spelling and other stem-built words are caught (frozen, F-1)', () => {
+    // `\bsurrender(?!ed\b)` — every word built on the stem except the past form. Frozen behaviour (FINDINGS G88).
+    expect(yieldDemandIn("Start surrenderin'.")).toBe('surrender');
+    expect(yieldDemandIn("Start yieldin'.")).toBe('yield');
+    expect(yieldDemandIn("Concedin' is all that's left.")).toBe('concede');
+  });
+
   it('the accepted edge cases (FINDINGS, frozen 2026-10-09) behave as logged', () => {
     // R-1, R-2, R-3, R-4: pass — the judge's.
     expect(talkGuard('Say it: I surrendered.', { selfReference: true })).toBeNull();
