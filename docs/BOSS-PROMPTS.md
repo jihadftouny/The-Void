@@ -104,7 +104,9 @@ messages, rude and empty ones included. Now:
    again.", "Admit you have conceded.", "They conceded.") — while "-ing" and "-s" forms ("Start surrendering.") are
    always caught; and "to just die" is exempt only when the
    player's own I/we leads to it with no "you" between ("I want you to just die.", "You need to just die." are caught).
-   A `--quick` re-run with these rules PASSES every target.
+   A `--quick` re-run with these rules PASSES every target. **Frozen on 2026-10-09** (the author): no more narrowing;
+   the rules are pinned line by line, each exists once in code (one table of the four yield words, one helper),
+   and the known edge cases are accepted (`FINDINGS.md` G88).
    **A word of their own self (judge round 3, 2026-10-04).** A card may require it (`talk.selfReference`; set for
    the Hollow Self and the Reflection): a message with no first-person word (*I, me, my, mine, myself, we, us,
    our…*, `FIRST_PERSON_WORDS`) concedes nothing. Acceptance ("you ARE them") and owning a deed can only be said

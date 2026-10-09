@@ -148,6 +148,14 @@ Legend: ⬜ not started · 🔄 in progress · ✅ done · ★ first big new sys
 
 ## Session log
 
+### 2026-10-09 — the bosses' word check, frozen (`boss-llm`) — not merged
+
+The author froze the word check as it behaves now. It was tidied so each rule is written once (one table of the
+four yield words feeds one rule), with proof that no line changed: 1,067 lines checked old against new, zero
+differences. A table test now holds every word to the same rule, and the edge cases the tester found are recorded
+as accepted (FINDINGS G88), to revisit only if playtesting or a full run shows a problem. The quick real-model run
+after the tidy-up gives exactly the same results.
+
 ### 2026-10-08 — the bosses' demand check, narrowed again (`boss-llm`) — not merged
 
 The tester showed the last round's exceptions let tricks through: "Say it: I surrender." passed because it began
