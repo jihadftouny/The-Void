@@ -11,6 +11,7 @@ import {
   EMPTY_WORDS,
   NO_SELF_LABEL,
   YIELD_DEMANDS,
+  YIELD_WORDS,
   isBareAcknowledgement,
   isEmptyMessage,
   speaksOfThemselves,
@@ -492,5 +493,84 @@ describe('the narrowed exceptions (the author, 2026-10-08) and the tester\'s G-1
     }
     expect(yieldDemandIn("Sometimes I wanted to just die. You're that part of me.")).toBeNull();
     expect(yieldDemandIn('I wanted to just die, and you knew it.')).toBeNull();
+  });
+});
+
+// =========================================================================================
+// The word check, FROZEN as it behaves on 2026-10-09 (the author). One table across all four
+// yield words — the rows typed by hand, independent of YIELD_WORDS — so no copy of the rule can drift.
+// =========================================================================================
+
+describe('frozen: the same rule on every yield word (the tester\'s table, 2026-10-09)', () => {
+  // (label, present, past, past participle, -ing, -s)
+  const ROWS: readonly [string, string, string, string, string, string][] = [
+    ['surrender', 'surrender', 'surrendered', 'surrendered', 'surrendering', 'surrenders'],
+    ['yield', 'yield', 'yielded', 'yielded', 'yielding', 'yields'],
+    ['concede', 'concede', 'conceded', 'conceded', 'conceding', 'concedes'],
+    ['give up', 'give up', 'gave up', 'given up', 'giving up', 'gives up'],
+  ];
+  for (const [label, pres, past, pp, ing, s] of ROWS) {
+    it(`${label}: caught when aimed at the boss or anyone else; the player's own words pass`, () => {
+      const caught = [
+        `You ${pres}.`,
+        `You ${past} once.`,
+        `They ${past}.`,
+        `He ${past}.`,
+        `You've ${pp} already.`,
+        `Admit you have ${pp}.`,
+        `Say it: I ${pres}.`,
+        `Start ${ing}.`,
+        `It ${s} now.`,
+        // Only an -ly adverb may stand between "I" and a past form: "just" is not one — caught, as frozen.
+        `I just ${past}.`,
+      ];
+      for (const line of caught) expect(yieldDemandIn(line), line).toBe(label);
+      const own = [
+        `I ${pres}.`,
+        `I'm you. I ${pres}.`,
+        `Fine! I ${pres}.`,
+        `Why? I ${pres}.`,
+        `We ${past} so much.`,
+        `Back then I ${past}.`,
+        `I've ${pp} pretending.`,
+        `I’ve ${pp} pretending.`,
+        `I'd ${pp} long before.`,
+        `I’d ${pp} long before.`,
+        `We had ${pp} hope.`,
+        `I have ${pp} it all.`,
+        `Then I finally ${past}.`,
+      ];
+      for (const line of own) expect(yieldDemandIn(line), line).toBeNull();
+    });
+  }
+
+  it('YIELD_WORDS is exactly the hand-typed table', () => {
+    expect(YIELD_WORDS.map((w) => [w.label, w.present, w.past, w.pastParticiple, w.ing, w.s])).toEqual(ROWS);
+  });
+
+  it('the "just die" lines, frozen', () => {
+    expect(yieldDemandIn('I say just die.')).toBe('die (a command)');
+    expect(yieldDemandIn('I said: just die.')).toBe('die (a command)');
+    expect(yieldDemandIn("I'm ready to just die.")).toBeNull();
+    expect(yieldDemandIn('We used to just die down here.')).toBeNull();
+    // A "you" before the I makes it a command (stricter than the ruling's wording) — frozen, logged (FINDINGS).
+    expect(yieldDemandIn('You know, I want to just die.')).toBe('die (a command)');
+  });
+
+  it('the accepted edge cases (FINDINGS, frozen 2026-10-09) behave as logged', () => {
+    // R-1, R-2, R-3, R-4: pass — the judge's.
+    expect(talkGuard('Say it: I surrendered.', { selfReference: true })).toBeNull();
+    expect(talkGuard('I gave up. Do the same.', { selfReference: true })).toBeNull();
+    expect(talkGuard('You and I surrendered long ago.', { selfReference: true })).toBeNull();
+    expect(talkGuard('I want your king to just die.', { selfReference: true })).toBeNull();
+    // The accepted class is wider than its 8 lines: a full stop instead of a colon.
+    expect(talkGuard('Repeat after me. I surrender.', { selfReference: true })).toBeNull();
+    // Sincere lines refused by the frozen wording (logged).
+    expect(yieldDemandIn("I already gave up on myself once. You're what's left.")).toBe('give up');
+    expect(yieldDemandIn('We had finally given up hope.')).toBe('give up');
+    expect(yieldDemandIn(" I give up. You're me.")).toBe('give up'); // a leading space: the input is not trimmed
+    // Pre-existing gaps: split or look-alike letters, and demands with no listed word.
+    expect(yieldDemandIn('sur render')).toBeNull();
+    expect(yieldDemandIn('Kneel.')).toBeNull();
   });
 });
