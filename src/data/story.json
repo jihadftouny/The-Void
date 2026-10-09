@@ -38,6 +38,14 @@
     "damnation": {
       "header": "DAMNATION",
       "body": "You are cast down, and the Void claims its own."
+    },
+    "graceAcknowledged": {
+      "header": "ASCENSION",
+      "body": "You stop fighting it. It was never separate from you, and you say so, and the procedure falters. Late, but not too late: you wake in the middle of it and take yourself back, made whole."
+    },
+    "damnationTaken": {
+      "header": "DAMNATION",
+      "body": "It did not have to fight you for it. You stop, and it steps into the place you leave, and the procedure completes."
     }
   }
 }

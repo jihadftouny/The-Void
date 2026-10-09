@@ -21,6 +21,7 @@ import { EQUIP_SLOTS } from './item.ts';
 import { BACKPACK_CAPACITY } from './inventory.ts';
 import { type PlayerClass } from './player.ts';
 import { levelForXp } from './progression.ts';
+import { isValidDeed } from './deeds.ts';
 
 /**
  * The current save-format version. Single source of version truth: it mirrors the
@@ -28,7 +29,7 @@ import { levelForXp } from './progression.ts';
  * embedded `version` is greater than this is from a future build and is rejected;
  * a lower version is routed through `migrate`.
  */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 /** The valid `Phase.kind` discriminants (mirrors the `Phase` union in game.ts). */
 const PHASE_KINDS: readonly string[] = [
@@ -170,6 +171,10 @@ function migrate(raw: unknown, fromVersion: number): unknown | null {
       case 8:
         value = upgrade8to9(value);
         current = 9;
+        break;
+      case 9:
+        value = upgrade9to10(value);
+        current = 10;
         break;
       default:
         return null; // unknown / unsupported source version — cannot migrate
@@ -423,6 +428,56 @@ function upgrade8to9(raw: unknown): unknown {
   return next;
 }
 
+/**
+ * Migrate a v9 save to the v10 shape (PLAN.md #11, the deed record) — PURE.
+ *
+ * The one shape change: `GameState.deeds`, the saved record of what the run did (§22.31 D3). A v9
+ * run kept no deeds — only the four karma numbers — and the deeds cannot be reconstructed from
+ * those, so an old save starts with an EMPTY record, in whatever phase it was saved (the author's
+ * ruling). Every other #11 addition is optional and additive (`BattleState.bossChoice`, the new
+ * `BossState` fields, the executioner) and cannot exist in a v9 save.
+ */
+function upgrade9to10(raw: unknown): unknown {
+  if (!isPlainObject(raw)) return raw;
+  const next: Record<string, unknown> = { ...raw };
+  if (!Array.isArray(next.deeds)) next.deeds = [];
+  // Fix round 1: a battle paused for the player's extra action now stores only the round's TICK
+  // adv/dis (`BattleState.extraActionAdvDis`), not the tick combined with the standing modifier.
+  // A v9 pause stored the combination, so the tick is recovered: the value that, combined with the
+  // standing modifier, gives what was stored (v9 had no `weakness`, so the standing modifier is
+  // `playerAdvantage` alone). The second action then rolls exactly as v9 would have.
+  //
+  // One case the arithmetic cannot decide: a standing −1 with a stored −1 (the tick was 0 or −1 —
+  // −1 combined with −1 is still −1). The only condition that produces a tick is FRACTURE, always
+  // −1 (`condition.ts`), and a fracture that ticked this round is still on the player in the saved
+  // pause (only an expiring one is removed, and an expiring one produced no tick) — so its presence
+  // decides. A tick of +1 cannot occur, which settles the mirror case (standing +1, stored +1 → 0).
+  if (isPlainObject(next.phase) && isPlainObject(next.phase.battle)) {
+    const battle = next.phase.battle as Record<string, unknown>;
+    if (battle.extraAction === true) {
+      // An absent field was a combined 0 (only non-zero values were written).
+      const combined = battle.extraActionAdvDis === 1 || battle.extraActionAdvDis === -1 ? battle.extraActionAdvDis : 0;
+      const standing = battle.playerAdvantage === 1 || battle.playerAdvantage === -1 ? battle.playerAdvantage : 0;
+      const player = isPlainObject(battle.player) ? battle.player : {};
+      const fractured =
+        Array.isArray(player.activeConditions) &&
+        player.activeConditions.some((c) => isPlainObject(c) && c.type === 'fracture');
+      const tick =
+        combined === standing
+          ? standing === -1 && fractured
+            ? -1
+            : 0
+          : Math.max(-1, Math.min(1, combined - standing));
+      const migrated: Record<string, unknown> = { ...battle };
+      if (tick === 0) delete migrated.extraActionAdvDis;
+      else migrated.extraActionAdvDis = tick;
+      next.phase = { ...next.phase, battle: migrated };
+    }
+  }
+  next.version = 10;
+  return next;
+}
+
 /** A v8 bargain whose reward is the retired `heal` kind. */
 function isHealDeal(deal: unknown): boolean {
   return isPlainObject(deal) && isPlainObject(deal.reward) && deal.reward.kind === 'heal';
@@ -467,6 +522,11 @@ function isValidGameState(v: unknown): v is GameState {
 
   // Karma vector: a plain object whose four axes are all finite numbers.
   if (!isValidKarma(v.karma)) return false;
+
+  // PLAN.md #11: the deed record — an array of deeds each with a known kind and a real floor
+  // (shallow, like the rest of this guard). A record longer than `DEED_CAP` is ACCEPTED: the cap
+  // re-applies on the next write (`recordDeed`), never at load.
+  if (!Array.isArray(v.deeds) || !v.deeds.every(isValidDeed)) return false;
 
   // `player` is null before creation, otherwise a full Player envelope.
   if (v.player !== null && !isValidPlayer(v.player)) return false;

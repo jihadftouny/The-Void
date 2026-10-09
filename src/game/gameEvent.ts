@@ -16,7 +16,7 @@ import type { Stats } from './character.ts';
 import type { PlayerClass } from './player.ts';
 import type { Rarity } from './weapon.ts';
 import type { Pool } from './deal.ts';
-import type { BossId } from './boss.ts';
+import type { BossId, Concession } from './boss.ts';
 
 /** The narrative (non-combat) half of the game event stream. */
 export type NarrativeEvent =
@@ -63,7 +63,20 @@ export type NarrativeEvent =
    * placeholder prose — NEVER a karma axis value/number (karma stays hidden).
    */
   | { kind: 'verdict'; outcome: 'grace' | 'cast-down'; text?: string }
-  | { kind: 'ending'; endingType: 'grace' | 'damnation'; header: string; body: string; text?: string }
+  /**
+   * The run's ending. PLAN.md #11: `path` names HOW an ending was reached when it was not the
+   * plain way — `acknowledged` (the late grace: the Hollow Self talked into surrender) or `taken`
+   * (damnation because the Hollow Self killed you). Absent for the verdict grace and damnation by
+   * force, so those events are unchanged.
+   */
+  | {
+      kind: 'ending';
+      endingType: 'grace' | 'damnation';
+      header: string;
+      body: string;
+      path?: 'acknowledged' | 'taken';
+      text?: string;
+    }
   | { kind: 'game-over'; xp: number; text?: string }
   // ---- PLAN.md #2: rest as a found place, the warped kit, and the full-pack bargain ----
   /**
@@ -92,7 +105,17 @@ export type NarrativeEvent =
    */
   | { kind: 'deal-needs-room'; reward: string; text?: string }
   /** An item was left behind to make room for a bargain's reward (A.3). */
-  | { kind: 'item-discarded'; name: string; rarity: Rarity; text?: string };
+  | { kind: 'item-discarded'; name: string; rarity: Rarity; text?: string }
+  /**
+   * PLAN.md #11: Talk earned a concession from the boss (one per fight, §22.7). Carries the boss and
+   * the concession only — never the words that earned it (those are unit B's and the log's).
+   */
+  | { kind: 'boss-concession'; bossId: BossId; concession: Concession; text?: string }
+  /**
+   * PLAN.md #11: after the executioner fight, you fall to the True Void either way (§22.31) —
+   * `defiant` having won it, `defeated` having lost it. A loss here is a fall, never a death.
+   */
+  | { kind: 'executioner-fall'; outcome: 'defiant' | 'defeated'; text?: string };
 
 /** The full game event stream: combat events plus narrative events. */
 export type GameEvent = CombatEvent | NarrativeEvent;

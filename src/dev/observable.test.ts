@@ -126,7 +126,21 @@ describe('the cast-down verdict, from the verdict-castdown jump', () => {
     const verdict = step(bundle.state, { kind: 'menu', choice: 'continue' });
     expect(verdict.state.phase).toEqual({ kind: 'verdict', outcome: 'cast-down' });
 
-    const outro = step(verdict.state, { kind: 'continue' });
+    // PLAN.md #11: cast-down meets the executioner first; win or lose, the run falls to act 5.
+    let outro = step(verdict.state, { kind: 'continue' });
+    expect(outro.state.phase.kind === 'battle' && outro.state.phase.battle.boss?.bossId).toBe('executioner');
+    for (let i = 0; i < 400 && outro.state.phase.kind !== 'act-outro'; i += 1) {
+      outro = step(
+        outro.state,
+        outro.awaiting === 'battle-action'
+          ? { kind: 'battle-action', action: 'fight' }
+          : outro.awaiting === 'boss-choice'
+            ? { kind: 'boss-choice', move: null }
+            : outro.awaiting === 'draft-pick'
+              ? { kind: 'draft-pick', index: 0 }
+              : { kind: 'continue' },
+      );
+    }
     expect(outro.state.phase.kind).toBe('act-outro');
     expect(outro.state.act).toBe(5);
     expect(outro.state.place).toBe(4);

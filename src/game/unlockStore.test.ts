@@ -311,12 +311,13 @@ describe('foldRunEvents over a full driven step loop', () => {
       advantageDisadvantage: 1,
     };
     const start: GameState = {
-      version: 9,
+      version: 10,
       rngState: 4242,
       player,
       act: 1,
       place: 0,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'main-menu' },
     };
 

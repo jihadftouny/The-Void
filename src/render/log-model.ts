@@ -92,6 +92,9 @@ export const LOG_ROUTING: Record<GameEventKind, LogRoute> = {
   'boss-summon': 'log',
   'boss-minion-damage': 'log',
   'boss-adapt': 'log',
+  // PLAN.md #11: what the boss chose, and the Sin's grief — inside the fight, so the log's.
+  'boss-move': 'log',
+  'boss-grieve': 'log',
   // PLAN.md #2 — inside a fight, so the battle log's (the log is the BATTLE log, rule above).
   // `illusion-dispelled` ends the fight the way `victory` and `spared` do, and like them it is
   // logged: it carries the one roll of the illusion mechanic the player is allowed to see.
@@ -137,6 +140,10 @@ export const LOG_ROUTING: Record<GameEventKind, LogRoute> = {
   'skills-warped': 'pane',
   'deal-needs-room': 'pane',
   'item-discarded': 'pane',
+  // PLAN.md #11: a concession is a narrative event that happens INSIDE a fight, so the battle log
+  // records it (the one narrative kind the log owns): the player should see what Talk earned.
+  'boss-concession': 'log',
+  'executioner-fall': 'pane', // PLAN.md #11: after the fight — the story's, not the log's
 };
 
 /**

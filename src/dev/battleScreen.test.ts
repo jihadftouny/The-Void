@@ -171,6 +171,54 @@ describe('a BOSS: no Spare, and Run is a disabled row that says why (AC-29, G4, 
   });
 });
 
+describe('the boss’s paused turn — the one-button shim until unit C (PLAN.md #11 Q5a)', () => {
+  // This file is load-sensitive (FINDINGS G83 — unit B's row), so the case carries a generous
+  // timeout; alone it takes well under a second.
+  it('offers exactly one Continue, which hands the turn to the engine’s fallback (move null)', async () => {
+    const bundle = bundleOf('hollow-fight');
+    // The same inputs, played headlessly: join, Fight (the boss's turn pauses), then the fallback.
+    const joined = step(bundle.state, { kind: 'continue' });
+    const fought = step(joined.state, { kind: 'battle-action', action: 'fight' });
+    expect(fought.awaiting, 'the fixture never reaches the boss’s turn').toBe('boss-choice');
+    const expected = step(fought.state, { kind: 'boss-choice', move: null });
+
+    // Every renderer `boot()` starts an UN-awaited `import('../dev/panel.ts')` (the dev panel), so
+    // the case before this one may leave that load in flight. Resetting the module registry under
+    // it (`freshRenderer`) stalled this case inside `resume` for the whole timeout — caught by a
+    // marker dump under three concurrent suites, the only place the stall showed. Letting that
+    // load finish first removes the overlap.
+    await import('./panel.ts');
+    const entries = await resume(bundle);
+    // Every click waits for its WHOLE dispatch — the renderer's `ui`/`turn` line, written in the
+    // dispatch's `finally` after the round's replay, the autosave and the redraw. Two reasons: a
+    // click made while the previous dispatch is still replaying is DROPPED (`dispatch` returns
+    // early while `busy`), and a replay left running would write this fight into the save during
+    // the NEXT case (it did: the floor-3 drain case read it back and failed). The screen key alone
+    // is not enough — it is set at the START of the replay.
+    const turns = (): number => entries.filter((e) => e.category === 'ui' && e.message === 'turn').length;
+    const clickAndSettle = async (label: string): Promise<void> => {
+      const before = turns();
+      click(label);
+      await vi.waitFor(() => expect(turns()).toBeGreaterThan(before), { timeout: 20_000, interval: 10 });
+    };
+    await clickAndSettle('Continue');
+    expect(screen()).toBe('battle-action');
+    await clickAndSettle('Fight');
+    expect(screen()).toBe('boss-choice');
+    expect(labels()).toEqual(['Continue']);
+    await clickAndSettle('Continue');
+    const last = entries.filter((e) => e.category === 'engine' && e.message === 'step').at(-1)?.data as { input: string } | undefined;
+    expect(last?.input).toBe('boss-choice');
+    const lastTurn = entries.filter((e) => e.category === 'ui' && e.message === 'turn').at(-1)?.data as { input: string } | undefined;
+    expect(lastTurn?.input).toBe('boss-choice');
+    // The dispatched step is the NULL move's: its events are exactly the headless fallback step's.
+    const detail = entries.filter((e) => e.category === 'engine' && e.message === 'step detail').at(-1)?.data as
+      | { events: string[] }
+      | undefined;
+    expect(detail?.events).toEqual(expected.events.map((e) => e.kind));
+  }, 30_000);
+});
+
 describe('floor 3’s opening drain is a beat of its own (AC-28)', () => {
   it('joining the fight plays the drain on the stage, and the charges bar lands on the engine’s value', async () => {
     const bundle = bundleOf({ act: 3, xp: 30, target: { kind: 'encounter', familyId: 'mirrorSelves' } });

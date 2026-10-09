@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripComments } from '../log/sourceScan.testutil.ts';
 import { AXIS_STEMS, AXIS_VOCABULARY, SCENE_VOCABULARY } from './karmaVocabulary.testutil.ts';
+import { SIN_IDENTITIES } from './boss.ts';
 
 describe('AXIS_VOCABULARY — stems, so every inflection is caught', () => {
   it('catches the axis nouns and every adjective a narrator or a formatter would reach for', () => {
@@ -58,9 +59,20 @@ describe('AXIS_VOCABULARY — stems, so every inflection is caught', () => {
 const ROOTS = ['karm', 'natur', 'merc', 'cruel', 'greed', 'restrain', 'reveren', 'desecra', 'clarit', 'delu'];
 const COPY_AT = 3;
 
-/** The families a piece of text names, with camelCase axis keys removed first. */
+/**
+ * The design-sanctioned Sin names — "The Cruelty", "The Delusion", … — read from the engine's
+ * own card data, never spelled here. They NAME a boss (§22.8, §22.31) and are not the hidden
+ * vocabulary leaking, so a test that names them (PLAN.md #11 writes several) is not a copy.
+ * FINDINGS.md G61 N2: they are stripped before the families are counted, exactly as the
+ * camelCase axis keys are.
+ */
+const SANCTIONED_SIN_NAMES: readonly string[] = Object.values(SIN_IDENTITIES).map((d) => d.name);
+
+/** The families a piece of text names, with camelCase axis keys and the Sin names removed first. */
 function families(text: string): string[] {
-  const words = text.replace(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g, ' ').toLowerCase();
+  let stripped = text.replace(/\b[a-z]+(?:[A-Z][a-z]+)+\b/g, ' ');
+  for (const name of SANCTIONED_SIN_NAMES) stripped = stripped.split(name).join(' ');
+  const words = stripped.toLowerCase();
   return ROOTS.filter((r) => words.includes(r));
 }
 
@@ -164,5 +176,17 @@ describe('every karma guard reads THIS list — no private copy left to drift', 
     ]) {
       expect(privateCopies(clean), clean).toEqual([]);
     }
+  });
+
+  it('G61 N2 — a test naming all five Sins is not a copy; a real copy beside them still is', () => {
+    // The five names, as a word array and as a pattern string — the two shapes a boss test takes.
+    const five = "const SINS = ['The Grief', 'The Desecration', 'The Cruelty', 'The Avarice', 'The Delusion'];";
+    const pattern = "expect(name).toMatch(/The Desecration|The Cruelty|The Avarice|The Delusion|The Grief/);";
+    expect(SANCTIONED_SIN_NAMES).toHaveLength(5);
+    expect(privateCopies(five)).toEqual([]);
+    expect(privateCopies(pattern)).toEqual([]);
+    // Not over-stripped: the bare words behind the names are still the vocabulary.
+    expect(privateCopies("const W = ['cruelty', 'desecration', 'delusion'];")).not.toEqual([]);
+    expect(privateCopies(`${five}\nconst AXIS = /mercy|greed|clarity/i;`)).not.toEqual([]);
   });
 });

@@ -41,12 +41,13 @@ const SPEC = ['Undercity', 'Entrance to the Void', 'Ash City', 'Angelic Undergro
 const EVENTS: GameEvent[] = [{ kind: 'encounter-start', enemyName: 'Feral Cryo Rat' }];
 function stateAt(place: number): GameState {
   return {
-    version: 9,
+    version: 10,
     rngState: 1,
     player: null,
     act: place + 1,
     place,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'title' },
   };
 }

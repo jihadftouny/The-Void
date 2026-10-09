@@ -9,6 +9,8 @@ import {
   getEnding,
   getGraceEnding,
   getDamnationEnding,
+  getGraceAcknowledgedEnding,
+  getDamnationTakenEnding,
 } from './story.ts';
 
 // Hand-derived from Java `Story.java`. Intro opens "The capital of Absolution,
@@ -32,6 +34,11 @@ describe('the {playerName} token is gone from every LIVE story string (G47)', ()
       getGraceEnding().header,
       getDamnationEnding().body,
       getDamnationEnding().header,
+      // PLAN.md #11: the two path variants.
+      getGraceAcknowledgedEnding().body,
+      getGraceAcknowledgedEnding().header,
+      getDamnationTakenEnding().body,
+      getDamnationTakenEnding().header,
       ...[1, 2, 3, 4, 5].flatMap((a) => [
         getActIntro(a)!.header,
         getActIntro(a)!.body,
@@ -62,7 +69,7 @@ describe('G49 — exactly one accessor carries the name token', () => {
     // without this, deleting the token from story.json entirely would leave that guard green
     // and this file silently no longer describing anything.
     expect(getEnding().body).toContain('{playerName}');
-    for (const section of [getGraceEnding(), getDamnationEnding()]) {
+    for (const section of [getGraceEnding(), getDamnationEnding(), getGraceAcknowledgedEnding(), getDamnationTakenEnding()]) {
       expect(section.body).not.toContain('{playerName}');
       expect(section.header).not.toContain('{playerName}');
     }
@@ -84,6 +91,8 @@ describe('G49 — exactly one accessor carries the name token', () => {
       'getEnding',
       'getGraceEnding',
       'getDamnationEnding',
+      'getGraceAcknowledgedEnding',
+      'getDamnationTakenEnding',
     ]);
     const mentioning = docs.filter((m) => m[0].includes('{playerName}')).map((m) => m[1]);
     expect(mentioning, 'a doc comment names the token above the wrong accessor').toEqual([

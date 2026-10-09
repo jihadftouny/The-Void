@@ -50,6 +50,8 @@ import { createKarma } from '../game/karma.ts';
 import { ALL_CLASSES, heuristicPolicy, mercifulPolicy } from '../game/sim.ts';
 import type { SimPolicy } from '../game/sim.ts';
 import { ONE_OF_EVERY_EVENT, SAMPLE_STATS } from '../game/eventSamples.testutil.ts';
+import { AXIS_VOCABULARY } from '../game/karmaVocabulary.testutil.ts';
+import { buildVocabulary, detectTextFaults, ENGINE_TEXT_RULES } from './textHygiene.ts';
 
 // ---------------------------------------------------------------------------------------
 // The two compile-time-exhaustive maps
@@ -122,6 +124,13 @@ const EXPECTED: Record<GameEventKind, 'fact' | 'silent'> = {
   // --- the 2 facts PLAN.md #1.6 adds (the tempo gauge's two moments) ---
   'tempo-extra-action': 'fact',
   'tempo-lost-turn': 'fact',
+  // --- PLAN.md #11: the boss's chosen move and the Sin's grief. `boss-move` is a FACT kind whose
+  // strike/cast/call_crew/grieve values describe to '' on purpose (their own events speak) —
+  // pinned value by value in the #11 block below; the sample is `hold_back`, a spoken move.
+  'boss-move': 'fact',
+  'boss-grieve': 'fact',
+  'boss-concession': 'fact',
+  'executioner-fall': 'fact',
   // --- the 17 deliberate silences ---
   'cast-unavailable': 'silent',
   'spare-unavailable': 'silent',
@@ -189,7 +198,9 @@ describe('describeEvent covers every event kind (G13)', () => {
     // potion itself (§22.6).
     // PLAN.md #1.6 added 4 combat kinds (tempo-changed, tempo-extra-action, tempo-lost-turn,
     // hp-changed).
-    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4);
+    // PLAN.md #11 added 2 combat kinds (boss-move, boss-grieve).
+    // ...and 2 narrative kinds (boss-concession, executioner-fall).
+    expect(ALL_KINDS).toHaveLength(37 + 4 - 3 + 4 + 26 + 4 - 4 + 2 + 2);
   });
 
   it('the classification is 51 facts and 17 deliberate silences', () => {
@@ -200,7 +211,9 @@ describe('describeEvent covers every event kind (G13)', () => {
     // ...and PLAN.md #2's potion removal took one pre-G13 fact (potion-drunk) and two silences.
     // PLAN.md #1.6: +2 facts (tempo-extra-action, tempo-lost-turn), +2 silences
     // (tempo-changed, hp-changed).
-    expect(facts).toHaveLength(26 + 15 + 8 + 2);
+    // PLAN.md #11: +2 facts (boss-move, boss-grieve).
+    // PLAN.md #11: +2 facts (boss-concession, executioner-fall).
+    expect(facts).toHaveLength(26 + 15 + 8 + 2 + 2 + 2);
     expect(DELIBERATELY_SILENT.size).toBe(15 + 2);
     expect(NEW_FACT_KINDS).toHaveLength(15);
     for (const k of NEW_FACT_KINDS) expect(EXPECTED[k]).toBe('fact');
@@ -230,6 +243,59 @@ describe('describeEvent covers every event kind (G13)', () => {
 // ---------------------------------------------------------------------------------------
 // U3-U6 — what the new fact lines must say
 // ---------------------------------------------------------------------------------------
+
+describe('the boss’s chosen move, as the narrator hears it (PLAN.md #11, AC-24)', () => {
+  it('a move whose own events speak is never narrated a second time', () => {
+    // strike → `attack`; cast → `enemy-skill-used` + `attack`; call_crew → `boss-summon`;
+    // grieve → `boss-grieve`. Each of those already has its fact line, so the move says nothing.
+    for (const move of ['strike', 'cast:pyroBall', 'call_crew', 'grieve'] as const) {
+      expect(describeEvent({ kind: 'boss-move', bossId: 'sin', move }), move).toBe('');
+    }
+  });
+
+  it('the two moves with no event of their own get a line — no number, no reserved word', () => {
+    for (const move of ['hold_back', 'pause'] as const) {
+      const out = describeEvent({ kind: 'boss-move', bossId: 'kingpin', move });
+      expect(out.length, move).toBeGreaterThan(0);
+      expect(out, move).not.toMatch(/\d/);
+      expect(out, move).not.toMatch(/\bhollow\b|made whole/i);
+    }
+    expect(describeEvent({ kind: 'boss-move', bossId: 'kingpin', move: 'hold_back' })).not.toBe(
+      describeEvent({ kind: 'boss-move', bossId: 'kingpin', move: 'pause' }),
+    );
+  });
+
+  it('the grief says what it costs without a number', () => {
+    const out = describeEvent({ kind: 'boss-grieve', amount: 1 });
+    expect(out).toContain('your strength');
+    expect(out).not.toMatch(/\d|charge/i);
+  });
+
+  it('EVERY #11 fact variant — each concession for each boss, both falls — is clean (AC-24)', () => {
+    // The shared sample table holds ONE value per kind; these kinds vary their line by field, so
+    // every branch is swept here: no number, no reserved word, no karma axis word, and no engine
+    // id or condition label (the engine rules of `textHygiene.ts`).
+    const vocab = buildVocabulary();
+    const lines: string[] = [];
+    for (const bossId of ['kingpin', 'reflection', 'sin', 'executioner', 'hollow'] as const) {
+      for (const concession of ['pause', 'weakness', 'drop_mechanic', 'surrender'] as const) {
+        lines.push(describeEvent({ kind: 'boss-concession', bossId, concession }));
+      }
+    }
+    for (const outcome of ['defiant', 'defeated'] as const) lines.push(describeEvent({ kind: 'executioner-fall', outcome }));
+    for (const move of ['hold_back', 'pause'] as const) lines.push(describeEvent({ kind: 'boss-move', bossId: 'kingpin', move }));
+    lines.push(describeEvent({ kind: 'boss-grieve', amount: 1 }));
+    expect(lines).toHaveLength(20 + 2 + 2 + 1);
+    for (const line of lines) {
+      expect(line.length, 'every variant speaks').toBeGreaterThan(0);
+      expect(line).not.toMatch(/\d/);
+      expect(line).not.toMatch(/\bhollow\b|made whole/i);
+      expect(line).not.toMatch(AXIS_VOCABULARY);
+      expect(line, 'a fall is never a death').not.toMatch(/\b(die|dies|died|dead|death)\b/i);
+      expect(detectTextFaults(line, vocab, { rules: ENGINE_TEXT_RULES }).faults, line).toEqual([]);
+    }
+  });
+});
 
 describe('the tempo gauge and the failed escape, as the narrator hears them (PLAN.md #1.6)', () => {
   it('reads the plan’s exact facts, with no number in any of them', () => {
@@ -730,12 +796,13 @@ describe('R6 — the terminal step gives the renderer nothing to draw (G42)', ()
     // standing between the player and a blank last screen is whether the renderer clears
     // the pane before or after it discovers the prompt is null.
     const state: GameState = {
-      version: 9,
+      version: 10,
       rngState: 12_345,
       player: createPlayer({ name: PROBE_NAME, classId: 'Enforcer', stats: STATS }),
       act: 4,
       place: 3,
       karma: createKarma(),
+      deeds: [],
       phase: { kind: 'ending', endingType: 'grace' },
     };
     const r = step(state, { kind: 'continue' });
@@ -800,12 +867,13 @@ describe('R6 — the terminal step gives the renderer nothing to draw (G42)', ()
 
 describe('buildNarrationPrompt exposes the facts it built', () => {
   const state: GameState = {
-    version: 9,
+    version: 10,
     rngState: 1,
     player: null,
     act: 2,
     place: 1,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'main-menu' },
   };
 

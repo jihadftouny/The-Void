@@ -677,11 +677,13 @@ describe('AC-7 — a save from before PLAN.md #2 loads, through loadRun', () => 
     expect(raw.state.player.inventory.backpack).toHaveLength(5);
   });
 
-  it('(a) loads as version 9: potions became Void Draughts, the rest counter is gone, the rest has no decision', () => {
+  it('(a) loads as the current version: potions became Void Draughts, the rest counter is gone, the rest has no decision', () => {
     const loaded = loadRun();
     expect(loaded, 'the real pre-#2 save no longer loads').not.toBeNull();
     const s = loaded!.state;
-    expect(s.version).toBe(9);
+    // PLAN.md #2 took it to 9; PLAN.md #11's rung takes it on to 10 with an empty deed record.
+    expect(s.version).toBe(10);
+    expect(s.deeds).toEqual([]);
     const p = s.player! as unknown as Record<string, unknown>;
     expect('pots' in p).toBe(false);
     expect('restsLeft' in p).toBe(false);

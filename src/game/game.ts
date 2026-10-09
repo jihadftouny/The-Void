@@ -23,22 +23,37 @@
 
 import { createRng, type Rng } from './rng.ts';
 import { type Stats } from './character.ts';
-import { createKarma, recordKarmaWeighted, type KarmaAction, type KarmaState } from './karma.ts';
+import { createKarma, recordKarmaWeighted, KARMA_DELTAS, type KarmaAction, type KarmaState } from './karma.ts';
+import { recordDeed, isRecordedBargain, BARGAIN_AXIS, type Deed } from './deeds.ts';
 import { getFamily } from './enemyFamily.ts';
 import { createPlayer, rollStartStats, type Player, type PlayerClass } from './player.ts';
 import {
   applyDamageToBattlePlayer,
   DEFAULT_ROUND_RULES,
+  resolveBossChoice,
   resolveRound,
+  resolveSurrender,
   openBattle,
   type BattleState,
   type BattleAction,
+  type RoundResult,
   type RoundRules,
 } from './battle.ts';
 import { dampenHeal, floorModifiers, floorOf, ILLUSION_DC } from './floors.ts';
 import { rollCorruptions } from './corruption.ts';
 import { createBattle } from './battle.ts';
-import { generateBoss, bossPostRound, computeVerdict, type BossId } from './boss.ts';
+import {
+  availableConcessions,
+  battleActionKey,
+  bossPostRound,
+  grantConcession,
+  computeVerdict,
+  generateBoss,
+  type BossId,
+  type BossMoveId,
+  type Concession,
+  type KarmaAxis,
+} from './boss.ts';
 import {
   buildRandomBattle,
   buildChestLoot,
@@ -68,7 +83,9 @@ import {
   getActIntro,
   getActOutro,
   getGraceEnding,
+  getGraceAcknowledgedEnding,
   getDamnationEnding,
+  getDamnationTakenEnding,
   getIntro,
 } from './story.ts';
 import { playerArmorClass } from './defense.ts';
@@ -106,14 +123,17 @@ export type Phase =
   | { kind: 'act-intro'; newAct: number }
   // M12: the act-4 verdict reckoning (no combat) — grace ends the run, cast-down falls to act 5.
   | { kind: 'verdict'; outcome: 'grace' | 'cast-down' }
-  | { kind: 'ending'; endingType: 'grace' | 'damnation' }
+  // PLAN.md #11: `acknowledged` — the late grace, the Hollow Self talked into surrender (§22.31).
+  // `taken` — damnation because the Hollow Self killed you (the author's 2026-09-28 ruling).
+  | { kind: 'ending'; endingType: 'grace' | 'damnation'; acknowledged?: true; taken?: true }
   | { kind: 'game-over' };
 
 /** The full, serializable game state. */
 export interface GameState {
   /** The save format — `SAVE_VERSION` (PLAN.md #2 bumped 8 -> 9: potions and the banked rest
-   *  counter left the player, and the rest phase lost its decision; see `save.ts` `upgrade8to9`). */
-  version: 9;
+   *  counter left the player, and the rest phase lost its decision; see `save.ts` `upgrade8to9`.
+   *  PLAN.md #11 bumped 9 -> 10: the deed record, `deeds`; see `upgrade9to10`). */
+  version: 10;
   /** mulberry32 accumulator — the serializable RNG state; JSON round-trips it. */
   rngState: number;
   player: Player | null;
@@ -134,6 +154,14 @@ export interface GameState {
    * transition, so it persists unchanged until a later milestone writes to it.
    */
   karma: KarmaState;
+  /**
+   * PLAN.md #11 (GAME-DESIGN.md §22.31 D3, FINDINGS.md G79): what the run DID — spares and ⚖ kills
+   * by name, karma-priced bargains with their price and reward, illusions seen through, bosses
+   * felled or talked down — each with its floor and its karma axis, oldest first, capped at
+   * `DEED_CAP` (boss deeds always kept). Written only by `step`, through `recordDeed`. Never a fled
+   * fight. The bosses read it (unit B); nothing in the rules does.
+   */
+  deeds: Deed[];
   /**
    * M13, OPTIONAL run-start SNAPSHOT of the meta-progression unlock sets (frozen for the
    * whole run so a fixed unlock-set is fully reproducible from the seed). Only the two sets
@@ -163,6 +191,10 @@ export type Awaiting =
   // PLAN.md #2: the found rest spot — the rest has already happened; only `continue` remains.
   // Its own value (not `continue`) so the renderer can give the one calm screen its scenery.
   | 'rest'
+  // PLAN.md #11: a boss round paused after the player's half, waiting for the BOSS's move — the
+  // model's choice, or the seeded fallback (`move: null`). Its own value so the renderer can
+  // tell "your turn" from "its turn".
+  | 'boss-choice'
   | 'game-over';
 
 /** The input the player (via the UI) supplies to `step`. */
@@ -179,7 +211,14 @@ export type GameInput =
   // PLAN.md #2: leave backpack item `index` behind. At the hub it is a plain discard; in the
   // `deal-discard` phase it is the room a bargain's reward needs (A.3). Either way it is an
   // ENGINE input, so a run still replays from `seed + inputs` (CLAUDE.md principle 1).
-  | { kind: 'discard'; index: number };
+  | { kind: 'discard'; index: number }
+  // PLAN.md #11: the BOSS's move for its paused turn — one of `battle.bossChoice.legal`, or `null`
+  // for the seeded fallback. An id not in the list is treated as `null` (§17.3.3). Like every
+  // input, it is how a run replays from `seed + inputs`.
+  | { kind: 'boss-choice'; move: BossMoveId | null }
+  // PLAN.md #11: what the player's Talk EARNED (unit B's judge decides; the engine applies it). One
+  // per fight, only from the boss's own list (`availableConcessions`); anything else is a no-op.
+  | { kind: 'boss-concession'; concession: Concession };
 
 /**
  * Rule overrides for a `step` — a MEASUREMENT seam, never set by the game (PLAN.md #2).
@@ -220,12 +259,13 @@ export interface StepResult {
  */
 export function createGame(seed: number, unlocks?: RunUnlocks): GameState {
   const state: GameState = {
-    version: 9,
+    version: 10,
     rngState: seed >>> 0,
     player: null,
     act: 1,
     place: 0,
     karma: createKarma(),
+    deeds: [],
     phase: { kind: 'title' },
   };
   if (unlocks) state.unlocks = unlocks;
@@ -246,7 +286,8 @@ export function awaitingFor(phase: Phase): Awaiting {
     case 'main-menu':
       return 'main-menu';
     case 'battle':
-      return phase.started ? 'battle-action' : 'continue';
+      if (!phase.started) return 'continue';
+      return phase.battle.bossChoice ? 'boss-choice' : 'battle-action';
     case 'battle-victory':
       return 'continue';
     case 'rest':
@@ -298,7 +339,7 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
   const finish = (
     phase: Phase,
     events: GameEvent[],
-    patch: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>> = {},
+    patch: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending' | 'deeds'>> = {},
   ): StepResult => {
     const next: GameState = {
       ...state,
@@ -389,8 +430,19 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
         const opened = openBattle(phase.battle, floorOf(state));
         return finish({ ...phase, battle: opened.battle, started: true }, opened.events);
       }
+      const rules = roundRules(state, options);
+      // PLAN.md #11: a concession Talk earned is accepted whether or not the boss's turn is open.
+      if (input.kind === 'boss-concession') return resolveConcession(state, phase, input.concession, rng, finish, noop);
+      // PLAN.md #11: while a boss round waits for the boss's move, only that move is accepted.
+      if (phase.battle.bossChoice) {
+        if (input.kind !== 'boss-choice') return noop;
+        const key = phase.battle.bossChoice.playerActionKey;
+        const round = resolveBossChoice(phase.battle, input.move, rng, rules);
+        return settleBattleRound(state, phase, round, key, rng, finish);
+      }
       if (input.kind !== 'battle-action') return noop;
-      return resolveBattleRound(state, phase, input.action, rng, finish, roundRules(state, options));
+      const round = resolveRound(phase.battle, input.action, rng, rules);
+      return settleBattleRound(state, phase, round, battleActionKey(input.action), rng, finish);
     }
 
     case 'battle-victory': {
@@ -514,8 +566,10 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
 
     case 'verdict': {
       // M12: the act-4 reckoning is resolved (no combat). GRACE ends the run as a terminal
-      // ascension (act stays 4; act 5 is never constructed). CAST-DOWN advances to act 5 → the
-      // Hollow → the damnation ending.
+      // ascension (act stays 4; act 5 is never constructed). PLAN.md #11 (§22.31): CAST-DOWN is
+      // no longer a straight fall — the Warden turns EXECUTIONER and fights you; win or lose, you
+      // then fall to act 5 (`executioner-fall`). The grace path is unchanged: a conversation (unit
+      // B's Talk, no engine effect), then `continue` — "go on" — to the ending.
       if (input.kind !== 'continue') return noop;
       const player = requirePlayer(state);
       if (phase.outcome === 'grace') {
@@ -529,7 +583,7 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
           },
         ]);
       }
-      return advanceAct(state, finish);
+      return startExecutioner(state, player, rng, finish);
     }
 
     case 'ending': {
@@ -548,7 +602,7 @@ export function step(state: GameState, input: GameInput, options: StepOptions = 
 type Finish = (
   phase: Phase,
   events: GameEvent[],
-  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending'>>,
+  patch?: Partial<Pick<GameState, 'player' | 'act' | 'place' | 'karma' | 'pending' | 'deeds'>>,
 ) => StepResult;
 
 /**
@@ -563,6 +617,8 @@ function roundRules(state: GameState, options: StepOptions): RoundRules {
     playerTempoRateCapTenths: options.playerTempoRateCapTenths ?? DEFAULT_ROUND_RULES.playerTempoRateCapTenths,
     enemyTempo: options.enemyTempo ?? DEFAULT_ROUND_RULES.enemyTempo,
     familySpeed: options.familySpeed ?? DEFAULT_ROUND_RULES.familySpeed,
+    // PLAN.md #11: the executioner names its blows for the run's deeds (§22.31).
+    deeds: state.deeds,
   };
 }
 
@@ -587,14 +643,24 @@ function requirePlayer(state: GameState): Player {
  * outro on entry to `act-outro`, and clears the `pending` advance flag. Reached from a
  * floor-boss victory (via `resolvePostVictory`) and from a cast-down verdict.
  */
-function advanceAct(state: GameState, finish: Finish): StepResult {
+function advanceAct(
+  state: GameState,
+  finish: Finish,
+  lead: GameEvent[] = [],
+  patch: Partial<Pick<GameState, 'player' | 'deeds'>> = {},
+): StepResult {
   const newAct = state.act + 1;
   const concluded = state.act;
   const outro = getActOutro(concluded) ?? { header: '', body: '' };
+  // PLAN.md #11: the executioner WON against — the only act-4 victory that schedules an advance —
+  // falls defiant: its line comes before the act-4 outro (the loss's line is `lead`, from the
+  // death branch).
+  const fall: GameEvent[] =
+    concluded === 4 && state.pending === 'advance-act' ? [{ kind: 'executioner-fall', outcome: 'defiant' }] : [];
   const result = finish(
     { kind: 'act-outro', newAct },
-    [{ kind: 'act-outro', act: concluded, header: outro.header, body: outro.body }],
-    { act: newAct, place: newAct - 1 },
+    [...lead, ...fall, { kind: 'act-outro', act: concluded, header: outro.header, body: outro.body }],
+    { ...patch, act: newAct, place: newAct - 1 },
   );
   // Clear the consumed routing flag so a LATER normal victory never re-advances the act.
   // (Removed as a key, not set to undefined — honors exactOptionalPropertyTypes + save shape.)
@@ -747,15 +813,19 @@ function openDeal(state: GameState, rng: Rng, finish: Finish): StepResult {
   ]);
 }
 
-function resolveBattleRound(
+/**
+ * Everything after a battle step resolved — the boss's once-per-round mechanic and the routing on
+ * the round's status. PLAN.md #11: a boss round can complete on the BOSS's step
+ * (`resolveBossChoice`), after the player's action is gone, so the action arrives as its key.
+ */
+function settleBattleRound(
   state: GameState,
   phase: Extract<Phase, { kind: 'battle' }>,
-  action: BattleAction,
-  rng: Rng,
+  round: RoundResult,
+  actionKey: string,
+  _rng: Rng,
   finish: Finish,
-  rules: RoundRules,
 ): StepResult {
-  const round = resolveRound(phase.battle, action, rng, rules);
   const events: GameEvent[] = [...round.events];
   let battle = round.state;
   let status = round.status;
@@ -776,7 +846,7 @@ function resolveBattleRound(
   // one guarded damage path in `battle.ts` (shield -> onTakeDamage relics -> revive gate), so
   // the most common death in the game finally consults the defenses the player paid for.
   if (status === 'ongoing' && battle.boss && round.resolved && round.roundComplete) {
-    const post = bossPostRound(battle, action);
+    const post = bossPostRound(battle, actionKey);
     battle = post.battle;
     events.push(...post.events);
     if (post.playerDamage > 0) {
@@ -798,16 +868,20 @@ function resolveBattleRound(
       return finish({ ...phase, battle }, events);
     case 'fled':
       return finish({ kind: 'main-menu' }, events, { player: battle.player });
-    case 'dispelled':
+    case 'dispelled': {
       // PLAN.md #2, floor 2: the passive Wisdom roll saw through an illusion. The fight ends
       // with NO reward (plan Appendix A.1 — "a pure cost": the illusion's attacks were real, the
       // player's were not, and seeing through pays nothing but the clarity nudge). The player's
       // battle state carries to the hub, as on any exit. `seeThroughIllusion` goes through the
       // floor funnel like every karma write (x1 on floor 2).
+      const seen: KarmaAction = 'seeThroughIllusion';
       return finish({ kind: 'main-menu' }, events, {
         player: battle.player,
-        karma: recordOnFloor(state, state.karma, 'seeThroughIllusion'),
+        karma: recordOnFloor(state, state.karma, seen),
+        // PLAN.md #11: an illusion seen through is a deed (§22.31 D3), on the same action's axis.
+        deeds: recordDeed(state.deeds, { kind: 'illusion', floor: floorOf(state), axis: axisOf(seen) }),
       });
+    }
     case 'spared':
       // Mercy: end the encounter with no rewards. Record the spare on the karma vector. The
       // actions are data-sourced from the family (the karma seam), defaulting to the uniform
@@ -817,13 +891,18 @@ function resolveBattleRound(
       // The Judged's spare is mercy AND reverence, not one instead of the other. Folded inline
       // rather than behind a helper so this, the only site that reads the seam, is also the
       // site the behavioural test watches.
+      const spareActions = getFamily(enemy.familyId)?.onSpare ?? DEFAULT_SPARE_ACTIONS;
       return finish({ kind: 'main-menu' }, events, {
         player: battle.player,
         // PLAN.md #2: each entry is weighted by the floor (floor 4 counts double).
-        karma: (getFamily(enemy.familyId)?.onSpare ?? DEFAULT_SPARE_ACTIONS).reduce(
-          (k, action) => recordOnFloor(state, k, action),
-          state.karma,
-        ),
+        karma: spareActions.reduce((k, action) => recordOnFloor(state, k, action), state.karma),
+        // PLAN.md #11: the spare is a deed, by name, on its first action's axis (§22.31 D3).
+        deeds: recordDeed(state.deeds, {
+          kind: 'spared',
+          floor: floorOf(state),
+          axis: axisOf(spareActions[0] ?? 'spareWeighted'),
+          name: enemy.fullName,
+        }),
       });
     case 'player-won': {
       // A moral (⚖) kill records cruelty; a plain enemy (and every boss) records nothing.
@@ -831,26 +910,156 @@ function resolveBattleRound(
       //
       // PLAN.md #2 / §22.22: `onKill` is a LIST, folded in order in THIS one step, exactly as
       // `onSpare` is — killing The Judged records cruelty AND desecration (`killSacred`).
+      const killActions = getFamily(enemy.familyId)?.onKill ?? DEFAULT_KILL_ACTIONS;
       const karma = enemy.karmaWeighted
-        ? (getFamily(enemy.familyId)?.onKill ?? DEFAULT_KILL_ACTIONS).reduce(
-            (k, action) => recordOnFloor(state, k, action),
-            state.karma,
-          )
+        ? killActions.reduce((k, action) => recordOnFloor(state, k, action), state.karma)
         : state.karma;
+      // PLAN.md #11 (§22.31 D3): a ⚖ kill — one that could have been spared — is a deed, by name;
+      // a boss felled is a deed. A plain enemy's death records nothing.
+      let deeds = state.deeds;
+      if (enemy.karmaWeighted) {
+        deeds = recordDeed(deeds, {
+          kind: 'killed',
+          floor: floorOf(state),
+          axis: axisOf(killActions[0] ?? 'killWeighted'),
+          name: enemy.fullName,
+        });
+      }
+      if (battle.boss) {
+        deeds = recordDeed(deeds, {
+          kind: 'boss',
+          floor: floorOf(state),
+          name: enemy.fullName,
+          bossId: battle.boss.bossId,
+          outcome: round.surrendered ? 'surrendered' : 'felled',
+        });
+      }
       // M12: a floor-boss win (acts 1–3, non-final, boss present) schedules an act advance once
       // any earned level-ups drain (`resolvePostVictory`). The Hollow (final) routes to the
       // damnation ending via `battle-victory`. A normal victory is unchanged (no `pending`).
-      const patch: Partial<Pick<GameState, 'player' | 'karma' | 'pending'>> = {
+      const patch: Partial<Pick<GameState, 'player' | 'karma' | 'pending' | 'deeds'>> = {
         player: battle.player,
         karma,
+        deeds,
       };
       if (!phase.final && battle.boss) patch.pending = 'advance-act';
       return finish({ kind: 'battle-victory', final: phase.final }, events, patch);
     }
-    case 'player-died':
+    case 'player-died': {
+      // PLAN.md #11: losing to the EXECUTIONER is not death (§22.31: "you fall to the True Void
+      // win or lose"). The fall restores you to FULL HP (the author's Q2 ruling), then the act-4
+      // outro — no game-over.
+      if (battle.boss?.bossId === 'executioner') {
+        const fallen: Player = { ...battle.player, hp: battle.player.maxHp };
+        return advanceAct(state, finish, [...events, { kind: 'executioner-fall', outcome: 'defeated' }], { player: fallen });
+      }
+      // PLAN.md #11 (the author's 2026-09-28 ruling): the Hollow Self KILLING you is DAMNATION —
+      // it takes you; the procedure completes. The same ending, and so the same Hollow unlock, as
+      // beating it by force, with its own prose (`path: 'taken'`). Not a plain death.
+      if (battle.boss?.bossId === 'hollow') {
+        const ending = getDamnationTakenEnding();
+        events.push({
+          kind: 'ending',
+          endingType: 'damnation',
+          path: 'taken',
+          header: ending.header,
+          body: substituteName(ending.body, battle.player.name),
+        });
+        return finish({ kind: 'ending', endingType: 'damnation', taken: true }, events, { player: battle.player });
+      }
       events.push({ kind: 'game-over', xp: battle.player.xp });
       return finish({ kind: 'game-over' }, events, { player: battle.player });
+    }
   }
+}
+
+/**
+ * The CAST-DOWN path's fight (PLAN.md #11, §22.31): the Warden turned executioner, at act 4.
+ * Generated like a floor boss (its card's kit, ×3 HP), unfleeable (it carries a boss), not the
+ * final battle. Win → `victory`, its XP, then the defiant fall; lose → the fall at full HP. Either
+ * way the run goes on to act 5.
+ */
+function startExecutioner(state: GameState, player: Player, rng: Rng, finish: Finish): StepResult {
+  const { enemy, boss } = generateBoss({ bossId: 'executioner', act: 4, player, karma: state.karma, rng });
+  const battle: BattleState = createBattle(player, enemy, 4, { boss });
+  return finish({ kind: 'battle', battle, started: false, final: false }, [
+    { kind: 'boss-encounter', bossId: 'executioner', enemyName: enemy.fullName },
+  ]);
+}
+
+/**
+ * Apply a concession Talk earned — PLAN.md #11 (§20, §22.7, the author's Q3). Accepted only in a
+ * started BOSS battle, only for a concession on that boss's card, and only while none has been
+ * granted this fight (`availableConcessions`); anything else is a no-op (the reducer is total).
+ * The executioner's card lists none, so it accepts nothing.
+ *
+ *  - pause / weakness / drop_mechanic: `grantConcession`. (Since the author's 2026-09-30 ruling
+ *    each card lists ONE signature — Kingpin and Hollow Self surrender, the Reflection and every Sin
+ *    drop_mechanic — so pause and weakness are dormant: no card reaches them.) A pause granted while the boss's turn
+ *    waits for its move lets that turn pass and COMPLETES the round, so the once-per-round
+ *    mechanic runs now (`settleBattleRound`).
+ *  - surrender, Kingpin: a full victory (`resolveSurrender` — XP and the loot roll, no `onKill`
+ *    relic), routed exactly as a kill: the floor ends and the "beat the Kingpin" unlock counts it.
+ *  - surrender, Hollow Self: the LATE GRACE (§22.31) — the grace ending, `acknowledged`, with its
+ *    own prose. No new feat: the grace ending's own unlock (Penitent) is the reward.
+ * Every grant records `boss.conceded` and emits `boss-concession` first.
+ */
+function resolveConcession(
+  state: GameState,
+  phase: Extract<Phase, { kind: 'battle' }>,
+  concession: Concession,
+  rng: Rng,
+  finish: Finish,
+  noop: StepResult,
+): StepResult {
+  const battle = phase.battle;
+  const boss = battle.boss;
+  if (!boss || !availableConcessions(battle).includes(concession)) return noop;
+  const granted: GameEvent = { kind: 'boss-concession', bossId: boss.bossId, concession };
+  if (concession === 'surrender') {
+    const conceded: BattleState = { ...battle, boss: { ...boss, conceded: 'surrender' } };
+    if (boss.bossId === 'hollow') {
+      const ending = getGraceAcknowledgedEnding();
+      const player = requirePlayer(state);
+      return finish(
+        { kind: 'ending', endingType: 'grace', acknowledged: true },
+        [
+          granted,
+          {
+            kind: 'ending',
+            endingType: 'grace',
+            path: 'acknowledged',
+            header: ending.header,
+            body: substituteName(ending.body, player.name),
+          },
+        ],
+        {
+          player: conceded.player,
+          deeds: recordDeed(state.deeds, {
+            kind: 'boss',
+            floor: floorOf(state),
+            name: battle.enemy.fullName,
+            bossId: 'hollow',
+            outcome: 'surrendered',
+          }),
+        },
+      );
+    }
+    const key = battle.bossChoice?.playerActionKey ?? 'talk';
+    return led(granted, settleBattleRound(state, phase, resolveSurrender(conceded, rng), key, rng, finish));
+  }
+  const result = grantConcession(battle, concession);
+  if (result.roundComplete) {
+    const key = battle.bossChoice?.playerActionKey ?? 'talk';
+    const round: RoundResult = { state: result.battle, events: result.events, status: 'ongoing', resolved: true, roundComplete: true };
+    return led(granted, settleBattleRound(state, phase, round, key, rng, finish));
+  }
+  return finish({ ...phase, battle: result.battle }, [granted, ...result.events]);
+}
+
+/** A step result with `first` placed ahead of its events. */
+function led(first: GameEvent, res: StepResult): StepResult {
+  return { ...res, events: [first, ...res.events] };
 }
 
 /**
@@ -940,7 +1149,7 @@ function resolveDealDecision(
   return finish(
     { kind: 'main-menu' },
     [{ kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
-    { player: result.player, karma: result.karma },
+    { player: result.player, karma: result.karma, deeds: withBargainDeed(state, deal) },
   );
 }
 
@@ -956,6 +1165,28 @@ function resolveDealDecision(
  */
 function declineDeal(finish: Finish): StepResult {
   return finish({ kind: 'main-menu' }, [{ kind: 'deal-declined' }]);
+}
+
+/**
+ * The deed record with a TAKEN bargain added — PLAN.md #11 (§22.31 D3). Only the four bargains
+ * whose price is karma are deeds (offering, desecration, greed, whisper); an HP, max-HP, stat,
+ * charge or relic price is a trade, not a deed, and leaves the record as it was. The price and
+ * the reward are kept in the words the player was shown.
+ */
+function withBargainDeed(state: GameState, deal: SacrificeDeal): Deed[] {
+  const cost = deal.cost.kind;
+  if (!isRecordedBargain(cost)) return state.deeds;
+  return recordDeed(state.deeds, {
+    kind: 'bargain',
+    floor: floorOf(state),
+    axis: BARGAIN_AXIS[cost],
+    bargain: { cost, paid: describeCost(deal.cost), got: describeReward(deal.reward) },
+  });
+}
+
+/** The karma axis an action leans on — the first axis its delta moves (`KARMA_DELTAS`). */
+function axisOf(action: KarmaAction): KarmaAxis {
+  return Object.keys(KARMA_DELTAS[action])[0] as KarmaAxis;
 }
 
 /** Is `index` a real backpack slot? Rejects non-integers, NaN and out-of-range (the G45 lesson). */
@@ -1044,7 +1275,7 @@ function discardForDeal(
   return finish(
     { kind: 'main-menu' },
     [...dropped, { kind: 'deal-taken', cost: describeCost(deal.cost), reward: describeReward(deal.reward) }],
-    { player: result.player, karma: result.karma },
+    { player: result.player, karma: result.karma, deeds: withBargainDeed(state, deal) },
   );
 }
 

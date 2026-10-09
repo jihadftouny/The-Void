@@ -15,6 +15,7 @@ import {
   type ConditionType,
 } from '../game/condition.ts';
 import { karmaTone } from './tone.ts';
+import type { BossId, Concession } from '../game/boss.ts';
 
 export const VOID_PERSONA =
   'You are the Void — the narrator of a dark, dreamlike descent RPG about ' +
@@ -123,6 +124,26 @@ const BUFF_ONSET: Record<BeneficialCondition, { you: string; enemy: string }> = 
  * than silently rewritten here. Its sibling — the "already whole" line of the full-HP rest
  * event — left with that event in PLAN.md #2.)
  */
+/**
+ * The fact line for a concession Talk earned (PLAN.md #11). Words for what the player sees happen,
+ * never the mechanic's name: a pause is a lowered hand, a weakness an opening shown, a dropped
+ * mechanic whatever that boss gives up. Exhaustive over `Concession`.
+ */
+function concessionFact(bossId: BossId, c: Concession): string {
+  switch (c) {
+    case 'pause':
+      return `It lowers its hand, for a moment.`;
+    case 'weakness':
+      return `It lets you see where it is open.`;
+    case 'drop_mechanic':
+      if (bossId === 'kingpin') return `He waves his people back.`;
+      if (bossId === 'reflection') return `It stops copying you.`;
+      return `It lets go of what you gave it.`;
+    case 'surrender':
+      return bossId === 'hollow' ? `It stops fighting you.` : `It yields.`;
+  }
+}
+
 export function describeEvent(e: GameEvent): string {
   switch (e.kind) {
     case 'intro':
@@ -261,6 +282,17 @@ export function describeEvent(e: GameEvent): string {
       // The mechanic is a to-hit penalty, so the clause carries no number: the narrator
       // is forbidden mechanics, and a to-hit modifier is nothing the player can observe.
       return `It reads your pattern; your next strike will be harder to land.`;
+    // ---- PLAN.md #11: the boss's chosen move --------------------------------------------
+    case 'boss-move':
+      // The move that has NO event of its own gets the line; every other move's own event
+      // already speaks (`attack` + `enemy-skill-used`, `boss-summon`, `boss-grieve`), and a second
+      // line would narrate one boss action twice.
+      if (e.move === 'hold_back') return `It holds back and lets the others do the work.`;
+      if (e.move === 'pause') return `It stops, and lets you breathe.`;
+      return '';
+    case 'boss-grieve':
+      // The Sin's new move (§22.31): no blow, one charge lost. No number, no resource word.
+      return `It mourns, and something of your strength goes with it.`;
     case 'boss-encounter':
       // Every floor's boss reveal. Mirrors the `final-battle-begins` shape above.
       return `${e.enemyName}, the master of this floor, stands before you.`;
@@ -325,6 +357,16 @@ export function describeEvent(e: GameEvent): string {
       return `Your pack is full; to take ${e.reward}, you must leave something behind.`;
     case 'item-discarded':
       return `You leave ${e.name} behind.`;
+
+    // ---- PLAN.md #11: what Talk earned (§20, §22.7) — no number, no mechanic word ------------
+    case 'boss-concession':
+      return concessionFact(e.bossId, e.concession);
+    case 'executioner-fall':
+      // Win or lose you fall (§22.31) — defiance, not defeat, having won. Never a death word:
+      // losing this fight is not dying.
+      return e.outcome === 'defiant'
+        ? `You fall anyway — but you fall unbowed.`
+        : `It casts you down, and you fall into the dark below.`;
 
     // ---- G13: DELIBERATE SILENCE — seventeen kinds that return '' on purpose ----------
     //

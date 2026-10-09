@@ -94,6 +94,10 @@ export const HOOK_BY_KIND: Readonly<Record<GameEventKind, AudioHookName | null>>
   'boss-summon': 'boss',
   'boss-minion-damage': 'boss',
   'boss-adapt': 'boss',
+  // PLAN.md #11: the chosen move is announced by the sound of what it does (the blow, the
+  // summon, the grief), so the announcement itself is silent; grief is a drain, like floor 3's.
+  'boss-move': null,
+  'boss-grieve': 'tick',
   'floor-drain': 'tick',
   // PLAN.md #1.6 — a tempo threshold is a tick of the clock; the gauge's value and the per-blow
   // HP are HUD writes riding a beat that already has its sound.
@@ -129,6 +133,8 @@ export const HOOK_BY_KIND: Readonly<Record<GameEventKind, AudioHookName | null>>
   'skills-warped': null,
   'deal-needs-room': null,
   'item-discarded': null,
+  'boss-concession': 'boss', // PLAN.md #11: a concession is a boss moment, in the arena
+  'executioner-fall': null, // PLAN.md #11: the fall is the pane's, after the fight
 };
 
 /** An attack's sound by outcome — exhaustive over `AttackOutcome`. A fumble is a miss to the ear. */

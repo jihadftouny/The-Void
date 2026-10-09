@@ -126,7 +126,7 @@
 >       N6, 2026-09-26.) In any floor-1 fight, watch the enemy's tempo row under its HP bar during
 >       a round where you strike: it can tick at the moment your blow lands, before the enemy
 >       acts. *Fail if* that reads as a bug or makes the gauge harder to follow.
-> - [ ] **7. Approve the lost-turn wording** — your words to change. The plan's *"too slow"* was
+> - [x] **7. Approve the lost-turn wording** ✅ **Approved by the author 2026-09-29.** — your words to change. The plan's *"too slow"* was
 >       replaced because `slow` is a condition name and the text rules forbid it in prose (G62).
 >       Combat log: *"You fall behind — you lose the turn."* / *"The enemy falls behind and loses
 >       the turn."* Narrator facts: *"You fall behind; the moment passes."* / *"The enemy falls

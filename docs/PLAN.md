@@ -393,6 +393,13 @@ is one exported function, `resolveEnemyTurn` in `battle.ts`, which runs the tick
 one call per granted action; a boss agent's choice replaces the random skill pick inside
 `resolveEnemyAttack`, and a boss with an extra action is asked twice. Do not run #11 in parallel with
 any unit touching `battle.ts`, `game.ts`, `boss.ts` or the event tables.
+**Part A (the engine, `boss-engine`, 2026-09-28) closes G79 and G61 N2 and raises G91:** the Hollow
+Self's 1d10 + STR "real teeth" end only 0.8% of its fights (measured) — a balance lever for the
+author (its HP scale, base XP or casts), not part A's to pull. **G89 is unit C's:** the executioner's blow deed
+(`boss-move.deed`) is shown nowhere yet. **G90 (2026-09-30, author, built):** each boss's Talk earns ONE
+signature concession — Kingpin and Hollow Self surrender, the Reflection and every Sin drop a
+mechanic, the executioner none; pause and weakness are dormant. The dice and rulings are in
+`GAME-DESIGN.md` §22.31 ("The engine rulings for #11").
 
 **#11 is built as THREE units (planned 2026-09-27; prompts and shapes in `BOSS-PROMPTS.md`):**
 - **A — `boss-engine`**: the saved deed record (§22.31 D3, G79), the executioner boss, the `grieve`

@@ -229,7 +229,7 @@ Same for the ash-wraith, where take 02 was also the chosen read.
 ## 3. Per-asset-type rules **[LOCKED]**
 
 ### Enemy sprites — 30 (23 families + the 7 named Sins)
-- **Aspect `1:1`.**
+- **Aspect `3:4`.** ~~`1:1`~~ — **changed by the author 2026-09-29 (`FINDINGS.md` G70):** the sprites are drawn to the battle screen's upright 3:4 enemy frame (§4) rather than the frame changing to fit square sprites. The full-body rule below is unchanged — a standing figure fills an upright frame better than a square one.
 - **Framing is strict and non-negotiable: full body, head and feet both inside the frame, roughly
   10% margin, subject centred, facing the viewer.** The roster must sit in one on-screen frame; per
   enemy zoom is the single most damaging inconsistency available.
@@ -247,8 +247,8 @@ Same for the ash-wraith, where take 02 was also the chosen read.
 
 ### Class portraits — 5
 - **Aspect `1:1`.**
-- **Full body, head and feet both inside the frame, ~10% margin**, **turned slightly off-axis per
-  §2b — never square to the viewer**, on pure flat black.
+- ~~Full body, head and feet both inside the frame, ~10% margin~~ **CHEST-UP — changed by the author 2026-09-29 (`FINDINGS.md` G70)**, because the status-panel square is ~140 px wide and a full figure would not read at that size. Still **turned slightly off-axis per §2b — never square to the viewer**, on pure flat black.
+  > **⚠ The cost, stated when the author chose it:** the correction below existed so the class portraits would not be "the odd crop in a set of five full-body mirrors" (§6's recursion). Chest-up re-opens that: the Reflection, Mirror-Self and Hollow Self are full-body, the class portraits are not. The **face and silhouette of the upper body** must carry the resemblance instead — write the §6 prompts so the likeness lives above the chest.
   > *(Two corrections, both 2026-08-28. **Pose:** this said "facing the viewer" — the exact phrase §3
   > uses for **enemy** sprites, which would have made the player read as a target; §2b
   > `[LOCKED 2026-08-25]` wins — "the angle is the visual difference between 'you' and 'it'".
@@ -260,7 +260,7 @@ Same for the ash-wraith, where take 02 was also the chosen read.
 - These are the player's self-image; they must relate visibly to the mirror-enemies (§6).
 
 ### Boss portraits — 5
-- **Aspect `1:1`.** **Framing per the ENEMY SPRITE rule above** — full body, head and feet both inside
+- **Aspect `3:4`** (with the enemy sprites, 2026-09-29 — bosses render in the same combat frame). **Framing per the ENEMY SPRITE rule above** — full body, head and feet both inside
   the frame, ~10% margin, pure flat black, the §3 append sentence — and **front-facing per §2b**,
   because bosses are enemies and every enemy squares to the viewer. Larger presence and more detail
   budget than a family sprite.

@@ -32,7 +32,7 @@ import {
   type GameInput,
   type StepResult,
 } from './game.ts';
-import { ALL_CLASSES, heuristicPolicy, mercifulPolicy, type SimPolicy } from './sim.ts';
+import { ALL_CLASSES, gearUpAtHub, heuristicPolicy, mercifulPolicy, type SimPolicy } from './sim.ts';
 import {
   applyDeal,
   canAfford,
@@ -652,7 +652,7 @@ describe('"The Delusion" can be the act-3 Sin now', () => {
     const r = seekAndAccept(newRunAtHub(5), 'whisper');
     expect(r.state.karma).toEqual({ ...createKarma(), clarityDelusion: -1 });
     expect(pickIndulgedAxis(r.state.karma)).toBe('clarityDelusion');
-    expect(SIN_BY_AXIS[pickIndulgedAxis(r.state.karma)].name).toBe('The Delusion');
+    expect(SIN_BY_AXIS.clarityDelusion.name).toBe('The Delusion');
 
     const boss = generateBoss({
       bossId: 'sin',
@@ -664,13 +664,14 @@ describe('"The Delusion" can be the act-3 Sin now', () => {
     expect(boss.enemy.fullName).toBe('The Delusion');
   });
 
-  it('CONTROL — the pre-#10a ledger still yields The Desecration, so the whisper is what moved it', () => {
-    // Before this unit `clarityDelusion` could not leave 0, `pickIndulgedAxis` needs `v < 0`,
-    // and an all-zero vector falls through to SIN_DEFAULT_AXIS. Without this control the test
-    // above would pass in a world where every Sin is called The Delusion.
+  it('CONTROL — the untouched ledger indulged nothing, so the whisper is what moved it', () => {
+    // `pickIndulgedAxis` needs `v < 0`. PLAN.md #11: an all-zero vector no longer falls through
+    // to a default axis — it indulged nothing, and meets The Grief. Without this control the
+    // test above would pass in a world where every Sin is called The Delusion.
     const neutral = createKarma();
-    expect(pickIndulgedAxis(neutral)).toBe('reverenceDesecration');
-    expect(SIN_BY_AXIS[pickIndulgedAxis(neutral)].name).toBe('The Desecration');
+    expect(pickIndulgedAxis(neutral)).toBeNull();
+    const boss = generateBoss({ bossId: 'sin', act: 3, player: newRunAtHub(5).state.player!, karma: neutral, rng: mulberry32(9) });
+    expect(boss.enemy.fullName).toBe('The Grief');
   });
 });
 
@@ -1122,9 +1123,9 @@ describe('karma stays hidden — no axis vocabulary reaches the player or the mo
 // =============================================================================================
 
 describe('the save format is untouched by #10a', () => {
-  it('SAVE_VERSION is the current one and a fresh game carries it (#10a bumped nothing; #2 did, to 9)', () => {
-    expect(SAVE_VERSION).toBe(9);
-    expect(createGame(1).version).toBe(9);
+  it('SAVE_VERSION is the current one and a fresh game carries it (#10a bumped nothing; #2 did, to 9; #11 to 10)', () => {
+    expect(SAVE_VERSION).toBe(10);
+    expect(createGame(1).version).toBe(10);
   });
 
   it('a state parked on an OFFERING deal round-trips through encode/decode deep-equal', () => {
@@ -1241,6 +1242,11 @@ function playRun(seed: number, classId: PlayerClass, policy: SimPolicy, guard = 
   let karmaAtVerdict: KarmaState | null = null;
   let steps = 0;
   while (r.awaiting !== 'game-over' && steps < guard) {
+    // PLAN.md #11: gear up at the hub exactly as the sim does (`runToTerminal`), so these runs
+    // really are "as strong as the measured merciful baseline" (penitentPolicy's own claim). Before
+    // bosses struck with real dice, an ungeared run still reached the reckoning often enough to
+    // hide the gap; with them, 120 ungeared penitent/enforcer runs reached it twice.
+    if (r.awaiting === 'main-menu') r = { ...r, state: gearUpAtHub(r.state) };
     const phase = r.state.phase;
     const facing = phase.kind === 'battle' ? phase.battle.enemy.familyId : null;
     const offered = phase.kind === 'deal' ? phase.deal.cost.kind : null;

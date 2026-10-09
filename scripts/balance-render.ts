@@ -341,6 +341,9 @@ export function renderReport(input: ReportInput): string {
     `- **Baseline overall win-rate: ${pct(baseline.winRate)}** (${baseline.grace} grace + ${baseline.damnation} damnation of ${baseline.runs}).`,
     `- **Merciful overall win-rate: ${pct(merciful.winRate)}** (${merciful.grace} grace + ${merciful.damnation} damnation of ${merciful.runs}).`,
     `- Deaths peak on **floor ${peakDeath(baseline).act}** (${pct(peakDeath(baseline).share)} of all baseline deaths).`,
+    // PLAN.md #11: the ending mix. The Hollow Self killing a run is DAMNATION (the author's
+    // 2026-09-28 ruling), so those runs sit inside the damnation count and the win rate — named here.
+    `- **Damnation taken** (the Hollow Self killed the run, which counts as the damnation ending): ${baseline.damnationTaken} of the baseline's ${baseline.damnation}, ${merciful.damnationTaken} of the merciful policy's ${merciful.damnation}.`,
     '',
     '## Balance read (from the data)',
     '',

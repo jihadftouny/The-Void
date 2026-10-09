@@ -87,6 +87,8 @@ export const BEAT_ROLE: Readonly<Record<GameEventKind, BeatRole>> = {
   detonate: 'attach',
   'boss-summon': 'attach',
   'boss-adapt': 'attach',
+  'boss-move': 'attach', // PLAN.md #11
+  'boss-grieve': 'attach',
   // ---- the narration's, never the arena's ----
   'loot-left-behind': 'pane',
   title: 'pane',
@@ -115,6 +117,8 @@ export const BEAT_ROLE: Readonly<Record<GameEventKind, BeatRole>> = {
   'skills-warped': 'pane',
   'deal-needs-room': 'pane',
   'item-discarded': 'pane',
+  'boss-concession': 'attach', // PLAN.md #11: it happens inside the fight
+  'executioner-fall': 'pane', // PLAN.md #11: the fight is over; the fall is the story's
 };
 
 /** Which of the frame's three bars a beat may have changed. */

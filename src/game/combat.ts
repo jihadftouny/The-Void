@@ -27,7 +27,7 @@
 import type { Character } from './character.ts';
 import { type Weapon } from './weapon.ts';
 import { rollDice, rollDie, randInt, type Rng } from './rng.ts';
-import { SKILLS, useSkill, type SkillId } from './skill.ts';
+import { SKILLS, useSkill, type SkillDef, type SkillId } from './skill.ts';
 import type { ActiveCondition } from './condition.ts';
 import { effectiveMods, effectiveArmorClass, statModDelta } from './statEffects.ts';
 import type {
@@ -261,6 +261,18 @@ export function resolvePlayerAttack(
   return { outcome, damage, events };
 }
 
+/**
+ * A boss's CHOSEN move, handed to `resolveEnemyAttack` in place of its random skill pick
+ * (PLAN.md #11, GAME-DESIGN.md §17.3 — the boss's choice is an input like the player's).
+ *  - `strike`: the boss's own blow — `1d<die>` (+ its STR mod once when `addStr`), the die
+ *    rolled again on a crit.
+ *  - `cast`: exactly this skill def (for the Hollow Self, its WARPED form), cast on a hit.
+ * Omitted ⇒ today's behaviour, byte-for-byte: a random affordable skill, else the plain 1.
+ */
+export type ForcedEnemyMove =
+  | { kind: 'strike'; die: number; addStr: boolean }
+  | { kind: 'cast'; skill: SkillDef };
+
 /** The result of one enemy attack (pure — new enemy/target, no hp change). */
 export interface EnemyAttackResult<E extends SkillUser, T extends SkillTarget> {
   enemy: E;
@@ -287,6 +299,9 @@ export interface EnemyAttackResult<E extends SkillUser, T extends SkillTarget> {
  *     the dealt damage. Clamped to >= 0.
  *  4. MISS / FUMBLE: 0 damage, enemy + target returned unchanged (no charge spent, no
  *     condition applied), and NO skill-pick draw.
+ *  PLAN.md #11 — `forced` (a boss's chosen move) replaces step 3 only: a forced `cast` casts
+ *  that def with no pick draw; a forced `strike` rolls its die (+1 draw, +1 more on a crit)
+ *  instead. Steps 1, 2 and 4 are unchanged, so an omitted `forced` is byte-identical to before.
  *
  * Events (ordered): an `advantage`/`disadvantage` {subject:'enemy'} event FIRST when
  * enemyAdvDis is ±1; then on a hit/crit-with-skill the `enemy-skill-used` (+ any
@@ -305,6 +320,7 @@ export function resolveEnemyAttack<E extends SkillUser, T extends SkillTarget>(
   defenderAc: number,
   enemyAdvDis: -1 | 0 | 1,
   rng: Rng,
+  forced?: ForcedEnemyMove,
 ): EnemyAttackResult<E, T> {
   const { natural, faces } = rollD20WithAdvantage(enemyAdvDis, rng);
   const modifier = effectiveMods(enemy).STR;
@@ -334,6 +350,32 @@ export function resolveEnemyAttack<E extends SkillUser, T extends SkillTarget>(
 
   // Hit / crit: cast a skill if able, else deal the plain 1. Crit doubles the dealt damage.
   const critMultiplier = outcome === 'crit' ? 2 : 1;
+
+  // PLAN.md #11: a BOSS's chosen move. The to-hit roll above is unchanged; only what lands on a
+  // hit is decided by the choice instead of the random pick (so no skill-pick draw is taken).
+  if (forced?.kind === 'cast') {
+    const used = useSkill(enemy, player, forced.skill);
+    const damageSources: DamageSource[] = [{ kind: 'skill', amount: used.damage }];
+    if (critMultiplier === 2) damageSources.push({ kind: 'crit-multiplier', amount: used.damage });
+    const damage = totalWithClamp(damageSources);
+    events.push(...used.events, { kind: 'attack', subject: 'enemy', outcome, damage, roll, damageSources });
+    return { enemy: used.caster, target: used.target, damage, events };
+  }
+  if (forced?.kind === 'strike') {
+    // The boss's own blow (the author's 2026-09-28 ruling): its die (one draw), rolled AGAIN on
+    // a crit (a second draw) as the player's weapon dice are, plus its STR mod ONCE where the
+    // card says so. The same terms the player's blow reports, so the log explains it alike.
+    const notation = `1d${forced.die}`;
+    const damageSources: DamageSource[] = [{ kind: 'weapon-dice', amount: rollDie(rng, forced.die), label: notation }];
+    if (critMultiplier === 2) {
+      damageSources.push({ kind: 'crit-dice', amount: rollDie(rng, forced.die), label: notation });
+    }
+    const str = forced.addStr ? effectiveMods(enemy).STR : 0;
+    if (str !== 0) damageSources.push({ kind: 'ability-mod', amount: str });
+    const damage = totalWithClamp(damageSources);
+    events.push({ kind: 'attack', subject: 'enemy', outcome, damage, roll, damageSources });
+    return { enemy: restoreEnemyCharge(enemy), target: player, damage, events };
+  }
   // G22(b): pick from the AFFORDABLE subset. The gate used to be `skillCharges > 0` while
   // `useSkill` subtracts the full `chargeCost`, so an enemy with 1 charge could cast a cost-2
   // skill and end the round at -1 (reproduced for wrathSmash, riotSlam, overload,
